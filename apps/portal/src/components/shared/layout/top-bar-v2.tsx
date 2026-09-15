@@ -82,7 +82,7 @@ import { usePageSearchSlot } from "@/components/shared/layout/page-search-slot";
 
 /** 32px, matching the icon buttons, so the row reads as one band of controls. */
 const FIELD =
-  "group relative flex h-9 w-full max-w-[460px] items-center gap-2 overflow-hidden rounded-lg " +
+  "group relative flex h-9 w-full max-w-[460px] items-center gap-2 overflow-hidden rounded-full " +
   "border border-primary/25 bg-primary/[0.07] px-2.5 text-left backdrop-blur-[2px] transition-colors " +
   "hover:border-primary/40 hover:bg-primary/10 " +
   "focus-visible:border-primary/50 focus-visible:bg-primary/10 focus-visible:outline-none " +
@@ -121,6 +121,17 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
      filters, and takes them back when it unmounts. Null on a page with nothing
      to filter, which is when the global ⌘K pill is the right thing to show. */
   const slot = usePageSearchSlot();
+
+  // Whether the page has scrolled under the bar. The window is the scroller on
+  // every page but the bounded workspaces (Messages, Trax), which scroll inside
+  // their own panel, so there the bar simply stays transparent.
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const read = () => setScrolled(window.scrollY > 2);
+    read();
+    window.addEventListener("scroll", read, { passive: true });
+    return () => window.removeEventListener("scroll", read);
+  }, []);
 
   /* Typed locally and pushed on a delay. The rentals list serialises its search
      into the QUERY STRING, so one push per keystroke is one navigation per
@@ -220,8 +231,18 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
          Matching v1's 64px keeps that arithmetic true instead of leaving an 8px
          gap on those screens. */
       className={
-        "sticky top-0 z-40 flex h-16 shrink-0 items-center gap-2 border-b border-border " +
-        "bg-background/95 px-3 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60 sm:px-4"
+        "sticky top-0 z-40 flex h-16 shrink-0 items-center gap-2 px-3 transition-[background-color,box-shadow] duration-200 sm:px-4 " +
+        // The bar has NO ground of its own. The app gradient is painted on the
+        // layout's root, behind the sidebar and this bar alike, and a white
+        // 60-95% fill here cut a band across the top so the page's colour
+        // appeared to start below the bar (team lead's review). At the top of
+        // the page it is fully transparent and the gradient runs from the very
+        // top, as it does in the sidebar. Only once content scrolls underneath
+        // does a light blur and a hairline come in, so the search field stays
+        // readable over the rows passing below it.
+        (scrolled
+          ? "bg-background/60 shadow-[inset_0_-1px_0_hsl(var(--border))] backdrop-blur-xl"
+          : "bg-transparent")
       }
     >
       {/* Phone-only navigation opener. Replaces the floating left-edge handle.
@@ -260,7 +281,7 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
               aria-pressed={slot.filters.open}
               onClick={() => slot.filters!.onOpenChange(!slot.filters!.open)}
               className={
-                "relative flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-lg transition-colors " +
+                "relative flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors " +
                 (slot.filters.open
                   ? "bg-primary text-primary-foreground"
                   : "bg-primary/10 text-primary hover:bg-primary/20")
@@ -290,7 +311,7 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
           <span className="min-w-0 flex-1 truncate text-[13px] text-muted-foreground">
             Search bookings, customers, vehicles…
           </span>
-          <kbd className="shrink-0 rounded bg-primary/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-primary">
+          <kbd className="shrink-0 rounded-full bg-primary/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-primary">
             ⌘K
           </kbd>
         </button>
@@ -300,7 +321,7 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
         type="button"
         onClick={open}
         aria-label="Search"
-        className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-primary/25 bg-primary/[0.07] text-primary sm:hidden"
+        className="inline-flex size-8 shrink-0 items-center justify-center rounded-full border border-primary/25 bg-primary/[0.07] text-primary sm:hidden"
       >
         <Search className="size-4" aria-hidden />
       </button>

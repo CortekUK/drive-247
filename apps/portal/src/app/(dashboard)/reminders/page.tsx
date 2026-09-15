@@ -33,6 +33,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import Image from 'next/image';
 import Link from 'next/link';
 import { useManagerPermissions } from '@/hooks/use-manager-permissions';
+import { useV2 } from '@/lib/v2-context';
 
 const capitalize = (str: string) => str.charAt(0).toUpperCase() + str.slice(1);
 
@@ -47,6 +48,10 @@ export default function RemindersPageEnhanced() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const { canEdit } = useManagerPermissions();
+  // v2 chrome (northwind only; fails closed to v1). Used only to put this page's
+  // header on the sidebar switch's row at md; every other tenant renders the
+  // classes it did before. Above the early returns, as every hook must be.
+  const v2Chrome = useV2('chrome');
 
   const { data: reminders = [], isLoading, error } = useReminders(filters);
   const { data: stats } = useReminderStats();
@@ -142,8 +147,10 @@ export default function RemindersPageEnhanced() {
   };
 
   if (error) {
+    // v2 (switch row alignment): the loaded page's md top padding, so the error
+    // card starts where the title does (y=74 at md), not 8px lower.
     return (
-      <div className="container mx-auto py-8">
+      <div className={`container mx-auto py-8${v2Chrome ? " md:pt-6" : ""}`}>
         <Card>
           <CardContent className="pt-6">
             <div className="text-center">
@@ -157,8 +164,11 @@ export default function RemindersPageEnhanced() {
     );
   }
 
+  // v2 (switch row alignment): md:pt-6 centres the 36px title on the sidebar
+  // switch's row at y=92 (main starts at 50, + 24 + 18). sm:py-8's 32px top
+  // left it 8px low.
   return (
-    <div className="container mx-auto p-4 sm:p-6 sm:py-8 space-y-6">
+    <div className={`container mx-auto p-4 sm:p-6 sm:py-8 space-y-6${v2Chrome ? " md:pt-6" : ""}`}>
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
         <div className="min-w-0">

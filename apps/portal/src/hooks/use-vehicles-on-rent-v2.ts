@@ -117,10 +117,28 @@ function dayNumber(d: Date): number {
   return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86_400_000;
 }
 
-interface Span {
-  vehicleId: string;
-  from: number;
-  to: number;
+/** How many of the ascending `sorted` numbers are at most `x`. */
+function countAtMost(sorted: readonly number[], x: number): number {
+  let lo = 0;
+  let hi = sorted.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (sorted[mid] <= x) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
+/** How many of the ascending `sorted` numbers are below `x`. */
+function countBelow(sorted: readonly number[], x: number): number {
+  let lo = 0;
+  let hi = sorted.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (sorted[mid] < x) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
 }
 
 /**
@@ -136,6 +154,12 @@ interface Span {
  *  - Every other status (Pending, Cancelled, Rejected) never counts.
  *
  * Days after `today` are not history; nothing counts on them.
+ *
+ * SPEED. The graph asks about every day it draws, about 700 of them for "Last 12
+ * months" against the 12 before, over up to 50,000 rentals. So the work is done
+ * once, here. Each car's spans are merged into runs of days that never overlap
+ * (a car counts once a day however many of its rentals cover that day), and a
+ * day's count is then two binary searches over the sorted run starts and ends.
  */
 export function carsOnRentCounter(
   rentals: readonly OnRentRental[],
@@ -143,15 +167,21 @@ export function carsOnRentCounter(
   today: Date,
 ): (day: Date) => number {
   const todayN = dayNumber(today);
-  const spans: Span[] = [];
+  if (!Number.isFinite(todayN)) return () => 0;
+
+  const spansByCar = new Map<string, [from: number, to: number][]>();
+  const addSpan = (vehicleId: string, from: number, to: number) => {
+    const spans = spansByCar.get(vehicleId);
+    if (spans) spans.push([from, to]);
+    else spansByCar.set(vehicleId, [[from, to]]);
+  };
 
   for (const r of rentals) {
     if (!r.vehicle_id || !carIds.has(r.vehicle_id)) continue;
     const start = dayNumber(parseLocalDate(r.start_date));
 
     if (r.status === "Active") {
-      const from = Number.isFinite(start) ? Math.min(start, todayN) : todayN;
-      spans.push({ vehicleId: r.vehicle_id, from, to: todayN });
+      addSpan(r.vehicle_id, Number.isFinite(start) ? Math.min(start, todayN) : todayN, todayN);
       continue;
     }
 
@@ -160,17 +190,38 @@ export function carsOnRentCounter(
       if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
       const to = Math.min(end, todayN - 1);
       if (to < start) continue;
-      spans.push({ vehicleId: r.vehicle_id, from: start, to });
+      addSpan(r.vehicle_id, start, to);
     }
   }
+
+  const runStarts: number[] = [];
+  const runEnds: number[] = [];
+  for (const spans of spansByCar.values()) {
+    spans.sort((a, b) => a[0] - b[0]);
+    let [from, to] = spans[0];
+    for (let k = 1; k < spans.length; k++) {
+      const [nextFrom, nextTo] = spans[k];
+      if (nextFrom <= to + 1) {
+        // Overlapping, or back to back: one unbroken run of days out.
+        to = Math.max(to, nextTo);
+      } else {
+        runStarts.push(from);
+        runEnds.push(to);
+        from = nextFrom;
+        to = nextTo;
+      }
+    }
+    runStarts.push(from);
+    runEnds.push(to);
+  }
+  runStarts.sort((a, b) => a - b);
+  runEnds.sort((a, b) => a - b);
 
   return (day: Date) => {
     const d = dayNumber(day);
     if (!Number.isFinite(d)) return 0;
-    const out = new Set<string>();
-    for (const s of spans) {
-      if (s.from <= d && d <= s.to) out.add(s.vehicleId);
-    }
-    return out.size;
+    // The runs that have started by day d, less those that ended before it (each
+    // of which had also started), are the runs covering d, and no car has two.
+    return countAtMost(runStarts, d) - countBelow(runEnds, d);
   };
 }

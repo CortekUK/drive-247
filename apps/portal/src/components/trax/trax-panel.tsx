@@ -1,155 +1,276 @@
 "use client";
 
-import Link from "next/link";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { usePathname } from "next/navigation";
-import { Bot, Maximize2, Plus, X } from "lucide-react";
+import { Maximize2, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui-v2/tooltip";
 import { TraxThread } from "./trax-thread";
-import { useTraxOptional } from "./trax-provider";
+import { TraxMark } from "./trax-greeting";
+import { isTraxPath, useTraxOptional } from "./trax-provider";
 
 /**
  * Trax as a docked side panel — the Stripe Assistant shape.
  *
  * ---------------------------------------------------------------------------
- * WHY THIS IS NOT THE `Sheet` PRIMITIVE
+ * IT DOCKS: THE PAGE GETS NARROWER, NOTHING IS COVERED
  *
- * `ui-v2/sheet.tsx` renders `<SheetOverlay />` UNCONDITIONALLY inside
- * `SheetContent` (sheet.tsx:61) — `fixed inset-0 z-50 bg-black/30
- * backdrop-blur-md`, with no prop to suppress it. A Radix sheet would therefore
- * DIM, BLUR and BLOCK the page behind Trax, and that is the one thing this
- * surface must not do: the argument for a panel over a dialog was that the
- * operator keeps reading the record they are asking about. An overlay that
- * hides and blocks it is a dialog wearing a sheet's geometry.
+ * Opening the panel shrinks the whole content column — top bar included — by
+ * the panel's width, the way Stripe's assistant does, so the record the
+ * operator is asking about stays fully readable beside the answer.
  *
- * So this is hand-rolled: pinned, no backdrop, no focus trap, no scroll lock,
- * no dismiss-on-outside. The page stays fully live, which is the feature.
+ * The mechanism is the one the Sidebar primitive already uses on the left
+ * (ui-v2/sidebar.tsx), mirrored on the right. This component renders two things
+ * into `SidebarProvider`'s flex ROW, after `SidebarInset`:
+ *
+ *   1. a FLOW GAP (`[data-slot=trax-gap]`) — an empty block whose width
+ *      animates between 0 and `--trax-width`. It is a real flex item, so the
+ *      `flex-1` Inset gives up exactly that much room.
+ *   2. the PANEL — `position: fixed` over the space the gap reserved, so it
+ *      stays viewport-tall while a long page scrolls under the top bar.
+ *
+ * Both move on the sidebar's own 200ms linear curve, so opening Trax and
+ * collapsing the sidebar feel like the same piece of furniture.
  *
  * ---------------------------------------------------------------------------
- * IT PINS OVER THE CONTENT. IT USED TO DOCK, AND THAT WAS WRONG.
+ * WHY THIS FAILED THE FIRST TIME, AND WHAT FIXES IT
  *
- * The first version was a flex sibling of `SidebarInset`: `SidebarProvider`
- * renders a flex ROW and the Inset is `flex-1`, so a docked third child made the
- * content column NARROWER instead of covering it — which is what Stripe does.
+ * An earlier docked version clipped the page's right edge (the Add Customer
+ * button) off screen. A flex item defaults to `min-width: auto` — floored at its
+ * CONTENT width — and `SidebarInset` shipped no `min-w-0`, so `flex-1` could not
+ * shrink it and the row became `sidebar + content + panel`, wider than the
+ * viewport. `body.v2-theme` clips horizontal overflow rather than scrolling it,
+ * so the symptom was silently missing content, not a scrollbar.
  *
- * It broke, visibly. `SidebarInset` ships `flex w-full flex-1` with no
- * `min-width`, and a flex item defaults to `min-width: auto` — floored at its
- * CONTENT width. `flex-1` therefore could not shrink it, so the row became
- * `sidebar + content + 440px`, wider than the viewport, and BOTH the page's
- * right edge (the Add Customer button) and the panel's own text were clipped off
- * screen. That floor is the exact horizontal twin of the `min-h-0` problem the
- * dashboard layout already documents for height.
+ * The dashboard layout now puts `min-w-0` on the Inset and its `<main>` under
+ * v2 (the horizontal twin of the `min-h-0` it already documents for height).
+ * With the floor gone, wide content does what it was built to do: list tables
+ * scroll inside their own cards, grids take `minmax(0, …)` tracks.
  *
- * `min-w-0` fixes the floor — but not the real problem, which is that there is
- * nothing to reflow INTO. The v2 chrome wraps mostly v1 page bodies: the
- * customers list, the vehicles list and ~60 other screens still live under
- * `components/<area>/` and are shared with the other 56 tenants. None was built
- * for a narrower column, and retrofitting them is the hero-tab rewrite, not a
- * change that belongs behind this panel. Stripe reflows because Stripe's pages
- * were built to; ours were not.
+ * The caveat that remains is breakpoints. Tailwind's `lg:` / `xl:` read the
+ * VIEWPORT, not this narrower column, so a page keeps its wide layout in a
+ * column up to 440px narrower than it expects. `--trax-width` is a clamp for
+ * that reason: 30vw, never below 340px, never above 440px.
  *
- * So it pins instead. The left of the page stays visible and clickable — no dim,
- * no block — and what the panel covers is reachable by closing it. When the
- * listing pages are rebuilt to the new pattern, docking becomes a one-line
- * change back.
+ * ---------------------------------------------------------------------------
+ * WHY THIS IS NOT THE `Sheet` PRIMITIVE
+ *
+ * `ui-v2/sheet.tsx` renders its overlay unconditionally — dim, blur, and a
+ * click-catcher over the page. Trax is consulted WHILE reading a record, so the
+ * page must stay live: no backdrop, no focus trap, no scroll lock. Below `md`
+ * there is no room to sit beside anything, so there it is a full-screen sheet.
+ *
+ * ---------------------------------------------------------------------------
+ * ALWAYS MOUNTED, LAZILY FILLED
+ *
+ * The panel element stays mounted so it can slide both ways. Closed, it is
+ * `invisible` as well as off-screen, which takes it out of the tab order and the
+ * accessibility tree. It becomes visible the instant it opens and hidden only
+ * once the slide-out finishes (see the class list for why that asymmetry is
+ * load-bearing). The conversation inside is not rendered until the panel is
+ * first opened, so a page load that never opens Trax renders no thread and
+ * sends no request for it.
+ *
+ * On `/trax` it renders nothing: the full page IS the conversation, and a
+ * docked copy beside it would be the same thread twice.
  */
-
-/** Stripe's assistant column is ~440px. Wide enough for a paragraph, narrow
- *  enough that a rental record beside it stays legible. */
-const PANEL_WIDTH = "md:w-[440px]";
-
 export function TraxPanel() {
-  /* Optional: the Messages workspace bypasses parts of the layout, so the
-     provider may legitimately be absent. Throwing there would take the whole
-     route down for a panel that is not even open. */
+  /* Optional: the provider is v2-only, and a panel is never worth throwing for. */
   const trax = useTraxOptional();
   const pathname = usePathname();
+  const onFullPage = isTraxPath(pathname);
+  const open = !!trax?.sheetOpen && !onFullPage;
 
-  if (!trax) return null;
+  /* First open fills the panel; it then stays filled so reopening is instant.
+     Set during render (React's derived-state pattern) rather than in an
+     effect, so the thread is already there on the frame the slide starts. */
+  const [hasOpened, setHasOpened] = useState(false);
+  if (open && !hasOpened) setHasOpened(true);
 
-  const { sheetOpen, closeSheet, startNewConversation, chat } = trax;
+  /* Arriving back from `/trax` mounts the panel already open. Hold it in the
+     closed position for two frames so it slides in — and the page column
+     narrows — instead of snapping into place. */
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    if (onFullPage) {
+      setArmed(false);
+      return;
+    }
+    let inner = 0;
+    const outer = requestAnimationFrame(() => {
+      inner = requestAnimationFrame(() => setArmed(true));
+    });
+    return () => {
+      cancelAnimationFrame(outer);
+      cancelAnimationFrame(inner);
+    };
+  }, [onFullPage]);
+  const shown = open && armed;
 
-  /* On the full page the panel would be a second copy of the same conversation
-     side by side with itself. The provider keeps the state, so closing it here
-     costs nothing. */
-  const onFullPage = pathname?.startsWith("/trax");
-  if (!sheetOpen || onFullPage) return null;
+  /* Hand focus back to the page when the panel closes with focus inside it.
+     Without this, focus drops to <body> and a keyboard user starts again from
+     the top of the page.
+     The target is the last element focused OUTSIDE the panel, tracked with a
+     `focusin` listener rather than read when the panel opens: the thread
+     focuses its composer from its own effect, and a child's effect runs before
+     this component's, so "what had focus on open" would already be the
+     composer. */
+  const asideRef = useRef<HTMLElement>(null);
+  const lastOutsideFocusRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const onFocusIn = (e: FocusEvent) => {
+      const t = e.target;
+      if (t instanceof HTMLElement && !asideRef.current?.contains(t)) lastOutsideFocusRef.current = t;
+    };
+    document.addEventListener("focusin", onFocusIn);
+    return () => document.removeEventListener("focusin", onFocusIn);
+  }, []);
+  const wasShownRef = useRef(false);
+  useEffect(() => {
+    if (shown) {
+      wasShownRef.current = true;
+      return;
+    }
+    if (!wasShownRef.current) return;
+    wasShownRef.current = false;
+    const aside = asideRef.current;
+    const target = lastOutsideFocusRef.current;
+    if (aside && target?.isConnected && aside.contains(document.activeElement)) {
+      target.focus({ preventScroll: true });
+    }
+  }, [shown]);
+
+  /* Publish the dock state on <html> for everything that is NOT in the flex
+     row: viewport-pinned overlays (the setup guide is portalled to <body>, the
+     Appearance save bar is `fixed`) cannot see the gap, so they read
+     `--trax-offset` instead — 0px when closed or below `md`, the panel's width
+     when docked. The variables themselves live in styles/v2-theme.css, keyed on
+     this attribute, so the width has one definition. The attribute exists only
+     while this v2-only component is mounted: no v1 page ever gets it. */
+  useEffect(() => {
+    const root = document.documentElement;
+    root.setAttribute("data-trax-panel", shown ? "open" : "closed");
+  }, [shown]);
+  useEffect(() => () => document.documentElement.removeAttribute("data-trax-panel"), []);
+
+  if (!trax || onFullPage) return null;
+
+  const { closeSheet, startNewConversation, expandToFullPage, chat } = trax;
+
+  const onKeyDown = (e: KeyboardEvent<HTMLElement>) => {
+    /* Escape closes the panel from anywhere inside it. `defaultPrevented`
+       yields to a Radix menu or popover that already used this Escape to close
+       itself; `isComposing` yields to an IME candidate window. */
+    if (e.key !== "Escape" || e.defaultPrevented || e.nativeEvent.isComposing) return;
+    e.preventDefault();
+    closeSheet();
+  };
 
   return (
-    <aside
-      aria-label="Trax"
-      /* Pinned, not docked. `inset-y-0 right-0` at md+ gives a full-height
-         column over the right edge; below md it takes the screen, because a
-         440px column cannot sit beside content on a phone and at that width the
-         record behind it would be unreadable anyway.
-         z-40 matches the top bar so the two form one plane — above page content,
-         below the portalled overlays (GlobalSearch, sheets) which sit at z-50. */
-      className={
-        "fixed inset-0 z-40 flex flex-col border-border bg-card shadow-xl " +
-        `md:inset-y-0 md:left-auto md:right-0 md:border-l ${PANEL_WIDTH}`
-      }
-    >
-      {/* Same 64px as the top bar, so the two read as one band across the app. */}
-      <header className="flex h-16 shrink-0 items-center gap-2 border-b border-border px-4">
-        <span className="flex size-7 items-center justify-center rounded-4xl bg-primary/10 text-primary">
-          <Bot className="size-4" aria-hidden />
-        </span>
-        <span className="text-[13px] font-semibold">Trax</span>
+    <>
+      {/* The flow gap. Desktop only: below `md` the panel is a full-screen
+          sheet and there is no column to share. */}
+      <div
+        aria-hidden
+        data-slot="trax-gap"
+        data-state={shown ? "open" : "closed"}
+        className="hidden shrink-0 transition-[width] duration-200 ease-linear motion-reduce:transition-none md:block"
+        style={{ width: shown ? "var(--trax-width, 440px)" : 0 }}
+      />
 
-        <div className="ml-auto flex items-center gap-0.5">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label="New conversation"
-                onClick={startNewConversation}
-                disabled={chat.messages.length === 0}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <Plus />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">New conversation</TooltipContent>
-          </Tooltip>
+      <aside
+        ref={asideRef}
+        aria-label="Trax"
+        data-slot="trax-panel"
+        data-state={shown ? "open" : "closed"}
+        onKeyDown={onKeyDown}
+        className={[
+          "fixed inset-0 z-40 flex flex-col text-foreground",
+          "md:inset-y-0 md:left-auto md:right-0 md:w-[var(--trax-width,440px)]",
+          /* Visibility flips ON at once and OFF only after the slide. A
+             `visibility` transition interpolates as `hidden` on its very first
+             frame, and the composer focuses its textarea on exactly that frame
+             — the browser silently refuses to focus a hidden element, so ⌘J
+             opened a panel you could not type into. Opening therefore
+             transitions `transform` alone; closing delays `visibility` by the
+             slide's 200ms so the panel stays painted while it leaves. */
+          shown
+            ? "visible translate-x-0 [transition:transform_200ms_linear]"
+            : "invisible translate-x-full [transition:transform_200ms_linear,visibility_0s_linear_200ms]",
+          "motion-reduce:transition-none",
+          /* ONE background. Beside the page (md+) the panel is transparent and
+             the layout's app gradient shows straight through the space the gap
+             reserved — no slab, no edge. Full screen on a phone it sits OVER the
+             page, so it paints the same ground itself: an opaque colour plus
+             the gradient. `!` because `.v2-theme .bg-app-gradient` outranks a
+             bare utility.
+             Joined by hand, NOT through `cn()`: tailwind-merge reads
+             `bg-app-gradient` as a background COLOUR and drops `bg-background`
+             as its conflict, which left the phone sheet see-through. */
+          "bg-background bg-app-gradient md:!bg-transparent md:!bg-none",
+        ].join(" ")}
+      >
+        {/* 64px, the top bar's height, so the two read as one band across the
+            screen. No rule underneath: the header is set apart by space. */}
+        <header className="flex h-16 shrink-0 items-center gap-2.5 pl-4 pr-3">
+          <TraxMark size="sm" animated={false} />
+          <span className="text-[14px] font-semibold tracking-tight">Trax</span>
 
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                asChild
-                className="text-muted-foreground hover:text-foreground"
-              >
-                {/* The conversation survives the navigation because the provider
-                    is mounted in the layout, ABOVE the route — so this is the
-                    same thread, full screen, not a new one. */}
-                <Link href="/trax" aria-label="Open full screen">
+          <div className="ml-auto flex items-center gap-0.5">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="New conversation"
+                  onClick={startNewConversation}
+                  /* Not mid-reply: `useChat` appends the answer to whatever
+                     thread is on screen when it lands. */
+                  disabled={chat.messages.length === 0 || chat.isLoading}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <Plus />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">New conversation</TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                {/* Same thread, full screen: the provider sits above the route,
+                    so this continues the conversation rather than starting one. */}
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Open full screen"
+                  onClick={expandToFullPage}
+                  className="text-muted-foreground hover:text-foreground"
+                >
                   <Maximize2 />
-                </Link>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Full screen</TooltipContent>
-          </Tooltip>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Full screen</TooltipContent>
+            </Tooltip>
 
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Close Trax"
-                onClick={closeSheet}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <X />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Close</TooltipContent>
-          </Tooltip>
-        </div>
-      </header>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Close Trax"
+                  onClick={closeSheet}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <X />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Close · ⌘J</TooltipContent>
+            </Tooltip>
+          </div>
+        </header>
 
-      <TraxThread density="sheet" />
-    </aside>
+        {hasOpened && <TraxThread density="sheet" autoFocus={shown} />}
+      </aside>
+    </>
   );
 }

@@ -176,9 +176,10 @@ export default function DashboardLayout({
 
   /* Trax's full-screen page. It needs the same HEIGHT treatment as Messages — a
      conversation must scroll inside itself rather than growing the document —
-     but NOT the same chrome treatment: Messages hides the sidebar, and a chat
-     page reached from the app should keep its navigation. Hence a second flag
-     rather than widening the first. */
+     but NOT the same chrome treatment: Messages hides the sidebar, whereas on
+     Trax the sidebar stays and BECOMES the conversation rail (AppSidebarV2 →
+     TraxRail), with Back at its top. Hence a second flag rather than widening
+     the first. */
   const isTraxWorkspace = pathname === "/trax" || !!pathname?.startsWith("/trax/");
 
   /* Routes that bound their own height instead of letting the document scroll. */
@@ -420,6 +421,12 @@ export default function DashboardLayout({
           same on both trees. `undefined` outside the gate leaves the element's
           class list byte-for-byte what it was for the other 56 tenants. */}
       <Provider
+        /* The docked Trax panel's width is NOT set here any more. It lives in
+           styles/v2-theme.css as `--trax-width` (plus `--trax-offset`), keyed on
+           the `data-trax-panel` attribute TraxPanel puts on <html>. It had to
+           move up to the root: the setup guide portals to <body>, outside this
+           wrapper, and still has to sit clear of the panel. v1 never mounts
+           TraxPanel, so no v1 page gets either variable. */
         className={
           [
             v2Theme ? "bg-background bg-app-gradient" : "",
@@ -462,9 +469,16 @@ export default function DashboardLayout({
             the bar would have scrolled away with the page. Horizontal overflow is
             still clamped: `html, body { overflow-x: hidden }` in global.css
             covers it for every tenant. The other 56 keep the class they have. */}
+        {/* `min-w-0` (v2) is what lets the Trax panel DOCK. A flex item's
+            default `min-width: auto` floors it at its content width, so without
+            it the Inset could not give up room to the panel's flow gap: the row
+            ran past the viewport and `body.v2-theme`'s `overflow-x: clip` cut
+            the page's right edge off. With the floor gone, `flex-1` narrows the
+            whole column — top bar included — and wide content scrolls inside
+            its own card as designed. */}
         <Inset
           className={
-            [v2Chrome ? "" : "overflow-x-hidden", v2Theme ? "bg-transparent" : ""]
+            [v2Chrome ? "min-w-0" : "overflow-x-hidden", v2Theme ? "bg-transparent" : ""]
               .filter(Boolean)
               .join(" ") || undefined
           }
@@ -474,7 +488,11 @@ export default function DashboardLayout({
               `shrink-0` flex sibling ABOVE the banners and <main>, so the flex
               pass subtracts its height the same way it already does for v1 —
               which is what keeps the /messages `h-svh` scroll bound intact. */}
-          {v2Chrome && <TopBarV2 showNavTrigger={!isMessagesWorkspace} />}
+          {/* Not on /trax: the full page is laid out like Claude's — the rail
+              carries Back and the conversations, the page is one conversation
+              column — and the bar's Trax button would only toggle a panel that
+              route never shows. */}
+          {v2Chrome && !isTraxWorkspace && <TopBarV2 showNavTrigger={!isMessagesWorkspace} />}
           {/* v1 only. v2 renders TopBarV2 above instead, so the two never
               coexist. Where each of this row's controls went for v2: SEARCH and
               NOTIFICATIONS are in the top bar (they were briefly in the sidebar
@@ -522,19 +540,34 @@ export default function DashboardLayout({
               removed, `flex-1` distributes the wrapper's bounded height and no
               viewport arithmetic is needed anywhere — v1's 4rem header is a
               sibling above, so the flex pass subtracts it on its own. */}
+          {/* v2: THE PAGE HEADER SITS ON THE SIDEBAR SWITCH'S ROW. The user asked
+              for the page title row (Rentals, Customers, Vehicles and every page
+              like them) to line up with the Portal / Website switch in the
+              sidebar. Measured in headless Chrome on the real AppSidebarV2 and
+              TopBarV2: the switch is centred 92px from the top at every desktop
+              width, collapsed or not, and a page header (a 24px page padding,
+              then a 36px title row) was centred at 122px, so 30px low. Dropping
+              main's 16px top padding and pulling main up 14px under the
+              transparent top bar puts it at 92px. Desktop only (md, where the
+              sidebar is on screen). `[header+&]` applies it only when main sits
+              directly under the top bar: with a maintenance or deposit banner
+              showing in between, main keeps today's spacing instead of sliding
+              under the banner. The v1 branch is unchanged. */}
           <main
             className={
               isBoundedHeight
-                ? "flex min-h-0 flex-1 flex-col overflow-hidden p-0"
-                : `flex flex-1 flex-col gap-4 p-4${v2Chrome ? "" : " pt-0"}`
+                ? `flex min-h-0 flex-1 flex-col overflow-hidden p-0${v2Chrome ? " min-w-0" : ""}`
+                : `flex flex-1 flex-col gap-4 p-4${v2Chrome ? " min-w-0 md:[header+&]:pt-0 md:[header+&]:-mt-3.5" : " pt-0"}`
             }
           >
             {children}
           </main>
         </Inset>
 
-        {/* Trax. Pinned over the right edge rather than docked in the flex row —
-            see the header of trax-panel.tsx for why that had to change. */}
+        {/* Trax, DOCKED: a third child of this flex row. It renders a flow gap
+            that narrows the Inset above by `--trax-width`, and a fixed panel
+            over the room the gap reserves — the Sidebar primitive's own
+            pattern, mirrored on the right. See the header of trax-panel.tsx. */}
         <TraxPanel />
         </SearchSlotWrap>
         </TraxWrap>

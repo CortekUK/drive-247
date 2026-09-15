@@ -3,7 +3,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
 import { isLeanTenant } from '@/lib/lean-areas';
 import {
+  MAX_VIDEO_DURATION_SECONDS,
   SETUP_CHECKLIST_ITEMS,
+  safeChecklistLink,
   type SetupChecklistItem,
 } from '@/lib/setup-checklist';
 
@@ -31,6 +33,7 @@ interface ChecklistRow {
   title: unknown;
   description: unknown;
   video_url: unknown;
+  video_duration_seconds: unknown;
   guide_url: unknown;
 }
 
@@ -38,9 +41,42 @@ function isNonEmptyString(v: unknown): v is string {
   return typeof v === 'string' && v.trim().length > 0;
 }
 
-/** A trimmed string, or `null` for anything blank or not a string. */
+/**
+ * A trimmed link, or `null` for anything blank, not a string, or unsafe.
+ *
+ * Unsafe means anything `safeChecklistLink` refuses — a `javascript:` or
+ * `data:` URL, a protocol-relative `//host`, a path like `/.//host` whose dot
+ * segment collapses to `//host`. A same-origin path comes back resolved
+ * (`/settings/../rentals` is `/rentals`), so what is stored on the item is what
+ * the card classifies and routes. Unsafe links are dropped HERE, before
+ * the link rule below runs, so a row whose only link is one of them counts as
+ * a row with no link and is dropped too. The card checks again before it uses
+ * a link; this is the reader keeping its own promise that every row it returns
+ * has something behind it.
+ */
 function toLink(v: unknown): string | null {
-  return isNonEmptyString(v) ? v.trim() : null;
+  return isNonEmptyString(v) ? safeChecklistLink(v.trim()) : null;
+}
+
+/**
+ * `video_duration_seconds` to whole seconds, or `null`.
+ *
+ * The column is an `integer`, so PostgREST sends a JSON number; a numeric
+ * string ("90") is accepted as well, because not every path that writes or
+ * proxies a row keeps it a number, and a card that quietly stops printing
+ * times over a representation change is the failure worth avoiding.
+ *
+ * Anything that is not a finite, positive, whole number of seconds up to
+ * MAX_VIDEO_DURATION_SECONDS (the same ceiling as the table's CHECK) is
+ * `null`, and the card then prints no time at all rather than a wrong one.
+ */
+function toDurationSeconds(v: unknown): number | null {
+  let n: number;
+  if (typeof v === 'number') n = v;
+  else if (typeof v === 'string' && /^\s*\d+(?:\.0+)?\s*$/.test(v)) n = Number(v);
+  else return null;
+  if (!Number.isInteger(n) || n < 1 || n > MAX_VIDEO_DURATION_SECONDS) return null;
+  return n;
 }
 
 /**
@@ -68,6 +104,9 @@ function toItem(row: ChecklistRow): SetupChecklistItem | null {
     title: row.title,
     description: isNonEmptyString(row.description) ? row.description : '',
     videoUrl,
+    // Only meaningful beside a video. A length on a row whose video was blank
+    // or refused as unsafe would be a time printed for nothing.
+    videoDurationSeconds: videoUrl ? toDurationSeconds(row.video_duration_seconds) : null,
     guideUrl,
   };
 }
@@ -114,7 +153,7 @@ export function useSetupChecklist(): SetupChecklistState {
     queryFn: async (): Promise<readonly SetupChecklistItem[] | null> => {
       const { data: rows, error } = await (supabase as any)
         .from('setup_checklist_items')
-        .select('item_key,title,description,video_url,guide_url')
+        .select('item_key,title,description,video_url,video_duration_seconds,guide_url')
         .eq('is_published', true)
         .order('sort_order', { ascending: true });
 

@@ -41,8 +41,9 @@
  *
  * The old dashboard "setup guide" step went the other way: it is not a stop any
  * more, because the panel it pointed at is already on the screen the operator
- * lands on and needs no spotlight to be found. The finale names it instead, so
- * they leave knowing what still tracks their remaining setup.
+ * lands on and needs no spotlight to be found. That panel has since been taken
+ * off the dashboard altogether, so the finale now points at Settings, where the
+ * remaining setup is actually done.
  *
  * Still skippable at every step, still replayable from the user menu, still NO
  * VIDEOS inside it — videos live in the setup checklist and the empty states.
@@ -473,9 +474,9 @@ export const FIRST_RENTAL_TOUR: readonly TourStep[] = [
     label: 'Booking site',
     title: 'Your customers book here',
     body: 'Your name, logo and colours go on a public booking site that is already live for you.',
-    route: '/settings?tab=branding',
-    // Point at the Branding ROW in the settings rail, not at the panel it
-    // opens. The panel (`[data-tour="booking-site-branding"]`) is a whole Card
+    route: '/settings',
+    // Point at the Branding entry on the settings index (v2 has no settings
+    // rail any more), not at a panel. The panel (`[data-tour="booking-site-branding"]`) is a whole Card
     // — Application Name, Company Logo and Favicon — and it is TALLER THAN THE
     // VIEWPORT, so spotlighting it rimmed nearly the entire screen, left only a
     // strip of sidebar dimmed, and slid around as the operator scrolled. A
@@ -517,7 +518,7 @@ export const FIRST_RENTAL_TOUR: readonly TourStep[] = [
         // tenant whose settings sidebar is not drawn never reads about a list
         // that is not there.
         text: 'The rest of your setup is in this list — locations, deposits, fees and more.',
-        anchors: [`${SIDEBAR} [data-sidebar="content"]`],
+        anchors: ['[data-tour="settings-index"]'],
       },
     ],
   },
@@ -525,7 +526,10 @@ export const FIRST_RENTAL_TOUR: readonly TourStep[] = [
     id: 'done',
     label: 'Done',
     title: "That's the house",
-    body: 'Take a tab tour whenever you want the detail on one. Your setup guide on the dashboard tracks what is still to switch on.',
+    // The dashboard's setup guide is no longer mounted (the lead asked for it
+    // off the home screen), so the finale names where remaining setup actually
+    // lives rather than a panel the operator would look for and not find.
+    body: 'Take a tab tour whenever you want the detail on one. Anything still to switch on lives in Settings.',
     route: null,
     anchors: [],
     side: 'center',
@@ -552,7 +556,9 @@ export const BLOCKED_RENTAL_STEP: TourStep = {
   id: 'rental',
   label: 'Rentals',
   title: 'Where the business runs',
-  body: 'Every booking lives here. New Rental starts one once your payments are connected, and the setup guide gets you there.',
+  // Names the real fix path (Settings, payments tab — where the connect-Stripe
+  // dialog sends them); the dashboard setup guide it used to name is gone.
+  body: 'Every booking lives here. New Rental starts one once your payments are connected in Settings.',
   route: '/rentals',
   anchors: [
     '[data-tour="new-rental"]',

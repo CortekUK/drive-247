@@ -3,12 +3,82 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/stores/auth-store';
 import { useTenant } from '@/contexts/TenantContext';
 import type {
+  ChatAttachment,
   ChatMessage,
   ChatApiResponse,
+  SendMessageOptions,
+  TraxAttachmentCapability,
   UseChatReturn,
 } from '@/types/chat';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://hviqoaokxvlancmftwuo.supabase.co";
+
+/**
+ * Ask the deployed chat function whether it can take file attachments.
+ *
+ * WHY A PROBE AND NOT A FLAG: the function parses its body loosely, so a build
+ * that predates attachments would accept `{ attachments: [...] }`, ignore it,
+ * and answer as if the model had read the file. The only honest source is the
+ * running function itself. A version that knows the `capabilities` route
+ * answers with its limits; an older one falls through to the chat route and
+ * returns 400 "Message is required" before any model call or DB write.
+ *
+ * Returns `null` for a definite "no" (any non-2xx, or a body without a
+ * versioned capability). THROWS when the question could not be asked at all
+ * (no session, network failure) so React Query records an error and asks
+ * again on the next mount, instead of caching a transient blip as "no".
+ */
+export async function probeChatCapabilities(tenantId: string): Promise<TraxAttachmentCapability | null> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) {
+    throw new Error('Not authenticated');
+  }
+
+  const response = await fetch(`${SUPABASE_URL}/functions/v1/chat`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({ type: 'capabilities', tenantId }),
+  });
+
+  if (!response.ok) return null;
+
+  const data = await response.json().catch(() => null);
+  const cap = data?.capabilities?.attachments;
+  const positive = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v > 0;
+  const strings = (v: unknown): v is string[] => Array.isArray(v) && v.every((x) => typeof x === 'string');
+  if (
+    !cap ||
+    !positive(cap.version) ||
+    !positive(cap.maxFiles) ||
+    !positive(cap.maxImageBytes) ||
+    !positive(cap.maxTextBytes) ||
+    !positive(cap.maxTotalBytes) ||
+    !strings(cap.imageTypes) ||
+    !strings(cap.textTypes)
+  ) {
+    return null;
+  }
+
+  return {
+    version: cap.version,
+    maxFiles: cap.maxFiles,
+    maxImageBytes: cap.maxImageBytes,
+    maxTextBytes: cap.maxTextBytes,
+    maxTotalBytes: cap.maxTotalBytes,
+    imageTypes: cap.imageTypes,
+    textTypes: cap.textTypes,
+  };
+}
+
+/** The wire shape: the client-only `id` and `truncated` stay behind. */
+function toWireAttachment(a: ChatAttachment) {
+  return a.kind === 'image'
+    ? { name: a.name, mimeType: a.mimeType, size: a.size, kind: a.kind, dataUrl: a.dataUrl }
+    : { name: a.name, mimeType: a.mimeType, size: a.size, kind: a.kind, text: a.text };
+}
 
 export function useChat(): UseChatReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -56,8 +126,15 @@ export function useChat(): UseChatReturn {
     return await response.json();
   }, []);
 
-  const sendMessage = useCallback(async (content: string) => {
-    if (!content.trim()) return;
+  const sendMessage = useCallback(async (content: string, options?: SendMessageOptions) => {
+    /* `options` is read defensively: v1 passes this function straight through
+       as an `onSend` / `onSuggestionClick` prop, so a stray second argument
+       must never be mistaken for attachments. */
+    const attachments: ChatAttachment[] =
+      options && typeof options === 'object' && Array.isArray(options.attachments)
+        ? options.attachments
+        : [];
+    if (!content.trim() && attachments.length === 0) return;
 
     // Check for tenant context
     if (!tenant?.id) {
@@ -81,9 +158,24 @@ export function useChat(): UseChatReturn {
       role: 'user',
       content: content.trim(),
       timestamp: new Date(),
+      ...(attachments.length > 0
+        ? {
+            attachments: attachments.map(({ id, name, mimeType, size, kind, dataUrl }) => ({
+              id, name, mimeType, size, kind, dataUrl,
+            })),
+          }
+        : {}),
     };
 
     setMessages((prev) => [...prev, userMessage]);
+
+    /** Mark whether the function confirmed every file (see ChatMessage.attachmentsDelivered). */
+    const markDelivery = (delivered: boolean) => {
+      if (attachments.length === 0) return;
+      setMessages((prev) =>
+        prev.map((m) => (m.id === userMessage.id ? { ...m, attachmentsDelivered: delivered } : m))
+      );
+    };
 
     try {
       const data = await callChatFunction({
@@ -91,7 +183,15 @@ export function useChat(): UseChatReturn {
         conversationId,
         userName: getUserName(),
         tenantId: tenant.id,
+        // Key omitted entirely for text-only sends, so that payload is
+        // byte-identical to what every caller sent before attachments existed.
+        ...(attachments.length > 0 ? { attachments: attachments.map(toWireAttachment) } : {}),
       });
+
+      markDelivery(
+        Array.isArray(data.attachmentsReceived) &&
+          data.attachmentsReceived.length === attachments.length
+      );
 
       // Update conversation ID if this is a new conversation
       if (!conversationId) {
@@ -116,6 +216,7 @@ export function useChat(): UseChatReturn {
       const errorMessage = err instanceof Error ? err.message : 'Failed to send message';
       setError(errorMessage);
       console.error('Chat error:', err);
+      markDelivery(false);
 
       // Add error message to chat
       const errorAssistantMessage: ChatMessage = {

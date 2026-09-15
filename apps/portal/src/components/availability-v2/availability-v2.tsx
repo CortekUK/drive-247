@@ -255,8 +255,16 @@ export function AvailabilityV2() {
        every remaining pixel. `min-h-0` on the calendar row is what lets it
        shrink instead of pushing the page taller — without it a flex child
        refuses to go below its content and the whole document scrolls, which is
-       the behaviour being fixed. */
-    <div className="mx-auto flex h-[calc(100svh-2rem)] w-full max-w-[1560px] flex-col gap-3 overflow-hidden px-2 pb-2">
+       the behaviour being fixed.
+
+       Switch row alignment (md+): main's content box starts at 50px, so the h1
+       (text-2xl leading-tight, a 30px line box) gets 27px of top padding and is
+       centred on the sidebar switch at 50 + 27 + 15 = 92. The height is
+       re-derived for that top: 100svh - 50 (top) - 16 (main's bottom padding)
+       = calc(100svh - 66px), the padding inside it (border-box). The old
+       calc(100svh - 2rem) predates the 64px top bar and overflowed the document
+       by 34px at md+ (measured). Below md both are unchanged. */
+    <div className="mx-auto flex h-[calc(100svh-2rem)] w-full max-w-[1560px] flex-col gap-3 overflow-hidden px-2 pb-2 md:h-[calc(100svh-66px)] md:pt-[27px]">
       {/* ── header ───────────────────────────────────────────────────── */}
       <header className="flex shrink-0 flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">

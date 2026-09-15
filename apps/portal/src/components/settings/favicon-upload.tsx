@@ -9,11 +9,17 @@ import { toast } from '@/hooks/use-toast';
 interface FaviconUploadProps {
   currentFaviconUrl?: string;
   onFaviconChange: (faviconUrl: string | null) => void;
+  /**
+   * v2 (Appearance, northwind): the favicon only persists on Save changes, so
+   * removing it must not delete the live file first. Only the form clears.
+   */
+  deferStorageDelete?: boolean;
 }
 
 export const FaviconUpload: React.FC<FaviconUploadProps> = ({
   currentFaviconUrl,
   onFaviconChange,
+  deferStorageDelete = false,
 }) => {
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -134,6 +140,14 @@ export const FaviconUpload: React.FC<FaviconUploadProps> = ({
 
   const handleRemoveFavicon = async () => {
     if (!currentFaviconUrl) return;
+    if (deferStorageDelete) {
+      onFaviconChange(null);
+      toast({
+        title: "Favicon removed from the form",
+        description: "Press Save changes to take it off your portal.",
+      });
+      return;
+    }
 
     try {
       const urlParts = currentFaviconUrl.split('/');

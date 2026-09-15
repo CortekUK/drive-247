@@ -23,7 +23,9 @@ import { codeOnly, readPortalSource } from '../helpers/edge-source';
 const DRAWN_IN: Record<string, readonly string[]> = {
   'components/customers-v2/customers-overview.tsx': ['customers-stats', 'customers-chart', 'customers-featured'],
   'components/vehicles-v2/vehicles-overview.tsx': ['fleet-overview', 'vehicles-chart', 'vehicles-featured'],
-  'components/rentals-v2/rentals-overview.tsx': ['rentals-chart', 'rentals-calendar'],
+  'components/rentals-v2/rentals-overview.tsx': ['rentals-chart', 'rentals-featured'],
+  // The calendar note's anchor: the header's calendar icon (the deck may be showing another card).
+  'components/rentals-v2/rentals-list-v2.tsx': ['rentals-calendar'],
 };
 
 const sel = (id: string) => `[data-tour="${id}"]`;

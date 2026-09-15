@@ -44,6 +44,7 @@ import { LogoStudio } from '@/components/settings/appearance/logo-studio';
 
 import { useTenantBranding, type TenantBranding } from '@/hooks/use-tenant-branding';
 import { useTenant } from '@/contexts/TenantContext';
+import { useV2 } from '@/lib/v2-context';
 import { useManagerPermissions } from '@/hooks/use-manager-permissions';
 import { useThemePreview } from '@/hooks/use-theme-preview';
 import { toast } from '@/hooks/use-toast';
@@ -53,6 +54,12 @@ import {
   type ThemePalette,
 } from '@/lib/appearance/presets';
 import { shade } from '@/lib/appearance/color';
+import {
+  SettingsLoadError,
+  SettingsReadOnlyFieldset,
+  useWarnOnUnsavedChanges,
+} from '@/components/settings-v2/section-states';
+import { ScopeIf, isHexColor6, useImageLoadFailed } from '@/components/settings-v2/business-settings-states';
 
 /** The shape this screen edits — a palette plus the identity fields. */
 interface AppearanceForm extends ThemePalette {
@@ -124,6 +131,19 @@ export function AppearanceSettings() {
   const { tenant } = useTenant();
   const { branding, updateBranding, isUpdating } = useTenantBranding();
   const { canEditSettings, isLoading: permissionsLoading } = useManagerPermissions();
+  // v2 chrome (northwind only; fails closed to v1). Used only to put this page's
+  // header on the sidebar switch's row at md; every other tenant renders the
+  // classes it did before. Above the early returns, as every hook must be.
+  const v2Chrome = useV2('chrome');
+  // v2 states (northwind): wait for the real branding row before hydrating. The
+  // placeholder is tenant-context defaults, and a snapshot of it would let Save
+  // null the live logo and favicon. A failed read offers a retry instead.
+  const {
+    hasBrandingData,
+    error: brandingError,
+    refetch: refetchBranding,
+    isFetchingBranding,
+  } = useTenantBranding();
 
   const readOnly = !permissionsLoading && !canEditSettings('branding');
 
@@ -154,6 +174,7 @@ export function AppearanceSettings() {
   // mutates during preview.
   useEffect(() => {
     if (loaded || !branding) return;
+    if (v2Chrome && !hasBrandingData) return;
     const next = formFromBranding(branding, tenant?.company_name);
     savedRef.current = next;
     setForm(next);
@@ -182,6 +203,13 @@ export function AppearanceSettings() {
     );
   }, [form, loaded]);
 
+  // v2: the browser's leave prompt while a try-on is unsaved (unmounting restores
+  // the saved theme, so leaving would silently drop it), a note when the stored
+  // favicon file is gone, and a half-typed hex that must not be saved.
+  useWarnOnUnsavedChanges(v2Chrome && dirty && !readOnly);
+  const faviconFailed = useImageLoadFailed(v2Chrome ? form.favicon_url : null);
+  const v2HexInvalid = v2Chrome && !isHexColor6(form.light_primary_color);
+
   /**
    * Apply a palette to the form *and* to the running portal, so the tenant sees
    * the consequence of the tap immediately rather than imagining it.
@@ -192,6 +220,11 @@ export function AppearanceSettings() {
   };
 
   const applyCustomColor = (hex: string) => {
+    if (v2Chrome && !isHexColor6(hex)) {
+      // Still being typed: keep it in the field, never preview or derive a palette from it.
+      setForm((prev) => ({ ...prev, light_primary_color: hex }));
+      return;
+    }
     applyPalette(paletteFromBrandColor(hex));
   };
 
@@ -207,6 +240,14 @@ export function AppearanceSettings() {
   };
 
   const handleSave = async () => {
+    if (v2Chrome && !isHexColor6(form.light_primary_color)) {
+      toast({
+        title: 'Finish the brand colour first',
+        description: 'Enter a 6-digit hex code such as #C6A256, or pick a swatch.',
+        variant: 'destructive',
+      });
+      return;
+    }
     try {
       await updateBranding({
         primary_color: form.primary_color,
@@ -242,9 +283,68 @@ export function AppearanceSettings() {
     }
   };
 
-  if (!loaded) {
+  if (v2Chrome && !loaded && brandingError && !hasBrandingData) {
     return (
-      <div className="space-y-6 p-1">
+      <div className="space-y-6 pb-16 md:pt-7">
+        <div className="space-y-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="-ml-2 h-7 gap-1.5 text-muted-foreground"
+            onClick={() => router.push('/settings')}
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Settings
+          </Button>
+          <h1 className="font-heading text-2xl font-medium tracking-tight">Appearance</h1>
+        </div>
+        <SettingsLoadError
+          thing="your branding"
+          error={brandingError}
+          onRetry={refetchBranding}
+          retrying={isFetchingBranding}
+        />
+      </div>
+    );
+  }
+
+  if (!loaded) {
+    if (v2Chrome) {
+      // Shaped like the page: header with its two actions, then the two sections.
+      return (
+        <div role="status" aria-busy="true" className="space-y-8 pb-16 md:pt-7">
+          <span className="sr-only">Loading appearance</span>
+          <div aria-hidden="true" className="flex flex-wrap items-start justify-between gap-4">
+            <div className="space-y-2">
+              <Skeleton className="h-7 w-20 rounded-full" />
+              <Skeleton className="h-8 w-40 rounded-full" />
+              <Skeleton className="h-4 w-72 max-w-[70vw] rounded-full" />
+            </div>
+            <div className="flex gap-2">
+              <Skeleton className="h-8 w-20 rounded-full" />
+              <Skeleton className="h-8 w-32 rounded-full" />
+            </div>
+          </div>
+          {[0, 1].map((i) => (
+            <div key={i} aria-hidden="true" className="grid gap-8 lg:grid-cols-[304px_minmax(0,1fr)]">
+              <div className="space-y-2">
+                <Skeleton className="h-5 w-32 rounded-full" />
+                <Skeleton className="h-4 w-56 max-w-full rounded-full" />
+              </div>
+              <div className="max-w-xl space-y-3">
+                <Skeleton className="h-9 w-full rounded-3xl" />
+                <Skeleton className="h-24 w-full rounded-2xl" />
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+    // v2 (switch row alignment): the same 28px top as the loaded header below, so
+    // the skeleton starts where the Back button will (y=78 at md) rather than at
+    // y=54, under the 64px top bar.
+    return (
+      <div className={`space-y-6 p-1${v2Chrome ? ' md:pt-7' : ''}`}>
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-4 w-96" />
         <Skeleton className="h-64 w-full" />
@@ -252,8 +352,11 @@ export function AppearanceSettings() {
     );
   }
 
+  // v2 (switch row alignment): at md <main> starts at y=50. The header's first
+  // line is the 28px Back button, so 28px of top padding centres it at
+  // 50 + 28 + 14 = 92, the sidebar switch's row. It sat at y=50, under the top bar.
   return (
-    <div className="space-y-8 pb-16">
+    <div className={`space-y-8 pb-16${v2Chrome ? ' md:pt-7' : ''}`}>
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-1">
@@ -343,6 +446,11 @@ export function AppearanceSettings() {
             onChange={applyCustomColor}
             disabled={readOnly}
           />
+          {v2HexInvalid && (
+            <p role="alert" className="text-xs text-destructive">
+              That isn&apos;t a full colour code yet. Use # and 6 characters, like #C6A256.
+            </p>
+          )}
         </div>
       </section>
 
@@ -363,6 +471,7 @@ export function AppearanceSettings() {
             <Input
               id="app_name"
               value={form.app_name}
+              maxLength={v2Chrome ? 60 : undefined}
               disabled={readOnly}
               placeholder={tenant?.company_name || 'Your company'}
               onChange={(e) => setForm((p) => ({ ...p, app_name: e.target.value }))}
@@ -372,6 +481,17 @@ export function AppearanceSettings() {
             </p>
           </div>
 
+          <ScopeIf
+            on={v2Chrome}
+            wrap={(children) => (
+              <SettingsReadOnlyFieldset
+                readOnly={readOnly}
+                className={readOnly ? 'pointer-events-none space-y-6' : 'space-y-6'}
+              >
+                {children}
+              </SettingsReadOnlyFieldset>
+            )}
+          >
           <LogoStudio
             logoUrl={form.logo_url}
             darkLogoUrl={form.dark_logo_url}
@@ -380,6 +500,7 @@ export function AppearanceSettings() {
             lightSidebar={form.light_secondary_color}
             darkSidebar={form.dark_secondary_color}
             disabled={readOnly}
+            deferStorageDelete={v2Chrome}
           />
 
           <div className="space-y-2">
@@ -387,17 +508,27 @@ export function AppearanceSettings() {
             <FaviconUpload
               currentFaviconUrl={form.favicon_url || undefined}
               onFaviconChange={(url) => setForm((p) => ({ ...p, favicon_url: url }))}
+              deferStorageDelete={v2Chrome}
             />
             <p className="text-xs text-muted-foreground">
               The small icon on your browser tab.
             </p>
+            {faviconFailed && (
+              <p role="alert" className="text-xs text-destructive">
+                We couldn&apos;t load your favicon file. Upload it again to replace it.
+              </p>
+            )}
           </div>
+          </ScopeIf>
         </div>
       </section>
 
-      {/* Sticky save affordance so a tenant deep in the page never loses changes */}
+      {/* Sticky save affordance so a tenant deep in the page never loses changes.
+          Its right edge stops at `--trax-offset` — the docked Trax panel's width
+          in v2 (styles/v2-theme.css), 0px everywhere else — so Save and Discard
+          stay beside the panel instead of under it. */}
       {dirty && !readOnly && (
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+        <div className="fixed bottom-0 left-0 right-[var(--trax-offset,0px)] z-40 border-t bg-background/95 px-4 py-3 backdrop-blur transition-[right] duration-200 ease-linear motion-reduce:transition-none supports-[backdrop-filter]:bg-background/80">
           <div className="mx-auto flex max-w-5xl items-center justify-between gap-4">
             <span className="text-sm text-muted-foreground">
               You&apos;re trying this out — nobody else sees it until you save.

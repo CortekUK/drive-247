@@ -43,6 +43,9 @@ import {
   Plus,
   XCircle,
   ShieldAlert,
+  CalendarDays,
+  Download,
+  List,
 } from "lucide-react";
 import { parseLocalDate } from "@/lib/date-utils";
 import { useEnhancedRentals, RentalFilters, EnhancedRental } from "@/hooks/use-enhanced-rentals";
@@ -60,6 +63,8 @@ import { RentalsTeachingEmptyState } from "@/components/empty-states/lean-empty-
 import { useForcedEmptyState } from "@/hooks/use-forced-empty-state";
 import { isLeanTenant } from "@/lib/lean-areas";
 import { TabTourButton } from "@/components/onboarding/tab-tour-button";
+import { HeaderIconButton } from "@/components/shared/header-icon-button-v2";
+import { csvDate, csvFilename, downloadCsv } from "@/lib/csv-export";
 
 /**
  * `30 Sep`, or `30 Sep 2027` when the year is not the current one.
@@ -428,10 +433,34 @@ export function RentalsListV2() {
     router.push(`?${params.toString()}`);
   };
 
+  // The rentals the list is showing, filters and search applied: the same set
+  // the overview graph and the table read.
+  const handleExportCsv = () => {
+    const currency = tenant?.currency_code || "USD";
+    downloadCsv(
+      csvFilename("rentals"),
+      ["Rental #", "Customer", "Vehicle", "Pickup", "Return", "Status", "Total", "Currency", "Booked on"],
+      allRentals.map((r) => [
+        r.rental_number,
+        r.customer?.name ?? "",
+        r.vehicle ? `${r.vehicle.reg} (${r.vehicle.make} ${r.vehicle.model})` : "",
+        csvDate(r.start_date),
+        csvDate(r.end_date),
+        r.computed_status,
+        Number(r.total_amount) || 0,
+        currency,
+        csvDate(r.created_at),
+      ]),
+    );
+  };
+
 
   if (isLoading) {
+    // md:pt-6 (switch row alignment): the loaded list pads its top 24px at md,
+    // so its title starts at y=74 (centred at 92, on the sidebar switch's row).
+    // Without it this skeleton started at y=50, 14px under the 64px top bar.
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 md:pt-6">
         <div className="h-8 bg-muted animate-pulse rounded"></div>
         <div className="h-96 bg-muted animate-pulse rounded"></div>
       </div>
@@ -472,12 +501,33 @@ export function RentalsListV2() {
               The PANEL is untouched: it still flips onto the back of the
               overview card below, driven by the same `filtersOpen` state. */}
           <div className="flex shrink-0 items-center gap-2">
-          {/* The view toggle, the analytics link and the CSV export were all
-              removed from this header at the user's request. Calendar view is
-              still reachable — the overview's calendar card opens it — and
+          {/* One labelled button, New Rental; every other control is an icon
+              with its name in a tooltip (team lead, Sep 15 2026). The calendar
+              icon is the header's own way into the timeline, so reaching it
+              never depends on which featured card is showing, and in calendar
+              view it turns into the way back to the list. Export writes the
+              rentals the list is showing, filters and search applied.
               /rentals/analytics still resolves if navigated to directly. */}
           {/* h-9 here, not h-10: this header is v2 and its Buttons are h-9. */}
           <TabTourButton tour="rentals" size="h-9" />
+          {currentView === "calendar" ? (
+            <HeaderIconButton label="List view" onClick={() => handleViewChange("list")}>
+              <List className="size-4" />
+            </HeaderIconButton>
+          ) : (
+            <>
+              <HeaderIconButton
+                label="Calendar view"
+                onClick={() => handleViewChange("calendar")}
+                data-tour="rentals-calendar"
+              >
+                <CalendarDays className="size-4" />
+              </HeaderIconButton>
+              <HeaderIconButton label="Export CSV" onClick={handleExportCsv} disabled={allRentals.length === 0}>
+                <Download className="size-4" />
+              </HeaderIconButton>
+            </>
+          )}
           {canEdit('rentals') && (
             <Button
               // Lean tenants without a usable Stripe Connect account get told

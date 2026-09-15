@@ -27,9 +27,13 @@ import { readAppSource } from '../helpers/source';
 
 const HOOK = 'hooks/use-feature-announcements.ts';
 const CARD = 'components/dashboard-v2/announcement-carousel.tsx';
+// `safeHref` moved out of the carousel, unchanged, so the hero-tab featured deck
+// shares it. The carousel still imports it; the lift below reads it from here.
+const SAFE_HREF = 'lib/safe-href.ts';
 
 const hookSrc = readAppSource(HOOK);
 const cardSrc = readAppSource(CARD);
+const safeHrefSrc = readAppSource(SAFE_HREF);
 
 /**
  * Slice one module-scope declaration out of source text.
@@ -104,7 +108,7 @@ describe('the what’s-new card is gated to the canary', () => {
 
 describe('values written by a super admin are treated as untrusted', () => {
   it('drops a cta_url that would execute on click', () => {
-    const safeHref = lift<(u: unknown) => string | null>(cardSrc, ['safeHref'], 'safeHref');
+    const safeHref = lift<(u: unknown) => string | null>(safeHrefSrc, ['safeHref'], 'safeHref');
 
     // Allowed: absolute http(s), and same-origin paths (the in-app CTAs).
     expect(safeHref('https://drive-247.com/whats-new')).toBe('https://drive-247.com/whats-new');

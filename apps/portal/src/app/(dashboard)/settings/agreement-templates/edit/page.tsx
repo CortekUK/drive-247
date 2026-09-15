@@ -41,10 +41,12 @@ import {
 import { toast } from '@/hooks/use-toast';
 import { TipTapEditor } from '@/components/settings/tiptap-editor';
 import { useTenant } from '@/contexts/TenantContext';
+import { useV2 } from '@/lib/v2-context';
 import { injectAgreementClauses } from '@/lib/agreement-injection';
 import { BONZAH_INSURANCE_ADDENDUM_HTML } from '@/lib/bonzah-addendum';
 import { useUnsavedChangesWarning } from '@/hooks/use-unsaved-changes-warning';
 import { UnsavedChangesDialog } from '@/components/shared/unsaved-changes-dialog';
+import { AgreementTemplateEditorV2 } from '@/components/settings-v2/agreement-templates-v2';
 const DEPOSIT_CLAUSE_SAMPLE = "<h2>Security deposit</h2><p>A refundable security deposit of <strong>$200.00</strong> is charged to the Renter&rsquo;s payment method at the start of the rental period. This is a charge, not a temporary authorisation hold. It is refunded after the vehicle is returned and inspected, less any deductions.</p>";
 
 
@@ -71,6 +73,10 @@ export default function EditAgreementTemplatePage() {
   const [hasChanges, setHasChanges] = useState(false);
 
   const { tenant } = useTenant();
+  // v2 chrome (northwind only; fails closed to v1). Used only to put this page's
+  // header on the sidebar switch's row at md; every other tenant renders the
+  // classes it did before. Above the early returns, as every hook must be.
+  const v2Chrome = useV2('chrome');
   const sampleData = getSampleData();
 
   const currentTemplate = templateType === 'default' ? defaultTemplate : customTemplate;
@@ -131,7 +137,7 @@ export default function EditAgreementTemplatePage() {
     saveAndLeave,
     cancelLeave,
     isSaving: isSavingNav,
-  } = useUnsavedChangesWarning({ hasChanges, onSave: saveContent });
+  } = useUnsavedChangesWarning({ hasChanges: hasChanges && !v2Chrome, onSave: saveContent });
 
   const handleSave = async () => {
     const success = await saveContent();
@@ -195,6 +201,11 @@ export default function EditAgreementTemplatePage() {
     );
   const isSaving = isUpdating;
 
+  // v2 (northwind): the editor rebuilt on the state kit. After every hook above.
+  if (v2Chrome) {
+    return <AgreementTemplateEditorV2 disclaimerHtml={PLATFORM_DISCLAIMER_HTML} depositClauseSample={DEPOSIT_CLAUSE_SAMPLE} />;
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-[80vh]">
@@ -203,10 +214,17 @@ export default function EditAgreementTemplatePage() {
     );
   }
 
+  // v2, md and up (switch row alignment): <main> starts at y=50. 14px of top
+  // padding here plus a 14px header top (16 in v1) puts the header's top edge on
+  // the top bar's bottom (64) and centres the 28px title line at 64 + 14 + 14 =
+  // 92, the sidebar switch's row. The height is re-derived for that start: the
+  // viewport less 50 above and main's 16px bottom padding, so 100vh - 66px with
+  // the padding inside. The old 100vh - 4rem ran 32px past the viewport under
+  // the v2 top bar. v1 keeps both class strings byte for byte.
   return (
-    <div className="h-[calc(100vh-4rem)] flex flex-col">
+    <div className={`h-[calc(100vh-4rem)] flex flex-col${v2Chrome ? ' md:h-[calc(100vh-66px)] md:pt-[14px]' : ''}`}>
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b bg-background">
+      <div className={`flex items-center justify-between px-6 py-4 border-b bg-background${v2Chrome ? ' md:pt-[14px]' : ''}`}>
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={() => router.push(`/settings/agreement-templates${templateCategory !== 'standard' ? `?category=${templateCategory}` : ''}`)}>
             <ArrowLeft className="h-4 w-4" />

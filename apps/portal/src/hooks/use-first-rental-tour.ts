@@ -139,7 +139,7 @@ export interface FirstRentalTourState {
   back: () => void;
   /** Skip. Ends the run for good — progress cleared, seen stays marked. */
   end: () => void;
-  /** Finish from the last card and go home to the setup guide. */
+  /** Finish from the last card and go home to the dashboard. */
   finishToDashboard: () => void;
   /** The card's anchor left the DOM. Re-resolve, or skip the step. */
   anchorLost: () => void;

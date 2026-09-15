@@ -17,9 +17,9 @@
  *
  * That is deliberately STRICTER than the pattern in
  * `components/rentals-v2/booking-mode-selector.tsx`, which points every mode at
- * a Big Buck Bunny placeholder. That file's `videoUrl` fields should migrate to
- * ids from this map when its explainers are produced; it is left alone for now
- * because another surface owns it.
+ * the shared sample clip (`SAMPLE_EXPLAINER_URL` below). That file's `videoUrl`
+ * fields should migrate to ids from this map when its explainers are produced;
+ * it is left alone for now because another surface owns it.
  *
  * DURATION IS SHOWN UP FRONT, always. Nobody clicks a video without knowing
  * what it costs them. Target is under 90 seconds — `durationSeconds` above 90
@@ -209,11 +209,38 @@ export interface ReadyExplainer extends ExplainerEntry {
 /**
  * The stand-in reel, for demonstrating the flow before any video is produced.
  *
- * Same file `components/rentals-v2/booking-mode-selector.tsx` already uses, so
- * the app has exactly one placeholder rather than two that drift.
+ * Imported by `components/rentals-v2/booking-mode-selector.tsx` and by the
+ * dashboard's setup checklist, so the app has exactly one placeholder rather
+ * than copies that drift.
+ *
+ * SELF-HOSTED, and that is a repair rather than a preference. This used to be
+ * Google's public sample bucket (`gtv-videos-bucket/.../BigBuckBunny.mp4`),
+ * which started answering 403 Forbidden — so every "Watch" on the canary opened
+ * a black box, on exactly the surfaces built to look finished. A same-origin
+ * file cannot be withdrawn from under us, is never blocked by a CSP or a
+ * corporate proxy, and plays inline in the dialog without an iframe.
+ *
+ * The file is a 90-second, 640x360, silent H.264 card that says "Sample
+ * walkthrough / The real video is on its way" with a running clock, so nobody
+ * can mistake it for finished content. It lives at
+ * apps/portal/public/explainers/sample-walkthrough.mp4.
  */
-export const SAMPLE_EXPLAINER_URL =
-  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
+export const SAMPLE_EXPLAINER_URL = '/explainers/sample-walkthrough.mp4';
+
+/**
+ * The runtime of the file at `SAMPLE_EXPLAINER_URL`, in seconds.
+ *
+ * A PROMISE ABOUT THAT FILE, not a target. It is printed as "1:30" beside the
+ * sample on the setup checklist, where the dialog also badges it "Sample" — so
+ * the number describes the clip that actually plays. Re-encode the file and
+ * this must move with it: __tests__/lib/sample-explainer-file.test.ts reads the
+ * mp4's own `mvhd` box and fails if the two ever disagree.
+ *
+ * NOT used by `getExplainer()`. A manifest entry standing in for an unproduced
+ * video still reports 0 there — see the note inside that function — because
+ * those slots do not say "Sample" beside the time.
+ */
+export const SAMPLE_EXPLAINER_DURATION_SECONDS = 90;
 
 export interface ExplainerLookupOptions {
   /**
@@ -221,7 +248,7 @@ export interface ExplainerLookupOptions {
    *
    * OFF by default, and that default is the load-bearing part: the empty-URL
    * contract says a paying tenant must never be shown a control that does
-   * nothing, and showing them a cartoon rabbit instead is a worse answer than
+   * nothing, and showing them a stand-in reel instead is a worse answer than
    * showing them nothing.
    *
    * Pass `true` only for the canary, so the checklist's video affordance can be

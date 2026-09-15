@@ -20,6 +20,20 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { useTenant } from '@/contexts/TenantContext';
 import { formatCurrency } from '@/lib/format-utils';
+import { useV2 } from '@/lib/v2-context';
+import { useManagerPermissions } from '@/hooks/use-manager-permissions';
+import { ExtrasTableV2 } from '@/components/settings-v2/extras-table-v2';
+import { Button as ButtonV2 } from '@/components/ui-v2/button';
+import { Package } from 'lucide-react';
+import {
+  SettingsDependencyNotice,
+  SettingsEmptyState,
+  SettingsLoadError,
+  SettingsSectionSkeleton,
+  describeSaveError,
+  formatSettingsNumber,
+} from '@/components/settings-v2/section-states';
+import { getExtraFormIssues, lowStockSentence } from '@/lib/settings-money-states';
 import {
   DndContext,
   closestCenter,
@@ -88,10 +102,13 @@ function SortableImage({
   url,
   index,
   onRemove,
+  touchVisible = false,
 }: {
   url: string;
   index: number;
   onRemove: () => void;
+  /** v2: the drag handle and remove button stay visible below `sm` (touch has no hover). */
+  touchVisible?: boolean;
 }) {
   const {
     attributes,
@@ -118,7 +135,7 @@ function SortableImage({
       <div
         {...attributes}
         {...listeners}
-        className="absolute top-0 left-0 right-0 h-6 flex items-center justify-center cursor-grab active:cursor-grabbing bg-black/40 rounded-t-lg opacity-0 group-hover:opacity-100 transition-opacity"
+        className={`absolute top-0 left-0 right-0 h-6 flex items-center justify-center cursor-grab active:cursor-grabbing bg-black/40 rounded-t-lg ${touchVisible ? 'sm:opacity-0 sm:group-hover:opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity`}
       >
         <GripVertical className="h-3 w-3 text-white" />
       </div>
@@ -135,7 +152,7 @@ function SortableImage({
       <button
         type="button"
         onClick={onRemove}
-        className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+        className={`absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center ${touchVisible ? 'sm:opacity-0 sm:group-hover:opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity`}
       >
         <X className="h-3 w-3" />
       </button>
@@ -148,6 +165,10 @@ export function ExtrasSettings() {
   const {
     extras,
     isLoading,
+    error: extrasError,
+    refetch: refetchExtras,
+    isFetching: isFetchingExtras,
+    hasLoaded: extrasLoaded,
     createExtra,
     isCreating,
     updateExtra,
@@ -165,17 +186,34 @@ export function ExtrasSettings() {
   const [stockValue, setStockValue] = useState('');
   const notifiedRef = useRef(false);
 
+  // v2 chrome (northwind only; every other tenant keeps v1). Above the loading
+  // return, so both hooks run on every render. `canEditSettings('extras')` is
+  // the check behind the Settings page's view-only banner for this tab.
+  const v2Chrome = useV2('chrome');
+  const { canEditSettings } = useManagerPermissions();
+
+  // v2: which extra's Activate/Deactivate is in flight; the stock and delete
+  // dialogs' save errors (they stay open on a failure instead of closing
+  // first); and whether the Add/Edit form has been submitted once, so its
+  // inline errors wait for a Save click.
+  const [togglingIdV2, setTogglingIdV2] = useState<string | null>(null);
+  const [stockErrorV2, setStockErrorV2] = useState<unknown>(null);
+  const [deleteErrorV2, setDeleteErrorV2] = useState<unknown>(null);
+  const [formTriedV2, setFormTriedV2] = useState(false);
+
   // Fetch all tenant vehicles for per-vehicle pricing picker
-  const { data: allVehicles } = useQuery({
+  const { data: allVehicles, isLoading: vehiclesLoadingV2, isError: vehiclesErrorV2, refetch: refetchVehiclesV2 } = useQuery({
     queryKey: ['vehicles-list', tenant?.id],
     queryFn: async () => {
       if (!tenant?.id) return [];
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('vehicles')
         .select('id, reg, make, model')
         .eq('tenant_id', tenant.id)
         .neq('status', 'Disposed')
         .order('reg');
+      // v2: a failed read is an error, not "you have no vehicles".
+      if (error && v2Chrome) throw error;
       return data || [];
     },
     enabled: !!tenant?.id,
@@ -183,6 +221,8 @@ export function ExtrasSettings() {
 
   // Notify admin about low stock items
   useEffect(() => {
+    // v2 says this inline above the table instead of a red toast on every visit.
+    if (v2Chrome) return;
     if (notifiedRef.current || !extras.length) return;
     const lowStockItems = extras.filter((e) => e.is_active && isLowStock(e));
     if (lowStockItems.length > 0) {
@@ -203,6 +243,7 @@ export function ExtrasSettings() {
   const handleOpenAdd = () => {
     setEditingExtra(null);
     setFormData(EMPTY_FORM);
+    setFormTriedV2(false);
     setIsDialogOpen(true);
   };
 
@@ -226,6 +267,7 @@ export function ExtrasSettings() {
       is_quantity_based: extra.max_quantity !== null,
       is_active: extra.is_active,
     });
+    setFormTriedV2(false);
     setIsDialogOpen(true);
   };
 
@@ -284,6 +326,21 @@ export function ExtrasSettings() {
   }, []);
 
   const handleSave = async () => {
+    // v2: every problem shows under its own field at once instead of one toast
+    // per click, and the first one scrolls into view. The price checks are
+    // v1's own, so no price that saved before is refused.
+    if (v2Chrome) {
+      const issues = getExtraFormIssues(formData);
+      if (Object.keys(issues).length > 0) {
+        setFormTriedV2(true);
+        toast({ title: 'Check the highlighted fields', description: Object.values(issues)[0], variant: 'destructive' });
+        requestAnimationFrame(() => {
+          document.querySelector('[data-extra-field-error]')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        });
+        return;
+      }
+      setFormTriedV2(false);
+    }
     if (!formData.name.trim()) {
       toast({ title: 'Error', description: 'Name is required.', variant: 'destructive' });
       return;
@@ -371,6 +428,90 @@ export function ExtrasSettings() {
     }
   };
 
+  // v2 handlers. The dialogs stay open until the write succeeds and say why
+  // when it does not. The values written are exactly v1's.
+  const handleToggleActiveV2 = async (extra: RentalExtra) => {
+    if (togglingIdV2) return;
+    setTogglingIdV2(extra.id);
+    try {
+      await handleToggleActive(extra);
+    } finally {
+      setTogglingIdV2(null);
+    }
+  };
+
+  const stockAddV2 = stockValue.trim() === '' ? null : Number(stockValue);
+  const stockInvalidV2 = stockAddV2 !== null && !(Number.isInteger(stockAddV2) && stockAddV2 > 0);
+
+  const handleAddStockV2 = async () => {
+    if (!stockTarget || isUpdating || stockAddV2 === null || stockInvalidV2) return;
+    setStockErrorV2(null);
+    try {
+      await updateExtra({ id: stockTarget.id, max_quantity: (stockTarget.max_quantity || 0) + stockAddV2 });
+      setStockTarget(null);
+    } catch (err) {
+      setStockErrorV2(err);
+    }
+  };
+
+  const handleDeleteV2 = async () => {
+    if (!deleteTarget || isDeleting) return;
+    setDeleteErrorV2(null);
+    try {
+      await deleteExtra(deleteTarget.id);
+      setDeleteTarget(null);
+    } catch (err) {
+      setDeleteErrorV2(err);
+    }
+  };
+
+  const formIssuesV2: ReturnType<typeof getExtraFormIssues> = v2Chrome && formTriedV2 ? getExtraFormIssues(formData) : {};
+  const fieldErrorV2 = (message?: string) =>
+    message ? (
+      <p role="alert" data-extra-field-error="" className="text-xs text-destructive">
+        {message}
+      </p>
+    ) : null;
+
+  const canEditExtrasV2 = canEditSettings('extras');
+  const extrasHeaderV2 = (
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="min-w-0">
+        <h2 className="font-heading text-base font-medium">Rental Extras</h2>
+        <p className="text-sm text-muted-foreground">
+          Manage optional add-ons customers can select during booking (GPS, baby seats, drinks, etc.)
+        </p>
+      </div>
+      {canEditExtrasV2 && extrasLoaded && extras.length > 0 && (
+        <ButtonV2 onClick={handleOpenAdd} className="w-full shrink-0 sm:w-auto">
+          <Plus data-icon="inline-start" />
+          Add Extra
+        </ButtonV2>
+      )}
+    </div>
+  );
+
+  // v2: the header stays put while the list loads (a table-shaped skeleton, so
+  // nothing jumps when rows land), and a failed first read says so with a
+  // retry instead of "No extras configured yet".
+  if (v2Chrome && !extrasLoaded) {
+    return (
+      <div className="pointer-events-auto space-y-3">
+        {extrasHeaderV2}
+        {extrasError ? (
+          <SettingsLoadError
+            thing="rental extras"
+            error={extrasError}
+            onRetry={() => refetchExtras()}
+            retrying={isFetchingExtras}
+          />
+        ) : (
+          <SettingsSectionSkeleton variant="table" rows={4} columns={7} label="Loading rental extras" />
+        )}
+      </div>
+    );
+  }
+
   if (isLoading) {
     return (
       <Card>
@@ -383,6 +524,88 @@ export function ExtrasSettings() {
 
   return (
     <div className="space-y-6">
+      {v2Chrome ? (
+        // v2: no card inside a card. The header sits above and the kit's
+        // ListTable is the card; the empty message is v1's, centred, with no
+        // table. `pointer-events-auto` because a view-only manager's tab body is
+        // `pointer-events-none`: without it the table could neither scroll nor
+        // show more than its first 25 extras. Add Extra and the row menu render
+        // only for `canEditSettings('extras')`, and every handler is this
+        // component's own, so the dialogs below serve both branches.
+        <div className="pointer-events-auto space-y-3">
+          {extrasHeaderV2}
+          {extrasError ? (
+            <SettingsLoadError
+              variant="inline"
+              thing="rental extras"
+              error={extrasError}
+              onRetry={() => refetchExtras()}
+              retrying={isFetchingExtras}
+            />
+          ) : null}
+          {extras.some((e) => e.stock_unknown || e.vehicle_pricing_unknown) && (
+            <SettingsDependencyNotice
+              tone="warning"
+              title="Some details couldn't be loaded"
+              body="Stock left and per-vehicle prices show a dash below. Editing a per-vehicle extra waits until they load."
+              action={{ label: 'Try again', onClick: () => void refetchExtras() }}
+            />
+          )}
+          {(() => {
+            const low = extras.filter((e) => e.is_active && !e.stock_unknown && isLowStock(e));
+            return low.length > 0 ? (
+              <SettingsDependencyNotice
+                tone="warning"
+                icon={AlertTriangle}
+                title={lowStockSentence(low.map((e) => e.name))}
+                body={canEditExtrasV2 ? 'Use Update Stock in its menu to add more.' : 'Ask an admin to add more stock.'}
+              />
+            ) : null;
+          })()}
+          {extras.length === 0 ? (
+            <SettingsEmptyState
+              icon={Package}
+              headline={canEditExtrasV2 ? 'Offer add-ons with every booking' : 'No extras have been set up yet'}
+              body={
+                canEditExtrasV2
+                  ? 'Extras are things customers can add when they book, like a child seat, GPS or a cooler.'
+                  : 'Add-ons customers can buy with a rental will be listed here once an admin sets them up.'
+              }
+              points={
+                canEditExtrasV2
+                  ? ['Charge once per trip or per day', 'One price, or a price per vehicle', 'Limit how many can be booked']
+                  : undefined
+              }
+              primaryAction={canEditExtrasV2 ? { label: 'Add your first extra', icon: Plus, onClick: handleOpenAdd } : undefined}
+            />
+          ) : (
+            <ExtrasTableV2
+              extras={extras}
+              resetKey={tenant?.id ?? ''}
+              currencyCode={tenant?.currency_code || 'USD'}
+              canEdit={canEditExtrasV2}
+              isLowStock={isLowStock}
+              busyId={togglingIdV2}
+              onEdit={(extra) => {
+                // Saving replaces every vehicle price, so an edit opened over a
+                // failed price read would save none of them.
+                if (extra.pricing_type === 'per_vehicle' && extra.vehicle_pricing_unknown) {
+                  toast({
+                    title: "Vehicle prices didn't load",
+                    description: `Try again before editing ${extra.name}, so its vehicle prices are not lost.`,
+                    variant: 'destructive',
+                  });
+                  return;
+                }
+                handleOpenEdit(extra);
+              }}
+              onUpdateStock={(extra) => { setStockErrorV2(null); setStockTarget(extra); setStockValue(''); }}
+              onToggleActive={handleToggleActiveV2}
+              onDelete={(extra) => { setDeleteErrorV2(null); setDeleteTarget(extra); }}
+            />
+          )}
+        </div>
+      ) : (
       <Card>
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
@@ -546,6 +769,7 @@ export function ExtrasSettings() {
           )}
         </CardContent>
       </Card>
+      )}
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
@@ -556,8 +780,26 @@ export function ExtrasSettings() {
               This will permanently remove this extra. Existing bookings with this extra will not be affected.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {v2Chrome && deleteErrorV2 ? (
+            <p role="alert" className="text-sm text-destructive">
+              Couldn&apos;t delete this extra. Nothing was deleted. Try again, or deactivate it instead.
+            </p>
+          ) : null}
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
+            {v2Chrome ? (
+              <AlertDialogAction
+                onClick={(e) => {
+                  // Stay open until the delete lands, so a failure is seen here.
+                  e.preventDefault();
+                  void handleDeleteV2();
+                }}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                disabled={isDeleting}
+              >
+                {isDeleting ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Deleting…</> : 'Delete'}
+              </AlertDialogAction>
+            ) : (
             <AlertDialogAction
               onClick={() => deleteTarget && handleDelete(deleteTarget.id)}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
@@ -565,6 +807,7 @@ export function ExtrasSettings() {
             >
               {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Delete'}
             </AlertDialogAction>
+            )}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -586,6 +829,10 @@ export function ExtrasSettings() {
                 value={stockValue}
                 onChange={(e) => setStockValue(e.target.value)}
                 onKeyDown={(e) => {
+                  if (v2Chrome) {
+                    if (e.key === 'Enter') void handleAddStockV2();
+                    return;
+                  }
                   if (e.key === 'Enter') {
                     const add = parseInt(stockValue);
                     if (!isNaN(add) && add > 0 && stockTarget) {
@@ -604,9 +851,34 @@ export function ExtrasSettings() {
                 New total will be: {(stockTarget?.max_quantity || 0) + parseInt(stockValue)}
               </p>
             )}
+            {v2Chrome && stockTarget && (
+              <div className="space-y-1 text-xs text-muted-foreground">
+                <p className="tabular-nums">
+                  Total {formatSettingsNumber(stockTarget.max_quantity)} · Booked{' '}
+                  {stockTarget.stock_unknown ? '—' : formatSettingsNumber(stockTarget.booked_quantity)} · Left{' '}
+                  {stockTarget.stock_unknown ? '—' : formatSettingsNumber(stockTarget.remaining_stock)}
+                </p>
+                <p>To lower stock, edit the extra and change its quantity.</p>
+                {stockInvalidV2 && <p role="alert" className="text-destructive">Enter a whole number above 0.</p>}
+                {stockErrorV2 ? (
+                  <p role="alert" className="text-destructive">
+                    Couldn&apos;t add stock. {describeSaveError(stockErrorV2)}
+                  </p>
+                ) : null}
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setStockTarget(null)}>Cancel</Button>
+            {v2Chrome ? (
+              <Button
+                onClick={() => void handleAddStockV2()}
+                disabled={isUpdating || stockAddV2 === null || stockInvalidV2}
+              >
+                {isUpdating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
+                Add Stock
+              </Button>
+            ) : (
             <Button
               onClick={() => {
                 const add = parseInt(stockValue);
@@ -620,6 +892,7 @@ export function ExtrasSettings() {
               {isUpdating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
               Add Stock
             </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -640,14 +913,15 @@ export function ExtrasSettings() {
 
           <div className="space-y-4 py-2 px-1 -mx-1 max-h-[70vh] overflow-y-auto">
             {/* Row 1: Name + Price (global only) */}
-            <div className={`grid gap-4 ${formData.pricing_type === 'global' ? 'grid-cols-3' : 'grid-cols-1'}`}>
-              <div className={formData.pricing_type === 'global' ? 'col-span-2 space-y-2' : 'space-y-2'}>
+            <div className={`grid gap-4 ${formData.pricing_type === 'global' ? (v2Chrome ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-3') : 'grid-cols-1'}`}>
+              <div className={formData.pricing_type === 'global' ? (v2Chrome ? 'sm:col-span-2 space-y-2' : 'col-span-2 space-y-2') : 'space-y-2'}>
                 <Label>Name *</Label>
                 <Input
                   value={formData.name}
                   onChange={(e) => setFormData((p) => ({ ...p, name: e.target.value }))}
                   placeholder="e.g., GPS Navigation"
                 />
+                {fieldErrorV2(formIssuesV2.name)}
               </div>
               {formData.pricing_type === 'global' && (
                 <div className="space-y-2">
@@ -664,6 +938,7 @@ export function ExtrasSettings() {
                       placeholder="0.00"
                     />
                   </div>
+                  {fieldErrorV2(formIssuesV2.price)}
                 </div>
               )}
             </div>
@@ -741,6 +1016,7 @@ export function ExtrasSettings() {
                   <Label>Vehicle Pricing *</Label>
                   <p className="text-xs text-muted-foreground">{formData.vehicle_pricing.length} vehicle(s) assigned</p>
                 </div>
+                {fieldErrorV2(formIssuesV2.vehicle_pricing)}
                 {formData.vehicle_pricing.length > 0 && (
                   <div className="space-y-2">
                     {formData.vehicle_pricing.map((vp, idx) => {
@@ -793,6 +1069,33 @@ export function ExtrasSettings() {
                 {(() => {
                   const assignedIds = new Set(formData.vehicle_pricing.map((vp) => vp.vehicle_id));
                   const available = (allVehicles || []).filter((v) => !assignedIds.has(v.id));
+                  if (v2Chrome) {
+                    if (vehiclesErrorV2) {
+                      return (
+                        <SettingsDependencyNotice
+                          tone="warning"
+                          title="Couldn't load your vehicles"
+                          body="Vehicles already priced above are kept. Try again to add more."
+                          action={{ label: 'Try again', onClick: () => void refetchVehiclesV2() }}
+                        />
+                      );
+                    }
+                    if (vehiclesLoadingV2) {
+                      return <p className="text-xs text-muted-foreground">Loading vehicles…</p>;
+                    }
+                    if ((allVehicles || []).length === 0) {
+                      return (
+                        <SettingsDependencyNotice
+                          title="You have no vehicles yet"
+                          body="Add a vehicle before setting per-vehicle prices, or use one price for all vehicles."
+                          action={{ label: 'Add a vehicle', href: '/vehicles' }}
+                        />
+                      );
+                    }
+                    if (available.length === 0) {
+                      return <p className="text-xs text-muted-foreground">Every vehicle has a price.</p>;
+                    }
+                  }
                   if (available.length === 0) return null;
                   return (
                     <Select
@@ -863,6 +1166,7 @@ export function ExtrasSettings() {
                             url={url}
                             index={i}
                             onRemove={() => handleRemoveImage(i)}
+                            touchVisible={v2Chrome}
                           />
                         ))}
                       </div>
@@ -888,10 +1192,11 @@ export function ExtrasSettings() {
                   />
                 </label>
               </div>
+              {fieldErrorV2(formIssuesV2.images)}
             </div>
 
             {/* Row 4: Toggles */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className={v2Chrome ? 'grid grid-cols-1 sm:grid-cols-2 gap-3' : 'grid grid-cols-2 gap-3'}>
               <div className="flex items-center justify-between rounded-lg border p-2.5">
                 <div>
                   <Label className="text-sm font-medium">Quantity-based</Label>
@@ -932,6 +1237,7 @@ export function ExtrasSettings() {
                 />
               </div>
             </div>
+            {fieldErrorV2(formIssuesV2.max_quantity)}
           </div>
 
           <DialogFooter>

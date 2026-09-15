@@ -301,9 +301,25 @@ function blockingAlert(c: CustomerRecord): { title: string; body: string; sectio
  * `min-h-0` on the flex children is the other half and is load-bearing:
  * without it a flex child refuses to shrink below its content, and the column
  * grows the page instead of scrolling inside itself.
+ *
+ * Desktop (md and up): the title sits on the sidebar switch's row. There the
+ * layout's <main> starts 50px down (no top padding, tucked 14px under the
+ * transparent top bar) so page titles centre on the Portal / Website switch at
+ * y=92. The record rail replaces the sidebar here, but the frame keeps the same
+ * line so the title does not jump between the list and the record: 26px of top
+ * padding puts the 32px panel title (and the 32px Back button on the error
+ * screen) at 50 + 26 + 16 = 92. The height is re-derived for that top: the
+ * viewport less the 50px above the frame and main's 16px bottom padding, so
+ * `100svh - 66px`, padding included. That fits exactly, where the old
+ * `100svh - 2rem` below an 80px start overran the viewport by 64px (the top
+ * bar) and the document scrolled. Below md nothing changes.
  */
 function Frame({ children }: { children: React.ReactNode }) {
-  return <div className="flex h-[calc(100svh-2rem)] min-h-0 w-full overflow-hidden">{children}</div>;
+  return (
+    <div className="flex h-[calc(100svh-2rem)] min-h-0 w-full overflow-hidden md:h-[calc(100svh-66px)] md:pt-[26px]">
+      {children}
+    </div>
+  );
 }
 
 export default CustomerDetailV2;

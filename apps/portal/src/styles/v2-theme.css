@@ -432,7 +432,16 @@
 body.v2-theme {
   font-family: var(--font-manrope, "Inter"), -apple-system, BlinkMacSystemFont,
     "Segoe UI", Roboto, sans-serif;
+  /* `clip`, not `hidden`, and the difference is the sticky top bar.
+     global.css sets `html, body { overflow-x: hidden }`. With <html> already
+     non-visible, <body>'s overflow is not handed to the viewport, so `hidden`
+     made <body> a scroll container that never scrolls, and TopBarV2's
+     `position: sticky` pinned to THAT box and scrolled away with the page.
+     `clip` still cuts horizontal overflow but creates no scroll container, so
+     the bar pins to the viewport. `hidden` stays first as the fallback for a
+     browser without `clip`. */
   overflow-x: hidden;
+  overflow-x: clip;
   max-width: 100vw;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -898,4 +907,54 @@ body.v2-theme {
  * page's buttons sit side by side at two different radii. */
 .v2-theme [class~="rounded-md"][class~="whitespace-nowrap"][class~="ring-offset-background"] {
   border-radius: var(--v2-radius-4xl);
+}
+
+/* --- Trax docked panel: width and offset --------------------------------
+ * ONE definition of the docked panel's width, on the root, because two kinds of
+ * consumer need it and only one of them lives inside the layout's flex row:
+ *
+ *   --trax-width   the panel and its flow gap (components/trax/trax-panel.tsx).
+ *                  A clamp because breakpoints read the viewport, not the
+ *                  narrowed column: 30vw, never below 340px, never above 440px.
+ *   --trax-offset  how far a VIEWPORT-pinned overlay must stay from the right
+ *                  edge so it does not sit under the panel — the setup guide
+ *                  (portalled to <body>) and the Appearance save bar. It is the
+ *                  width only while the panel is open AND docked (md+); below md
+ *                  the panel is a full-screen sheet with no column beside it.
+ *
+ * Keyed on `data-trax-panel`, which TraxPanel sets on <html> while it is
+ * mounted. TraxPanel is v2-only, so no v1 page ever matches; every consumer
+ * writes `var(--trax-offset, 0px)`, which is exactly its old position. */
+html[data-trax-panel] {
+  --trax-width: clamp(340px, 30vw, 440px);
+  --trax-offset: 0px;
+}
+@media (min-width: 768px) {
+  html[data-trax-panel="open"] {
+    --trax-offset: var(--trax-width);
+  }
+}
+
+/* ── Settings v2 bodies ───────────────────────────────────────────────────────
+ * The v2 settings pages still mount a few shared settings components (locations,
+ * pricing rules, installments, extras, email and push notifications, lockbox
+ * templates). Their markup serves every tenant, so it is not edited. Inside
+ * `.settings-v2-body` only, the decorative title icons go — the icon beside a
+ * card title and the tinted icon box beside a section heading — and card titles
+ * drop to the v2 heading size. (No selector here may name a Tailwind utility
+ * class such as `.rounded-lg` or `.border`: this file also @applies them, and
+ * Tailwind rejects that as a circular dependency, which 500s every page.)
+ */
+.v2-theme .settings-v2-body h3 > svg,
+.v2-theme .settings-v2-body h2 > svg,
+.v2-theme .settings-v2-body h3 > span:has(> svg:only-child),
+.v2-theme .settings-v2-body div:has(> svg:only-child):has(+ div > h2) {
+  display: none;
+}
+
+.v2-theme .settings-v2-body h3 {
+  font-size: 1rem;
+  line-height: 1.5rem;
+  font-weight: 500;
+  letter-spacing: normal;
 }

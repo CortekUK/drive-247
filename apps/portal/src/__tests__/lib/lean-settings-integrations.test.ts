@@ -253,11 +253,14 @@ describe("settingsTabBoardCard", () => {
 describe("gate call sites", () => {
   const settings = () => read("app/(dashboard)/settings/page.tsx");
   const sidebar = () => read("components/shared/layout/app-sidebar-v2.tsx");
+  const settingsIndex = () => read("components/settings-v2/settings-index.tsx");
 
-  it("gates the desktop settings sidebar", () => {
-    const src = sidebar();
-    expect(src).toMatch(/isSettingsTabHidden/);
-    expect(src).toMatch(/!isSettingsTabHidden\(item\.value, tenantSlug\)/);
+  it("gates the v2 settings index", () => {
+    // The v2 chrome no longer swaps the sidebar for a settings rail — the index
+    // page at /settings is the one settings navigation a lean tenant sees, so it
+    // must read the same gate the rail did.
+    expect(settingsIndex()).toMatch(/!isSettingsTabHidden\(item\.tab, tenantSlug\)/);
+    expect(sidebar()).not.toMatch(/settingsTabGroups/);
   });
 
   it("gates the mobile trigger row with the SAME predicate", () => {
@@ -328,18 +331,18 @@ describe("gate call sites", () => {
     expect(() => read("components/settings/bonzah-onboarding/index.tsx")).not.toThrow();
   });
 
-  it("moves Blacklist into Booking Rules for lean tenants, and only for them", () => {
-    const src = sidebar();
-    expect(src).toMatch(/function settingsGroupsFor\(tenantSlug: string \| null \| undefined\)/);
-    // Non-lean tenants get the module constant BY REFERENCE — no reshaping, no
-    // reordering, no re-render cost.
-    expect(src).toMatch(/if \(!isLeanTenant\(tenantSlug\)\) return settingsTabGroups;/);
-    expect(src).toMatch(/settingsGroupsFor\(tenantSlug\)\s*\n?\s*\.map\(group =>/);
-    // The entry is declared exactly once, still under Integrations.
-    const entries = src.match(/\{ value: 'blacklist', icon: ShieldX, label: 'Blacklist' \}/g) ?? [];
-    expect(entries).toHaveLength(1);
-    // The now-empty group disappears on its own.
-    expect(src).toMatch(/\.filter\(group => group\.items\.length > 0\)/);
+  it("lists Blacklist under Bookings on the v2 index, and no integration at all", () => {
+    const src = settingsIndex();
+    const bookings = src.match(/title: "Bookings",[\s\S]*?title: "Pricing and payments"/)?.[0] ?? "";
+    expect(bookings).toContain('href: "/settings/blacklist"');
+    expect(src).not.toMatch(/title: "Integrations",/);
+    // Every tab an Integrations card owns — and Subscription, which is the
+    // sidebar's Billing page — has no entry on the index.
+    for (const tab of ["payments", "messaging", "insurance", "esign", "accounting", "inshur", "tesla", "subscription"]) {
+      expect(src).not.toContain(`tab: "${tab}"`);
+    }
+    // Empty sections disappear rather than rendering a bare heading.
+    expect(src).toMatch(/\.filter\(\(section\) => section\.items\.length > 0\)/);
   });
 });
 

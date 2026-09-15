@@ -98,5 +98,10 @@ export function useESignUsage() {
     monthlyAggregates: allUsageQuery.data || [],
     isLoading: currentPeriodQuery.isLoading,
     isLoadingHistory: allUsageQuery.isLoading,
+    isError: currentPeriodQuery.isError || allUsageQuery.isError,
+    refetch: () => {
+      void currentPeriodQuery.refetch();
+      void allUsageQuery.refetch();
+    },
   };
 }

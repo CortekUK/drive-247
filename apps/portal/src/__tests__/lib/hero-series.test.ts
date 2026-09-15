@@ -93,46 +93,143 @@ describe('flowSeries — 3 months in weeks', () => {
 });
 
 describe('flowSeries — 12 months', () => {
-  // Current: Oct 2025 .. Sep 2026. Previous: Oct 2024 .. Sep 2025.
+  // Current: Oct 1 2025 .. today, Sep 15 2026. Its last month is only half gone,
+  // so the previous window, Oct 1 2024 .., stops on the matching day: Sep 15 2025.
   it('puts month edges on the right side of the window boundary', () => {
     const s = flowSeries(
       [
         { at: at(2025, 10, 1, 0), amount: 10 }, // current index 0
-        { at: at(2025, 9, 30, 23), amount: 20 }, // previous index 11
+        { at: at(2026, 9, 15, 9), amount: 5 }, // current index 11, today
+        { at: at(2025, 9, 15, 23), amount: 20 }, // previous index 11: the matching day counts
+        { at: at(2025, 9, 16, 0), amount: 25 }, // the day after it: no counterpart yet, counts nowhere
+        { at: at(2025, 9, 30, 23), amount: 35 }, // counts nowhere
         { at: at(2024, 10, 1), amount: 30 }, // previous index 0
         { at: at(2024, 9, 30), amount: 40 }, // before both
       ],
       '12m',
       TODAY,
     );
-    expect(s.currentTotal).toBe(10);
+    expect(s.currentTotal).toBe(15);
     expect(s.previousTotal).toBe(50);
     expect(s.points[0].current).toBe(10);
     expect(s.points[0].previous).toBe(30);
+    expect(s.points[10].current).toBe(10);
     expect(s.points[10].previous).toBe(30);
+    expect(s.points[11].current).toBe(15);
     expect(s.points[11].previous).toBe(50);
+  });
+
+  it('labels whole months by name and the month under way by its real days', () => {
+    const s = flowSeries([], '12m', TODAY);
     expect(s.points[0].currentLabel).toBe('Oct 2025');
-    expect(s.points[11].currentLabel).toBe('Sep 2026');
+    expect(s.points[0].previousLabel).toBe('Oct 2024');
+    expect(s.points[10].currentLabel).toBe('Aug 2026');
+    expect(s.points[11].currentLabel).toBe('Sep 1 – Sep 15, 2026');
+    expect(s.points[11].previousLabel).toBe('Sep 1 – Sep 15, 2025');
+    expect(s.startLabel).toBe('Oct 2025');
+  });
+
+  // One customer at noon every day from Sep 16 2024 to Sep 15 2026.
+  const steady: { at: Date; amount: number }[] = [];
+  for (let d = at(2024, 9, 16); d <= at(2026, 9, 15); d = at(d.getFullYear(), d.getMonth() + 1, d.getDate() + 1)) {
+    steady.push({ at: d, amount: 1 });
+  }
+
+  it('reads a steady business as steady: equal stretches of calendar on both lines', () => {
+    // Oct 31 + Nov 30 + Dec 31 + Jan 31 + Feb 28 + Mar 31 + Apr 30 + May 31 +
+    // Jun 30 + Jul 31 + Aug 31 = 335 in both years (neither February is a leap
+    // one), then Sep 1 .. 15 adds 15 to each.
+    const s = flowSeries(steady, '12m', TODAY);
+    expect(s.points[10].current).toBe(335);
+    expect(s.points[10].previous).toBe(335);
+    expect(s.currentTotal).toBe(350);
+    expect(s.previousTotal).toBe(350);
+    // The shorter ranges were already equal: 7, 30 and 91 days each side.
+    expect([flowSeries(steady, '7d', TODAY).currentTotal, flowSeries(steady, '7d', TODAY).previousTotal]).toEqual([7, 7]);
+    expect([flowSeries(steady, '30d', TODAY).currentTotal, flowSeries(steady, '30d', TODAY).previousTotal]).toEqual([30, 30]);
+    expect([flowSeries(steady, '3m', TODAY).currentTotal, flowSeries(steady, '3m', TODAY).previousTotal]).toEqual([91, 91]);
+  });
+
+  it('on the 1st, compares one day of the month with one day', () => {
+    // Today Tue Sep 1 2026: 335 whole months, plus Sep 1 itself, on each side.
+    const s = flowSeries(steady, '12m', new Date(2026, 8, 1, 9, 0));
+    expect(s.currentTotal).toBe(336);
+    expect(s.previousTotal).toBe(336);
+    expect(s.points[11].currentLabel).toBe('Sep 1, 2026');
+    expect(s.points[11].previousLabel).toBe('Sep 1, 2025');
+  });
+
+  it('handles leap days by the calendar', () => {
+    // Feb 29 2028 is the last day of its month; a year back is Feb 28 2027, the
+    // last day of that one, so both Februaries are whole.
+    const leap = flowSeries([], '12m', new Date(2028, 1, 29, 9, 0));
+    expect(leap.points[11].currentLabel).toBe('Feb 2028');
+    expect(leap.points[11].previousLabel).toBe('Feb 2027');
+    // Feb 28 2029 ends its month; Feb 28 2028 does not (Feb 29 follows it).
+    const after = flowSeries([], '12m', new Date(2029, 1, 28, 9, 0));
+    expect(after.points[11].currentLabel).toBe('Feb 2029');
+    expect(after.points[11].previousLabel).toBe('Feb 1 – Feb 28, 2028');
   });
 });
 
 describe('stockSeries', () => {
+  // A level equal to the day of the month, so every average is a sum of a run
+  // of whole numbers divided by its length, easy to work by hand.
   const dayOfMonth = (d: Date) => d.getDate();
 
-  it('samples the last day of each daily bucket, and today last', () => {
+  it("draws each day's own level on day ranges, and reads the comparison on today's date one period back", () => {
     const s = stockSeries(dayOfMonth, '7d', TODAY);
     expect(s.points.map((p) => p.current)).toEqual([9, 10, 11, 12, 13, 14, 15]);
     expect(s.points.map((p) => p.previous)).toEqual([2, 3, 4, 5, 6, 7, 8]);
-    expect(s.currentTotal).toBe(15);
-    expect(s.previousTotal).toBe(8);
+    expect(s.currentTotal).toBe(15); // today, Sep 15
+    expect(s.previousTotal).toBe(8); // Sep 8
+    expect(s.previousDay).toEqual(new Date(2026, 8, 8));
+    expect(s.averaged).toBe(false);
+
+    const m = stockSeries(dayOfMonth, '30d', TODAY);
+    expect(m.points[29].current).toBe(15); // Sep 15
+    expect(m.points[29].previous).toBe(16); // Aug 16
+    expect(m.previousTotal).toBe(16);
+    expect(m.previousDay).toEqual(new Date(2026, 7, 16));
   });
 
-  it('samples month ends, but never past today', () => {
+  it('averages each week over its seven days on 3 months', () => {
+    // Weeks from Jun 17 2026; the previous weeks from Mar 18.
+    const s = stockSeries(dayOfMonth, '3m', TODAY);
+    expect(s.points[0].current).toBe(20); // Jun 17..23: 140 / 7
+    expect(s.points[1].current).toBe(27); // Jun 24..30: 189 / 7
+    expect(s.points[2].current).toBe(4); // Jul 1..7, over the month end: 28 / 7
+    expect(s.points[12].current).toBe(12); // Sep 9..15: 84 / 7
+    expect(s.points[0].previous).toBe(21); // Mar 18..24: 147 / 7
+    expect(s.points[12].previous).toBe(13); // Jun 10..16: 91 / 7
+    expect(s.currentTotal).toBe(15); // today
+    expect(s.previousTotal).toBe(16); // Jun 16: one day, not its week's average
+    expect(s.previousDay).toEqual(new Date(2026, 5, 16));
+    expect(s.averaged).toBe(true);
+  });
+
+  it('averages each month over its days on 12 months, a month under way over its days so far', () => {
     const s = stockSeries(dayOfMonth, '12m', TODAY);
-    expect(s.points[0].current).toBe(31); // Oct 31 2025
-    expect(s.points[4].current).toBe(28); // Feb 28 2026
-    expect(s.points[11].current).toBe(15); // Sep 2026 is sampled today, the 15th
-    expect(s.points[11].previous).toBe(30); // Sep 30 2025
+    expect(s.points[0].current).toBe(16); // Oct 2025: 496 / 31
+    expect(s.points[0].previous).toBe(16); // Oct 2024
+    expect(s.points[4].current).toBe(14.5); // Feb 2026: 406 / 28
+    expect(s.points[4].previous).toBe(14.5); // Feb 2025
+    expect(s.points[11].current).toBe(8); // Sep 1..15 2026: 120 / 15
+    expect(s.points[11].previous).toBe(8); // Sep 1..15 2025
+    expect(s.currentTotal).toBe(15); // today
+    expect(s.previousTotal).toBe(15); // Sep 15 2025
+    expect(s.previousDay).toEqual(new Date(2025, 8, 15));
+    expect(s.averaged).toBe(true);
+  });
+
+  it("never lets a month's last day stand for the month", () => {
+    // One car out Mar 2..29 2026, 28 of March's 31 days, and on no other day.
+    const out = (d: Date) => (d >= new Date(2026, 2, 2) && d <= new Date(2026, 2, 29) ? 1 : 0);
+    const s = stockSeries(out, '12m', TODAY);
+    expect(s.points[5].currentLabel).toBe('Mar 2026');
+    expect(s.points[5].current).toBeCloseTo(28 / 31, 12);
+    expect(s.points[4].current).toBe(0); // Feb
+    expect(s.points[6].current).toBe(0); // Apr
   });
 
   it('treats a non-number level as zero', () => {

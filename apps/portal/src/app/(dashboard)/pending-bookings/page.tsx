@@ -170,16 +170,22 @@ const PendingBookings = () => {
   };
 
   if (isLoading) {
+    // v2 (switch row alignment): the loaded page's 24px top padding at md, so this
+    // state starts where the title does (y=74) instead of at y=50 under the 64px
+    // top bar. v1 renders the same classes as before.
     return (
-      <div className="flex items-center justify-center h-64">
+      <div className={`flex items-center justify-center h-64${v2Chrome ? " md:mt-6" : ""}`}>
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
   if (error) {
+    // v2 (switch row alignment): the loaded page's 24px top padding at md, so this
+    // state starts where the title does (y=74) instead of at y=50 under the 64px
+    // top bar. v1 renders the same classes as before.
     return (
-      <Card>
+      <Card className={v2Chrome ? "md:mt-6" : undefined}>
         <CardContent className="py-12">
           <div className="text-center text-destructive">
             <AlertTriangle className="h-12 w-12 mx-auto mb-4" />

@@ -143,6 +143,8 @@ export function useEmailNotificationPrefs() {
     prefs: query.data,
     isLoading: query.isLoading,
     error: query.error,
+    refetch: query.refetch,
+    isFetching: query.isFetching,
     setMasterEnabled,
     setRecipientEmail,
     setCategoryEnabled,

@@ -20,6 +20,11 @@ interface LogoUploadWithResizeProps {
   onLogoChange: (logoUrl: string | null) => void;
   label?: string;
   description?: string;
+  /**
+   * v2 (Appearance, northwind): the logo there persists on Save changes, so
+   * removing it must not delete the live file first. Only the form clears.
+   */
+  deferStorageDelete?: boolean;
 }
 
 export function LogoUploadWithResize({
@@ -27,6 +32,7 @@ export function LogoUploadWithResize({
   onLogoChange,
   label = "Company Logo",
   description = "Upload and resize your company logo",
+  deferStorageDelete = false,
 }: LogoUploadWithResizeProps) {
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -180,6 +186,14 @@ export function LogoUploadWithResize({
 
   const handleRemoveLogo = async () => {
     if (!currentLogoUrl) return;
+    if (deferStorageDelete) {
+      onLogoChange(null);
+      toast({
+        title: "Logo removed from the form",
+        description: "Press Save changes to take it off your portal.",
+      });
+      return;
+    }
 
     try {
       const urlParts = currentLogoUrl.split('/');

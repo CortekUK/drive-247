@@ -294,8 +294,16 @@ export function SetupGuide() {
   // Sits tight to the bottom-right corner. It overlaps the QuickDock — pinned
   // to the right edge at half height — only while expanded, and wins on
   // z-index, which is the right call for a panel the operator just opened.
+  //
+  // With Trax docked (v2), "the right edge" is the page column's, not the
+  // viewport's: `--trax-offset` is the docked panel's width (styles/v2-theme.css,
+  // set only while the panel is open at md+), so the card slides left with the
+  // column instead of sitting on the composer. Unset — v1, or Trax closed — it
+  // is 0px and the card is exactly where it always was. Below md Trax is a
+  // full-screen sheet with no column beside it, so the card steps aside
+  // entirely while it is open rather than covering the conversation.
   const dockClasses =
-    "fixed bottom-4 right-4 z-50 w-[calc(100vw-2rem)] max-w-[380px] overflow-hidden rounded-xl border border-border bg-card shadow-2xl";
+    "fixed bottom-4 right-[calc(1rem+var(--trax-offset,0px))] z-50 w-[calc(100vw-2rem)] max-w-[380px] overflow-hidden rounded-xl border border-border bg-card shadow-2xl transition-[right] duration-200 ease-linear motion-reduce:transition-none max-md:[html[data-trax-panel=open]_&]:hidden";
 
   const card =
     panelState === "minimized" ? (

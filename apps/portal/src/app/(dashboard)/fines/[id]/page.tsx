@@ -17,6 +17,7 @@ import { KPICard } from "@/components/ui/kpi-card";
 import { InfoGrid } from "@/components/ui/info-grid";
 import { formatCurrency } from "@/lib/format-utils";
 import { useTenant } from "@/contexts/TenantContext";
+import { useV2 } from "@/lib/v2-context";
 
 interface Fine {
   id: string;
@@ -49,6 +50,10 @@ const FineDetail = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
+  // v2 chrome (northwind only; fails closed to v1). Only lines the loading
+  // state's header up with the sidebar switch; above the early returns, as
+  // every hook must be.
+  const v2Chrome = useV2("chrome");
 
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
 
@@ -186,8 +191,11 @@ const FineDetail = () => {
   });
 
   if (isLoading) {
+    // v2 (switch row alignment): the loaded page's 24px top padding at md, so the
+    // 36px title sits where it will after load, centred at 50 + 24 + 18 = 92 on
+    // the sidebar switch's row, not at y=50 under the top bar. v1 unchanged.
     return (
-      <div className="space-y-6">
+      <div className={`space-y-6${v2Chrome ? " md:pt-6" : ""}`}>
         <div className="flex items-center gap-4">
           <Button variant="outline" disabled>
             <ArrowLeft className="h-4 w-4 mr-2" />

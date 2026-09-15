@@ -14,6 +14,7 @@ import { format, parseISO, startOfMonth, endOfMonth } from "date-fns";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
 import { cn } from "@/lib/utils";
 import { PLBreadcrumb } from "@/components/shared/data-display/pl-breadcrumb";
+import { useV2 } from "@/lib/v2-context";
 import { useTenant } from "@/contexts/TenantContext";
 import { formatCurrency as formatCurrencyUtil } from "@/lib/format-utils";
 
@@ -42,6 +43,10 @@ const MonthlyPLDrilldown = () => {
   const [sortField, setSortField] = useState<SortField>('net_profit');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [showChart, setShowChart] = useState(false);
+  // v2 chrome (northwind only; fails closed to v1). Used only to put this page's
+  // header on the sidebar switch's row at md; every other tenant renders the
+  // classes it did before. Above the `!month` early return, as every hook must be.
+  const v2Chrome = useV2("chrome");
 
   // Extract filter context from URL params
   const fromDateRange = searchParams.get('from');
@@ -276,8 +281,11 @@ const MonthlyPLDrilldown = () => {
     return <div className="flex items-center justify-center h-64">Loading monthly breakdown...</div>;
   }
 
+  // v2 (switch row alignment): the breadcrumb is this page's first line, 20px
+  // tall, so md:pt-8 centres it at 50 + 32 + 10 = 92 on the sidebar switch's
+  // row (main starts at y=50 at md). p-6 left it 8px high.
   return (
-    <div className="container mx-auto space-y-6 p-6">
+    <div className={`container mx-auto space-y-6 p-6${v2Chrome ? " md:pt-8" : ""}`}>
       <PLBreadcrumb items={breadcrumbItems} />
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">

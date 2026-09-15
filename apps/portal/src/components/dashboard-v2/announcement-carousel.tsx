@@ -4,14 +4,6 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { ArrowRight, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui-v2/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui-v2/dialog';
 import { cn } from '@/lib/utils';
 import {
   useFeatureAnnouncements,
@@ -20,6 +12,10 @@ import {
 } from '@/hooks/use-feature-announcements';
 import { AttentionWash } from './attention-wash';
 import { CardSurface } from './card-surface';
+// The detail dialog, its severity labels and the href check live in shared
+// modules so the hero-tab featured deck opens the very same dialog. Moved, not
+// changed: see announcement-detail-dialog.tsx and lib/safe-href.ts.
+import { DetailDialog, SEVERITY_LABEL } from './announcement-detail-dialog';
 
 /**
  * Feature announcements as a text-only carousel — no photography, just the
@@ -56,13 +52,6 @@ type DragInfo = {
   velocity: { x: number; y: number };
 };
 
-const SEVERITY_LABEL: Record<AnnouncementSeverity, string> = {
-  critical: 'Important',
-  major: 'New',
-  minor: 'Update',
-  info: 'Note',
-};
-
 /**
  * Severity keeps its own semantics — critical stays red regardless of the
  * tenant's brand, because "important" must not become "on-brand".
@@ -89,29 +78,6 @@ const SEVERITY_CLASS: Record<AnnouncementSeverity, string> = {
   minor: 'border-white/25 bg-white/10 text-white/90',
   info: 'border-white/25 bg-white/10 text-white/90',
 };
-
-/**
- * The href we are willing to put in the DOM, or `null` to drop the button.
- *
- * `cta_url` is free text typed into the super-admin form and it lands in an
- * `href` unmodified. A `javascript:` or `data:` href EXECUTES on click, so a
- * paste accident — or anyone who ever gets a write on this table — becomes
- * script running in an operator's authenticated portal session. Only an
- * absolute http(s) URL or a same-origin path survives; anything else renders no
- * button at all, because a missing CTA is better than that one.
- *
- * Note this is the href only. `body_html` still goes through
- * `dangerouslySetInnerHTML` unsanitised — see the comment at that call site.
- */
-function safeHref(url: string | null | undefined): string | null {
-  if (typeof url !== 'string') return null;
-  const trimmed = url.trim();
-  if (/^https?:\/\//i.test(trimmed)) return trimmed;
-  // Same-origin path. `//evil.com` is protocol-relative and NOT same-origin,
-  // so a second slash disqualifies it.
-  if (trimmed.startsWith('/') && !trimmed.startsWith('//')) return trimmed;
-  return null;
-}
 
 /**
  * The slot when there is nothing to show.
@@ -144,97 +110,6 @@ function EmptySlot({ className, children }: { className?: string; children?: Rea
     >
       {children}
     </div>
-  );
-}
-
-function DetailDialog({
-  announcement,
-  onOpenChange,
-  onDismiss,
-}: {
-  announcement: FeatureAnnouncement | null;
-  onOpenChange: (open: boolean) => void;
-  onDismiss: (id: string) => void;
-}) {
-  if (!announcement) return null;
-  const href = safeHref(announcement.cta_url);
-  const isExternal = !!href && /^https?:\/\//i.test(href);
-
-  return (
-    <Dialog open onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <span className="text-xs font-semibold uppercase tracking-wider text-primary">
-            {SEVERITY_LABEL[announcement.severity]}
-          </span>
-          <DialogTitle className="text-2xl font-bold tracking-tight">
-            {announcement.title}
-          </DialogTitle>
-          {announcement.summary && (
-            <DialogDescription className="text-sm leading-relaxed">
-              {announcement.summary}
-            </DialogDescription>
-          )}
-        </DialogHeader>
-
-        {announcement.body_html && (
-          /* NOT SANITISED, and that is a standing risk rather than a settled
-             decision — recorded here because the audit that found it could not
-             close it.
-
-             The reasoning it shipped on is that only super admins can write
-             this table (it is one of the tables that DOES have RLS on), so the
-             HTML comes from us rather than from a tenant. That reasoning is
-             unverifiable from this repository: `feature_announcements` has no
-             DDL and no policy definition anywhere in the tree (the table was
-             created through the Management API), so nothing here pins the write
-             policy to `is_super_admin()`.
-
-             The booking app injects the SAME COLUMN through
-             `sanitizeHtml()` (apps/booking/src/lib/sanitize-html.ts, DOMPurify),
-             and the super-admin editor's own field label promises "HTML allowed
-             — sanitized on render". The portal is the one reader that does
-             neither. It is left alone here only because closing it means adding
-             `dompurify` to apps/portal/package.json, which this area explicitly
-             does not do (see the `PanInfo` note at the top of this file), and a
-             hand-rolled half-sanitiser is worse than none.
-
-             Styled with explicit child selectors rather than `prose`:
-             @tailwindcss/typography is in package.json but is NOT registered in
-             tailwind.config.ts — `plugins` there is `[tailwindcss-animate]`
-             only — so the prose classes resolve to nothing and paragraphs would
-             run together. */
-          <div
-            className="space-y-3 text-sm leading-relaxed text-muted-foreground [&_a]:text-primary [&_a]:underline [&_li]:mt-1 [&_strong]:font-semibold [&_strong]:text-foreground [&_ul]:list-disc [&_ul]:pl-5"
-            dangerouslySetInnerHTML={{ __html: announcement.body_html }}
-          />
-        )}
-
-        <DialogFooter className="gap-2 sm:justify-between">
-          <Button
-            variant="ghost"
-            onClick={() => {
-              onDismiss(announcement.id);
-              onOpenChange(false);
-            }}
-          >
-            Got it, hide this
-          </Button>
-          {href && (
-            <Button asChild>
-              <a
-                href={href}
-                target={isExternal ? '_blank' : undefined}
-                rel={isExternal ? 'noreferrer noopener' : undefined}
-              >
-                {announcement.cta_label || 'Find out more'}
-                <ArrowRight className="ml-1 size-4" />
-              </a>
-            </Button>
-          )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }
 

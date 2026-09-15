@@ -40,7 +40,11 @@ export function InsightsView() {
   const { data, isLoading, isError, error } = useInsights(months);
 
   return (
-    <div className="mx-auto w-full max-w-[1560px] space-y-8 px-2 pb-8">
+    /* Switch row alignment: at md+ the h1 (text-3xl leading-tight, a 37.5px
+       line box) is centred on the sidebar's Portal / Website switch at y=92.
+       main's content box starts at 50px there: 50 + 23.25 + 18.75 = 92. It sat
+       at 50, under the 64px top bar. Below md there is still no top padding. */
+    <div className="mx-auto w-full max-w-[1560px] space-y-8 px-2 pb-8 md:pt-[23.25px]">
       <header>
         <h1 className="text-3xl font-semibold leading-tight tracking-tight">Insights</h1>
         <p className="mt-1.5 text-sm text-muted-foreground">

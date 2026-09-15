@@ -11,6 +11,8 @@ function useESignCategoryData(): UsageCategoryData {
     monthlyAggregates,
     isLoading,
     isLoadingHistory,
+    isError,
+    refetch,
   } = useESignUsage();
 
   const events: UsageEvent[] = useMemo(
@@ -47,6 +49,8 @@ function useESignCategoryData(): UsageCategoryData {
     monthlyAggregates: aggregates,
     isLoading,
     isLoadingHistory,
+    isError,
+    refetch,
   };
 }
 

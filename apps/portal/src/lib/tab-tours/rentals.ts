@@ -277,15 +277,13 @@ const STEPS: readonly TourStep[] = [
     anchors: ['[data-tour="rentals-search"]', ...LIST_HEADING],
     side: 'bottom',
     // Searching nothing teaches nothing, and the calendar note below points at
-    // the Calendar View card beside the overview graph, which is not drawn while
-    // the rentals are still loading. Both are worth a stop only once there is a
-    // list to narrow.
+    // the header's calendar button, which is not drawn while the rentals are
+    // still loading. Both are worth a stop only once there is a list to narrow.
     requires: { record: 'rentalId' },
     notes: [
       {
-        // Removed from the header on purpose, so this card is the only way an
-        // operator finds it. Anchored, so it is not promised in calendar view
-        // where the card is not drawn.
+        // The header's calendar button. Anchored, so it is not promised in
+        // calendar view, where that button becomes the way back to the list.
         text: 'Calendar view lays the same rentals on a timeline, one row per car.',
         anchors: ['[data-tour="rentals-calendar"]'],
       },

@@ -15,16 +15,142 @@ const MAX_HISTORY_MESSAGES = 10;
 const MATCH_THRESHOLD = 0.7;
 const MATCH_COUNT = 8;
 
+interface ChatAttachmentInput {
+  name: string;
+  mimeType: string;
+  size: number;
+  kind: 'image' | 'text';
+  /** `data:<mimeType>;base64,…` — images only. */
+  dataUrl?: string;
+  /** Decoded file text — text files only. */
+  text?: string;
+}
+
 interface ChatRequestBody {
   // Regular chat message
   message?: string;
   conversationId?: string;
   userName?: string;
   tenantId?: string;
-  // Action execution
-  type?: 'execute_action';
+  // Action execution, or the capability probe
+  type?: 'execute_action' | 'capabilities';
   actionName?: string;
   resolvedParams?: Record<string, unknown>;
+  // Files for THIS turn only (v2 Trax). Never stored — see handleChatMessage.
+  attachments?: ChatAttachmentInput[];
+}
+
+/**
+ * What this function accepts as attachments, returned by the `capabilities`
+ * route and enforced by `validateAttachments`. The portal reads its limits from
+ * this answer rather than hardcoding them, so the two cannot drift.
+ *
+ * WHY A VERSIONED PROBE: the body is parsed loosely, so a deployment from before
+ * attachments silently ignores an `attachments` key and replies as if the model
+ * had read the file. The portal only switches the attach button on when the
+ * RUNNING function answers this route; an older one returns 400 "Message is
+ * required", which the portal reads as "no".
+ */
+const ATTACHMENT_CAPABILITY = {
+  version: 1,
+  maxFiles: 4,
+  maxImageBytes: 3_000_000,
+  maxTextBytes: 200_000,
+  maxTotalBytes: 8_000_000,
+  imageTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'],
+  textTypes: ['text/plain', 'text/csv', 'text/markdown', 'application/json'],
+} as const;
+
+type ValidAttachment =
+  | { kind: 'image'; name: string; mimeType: string; bytes: number; dataUrl: string }
+  | { kind: 'text'; name: string; mimeType: string; bytes: number; text: string; truncated: boolean };
+
+/** Names are echoed into the prompt: strip control characters, keep them short. */
+function cleanAttachmentName(raw: unknown): string {
+  const s = typeof raw === 'string' ? raw : '';
+  return s.replace(/[\u0000-\u001f\u007f]+/g, ' ').trim().slice(0, 120) || 'attachment';
+}
+
+function base64DecodedBytes(b64: string): number {
+  const padding = b64.endsWith('==') ? 2 : b64.endsWith('=') ? 1 : 0;
+  return Math.floor((b64.length * 3) / 4) - padding;
+}
+
+function truncateUtf8(text: string, maxBytes: number): { text: string; bytes: number; truncated: boolean } {
+  const encoder = new TextEncoder();
+  const encoded = encoder.encode(text);
+  if (encoded.length <= maxBytes) return { text, bytes: encoded.length, truncated: false };
+  const cut = new TextDecoder('utf-8').decode(encoded.subarray(0, maxBytes)).replace(/\uFFFD+$/, '');
+  return { text: cut, bytes: encoder.encode(cut).length, truncated: true };
+}
+
+function megabytes(bytes: number): string {
+  return `${Math.round((bytes / 1_000_000) * 10) / 10} MB`;
+}
+
+/**
+ * Validate the turn's attachments against ATTACHMENT_CAPABILITY. The client
+ * checks the same limits, but the client is not the boundary: sizes are
+ * measured from the payload itself, never from the declared `size`.
+ */
+function validateAttachments(
+  raw: unknown,
+): { ok: true; files: ValidAttachment[] } | { ok: false; error: string } {
+  if (raw === undefined || raw === null) return { ok: true, files: [] };
+  if (!Array.isArray(raw)) return { ok: false, error: 'Attachments must be a list.' };
+
+  const cap = ATTACHMENT_CAPABILITY;
+  if (raw.length > cap.maxFiles) {
+    return { ok: false, error: `You can attach up to ${cap.maxFiles} files per message.` };
+  }
+
+  const files: ValidAttachment[] = [];
+  let total = 0;
+
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') return { ok: false, error: 'An attachment was malformed.' };
+    const a = item as Record<string, unknown>;
+    const name = cleanAttachmentName(a.name);
+    const mimeType = typeof a.mimeType === 'string' ? a.mimeType : '';
+
+    if (a.kind === 'image') {
+      if (!(cap.imageTypes as readonly string[]).includes(mimeType)) {
+        return { ok: false, error: `${name}: images must be PNG, JPEG, WebP or GIF.` };
+      }
+      const prefix = `data:${mimeType};base64,`;
+      if (typeof a.dataUrl !== 'string' || !a.dataUrl.startsWith(prefix)) {
+        return { ok: false, error: `${name}: the image data is missing or does not match its type.` };
+      }
+      const b64 = a.dataUrl.slice(prefix.length);
+      if (b64.length === 0 || b64.length % 4 !== 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(b64)) {
+        return { ok: false, error: `${name}: the image data is not valid base64.` };
+      }
+      const bytes = base64DecodedBytes(b64);
+      if (bytes > cap.maxImageBytes) {
+        return { ok: false, error: `${name}: images must be ${megabytes(cap.maxImageBytes)} or smaller.` };
+      }
+      total += bytes;
+      files.push({ kind: 'image', name, mimeType, bytes, dataUrl: a.dataUrl });
+    } else if (a.kind === 'text') {
+      if (!(cap.textTypes as readonly string[]).includes(mimeType)) {
+        return { ok: false, error: `${name}: text files must be plain text, CSV, Markdown or JSON.` };
+      }
+      if (typeof a.text !== 'string') {
+        return { ok: false, error: `${name}: the file text is missing.` };
+      }
+      const t = truncateUtf8(a.text, cap.maxTextBytes);
+      total += t.bytes;
+      files.push({ kind: 'text', name, mimeType, bytes: t.bytes, text: t.text, truncated: t.truncated });
+    } else {
+      return { ok: false, error: `${name}: unsupported attachment.` };
+    }
+
+    if (total > cap.maxTotalBytes) {
+      return { ok: false, error: `Attachments must total ${megabytes(cap.maxTotalBytes)} or less.` };
+    }
+  }
+
+  return { ok: true, files };
 }
 
 interface ChartData {
@@ -51,6 +177,8 @@ interface ChatResponse {
   rentalRequests?: RentalRequestsData;
   action?: ActionProposal;
   actionResult?: { success: boolean; message: string; entityType?: string; entityId?: string };
+  /** Echo of the files the model was given this turn, so the client can confirm delivery. */
+  attachmentsReceived?: Array<{ name: string; kind: 'image' | 'text' }>;
 }
 
 // System prompt for the AI assistant
@@ -250,6 +378,13 @@ serve(async (req) => {
       return errorResponse('Invalid request body', 400);
     }
 
+    // ─── ROUTE: Capability probe ─────────────────────────────────
+    // Before the app_users / tenants reads so the probe stays cheap: it needs
+    // only a valid session (checked above) and touches no data.
+    if (body?.type === 'capabilities') {
+      return jsonResponse({ capabilities: { attachments: ATTACHMENT_CAPABILITY } });
+    }
+
     // Get user's profile from app_users
     const { data: appUser, error: appUserError } = await supabase
       .from('app_users')
@@ -359,11 +494,46 @@ async function handleChatMessage(
 ): Promise<Response> {
   const { message, conversationId: existingConversationId } = body;
 
-  if (!message || typeof message !== 'string' || message.trim().length === 0) {
+  const validated = validateAttachments(body.attachments);
+  if (!validated.ok) {
+    return errorResponse(validated.error, 400);
+  }
+  const files = validated.files;
+  const hasText = typeof message === 'string' && message.trim().length > 0;
+
+  if (!hasText && files.length === 0) {
     return errorResponse('Message is required', 400);
   }
 
   const conversationId = existingConversationId || crypto.randomUUID();
+
+  // ── Attachments: what the model reads, what is embedded, what is stored ──
+  // With no attachments every one of these is exactly `message`, as before.
+  //
+  // HONEST LIMIT: files live for this turn only. There is no attachments column
+  // and no bucket, and get_chat_history returns text, so the saved user row
+  // carries an "[Attached: …]" note — later turns and a reopened conversation
+  // know a file existed but cannot see it again.
+  const rawMessage = hasText ? (message as string) : '';
+  const userText = hasText ? rawMessage : 'Please review the attached file(s).';
+  const fileNames = files.map((f) => f.name).join(', ');
+  const modelText = files.length === 0
+    ? rawMessage
+    : userText + files
+      .filter((f): f is Extract<ValidAttachment, { kind: 'text' }> => f.kind === 'text')
+      .map((f) =>
+        `\n\n--- Attached file: ${f.name} (${f.mimeType}) ---\n${f.text}` +
+        `${f.truncated ? '\n[file truncated]' : ''}\n--- end of ${f.name} ---`
+      )
+      .join('');
+  // Embed the question and the file NAMES only — never base64 or file bodies.
+  const embeddingText = files.length === 0 ? rawMessage : `${userText}\n\nAttached: ${fileNames}`;
+  const storedUserMessage = files.length === 0
+    ? rawMessage
+    : `${hasText ? `${rawMessage.trim()}\n\n` : ''}[Attached: ${fileNames}]`;
+  const received = files.length > 0
+    ? { attachmentsReceived: files.map((f) => ({ name: f.name, kind: f.kind })) }
+    : {};
 
   // Get user's name for personalization
   const userName = body.userName ||
@@ -372,10 +542,10 @@ async function handleChatMessage(
     (user.email ? user.email.split('@')[0] : null) ||
     'there';
 
-  console.log(`Chat request from ${userName} (${user.id}) in tenant ${ctx.tenantId}`);
+  console.log(`Chat request from ${userName} (${user.id}) in tenant ${ctx.tenantId}${files.length ? ` with ${files.length} attachment(s)` : ''}`);
 
   // Step 1: Generate embedding for the user's query
-  const queryEmbedding = await generateEmbedding(message, {
+  const queryEmbedding = await generateEmbedding(embeddingText, {
     functionName: 'chat',
     tenantId: ctx.tenantId,
   });
@@ -472,11 +642,24 @@ async function handleChatMessage(
     }
   }
 
-  // Add current user message
-  messages.push({
-    role: 'user',
-    content: message,
-  });
+  // Add current user message. Images go as vision content parts (gpt-4o reads
+  // them); `chatCompletion` forwards `messages` untouched, so only the local
+  // type needs widening — _shared/openai.ts types `content` as a string.
+  const images = files.filter((f): f is Extract<ValidAttachment, { kind: 'image' }> => f.kind === 'image');
+  if (images.length > 0) {
+    messages.push({
+      role: 'user',
+      content: [
+        { type: 'text', text: modelText },
+        ...images.map((img) => ({ type: 'image_url', image_url: { url: img.dataUrl, detail: 'auto' } })),
+      ],
+    } as unknown as ChatMessage);
+  } else {
+    messages.push({
+      role: 'user',
+      content: modelText,
+    });
+  }
 
   // Step 7: Get AI response (with tools if available)
   const completion = await chatCompletion(
@@ -506,6 +689,7 @@ async function handleChatMessage(
         response: "I tried to perform an action but couldn't parse the parameters. Could you rephrase your request?",
         conversationId,
         sources: [],
+        ...received,
       });
     }
 
@@ -517,6 +701,7 @@ async function handleChatMessage(
         response: `I tried to use an action called "${actionName}" but it doesn't exist. Let me help you another way.`,
         conversationId,
         sources: [],
+        ...received,
       });
     }
 
@@ -526,12 +711,13 @@ async function handleChatMessage(
     // If resolve returns a string, it's a clarification question
     if (typeof resolveResult === 'string') {
       // Save the clarification as a normal chat message
-      await saveChatMessages(ctx.supabase, ctx.tenantId, user.id, conversationId, message, resolveResult, matchedDocs);
+      await saveChatMessages(ctx.supabase, ctx.tenantId, user.id, conversationId, storedUserMessage, resolveResult, matchedDocs);
 
       return jsonResponse({
         response: resolveResult,
         conversationId,
         sources: [],
+        ...received,
       });
     }
 
@@ -539,7 +725,7 @@ async function handleChatMessage(
     const aiText = choice?.message?.content || `I'll set that up for you. Please confirm below:`;
 
     // Save chat messages (the proposal text)
-    await saveChatMessages(ctx.supabase, ctx.tenantId, user.id, conversationId, message, aiText, matchedDocs);
+    await saveChatMessages(ctx.supabase, ctx.tenantId, user.id, conversationId, storedUserMessage, aiText, matchedDocs);
 
     const response: ChatResponse = {
       response: aiText,
@@ -549,6 +735,7 @@ async function handleChatMessage(
         id: doc.source_id,
       })) || [],
       action: resolveResult,
+      ...received,
     };
 
     return jsonResponse(response);
@@ -561,7 +748,7 @@ async function handleChatMessage(
   const { cleanContent, chart, rentalRequests } = parseResponseData(aiResponseContent);
 
   // Save messages to database
-  await saveChatMessages(ctx.supabase, ctx.tenantId, user.id, conversationId, message, cleanContent, matchedDocs, chart);
+  await saveChatMessages(ctx.supabase, ctx.tenantId, user.id, conversationId, storedUserMessage, cleanContent, matchedDocs, chart);
 
   const response: ChatResponse = {
     response: cleanContent,
@@ -570,6 +757,7 @@ async function handleChatMessage(
       table: doc.source_table,
       id: doc.source_id,
     })) || [],
+    ...received,
   };
 
   if (chart) {

@@ -13,6 +13,17 @@ interface LocationAutocompleteProps {
   placeholder?: string;
   className?: string;
   disabled?: boolean;
+  /**
+   * v2 settings only (northwind). Keeps accented letters, #, &, / and brackets
+   * (only control characters are stripped), and says so when no address matches
+   * or address search is unavailable. Off everywhere else, so v1 is unchanged.
+   */
+  v2States?: boolean;
+}
+
+/** v2: an address keeps every printable character; only control characters go. */
+export function sanitizeAddressInputV2(input: string): string {
+  return input.replace(/[\u0000-\u001F\u007F]/g, '');
 }
 
 interface Suggestion {
@@ -28,6 +39,7 @@ export function LocationAutocomplete({
   onChange,
   placeholder = "Enter address",
   className,
+  v2States = false,
   disabled = false
 }: LocationAutocompleteProps) {
   const { isLoaded } = useGoogleMapsLoader();
@@ -37,11 +49,17 @@ export function LocationAutocomplete({
   const wrapperRef = useRef<HTMLDivElement>(null);
   const debounceTimer = useRef<NodeJS.Timeout>();
   const sessionManager = useRef(new PlacesSessionManager());
+  // v2 only: the query that came back empty, whether search is down, and whether
+  // the hint is on screen (it closes with the dropdown).
+  const [v2EmptyFor, setV2EmptyFor] = useState<string | null>(null);
+  const [v2SearchDown, setV2SearchDown] = useState(false);
+  const [v2HintOpen, setV2HintOpen] = useState(false);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
         setShowSuggestions(false);
+        setV2HintOpen(false);
       }
     };
 
@@ -50,6 +68,7 @@ export function LocationAutocomplete({
   }, []);
 
   const fetchSuggestions = async (inputValue: string) => {
+    if (v2States) setV2SearchDown(!isLoaded && inputValue.length >= 3);
     if (!inputValue || inputValue.length < 3 || !isLoaded) {
       setSuggestions([]);
       setShowSuggestions(false);
@@ -73,8 +92,10 @@ export function LocationAutocomplete({
 
       setSuggestions(results);
       setShowSuggestions(results.length > 0);
+      if (v2States) setV2EmptyFor(results.length === 0 ? inputValue : null);
     } catch (error) {
       console.error("Error fetching location suggestions:", error);
+      if (v2States) setV2SearchDown(true);
       setSuggestions([]);
       setShowSuggestions(false);
     } finally {
@@ -83,6 +104,19 @@ export function LocationAutocomplete({
   };
 
   const handleInputChange = (inputValue: string) => {
+    if (v2States) {
+      const cleaned = sanitizeAddressInputV2(inputValue);
+      onChange(cleaned);
+      setV2HintOpen(true);
+      setV2EmptyFor(null);
+      if (debounceTimer.current) {
+        clearTimeout(debounceTimer.current);
+      }
+      debounceTimer.current = setTimeout(() => {
+        fetchSuggestions(cleaned);
+      }, 300);
+      return;
+    }
     const sanitized = inputValue.replace(/[^a-zA-Z0-9\s,.\-']/g, '');
     onChange(sanitized);
 
@@ -168,6 +202,25 @@ export function LocationAutocomplete({
               </div>
             </button>
           ))}
+        </div>
+      )}
+      {v2States && v2HintOpen && !disabled && !loading && suggestions.length === 0 &&
+        value.trim().length >= 3 && (v2SearchDown || v2EmptyFor === value) && (
+        <div
+          role="status"
+          className="absolute z-50 mt-1 w-full rounded-2xl bg-popover px-3 py-2 text-xs text-muted-foreground shadow-lg [overflow-wrap:anywhere]"
+        >
+          {v2SearchDown ? (
+            "Address suggestions aren't available right now. Type the full address."
+          ) : (
+            <>
+              No addresses match{" "}
+              <span className="font-medium text-foreground" title={value.trim()}>
+                &ldquo;{value.trim().length > 40 ? `${value.trim().slice(0, 40)}…` : value.trim()}&rdquo;
+              </span>
+              . Keep typing or enter the full address.
+            </>
+          )}
         </div>
       )}
     </div>

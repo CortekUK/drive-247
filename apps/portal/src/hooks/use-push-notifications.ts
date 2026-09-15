@@ -280,6 +280,7 @@ export function usePushNotifications() {
     customerDevices: devices.filter((d) => d.audience === 'customer'),
     devicesLoading: devicesQuery.isLoading,
     refetchDevices: devicesQuery.refetch,
+    devicesError: devicesQuery.error,
     sendPush,
   };
 }

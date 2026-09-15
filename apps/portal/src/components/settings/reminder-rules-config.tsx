@@ -10,6 +10,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Loader2, RotateCcw, Car, Shield, AlertTriangle, FileText, DollarSign, Settings2, KeyRound } from 'lucide-react';
 import { useReminderRulesByCategory, useReminderRuleActions, type ReminderRule } from '@/hooks/use-reminder-rules';
+import { useV2 } from '@/lib/v2-context';
+import { ReminderRulesConfigV2 } from '@/components/settings-v2/notification-states-v2';
 
 const categoryIcons = {
   'Vehicle': Car,
@@ -144,6 +146,8 @@ const ReminderRuleCard: React.FC<{
 const ReminderRulesConfig: React.FC = () => {
   const { data: groupedRules, isLoading, error } = useReminderRulesByCategory();
   const { updateRule, resetToDefaults, isLoading: isUpdating } = useReminderRuleActions();
+  // v2 chrome (northwind only): the states rebuilt on the settings kit.
+  const v2Chrome = useV2('chrome');
 
   const handleRuleUpdate = (updates: { id: string; lead_days?: number; severity?: 'info' | 'warning' | 'critical'; is_enabled?: boolean }) => {
     updateRule.mutate(updates);
@@ -152,6 +156,8 @@ const ReminderRulesConfig: React.FC = () => {
   const handleResetAll = () => {
     resetToDefaults.mutate();
   };
+
+  if (v2Chrome) return <ReminderRulesConfigV2 />;
 
   if (isLoading) {
     return (

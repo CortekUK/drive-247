@@ -16,7 +16,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Users, Plus, Mail, Phone, Eye, Edit, Search, Shield, ArrowUpDown, ArrowUp, ArrowDown, X, MoreHorizontal, Ban, Trash2, XCircle, UserCheck, Link2, Briefcase, BarChart3, ChevronDown, ShieldCheck, RefreshCw, Upload } from "lucide-react";
+import { Users, Plus, Mail, Phone, Eye, Edit, Search, Shield, ArrowUpDown, ArrowUp, ArrowDown, X, MoreHorizontal, Ban, Trash2, XCircle, UserCheck, Link2, Briefcase, BarChart3, ChevronDown, ShieldCheck, RefreshCw, Upload, Download } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
@@ -54,6 +54,8 @@ import {
 } from "@/components/shared/list-table-v2";
 import { formatCurrency } from "@/lib/format-utils";
 import { TabTourButton } from "@/components/onboarding/tab-tour-button";
+import { HeaderIconButton } from "@/components/shared/header-icon-button-v2";
+import { csvDate, csvFilename, downloadCsv } from "@/lib/csv-export";
 import { useV2 } from "@/lib/v2-context";
 import { usePageSearch } from "@/components/shared/layout/page-search-slot";
 import { OverviewFlip } from "@/components/shared/layout/overview-flip";
@@ -721,8 +723,12 @@ const CustomersList = () => {
   };
 
   if (isLoading) {
+    // v2 (switch row alignment): the loaded page's 24px top padding at md, so this
+    // skeleton starts where the title does (y=74, title centred on the sidebar
+    // switch's row at 92) instead of at y=50 under the 64px top bar. v1 keeps
+    // "space-y-6" byte for byte.
     return (
-      <div className="space-y-6">
+      <div className={`space-y-6${v2Chrome ? " md:pt-6" : ""}`}>
         <div className="flex items-center justify-between">
           <div>
             <Skeleton className="h-8 w-48 mb-2" />
@@ -730,11 +736,29 @@ const CustomersList = () => {
           </div>
           <Skeleton className="h-10 w-32" />
         </div>
+        {!v2Chrome && (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {[...Array(4)].map((_, i) => (
             <Skeleton key={i} className="h-24" />
           ))}
         </div>
+        )}
+        {/* v2 has no stat cards: hold the hero row's shape instead (the graph
+            across three quarters, and the featured card only when this viewer
+            gets one), so the table does not jump when the list lands. 260px is
+            the loaded graph's height; 13rem is the card's when the row stacks. */}
+        {v2Chrome && (
+          <div className="grid grid-cols-1 gap-6 py-2 lg:grid-cols-4">
+            {canEdit('customers') || (isLeanTenant(tenantSlug) && canView('blocked_customers')) ? (
+              <>
+                <Skeleton className="h-[260px] lg:col-span-3" />
+                <Skeleton className="h-52 lg:h-[260px]" />
+              </>
+            ) : (
+              <Skeleton className="h-[260px] lg:col-span-4" />
+            )}
+          </div>
+        )}
         <Card>
           <CardHeader>
             <Skeleton className="h-6 w-48" />
@@ -750,6 +774,39 @@ const CustomersList = () => {
       </div>
     );
   }
+
+  // v2 header export: the customers the table is showing, filters and search
+  // applied, with the same Verified wording as the table's column.
+  const handleExportCustomersCsv = () => {
+    const verifiedLabel = (status?: string | null) =>
+      status === 'verified' || status === 'manually_verified'
+        ? 'Verified'
+        : status === 'pending'
+          ? 'Pending'
+          : status === 'failed'
+            ? 'Failed'
+            : 'Unverified';
+    downloadCsv(
+      csvFilename('customers'),
+      ['Name', 'Email', 'Phone', 'Type', 'User type', 'Status', 'Verified', 'Gig driver', 'Balance', 'Balance status', 'Added'],
+      filteredAndSortedCustomers.map((customer) => {
+        const balance = customerBalances[customer.id];
+        return [
+          customer.name,
+          customer.email,
+          customer.phone,
+          customer.type,
+          customer.user_type || 'Guest',
+          customer.status,
+          verifiedLabel((customer as any).identity_verification_status),
+          (customer as any).is_gig_driver ? 'Yes' : 'No',
+          balance ? Number(balance.balance) || 0 : '',
+          balance ? balance.status : '',
+          csvDate(customer.created_at),
+        ];
+      }),
+    );
+  };
 
   return (
     <div className="container mx-auto p-4 sm:p-6 space-y-6">
@@ -780,6 +837,12 @@ const CustomersList = () => {
           {/* Canary-only: self-gates on the resolved tenant slug, so this
               shared v1 header is unchanged for the other 56 tenants. */}
           <TabTourButton tour="customers" size="h-10" />
+          {/* v2 headers carry one labelled button, the main action; the rest
+              are icons with their names in tooltips (team lead, Sep 15 2026).
+              Each v1 control below is wrapped, unchanged, in !v2Chrome and its
+              v2 icon sits beside it under the same condition. */}
+          {!v2Chrome && (
+            <>
           {isLeanTenant(tenantSlug) && canView('blocked_customers') && (
             <Link href="/blocked-customers" className="shrink-0" data-tour="customers-blocked">
               <Button variant="outline" className="flex-1 sm:flex-none">
@@ -787,6 +850,13 @@ const CustomersList = () => {
                 Blocked
               </Button>
             </Link>
+          )}
+            </>
+          )}
+          {v2Chrome && isLeanTenant(tenantSlug) && canView('blocked_customers') && (
+            <HeaderIconButton href="/blocked-customers" label="Blocked customers" size="icon-lg" data-tour="customers-blocked">
+              <Ban className="h-4 w-4" />
+            </HeaderIconButton>
           )}
           {/* v2 has no Analytics tab: the overview graph replaces this link. The
               /customers/analytics route itself still answers. */}
@@ -801,6 +871,8 @@ const CustomersList = () => {
           )}
             </>
           )}
+          {!v2Chrome && (
+            <>
           {canEdit('customers') && (
             <Button variant="outline" size="icon" data-tour="customer-invite" onClick={() => setInviteDialogOpen(true)} className="shrink-0">
               <Link2 className="h-4 w-4" />
@@ -816,6 +888,28 @@ const CustomersList = () => {
               Import CSV
             </Button>
           )}
+            </>
+          )}
+          {v2Chrome && canEdit('customers') && (
+            <>
+              <HeaderIconButton label="Invite link" size="icon-lg" data-tour="customer-invite" onClick={() => setInviteDialogOpen(true)}>
+                <Link2 className="h-4 w-4" />
+              </HeaderIconButton>
+              <HeaderIconButton label="Import CSV" size="icon-lg" onClick={() => setCsvImportOpen(true)}>
+                <Upload className="h-4 w-4" />
+              </HeaderIconButton>
+            </>
+          )}
+          {v2Chrome && (
+            <HeaderIconButton
+              label="Export CSV"
+              size="icon-lg"
+              onClick={handleExportCustomersCsv}
+              disabled={filteredAndSortedCustomers.length === 0}
+            >
+              <Download className="h-4 w-4" />
+            </HeaderIconButton>
+          )}
           {canEdit('customers') && (
             <Button className="bg-gradient-primary flex-1 sm:flex-none" data-tour="add-customer" onClick={handleAddCustomer}>
               <Plus className="h-4 w-4 mr-2" />
@@ -830,8 +924,8 @@ const CustomersList = () => {
       {/* v2: the overview turns over to show the filter panel. Its front face is
           the hero row (one graph and a featured card) over the same rows the
           table shows, and it carries the customers-stats tour anchor on its root.
-          The card mirrors the header's Invite button, or failing that its
-          Blocked button, under the same permission checks. */}
+          The card is the featured deck: the invite link, CSV import and the
+          blocklist among others, each under its header control's own check. */}
       {v2Chrome && customers && (
         <OverviewFlip
           flipped={filtersOpen}
@@ -841,7 +935,7 @@ const CustomersList = () => {
               customers={filteredAndSortedCustomers}
               filtered={!!hasActiveFilters}
               onInvite={canEdit('customers') ? () => setInviteDialogOpen(true) : undefined}
-              showBlocked={isLeanTenant(tenantSlug) && canView('blocked_customers')}
+              onImport={canEdit('customers') ? () => setCsvImportOpen(true) : undefined}
             />
           }
           back={
@@ -986,7 +1080,10 @@ const CustomersList = () => {
                         <ListMetaChip>{customer.user_type || 'Guest'}</ListMetaChip>
                       </ListCell>
                       <ListCell>
-                        {verification === 'verified' ? (
+                        {/* manually_verified is an operator's hand check, which New
+                            Rental accepts as verified; the overview graph's
+                            Verified line counts the same two. */}
+                        {verification === 'verified' || verification === 'manually_verified' ? (
                           <ListStatusText tone="success">Verified</ListStatusText>
                         ) : verification === 'pending' ? (
                           <ListStatusText tone="warning">Pending</ListStatusText>

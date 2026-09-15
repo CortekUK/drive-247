@@ -37,6 +37,16 @@
  *    (`primary`, `muted-foreground`, `border`) so they follow the real theme.
  *
  * ---------------------------------------------------------------------------
+ * ICON ONLY
+ *
+ * The team lead's rule for these headers (Sep 15 2026): one labelled button,
+ * the page's main action, and every other control an icon. So this is a round
+ * compass with its name in a tooltip and in `aria-label`; the name still
+ * changes with the tour on offer ("Take the tour" / "See what is inside"). The
+ * unseen state keeps its tinted outline and adds a small dot, since there is
+ * no label left to carry it.
+ *
+ * ---------------------------------------------------------------------------
  * THE BUTTON MUST NOT OUTRANK THE PAGE'S PRIMARY ACTION
  *
  * "Add Customer", "Add Vehicle" and "New Rental" are the filled controls in
@@ -55,6 +65,7 @@ import { useAuth } from '@/stores/auth-store';
 import { useV2 } from '@/lib/v2-context';
 import { isLeanTenant } from '@/lib/lean-areas';
 import { cn } from '@/lib/utils';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui-v2/tooltip';
 import {
   hasTakenTabTour,
   runTabTour,
@@ -150,38 +161,46 @@ export function TabTourButton({ tour, size = 'h-10', className }: TabTourButtonP
   // screens. It fails CLOSED — an unresolved tenant renders nothing.
   if (!isLeanTenant(tenant?.slug) || !hasV2Chrome) return null;
 
+  // The label says which tour this is. Someone who took the short version on an
+  // empty tab and comes back after adding their first record is not being
+  // offered the same thing again, and "Take the tour" would read as a repeat
+  // rather than the deeper walkthrough it now is.
+  const label = seenVariant === 'empty' && variant === 'full' ? 'See what is inside' : 'Take the tour';
+
   return (
-    <button
-      type="button"
-      data-tour="take-tab-tour"
-      onClick={() => {
-        // Dim it immediately rather than waiting for the run to finish. Someone
-        // who starts a tour and closes it on step two has still found the door,
-        // and the loud treatment has done its job.
-        setTaken(true);
-        runTabTour(tour);
-      }}
-      className={cn(
-        'inline-flex shrink-0 items-center gap-2 rounded-md border px-3 text-sm font-medium',
-        'transition-colors focus-visible:outline-none focus-visible:ring-2',
-        'focus-visible:ring-ring focus-visible:ring-offset-2',
-        size,
-        taken
-          ? 'border-transparent text-muted-foreground hover:bg-muted hover:text-foreground'
-          : 'border-primary/30 bg-primary/5 text-primary hover:border-primary/50 hover:bg-primary/10',
-        className,
-      )}
-    >
-      <Compass className="size-4" aria-hidden />
-      {/* The label says which tour this is. Someone who took the short version
-          on an empty tab and comes back after adding their first record is not
-          being offered the same thing again, and "Take the tour" would read as
-          a repeat rather than the deeper walkthrough it now is. */}
-      <span>
-        {seenVariant === 'empty' && variant === 'full'
-          ? 'See what is inside'
-          : 'Take the tour'}
-      </span>
-    </button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          data-tour="take-tab-tour"
+          aria-label={label}
+          onClick={() => {
+            // Dim it immediately rather than waiting for the run to finish. Someone
+            // who starts a tour and closes it on step two has still found the door,
+            // and the loud treatment has done its job.
+            setTaken(true);
+            runTabTour(tour);
+          }}
+          className={cn(
+            'relative inline-flex shrink-0 items-center justify-center rounded-full border',
+            'transition-colors focus-visible:outline-none focus-visible:ring-2',
+            'focus-visible:ring-ring focus-visible:ring-offset-2',
+            size === 'h-10' ? 'size-10' : 'size-9',
+            taken
+              ? 'border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground dark:bg-transparent'
+              : 'border-primary/30 bg-primary/5 text-primary hover:border-primary/50 hover:bg-primary/10',
+            className,
+          )}
+        >
+          <Compass className="size-4" aria-hidden />
+          {!taken && (
+            <span aria-hidden className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-primary" />
+          )}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={6}>
+        {label}
+      </TooltipContent>
+    </Tooltip>
   );
 }

@@ -32,6 +32,8 @@ import {
   type LogoAnalysis,
 } from '@/lib/appearance/logo';
 import { cn } from '@/lib/utils';
+import { useV2 } from '@/lib/v2-context';
+import { useImageLoadFailed } from '@/components/settings-v2/business-settings-states';
 
 interface LogoStudioProps {
   logoUrl: string | null;
@@ -42,6 +44,8 @@ interface LogoStudioProps {
   lightSidebar: string;
   darkSidebar: string;
   disabled?: boolean;
+  /** v2: removing the logo clears the form only; the file is not deleted before Save. */
+  deferStorageDelete?: boolean;
 }
 
 export function LogoStudio({
@@ -52,10 +56,16 @@ export function LogoStudio({
   lightSidebar,
   darkSidebar,
   disabled,
+  deferStorageDelete,
 }: LogoStudioProps) {
   const { tenant } = useTenant();
   const [analysis, setAnalysis] = useState<LogoAnalysis | null>(null);
   const [busy, setBusy] = useState<null | 'backdrop' | 'dark'>(null);
+  // v2 (northwind): say so when a saved logo file can't be loaded, rather than
+  // leaving an empty box. Every other tenant keeps v1.
+  const v2Chrome = useV2('chrome');
+  const logoFailed = useImageLoadFailed(v2Chrome ? logoUrl : null);
+  const darkLogoFailed = useImageLoadFailed(v2Chrome ? darkLogoUrl : null);
 
   // Re-diagnose whenever the logo changes.
   useEffect(() => {
@@ -174,9 +184,15 @@ export function LogoStudio({
         <LogoUploadWithResize
           currentLogoUrl={logoUrl || undefined}
           onLogoChange={onLogoChange}
+          deferStorageDelete={deferStorageDelete}
           label="Logo"
           description="PNG with a transparent background works best. We'll tell you if something's off."
         />
+        {v2Chrome && logoFailed && (
+          <p role="alert" className="text-xs text-destructive">
+            We couldn&apos;t load your logo file. Upload it again to replace it.
+          </p>
+        )}
 
         {logoUrl && (
           <>
@@ -193,12 +209,20 @@ export function LogoStudio({
                       className="flex h-20 items-center justify-center rounded-md border p-3"
                       style={{ background: panel.bg }}
                     >
+                      {v2Chrome && (darkLogoUrl && panel.src === darkLogoUrl ? darkLogoFailed : logoFailed) ? (
+                        <span className="rounded-full bg-background/90 px-2 py-0.5 text-[11px] font-medium text-foreground">
+                          Couldn&apos;t load logo
+                        </span>
+                      ) : (
+                      <>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={panel.src}
                         alt={`Logo on ${panel.label}`}
                         className="max-h-full max-w-full object-contain"
                       />
+                      </>
+                      )}
                     </div>
                     <p className="text-center text-[11px] text-muted-foreground">
                       {panel.label}

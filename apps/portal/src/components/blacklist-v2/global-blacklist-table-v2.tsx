@@ -32,6 +32,7 @@ import {
   ListTableHeader,
   useProgressiveRows,
 } from "@/components/shared/list-table-v2";
+import { formatCompanyCount } from "@/components/settings-v2/settings-shell-state";
 
 const Blank = () => <span className="text-muted-foreground">—</span>;
 
@@ -100,7 +101,7 @@ export function GlobalBlacklistTableV2<T extends GlobalBlacklistEntryRowV2>({
                   <ListCell>
                     {/* v1's destructive "{n} companies" badge, as coloured text.
                         Every row here is blacklisted, so the tone never varies. */}
-                    <ListStatusText tone="danger">{entry.blocked_tenant_count} companies</ListStatusText>
+                    <ListStatusText tone="danger">{formatCompanyCount(entry.blocked_tenant_count)}</ListStatusText>
                   </ListCell>
                   <ListCell className="tabular-nums">
                     {firstBlocked ? <span className={LIST_CLASSES.text}>{firstBlocked}</span> : <Blank />}

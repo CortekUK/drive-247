@@ -2,6 +2,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
 import { toast } from '@/hooks/use-toast';
+import { useV2 } from '@/lib/v2-context';
+
+/** v2: the update reached the extra but not its per-vehicle prices. */
+export const VEHICLE_PRICES_NOT_SAVED = "The extra was saved, but its vehicle prices couldn't be updated. Try saving again.";
 
 export interface VehiclePricing {
   id: string;
@@ -33,6 +37,10 @@ export interface RentalExtra {
   remaining_stock: number | null;
   /** Computed: per-vehicle pricing rows (only for per_vehicle extras) */
   vehicle_pricing: VehiclePricing[];
+  /** True when the bookings read failed, so `remaining_stock` is not real. */
+  stock_unknown?: boolean;
+  /** True when the vehicle-price read failed, so `vehicle_pricing` is not real. */
+  vehicle_pricing_unknown?: boolean;
 }
 
 export interface CreateRentalExtraInput {
@@ -65,11 +73,15 @@ export interface UpdateRentalExtraInput {
 export const useRentalExtras = () => {
   const { tenant } = useTenant();
   const queryClient = useQueryClient();
+  // v2 (northwind): a failed vehicle-price write is reported, not logged away.
+  const strictVehiclePricing = useV2('chrome');
 
   const {
     data: extras,
     isLoading,
     error,
+    refetch,
+    isFetching,
   } = useQuery({
     queryKey: ['rental-extras', tenant?.id],
     queryFn: async (): Promise<RentalExtra[]> => {
@@ -90,13 +102,16 @@ export const useRentalExtras = () => {
       // Fetch booked quantities for quantity-based extras
       const quantityExtras = (data || []).filter((e: any) => e.max_quantity !== null);
       let bookedMap: Record<string, number> = {};
+      let stockUnknown = false;
+      let vehiclePricingUnknown = false;
 
       if (quantityExtras.length > 0) {
-        const { data: selections } = await supabase
+        const { data: selections, error: selectionsError } = await supabase
           .from('rental_extras_selections')
           .select('extra_id, quantity')
           .in('extra_id', quantityExtras.map((e: any) => e.id));
 
+        if (selectionsError) stockUnknown = true;
         if (selections) {
           for (const sel of selections) {
             bookedMap[sel.extra_id] = (bookedMap[sel.extra_id] || 0) + sel.quantity;
@@ -109,11 +124,12 @@ export const useRentalExtras = () => {
       let vehiclePricingMap: Record<string, VehiclePricing[]> = {};
 
       if (perVehicleExtras.length > 0) {
-        const { data: pricingRows } = await supabase
+        const { data: pricingRows, error: pricingError } = await supabase
           .from('rental_extras_vehicle_pricing')
           .select('id, extra_id, vehicle_id, price, vehicles(reg, make, model)')
           .in('extra_id', perVehicleExtras.map((e: any) => e.id));
 
+        if (pricingError) vehiclePricingUnknown = true;
         if (pricingRows) {
           for (const row of pricingRows as any[]) {
             if (!vehiclePricingMap[row.extra_id]) {
@@ -139,6 +155,8 @@ export const useRentalExtras = () => {
           ? Math.max(0, extra.max_quantity - (bookedMap[extra.id] || 0))
           : null,
         vehicle_pricing: vehiclePricingMap[extra.id] || [],
+        stock_unknown: stockUnknown && extra.max_quantity !== null,
+        vehicle_pricing_unknown: vehiclePricingUnknown && extra.pricing_type === 'per_vehicle',
       })) as RentalExtra[];
     },
     enabled: !!tenant?.id,
@@ -184,6 +202,13 @@ export const useRentalExtras = () => {
           );
         if (vpError) {
           console.error('[RentalExtras] Vehicle pricing insert error:', vpError);
+          if (strictVehiclePricing) {
+            toast({
+              title: 'Vehicle prices not saved',
+              description: "The extra was added, but its per-vehicle prices couldn't be saved. Edit the extra to add them again.",
+              variant: 'destructive',
+            });
+          }
         }
       }
 
@@ -226,10 +251,14 @@ export const useRentalExtras = () => {
       // If vehicle_pricing is provided, replace all rows
       if (vehicle_pricing !== undefined) {
         // Delete existing rows
-        await supabase
+        const { error: vpDeleteError } = await supabase
           .from('rental_extras_vehicle_pricing')
           .delete()
           .eq('extra_id', id);
+        if (vpDeleteError && strictVehiclePricing) {
+          queryClient.invalidateQueries({ queryKey: ['rental-extras', tenant?.id] });
+          throw new Error(VEHICLE_PRICES_NOT_SAVED);
+        }
 
         // Insert new rows if per_vehicle
         if (updates.pricing_type === 'per_vehicle' && vehicle_pricing.length > 0) {
@@ -244,6 +273,10 @@ export const useRentalExtras = () => {
             );
           if (vpError) {
             console.error('[RentalExtras] Vehicle pricing update error:', vpError);
+            if (strictVehiclePricing) {
+              queryClient.invalidateQueries({ queryKey: ['rental-extras', tenant?.id] });
+              throw new Error(VEHICLE_PRICES_NOT_SAVED);
+            }
           }
         }
       }
@@ -258,6 +291,10 @@ export const useRentalExtras = () => {
       });
     },
     onError: (error: Error) => {
+      if (error.message === VEHICLE_PRICES_NOT_SAVED) {
+        toast({ title: 'Vehicle prices not saved', description: error.message, variant: 'destructive' });
+        return;
+      }
       toast({
         title: 'Error',
         description: error.message.includes('unique')
@@ -301,6 +338,10 @@ export const useRentalExtras = () => {
     activeExtras: (extras || []).filter((e) => e.is_active),
     isLoading,
     error,
+    refetch,
+    isFetching,
+    /** False until the extras read has returned rows (or an empty list) once. */
+    hasLoaded: extras !== undefined,
     createExtra: createExtraMutation.mutateAsync,
     isCreating: createExtraMutation.isPending,
     updateExtra: updateExtraMutation.mutateAsync,

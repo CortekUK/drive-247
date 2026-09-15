@@ -17,6 +17,9 @@ export interface UsageCategoryData {
   monthlyAggregates: MonthlyAggregate[];
   isLoading: boolean;
   isLoadingHistory: boolean;
+  /** Read only by v2: a failed usage read must not look like "no usage". */
+  isError?: boolean;
+  refetch?: () => void;
 }
 
 export interface UsageEvent {

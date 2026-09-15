@@ -19,6 +19,8 @@ import {
   EMAIL_NOTIFICATION_CATEGORIES,
   type EmailNotificationCategory,
 } from '@/hooks/use-email-notification-prefs';
+import { useV2 } from '@/lib/v2-context';
+import { EmailNotificationSettingsV2 } from '@/components/settings-v2/notification-states-v2';
 
 /**
  * OPERATOR/ADMIN email notification settings card.
@@ -143,6 +145,11 @@ export function EmailNotificationSettings({
       }
     );
   };
+
+  // v2 chrome (northwind only): the loading / error / validation states
+  // rebuilt on the settings kit. Every other tenant renders the card below.
+  const v2Chrome = useV2('chrome');
+  if (v2Chrome) return <EmailNotificationSettingsV2 canEdit={canEdit} />;
 
   return (
     <Card>

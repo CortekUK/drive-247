@@ -36,7 +36,7 @@ export function useLockboxTemplates() {
   const { tenant } = useTenant();
   const queryClient = useQueryClient();
 
-  const { data: templates, isLoading } = useQuery({
+  const { data: templates, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ['lockbox-templates', tenant?.id],
     queryFn: async () => {
       if (!tenant?.id) return [];
@@ -100,6 +100,9 @@ export function useLockboxTemplates() {
   return {
     templates,
     isLoading,
+    error,
+    refetch,
+    isFetching,
     getTemplate,
     getEmailTemplate,
     getSmsTemplate,

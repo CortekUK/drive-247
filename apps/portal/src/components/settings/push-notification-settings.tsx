@@ -21,6 +21,13 @@ import { formatDistanceToNow } from 'date-fns';
 import { usePushNotifications, usePushLog, type SendPushInput } from '@/hooks/use-push-notifications';
 import { usePwaInstall } from '@/hooks/use-pwa-install';
 import { useToast } from '@/hooks/use-toast';
+import { BellOff } from 'lucide-react';
+import { useTenant } from '@/contexts/TenantContext';
+import { useV2 } from '@/lib/v2-context';
+import { SettingsEmptyState, SettingsSectionSkeleton } from '@/components/settings-v2/section-states';
+import {
+  PUSH_BLOCK_COPY, isValidPushUrl, pushAudienceCount, pushSendBlockReason,
+} from '@/components/settings-v2/message-rules';
 
 interface Props {
   canEdit?: boolean;
@@ -41,11 +48,14 @@ export function PushNotificationSettings({ canEdit = true }: Props) {
   const {
     isSupported, needsInstall, isEnabledForTenant, isSubscribed, isLoading, isBusy,
     error, permission, capability, enable, disable,
-    staffDevices, customerDevices, devicesLoading, sendPush,
+    staffDevices, customerDevices, devicesLoading, sendPush, devicesError, refetchDevices,
   } = usePushNotifications();
-  const { data: log } = usePushLog(10);
+  const { data: log, isLoading: logLoading, isError: logIsError, refetch: refetchLog, isFetching: logFetching } = usePushLog(10);
   const { isInstalled, canPrompt, install } = usePwaInstall();
   const { toast } = useToast();
+  // v2 chrome (northwind only; every other tenant renders exactly as before).
+  const { tenant } = useTenant();
+  const v2Chrome = useV2('chrome');
 
   const [target, setTarget] = useState<SendPushInput['target']>('self');
   const [title, setTitle] = useState('Test notification');
@@ -54,6 +64,21 @@ export function PushNotificationSettings({ canEdit = true }: Props) {
 
   // The feature is per-tenant. Showing the screen to an operator who cannot use
   // it would just generate support questions.
+  if (v2Chrome && !tenant) {
+    return <SettingsSectionSkeleton variant="form" rows={3} label="Loading push notification settings" />;
+  }
+  if (v2Chrome && !isEnabledForTenant) {
+    return (
+      <SettingsEmptyState
+        icon={BellOff}
+        headline="Push notifications aren't on for your account"
+        body="They send alerts to your team's phones and browsers, even when the portal is closed. Drive247 support can switch them on for you."
+        primaryAction={{ label: 'Contact support', href: 'mailto:support@drive-247.com' }}
+        footnote="Nothing is sent to anyone until they are switched on."
+      />
+    );
+  }
+
   if (!isEnabledForTenant) {
     return (
       <Card>
@@ -125,6 +150,14 @@ export function PushNotificationSettings({ canEdit = true }: Props) {
 
   const isBlocked = permission === 'denied';
   const totalDevices = staffDevices.length + customerDevices.length;
+  const devicesKnown = !devicesLoading && !devicesError;
+  const v2SendBlock = v2Chrome
+    ? pushSendBlockReason({
+        target, title, url, isSupported, isBlocked, devicesKnown,
+        staffCount: staffDevices.length, customerCount: customerDevices.length,
+      })
+    : null;
+  const v2AudienceEmpty = v2SendBlock === 'empty-audience';
 
   return (
     <div className="space-y-6">
@@ -269,7 +302,7 @@ export function PushNotificationSettings({ canEdit = true }: Props) {
                 <UserCog className="h-4 w-4" /> Staff devices
               </div>
               <p className="mt-1 text-2xl font-semibold">
-                {devicesLoading ? '—' : staffDevices.length}
+                {devicesLoading || (v2Chrome && devicesError) ? '—' : staffDevices.length}
               </p>
             </div>
             <div className="rounded-lg border p-3">
@@ -277,14 +310,26 @@ export function PushNotificationSettings({ canEdit = true }: Props) {
                 <Users className="h-4 w-4" /> Customer devices
               </div>
               <p className="mt-1 text-2xl font-semibold">
-                {devicesLoading ? '—' : customerDevices.length}
+                {devicesLoading || (v2Chrome && devicesError) ? '—' : customerDevices.length}
               </p>
             </div>
           </div>
 
+          {v2Chrome && devicesError && (
+            <div role="alert" className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl bg-destructive/10 px-4 py-2 text-sm">
+              <span className="min-w-0 flex-1">Couldn&apos;t load enrolled devices, so these counts are unknown.</span>
+              <Button variant="ghost" size="sm" onClick={() => refetchDevices()}>Try again</Button>
+            </div>
+          )}
+          {v2Chrome && devicesKnown && totalDevices === 0 && !isSubscribed && (
+            <p className="text-sm text-muted-foreground">
+              No devices enrolled yet. Turn on notifications above to add this one.
+            </p>
+          )}
+
           {staffDevices.length > 0 && (
             <>
-              <Separator />
+              {!v2Chrome && <Separator />}
               <div className="space-y-2">
                 {staffDevices.slice(0, 5).map((device) => {
                   const Icon = platformIcon(device.platform);
@@ -305,6 +350,11 @@ export function PushNotificationSettings({ canEdit = true }: Props) {
                     </div>
                   );
                 })}
+                {v2Chrome && staffDevices.length > 5 && (
+                  <p className="text-xs text-muted-foreground">
+                    and {staffDevices.length - 5} more staff device{staffDevices.length - 5 === 1 ? '' : 's'}
+                  </p>
+                )}
               </div>
             </>
           )}
@@ -342,6 +392,7 @@ export function PushNotificationSettings({ canEdit = true }: Props) {
                     {key === 'staff' && staffDevices.length > 0 && ` (${staffDevices.length})`}
                     {key === 'customers' && customerDevices.length > 0 && ` (${customerDevices.length})`}
                     {key === 'all' && totalDevices > 0 && ` (${totalDevices})`}
+                    {v2Chrome && key !== 'self' && devicesKnown && pushAudienceCount(key, staffDevices.length, customerDevices.length) === 0 && ' (0)'}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -358,6 +409,9 @@ export function PushNotificationSettings({ canEdit = true }: Props) {
               placeholder="Your rental starts tomorrow"
               disabled={!canEdit}
             />
+            {v2Chrome && (
+              <p className="text-xs text-muted-foreground">{title.length}/100</p>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -383,11 +437,14 @@ export function PushNotificationSettings({ canEdit = true }: Props) {
               placeholder="/rentals"
               disabled={!canEdit}
             />
+            {v2Chrome && !isValidPushUrl(url) && (
+              <p className="text-xs text-destructive">{PUSH_BLOCK_COPY.url}</p>
+            )}
           </div>
 
           {/* Sending to customers is a different order of consequence from a
               self-test, so the button says who it is about to reach. */}
-          {target !== 'self' && (
+          {target !== 'self' && !v2AudienceEmpty && (
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
@@ -398,9 +455,13 @@ export function PushNotificationSettings({ canEdit = true }: Props) {
             </Alert>
           )}
 
+          {v2AudienceEmpty && (
+            <p className="text-sm text-muted-foreground">{PUSH_BLOCK_COPY['empty-audience']}</p>
+          )}
+
           <Button
             onClick={handleSend}
-            disabled={sendPush.isPending || !canEdit || !title.trim()}
+            disabled={sendPush.isPending || !canEdit || !title.trim() || !!v2SendBlock}
             className="w-full sm:w-auto"
           >
             {sendPush.isPending ? (
@@ -410,7 +471,11 @@ export function PushNotificationSettings({ canEdit = true }: Props) {
             )}
           </Button>
 
-          {!isSubscribed && target === 'self' && (
+          {v2SendBlock === 'browser' && (
+            <p className="text-xs text-muted-foreground" role="note">{PUSH_BLOCK_COPY.browser}</p>
+          )}
+
+          {!isSubscribed && target === 'self' && v2SendBlock !== 'browser' && (
             <p className="text-xs text-muted-foreground">
               Turn notifications on for this device above, or nothing will arrive.
             </p>
@@ -419,7 +484,7 @@ export function PushNotificationSettings({ canEdit = true }: Props) {
       </Card>
 
       {/* ---- Delivery history ---------------------------------------------- */}
-      {log && log.length > 0 && (
+      {(v2Chrome || (log && log.length > 0)) && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Recent sends</CardTitle>
@@ -428,8 +493,26 @@ export function PushNotificationSettings({ canEdit = true }: Props) {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
-            {log.map((entry: any) => (
-              <div key={entry.id} className="flex items-start justify-between gap-3 border-b pb-2 text-sm last:border-0 last:pb-0">
+            {v2Chrome && logLoading && (
+              <div role="status" aria-label="Loading recent sends" className="space-y-2">
+                {[0, 1, 2].map((i) => (
+                  <div key={i} className="h-5 w-full animate-pulse rounded-full bg-muted" />
+                ))}
+              </div>
+            )}
+            {v2Chrome && logIsError && (
+              <div role="alert" className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="text-destructive">Couldn&apos;t load recent sends.</span>
+                <Button variant="ghost" size="sm" onClick={() => refetchLog()} disabled={logFetching}>Try again</Button>
+              </div>
+            )}
+            {v2Chrome && !logLoading && !logIsError && (log?.length ?? 0) === 0 && (
+              <p className="text-sm text-muted-foreground">
+                No notifications sent yet. Your last 10 sends will appear here.
+              </p>
+            )}
+            {(log ?? []).map((entry: any) => (
+              <div key={entry.id} className={v2Chrome ? "flex items-start justify-between gap-3 py-1 text-sm" : "flex items-start justify-between gap-3 border-b pb-2 text-sm last:border-0 last:pb-0"}>
                 <div className="flex min-w-0 items-start gap-2">
                   {entry.status === 'sent' ? (
                     <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-green-600" />

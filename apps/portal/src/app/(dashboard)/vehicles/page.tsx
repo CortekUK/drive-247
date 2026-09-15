@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Eye, Plus, Search, BarChart3, ChevronDown, X, ShieldCheck } from "lucide-react";
+import { Eye, Plus, Search, BarChart3, ChevronDown, X, ShieldCheck, Download } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/shared/data-display/empty-state";
@@ -56,6 +56,8 @@ import { useFleetHealth, useFleetHealthEnabled } from "@/hooks/use-fleet-health"
 import { HealthStatusChip } from "@/components/fleet-health/health-status-chip";
 import type { VehicleHealthStatus } from "@/types/fleet-health";
 import { TabTourButton } from "@/components/onboarding/tab-tour-button";
+import { HeaderIconButton } from "@/components/shared/header-icon-button-v2";
+import { csvDate, csvFilename, downloadCsv } from "@/lib/csv-export";
 import { useV2 } from "@/lib/v2-context";
 import { usePageSearch } from "@/components/shared/layout/page-search-slot";
 import { OverviewFlip } from "@/components/shared/layout/overview-flip";
@@ -652,8 +654,12 @@ export default function VehiclesListEnhanced() {
   );
 
   if (isLoading) {
+    // v2 (switch row alignment): the loaded page's 24px top padding at md, so this
+    // skeleton starts where the title does (y=74, title centred on the sidebar
+    // switch's row at 92) instead of at y=50 under the 64px top bar. v1 keeps
+    // "space-y-6" byte for byte.
     return (
-      <div className="space-y-6">
+      <div className={`space-y-6${v2Chrome ? " md:pt-6" : ""}`}>
         <div className="flex justify-between items-start">
           <div>
             <Skeleton className="h-8 w-48 mb-2" />
@@ -681,6 +687,26 @@ export default function VehiclesListEnhanced() {
     );
   }
 
+  // v2 header export: the cars the table is showing, filters and search
+  // applied, with the Status the table's column shows (Rented vs Reserved).
+  const handleExportVehiclesCsv = () => {
+    downloadCsv(
+      csvFilename('vehicles'),
+      ['Registration', 'Make', 'Model', 'Year', 'Colour', 'Status', 'Owner', 'VIN', 'Added'],
+      filteredVehicles.map((vehicle) => [
+        vehicle.reg,
+        vehicle.make,
+        vehicle.model,
+        vehicle.year ?? '',
+        vehicle.colour,
+        resolveVehicleStatus(withRentalSignal(vehicle)),
+        vehicle.vehicle_owners?.full_name ?? '',
+        vehicle.vin ?? '',
+        csvDate((vehicle as { created_at?: string | null }).created_at),
+      ]),
+    );
+  };
+
   return (
     <div className="container mx-auto p-4 sm:p-6 space-y-6">
       {/* Header */}
@@ -696,6 +722,17 @@ export default function VehiclesListEnhanced() {
               resolved tenant's slug — so the other 56 tenants see this shared
               v1 header exactly as they do today. */}
           <TabTourButton tour="vehicles" size="h-10" />
+          {/* v2: one labelled button (Add Vehicle), every other control an icon. */}
+          {v2Chrome && (
+            <HeaderIconButton
+              label="Export CSV"
+              size="icon-lg"
+              onClick={handleExportVehiclesCsv}
+              disabled={filteredVehicles.length === 0}
+            >
+              <Download className="h-4 w-4" />
+            </HeaderIconButton>
+          )}
           {/* v2 has no Analytics tab: the overview graph stands in for it. The
               /vehicles/analytics route itself stays for every tenant. */}
           {!v2Chrome && (

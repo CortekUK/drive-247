@@ -53,16 +53,38 @@ export function RentalOnboardingShell({
     const el = rootRef.current;
     if (!el) return;
     const update = () => {
-      const top = el.getBoundingClientRect().top;
+      // Document-relative top, so a re-measure that fires while the page is
+      // scrolled (the observer below can fire at any scroll position) sizes the
+      // shell exactly as one at scroll 0 would.
+      const top = el.getBoundingClientRect().top + window.scrollY;
       setHeight(`${Math.max(320, window.innerHeight - top - 12)}px`);
     };
     update();
     window.addEventListener("resize", update);
-    return () => window.removeEventListener("resize", update);
+    // Re-measure when something above the shell mounts or unmounts, not only on
+    // resize. A maintenance/deposit banner lands after mount (its query refetches
+    // every 60s) and at md+ also switches off the layout's switch-row pull-up, so
+    // <main> drops 70px (40px banner + 30px), not 40. With only the resize
+    // listener the shell kept its old height: 74px of page scroll with Continue
+    // 58px below the fold at 1440x900 (HEAD 44 / 28). <body> changes size
+    // whenever that happens, and an unchanged height string is a no-op, so the
+    // observer settles after one pass instead of looping.
+    const ro = new ResizeObserver(update);
+    ro.observe(document.body);
+    return () => {
+      window.removeEventListener("resize", update);
+      ro.disconnect();
+    };
   }, []);
 
   return (
-    <div ref={rootRef} style={{ height }} className="min-h-0 flex flex-col overflow-hidden">
+    /* Switch row alignment: at md+ the h1 (text-3xl, a 36px line box) is
+       centred on the sidebar's Portal / Website switch. main's content box
+       starts at 50px there, so 50 + 24 + 18 = 92; it sat at 50, under the 64px
+       top bar. The padding is inside the measured height (border-box), and the
+       height still comes from the live top: innerHeight - 50 - 12, ending 12px
+       above the viewport bottom exactly as it did from the old top of 80. */
+    <div ref={rootRef} style={{ height }} className="min-h-0 flex flex-col overflow-hidden md:pt-6">
       <div className="mx-auto w-full max-w-5xl flex flex-1 min-h-0 flex-col">
         {/* Fixed header */}
         <div className="shrink-0">
