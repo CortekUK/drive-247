@@ -215,6 +215,19 @@ export async function handleSupportRequest(req:Request,deps:Dependencies):Promis
             :(language==='en'?`I couldn't resolve this issue with the information available. I've created support ticket #${ticket.reference} for you. Open it to continue with our support team.`
               :`Mojooda maloomat se main ye issue hal nahi kar saka. Aap ke liye support ticket #${ticket.reference} bana diya hai. Support team se baat karne ke liye use kholein.`);
           response.response=[String(response.response??'').trim(),confirmation].filter(Boolean).join('\n\n');
+          /* The stored transcript has to carry the confirmation too. The excerpt was
+             recorded from the answer BEFORE this handoff ran (here, or inside the
+             model orchestrator), so reopening the conversation would otherwise
+             replay an answer that never mentions the ticket. Re-find the issue:
+             the reload above replaced `conversation`. */
+          const current=conversation.issues?.find(i=>i.id===issue.id);
+          if(current){
+            const excerpts=current.excerpts??[];const last=excerpts.at(-1);
+            const content=redactSupportText(String(response.response));
+            current.excerpts=last?.role==='assistant'?[...excerpts.slice(0,-1),{...last,content}]
+              :[...excerpts,{role:'assistant' as const,content,at:new Date(now).toISOString()}].slice(-8);
+            stateChanged=true;
+          }
         }catch(error){
           /* Never a false success: the text says what failed and what survived. */
           const reason=error instanceof SupportError?error.message:'Support storage did not confirm the ticket.';
@@ -233,6 +246,14 @@ export async function handleSupportRequest(req:Request,deps:Dependencies):Promis
           if(type==='support_ticket'&&!(error instanceof SupportError))throw error;
         }
       }else if(type==='support_ticket')throw new SupportError('issue_not_ready','This issue has not reached the support handoff yet.');
+    }
+    /* A conversation reopened from history gets its ticket back with it, so the
+       confirmed reference and its Open support ticket destination survive a
+       refresh, a New conversation or a later session. The ticket is read with the
+       tenant's own access; a failure leaves no link rather than a wrong one. */
+    if((type==='resume'||type==='select_issue')&&storageReady){
+      const issue=conversation.issues?.find(i=>i.id===conversation.activeIssueId);
+      if(issue?.ticketId){try{response.ticket=await deps.store!.detail(auth,issue.ticketId,false);}catch{/* no link */}}
     }
     const fresh=await authorize(deps.reads,token,body.tenantId);fresh.scope=await digest(fresh.scope+authorizationRevision);
     if(fresh.scope!==auth.scope)throw new SupportError('context_changed','Account access changed. Start a new conversation.',409);
