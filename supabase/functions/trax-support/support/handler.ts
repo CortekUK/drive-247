@@ -247,6 +247,27 @@ export async function handleSupportRequest(req:Request,deps:Dependencies):Promis
         }
       }else if(type==='support_ticket')throw new SupportError('issue_not_ready','This issue has not reached the support handoff yet.');
     }
+    /* Keep the answer as it was shown, with the conversation. A reopened
+       conversation then replays evidence, the provenance line, verified
+       destinations, Check Again and a confirmed ticket — not a bare text echo.
+       Only where support storage is configured: an unstored conversation travels
+       in its own token, which has a hard size limit, and the browser already
+       holds that session's messages. Bounded to the last 30 turns. */
+    if(storageReady&&['message','recheck','support_ticket'].includes(String(type))){
+      const at=new Date(now).toISOString();
+      const ticket=response.ticket as {id?:string;reference?:string}|undefined;
+      conversation.transcript=[...(conversation.transcript??[]),
+        /* A retried handoff is a button, not a typed question: it adds only its answer. */
+        ...(type==='support_ticket'?[]:[{role:'user' as const,content:redactSupportText(type==='recheck'?'Check again':String(body.message??''),4000),at}]),
+        {role:'assistant' as const,content:String(response.response??''),at,
+          sources:response.sources as unknown[],provenance:response.provenance as Record<string,unknown>,
+          evidence:response.evidence as unknown[],navigation:response.navigation as unknown[],
+          canRecheck:response.canRecheck===true,
+          ...(ticket?.id&&ticket.reference?{ticket:{id:ticket.id,reference:ticket.reference}}:{})}
+      ].slice(-30);
+      stateChanged=true;
+    }
+
     /* A conversation reopened from history gets its ticket back with it, so the
        confirmed reference and its Open support ticket destination survive a
        refresh, a New conversation or a later session. The ticket is read with the
@@ -260,7 +281,17 @@ export async function handleSupportRequest(req:Request,deps:Dependencies):Promis
     if(storageReady&&stateChanged){conversation.persisted=true;revision=await deps.store!.save(auth,conversation,revision);}
     if(storageReady){const latestAccess=await deps.store!.capabilities(fresh);if(JSON.stringify(latestAccess)!==JSON.stringify(supportAccess))throw new SupportError('context_changed','Support permissions changed. Reload this conversation.',409);}
     response.issues=(conversation.issues??[]).map(issueView);response.activeIssueId=conversation.activeIssueId;
-    if(type==='resume'||type==='select_issue')response.resumedMessages=conversation.issues?.find(i=>i.id===conversation.activeIssueId)?.excerpts??[];
+    if(type==='resume'||type==='select_issue'){
+      /* Reopening replays the stored transcript when there is one (everything the
+         answer carried), and falls back to the issue's redacted excerpts for a
+         conversation recorded before transcripts existed. Check Again is offered
+         only on the last answer, and only while the diagnostic it would re-run is
+         still part of this conversation. */
+      const transcript=type==='resume'?conversation.transcript??[]:[];
+      response.resumedMessages=transcript.length
+        ?transcript.map((turn,index)=>({...turn,canRecheck:turn.canRecheck===true&&index===transcript.length-1&&!!(conversation.diagnostic||conversation.paymentCheck)}))
+        :conversation.issues?.find(i=>i.id===conversation.activeIssueId)?.excerpts??[];
+    }
     response.provenance={...(response.provenance as object),conversationStorage:conversation.persisted?'tenant_scoped_support_store':'browser_memory_only'};
     const tokenState=conversation.persisted?{id:conversation.id,expires:now+30*60_000,persisted:true}:conversation;
     return respond({...response,contextScope:auth.scope,conversationId:await conversationToken(deps.signingSecret,auth,tokenState)});

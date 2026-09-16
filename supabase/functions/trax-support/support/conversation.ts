@@ -8,7 +8,18 @@ const encoder = new TextEncoder();
 export const MAX_CONVERSATION_TOKEN_LENGTH=132000;
 const base64 = (data: Uint8Array) => btoa(String.fromCharCode(...data)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 const decode = (value: string) => Uint8Array.from(atob(value.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
-export interface Conversation { id: string; expires: number; section?: string; locale?: 'en' | 'ur-Latn'; turns?:{role:'user'|'assistant';content:string}[]; diagnostic?:DiagnosticInput; paymentCheck?:{rentalId:string;paymentId:string|null}; paymentCandidates?:{paymentId:string;reference:string;stripeReference:string|null;amount:string|null;stripeStatus:string|null;verification:string}[]; issues?:SupportIssue[]; activeIssueId?:string; persisted?:boolean }
+/** One replayable turn: what the operator actually saw, not only its text.
+ *
+ * Reopening a conversation from history has to give back the same answer —
+ * its evidence, provenance line, server-verified destinations, Check Again and
+ * a confirmed support ticket. The issue `excerpts` cannot do that: they are the
+ * redacted text the support handoff carries, deliberately narrow. */
+export interface TranscriptTurn {
+  role: 'user' | 'assistant'; content: string; at: string;
+  sources?: unknown[]; provenance?: Record<string, unknown>; evidence?: unknown[]; navigation?: unknown[];
+  canRecheck?: boolean; ticket?: { id: string; reference: string };
+}
+export interface Conversation { id: string; expires: number; transcript?: TranscriptTurn[]; section?: string; locale?: 'en' | 'ur-Latn'; turns?:{role:'user'|'assistant';content:string}[]; diagnostic?:DiagnosticInput; paymentCheck?:{rentalId:string;paymentId:string|null}; paymentCandidates?:{paymentId:string;reference:string;stripeReference:string|null;amount:string|null;stripeStatus:string|null;verification:string}[]; issues?:SupportIssue[]; activeIssueId?:string; persisted?:boolean }
 
 /** Stateless, short-lived context. Never read legacy chat_messages or accept history. */
 export async function conversationToken(secret: string, ctx: SupportContext, value: Conversation): Promise<string> {

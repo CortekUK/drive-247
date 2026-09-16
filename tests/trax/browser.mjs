@@ -200,8 +200,10 @@ try{
     await page.getByRole('button',{name:'History',exact:true}).click();
     await page.getByLabel('Previous TRAX conversations').getByRole('button').first().click();
     await page.getByRole('textbox',{name:'Ask TRAX'}).waitFor();
-    // A reopened conversation still shows its ticket: reference in the answer, button under it.
-    await page.getByRole('button',{name:/^Open support ticket/}).waitFor();
+    // A reopened conversation is the same conversation: the answer keeps its
+    // provenance line and its ticket, not just its text.
+    await page.getByRole('button',{name:/^Open support ticket/}).first().waitFor();
+    await page.getByText('Prepared guidance fallback · Live records not checked',{exact:true}).first().waitFor();
     assert.match((await thread.innerText()).replace(/\s+/g,' '),/support ticket #TRX-FIXTURE-/);
     assert.equal(supportFixture.tickets.size,2);
     await page.getByRole('button',{name:'Close TRAX',exact:true}).click();
@@ -265,6 +267,6 @@ try{
     assert.equal(supportRequests,checkedRequests);
   }
   assert.deepEqual(errors,[]);
-  console.log(JSON.stringify({status:'passed',mode:financeMode?'scripted-model-finance-fixtures':supportMode?'offline-support-storage-fixtures':operationalMode?'scripted-model-operational-fixtures':'prepared-guidance-fixtures',checks:financeMode?['actual-dialog-hook-handler','linked-payment-check','refund-discrepancy','multi-currency-account-funds','honest-unconfigured-handoff','no-issue-controls','V1-excluded','mobile-no-clipping']:supportMode?['real-dialog-hook-handler','automatic-ticket-on-escalation','no-score-or-issue-controls','no-ticket-ui-inside-trax','existing-ticket-reused','failed-handoff-invents-nothing','retry-creates-once','ticket-opens-support-section','conversation-kept-behind-navigation','reopened-conversation-keeps-its-ticket','retention-save-and-dry-run','V1-excluded','other-tenants-excluded','mobile-no-horizontal-clipping','no-page-errors']:operationalMode?['real-dialog-hook-handler','scripted-model-tools','unrecorded-return','fresh-recheck-remaining-block','V1-excluded','other-tenants-excluded','mobile-no-horizontal-clipping','no-page-errors']:['Northwind-V2-launcher','V1-excluded','other-tenants-excluded','actual-dialog','English-guidance','server-verified-navigation','conversation-survives-close','Roman-Urdu','mobile-no-horizontal-clipping','no-page-errors'],screenshots}));
+  console.log(JSON.stringify({status:'passed',mode:financeMode?'scripted-model-finance-fixtures':supportMode?'offline-support-storage-fixtures':operationalMode?'scripted-model-operational-fixtures':'prepared-guidance-fixtures',checks:financeMode?['actual-dialog-hook-handler','linked-payment-check','refund-discrepancy','multi-currency-account-funds','honest-unconfigured-handoff','no-issue-controls','V1-excluded','mobile-no-clipping']:supportMode?['real-dialog-hook-handler','automatic-ticket-on-escalation','no-score-or-issue-controls','no-ticket-ui-inside-trax','existing-ticket-reused','failed-handoff-invents-nothing','retry-creates-once','ticket-opens-support-section','conversation-kept-behind-navigation','reopened-conversation-replays-the-whole-answer','retention-save-and-dry-run','V1-excluded','other-tenants-excluded','mobile-no-horizontal-clipping','no-page-errors']:operationalMode?['real-dialog-hook-handler','scripted-model-tools','unrecorded-return','fresh-recheck-remaining-block','V1-excluded','other-tenants-excluded','mobile-no-horizontal-clipping','no-page-errors']:['Northwind-V2-launcher','V1-excluded','other-tenants-excluded','actual-dialog','English-guidance','server-verified-navigation','conversation-survives-close','Roman-Urdu','mobile-no-horizontal-clipping','no-page-errors'],screenshots}));
   }
 }finally{await browser?.close();await new Promise((resolve)=>server.close(resolve));}

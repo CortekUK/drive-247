@@ -144,7 +144,8 @@ export interface ChatApiResponse {
   activeIssueId?:string;
   ticketRetry?:boolean;
   recentConversations?:{id:string;lastActivityAt:string;summary:string}[];
-  resumedMessages?:{role:'user'|'assistant';content:string;at:string}[];
+  /** A reopened conversation replays what each answer carried, not only its text. */
+  resumedMessages?:{role:'user'|'assistant';content:string;at:string;sources?:ChatMessageSource[];provenance?:TraxProvenance;evidence?:TraxEvidence[];navigation?:TraxNavigation[];canRecheck?:boolean;ticket?:{id:string;reference:string}}[];
   ticket?:TraxTicket;
   ticketPage?:{tickets:TraxTicket[];nextOffset:number|null};
   retentionPolicy?:TraxRetentionPolicy;

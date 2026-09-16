@@ -159,10 +159,13 @@ export function useTraxSupport(enabled = true, surfaceVisible = true): UseChatRe
       if(!lease.current())return null;
       if(data.contextScope!==current.scope){reset('Your access changed. Reload this conversation.');return null;}
       setChat(old=>({...old,error:null,conversationId:data.conversationId,issues:data.issues,activeIssueId:data.activeIssueId,capabilities:data.capabilities,
-        // A reopened conversation keeps its ticket: the last answer gets the ticket
-        // back, so Open support ticket is there rather than only in the text.
+        /* A reopened conversation is rebuilt as it was: each answer keeps its
+           sources, provenance line, evidence, verified destinations, Check Again
+           and its ticket. `data.ticket` is the fallback for a conversation stored
+           before transcripts existed — it re-attaches the link to the last answer. */
         messages:type==='new_issue'?[]:data.resumedMessages?(data.resumedMessages.length?data.resumedMessages.map((e,index,all)=>({id:crypto.randomUUID(),role:e.role,content:e.content,
-          ...(data.ticket&&e.role==='assistant'&&index===all.map(m=>m.role).lastIndexOf('assistant')?{ticket:{id:data.ticket.id,reference:data.ticket.reference}}:{}),timestamp:new Date(e.at)}))
+          sources:e.sources,provenance:e.provenance,evidence:e.evidence,navigation:e.navigation,canRecheck:e.canRecheck,
+          ticket:e.ticket??(data.ticket&&e.role==='assistant'&&index===all.map(m=>m.role).lastIndexOf('assistant')?{id:data.ticket.id,reference:data.ticket.reference}:undefined),timestamp:new Date(e.at)}))
           :[{id:crypto.randomUUID(),role:'assistant' as const,content:'This earlier conversation is open again. Its previous messages are not stored for display; ask your next question to continue.',timestamp:new Date()}]):old.messages}));
       return data;
     }catch(error){

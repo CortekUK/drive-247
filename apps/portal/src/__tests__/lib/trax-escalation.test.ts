@@ -80,6 +80,16 @@ describe('deterministic issue policy and real submission boundary',()=>{
   it('an issue ID from another conversation cannot be submitted',async()=>{const a=await request({message:'Missing payment'});const b=await request({message:'Human support please'});const created=storage.tickets.size;const out=await request({type:'submit_ticket',conversationId:b.body.conversationId,issueId:a.body.activeIssueId});expect(out.status).toBe(400);expect(storage.tickets.size).toBe(created);});
   it('tenant switching invalidates conversation, ticket actions and resume',async()=>{const a=await request({message:'Missing payment'});const stored=[...storage.conversations.keys()][0];expect((await request({type:'submit_ticket',conversationId:a.body.conversationId,issueId:a.body.activeIssueId},'two')).status).toBe(409);expect((await request({type:'resume',resumeId:stored},'two')).status).toBe(409);});
   it('role changes invalidate previous evidence and submission',async()=>{const a=await request({message:'Missing payment'});const created=storage.tickets.size;staff.one.role='viewer';expect((await request({type:'submit_ticket',conversationId:a.body.conversationId,issueId:a.body.activeIssueId})).status).toBe(409);expect(storage.tickets.size).toBe(created);});
+  it('a reopened conversation replays the whole answer: sources, provenance, evidence and verified destinations',async()=>{deps.model=model(call('get_account_counts',{kinds:['vehicles']}),answer('Authorized total.',['account_summary:totals']));
+    const first=await request({message:'How many cars?'});expect(first.body.evidence.length).toBeGreaterThan(0);
+    const stored=[...storage.conversations.keys()][0];const resumed=await request({type:'resume',resumeId:stored});
+    const answers=resumed.body.resumedMessages.filter((m:any)=>m.role==='assistant');
+    expect(answers.at(-1)).toMatchObject({provenance:{engine:'model'}});
+    expect(answers.at(-1).evidence).toHaveLength(first.body.evidence.length);
+    expect(answers.at(-1).sources).toHaveLength(first.body.sources.length);
+    expect(resumed.body.resumedMessages.filter((m:any)=>m.role==='user').at(-1).content).toBe('How many cars?');
+    // No dead Check Again: the diagnostic it would re-run is not in this conversation.
+    expect(answers.at(-1).canRecheck).toBe(false);});
   it('a reopened conversation keeps its ticket: the reference in the transcript and the destination in the payload',async()=>{const first=await request({message:'My payment is missing'});expect(first.body.ticket.reference).toBeDefined();
     const stored=[...storage.conversations.keys()][0];const resumed=await request({type:'resume',resumeId:stored});
     expect(resumed.body.ticket.id).toBe(first.body.ticket.id);

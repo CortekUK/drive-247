@@ -32,6 +32,8 @@ Existing unavailable-car flow is preserved: resolve the page/exact car → obtai
 
 ## Deterministic issue policy
 
+Reopening a conversation from history replays it as it was: a stored conversation keeps a bounded transcript (the last 30 turns) of what each answer carried — its sources, the provenance line, evidence, the server-verified navigation destinations, Check Again and a confirmed ticket — so nothing is reduced to a bare text echo. Check Again is replayed only on the last answer and only while its diagnostic is still part of the conversation. Replayed evidence is historical and keeps the observation time it was recorded with; only Check Again runs fresh reads. A stored conversation is loaded by its scope digest, so a permission or role change makes it unavailable rather than replaying evidence the account may no longer read. Conversations without support storage keep no transcript: they live in their own size-limited token for that session only.
+
 `issues.ts` stores issue ID/topic/record, redacted summary, independent score/state, checks, unknowns, record references, event history, a relevant excerpt and optional ticket ID. The score is support policy, not model confidence, and it stays on the server: `issueView` sends the tenant (and the model) only id, topic, summary, state and ticket id, and the stored handoff keeps the escalation reasons without their numbers.
 
 | Event | Default transition |
@@ -65,7 +67,7 @@ RLS is enabled with no browser policies; browser roles cannot read these tables 
 
 | Stored material | Default policy |
 |---|---|
-| Ordinary conversations, diagnostics and issue scores | 90 days after last conversation activity; automatic context polling does not extend retention |
+| Ordinary conversations, their replay transcript, diagnostics and issue scores | 90 days after last conversation activity; automatic context polling does not extend retention |
 | Open/in-progress tickets | Keep; flag after 90 inactive days by default for support review |
 | Closed tickets | 365 days after latest closure; reopening clears closure time until next closure |
 | Copied redacted handoff | Ticket policy; deleting chat sets its ticket FK to null without deleting the handoff |
