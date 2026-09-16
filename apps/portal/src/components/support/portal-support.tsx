@@ -67,7 +67,7 @@ export function PortalSupport({ initialTicketId, composeIssueId }: { initialTick
     return ready ? { summary: '' } : undefined;
   }, [composeIssueId, issue, supportRequest, ready]);
 
-  const inbox = useSupportInbox({ call: human.call, scope: human.scope, initialId: initialTicketId, compose });
+  const inbox = useSupportInbox({ call: human.call, scope: human.scope, initialId: initialTicketId, compose, uploadAttachment: human.uploadAttachment });
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">

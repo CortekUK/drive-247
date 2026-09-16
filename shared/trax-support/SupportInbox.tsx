@@ -1,7 +1,7 @@
 'use client';
 import React from 'react';
 import { type MessagingCall } from './client';
-import { useSupportInbox, type HumanTicket, type SupportCompose } from './use-support-inbox';
+import { useSupportInbox, type HumanTicket, type SupportCompose, type SupportInboxOptions } from './use-support-inbox';
 
 export type { HumanTicket, SupportCompose } from './use-support-inbox';
 const button='inline-flex items-center justify-center rounded-md border border-border bg-background px-3 py-2 text-sm font-medium hover:bg-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50 disabled:cursor-not-allowed';
@@ -18,8 +18,8 @@ const stamp=(value:string)=>new Date(value).toLocaleString(undefined,{month:'sho
  * primitives, which this app does not have. Both drive the same `useSupportInbox`
  * behaviour over the same authenticated endpoint, so polling, unread acknowledgement,
  * retry nonces and message ordering cannot drift apart. */
-export function SupportInbox({call,admin=false,initialId,compose,scope}:{call:MessagingCall;admin?:boolean;initialId?:string;compose?:SupportCompose;scope:string}){
-  const inbox=useSupportInbox({call,admin,initialId,compose,scope});
+export function SupportInbox({call,admin=false,initialId,compose,scope,uploadAttachment}:{call:MessagingCall;admin?:boolean;initialId?:string;compose?:SupportCompose;scope:string;uploadAttachment?:SupportInboxOptions['uploadAttachment']}){
+  const inbox=useSupportInbox({call,admin,initialId,compose,scope,uploadAttachment});
   const {id,creating,tickets,next,thread,search,filter,draft,subject,status,busy,loading,error,notice,retrying,scrollRef}=inbox;
   return <div className="flex min-h-0 flex-1 flex-col text-foreground" data-testid="support-inbox">
     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3"><div><h2 className="text-base font-semibold">{admin?'Support inbox':creating?'Communicate with Support':'My Tickets'}</h2><p className="text-xs text-muted-foreground">Human support · Conversations update automatically</p></div>{!admin&&!creating&&<button className={button} disabled={busy} onClick={inbox.beginNew}>New request</button>}</div>
@@ -36,18 +36,49 @@ export function SupportInbox({call,admin=false,initialId,compose,scope}:{call:Me
           <div ref={scrollRef} onScroll={inbox.onThreadScroll} className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4" aria-label="Message thread" aria-live="polite">
             {thread.hasOlder&&<button className={button} onClick={inbox.loadOlder}>Load earlier messages</button>}
             {!thread.messages.length&&<p className="text-sm text-muted-foreground">This older ticket has no conversation messages yet.{thread.ticket.staff_note?' Previous update: '+thread.ticket.staff_note:''}</p>}
-            {thread.messages.map(m=><article key={m.seq} className={'max-w-[92%] rounded-lg border border-border px-4 py-3 '+(m.author_kind==='support'?'bg-secondary/40':'ml-auto bg-primary/5')}><div className="mb-1 flex flex-wrap items-center justify-between gap-3 text-[11px] text-muted-foreground"><span className="font-semibold">{m.author_kind==='support'?'Drive247 Support':admin?thread.ticket.requester:'You'}</span><time dateTime={m.created_at}>{stamp(m.created_at)}</time></div><p className="whitespace-pre-wrap break-words text-sm leading-relaxed [overflow-wrap:anywhere]">{m.body}</p><span data-seq={m.seq} aria-hidden="true" className="block h-px"/></article>)}
+            {thread.messages.map(m=><article key={m.seq} className={'max-w-[92%] rounded-lg border border-border px-4 py-3 '+(m.author_kind==='support'?'bg-secondary/40':'ml-auto bg-primary/5')}><div className="mb-1 flex flex-wrap items-center justify-between gap-3 text-[11px] text-muted-foreground"><span className="font-semibold">{m.author_kind==='support'?'Drive247 Support':admin?thread.ticket.requester:'You'}</span><time dateTime={m.created_at}>{stamp(m.created_at)}</time></div><p className="whitespace-pre-wrap break-words text-sm leading-relaxed [overflow-wrap:anywhere]">{m.body}</p>
+              <Attachments files={(thread.attachments??[]).filter(a=>a.seq===m.seq)}/>
+              <span data-seq={m.seq} aria-hidden="true" className="block h-px"/></article>)}
           </div>
         </>:<div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">{id?'Loading conversation…':'Select a ticket to read and reply.'}</div>}
         {(creating||thread)&&<form className="mt-auto shrink-0 space-y-2 border-t border-border p-4" onSubmit={e=>{e.preventDefault();void inbox.send();}}>
           {!creating&&thread?.ticket.status==='closed'&&!admin&&<p className="text-xs text-muted-foreground">A follow-up message reopens this ticket.</p>}
           <label htmlFor="support-message" className="text-sm font-medium">{creating?'Your message':'Reply in this conversation'}</label>
           <textarea id="support-message" value={draft} maxLength={4000} readOnly={busy||retrying} onChange={e=>inbox.setDraft(e.target.value)} placeholder="Write your message…" rows={3} className="w-full resize-y rounded-md border border-input bg-background p-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"/>
-          <div className="flex flex-wrap items-center justify-between gap-2"><div className="flex items-center gap-2">{creating&&<button type="button" className={button} disabled={busy} onClick={inbox.cancelNew}>Cancel</button>}{admin&&thread&&<select aria-label="Status after sending reply" value={status} disabled={busy||retrying} onChange={e=>inbox.setStatus(e.target.value)} className="rounded-md border border-input bg-background p-2 text-sm"><option value="">Keep status</option>{Object.entries(statusLabel).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select>}<span role="status" className="text-xs text-muted-foreground">{busy?'Sending…':notice}</span></div><button className={primary} disabled={busy||!inbox.canSend}>{busy?'Sending…':retrying?'Retry send':'Send'}</button></div>
+          <PendingFiles inbox={inbox}/>
+          <div className="flex flex-wrap items-center justify-between gap-2"><div className="flex items-center gap-2">{creating&&<button type="button" className={button} disabled={busy} onClick={inbox.cancelNew}>Cancel</button>}<AttachButton inbox={inbox}/>{admin&&thread&&<select aria-label="Status after sending reply" value={status} disabled={busy||retrying} onChange={e=>inbox.setStatus(e.target.value)} className="rounded-md border border-input bg-background p-2 text-sm"><option value="">Keep status</option>{Object.entries(statusLabel).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select>}<span role="status" className="text-xs text-muted-foreground">{busy?'Sending…':notice}</span></div><button className={primary} disabled={busy||!inbox.canSend}>{busy?'Sending…':retrying?'Retry send':'Send'}</button></div>
         </form>}
       </section>
     </div>
   </div>;
+}
+const readableSize=(bytes:number)=>bytes>=1048576?`${(bytes/1048576).toFixed(1)} MB`:`${Math.max(1,Math.round(bytes/1024))} KB`;
+/** Files on a message: an image shows itself, anything else is a named link. */
+function Attachments({files}:{files:{id:string;name:string;mime:string;size:number;url?:string}[]}){
+  if(!files.length)return null;
+  return <ul className="mt-2 flex flex-wrap gap-2">{files.map(file=><li key={file.id}>
+    {file.mime.startsWith('image/')&&file.url
+      ?<a href={file.url} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-md border border-border"><img src={file.url} alt={file.name} className="max-h-40 max-w-[220px] object-cover"/></a>
+      :<a href={file.url} target="_blank" rel="noopener noreferrer" className={button+' text-xs'+(file.url?'':' pointer-events-none opacity-60')}>{file.name} · {readableSize(file.size)}</a>}
+  </li>)}</ul>;
+}
+/** What is attached to the message being written, before it is sent. */
+function PendingFiles({inbox}:{inbox:ReturnType<typeof useSupportInbox>}){
+  const picked=inbox.attachments??[];
+  if(!picked.length)return null;
+  return <ul className="flex flex-wrap gap-2">{picked.map(file=><li key={file.key} className={'flex items-center gap-2 rounded-md border px-2 py-1 text-xs '+(file.error?'border-destructive text-destructive':'border-border')}>
+    <span className="max-w-[220px] truncate">{file.name} · {readableSize(file.size)}{file.error?` · ${file.error}`:''}</span>
+    <button type="button" aria-label={`Remove ${file.name}`} className="text-muted-foreground hover:text-foreground" disabled={inbox.busy} onClick={()=>inbox.removeAttachment(file.key)}>×</button>
+  </li>)}</ul>;
+}
+function AttachButton({inbox}:{inbox:ReturnType<typeof useSupportInbox>}){
+  const input=React.useRef<HTMLInputElement>(null);
+  if(!inbox.canAttach&&!(inbox.attachments??[]).length)return null;
+  return <>
+    <input ref={input} type="file" multiple accept="image/png,image/jpeg,image/webp,image/gif,application/pdf" className="hidden"
+      onChange={e=>{if(e.target.files?.length)inbox.addAttachments(e.target.files);e.target.value='';}}/>
+    <button type="button" className={button} disabled={inbox.busy||!inbox.canAttach} onClick={()=>input.current?.click()}>Attach file</button>
+  </>;
 }
 function Handoff({value}:{value:Record<string,unknown>}){
   const safeText=(v:unknown)=>typeof v==='string'?v:'';

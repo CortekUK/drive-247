@@ -5,7 +5,49 @@ import type {SupportReads} from '../../../../../supabase/functions/trax-support/
 const tenant='00000000-0000-4000-8000-000000000001',ticket='00000000-0000-4000-8000-000000000002',nonce='00000000-0000-4000-8000-000000000003';
 let reads:SupportReads,db:{rpc:ReturnType<typeof vi.fn>};
 beforeEach(()=>{reads={authenticate:vi.fn(async()=>({id:'user'})),staff:vi.fn(async()=>({id:'staff',auth_user_id:'user',tenant_id:tenant,role:'admin',is_active:true,is_super_admin:false})),tenant:vi.fn(async()=>({id:tenant,slug:'northwind',status:'active'})),permissions:vi.fn(async()=>[]),entity:vi.fn(async()=>null)};db={rpc:vi.fn(async()=>({data:{unread:2},error:null}))};});
-const request=async(body:unknown,enabled=true,authorization='Bearer fixture')=>{const response=await handleMessaging(new Request('http://localhost',{method:'POST',headers:{Authorization:authorization},body:JSON.stringify(body)}),{reads,db,enabled});return {status:response.status,body:await response.json()};};
+const request=async(body:unknown,enabled=true,authorization='Bearer fixture',storage?:Parameters<typeof handleMessaging>[1]['storage'])=>{const response=await handleMessaging(new Request('http://localhost',{method:'POST',headers:{Authorization:authorization},body:JSON.stringify(body)}),{reads,db,enabled,storage});return {status:response.status,body:await response.json()};};
+const storage={signUpload:vi.fn(async(path:string)=>({url:'https://storage.invalid/upload/'+path,token:'signed-token'})),signDownload:vi.fn(async(path:string)=>'https://storage.invalid/read/'+path)};
+describe('support attachments',()=>{
+  const file={id:ticket,nonce,name:'screenshot.png',mime:'image/png',size:2048};
+  it('reserves a path in the database and returns a one-time upload URL, never the file itself',async()=>{
+    db.rpc=vi.fn(async()=>({data:{id:'attachment-1',storagePath:'tenant/ticket/file',fileName:'screenshot.png',mimeType:'image/png',sizeBytes:2048},error:null}));
+    const result=await request({action:'attach',tenantId:tenant,data:file},true,'Bearer fixture',storage);
+    expect(result.status).toBe(200);
+    expect(db.rpc).toHaveBeenCalledWith('trax_support_attachment_reserve',expect.objectContaining({p_user:'user',p_staff:'staff',p_tenant:tenant,p_admin:false,p_ticket:ticket,p_mime:'image/png',p_size:2048}));
+    expect(result.body.upload).toEqual({url:'https://storage.invalid/upload/tenant/ticket/file',token:'signed-token'});
+    expect(result.body.attachment.path).toBe('tenant/ticket/file');
+  });
+  it('refuses a type, a size or a name the conversation does not accept, before any reservation',async()=>{
+    for(const invalid of [{...file,mime:'image/svg+xml'},{...file,mime:'application/zip'},{...file,size:10*1024*1024+1},{...file,size:0},{...file,name:''},{...file,name:'x'.repeat(201)}]){
+      expect((await request({action:'attach',tenantId:tenant,data:invalid},true,'Bearer fixture',storage)).status).toBe(400);
+    }
+    expect(db.rpc).not.toHaveBeenCalled();
+  });
+  it('says so plainly when attachments are not configured, without touching the database',async()=>{
+    const result=await request({action:'attach',tenantId:tenant,data:file});
+    expect(result.status).toBe(503);
+    expect(result.body.error).toMatch(/not configured/i);
+    expect(db.rpc).not.toHaveBeenCalled();
+  });
+  it('returns a conversation’s files with short-lived read URLs, and the thread without them when unconfigured',async()=>{
+    db.rpc=vi.fn(async(name:string)=>name==='trax_support_attachment_list'
+      ?{data:[{id:'a1',seq:2,path:'tenant/ticket/file',name:'screenshot.png',mime:'image/png',size:2048,author_kind:'tenant'}],error:null}
+      :{data:{ticket:{id:ticket},messages:[{seq:2}],hasOlder:false,latestSeq:2},error:null});
+    const withStorage=await request({action:'detail',tenantId:tenant,data:{id:ticket}},true,'Bearer fixture',storage);
+    expect(withStorage.body.attachments).toEqual([{id:'a1',seq:2,name:'screenshot.png',mime:'image/png',size:2048,authorKind:'tenant',url:'https://storage.invalid/read/tenant/ticket/file'}]);
+    expect(storage.signDownload).toHaveBeenCalledWith('tenant/ticket/file',3600);
+    const without=await request({action:'detail',tenantId:tenant,data:{id:ticket}});
+    expect(without.body.attachments).toBeUndefined();
+    expect(without.body.messages).toHaveLength(1);
+  });
+  it('passes the database refusals through as themselves',async()=>{
+    for(const [message,status] of [['support_attachment_limit',400],['support_rate_limited',429],['support_access_denied',403]] as const){
+      db.rpc=vi.fn(async()=>({data:null,error:{message}}));
+      expect((await request({action:'attach',tenantId:tenant,data:file},true,'Bearer fixture',storage)).status).toBe(status);
+    }
+  });
+});
+
 describe('human messaging boundary',()=>{
   it('works without a model or an AI conversation token',async()=>{const result=await request({action:'count',tenantId:tenant});expect(result.body.unread).toBe(2);expect(db.rpc).toHaveBeenCalledWith('trax_messaging_request',expect.objectContaining({p_user:'user',p_staff:'staff',p_tenant:tenant,p_admin:false}));});
   it('requires authentication before any query',async()=>{expect((await request({action:'count'},true,'')).status).toBe(401);expect(db.rpc).not.toHaveBeenCalled();});

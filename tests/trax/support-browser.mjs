@@ -52,7 +52,11 @@ const tickets=[
   {id:'t3',reference:'TRX-77GG88HH99II',summary:'Website booking widget showed the wrong price',status:'closed',tenant_name:'Northwind',requester:'Offline operator',updated_at:iso(20000),created_at:iso(21000),unread:false,
    messages:[{seq:1,author_kind:'tenant',body:'The widget showed £39 instead of £59.',created_at:iso(21000)},{seq:2,author_kind:'support',body:'Fixed in the pricing rule.',created_at:iso(20000)}]},
 ];
-window.failNextSend=false;
+window.failNextSend=false;window.failNextAttach=false;
+/* Reserved uploads, and the bytes the browser sent for them. A message claims the
+   uploads reserved under its own nonce, the way the SQL does. */
+const reserved=[],uploads=new Map();
+const claim=(ticket,nonce,seq)=>{for(const file of reserved)if(file.nonce===nonce&&!file.seq){file.seq=seq;file.ticketId=ticket.id;}};
 const call=async(action,data={})=>{
   await new Promise(r=>setTimeout(r,10));
   if(action==='count')return {unread:tickets.filter(t=>t.unread).length};
@@ -64,22 +68,37 @@ const call=async(action,data={})=>{
   if(action==='detail'){
     const t=tickets.find(x=>x.id===data.id);if(!t)throw Error('Ticket not found.');
     const {messages,...ticket}=t;
-    return {ticket,messages,hasOlder:false,latestSeq:messages.length};
+    /* The server returns the conversation's files with a short-lived read URL each;
+       the fixture hands back the uploaded bytes as a data URL so the image renders. */
+    const files=reserved.filter(f=>f.ticketId===t.id&&f.seq).map(f=>({id:f.id,seq:f.seq,name:f.name,mime:f.mime,size:f.size,authorKind:'tenant',url:uploads.get(f.path)}));
+    return {ticket,messages,hasOlder:false,latestSeq:messages.length,attachments:files};
   }
   if(action==='read'){const t=tickets.find(x=>x.id===data.id);if(t)t.unread=false;return {readThrough:data.through};}
+  if(action==='attach'){
+    if(window.failNextAttach){window.failNextAttach=false;throw Error('The attachment could not be reserved. Your message has not been sent.');}
+    const path='fixture/'+(data.id??'new')+'/'+String(reserved.length+1);
+    reserved.push({id:'a'+(reserved.length+1),path,ticketId:data.id??null,nonce:data.nonce,name:data.name,mime:data.mime,size:data.size});
+    return {attachment:{id:'a'+reserved.length,path,name:data.name,mime:data.mime,size:data.size},upload:{url:'fixture://'+path,token:'token'}};
+  }
   if(action==='send'){
     if(window.failNextSend){window.failNextSend=false;throw Error('Fixture connection interrupted. Your draft is preserved for retry.');}
     const t=tickets.find(x=>x.id===data.id);t.messages.push({seq:t.messages.length+1,author_kind:'tenant',body:data.body,created_at:new Date().toISOString()});t.updated_at=new Date().toISOString();
+    claim(t,data.nonce,t.messages.length);
     return {seq:t.messages.length};
   }
   if(action==='create'){
     const t={id:'t'+(tickets.length+1),reference:'TRX-NEWFIXTURE000',summary:data.subject,status:'open',tenant_name:'Northwind',requester:'Offline operator',updated_at:new Date().toISOString(),created_at:new Date().toISOString(),unread:false,
       messages:[{seq:1,author_kind:'tenant',body:data.body,created_at:new Date().toISOString()}]};
-    tickets.unshift(t);return {id:t.id,reference:t.reference};
+    tickets.unshift(t);claim(t,data.nonce,1);return {id:t.id,reference:t.reference};
   }
   throw Error('Unsupported fixture action: '+action);
 };
-export const useSupportMessaging=()=>({call,scope:'offline-fixture',count:1,allowed:true,checking:false,errorCode:null,retry:()=>{}});
+const uploadAttachment=async(upload,file)=>{
+  const bytes=await file.arrayBuffer();
+  const base64=btoa(String.fromCharCode(...new Uint8Array(bytes)));
+  uploads.set(upload.path,'data:'+file.type+';base64,'+base64);
+};
+export const useSupportMessaging=()=>({call,scope:'offline-fixture',uploadAttachment,count:1,allowed:true,checking:false,errorCode:null,retry:()=>{}});
 export const useTraxSupportOptional=()=>null;
 export const usePathname=()=>'/support';
 export const useSearchParams=()=>new URLSearchParams();
@@ -211,6 +230,26 @@ try{
   await thread.getByText('We have not heard anything since Tuesday.',{exact:true}).waitFor();
   assert.equal(await page.getByPlaceholder('Write a reply…').inputValue(),'','the draft survived a confirmed send');
 
+  // 7b — a screenshot goes with the message, and comes back in the conversation.
+  const pngBytes=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==','base64');
+  await page.locator('input[type="file"]').setInputFiles({name:'return-handover.png',mimeType:'image/png',buffer:pngBytes});
+  await page.getByText('return-handover.png',{exact:false}).waitFor();
+  await page.getByPlaceholder('Write a reply…').fill('Here is the screenshot of the handover screen.');
+  await page.getByRole('button',{name:'Send',exact:true}).click();
+  await thread.getByText('Here is the screenshot of the handover screen.',{exact:true}).waitFor();
+  const image=thread.locator('img[alt="return-handover.png"]');
+  await image.waitFor();
+  assert.ok(await image.getAttribute('src'),'the attachment came back without a readable URL');
+  assert.equal(await page.getByText('return-handover.png',{exact:false}).count(),0,'the pending file stayed after it was sent');
+  await page.screenshot({path:resolve(screenshots,'attachment-sent.png'),animations:'disabled'});
+
+  // 7c — a file the conversation does not accept is refused before any upload.
+  await page.locator('input[type="file"]').setInputFiles({name:'notes.txt',mimeType:'text/plain',buffer:Buffer.from('plain text')});
+  await page.getByText('Attach a PNG, JPEG, WebP, GIF or PDF.',{exact:false}).waitFor();
+  assert.equal(await page.getByRole('button',{name:'Send',exact:true}).isDisabled(),true,'an unsupported file did not block sending');
+  await page.getByRole('button',{name:'Remove notes.txt',exact:true}).click();
+  await page.getByPlaceholder('Write a reply…').fill('');
+
   // 8 — filters and their empty result.
   await page.getByRole('button',{name:'Resolved',exact:true}).click();
   await page.waitForFunction(()=>document.querySelectorAll('[data-testid="support-ticket-list"] ul > li').length===1);
@@ -245,7 +284,7 @@ try{
   await page.screenshot({path:resolve(screenshots,'inbox-mobile.png'),animations:'disabled'});
 
   assert.deepEqual(errors,[],'page errors: '+errors.join(' || '));
-  console.log(JSON.stringify({status:'passed',mode:'support-inbox-ui',checks:['one-page-header','ticket-list-320','no-outer-page-scroll','real-status-and-unread','content-sized-bubbles','tenant-right-support-left','date-separators-and-grouping','header-and-composer-fixed','no-jump-while-reading','issue-details-disclosure','failed-send-keeps-draft','retry-sends-once','filters-and-empty-result','new-ticket-only-on-send','phone-list-and-back','no-page-errors'],screenshots}));
+  console.log(JSON.stringify({status:'passed',mode:'support-inbox-ui',checks:['one-page-header','ticket-list-320','no-outer-page-scroll','real-status-and-unread','content-sized-bubbles','tenant-right-support-left','date-separators-and-grouping','header-and-composer-fixed','no-jump-while-reading','issue-details-disclosure','failed-send-keeps-draft','retry-sends-once','attachment-sent-and-shown','unsupported-file-refused','filters-and-empty-result','new-ticket-only-on-send','phone-list-and-back','no-page-errors'],screenshots}));
   }
 }finally{
   await browser?.close();

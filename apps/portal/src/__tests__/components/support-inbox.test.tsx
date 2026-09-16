@@ -18,10 +18,11 @@ function state(over: Partial<SupportInboxState> = {}): SupportInboxState {
   return {
     id: null, creating: false, tickets: [], next: null, thread: null, search: '', filter: '',
     draft: '', subject: '', status: '', busy: false, loading: false, error: null, notice: '',
-    retrying: false, canSend: false, scrollRef: { current: null },
+    retrying: false, canSend: false, canAttach: false, attachments: [], scrollRef: { current: null },
     setSearch: vi.fn(), setFilter: vi.fn(), setDraft: vi.fn(), setSubject: vi.fn(), setStatus: vi.fn(),
     choose: vi.fn(), clearSelection: vi.fn(), beginNew: vi.fn(), cancelNew: vi.fn(),
     loadMore: vi.fn(), loadOlder: vi.fn(), onThreadScroll: vi.fn(), send: vi.fn(),
+    addAttachments: vi.fn(), removeAttachment: vi.fn(),
     ...over,
   } as unknown as SupportInboxState;
 }
@@ -126,6 +127,24 @@ describe('the Support inbox view', () => {
     act(() => [...document.querySelectorAll('button')].find((b) => b.textContent === 'Cancel')!.click());
     expect(inbox.cancelNew).toHaveBeenCalled();
     expect(inbox.send).not.toHaveBeenCalled();
+  });
+
+  it('offers the paperclip only with an upload path, shows what is attached, and renders what was sent', () => {
+    const sent = { id: 'a1', seq: 1, name: 'shot.png', mime: 'image/png', size: 2048, authorKind: 'tenant' as const, url: 'https://storage.invalid/x' };
+    const thread = { ticket: ticket(), messages: [message(1, 'tenant', 'Here it is', 5)], hasOlder: false, latestSeq: 1, attachments: [sent] };
+    const inbox = state({ id: 't1', canAttach: true, attachments: [{ key: 'k1', file: {} as File, name: 'later.png', mime: 'image/png', size: 4096 }], thread } as never);
+    render(inbox);
+    expect(document.querySelector('button[aria-label="Attach a file"]')).not.toBeNull();
+    expect(text()).toContain('later.png');
+    expect(document.querySelector<HTMLImageElement>('img[alt="shot.png"]')?.getAttribute('src')).toBe('https://storage.invalid/x');
+    act(() => document.querySelector<HTMLButtonElement>('button[aria-label="Remove later.png"]')!.click());
+    expect(inbox.removeAttachment).toHaveBeenCalledWith('k1');
+    // A file whose URL could not be signed is named, not guessed at.
+    act(() => root!.unmount()); document.body.replaceChildren(); root = null;
+    render(state({ id: 't1', canAttach: false, thread: { ...thread, attachments: [{ ...sent, url: undefined }] } } as never));
+    expect(document.querySelector('button[aria-label="Attach a file"]')).toBeNull();
+    expect(document.querySelector('img[alt="shot.png"]')).toBeNull();
+    expect(text()).toContain('shot.png');
   });
 
   it('gives a narrow screen a way back to the list', () => {

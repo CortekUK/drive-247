@@ -19,7 +19,7 @@ export function AdminSupportWorkspace({ initialId }: { initialId?: string }) {
   return (
     <div className="flex h-[calc(100dvh-9rem)] min-h-[480px] w-full min-w-0 overflow-hidden rounded-xl border border-border bg-background">
       {support.allowed ? (
-        <SupportInbox key={support.scope} call={support.call} admin scope={support.scope} initialId={initialId} />
+        <SupportInbox key={support.scope} call={support.call} admin scope={support.scope} initialId={initialId} uploadAttachment={support.uploadAttachment} />
       ) : (
         <section className="flex min-w-0 flex-1 flex-col" aria-label="Support setup and access">
           <header className="border-b border-border px-5 py-4">

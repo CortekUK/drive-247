@@ -22,12 +22,23 @@ import { MessagingError, type MessagingCall } from './client';
 
 export interface HumanTicket {id:string;reference:string;summary:string;status:'open'|'in_progress'|'closed';tenant_name:string;requester:string;updated_at:string;created_at:string;unread?:boolean;handoff?:Record<string,unknown>;emailStatus?:string;staff_note?:string}
 export interface SupportMessage {seq:number;author_kind:'tenant'|'support';body:string;created_at:string}
-export interface SupportThread {ticket:HumanTicket;messages:SupportMessage[];hasOlder:boolean;latestSeq:number}
+/** A file on a message: metadata plus a short-lived signed read URL from the server. */
+export interface SupportAttachment {id:string;seq:number;name:string;mime:string;size:number;authorKind:'tenant'|'support';url?:string}
+/** One the operator picked but has not sent yet. */
+export interface PendingAttachment {key:string;file:File;name:string;mime:string;size:number;error?:string}
+export const ATTACHMENT_TYPES=['image/png','image/jpeg','image/webp','image/gif','application/pdf'];
+export const ATTACHMENT_MAX_BYTES=10*1024*1024;
+export const ATTACHMENT_MAX_FILES=3;
+export interface SupportThread {ticket:HumanTicket;messages:SupportMessage[];hasOlder:boolean;latestSeq:number;attachments?:SupportAttachment[]}
 /** A new request opened from elsewhere (a TRAX escalation), with its own submit path. */
 export interface SupportCompose {summary:string;submit?:(body:string,nonce:string,subject:string)=>Promise<{id:string}|null>}
 
 export interface SupportInboxOptions {
   call:MessagingCall;
+  /** Uploads the chosen file to the signed URL the server reserved for it.
+   *  Supplied by the app (its Supabase client); without it the attach control
+   *  is not offered rather than failing at send time. */
+  uploadAttachment?:(upload:{url:string;token:string;path:string},file:File)=>Promise<void>;
   /** Identity + permissions the data belongs to; changing it resets everything. */
   scope:string;
   /** The platform queue: cross-tenant tickets, status changes, no New request. */
@@ -36,7 +47,7 @@ export interface SupportInboxOptions {
   compose?:SupportCompose;
 }
 
-export function useSupportInbox({call,admin=false,initialId,compose,scope}:SupportInboxOptions){
+export function useSupportInbox({call,admin=false,initialId,compose,scope,uploadAttachment}:SupportInboxOptions){
   const [id,setId]=useState<string|null>(initialId??null),[creating,setCreating]=useState(!!compose);
   const [tickets,setTickets]=useState<HumanTicket[]>([]),[next,setNext]=useState<number|null>(null);
   const [thread,setThread]=useState<SupportThread|null>(null),[search,setSearch]=useState(''),[filter,setFilter]=useState('');
@@ -46,7 +57,10 @@ export function useSupportInbox({call,admin=false,initialId,compose,scope}:Suppo
   const scrollRef=useRef<HTMLDivElement>(null),opened=useRef<string|null>(null),readThrough=useRef(0),marking=useRef(false),sending=useRef(false);
   const followBottom=useRef(true);
   const outgoing=useRef<{action:string;data:Record<string,unknown>}|null>(null);
+  /** Files already stored for the pending submission; a retry skips them. */
+  const uploaded=useRef<Set<string>>(new Set());
   const [retrying,setRetrying]=useState(false);
+  const [attachments,setAttachments]=useState<PendingAttachment[]>([]);
   const nonceKey='trax-support-compose:'+scope;
   const [nonce,setNonce]=useState(()=>{try{const saved=sessionStorage.getItem(nonceKey);if(saved)return saved;const value=crypto.randomUUID();sessionStorage.setItem(nonceKey,value);return value;}catch{return crypto.randomUUID();}});
   const fail=useCallback((e:unknown)=>{if(e instanceof MessagingError&&['unauthorized','forbidden','context_changed'].includes(e.code)){setThread(null);setTickets([]);}
@@ -92,15 +106,35 @@ export function useSupportInbox({call,admin=false,initialId,compose,scope}:Suppo
     composeSeen.current=true;
     setCreating(true);setId(null);setSubject(compose.summary);
   },[compose]);
-  const choose=useCallback((ticketId:string)=>{if(ticketId===id)return;setId(ticketId);setCreating(false);setDraft('');outgoing.current=null;setRetrying(false);setStatus('');setNotice('');},[id]);
-  const beginNew=useCallback(()=>{let value=crypto.randomUUID();try{value=sessionStorage.getItem(nonceKey)||value;sessionStorage.setItem(nonceKey,value);}catch{}setNonce(value);setCreating(true);setId(null);setSubject(compose?.summary??'');setDraft('');outgoing.current=null;setRetrying(false);setNotice('');},[compose,nonceKey]);
+  /* Picked, not sent. Each file is checked here for the same limits the server
+     enforces, so an oversized or unsupported file is refused before an upload. */
+  const addAttachments=useCallback((files:FileList|File[])=>{
+    /* Read the list NOW: a file input's FileList is live, and the picker clears the
+       input as soon as this returns, so a lazy state updater would see nothing. */
+    const picked=Array.from(files);
+    setAttachments(old=>{
+      const next=[...old];
+      for(const file of picked){
+        if(next.length>=ATTACHMENT_MAX_FILES)break;
+        const problem=!ATTACHMENT_TYPES.includes(file.type)?'Attach a PNG, JPEG, WebP, GIF or PDF.'
+          :file.size>ATTACHMENT_MAX_BYTES?'Attach a file of up to 10 MB.'
+          :file.size<1?'This file is empty.':undefined;
+        next.push({key:`${file.name}:${file.size}:${file.lastModified}:${next.length}`,file,name:file.name,mime:file.type,size:file.size,error:problem});
+      }
+      return next;
+    });
+  },[]);
+  const removeAttachment=useCallback((key:string)=>setAttachments(old=>old.filter(a=>a.key!==key)),[]);
+  const choose=useCallback((ticketId:string)=>{if(ticketId===id)return;setId(ticketId);setCreating(false);setDraft('');setAttachments([]);outgoing.current=null;setRetrying(false);setStatus('');setNotice('');},[id]);
+  const beginNew=useCallback(()=>{let value=crypto.randomUUID();try{value=sessionStorage.getItem(nonceKey)||value;sessionStorage.setItem(nonceKey,value);}catch{}setNonce(value);setCreating(true);setId(null);setSubject(compose?.summary??'');setDraft('');setAttachments([]);outgoing.current=null;setRetrying(false);setNotice('');},[compose,nonceKey]);
   /** Back to the list on a narrow screen: nothing is selected, nothing is lost. */
   const clearSelection=useCallback(()=>{setId(null);},[]);
-  const cancelNew=useCallback(()=>{setCreating(false);setDraft('');outgoing.current=null;setRetrying(false);},[]);
+  const cancelNew=useCallback(()=>{setCreating(false);setDraft('');setAttachments([]);outgoing.current=null;setRetrying(false);},[]);
   const loadMore=useCallback(()=>{if(next!==null)void loadList(next);},[loadList,next]);
   const loadOlder=useCallback(()=>{followBottom.current=false;void loadThread(thread?.messages[0]?.seq);},[loadThread,thread]);
   const onThreadScroll=useCallback((e:{currentTarget:HTMLElement})=>{const el=e.currentTarget;followBottom.current=el.scrollHeight-el.scrollTop-el.clientHeight<48;},[]);
-  const canSend=!!draft.trim()&&(!creating||!!subject.trim());
+  const canSend=!!draft.trim()&&(!creating||!!subject.trim())&&!attachments.some(a=>a.error);
+  const canAttach=!!uploadAttachment&&attachments.length<ATTACHMENT_MAX_FILES;
   const send=useCallback(async()=>{
     if(sending.current||!draft.trim()||(creating&&!subject.trim()))return;sending.current=true;setBusy(true);setError(null);
     /* One payload per submission: an uncertain send is RETRIED with its original
@@ -108,20 +142,32 @@ export function useSupportInbox({call,admin=false,initialId,compose,scope}:Suppo
     if(!outgoing.current){outgoing.current={action:creating?'create':admin&&status?'status':'send',data:{...(id&&!creating?{id}:{}),nonce:creating?nonce:crypto.randomUUID(),body:draft.trim(),...(creating?{subject:subject.trim()}:{}),...(admin&&status&&!creating?{status}:{})}};setRetrying(true);}
     try{
       const out=outgoing.current;
+      /* Files first, under the message's own nonce: the message that follows
+         claims them. A retry re-uploads only what has not been reserved yet, so
+         the same file is never stored twice. */
+      if(uploadAttachment&&attachments.length){
+        for(const pending of attachments){
+          if(uploaded.current.has(pending.key))continue;
+          const reserved=await call('attach',{...(id&&!creating?{id}:{}),nonce:out.data.nonce,name:pending.name,mime:pending.mime,size:pending.size});
+          await uploadAttachment({...reserved.upload,path:reserved.attachment.path},pending.file);
+          uploaded.current.add(pending.key);
+        }
+      }
       const result=creating&&compose?.submit?await compose.submit(String(out.data.body),String(out.data.nonce),String(out.data.subject)):await call(out.action,out.data);
       if(!result)throw Error('Your message was not confirmed. Retry to check the same submission.');
-      setDraft('');outgoing.current=null;setRetrying(false);setStatus('');setNotice('Message sent.');
+      setDraft('');setAttachments([]);uploaded.current.clear();outgoing.current=null;setRetrying(false);setStatus('');setNotice('Message sent.');
       if(creating){try{sessionStorage.removeItem(nonceKey);}catch{}setNonce(crypto.randomUUID());setCreating(false);setId(result.id);}
       else{await loadThread();requestAnimationFrame(()=>{if(scrollRef.current)scrollRef.current.scrollTop=scrollRef.current.scrollHeight;});}
       await loadList();window.dispatchEvent(new Event('trax-support-read'));
     }catch(e){fail(e);}finally{sending.current=false;setBusy(false);}
-  },[admin,call,compose,creating,draft,fail,id,loadList,loadThread,nonce,nonceKey,status,subject]);
+  },[admin,attachments,call,compose,creating,draft,fail,id,loadList,loadThread,nonce,nonceKey,status,subject,uploadAttachment]);
 
   return {
     id,creating,tickets,next,thread,search,filter,draft,subject,status,
-    busy,loading,error,notice,retrying,canSend,scrollRef,
+    busy,loading,error,notice,retrying,canSend,canAttach,attachments,scrollRef,
     setSearch,setFilter,setDraft,setSubject,setStatus,
     choose,clearSelection,beginNew,cancelNew,loadMore,loadOlder,onThreadScroll,send,
+    addAttachments,removeAttachment,
   };
 }
 

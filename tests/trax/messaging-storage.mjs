@@ -13,7 +13,7 @@ create table app_users(id uuid primary key,auth_user_id uuid unique,tenant_id uu
 create table rentals(id uuid primary key,tenant_id uuid,status text);create table vehicles(id uuid primary key,tenant_id uuid);
 create table customers(id uuid primary key,tenant_id uuid);create table payments(id uuid primary key,tenant_id uuid);
 create table manager_permissions(app_user_id uuid,tab_key text,access_level text);`);
-for(const migration of ['20260915190000_trax_v2_support.sql','20260915200000_trax_support_messaging.sql'])await db.exec(await readFile(new URL('../../supabase/migrations/'+migration,import.meta.url),'utf8'));
+for(const migration of ['20260915190000_trax_v2_support.sql','20260915200000_trax_support_messaging.sql','20260917020000_trax_support_attachments.sql'])await db.exec(await readFile(new URL('../../supabase/migrations/'+migration,import.meta.url),'utf8'));
 const id=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const t1=id(1),t2=id(2),s1=id(11),s2=id(12),a1=id(13),a2=id(14),u1=id(21),u2=id(22),au1=id(23),au2=id(24),scope='a'.repeat(64);
 await db.query('insert into tenants values($1,\'active\',\'Fixture One\',\'one\'),($2,\'active\',\'Fixture Two\',\'two\')',[t1,t2]);
@@ -91,5 +91,66 @@ await test('a follow-up on a pre-messaging ticket does not create a new-ticket e
  await call(user,'send',{id:old,nonce:id(272),body:'Following up on the older ticket.'});
  assert.equal((await db.query('select count(*)::int n from trax_support_email_jobs where ticket_id=$1',[old])).rows[0].n,0);
 });
+
+// ── Attachments ────────────────────────────────────────────────────────────────
+const reserve=(actor,ticketId,nonce,name='screenshot.png',mime='image/png',size=2048)=>
+  rpc('trax_support_attachment_reserve',[...actor,ticketId,nonce,name,mime,size]);
+const attachments=(actor,ticketId)=>rpc('trax_support_attachment_list',[...actor,ticketId]);
+
+await test('a reserved upload is claimed by the message that follows, and listed with it',async()=>{
+  const nonce=id(400);
+  const file=await reserve(user,ticket.id,nonce);
+  assert.match(file.storagePath,new RegExp('^'+t1+'/'+ticket.id+'/'));
+  // Reserved is not yet part of the conversation.
+  assert.deepEqual(await attachments(user,ticket.id),[]);
+  const message=await call(user,'send',{id:ticket.id,nonce,body:'Here is the screenshot.'});
+  const listed=await attachments(user,ticket.id);
+  assert.equal(listed.length,1);
+  assert.equal(listed[0].seq,message.seq);
+  assert.equal(listed[0].name,'screenshot.png');
+  assert.equal(listed[0].author_kind,'tenant');
+});
+
+await test('support can attach to a ticket it answers, and the requester sees it',async()=>{
+  const nonce=id(401);
+  await reserve(admin,ticket.id,nonce,'annotated.png');
+  await call(admin,'send',{id:ticket.id,nonce,body:'Marked up for you.'});
+  const listed=await attachments(user,ticket.id);
+  assert.equal(listed.length,2);
+  assert.equal(listed.at(-1).author_kind,'support');
+});
+
+await test('another tenant can neither reserve against nor list this ticket',async()=>{
+  await assert.rejects(()=>reserve(other,ticket.id,id(402)));
+  await assert.rejects(()=>attachments(other,ticket.id));
+  assert.equal((await attachments(user,ticket.id)).length,2);
+});
+
+await test('three files per message, and only the declared types and sizes',async()=>{
+  const nonce=id(403);
+  for(let i=0;i<3;i++)await reserve(user,ticket.id,nonce,`shot-${i}.png`);
+  await assert.rejects(()=>reserve(user,ticket.id,nonce,'one-too-many.png'),/support_attachment_limit/);
+  await assert.rejects(()=>reserve(user,ticket.id,id(404),'script.svg','image/svg+xml',10),/violates check constraint/);
+  await assert.rejects(()=>reserve(user,ticket.id,id(405),'huge.png','image/png',10485761),/violates check constraint/);
+});
+
+await test('an upload whose message never arrives stays unlisted and is purged',async()=>{
+  const nonce=id(406);
+  const orphan=await reserve(user,ticket.id,nonce,'abandoned.png');
+  assert.equal((await attachments(user,ticket.id)).length,2); // Still only the sent ones.
+  await db.query("update trax_support_attachments set created_at=now()-interval '2 days' where storage_path=$1",[orphan.storagePath]);
+  const purged=await rpc('trax_support_attachment_purge',['24 hours']);
+  assert.ok(purged.paths.includes(orphan.storagePath));
+  assert.equal((await db.query('select count(*)::int n from trax_support_attachments where storage_path=$1',[orphan.storagePath])).rows[0].n,0);
+  assert.equal((await attachments(user,ticket.id)).length,2);
+});
+
+await test('deleting a ticket takes its attachments with it',async()=>{
+  const before=(await db.query('select count(*)::int n from trax_support_attachments where ticket_id=$1',[ticket.id])).rows[0].n;
+  assert.ok(before>0);
+  await db.query('delete from trax_support_tickets where id=$1',[ticket.id]);
+  assert.equal((await db.query('select count(*)::int n from trax_support_attachments where ticket_id=$1',[ticket.id])).rows[0].n,0);
+});
+
 await db.close();
 

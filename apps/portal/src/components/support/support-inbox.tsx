@@ -1,14 +1,14 @@
 'use client';
 
-import { Fragment, useMemo, type KeyboardEvent, type ReactNode } from 'react';
-import { ArrowLeft, Check, Info, Loader2, Search, Send } from 'lucide-react';
+import { Fragment, useMemo, useRef, type KeyboardEvent, type ReactNode } from 'react';
+import { ArrowLeft, Check, FileText, Info, Loader2, Paperclip, Search, Send, X } from 'lucide-react';
 import { Button } from '@/components/ui-v2/button';
 import { Input } from '@/components/ui-v2/input';
 import { Bubble, BubbleContent } from '@/components/ui-v2/bubble';
 import { Message, MessageContent, MessageFooter, MessageHeader } from '@/components/ui-v2/message';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui-v2/collapsible';
 import { cn } from '@/lib/utils';
-import type { HumanTicket, SupportInboxState, SupportMessage } from '../../../../../shared/trax-support/use-support-inbox';
+import type { HumanTicket, SupportAttachment, SupportInboxState, SupportMessage } from '../../../../../shared/trax-support/use-support-inbox';
 
 /**
  * The tenant's support inbox: a ticket list beside one conversation.
@@ -253,6 +253,7 @@ export function SupportInboxView({ inbox, className }: { inbox: SupportInboxStat
                               >
                                 <BubbleContent className="rounded-2xl px-3 py-2 text-[13px]">
                                   <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{message.body}</p>
+                                  <MessageFiles files={(thread.attachments ?? []).filter((file) => file.seq === message.seq)} />
                                   <span data-seq={message.seq} aria-hidden className="block h-px" />
                                 </BubbleContent>
                               </Bubble>
@@ -284,6 +285,87 @@ export function SupportInboxView({ inbox, className }: { inbox: SupportInboxStat
       </div>
       {retrying && <span className="sr-only">Your last message is waiting to be retried.</span>}
     </div>
+  );
+}
+
+const readableSize = (bytes: number) => (bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`);
+
+/** Files sent with a message: an image shows itself, a document is a named link.
+ *  Both open the short-lived signed URL the server minted for this reader. */
+function MessageFiles({ files }: { files: SupportAttachment[] }) {
+  if (!files.length) return null;
+  return (
+    <ul className="mt-2 flex flex-wrap gap-2">
+      {files.map((file) => (
+        <li key={file.id}>
+          {file.mime.startsWith('image/') && file.url ? (
+            <a href={file.url} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-lg border border-border/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <img src={file.url} alt={file.name} loading="lazy" className="max-h-44 max-w-[220px] object-cover" />
+            </a>
+          ) : (
+            <a
+              href={file.url ?? undefined}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-disabled={file.url ? undefined : true}
+              className={cn('inline-flex items-center gap-1.5 rounded-lg border border-border/70 bg-background/70 px-2 py-1.5 text-[12px]',
+                file.url ? 'hover:bg-muted' : 'pointer-events-none opacity-60')}
+            >
+              <FileText className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+              <span className="max-w-[180px] truncate">{file.name}</span>
+              <span className="text-muted-foreground">{readableSize(file.size)}</span>
+            </a>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Chosen, not sent yet. A file that fails the limits says so here, before any upload. */
+function PendingFiles({ inbox }: { inbox: SupportInboxState }) {
+  const picked = inbox.attachments ?? [];
+  if (!picked.length) return null;
+  return (
+    <ul className="mb-2 flex flex-wrap gap-1.5">
+      {picked.map((file) => (
+        <li key={file.key} className={cn('flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[11px]',
+          file.error ? 'border-destructive/40 bg-destructive/10 text-destructive' : 'border-border bg-muted/50')}>
+          <FileText className="size-3 shrink-0" aria-hidden />
+          <span className="max-w-[200px] truncate">{file.name}</span>
+          <span className={file.error ? '' : 'text-muted-foreground'}>{file.error ?? readableSize(file.size)}</span>
+          <button type="button" aria-label={`Remove ${file.name}`} disabled={inbox.busy} onClick={() => inbox.removeAttachment(file.key)}
+            className="rounded p-0.5 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <X className="size-3" aria-hidden />
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** The paperclip. Hidden where the app has no upload path configured, rather than
+ *  offering a control that would fail when the message is sent. */
+function AttachButton({ inbox }: { inbox: SupportInboxState }) {
+  const input = useRef<HTMLInputElement>(null);
+  if (!inbox.canAttach && !(inbox.attachments ?? []).length) return null;
+  return (
+    <>
+      <input
+        ref={input}
+        type="file"
+        multiple
+        accept="image/png,image/jpeg,image/webp,image/gif,application/pdf"
+        className="sr-only"
+        aria-label="Attach a screenshot or document"
+        onChange={(e) => { if (e.target.files?.length) inbox.addAttachments(e.target.files); e.target.value = ''; }}
+      />
+      <Button type="button" variant="ghost" size="icon-sm" className="mb-0.5 shrink-0 text-muted-foreground"
+        aria-label="Attach a file" title="Attach a screenshot or document (PNG, JPEG, WebP, GIF or PDF, up to 10 MB)"
+        disabled={inbox.busy || !inbox.canAttach} onClick={() => input.current?.click()}>
+        <Paperclip className="size-4" aria-hidden />
+      </Button>
+    </>
   );
 }
 
@@ -393,7 +475,9 @@ function Composer({
       onSubmit={(e) => { e.preventDefault(); void inbox.send(); }}
     >
       {children}
+      <PendingFiles inbox={inbox} />
       <div className="flex items-end gap-2 rounded-xl border border-input bg-background p-1.5 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20">
+        <AttachButton inbox={inbox} />
         <label htmlFor="support-message" className="sr-only">{label}</label>
         <textarea
           id="support-message"
