@@ -1,6 +1,6 @@
 # Test TRAX locally in the V2 portal
 
-The normal local entry point is `http://northwind.portal.localhost:4002`. Click **Trax** in the V2 top bar or press **Ctrl+J** (Cmd+J on macOS). The panel header carries the whole workspace: conversation history, a new conversation, support tickets, full screen and close. No deployment is required for this development path. Other tenants use their own subdomain and must already be enrolled in V2 through the existing rollout policy. Do not change tenant enrollment to run a test.
+The normal local entry point is `http://northwind.portal.localhost:4002`. Click **Trax** in the V2 top bar or press **Ctrl+J** (Cmd+J on macOS). The panel header carries the workspace: conversation history, a new conversation, Open Support, full screen and close. Open Support leaves TRAX for the portal's Support section (`/support`) — the same place the profile menu's Support item opens — and the AI conversation and any unsent draft are kept. No deployment is required for this development path. Other tenants use their own subdomain and must already be enrolled in V2 through the existing rollout policy. Do not change tenant enrollment to run a test.
 
 ## What this test can establish
 
@@ -68,7 +68,7 @@ No suitable real availability issue is required for the real integration check: 
 
 ## Offline option without any credentials
 
-For the new support workflow, run `node tests/trax/browser.mjs --support --manual`. It uses the real V2 UI/hook/handler with isolated storage fixtures. Ask about a missing payment, see the limitation and Contact Support button, submit, then inspect My support requests, Support queue and Retention. References are explicitly fixture-labelled and disappear when this harness stops. Omit `--manual` for automated browser checks. Actual SQL persistence/retention tests and the approved-environment activation sequence are in [support-escalation.md](support-escalation.md).
+For the new support workflow, run `node tests/trax/browser.mjs --support --manual`. It uses the real V2 UI/hook/handler with isolated storage fixtures. Ask about a missing payment, see the limitation and the Communicate with Support button, follow it into the Support section, submit there, then inspect My Tickets and Retention and reopen TRAX to confirm the conversation is still there. References are explicitly fixture-labelled and disappear when this harness stops. Omit `--manual` for automated browser checks. Actual SQL persistence/retention tests and the approved-environment activation sequence are in [support-escalation.md](support-escalation.md).
 
 In the signed-in portal, durable support requires the reviewed migration and actual assigned support staff before enabling server-only `TRAX_SUPPORT_STORAGE=enabled`. Do not enable it against the current Supabase project without approved migration/storage rollout. The default UI honestly disables submission while storage/delivery are unconfigured. Production destructive cleanup requires separate approval even after storage is enabled.
 

@@ -16,10 +16,13 @@ import type { UseChatReturn } from "@/types/trax-support";
  * `useTraxSupport` still applies its own V2 rollout gate and server checks.
  *
  * The workspace VIEW lives here too, because the panel header switches it
- * (History, New, Support) while the body that renders it is a separate
- * component — and the choice must survive going full screen and back.
+ * (conversation or history) while the body that renders it is a separate
+ * component — and the choice must survive going full screen and back. Human
+ * support is NOT a view here: it is the portal's own Support section, which
+ * TRAX navigates to. `activate()` lets that section load this conversation so
+ * an escalation handoff can be submitted with its recorded context.
  */
-export type TraxSupportView = "conversation" | "history" | "tickets" | "retention";
+export type TraxSupportView = "conversation" | "history";
 
 interface TraxSupportValue {
   support: UseChatReturn;
@@ -27,6 +30,8 @@ interface TraxSupportValue {
   setView: (view: TraxSupportView) => void;
   /** Fresh thread, back on the conversation view. */
   startNew: () => void;
+  /** Load the conversation without opening a TRAX surface (the Support section). */
+  activate: () => void;
 }
 
 const TraxSupportContext = createContext<TraxSupportValue | null>(null);
@@ -45,8 +50,9 @@ export function TraxSupportProvider({ children }: { children: ReactNode }) {
     support.clearChat();
     setView("conversation");
   }, [support]);
+  const activate = useCallback(() => setActivated(true), []);
 
-  const value = useMemo<TraxSupportValue>(() => ({ support, view, setView, startNew }), [support, view, startNew]);
+  const value = useMemo<TraxSupportValue>(() => ({ support, view, setView, startNew, activate }), [support, view, startNew, activate]);
   return <TraxSupportContext.Provider value={value}>{children}</TraxSupportContext.Provider>;
 }
 
@@ -71,8 +77,8 @@ export function useTraxSupportChat(): UseChatReturn {
 
 /** The workspace view and the two actions the panel header drives. */
 export function useTraxSupportWorkspace(): Omit<TraxSupportValue, "support"> {
-  const { view, setView, startNew } = useTraxSupportContext();
-  return { view, setView, startNew };
+  const { view, setView, startNew, activate } = useTraxSupportContext();
+  return { view, setView, startNew, activate };
 }
 
 /** Non-throwing variant for chrome that also renders outside v2 (the panel mount). */

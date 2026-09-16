@@ -97,6 +97,13 @@
       "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
     },
     {
+      "id": "support_section",
+      "title": "Support",
+      "status": "requiring_confirmation",
+      "scope": "Portal Support section: the tenant's own tickets, one ticket's conversation and new requests over the existing trax-messaging endpoint. The destination for the profile menu's Support item, Trax's Support control and its escalation handoff; V2 chrome tenants only.",
+      "limits": "Not eligible for Phase 1 retrieval or navigation until the deployed ticket workflow, notifications and permissions are reviewed."
+    },
+    {
       "id": "trax_workspace",
       "title": "Trax full-screen conversation",
       "status": "requiring_confirmation",
@@ -311,7 +318,7 @@
     "verified": 6,
     "partially_documented": 21,
     "unsupported": 1,
-    "requiring_confirmation": 15
+    "requiring_confirmation": 16
   },
   "permissionKeys": [
     "vehicles",
@@ -807,6 +814,12 @@
       "source": "apps/portal/src/app/(dashboard)/subscription/page.tsx",
       "feature": "subscription",
       "status": "partially_documented"
+    },
+    {
+      "route": "/support",
+      "source": "apps/portal/src/app/(dashboard)/support/page.tsx",
+      "feature": "support_section",
+      "status": "requiring_confirmation"
     },
     {
       "route": "/testimonials",

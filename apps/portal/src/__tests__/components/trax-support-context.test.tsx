@@ -45,11 +45,19 @@ describe('TraxSupportProvider', () => {
     function Workspace() { workspace = useTraxSupportWorkspace(); return null; }
     mount(createElement(TraxSupportProvider, null, createElement(Workspace)));
     expect(workspace!.view).toBe('conversation');
-    act(() => workspace!.setView('tickets'));
-    expect(workspace!.view).toBe('tickets');
+    act(() => workspace!.setView('history'));
+    expect(workspace!.view).toBe('history');
     act(() => workspace!.startNew());
     expect(mocks.clearChat).toHaveBeenCalledTimes(1);
     expect(workspace!.view).toBe('conversation');
+  });
+  it('activates the conversation for the Support section, without a Trax surface open', () => {
+    let workspace: ReturnType<typeof useTraxSupportWorkspace> | undefined;
+    function Workspace() { workspace = useTraxSupportWorkspace(); return null; }
+    mount(createElement(TraxSupportProvider, null, createElement(Workspace)));
+    expect(mocks.enabled.at(-1)).toBe(false);
+    act(() => workspace!.activate());
+    expect(mocks.enabled.at(-1)).toBe(true);
   });
   it('requires the provider for surfaces that need the conversation, but not for optional chrome', () => {
     let optional: unknown = 'unset';

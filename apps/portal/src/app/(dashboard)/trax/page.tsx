@@ -9,6 +9,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui-v2/tool
 import { TraxSupportThread } from "@/components/trax/support/TraxSupportThread";
 import { useTraxSupportChat, useTraxSupportWorkspace } from "@/components/trax/support/trax-support-context";
 import { useTrax } from "@/components/trax/trax-provider";
+import { supportHref } from "@/lib/support-route";
+import { useRouter } from "next/navigation";
 
 /**
  * Trax, full screen — laid out the way Claude lays out its own.
@@ -80,6 +82,9 @@ export default function TraxPage() {
   const { minimiseToPanel } = useTrax();
   const support = useTraxSupportChat();
   const { view, setView, startNew } = useTraxSupportWorkspace();
+  const router = useRouter();
+  /* Human support is the portal's Support section, not a view in here. */
+  const openSupport = (target: { ticketId?: string; issueId?: string }) => router.push(supportHref(target));
 
   /* The conversation's first question, as its title. Empty for a fresh thread. */
   const title = support.messages.find((m) => m.role === "user")?.content ?? "";
@@ -112,18 +117,12 @@ export default function TraxPage() {
             disabled={support.isLoading || (support.messages.length === 0 && view === "conversation")}
             onClick={startNew}
           />
-          <PageAction
-            label="Support tickets"
-            tip="Support · opens inside Trax"
-            icon={<LifeBuoy />}
-            active={view === "tickets"}
-            onClick={() => setView(view === "tickets" ? "conversation" : "tickets")}
-          />
+          <PageAction label="Open Support" tip="Open Support" icon={<LifeBuoy />} onClick={() => openSupport({})} />
           <PageAction label="Open as side panel" tip="Open as side panel · ⌘J" icon={<Minimize2 />} onClick={minimiseToPanel} />
         </div>
       </header>
 
-      <TraxSupportThread density="page" autoFocus />
+      <TraxSupportThread density="page" autoFocus onOpenSupport={openSupport} />
     </div>
   );
 }

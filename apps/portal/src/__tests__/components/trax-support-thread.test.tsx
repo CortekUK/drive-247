@@ -40,7 +40,7 @@ const buttons = (label: string) => [...document.querySelectorAll('button')].filt
 beforeEach(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   mocks.support = base(); mocks.workspace = null;
-  mocks.state = { view: 'conversation', setView: vi.fn(), startNew: vi.fn() };
+  mocks.state = { view: 'conversation', setView: vi.fn(), startNew: vi.fn(), activate: vi.fn() };
   Element.prototype.scrollIntoView = vi.fn();
 });
 afterEach(() => { act(() => root?.unmount()); root = null; document.body.replaceChildren(); vi.unstubAllGlobals(); });
@@ -76,7 +76,7 @@ describe('TraxSupportThread in the Trax panel', () => {
     expect(rendered.every((m) => m.dataset.navigate === 'true')).toBe(true);
     expect(document.querySelector('[data-testid="greeting"]')).toBeNull();
   });
-  it('passes issues and the support request to the workspace for tickets and handoff', () => {
+  it('passes issues and the support request to the workspace for the issue state and handoff', () => {
     render();
     expect(mocks.workspace.request).toBe(mocks.support.supportRequest);
     expect(mocks.workspace.issues).toHaveLength(1);
@@ -96,19 +96,18 @@ describe('TraxSupportThread in the Trax panel', () => {
     render();
     expect(document.body.textContent).toContain('not connected to an AI model');
   });
-  it('hands the workspace the current view so history and tickets open inside TRAX', () => {
-    mocks.state.view = 'tickets';
+  it('hands the workspace the current view so the header can open the history', () => {
+    mocks.state.view = 'history';
     render();
-    expect(mocks.workspace.view).toBe('tickets');
+    expect(mocks.workspace.view).toBe('history');
     expect(mocks.workspace.onView).toBe(mocks.state.setView);
   });
-  it('renders nothing while the panel is closed and uses the compact ticket layout in the panel', () => {
+  it('stays mounted, so the composer draft survives, and passes the Support opener down', () => {
+    const onOpenSupport = vi.fn();
     const node = document.createElement('div'); document.body.append(node); root = createRoot(node);
-    act(() => root!.render(createElement(TraxSupportThread, { density: 'sheet', active: false })));
-    expect(document.querySelector('[data-testid="workspace"]')).toBeNull();
-    act(() => root!.render(createElement(TraxSupportThread, { density: 'sheet', active: true })));
-    expect(mocks.workspace.compact).toBe(true);
-    act(() => root!.render(createElement(TraxSupportThread, { density: 'page' })));
-    expect(mocks.workspace.compact).toBe(false);
+    act(() => root!.render(createElement(TraxSupportThread, { density: 'sheet', onOpenSupport })));
+    expect(document.querySelector('[data-testid="workspace"]')).not.toBeNull();
+    expect(document.querySelector('[data-testid="composer"]')).not.toBeNull();
+    expect(mocks.workspace.onOpenSupport).toBe(onOpenSupport);
   });
 });

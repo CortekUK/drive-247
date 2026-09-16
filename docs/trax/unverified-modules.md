@@ -23,6 +23,7 @@ The generated report enumerates portal pages, permission keys, feature coverage,
 | Subscription | Paying for Drive247 | Distinction from renter money; platform/tenant billing authorization |
 | Welcome pack | Operator onboarding | Published database content and authoring release workflow |
 | Developer tools | Internal development | Excluded from support; never offer shell or operational tools |
+| Support section | Reading and answering the tenant's own support tickets | Deployed ticket workflow, notification delivery, retention and permission enforcement |
 | Trax full-screen page, Turo Sync | Chat history and the Turo Bridge extension workflow | Chat endpoint behavior, per-tenant flags, extension pairing and import decisions |
 
 Customer booking, customer portal, platform admin, marketing, Tesla, accounting, voice, charts, exports and ticketing require their own scoped reviews. Existing files or UI labels are evidence of an implementation entry point, not proof that every feature works in every deployment.

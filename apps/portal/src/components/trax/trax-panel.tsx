@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { History, LifeBuoy, Maximize2, SquarePen, X } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui-v2/tooltip";
@@ -9,6 +9,7 @@ import { TraxSupportThread } from "./support/TraxSupportThread";
 import { useTraxSupportOptional } from "./support/trax-support-context";
 import { TraxMark } from "./trax-greeting";
 import { isTraxPath, useTraxOptional } from "./trax-provider";
+import { supportHref } from "@/lib/support-route";
 
 /**
  * Trax as a docked side panel — the Stripe Assistant shape.
@@ -122,6 +123,7 @@ export function TraxPanel() {
   const workspace = useTraxSupportOptional();
   const support = workspace?.support ?? null;
   const pathname = usePathname();
+  const router = useRouter();
   const onFullPage = isTraxPath(pathname);
   const open = !!trax?.sheetOpen && !onFullPage;
 
@@ -201,16 +203,16 @@ export function TraxPanel() {
 
   const { closeSheet, expandToFullPage } = trax;
   const view = workspace?.view ?? "conversation";
+  const openSupport = (target: { ticketId?: string; issueId?: string }) => {
+    router.push(supportHref(target));
+    closeSheet();
+  };
   const viewLabel =
-    view === "tickets"
-      ? "Support tickets"
-      : view === "history"
-        ? "Conversation history"
-        : view === "retention"
-          ? "Support retention"
-          : support?.capabilities?.modelReady
-            ? "Assistant · reads your records"
-            : "Prepared guidance";
+    view === "history"
+      ? "Conversation history"
+      : support?.capabilities?.modelReady
+        ? "Assistant · reads your records"
+        : "Prepared guidance";
 
   const onKeyDown = (e: KeyboardEvent<HTMLElement>) => {
     /* Escape closes the panel from anywhere inside it. `defaultPrevented`
@@ -295,14 +297,9 @@ export function TraxPanel() {
               disabled={!workspace || support!.isLoading || (support!.messages.length === 0 && view === "conversation")}
               onClick={() => workspace?.startNew()}
             />
-            <PanelAction
-              label="Support tickets"
-              tip="Support · opens inside Trax"
-              icon={<LifeBuoy />}
-              active={view === "tickets"}
-              disabled={!workspace}
-              onClick={() => workspace?.setView(view === "tickets" ? "conversation" : "tickets")}
-            />
+            {/* Human support lives in the portal's Support section. TRAX closes
+                behind it; the conversation and the unsent draft are kept. */}
+            <PanelAction label="Open Support" tip="Open Support" icon={<LifeBuoy />} onClick={() => openSupport({})} />
             {/* Same thread, full screen: the provider sits above the route,
                 so this continues the conversation rather than starting one. */}
             <PanelAction label="Open full screen" tip="Full screen" icon={<Maximize2 />} onClick={expandToFullPage} />
@@ -310,7 +307,9 @@ export function TraxPanel() {
           </div>
         </header>
 
-        {hasOpened && <TraxSupportThread density="sheet" autoFocus={shown} active={shown} />}
+        {/* Mounted once opened and kept: closing Trax must not lose the thread
+            or a half-typed question. Nothing polls from here. */}
+        {hasOpened && <TraxSupportThread density="sheet" autoFocus={shown} onOpenSupport={openSupport} />}
       </aside>
     </>
   );

@@ -6,7 +6,7 @@ Review date: 2026-09-15. Knowledge candidate 0.3.1. Source base commit and worki
 
 ## Implemented package
 
-TRAX opens from the V2 top bar **Trax** button (and Ctrl+J) in the docked Trax panel and the `/trax` page (`TraxSupportThread` inside `TraxSupportProvider`). Both headers switch one workspace between conversation, conversation history, support tickets and retention through `SupportWorkspace`, `useTraxSupport`, the development route and the dedicated `trax-support` edge endpoint. Both ends enforce the existing V2 chrome rollout; Northwind is a canary, not a hardcoded authorization exception. No V1 chat, calendar, rental/payment operation or unrelated page is changed by this package.
+TRAX opens from the V2 top bar **Trax** button (and Ctrl+J) in the docked Trax panel and the `/trax` page (`TraxSupportThread` inside `TraxSupportProvider`). Both headers switch one workspace between the conversation and the conversation history through `SupportWorkspace`, `useTraxSupport`, the development route and the dedicated `trax-support` edge endpoint. Human support is not a TRAX view: Open Support navigates to the portal's Support section (`/support`, `PortalSupport`), which holds the tickets, their conversations and the retention controls. Both ends enforce the existing V2 chrome rollout; Northwind is a canary, not a hardcoded authorization exception. No V1 chat, calendar, rental/payment operation or unrelated page is changed by this package.
 
 `model.ts:configuredModel` now calls OpenAI Responses with a server-configured model, strict function schemas, structured answers and `store:false`. `orchestrator.ts:modelConversation` accepts one tool call at a time, at most seven tools/eight model turns, with a 65-second request deadline, 18-second provider calls and 8-second database fetch deadlines. Provider errors become an honest fallback. Private provider reasoning is never copied to chat history, tickets or logs. The function-call protocol follows the [OpenAI function-calling documentation](https://developers.openai.com/api/docs/guides/function-calling).
 
@@ -106,7 +106,7 @@ node tests/trax/browser.mjs --operational
 node tests/trax/browser.mjs
 ```
 
-For an interactive fixture browser: `node tests/trax/browser.mjs --support --manual`. Ask about a missing payment, observe the explicit limitation, then click Contact Support; inspect My support requests, Support queue and Retention. This fixture shows a labelled fixture reference and makes no live-provider calls. It is not the signed-in portal or durable production storage.
+For an interactive fixture browser: `node tests/trax/browser.mjs --support --manual`. Ask about a missing payment, observe the explicit limitation, then click Communicate with Support; the fixture leaves TRAX for the Support section, where the composer, My Tickets and Retention are. Reopen TRAX from Ask AI to see the conversation and its history unchanged. This fixture shows a labelled fixture reference and makes no live-provider calls. It is not the signed-in portal or durable production storage.
 
 `tests/trax/support-storage.mjs` executes the actual migration in isolated PostgreSQL/WASM (PGlite). Install its test-only dependency outside the repo, then run:
 

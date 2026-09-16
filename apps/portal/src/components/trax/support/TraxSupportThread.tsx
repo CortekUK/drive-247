@@ -10,10 +10,12 @@ import { SupportWorkspace } from "./SupportWorkspace";
 import { useTraxSupportChat, useTraxSupportWorkspace } from "./trax-support-context";
 
 /**
- * The TRAX workspace body: the conversation, and — through SupportWorkspace —
- * history, tickets and retention, all inside the same panel. The panel header
- * (trax-panel.tsx) and the `/trax` page header drive the view; nothing here
- * routes the operator away from TRAX.
+ * The TRAX workspace body: the conversation and, through SupportWorkspace, the
+ * conversation history. The panel header (trax-panel.tsx) and the `/trax` page
+ * header drive the view.
+ *
+ * Human support is not rendered here: the issue bar and the header open the
+ * portal's Support section instead (lib/support-route.ts).
  *
  * The conversation keeps trax-thread.tsx's shape — greeting and composer
  * centred while empty, then a scrolling thread with the composer pinned — with
@@ -37,12 +39,12 @@ function prefersReducedMotion() {
 export interface TraxSupportThreadProps {
   density?: "sheet" | "page";
   autoFocus?: boolean;
-  /** False while the panel is closed: nothing renders, so ticket polling and read receipts stop. */
-  active?: boolean;
+  /** Open the portal's Support section (and leave TRAX). */
+  onOpenSupport?: (target: { ticketId?: string; issueId?: string }) => void;
   className?: string;
 }
 
-export function TraxSupportThread({ density = "page", autoFocus = false, active = true, className }: TraxSupportThreadProps) {
+export function TraxSupportThread({ density = "page", autoFocus = false, onOpenSupport, className }: TraxSupportThreadProps) {
   const {
     messages, isLoading, error, sendMessage, confirmAction, rejectAction, navigate, capabilities,
     checkAgain, supportRequest, issues, activeIssueId, recentConversations, contextKey,
@@ -68,8 +70,6 @@ export function TraxSupportThread({ density = "page", autoFocus = false, active 
     if (text.trim()) void sendMessage(text);
   };
 
-  if (!active) return null;
-
   return (
     <div data-slot="trax-support-thread" data-density={density} data-view={view} className={cn("flex min-h-0 min-w-0 flex-1 flex-col", className)}>
       <SupportWorkspace
@@ -80,7 +80,7 @@ export function TraxSupportThread({ density = "page", autoFocus = false, active 
         activeIssueId={activeIssueId}
         recent={recentConversations}
         busy={isLoading}
-        compact={density === "sheet"}
+        onOpenSupport={onOpenSupport}
         view={view}
         onView={setView}
       >

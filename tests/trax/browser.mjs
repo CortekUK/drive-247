@@ -32,7 +32,8 @@ export const useAuth=useAuthStore;
 export const useV2=()=>window.offlineV2!==false;
 export const useManagerPermissions=()=>({permissions:[]});
 export const useTenantBranding=()=>({branding:{accent_color:'#6554c0'}});
-export const usePathname=()=>'/rentals';
+export const usePathname=()=>'/trax';
+export const useSearchParams=()=>new URLSearchParams();
 export const useRouter=()=>({push:(href)=>{window.lastNavigation=href;window.dispatchEvent(new CustomEvent('offline-navigation',{detail:href}));}});
 export const supabase={auth:{getSession:async()=>({data:{session:{access_token:'offline-only',user:{id:'offline-user'}}}})},channel:()=>{const c={on:()=>c,subscribe:()=>c};return c;},removeChannel:()=>{}};
 export default function Link({children,href,...props}){return React.createElement('a',{href,...props},children);}
@@ -43,12 +44,14 @@ const css=(await postcss([tailwind(config)]).process((await readFile(resolve(roo
 await writeFile(resolve(temp,'style.css'),css);
 const mocks=new Set(['@/integrations/supabase/client','@/stores/auth-store','@/contexts/TenantContext','@/hooks/use-manager-permissions','@/hooks/use-tenant-branding','@/lib/v2-context','next/navigation','next/link']);
 await build({stdin:{contents:`import React,{useEffect,useRef,useState} from 'react'; import {createRoot} from 'react-dom/client'; import {TraxLauncher} from './apps/portal/src/components/trax/trax-launcher';
+import {TraxSupportProvider} from './apps/portal/src/components/trax/support/trax-support-context';
+import {PortalSupport} from './apps/portal/src/components/support/portal-support';
 const root=createRoot(document.getElementById('root'));
 function Harness(){
   const ref=useRef(null);const [navigation,setNavigation]=useState('');
   useEffect(()=>{const show=(event)=>setNavigation(event.detail);window.addEventListener('offline-navigation',show);return()=>window.removeEventListener('offline-navigation',show);},[]);
   const buttonStyle={border:'1px solid #c4b5fd',borderRadius:8,padding:'10px 16px',background:'white',color:'#4c1d95',cursor:'pointer'};
-  return React.createElement(React.Fragment,null,
+  return React.createElement(TraxSupportProvider,null,
     React.createElement('main',{style:{padding:24,fontFamily:'system-ui',maxWidth:900,margin:'0 auto'}},
       React.createElement('h1',{style:{fontSize:24,fontWeight:600,marginBottom:12}},'TRAX offline test'),
       React.createElement('p',{style:{marginBottom:12}},'Isolated fixture session. No live accounts, bookings, payments or model providers are connected.'),
@@ -60,7 +63,12 @@ function Harness(){
       React.createElement('p',{'data-testid':'fixture-mode',style:{marginBottom:16}},'Current fixture: '+(window.offlineV2===false?'V1 layout':window.offlineSlug==='northwind'?'Northwind V2':'tenant outside V2 rollout')),
       React.createElement('button',{style:buttonStyle,onClick:()=>ref.current?.open()},'Ask AI'),
       React.createElement('p',{role:'status','data-testid':'navigation-result',style:{marginTop:20,overflowWrap:'anywhere'}},navigation?'Navigation verified: '+navigation:'No navigation selected.')),
-    React.createElement(TraxLauncher,{ref}));
+    React.createElement(TraxLauncher,{ref}),
+    /* The portal's Support section, mounted on navigation exactly as /support does. */
+    navigation.startsWith('/support')&&React.createElement('section',{'data-testid':'portal-support',style:{display:'flex',flexDirection:'column',height:640,maxWidth:900,margin:'0 auto 24px',padding:'0 24px'}},
+      React.createElement(PortalSupport,{
+        initialTicketId:new URL(navigation,'http://offline.invalid').searchParams.get('ticket')||undefined,
+        composeIssueId:new URL(navigation,'http://offline.invalid').searchParams.get('issue')||undefined})));
 }
 window.renderOffline=(slug='northwind',v2=true)=>{window.offlineSlug=slug;window.offlineV2=v2;root.render(React.createElement(Harness,{key:slug+v2}));};window.renderOffline();`,resolveDir:root,loader:'tsx'},outfile:resolve(temp,'app.js'),bundle:true,format:'iife',platform:'browser',jsx:'automatic',define:{'process.env.NODE_ENV':'"test"','process.env.NEXT_PUBLIC_SUPABASE_URL':'"https://offline.invalid"','process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY':'"fixture"'},plugins:[{name:'offline-fixtures',setup(b){
   b.onResolve({filter:/.*/},(args)=>{
@@ -140,15 +148,22 @@ try{
     await page.getByRole('textbox',{name:'Ask TRAX'}).press('Enter');
     await page.getByText('Human support recommended',{exact:true}).waitFor();
     assert.equal(supportFixture.tickets.size,0);
+    // Tickets are not inside TRAX: TRAX is the AI conversation, support is the portal's own section.
+    assert.equal(await page.getByTestId('support-inbox').count(),0);
     await page.screenshot({path:resolve(screenshots,'escalation-desktop.png'),fullPage:true,animations:'disabled'});
+    // The handoff leaves TRAX for the Support section, carrying the issue and closing TRAX behind it.
     await page.getByRole('button',{name:'Communicate with Support',exact:true}).click();
-    assert.equal(supportFixture.tickets.size,0);
+    assert.match(await page.evaluate(()=>window.lastNavigation??''),/^\/support\?issue=/);
+    assert.equal(await page.getByTestId('trax-issue-state').count(),0);
+    await page.getByTestId('support-inbox').waitFor();
+    assert.equal(supportFixture.tickets.size,0); // Opening Support creates nothing.
+    await page.screenshot({path:resolve(screenshots,'support-section.png'),fullPage:true,animations:'disabled'});
     await page.getByLabel('Your message',{exact:true}).fill('Please review this issue with the recorded checks.');
     await page.getByRole('button',{name:'Cancel',exact:true}).click();
     assert.equal(supportFixture.tickets.size,0);
     const originalSubmit=supportFixture.store.submit;
     supportFixture.store.submit=async()=>{throw Error('Isolated submission failure');};
-    await page.getByRole('button',{name:'Communicate with Support',exact:true}).click();
+    await page.getByRole('button',{name:'New request',exact:true}).click();
     await page.getByLabel('Your message',{exact:true}).fill('Please review this issue with the recorded checks.');
     await page.getByRole('button',{name:'Send',exact:true}).click();
     await page.getByRole('button',{name:'Retry send',exact:true}).waitFor();
@@ -158,25 +173,25 @@ try{
     await page.getByRole('button',{name:'Retry send',exact:true}).click();
     assert.equal((await submittedResponse).status(),200);
     assert.equal(supportFixture.tickets.size,1);
-    await page.getByRole('button',{name:'Conversation',exact:true}).click();
+    // The AI conversation survived the handoff, and knows the issue reached support.
+    await page.getByRole('button',{name:'Ask AI',exact:true}).click();
     await page.getByText('Shared with support',{exact:true}).waitFor();
     await page.screenshot({path:resolve(screenshots,'submitted-conversation.png'),fullPage:true,animations:'disabled'});
+    await page.getByRole('button',{name:'History',exact:true}).click();
+    await page.getByLabel('Previous TRAX conversations').getByRole('button').first().click();
+    await page.getByText('Shared with support',{exact:true}).waitFor();
+    assert.equal(supportFixture.tickets.size,1);
+    await page.getByRole('button',{name:'Close TRAX',exact:true}).click();
+    // Retention belongs with support, so it lives in the Support section too.
     await page.getByRole('button',{name:'Retention',exact:true}).click();
     await page.getByRole('button',{name:'Save retention periods',exact:true}).click();
     await page.getByRole('button',{name:'Preview cleanup',exact:true}).click();
     await page.getByText('Nothing was deleted.',{exact:false}).waitFor();
     await page.screenshot({path:resolve(screenshots,'retention.png'),fullPage:true,animations:'disabled'});
     await page.setViewportSize({width:390,height:844});
-    await page.getByRole('button',{name:'Conversation',exact:true}).click();
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth),false);
     await page.screenshot({path:resolve(screenshots,'mobile.png'),fullPage:true,animations:'disabled'});
-    await page.getByRole('button',{name:'Close TRAX',exact:true}).click();
-    await page.getByRole('button',{name:'Ask AI',exact:true}).click();
-    await page.getByRole('button',{name:'History',exact:true}).click();
-    await page.getByLabel('Previous TRAX conversations').getByRole('button').first().click();
-    await page.getByText('Shared with support',{exact:true}).waitFor();
-    assert.equal(supportFixture.tickets.size,1);
-    await page.getByRole('button',{name:'Close TRAX',exact:true}).click();
+    await page.setViewportSize({width:1366,height:900});
   }else{
   if(operationalMode){
     await page.getByRole('textbox',{name:'Ask TRAX'}).fill('The car and keys are back. DEMO-01 is unavailable on the V2 website for September 15 to 18, 2026. The customer browser timezone is America/New_York; no location filter.');
@@ -205,7 +220,10 @@ try{
   await page.setViewportSize({width:390,height:844});
   await page.getByRole('button',{name:'Ask AI',exact:true}).click();
   await page.getByText('Checking access and application guidance...').waitFor({state:'hidden'});
-  await page.getByRole('button',{name:'Roman Urdu help',exact:true}).click();
+  // One conversation per session: closing TRAX and reopening keeps the thread.
+  await page.getByText('Prepared guidance fallback · Live records not checked',{exact:true}).first().waitFor();
+  await page.getByRole('textbox',{name:'Ask TRAX'}).fill('Gaari wapis aaye to return kaise record karein?');
+  await page.getByRole('textbox',{name:'Ask TRAX'}).press('Enter');
   await page.getByText('check nahi kiya.',{exact:false}).waitFor();
   const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth);
   assert.equal(overflow,false);await page.screenshot({path:resolve(screenshots,'mobile.png'),fullPage:true,animations:'disabled'});
@@ -221,6 +239,6 @@ try{
     assert.equal(supportRequests,checkedRequests);
   }
   assert.deepEqual(errors,[]);
-  console.log(JSON.stringify({status:'passed',mode:financeMode?'scripted-model-finance-fixtures':supportMode?'offline-support-storage-fixtures':operationalMode?'scripted-model-operational-fixtures':'prepared-guidance-fixtures',checks:financeMode?['actual-dialog-hook-handler','linked-payment-check','refund-discrepancy','multi-currency-account-funds','explicit-handoff-offer','V1-excluded','mobile-no-clipping']:supportMode?['real-dialog-hook-handler','no-ticket-before-click','failed-submit-preserves-context','successful-retry','composer-opens-without-ticket','first-message-required','retention-save-and-dry-run','resume-submitted-issue','V1-excluded','other-tenants-excluded','mobile-no-horizontal-clipping','no-page-errors']:operationalMode?['real-dialog-hook-handler','scripted-model-tools','unrecorded-return','fresh-recheck-remaining-block','V1-excluded','other-tenants-excluded','mobile-no-horizontal-clipping','no-page-errors']:['Northwind-V2-launcher','V1-excluded','other-tenants-excluded','actual-dialog','English-guidance','server-verified-navigation','Roman-Urdu','mobile-no-horizontal-clipping','no-page-errors'],screenshots}));
+  console.log(JSON.stringify({status:'passed',mode:financeMode?'scripted-model-finance-fixtures':supportMode?'offline-support-storage-fixtures':operationalMode?'scripted-model-operational-fixtures':'prepared-guidance-fixtures',checks:financeMode?['actual-dialog-hook-handler','linked-payment-check','refund-discrepancy','multi-currency-account-funds','explicit-handoff-offer','V1-excluded','mobile-no-clipping']:supportMode?['real-dialog-hook-handler','no-ticket-before-click','failed-submit-preserves-context','successful-retry','composer-opens-without-ticket','first-message-required','retention-save-and-dry-run','handoff-leaves-trax-for-support','no-ticket-ui-inside-trax','support-opens-no-ticket','resume-submitted-issue','V1-excluded','other-tenants-excluded','mobile-no-horizontal-clipping','no-page-errors']:operationalMode?['real-dialog-hook-handler','scripted-model-tools','unrecorded-return','fresh-recheck-remaining-block','V1-excluded','other-tenants-excluded','mobile-no-horizontal-clipping','no-page-errors']:['Northwind-V2-launcher','V1-excluded','other-tenants-excluded','actual-dialog','English-guidance','server-verified-navigation','conversation-survives-close','Roman-Urdu','mobile-no-horizontal-clipping','no-page-errors'],screenshots}));
   }
 }finally{await browser?.close();await new Promise((resolve)=>server.close(resolve));}
