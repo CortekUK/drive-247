@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { CalendarClock, Car, CreditCard, HelpCircle, type LucideIcon } from "lucide-react";
+import { CalendarClock, CreditCard, HelpCircle, KeyRound, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TraxComposer } from "@/components/trax/trax-composer";
 import { TraxGreeting } from "@/components/trax/trax-greeting";
@@ -25,7 +25,8 @@ import { useTraxSupportChat, useTraxSupportWorkspace } from "./trax-support-cont
  */
 
 const SUGGESTIONS: Array<{ icon: LucideIcon; label: string; prompt: string }> = [
-  { icon: Car, label: "Vehicles out now", prompt: "Which vehicles are out on rent right now?" },
+  /* Keys, not a car: the question is which vehicles are WITH a renter right now. */
+  { icon: KeyRound, label: "Vehicles out now", prompt: "Which vehicles are out on rent right now?" },
   { icon: CalendarClock, label: "Today's pickups and returns", prompt: "What pickups and returns are scheduled for today?" },
   { icon: HelpCircle, label: "How to create a rental", prompt: "How do I create a new rental?" },
 ];
