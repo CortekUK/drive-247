@@ -70,7 +70,7 @@ export function SupportInbox({call,admin=false,initialId,compose,scope,onCancel,
     }catch(e){fail(e);}finally{sending.current=false;setBusy(false);}
   };
   return <div className="flex min-h-0 flex-1 flex-col text-foreground" data-testid="support-inbox">
-    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3"><div><h2 className="text-base font-semibold">{admin?'Support inbox':creating?'Communicate with Support':'My Tickets'}</h2><p className="text-xs text-muted-foreground">Human support · Conversations update automatically</p></div>{!admin&&!creating&&<button className={button} disabled={busy} onClick={beginNew}>New request</button>}</div>
+    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3"><div><h2 className="text-base font-semibold">{admin?'Support inbox':creating?'Communicate with Support':'My Tickets'}</h2>{/* The Trax panel already states this above; no second subtitle in a 400px column. */}{!compact&&<p className="text-xs text-muted-foreground">Human support · Conversations update automatically</p>}</div>{!admin&&!creating&&<button className={button} disabled={busy} onClick={beginNew}>New request</button>}</div>
     {error&&<div role="alert" className="border-b border-border bg-secondary/50 px-4 py-2 text-sm">{error}</div>}
     <div className={'flex min-h-0 flex-1 flex-col'+(compact?'':' md:flex-row')}>
       {!creating&&<aside className={(compact?(id?'hidden ':'flex flex-1 '):(id?'hidden md:flex ':'flex ')+(admin?'md:w-80 ':'md:w-64 ')+'shrink-0 border-r border-border ')+'min-h-0 flex-col'}>

@@ -172,7 +172,8 @@ try{
     await page.screenshot({path:resolve(screenshots,'mobile.png'),fullPage:true,animations:'disabled'});
     await page.getByRole('button',{name:'Close TRAX',exact:true}).click();
     await page.getByRole('button',{name:'Ask AI',exact:true}).click();
-    await page.getByLabel('Continue a previous issue').selectOption([...supportFixture.conversations.keys()][0]);
+    await page.getByRole('button',{name:'History',exact:true}).click();
+    await page.getByLabel('Previous TRAX conversations').getByRole('button').first().click();
     await page.getByText('Shared with support',{exact:true}).waitFor();
     assert.equal(supportFixture.tickets.size,1);
     await page.getByRole('button',{name:'Close TRAX',exact:true}).click();

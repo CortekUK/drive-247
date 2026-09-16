@@ -1,6 +1,6 @@
 # Test TRAX locally in the V2 portal
 
-The normal local entry point is `http://northwind.portal.localhost:4002`. Click **Trax** in the V2 top bar or press **Ctrl+J** (Cmd+J on macOS). No deployment is required for this development path. Other tenants use their own subdomain and must already be enrolled in V2 through the existing rollout policy. Do not change tenant enrollment to run a test.
+The normal local entry point is `http://northwind.portal.localhost:4002`. Click **Trax** in the V2 top bar or press **Ctrl+J** (Cmd+J on macOS). The panel header carries the whole workspace: conversation history, a new conversation, support tickets, full screen and close. No deployment is required for this development path. Other tenants use their own subdomain and must already be enrolled in V2 through the existing rollout policy. Do not change tenant enrollment to run a test.
 
 ## What this test can establish
 
@@ -94,4 +94,4 @@ The current requirement-by-requirement handover and most recent provider check a
 
 ## Two-way human support
 
-Start with `node tests/trax/messaging-browser.mjs` from the repository root. It exercises the actual shared inbox/admin sidebar and backend against isolated PostgreSQL with two fixture tenants and one platform support identity; no live email is sent. Screenshots are in `artifacts/trax-messaging`. For configured local/staging apps, use the migration, grant, worker and scheduler checklist in [in-app-support.md](in-app-support.md). My Tickets stays independent of OpenAI.
+Start with `node tests/trax/messaging-browser.mjs` from the repository root. It exercises the actual shared inbox/admin sidebar and backend against isolated PostgreSQL with two fixture tenants and one platform support identity; no live email is sent. Screenshots are in `artifacts/trax-messaging`. For configured local/staging apps, use the migration, grant, worker and scheduler checklist in [in-app-support.md](in-app-support.md). Support tickets stay independent of OpenAI.

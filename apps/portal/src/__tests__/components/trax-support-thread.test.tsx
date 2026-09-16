@@ -4,8 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TraxSupportThread } from '@/components/trax/support/TraxSupportThread';
 
 // Offline: the support conversation, composer, greeting, messages and workspace are mocked.
-const mocks = vi.hoisted(() => ({ support: null as any, workspace: null as any }));
-vi.mock('@/components/trax/support/trax-support-context', () => ({ useTraxSupportChat: () => mocks.support }));
+const mocks = vi.hoisted(() => ({ support: null as any, workspace: null as any, state: null as any }));
+vi.mock('@/components/trax/support/trax-support-context', () => ({
+  useTraxSupportChat: () => mocks.support,
+  useTraxSupportWorkspace: () => mocks.state,
+}));
 vi.mock('@/components/trax/trax-composer', () => ({
   TraxComposer: (p: any) => createElement('button', { 'data-testid': 'composer', 'data-busy': String(p.busy), 'data-attach': String(!!p.capability), onClick: () => p.onSend('Which cars are free today?', []) }, 'send'),
 }));
@@ -34,7 +37,12 @@ function render(density: 'sheet' | 'page' = 'sheet') {
 }
 const buttons = (label: string) => [...document.querySelectorAll('button')].filter((b) => b.textContent?.includes(label));
 
-beforeEach(() => { vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true); mocks.support = base(); mocks.workspace = null; Element.prototype.scrollIntoView = vi.fn(); });
+beforeEach(() => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+  mocks.support = base(); mocks.workspace = null;
+  mocks.state = { view: 'conversation', setView: vi.fn(), startNew: vi.fn() };
+  Element.prototype.scrollIntoView = vi.fn();
+});
 afterEach(() => { act(() => root?.unmount()); root = null; document.body.replaceChildren(); vi.unstubAllGlobals(); });
 
 describe('TraxSupportThread in the Trax panel', () => {
@@ -74,15 +82,25 @@ describe('TraxSupportThread in the Trax panel', () => {
     expect(mocks.workspace.issues).toHaveLength(1);
     expect(mocks.workspace.activeIssueId).toBe('i1');
   });
-  it('shows the payment progress line, prepared-guidance mode and errors honestly', () => {
-    mocks.support.capabilities = { modelReady: false, operationalChecks: false, finance: true };
+  it('shows the payment progress line and errors honestly', () => {
+    mocks.support.capabilities = { modelReady: true, operationalChecks: true, finance: true };
     mocks.support.messages = [{ id: 'm1', role: 'user', content: 'Check the stripe payment', timestamp: new Date() }];
     mocks.support.isLoading = true;
     mocks.support.error = 'TRAX could not verify access.';
     render();
     expect(document.querySelector('[role="status"]')?.textContent).toContain('Verifying with Stripe');
-    expect(document.body.textContent).toContain('Prepared guidance · AI model not configured');
     expect(document.querySelector('[role="alert"]')?.textContent).toBe('TRAX could not verify access.');
+  });
+  it('says plainly when no AI model is configured', () => {
+    mocks.support.capabilities = { modelReady: false, operationalChecks: false, finance: false };
+    render();
+    expect(document.body.textContent).toContain('not connected to an AI model');
+  });
+  it('hands the workspace the current view so history and tickets open inside TRAX', () => {
+    mocks.state.view = 'tickets';
+    render();
+    expect(mocks.workspace.view).toBe('tickets');
+    expect(mocks.workspace.onView).toBe(mocks.state.setView);
   });
   it('renders nothing while the panel is closed and uses the compact ticket layout in the panel', () => {
     const node = document.createElement('div'); document.body.append(node); root = createRoot(node);

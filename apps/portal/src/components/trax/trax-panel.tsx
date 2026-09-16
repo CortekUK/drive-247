@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
-import { Maximize2, Plus, X } from "lucide-react";
+import { History, LifeBuoy, Maximize2, SquarePen, X } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui-v2/tooltip";
 import { TraxSupportThread } from "./support/TraxSupportThread";
-import { useTraxSupportChatOptional } from "./support/trax-support-context";
+import { useTraxSupportOptional } from "./support/trax-support-context";
 import { TraxMark } from "./trax-greeting";
 import { isTraxPath, useTraxOptional } from "./trax-provider";
 
@@ -50,8 +50,8 @@ import { isTraxPath, useTraxOptional } from "./trax-provider";
  *
  * The caveat that remains is breakpoints. Tailwind's `lg:` / `xl:` read the
  * VIEWPORT, not this narrower column, so a page keeps its wide layout in a
- * column up to 440px narrower than it expects. `--trax-width` is a clamp for
- * that reason: 30vw, never below 340px, never above 440px.
+ * column up to 600px narrower than it expects. `--trax-width` is a clamp for
+ * that reason: 34vw, never below 380px, never above 600px.
  *
  * ---------------------------------------------------------------------------
  * WHY THIS IS NOT THE `Sheet` PRIMITIVE
@@ -75,11 +75,52 @@ import { isTraxPath, useTraxOptional } from "./trax-provider";
  * On `/trax` it renders nothing: the full page IS the conversation, and a
  * docked copy beside it would be the same thread twice.
  */
+/** One header control: compact, labelled for assistive tech, pressed when its view is open. */
+function PanelAction({
+  label,
+  tip,
+  icon,
+  onClick,
+  active = false,
+  disabled = false,
+}: {
+  label: string;
+  tip: string;
+  icon: ReactNode;
+  onClick: () => void;
+  active?: boolean;
+  disabled?: boolean;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label={label}
+          aria-pressed={active}
+          disabled={disabled}
+          onClick={onClick}
+          className={
+            "text-muted-foreground hover:text-foreground " +
+            (active ? "bg-muted text-foreground" : "")
+          }
+        >
+          {icon}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">{tip}</TooltipContent>
+    </Tooltip>
+  );
+}
+
 export function TraxPanel() {
   /* Optional: the provider is v2-only, and a panel is never worth throwing for. */
   const trax = useTraxOptional();
-  /* The TRAX support conversation (issues, tickets, payment checks) this panel shows. */
-  const support = useTraxSupportChatOptional();
+  /* The TRAX workspace this panel shows: one conversation plus its history,
+     tickets and retention views, all opened from the header below. */
+  const workspace = useTraxSupportOptional();
+  const support = workspace?.support ?? null;
   const pathname = usePathname();
   const onFullPage = isTraxPath(pathname);
   const open = !!trax?.sheetOpen && !onFullPage;
@@ -159,6 +200,17 @@ export function TraxPanel() {
   if (!trax || onFullPage) return null;
 
   const { closeSheet, expandToFullPage } = trax;
+  const view = workspace?.view ?? "conversation";
+  const viewLabel =
+    view === "tickets"
+      ? "Support tickets"
+      : view === "history"
+        ? "Conversation history"
+        : view === "retention"
+          ? "Support retention"
+          : support?.capabilities?.modelReady
+            ? "Assistant · reads your records"
+            : "Prepared guidance";
 
   const onKeyDown = (e: KeyboardEvent<HTMLElement>) => {
     /* Escape closes the panel from anywhere inside it. `defaultPrevented`
@@ -215,59 +267,46 @@ export function TraxPanel() {
       >
         {/* 64px, the top bar's height, so the two read as one band across the
             screen. No rule underneath: the header is set apart by space. */}
-        <header className="flex h-16 shrink-0 items-center gap-2.5 pl-4 pr-3">
+        {/* 64px, the top bar's height, so the two read as one band across the
+            screen. No rule underneath: the header is set apart by space. The
+            five controls are the whole workspace: history, a fresh thread,
+            support tickets, full screen and close. */}
+        <header className="flex h-16 shrink-0 items-center gap-2.5 pl-4 pr-2">
           <TraxMark size="sm" animated={false} />
-          <span className="text-[14px] font-semibold tracking-tight">Trax</span>
+          <div className="min-w-0">
+            <p className="truncate text-[14px] font-semibold leading-tight tracking-tight">Trax</p>
+            <p className="truncate text-[11px] leading-tight text-muted-foreground">{viewLabel}</p>
+          </div>
 
           <div className="ml-auto flex items-center gap-0.5">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="New conversation"
-                  onClick={() => support?.clearChat()}
-                  /* Not mid-reply: a new conversation discards the pending answer. */
-                  disabled={!support || support.messages.length === 0 || support.isLoading}
-                  className="text-muted-foreground hover:text-foreground"
-                >
-                  <Plus />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">New conversation</TooltipContent>
-            </Tooltip>
-
-            <Tooltip>
-              <TooltipTrigger asChild>
-                {/* Same thread, full screen: the provider sits above the route,
-                    so this continues the conversation rather than starting one. */}
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="Open full screen"
-                  onClick={expandToFullPage}
-                  className="text-muted-foreground hover:text-foreground"
-                >
-                  <Maximize2 />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Full screen</TooltipContent>
-            </Tooltip>
-
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="Close Trax"
-                  onClick={closeSheet}
-                  className="text-muted-foreground hover:text-foreground"
-                >
-                  <X />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Close · ⌘J</TooltipContent>
-            </Tooltip>
+            <PanelAction
+              label="Conversation history"
+              tip="Conversation history"
+              icon={<History />}
+              active={view === "history"}
+              disabled={!workspace}
+              onClick={() => workspace?.setView(view === "history" ? "conversation" : "history")}
+            />
+            <PanelAction
+              label="New conversation"
+              tip="New conversation"
+              icon={<SquarePen />}
+              /* Not mid-reply: a new conversation discards the pending answer. */
+              disabled={!workspace || support!.isLoading || (support!.messages.length === 0 && view === "conversation")}
+              onClick={() => workspace?.startNew()}
+            />
+            <PanelAction
+              label="Support tickets"
+              tip="Support · opens inside Trax"
+              icon={<LifeBuoy />}
+              active={view === "tickets"}
+              disabled={!workspace}
+              onClick={() => workspace?.setView(view === "tickets" ? "conversation" : "tickets")}
+            />
+            {/* Same thread, full screen: the provider sits above the route,
+                so this continues the conversation rather than starting one. */}
+            <PanelAction label="Open full screen" tip="Full screen" icon={<Maximize2 />} onClick={expandToFullPage} />
+            <PanelAction label="Close Trax" tip="Close · ⌘J" icon={<X />} onClick={closeSheet} />
           </div>
         </header>
 
