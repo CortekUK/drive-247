@@ -20,7 +20,9 @@ import { MessagingError, type MessagingCall } from './client';
  * table access and no optimistic state that outlives a confirmation.
  */
 
-export interface HumanTicket {id:string;reference:string;summary:string;status:'open'|'in_progress'|'closed';tenant_name:string;requester:string;updated_at:string;created_at:string;unread?:boolean;handoff?:Record<string,unknown>;emailStatus?:string;staff_note?:string}
+export interface HumanTicket {id:string;reference:string;summary:string;status:'open'|'in_progress'|'closed';tenant_name:string;requester:string;updated_at:string;created_at:string;unread?:boolean;handoff?:Record<string,unknown>;emailStatus?:string;staff_note?:string;
+  /** The latest message, one truncated line. Present only where the deployment's list query provides it. */
+  preview?:string}
 export interface SupportMessage {seq:number;author_kind:'tenant'|'support';body:string;created_at:string}
 /** A file on a message: metadata plus a short-lived signed read URL from the server. */
 export interface SupportAttachment {id:string;seq:number;name:string;mime:string;size:number;authorKind:'tenant'|'support';url?:string}
@@ -130,6 +132,29 @@ export function useSupportInbox({call,admin=false,initialId,compose,scope,upload
   /** Back to the list on a narrow screen: nothing is selected, nothing is lost. */
   const clearSelection=useCallback(()=>{setId(null);},[]);
   const cancelNew=useCallback(()=>{setCreating(false);setDraft('');setAttachments([]);outgoing.current=null;setRetrying(false);},[]);
+  /**
+   * Move a ticket's stored status (platform support only).
+   *
+   * It writes the SAME ticket record both views read — there is no second copy —
+   * through the existing authenticated `status` action, which commits the status
+   * and a short note in one transaction. The SQL refuses it without the platform
+   * support grant, so this is not a frontend permission.
+   *
+   * Returns only after the server confirms, and refreshes the thread and the list
+   * from the server rather than assuming: nothing is claimed before persistence,
+   * and a failure leaves the stored status showing.
+   */
+  const setTicketStatus=useCallback(async(status:HumanTicket['status'],note:string)=>{
+    if(!admin||!id||busy)return false;
+    setBusy(true);setError(null);
+    try{
+      await call('status',{id,nonce:crypto.randomUUID(),body:note,status});
+      await Promise.all([loadThread(),loadList()]);
+      setNotice('Status updated.');
+      return true;
+    }catch(e){fail(e);return false;}
+    finally{setBusy(false);}
+  },[admin,busy,call,fail,id,loadList,loadThread]);
   const loadMore=useCallback(()=>{if(next!==null)void loadList(next);},[loadList,next]);
   const loadOlder=useCallback(()=>{followBottom.current=false;void loadThread(thread?.messages[0]?.seq);},[loadThread,thread]);
   const onThreadScroll=useCallback((e:{currentTarget:HTMLElement})=>{const el=e.currentTarget;followBottom.current=el.scrollHeight-el.scrollTop-el.clientHeight<48;},[]);
@@ -167,7 +192,7 @@ export function useSupportInbox({call,admin=false,initialId,compose,scope,upload
     busy,loading,error,notice,retrying,canSend,canAttach,attachments,scrollRef,
     setSearch,setFilter,setDraft,setSubject,setStatus,
     choose,clearSelection,beginNew,cancelNew,loadMore,loadOlder,onThreadScroll,send,
-    addAttachments,removeAttachment,
+    addAttachments,removeAttachment,setTicketStatus,
   };
 }
 

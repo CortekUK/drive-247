@@ -71,10 +71,11 @@ export function PortalSupport({ initialTicketId, composeIssueId }: { initialTick
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
+      {/* Title and description only: no decorative icon, and no gutter left behind. */}
       <header className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2">
         <div className="min-w-0 flex-1">
           <h1 className="text-lg font-semibold tracking-tight">Support</h1>
-          <p className="hidden text-[12px] text-muted-foreground sm:block">Message the Drive247 team. Replies appear here as they arrive.</p>
+          <p className="hidden text-[12px] text-muted-foreground sm:block">Get help from the Drive247 support team. Track your tickets and continue conversations.</p>
         </div>
         {support?.capabilities?.managePolicy && <RetentionDialog />}
         <Button size="sm" className="gap-1.5" disabled={inbox.busy || inbox.creating} onClick={inbox.beginNew}>

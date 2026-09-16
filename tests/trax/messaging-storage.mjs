@@ -13,7 +13,7 @@ create table app_users(id uuid primary key,auth_user_id uuid unique,tenant_id uu
 create table rentals(id uuid primary key,tenant_id uuid,status text);create table vehicles(id uuid primary key,tenant_id uuid);
 create table customers(id uuid primary key,tenant_id uuid);create table payments(id uuid primary key,tenant_id uuid);
 create table manager_permissions(app_user_id uuid,tab_key text,access_level text);`);
-for(const migration of ['20260915190000_trax_v2_support.sql','20260915200000_trax_support_messaging.sql','20260917020000_trax_support_attachments.sql'])await db.exec(await readFile(new URL('../../supabase/migrations/'+migration,import.meta.url),'utf8'));
+for(const migration of ['20260915190000_trax_v2_support.sql','20260915200000_trax_support_messaging.sql','20260917020000_trax_support_attachments.sql','20260917030000_trax_support_ticket_previews.sql'])await db.exec(await readFile(new URL('../../supabase/migrations/'+migration,import.meta.url),'utf8'));
 const id=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const t1=id(1),t2=id(2),s1=id(11),s2=id(12),a1=id(13),a2=id(14),u1=id(21),u2=id(22),au1=id(23),au2=id(24),scope='a'.repeat(64);
 await db.query('insert into tenants values($1,\'active\',\'Fixture One\',\'one\'),($2,\'active\',\'Fixture Two\',\'two\')',[t1,t2]);
@@ -150,6 +150,20 @@ await test('deleting a ticket takes its attachments with it',async()=>{
   assert.ok(before>0);
   await db.query('delete from trax_support_tickets where id=$1',[ticket.id]);
   assert.equal((await db.query('select count(*)::int n from trax_support_attachments where ticket_id=$1',[ticket.id])).rows[0].n,0);
+});
+
+
+await test('a ticket preview is the latest message, only for a reader who may read it',async()=>{
+  const previews=async(actor,ids)=>rpc('trax_support_ticket_previews',[...actor,ids]);
+  const fresh=await call(user,'create',{nonce:id(451),subject:'Preview subject',body:'The first line of this ticket.'});
+  const mine=await previews(user,[fresh.id]);
+  assert.equal(mine[fresh.id],'The first line of this ticket.');
+  // Another tenant gets nothing for it, and the platform queue does.
+  assert.deepEqual(await previews(other,[fresh.id]),{});
+  assert.equal(typeof (await previews(admin,[fresh.id]))[fresh.id],'string');
+  // The newest message wins, and it is bounded.
+  await call(user,'send',{id:fresh.id,nonce:id(452),body:'x'.repeat(400)});
+  assert.equal((await previews(user,[fresh.id]))[fresh.id].length,160);
 });
 
 await db.close();

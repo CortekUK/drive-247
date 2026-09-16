@@ -171,13 +171,23 @@ try{
   await rows.first().waitFor(); // The list is debounced; wait for the first load.
   assert.equal(await rows.count(),3);
   assert.equal(await rows.first().getByText('Open',{exact:true}).count(),1);
-  assert.equal(await rows.first().locator('span.bg-primary.rounded-full').count(),1);
   assert.equal(await rows.nth(2).getByText('Resolved',{exact:true}).count(),1);
+  // No leading dot, avatar or bullet on a row: unread is the subject's weight.
+  assert.equal(await rows.first().locator('span.size-2').count(),0);
+  const subjectClass=async(n)=>await rows.nth(n).locator('span.line-clamp-2').getAttribute('class');
+  assert.ok((await subjectClass(0)).includes('font-semibold'),'an unread subject is not emphasised');
+  assert.ok(!(await subjectClass(1)).includes('font-semibold'),'a read subject is emphasised anyway');
+  // And no decorative icon beside the page title.
+  assert.equal(await page.locator('header span.size-9').count(),0);
   await page.screenshot({path:resolve(screenshots,'inbox-desktop.png'),animations:'disabled'});
 
   // 4 — a conversation: bubbles sized to their content, grouped, with separators.
   await rows.first().getByRole('button').click();
   await page.getByRole('heading',{name:/Returned vehicle still shows/}).waitFor();
+  // The conversation header keeps the reference and status, not a created/updated strip.
+  const headerText=(await page.getByLabel('Support conversation').locator('header').innerText()).replace(/\s+/g,' ');
+  assert.ok(headerText.includes('TRX-11AA22BB33CC')&&headerText.includes('Open'),'the header lost its reference or status');
+  assert.ok(!/Created|Last updated/i.test(headerText),'the created/updated strip is back');
   const thread=page.getByLabel('Message thread');
   await thread.getByText('Manchester.',{exact:true}).waitFor();
   const shortBubble=await thread.locator('[data-slot="bubble"]').filter({hasText:'Manchester.'}).boundingBox();
@@ -199,10 +209,10 @@ try{
   await page.screenshot({path:resolve(screenshots,'conversation-desktop.png'),animations:'disabled'});
 
   // 5 — the header and the composer stay put while the history scrolls.
-  const composerBefore=await page.getByPlaceholder('Write a reply…').boundingBox();
+  const composerBefore=await page.getByPlaceholder('Reply to support…').boundingBox();
   await thread.evaluate((el)=>{el.scrollTop=0;});
   await page.waitForTimeout(200);
-  const composerAfter=await page.getByPlaceholder('Write a reply…').boundingBox();
+  const composerAfter=await page.getByPlaceholder('Reply to support…').boundingBox();
   assert.equal(Math.round(composerBefore.y),Math.round(composerAfter.y),'the composer moved when the history scrolled');
   assert.ok(composerAfter.y+composerAfter.height<=860,'the composer is below the fold');
   assert.equal(await page.getByRole('heading',{name:/Returned vehicle still shows/}).isVisible(),true,'the conversation header scrolled away');
@@ -211,30 +221,35 @@ try{
   await page.waitForTimeout(6000);
   assert.equal(await thread.evaluate((el)=>el.scrollTop),scrollTop,'the thread jumped to the bottom while reading older messages');
 
-  // 6 — secondary metadata is behind the disclosure, not in the header.
-  assert.equal(await page.getByText('Historical observations',{exact:false}).count(),0);
-  await page.getByRole('button',{name:'Issue details'}).click();
-  await page.getByText('TRAX troubleshooting context',{exact:true}).waitFor();
+  // 6 — the TRAX context is a compact collapsed section, and the ticket's
+  //     metadata is behind Issue details; neither crowds the conversation.
+  const context=page.getByText('TRAX troubleshooting context',{exact:false}).first();
+  await context.waitFor();
+  assert.equal(await page.getByText('Historical observations',{exact:false}).first().isVisible(),false,'the handoff body is open by default');
+  await context.click();
   await page.getByText('Rental DEMO-104 is still open.',{exact:false}).waitFor();
+  await page.getByRole('button',{name:'Issue details'}).click();
+  await page.getByText('Last activity',{exact:false}).waitFor();
   await page.screenshot({path:resolve(screenshots,'issue-details.png'),animations:'disabled'});
   await page.getByRole('button',{name:'Issue details'}).click();
+  await context.click();
 
   // 7 — a failed send keeps the draft and offers Retry; the retry succeeds.
   await page.evaluate(()=>{window.failNextSend=true;});
-  await page.getByPlaceholder('Write a reply…').fill('We have not heard anything since Tuesday.');
+  await page.getByPlaceholder('Reply to support…').fill('We have not heard anything since Tuesday.');
   await page.getByRole('button',{name:'Send',exact:true}).click();
   await page.getByRole('alert').waitFor();
-  assert.equal(await page.getByPlaceholder('Write a reply…').inputValue(),'We have not heard anything since Tuesday.','the draft was lost on a failed send');
+  assert.equal(await page.getByPlaceholder('Reply to support…').inputValue(),'We have not heard anything since Tuesday.','the draft was lost on a failed send');
   await page.screenshot({path:resolve(screenshots,'failed-send.png'),animations:'disabled'});
   await page.getByRole('button',{name:'Retry send',exact:true}).click();
   await thread.getByText('We have not heard anything since Tuesday.',{exact:true}).waitFor();
-  assert.equal(await page.getByPlaceholder('Write a reply…').inputValue(),'','the draft survived a confirmed send');
+  assert.equal(await page.getByPlaceholder('Reply to support…').inputValue(),'','the draft survived a confirmed send');
 
   // 7b — a screenshot goes with the message, and comes back in the conversation.
   const pngBytes=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==','base64');
   await page.locator('input[type="file"]').setInputFiles({name:'return-handover.png',mimeType:'image/png',buffer:pngBytes});
   await page.getByText('return-handover.png',{exact:false}).waitFor();
-  await page.getByPlaceholder('Write a reply…').fill('Here is the screenshot of the handover screen.');
+  await page.getByPlaceholder('Reply to support…').fill('Here is the screenshot of the handover screen.');
   await page.getByRole('button',{name:'Send',exact:true}).click();
   await thread.getByText('Here is the screenshot of the handover screen.',{exact:true}).waitFor();
   const image=thread.locator('img[alt="return-handover.png"]');
@@ -248,16 +263,16 @@ try{
   await page.getByText('Attach a PNG, JPEG, WebP, GIF or PDF.',{exact:false}).waitFor();
   assert.equal(await page.getByRole('button',{name:'Send',exact:true}).isDisabled(),true,'an unsupported file did not block sending');
   await page.getByRole('button',{name:'Remove notes.txt',exact:true}).click();
-  await page.getByPlaceholder('Write a reply…').fill('');
+  await page.getByPlaceholder('Reply to support…').fill('');
 
   // 8 — filters and their empty result.
-  await page.getByRole('button',{name:'Resolved',exact:true}).click();
+  await page.getByLabel('Filter ticket status').selectOption('closed');
   await page.waitForFunction(()=>document.querySelectorAll('[data-testid="support-ticket-list"] ul > li').length===1);
   await page.getByPlaceholder('Search your tickets…').fill('nothing matches this');
   await page.getByText('No tickets match these filters.',{exact:true}).waitFor();
   await page.screenshot({path:resolve(screenshots,'empty-results.png'),animations:'disabled'});
   await page.getByPlaceholder('Search your tickets…').fill('');
-  await page.getByRole('button',{name:'All',exact:true}).click();
+  await page.getByLabel('Filter ticket status').selectOption('');
   await page.waitForFunction(()=>document.querySelectorAll('[data-testid="support-ticket-list"] ul > li').length===3);
 
   // 9 — a new ticket from the page header, created only by the first Send.
@@ -275,7 +290,7 @@ try{
   await page.waitForTimeout(300);
   assert.equal(await page.getByTestId('support-ticket-list').isVisible(),false,'both columns are squeezed together on a phone');
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth),false,'horizontal overflow on a phone');
-  const phoneComposer=await page.getByPlaceholder('Write a reply…').boundingBox();
+  const phoneComposer=await page.getByPlaceholder('Reply to support…').boundingBox();
   assert.ok(phoneComposer.y+phoneComposer.height<=844,'the composer is below the fold on a phone');
   await page.screenshot({path:resolve(screenshots,'conversation-mobile.png'),animations:'disabled'});
   await page.getByRole('button',{name:'Back to tickets',exact:true}).click();
@@ -284,7 +299,7 @@ try{
   await page.screenshot({path:resolve(screenshots,'inbox-mobile.png'),animations:'disabled'});
 
   assert.deepEqual(errors,[],'page errors: '+errors.join(' || '));
-  console.log(JSON.stringify({status:'passed',mode:'support-inbox-ui',checks:['one-page-header','ticket-list-320','no-outer-page-scroll','real-status-and-unread','content-sized-bubbles','tenant-right-support-left','date-separators-and-grouping','header-and-composer-fixed','no-jump-while-reading','issue-details-disclosure','failed-send-keeps-draft','retry-sends-once','attachment-sent-and-shown','unsupported-file-refused','filters-and-empty-result','new-ticket-only-on-send','phone-list-and-back','no-page-errors'],screenshots}));
+  console.log(JSON.stringify({status:'passed',mode:'support-inbox-ui',checks:['one-page-header','ticket-list-320','no-outer-page-scroll','real-status-and-unread','no-row-markers-or-header-icon','header-without-created-updated','content-sized-bubbles','tenant-right-support-left','date-separators-and-grouping','header-and-composer-fixed','no-jump-while-reading','issue-details-disclosure','failed-send-keeps-draft','retry-sends-once','attachment-sent-and-shown','unsupported-file-refused','filters-and-empty-result','new-ticket-only-on-send','phone-list-and-back','no-page-errors'],screenshots}));
   }
 }finally{
   await browser?.close();

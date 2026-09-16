@@ -2,96 +2,178 @@
 import React from 'react';
 import { type MessagingCall } from './client';
 import { useSupportInbox, type HumanTicket, type SupportCompose, type SupportInboxOptions } from './use-support-inbox';
+import {
+  byDay, Composer, DaySeparator, MessageTurn, SearchField, StatusBadge, StatusFilter, STATUS_LABEL, STATUS_ORDER, TicketRow, TroubleshootingDetails,
+} from './inbox-ui';
 
 export type { HumanTicket, SupportCompose } from './use-support-inbox';
-const button='inline-flex items-center justify-center rounded-md border border-border bg-background px-3 py-2 text-sm font-medium hover:bg-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50 disabled:cursor-not-allowed';
-const primary=button.replace('bg-background','bg-primary').replace('hover:bg-secondary','hover:bg-primary/90')+' text-primary-foreground';
-const statusLabel={open:'Open',in_progress:'In progress',closed:'Resolved'};
-const stamp=(value:string)=>new Date(value).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
 
-/** The PLATFORM support inbox: the cross-tenant queue, one ticket's conversation and the
- * status control, in the admin app. It is full width, so the list sits beside the thread
- * from `md:` up and becomes a single-column list → conversation flow below it.
+/**
+ * The PLATFORM support inbox: the cross-tenant queue, one ticket's conversation,
+ * and the status control, in the admin app.
  *
- * The tenant's own inbox is no longer this component: the portal renders its own compact
- * messaging view (apps/portal/src/components/support/support-inbox.tsx) on the portal's v2
- * primitives, which this app does not have. Both drive the same `useSupportInbox`
- * behaviour over the same authenticated endpoint, so polling, unread acknowledgement,
- * retry nonces and message ordering cannot drift apart. */
-export function SupportInbox({call,admin=false,initialId,compose,scope,uploadAttachment}:{call:MessagingCall;admin?:boolean;initialId?:string;compose?:SupportCompose;scope:string;uploadAttachment?:SupportInboxOptions['uploadAttachment']}){
-  const inbox=useSupportInbox({call,admin,initialId,compose,scope,uploadAttachment});
-  const {id,creating,tickets,next,thread,search,filter,draft,subject,status,busy,loading,error,notice,retrying,scrollRef}=inbox;
-  return <div className="flex min-h-0 flex-1 flex-col text-foreground" data-testid="support-inbox">
-    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3"><div><h2 className="text-base font-semibold">{admin?'Support inbox':creating?'Communicate with Support':'My Tickets'}</h2><p className="text-xs text-muted-foreground">Human support · Conversations update automatically</p></div>{!admin&&!creating&&<button className={button} disabled={busy} onClick={inbox.beginNew}>New request</button>}</div>
-    {error&&<div role="alert" className="border-b border-border bg-secondary/50 px-4 py-2 text-sm">{error}</div>}
-    <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-      {!creating&&<aside className={(id?'hidden md:flex ':'flex ')+(admin?'md:w-80 ':'md:w-64 ')+'shrink-0 border-r border-border min-h-0 flex-col'}>
-        <div className="space-y-2 border-b border-border p-3"><input aria-label="Search support tickets" placeholder="Search tickets or company…" maxLength={120} value={search} onChange={e=>inbox.setSearch(e.target.value)} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"/><select aria-label="Filter ticket status" value={filter} onChange={e=>inbox.setFilter(e.target.value)} className="w-full rounded-md border border-input bg-background p-2 text-sm"><option value="">All statuses</option>{Object.entries(statusLabel).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></div>
-        <div className="min-h-0 flex-1 overflow-y-auto" aria-label="Support tickets">{!tickets.length&&<p className="p-5 text-sm text-muted-foreground">{loading?'Loading tickets…':search||filter?'No tickets match these filters.':'No support tickets yet.'}</p>}{tickets.map((t:HumanTicket)=><button key={t.id} disabled={busy} onClick={()=>inbox.choose(t.id)} className={'block w-full border-b border-border p-3 text-left hover:bg-secondary/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring '+(id===t.id?'bg-primary/10':'')}><span className="flex items-center justify-between gap-2 text-xs text-muted-foreground"><span>{t.reference}</span>{t.unread&&<span className="rounded-full bg-primary/10 px-2 py-0.5 font-semibold text-primary">Unread</span>}</span><span className="mt-1 block break-words text-sm font-semibold">{t.summary}</span>{admin&&<span className="mt-1 block text-xs text-muted-foreground">{t.tenant_name} · {t.requester}</span>}<span className="mt-2 flex justify-between gap-1 text-[11px] text-muted-foreground"><span>{statusLabel[t.status]}</span><span>{stamp(t.updated_at)}</span></span></button>)}{next!==null&&<button className={button+' m-3'} onClick={inbox.loadMore}>Load more</button>}</div>
-      </aside>}
-      <section className={'flex min-h-0 min-w-0 flex-1 flex-col '+(!creating&&!id?'hidden md:flex':'')} aria-label="Support conversation">
-        {creating?<div className="mx-auto w-full max-w-2xl space-y-4 p-4 sm:p-6"><p className="text-sm leading-relaxed text-muted-foreground">Describe your issue below. Your message and the relevant TRAX troubleshooting context will be shared with support.</p><label className="block text-sm font-medium">Subject<input value={subject} maxLength={240} readOnly={busy||retrying} onChange={e=>inbox.setSubject(e.target.value)} className="mt-2 w-full rounded-md border border-input bg-background px-3 py-2"/></label><p className="text-xs text-muted-foreground">Nothing is submitted until you send. Do not include credentials, card details or identity documents.</p></div>:thread?<>
-          <header className="border-b border-border px-4 py-3"><button className={button+' mb-2 md:hidden'} onClick={inbox.clearSelection}>Back to tickets</button><p className="text-xs text-muted-foreground">{thread.ticket.reference} · {statusLabel[thread.ticket.status]}</p><h3 className="mt-1 break-words text-base font-semibold">{thread.ticket.summary}</h3>{admin&&<p className="mt-1 text-sm font-medium text-primary">{thread.ticket.tenant_name} · {thread.ticket.requester}</p>}{admin&&['failed','review','pending','sending'].includes(thread.ticket.emailStatus??'')&&<p className="mt-1 text-xs text-muted-foreground">Email alert: {thread.ticket.emailStatus==='review'?'delivery needs administrator review':thread.ticket.emailStatus}. The ticket is saved.</p>}
-          {thread.ticket.handoff&&<details className="mt-2 text-xs"><summary className="cursor-pointer text-muted-foreground">TRAX troubleshooting context</summary><Handoff value={thread.ticket.handoff}/></details>}</header>
-          <div ref={scrollRef} onScroll={inbox.onThreadScroll} className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4" aria-label="Message thread" aria-live="polite">
-            {thread.hasOlder&&<button className={button} onClick={inbox.loadOlder}>Load earlier messages</button>}
-            {!thread.messages.length&&<p className="text-sm text-muted-foreground">This older ticket has no conversation messages yet.{thread.ticket.staff_note?' Previous update: '+thread.ticket.staff_note:''}</p>}
-            {thread.messages.map(m=><article key={m.seq} className={'max-w-[92%] rounded-lg border border-border px-4 py-3 '+(m.author_kind==='support'?'bg-secondary/40':'ml-auto bg-primary/5')}><div className="mb-1 flex flex-wrap items-center justify-between gap-3 text-[11px] text-muted-foreground"><span className="font-semibold">{m.author_kind==='support'?'Drive247 Support':admin?thread.ticket.requester:'You'}</span><time dateTime={m.created_at}>{stamp(m.created_at)}</time></div><p className="whitespace-pre-wrap break-words text-sm leading-relaxed [overflow-wrap:anywhere]">{m.body}</p>
-              <Attachments files={(thread.attachments??[]).filter(a=>a.seq===m.seq)}/>
-              <span data-seq={m.seq} aria-hidden="true" className="block h-px"/></article>)}
+ * It is the same design as the tenant's Support section — the rows, badges,
+ * bubbles and composer are the shared pieces in `inbox-ui.tsx` — with the
+ * differences the role actually has: which tenant a ticket belongs to, a search
+ * that spans companies, "Reply to tenant…", and the status selector. The tenant's
+ * view is the portal's own component over the same `useSupportInbox` behaviour,
+ * so polling, unread acknowledgement, retry nonces and ordering cannot drift.
+ *
+ * Authorization is NOT here. Every action goes through the authenticated
+ * messaging endpoint, and the SQL rechecks the platform support grant.
+ */
+export function SupportInbox({ call, admin = false, initialId, compose, scope, uploadAttachment }: {
+  call: MessagingCall; admin?: boolean; initialId?: string; compose?: SupportCompose; scope: string;
+  uploadAttachment?: SupportInboxOptions['uploadAttachment'];
+}) {
+  const inbox = useSupportInbox({ call, admin, initialId, compose, scope, uploadAttachment });
+  const { id, creating, tickets, next, thread, search, filter, busy, loading, error, retrying, scrollRef } = inbox;
+  const days = React.useMemo(() => byDay(thread?.messages ?? []), [thread]);
+  const open = creating || !!id;
+
+  return (
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 text-foreground" data-testid="support-inbox">
+      {error && <p role="alert" className="shrink-0 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-[12px] text-destructive">{error}</p>}
+      <div className="flex min-h-0 min-w-0 flex-1 gap-3">
+        <aside aria-label="Support tickets" data-testid="support-ticket-list"
+          className={'min-h-0 w-full flex-col overflow-hidden rounded-xl border border-border bg-card/40 md:flex md:w-[340px] md:shrink-0 '+(open?'hidden':'flex')}>
+          <div className="flex shrink-0 items-center gap-2 border-b border-border/70 p-2">
+            <div className="min-w-0 flex-1"><SearchField value={search} onChange={inbox.setSearch} placeholder={admin?'Search tickets or company…':'Search your tickets…'}/></div>
+            <StatusFilter value={filter} onChange={inbox.setFilter}/>
+            {/* Support staff never open tickets; a non-admin embedding of this component
+                (the isolated messaging fixture) still needs the tenant's own action. The
+                portal carries it in its page header instead. */}
+            {!admin&&<button type="button" disabled={busy} onClick={inbox.beginNew}
+              className="h-9 shrink-0 rounded-lg border border-border bg-background px-3 text-[12px] font-medium hover:bg-muted">New request</button>}
           </div>
-        </>:<div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">{id?'Loading conversation…':'Select a ticket to read and reply.'}</div>}
-        {(creating||thread)&&<form className="mt-auto shrink-0 space-y-2 border-t border-border p-4" onSubmit={e=>{e.preventDefault();void inbox.send();}}>
-          {!creating&&thread?.ticket.status==='closed'&&!admin&&<p className="text-xs text-muted-foreground">A follow-up message reopens this ticket.</p>}
-          <label htmlFor="support-message" className="text-sm font-medium">{creating?'Your message':'Reply in this conversation'}</label>
-          <textarea id="support-message" value={draft} maxLength={4000} readOnly={busy||retrying} onChange={e=>inbox.setDraft(e.target.value)} placeholder="Write your message…" rows={3} className="w-full resize-y rounded-md border border-input bg-background p-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"/>
-          <PendingFiles inbox={inbox}/>
-          <div className="flex flex-wrap items-center justify-between gap-2"><div className="flex items-center gap-2">{creating&&<button type="button" className={button} disabled={busy} onClick={inbox.cancelNew}>Cancel</button>}<AttachButton inbox={inbox}/>{admin&&thread&&<select aria-label="Status after sending reply" value={status} disabled={busy||retrying} onChange={e=>inbox.setStatus(e.target.value)} className="rounded-md border border-input bg-background p-2 text-sm"><option value="">Keep status</option>{Object.entries(statusLabel).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select>}<span role="status" className="text-xs text-muted-foreground">{busy?'Sending…':notice}</span></div><button className={primary} disabled={busy||!inbox.canSend}>{busy?'Sending…':retrying?'Retry send':'Send'}</button></div>
-        </form>}
-      </section>
+          <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
+            {!tickets.length
+              ? <p className="px-3 py-8 text-center text-[13px] text-muted-foreground">{loading?'Loading tickets…':search||filter?'No tickets match these filters.':'No support tickets yet.'}</p>
+              : <ul className="flex flex-col gap-0.5">{tickets.map((ticket:HumanTicket)=>(
+                  <li key={ticket.id}>
+                    <TicketRow ticket={ticket} selected={id===ticket.id} disabled={busy} onSelect={()=>inbox.choose(ticket.id)}
+                      subtitle={admin?[ticket.tenant_name,ticket.requester].filter(Boolean).join(' · '):undefined}/>
+                  </li>))}
+                </ul>}
+            {next!==null&&<button className="mt-1 w-full rounded-lg px-3 py-2 text-[12px] text-muted-foreground hover:bg-muted" onClick={inbox.loadMore}>Load more</button>}
+          </div>
+        </aside>
+
+        <section aria-label="Support conversation"
+          className={'min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-background md:flex '+(open?'flex':'hidden')}>
+          {creating ? <NewRequest inbox={inbox}/> : thread ? <>
+            <header className="flex shrink-0 flex-wrap items-start gap-2 border-b border-border/70 px-3 py-2.5 sm:px-4">
+              <button aria-label="Back to tickets" onClick={inbox.clearSelection}
+                className="-ml-1 flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted md:hidden">←</button>
+              <div className="min-w-0 flex-1">
+                <h2 className="truncate text-[15px] font-semibold leading-tight tracking-tight">{thread.ticket.summary}</h2>
+                <p className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                  <span>{thread.ticket.reference}</span>
+                  <StatusBadge status={thread.ticket.status}/>
+                  {admin&&<span className="truncate font-medium text-foreground">{thread.ticket.tenant_name}</span>}
+                  {admin&&<span className="truncate">{thread.ticket.requester}</span>}
+                </p>
+                {admin&&['failed','review','pending','sending'].includes(thread.ticket.emailStatus??'')&&
+                  <p className="mt-1 text-[11px] text-muted-foreground">Email alert: {thread.ticket.emailStatus==='review'?'delivery needs administrator review':thread.ticket.emailStatus}. The ticket is saved.</p>}
+              </div>
+              {admin&&<StatusSelect inbox={inbox} ticket={thread.ticket}/>}
+            </header>
+
+            <div ref={scrollRef} onScroll={inbox.onThreadScroll} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3 sm:px-4" aria-label="Message thread" aria-live="polite">
+              {thread.ticket.handoff&&<TroubleshootingDetails value={thread.ticket.handoff}/>}
+              {thread.hasOlder&&<div className="flex justify-center"><button className="rounded-lg px-3 py-1.5 text-[12px] text-muted-foreground hover:bg-muted" onClick={inbox.loadOlder}>Load earlier messages</button></div>}
+              {!thread.messages.length&&<p className="py-6 text-center text-[13px] text-muted-foreground">This older ticket has no conversation messages yet.{thread.ticket.staff_note?' Previous update: '+thread.ticket.staff_note:''}</p>}
+              {days.map(day=>(
+                <React.Fragment key={day.key}>
+                  <DaySeparator label={day.label}/>
+                  <div className="flex flex-col gap-3">
+                    {day.turns.map(turn=>(
+                      <MessageTurn key={turn.key}
+                        /* The viewer decides the side: support's own replies sit right
+                           here, and left in the tenant's Support section. */
+                        own={admin?turn.author==='support':turn.author==='tenant'}
+                        author={turn.author==='support'?(admin?'You · Drive247 Support':'Drive247 Support'):(admin?thread.ticket.requester||'Requester':'You')}
+                        messages={turn.items} files={thread.attachments}/>
+                    ))}
+                  </div>
+                </React.Fragment>
+              ))}
+            </div>
+
+            <Composer inbox={inbox} placeholder={admin?'Reply to tenant…':'Reply to support…'} label={admin?'Reply to the tenant':'Reply in this conversation'}>
+              {!admin&&thread.ticket.status==='closed'&&<p className="mb-1.5 px-1 text-[11px] text-muted-foreground">A follow-up message reopens this ticket.</p>}
+            </Composer>
+          </> : <div className="flex flex-1 flex-col items-center justify-center gap-1 p-8 text-center">
+            <p className="text-[13px] text-muted-foreground">{id?'Loading conversation…':'Select a ticket to read and reply.'}</p>
+          </div>}
+        </section>
+      </div>
+      {retrying&&<span className="sr-only">Your last message is waiting to be retried.</span>}
     </div>
-  </div>;
+  );
 }
-const readableSize=(bytes:number)=>bytes>=1048576?`${(bytes/1048576).toFixed(1)} MB`:`${Math.max(1,Math.round(bytes/1024))} KB`;
-/** Files on a message: an image shows itself, anything else is a named link. */
-function Attachments({files}:{files:{id:string;name:string;mime:string;size:number;url?:string}[]}){
-  if(!files.length)return null;
-  return <ul className="mt-2 flex flex-wrap gap-2">{files.map(file=><li key={file.id}>
-    {file.mime.startsWith('image/')&&file.url
-      ?<a href={file.url} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-md border border-border"><img src={file.url} alt={file.name} className="max-h-40 max-w-[220px] object-cover"/></a>
-      :<a href={file.url} target="_blank" rel="noopener noreferrer" className={button+' text-xs'+(file.url?'':' pointer-events-none opacity-60')}>{file.name} · {readableSize(file.size)}</a>}
-  </li>)}</ul>;
+
+/**
+ * The status control, for the platform inbox only.
+ *
+ * It writes the ticket record through the same authenticated `status` action the
+ * queue already used — the SQL refuses it for anyone without the platform support
+ * grant — and commits the change together with a short note in the conversation,
+ * so the tenant sees both the new badge and why it moved. The tenant's own view
+ * reads that same row: there is no second copy of a status anywhere.
+ *
+ * Nothing is claimed before persistence: the control shows "Saving…" while the
+ * request is in flight, and a failure leaves the stored status showing.
+ */
+function StatusSelect({ inbox, ticket }: { inbox: ReturnType<typeof useSupportInbox>; ticket: HumanTicket }) {
+  const [saving, setSaving] = React.useState<HumanTicket['status'] | null>(null);
+  const [failure, setFailure] = React.useState<string | null>(null);
+  const change = async (next: HumanTicket['status']) => {
+    if (next === ticket.status || saving) return;
+    setSaving(next); setFailure(null);
+    const ok = await inbox.setTicketStatus(next, `Support marked this ticket as ${STATUS_LABEL[next]}.`);
+    setSaving(null);
+    if (!ok) setFailure('That status was not saved. The ticket still shows its stored status.');
+  };
+  return (
+    <div className="flex shrink-0 flex-col items-end gap-1">
+      {/* The visible word and the control are siblings, not a wrapping label: the
+          select's own accessible name stays "Ticket status". */}
+      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+        <span aria-hidden>Status</span>
+        <select aria-label="Ticket status" disabled={!!saving||inbox.busy} value={saving??ticket.status}
+          onChange={(e)=>void change(e.target.value as HumanTicket['status'])}
+          className="h-8 rounded-lg border border-input bg-background px-2 text-[12px] text-foreground outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20 disabled:opacity-60">
+          {STATUS_ORDER.map((status)=><option key={status} value={status}>{STATUS_LABEL[status]}</option>)}
+        </select>
+      </div>
+      {saving&&<span role="status" className="text-[11px] text-muted-foreground">Saving…</span>}
+      {failure&&<span role="alert" className="max-w-[16rem] text-right text-[11px] text-destructive">{failure}</span>}
+    </div>
+  );
 }
-/** What is attached to the message being written, before it is sent. */
-function PendingFiles({inbox}:{inbox:ReturnType<typeof useSupportInbox>}){
-  const picked=inbox.attachments??[];
-  if(!picked.length)return null;
-  return <ul className="flex flex-wrap gap-2">{picked.map(file=><li key={file.key} className={'flex items-center gap-2 rounded-md border px-2 py-1 text-xs '+(file.error?'border-destructive text-destructive':'border-border')}>
-    <span className="max-w-[220px] truncate">{file.name} · {readableSize(file.size)}{file.error?` · ${file.error}`:''}</span>
-    <button type="button" aria-label={`Remove ${file.name}`} className="text-muted-foreground hover:text-foreground" disabled={inbox.busy} onClick={()=>inbox.removeAttachment(file.key)}>×</button>
-  </li>)}</ul>;
-}
-function AttachButton({inbox}:{inbox:ReturnType<typeof useSupportInbox>}){
-  const input=React.useRef<HTMLInputElement>(null);
-  if(!inbox.canAttach&&!(inbox.attachments??[]).length)return null;
-  return <>
-    <input ref={input} type="file" multiple accept="image/png,image/jpeg,image/webp,image/gif,application/pdf" className="hidden"
-      onChange={e=>{if(e.target.files?.length)inbox.addAttachments(e.target.files);e.target.value='';}}/>
-    <button type="button" className={button} disabled={inbox.busy||!inbox.canAttach} onClick={()=>input.current?.click()}>Attach file</button>
-  </>;
-}
-function Handoff({value}:{value:Record<string,unknown>}){
-  const safeText=(v:unknown)=>typeof v==='string'?v:'';
-  const checks=Array.isArray(value.verifiedChecks)?value.verifiedChecks as Record<string,unknown>[]:[];
-  const reports=Array.isArray(value.reportedByUser)?value.reportedByUser as Record<string,unknown>[]:[];
-  const references=Array.isArray(value.recordReferences)?value.recordReferences as Record<string,unknown>[]:[];
-  const issue=value.issue&&typeof value.issue==='object'?value.issue as Record<string,unknown>:{};
-  return <div className="mt-2 max-h-48 space-y-2 overflow-y-auto rounded-md border border-border p-3 text-xs leading-relaxed">
-    <p>{safeText(value.disclosure)||'Historical observations; recheck current records before acting.'}</p>
-    {typeof issue.reason==='string'&&<p>Support requested: {issue.reason.replace(/_/g,' ')}.</p>}
-    {reports.map((r,i)=><p key={'r'+i}><strong>Reported by requester:</strong> {safeText(r.content)}</p>)}
-    {checks.map((c,i)=><div key={i}><strong>Recorded check · {safeText(c.observedAt)}</strong>{Array.isArray(c.findings)&&c.findings.map((f,j)=><p key={j}>{safeText(f)}</p>)}</div>)}
-    {Array.isArray(value.unknowns)&&value.unknowns.map((u,i)=><p key={'u'+i}>Unresolved: {safeText(u)}</p>)}
-    {references.map((r,i)=><p key={'ref'+i} className="break-all">Record reference · {safeText(r.kind)}: {safeText(r.id)}</p>)}
-  </div>;
+
+function NewRequest({ inbox }: { inbox: ReturnType<typeof useSupportInbox> }) {
+  return (
+    <>
+      <header className="shrink-0 border-b border-border/70 px-3 py-2.5 sm:px-4">
+        <h2 className="text-[15px] font-semibold leading-tight tracking-tight">New ticket</h2>
+        <p className="mt-0.5 text-[11px] text-muted-foreground">Nothing is sent until you press Send.</p>
+      </header>
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3 sm:px-4">
+        <div className="mx-auto w-full max-w-xl space-y-3">
+          <label className="block space-y-1.5 text-[12px] font-medium">Subject
+            <input value={inbox.subject} maxLength={240} readOnly={inbox.busy||inbox.retrying} onChange={e=>inbox.setSubject(e.target.value)}
+              className="h-9 w-full rounded-lg border border-input bg-background px-3 text-[13px] font-normal outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20"/>
+          </label>
+          <p className="text-[11px] leading-relaxed text-muted-foreground">Nothing is submitted until you send. Do not include credentials, card details or identity documents.</p>
+        </div>
+      </div>
+      <Composer inbox={inbox} placeholder="Describe the problem…" label="Your message">
+        <div className="mb-1.5 flex justify-end">
+          <button type="button" className="rounded-lg px-3 py-1.5 text-[12px] text-muted-foreground hover:bg-muted" disabled={inbox.busy} onClick={inbox.cancelNew}>Cancel</button>
+        </div>
+      </Composer>
+    </>
+  );
 }

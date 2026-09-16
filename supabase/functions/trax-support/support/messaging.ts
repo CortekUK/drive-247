@@ -86,6 +86,20 @@ export async function handleMessaging(req:Request,deps:MessagingDependencies):Pr
       if(error.message?.includes('support_rate_limited'))throw new SupportError('rate_limited','Please wait a minute before sending again. Your draft is preserved.',429);
       throw new SupportError('support_unavailable','Support could not confirm this request. Retry with the same draft; duplicate messages are prevented.',503);
     }
+    if(body.action==='list'&&result.data&&typeof result.data==='object'){
+      /* One truncated line of the latest message per row. Its own authorized
+         reader, so the reviewed list query is untouched; a deployment without the
+         function simply answers without previews rather than failing the list. */
+      const page=result.data as {tickets?:{id:string}[]};
+      const ids=(page.tickets??[]).map(ticket=>ticket.id).filter(id=>typeof id==='string');
+      if(ids.length){
+        const previews=await deps.db.rpc('trax_support_ticket_previews',{p_user:userId,p_staff:staffId,p_tenant:tenantId,p_admin:body.admin===true,p_ids:ids});
+        if(!previews.error&&previews.data&&typeof previews.data==='object'){
+          const map=previews.data as Record<string,string>;
+          return respond({...page,tickets:(page.tickets??[]).map(ticket=>({...ticket,...(map[ticket.id]?{preview:map[ticket.id]}:{})}))});
+        }
+      }
+    }
     if(body.action==='detail'&&deps.storage&&result.data&&typeof result.data==='object'){
       /* The conversation's files, with a short-lived read URL each. The list comes
          from the database under the same access rule as the thread itself; a URL

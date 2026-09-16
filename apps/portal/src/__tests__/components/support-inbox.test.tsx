@@ -85,21 +85,28 @@ describe('the Support inbox view', () => {
     // The tenant's own bubble is the tinted one; support's is the neutral surface.
     expect(bubbles()[0].getAttribute('data-variant')).toBe('tinted');
     expect(bubbles()[1].getAttribute('data-variant')).toBe('muted');
+    // A three-word reply is a bubble sized to its content, not a full-width card.
+    expect(bubbles()[0].className).toContain('w-fit');
     // Every message keeps its read marker, so acknowledgement stays per message.
     expect(document.querySelectorAll('[data-seq]')).toHaveLength(4);
     expect(document.querySelectorAll('[role="separator"]').length).toBeGreaterThanOrEqual(1);
-    expect(document.querySelectorAll('[data-slot="message-header"]')[1].textContent).toBe('Drive247 Support');
+    expect(document.querySelectorAll('[data-slot="message-header"]')[0].textContent).toBe('Drive247 Support');
   });
 
-  it('keeps the subject in the header and the metadata behind Issue details', () => {
+  it('keeps the subject in the header, the status beside its reference, and no created/updated strip', () => {
     render(state({ id: 't1', thread: { ticket: ticket({ handoff: { disclosure: 'Historical observations only.' } }), messages: [], hasOlder: false, latestSeq: 0 } } as never));
-    expect(document.querySelector('h2')?.textContent).toContain('Returned vehicle still shows as out on rent');
-    expect(text()).toContain('TRX-1111');
-    // The handoff is not in the conversation until it is asked for.
-    expect(text()).not.toContain('Historical observations only.');
+    const header = document.querySelector('[aria-label="Support conversation"] header')!;
+    expect(header.querySelector('h2')?.textContent).toContain('Returned vehicle still shows as out on rent');
+    expect(header.textContent).toContain('TRX-1111');
+    expect(header.querySelector('[data-testid="ticket-status"]')?.textContent).toBe('Open');
+    expect(header.textContent).not.toMatch(/Created|Last updated/i);
+    // The handoff is a collapsed section in the conversation, not an open block.
+    const context = document.querySelector('details');
+    expect(context?.open).toBe(false);
+    expect(context?.textContent).toContain('TRAX troubleshooting context');
+    // Ticket metadata lives behind Issue details.
     act(() => (document.querySelector('[data-slot="collapsible-trigger"]') as HTMLButtonElement).click());
-    expect(text()).toContain('TRAX troubleshooting context');
-    expect(text()).toContain('Historical observations only.');
+    expect(text()).toContain('Last activity');
   });
 
   it('shows a failed send once, keeps the draft and offers the retry', () => {

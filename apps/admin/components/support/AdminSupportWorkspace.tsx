@@ -16,11 +16,22 @@ export function AdminSupportWorkspace({ initialId }: { initialId?: string }) {
     : signedOut ? 'Sign in again to open Support'
     : 'Support is currently unavailable';
 
+  /* One compact page header over one workspace, the same shape as the tenant's
+     Support section — the workspace itself is bounded to the viewport so the
+     ticket list and the conversation scroll inside themselves and the reply box
+     never falls below a long page. */
   return (
-    <div className="flex h-[calc(100dvh-9rem)] min-h-[480px] w-full min-w-0 overflow-hidden rounded-xl border border-border bg-background">
+    <div className="flex h-[calc(100dvh-8rem)] min-h-[480px] w-full min-w-0 flex-col gap-3">
+      <header className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-lg font-semibold tracking-tight">Support</h1>
+          <p className="hidden text-[12px] text-muted-foreground sm:block">Tenant conversations across every company. Replies and status changes reach the requester's own Support section.</p>
+        </div>
+      </header>
       {support.allowed ? (
         <SupportInbox key={support.scope} call={support.call} admin scope={support.scope} initialId={initialId} uploadAttachment={support.uploadAttachment} />
       ) : (
+        <div className="flex min-h-0 flex-1 overflow-hidden rounded-xl border border-border bg-background">
         <section className="flex min-w-0 flex-1 flex-col" aria-label="Support setup and access">
           <header className="border-b border-border px-5 py-4">
             <h1 className="text-base font-semibold">Support inbox</h1>
@@ -52,6 +63,7 @@ export function AdminSupportWorkspace({ initialId }: { initialId?: string }) {
             </div>
           </div>
         </section>
+        </div>
       )}
     </div>
   );
