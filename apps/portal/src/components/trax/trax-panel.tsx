@@ -5,7 +5,8 @@ import { usePathname } from "next/navigation";
 import { Maximize2, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui-v2/tooltip";
-import { TraxThread } from "./trax-thread";
+import { TraxSupportThread } from "./support/TraxSupportThread";
+import { useTraxSupportChatOptional } from "./support/trax-support-context";
 import { TraxMark } from "./trax-greeting";
 import { isTraxPath, useTraxOptional } from "./trax-provider";
 
@@ -77,6 +78,8 @@ import { isTraxPath, useTraxOptional } from "./trax-provider";
 export function TraxPanel() {
   /* Optional: the provider is v2-only, and a panel is never worth throwing for. */
   const trax = useTraxOptional();
+  /* The TRAX support conversation (issues, tickets, payment checks) this panel shows. */
+  const support = useTraxSupportChatOptional();
   const pathname = usePathname();
   const onFullPage = isTraxPath(pathname);
   const open = !!trax?.sheetOpen && !onFullPage;
@@ -155,7 +158,7 @@ export function TraxPanel() {
 
   if (!trax || onFullPage) return null;
 
-  const { closeSheet, startNewConversation, expandToFullPage, chat } = trax;
+  const { closeSheet, expandToFullPage } = trax;
 
   const onKeyDown = (e: KeyboardEvent<HTMLElement>) => {
     /* Escape closes the panel from anywhere inside it. `defaultPrevented`
@@ -223,10 +226,9 @@ export function TraxPanel() {
                   variant="ghost"
                   size="icon-sm"
                   aria-label="New conversation"
-                  onClick={startNewConversation}
-                  /* Not mid-reply: `useChat` appends the answer to whatever
-                     thread is on screen when it lands. */
-                  disabled={chat.messages.length === 0 || chat.isLoading}
+                  onClick={() => support?.clearChat()}
+                  /* Not mid-reply: a new conversation discards the pending answer. */
+                  disabled={!support || support.messages.length === 0 || support.isLoading}
                   className="text-muted-foreground hover:text-foreground"
                 >
                   <Plus />
@@ -269,7 +271,7 @@ export function TraxPanel() {
           </div>
         </header>
 
-        {hasOpened && <TraxThread density="sheet" autoFocus={shown} />}
+        {hasOpened && <TraxSupportThread density="sheet" autoFocus={shown} active={shown} />}
       </aside>
     </>
   );

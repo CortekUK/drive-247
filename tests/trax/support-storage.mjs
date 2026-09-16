@@ -1,0 +1,58 @@
+/** Executes the actual review-candidate migration in isolated PostgreSQL/WASM.
+ * No environment keys, network, deployed Supabase or business records are used.
+ * Install PGlite in a temporary test directory, not an application dependency.
+ */
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+const modulePath=process.env.TRAX_PGLITE_PATH??resolve(tmpdir(),'drive247-trax-sql-tests/node_modules/@electric-sql/pglite/dist/index.js');
+const {PGlite}=await import(pathToFileURL(modulePath));
+const db=new PGlite();
+await db.exec(`create role anon;create role authenticated;create role service_role;
+create table public.tenants(id uuid primary key,status text);
+create table public.app_users(id uuid primary key,auth_user_id uuid,tenant_id uuid,role text,is_active boolean,is_super_admin boolean);
+create table public.rentals(id uuid primary key,tenant_id uuid,status text);
+create table public.vehicles(id uuid primary key,tenant_id uuid);
+create table public.customers(id uuid primary key,tenant_id uuid);
+create table public.payments(id uuid primary key,tenant_id uuid);
+create table public.manager_permissions(app_user_id uuid,tab_key text,access_level text);`);
+await db.exec(await readFile(new URL('../../supabase/migrations/20260915190000_trax_v2_support.sql',import.meta.url),'utf8'));
+const id=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
+const t1=id(1),t2=id(2),u1=id(11),u2=id(12),s1=id(21),s2=id(22),agent=id(23),agentUser=id(13),scope='a'.repeat(64),conv=id(31),issue=id(41);
+await db.query('insert into tenants values ($1,\'active\'),($2,\'active\')',[t1,t2]);
+await db.query('insert into app_users values ($1,$2,$3,\'admin\',true,false),($4,$5,$6,\'admin\',true,false),($7,$8,$3,\'admin\',true,false)',[s1,u1,t1,s2,u2,t2,agent,agentUser]);
+await db.query('insert into rentals values($1,$2,\'Active\')',[id(71),t1]);
+for(const table of ['vehicles','customers','payments'])await db.query(`insert into ${table} values($1,$2)`,[id(72),t1]);
+const actor=[u1,s1,t1,scope],other=[u2,s2,t2,scope],support=[agentUser,agent,t1,scope];
+const rpc=async(name,args)=>{const result=await db.query(`select public.${name}(${args.map((_,i)=>'$'+(i+1)).join(',')}) as value`,args);return result.rows[0]?.value;};
+const state={id:conv,expires:Date.now()+1800000,persisted:true,activeIssueId:issue,issues:[{id:issue,score:100,state:'needs_support',summary:'Fixture: check could not complete',events:[],records:[],checks:[]}]};
+const count=async(table)=>(await db.query(`select count(*)::int n from ${table}`)).rows[0].n;
+let ticket;
+await test('migration starts with dry-run retention and no support grants',async()=>{assert.equal(await count('trax_support_agents'),0);const policy=(await db.query('select * from trax_support_retention_policy')).rows[0];assert.equal(policy.conversation_days,90);assert.equal(policy.closed_ticket_days,365);assert.equal(policy.cleanup_enabled,false);});
+await test('conversation and escalation state are persistent without creating a ticket',async()=>{assert.equal(await rpc('trax_support_save_conversation',[...actor,conv,null,state]),1);assert.equal(await count('trax_support_conversations'),1);assert.equal(await count('trax_support_tickets'),0);});
+await test('browser roles cannot read state or call write RPCs',async()=>{await db.exec('set role authenticated');try{await assert.rejects(()=>db.query('select * from trax_support_conversations'));await assert.rejects(()=>rpc('trax_support_save_conversation',[...actor,id(32),null,{...state,id:id(32)}]));}finally{await db.exec('reset role');}});
+await test('forged tenant membership cannot update or submit another issue',async()=>{await assert.rejects(()=>rpc('trax_support_save_conversation',[u1,s1,t2,scope,conv,1,state]));await assert.rejects(()=>rpc('trax_support_submit_ticket',[...other,conv,issue,'Foreign issue',{}]));assert.equal(await count('trax_support_tickets'),0);});
+await test('ticket submission fails honestly when no delivery queue staff are configured',async()=>{await assert.rejects(()=>rpc('trax_support_submit_ticket',[...actor,conv,issue,'Fixture issue',{}]));assert.equal(await count('trax_support_tickets'),0);});
+await test('ordinary tenant administrators have no cross-tenant support queue',async()=>{await assert.rejects(()=>rpc('trax_support_list_tickets',[...actor,true,0]));});
+await test('only an explicit support grant enables the queue',async()=>{await db.query('insert into trax_support_agents(staff_id,can_manage_policy) values($1,true)',[agent]);const cap=await rpc('trax_support_capabilities',support);assert.equal(cap.supportAgent,true);assert.equal(cap.managePolicy,true);assert.equal(cap.deliveryReady,true);});
+await test('handoff write rejects a foreign related record in the database transaction',async()=>{await db.query('insert into vehicles values($1,$2)',[id(99),t2]);await assert.rejects(()=>rpc('trax_support_submit_ticket',[...actor,conv,issue,'Fixture issue',{recordReferences:[{kind:'vehicle',id:id(99)}]}]));assert.equal(await count('trax_support_tickets'),0);await db.query('delete from vehicles where id=$1',[id(99)]);});
+await test('handoff write rechecks a manager record permission before submission',async()=>{await db.query("update app_users set role='manager' where id=$1",[s1]);try{await assert.rejects(()=>rpc('trax_support_submit_ticket',[...actor,conv,issue,'Fixture issue',{recordReferences:[{kind:'vehicle',id:id(72)}]}]));assert.equal(await count('trax_support_tickets'),0);}finally{await db.query("update app_users set role='admin' where id=$1",[s1]);}});
+await test('click submission creates one real ticket and retries return that ticket',async()=>{ticket=await rpc('trax_support_submit_ticket',[...actor,conv,issue,'Fixture issue',{excerpt:[{role:'user',content:'Unable to finish the supported check'}],recordReferences:[]}]);assert.match(ticket.reference,/^TRX-/);const retry=await rpc('trax_support_submit_ticket',[...actor,conv,issue,'Fixture issue',{}]);assert.equal(retry.id,ticket.id);assert.equal(await count('trax_support_tickets'),1);});
+await test('same issue is idempotent across competing submissions',async()=>{const results=await Promise.all(Array.from({length:4},()=>rpc('trax_support_submit_ticket',[...actor,conv,issue,'Fixture issue',{}])));assert.ok(results.every(r=>r.id===ticket.id));assert.equal(await count('trax_support_tickets'),1);});
+await test('another tenant sees neither ticket details nor its existence in a list',async()=>{assert.deepEqual((await rpc('trax_support_list_tickets',[...other,false,0])).tickets,[]);await assert.rejects(()=>rpc('trax_support_ticket_detail',[...other,ticket.id,false]));});
+await test('ordinary tenant admin cannot change ticket status',async()=>{await assert.rejects(()=>rpc('trax_support_update_ticket',[...actor,ticket.id,'closed','',false]));});
+await test('support staff can inspect and update a submitted issue',async()=>{assert.equal((await rpc('trax_support_ticket_detail',[...support,ticket.id,true])).reference,ticket.reference);ticket=await rpc('trax_support_update_ticket',[...support,ticket.id,'in_progress','Reviewing the recorded issue.',false]);assert.equal(ticket.status,'in_progress');});
+await test('optimistic revision prevents stale conversation overwrite',async()=>{await assert.rejects(()=>rpc('trax_support_save_conversation',[...actor,conv,1,state]));});
+await test('permission-scope changes invalidate old conversation writes',async()=>{await assert.rejects(()=>rpc('trax_support_save_conversation',[u1,s1,t1,'b'.repeat(64),conv,2,state]));});
+await test('expired normal chat is eligible but open ticket and copied handoff survive',async()=>{await db.query("update trax_support_conversations set last_activity_at=now()-interval '91 days'");let dry=await rpc('trax_support_cleanup',[true]);assert.equal(dry.conversationsEligible,1);assert.equal(dry.closedTicketsEligible,0);await assert.rejects(()=>rpc('trax_support_cleanup',[false]));assert.equal(await count('trax_support_conversations'),1);assert.equal(await count('trax_support_tickets'),1);});
+await test('an approved conversation hold exempts only that support context',async()=>{await rpc('trax_support_hold_conversation',[...support,conv,true]);assert.equal((await rpc('trax_support_cleanup',[true])).conversationsEligible,0);await rpc('trax_support_hold_conversation',[...support,conv,false]);});
+await test('inactive open tickets are flagged instead of deleted',async()=>{await db.query("update trax_support_tickets set updated_at=now()-interval '91 days'");const list=await rpc('trax_support_list_tickets',[...support,true,0]);assert.equal(list.tickets[0].review_due,true);assert.equal((await rpc('trax_support_cleanup',[true])).openTicketsForReview,1);});
+await test('closure starts retention and reopening cancels deletion eligibility',async()=>{ticket=await rpc('trax_support_update_ticket',[...support,ticket.id,'closed','Completed support review.',false]);assert.ok(ticket.closed_at);await db.query("update trax_support_tickets set closed_at=now()-interval '366 days'");assert.equal((await rpc('trax_support_cleanup',[true])).closedTicketsEligible,1);ticket=await rpc('trax_support_update_ticket',[...support,ticket.id,'open','Reopened for another review.',false]);assert.equal(ticket.closed_at,null);assert.equal((await rpc('trax_support_cleanup',[true])).closedTicketsEligible,0);ticket=await rpc('trax_support_update_ticket',[...support,ticket.id,'closed','Closed again.',false]);assert.ok(Date.parse(ticket.closed_at)>Date.now()-60000);});
+await test('ticket retention exceptions survive normal cleanup eligibility',async()=>{ticket=await rpc('trax_support_update_ticket',[...support,ticket.id,'closed','Approved retention exception.',true]);await db.query("update trax_support_tickets set closed_at=now()-interval '366 days'");assert.equal((await rpc('trax_support_cleanup',[true])).closedTicketsEligible,0);});
+await test('authorized settings updates cannot enable destructive cleanup',async()=>{const updated=await rpc('trax_support_policy',[...support,{conversation_days:120,closed_ticket_days:400,inactive_open_days:60}]);assert.equal(updated.conversation_days,120);assert.equal(updated.cleanup_enabled,false);await assert.rejects(()=>rpc('trax_support_policy',[...support,{cleanup_enabled:true}]));await assert.rejects(()=>rpc('trax_support_policy',[...actor,{conversation_days:1,closed_ticket_days:1,inactive_open_days:1}]));await rpc('trax_support_policy',[...support,{conversation_days:90,closed_ticket_days:365,inactive_open_days:90}]);});
+await test('explicit fixture-only cleanup approval deletes only TRAX data, preserving the handoff',async()=>{await db.exec("update trax_support_retention_policy set cleanup_enabled=true,cleanup_approved_at=now()");await rpc('trax_support_cleanup',[false]);assert.equal(await count('trax_support_conversations'),0);assert.equal(await count('trax_support_tickets'),1);const surviving=(await db.query('select conversation_id,handoff from trax_support_tickets')).rows[0];assert.equal(surviving.conversation_id,null);assert.equal(surviving.handoff.excerpt[0].content,'Unable to finish the supported check');for(const table of ['rentals','vehicles','customers','payments'])assert.equal(await count(table),1);});
+await test('revoking a support grant immediately denies queue reads',async()=>{await db.query('update trax_support_agents set active=false where staff_id=$1',[agent]);await assert.rejects(()=>rpc('trax_support_list_tickets',[...support,true,0]));});
+await db.close();

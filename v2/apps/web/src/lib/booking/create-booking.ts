@@ -1,3 +1,4 @@
+import { applyCheckoutOverlap } from '@/lib/vehicles/availability-rules';
 /**
  * The booking WRITE path: customer → rental → extras → invoice → ledger.
  *
@@ -402,15 +403,12 @@ export async function createBooking(
 
   // Mirrors the DB trigger, so a clash reads as a sentence rather than a raw
   // Postgres exception. It is a courtesy, not the guard — the trigger is.
-  const clash = await supabase
-    .from("rentals")
-    .select("id")
-    .eq("vehicle_id", vehicleId)
-    .eq("tenant_id", tenantId)
-    .not("status", "in", "(Cancelled,Rejected,Closed)")
-    .lte("start_date", form.dropoffDate)
-    .or(`end_date.gte.${form.pickupDate},end_date.is.null`)
-    .limit(1);
+  const clash = await applyCheckoutOverlap(
+    supabase.from("rentals").select("id")
+      .eq("vehicle_id", vehicleId).eq("tenant_id", tenantId),
+    form.pickupDate,
+    form.dropoffDate,
+  ).limit(1);
 
   if (clash.error) return writeFailed("overlap pre-check", describe(clash.error));
   if ((clash.data ?? []).length > 0) return taken("a live rental already covers these dates");

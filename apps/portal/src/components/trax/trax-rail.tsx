@@ -1,8 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useIsFetching } from "@tanstack/react-query";
-import { ArrowLeft, RotateCw, SquarePen, X } from "lucide-react";
+import { ArrowLeft, SquarePen, X } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -15,10 +14,9 @@ import {
   SidebarRail,
   useSidebar,
 } from "@/components/ui-v2/sidebar";
-import { Button } from "@/components/ui-v2/button";
 import { Skeleton } from "@/components/ui-v2/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui-v2/tooltip";
-import type { TraxConversationSummary } from "@/hooks/use-trax-conversations";
+import { useTraxSupportChat } from "./support/trax-support-context";
 import { cn } from "@/lib/utils";
 import { TraxMark } from "./trax-greeting";
 import { useTrax } from "./trax-provider";
@@ -62,9 +60,9 @@ function bucketOf(iso: string, now: Date): Bucket {
   return "Older";
 }
 
-function groupByRecency(conversations: TraxConversationSummary[]) {
+function groupByRecency<T extends { lastActivityAt: string }>(conversations: T[]) {
   const now = new Date();
-  const groups = new Map<Bucket, TraxConversationSummary[]>();
+  const groups = new Map<Bucket, T[]>();
   for (const c of conversations) {
     const b = bucketOf(c.lastActivityAt, now);
     const list = groups.get(b);
@@ -82,7 +80,9 @@ const SECTION_LABEL =
 
 export function TraxRail() {
   const { state, isMobile, setOpenMobile } = useSidebar();
-  const { chat, history, openConversation, startNewConversation, leaveFullPage } = useTrax();
+  const { leaveFullPage } = useTrax();
+  /* The TRAX support conversation and its stored conversations (support storage). */
+  const support = useTraxSupportChat();
 
   /* On a phone the rail is an off-canvas sheet at full width, so the desktop
      collapsed state must not squeeze it down to icons. */
@@ -90,20 +90,15 @@ export function TraxRail() {
 
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [openError, setOpenError] = useState<string | null>(null);
+  /* The stored conversation reopened from this rail, so it is marked and not reloaded. */
+  const [activeId, setActiveId] = useState<string | null>(null);
 
-  /* The list query is `enabled`-gated and `history` does not expose its fetch
-     state, so Retry reads it from the cache directly — otherwise a retry of an
-     errored query shows the old error, unchanged, until it lands. */
-  const refetching = useIsFetching({ queryKey: ["trax-conversations"] }) > 0;
+  const recent = support.recentConversations;
+  const groups = useMemo(() => groupByRecency(recent ?? []), [recent]);
 
-  const groups = useMemo(() => groupByRecency(history.conversations), [history.conversations]);
-
-  /* While a reply is in flight, the thread must not change underneath it:
-     `useChat` appends the answer to whatever messages are on screen when it
-     lands, so switching now would graft this reply onto another conversation
-     (and a brand-new one would adopt the wrong conversation id). */
-  const busy = chat.isLoading;
-  const canStartNew = chat.messages.length > 0 && !busy;
+  /* While a reply is in flight the thread must not change underneath it. */
+  const busy = support.isLoading;
+  const canStartNew = support.messages.length > 0 && !busy;
 
   const closeMobile = () => {
     if (isMobile) setOpenMobile(false);
@@ -116,25 +111,27 @@ export function TraxRail() {
 
   const onNew = () => {
     setOpenError(null);
-    startNewConversation();
+    setActiveId(null);
+    support.clearChat();
     closeMobile();
   };
 
-  const onOpen = async (conversationId: string) => {
-    if (conversationId === chat.conversationId) {
+  /* Resuming re-checks access on the server and restores that conversation. */
+  const onOpen = async (id: string) => {
+    if (id === activeId) {
       closeMobile();
       return;
     }
-    if (openingId || busy) return;
-    setOpeningId(conversationId);
+    if (openingId || busy || !support.supportRequest) return;
+    setOpeningId(id);
     setOpenError(null);
     try {
-      await openConversation(conversationId);
-      closeMobile();
-    } catch (err) {
-      /* `openConversation` rethrows the read's {error}. Caught here, or a
-         failed read is an unhandled rejection and a click that did nothing. */
-      setOpenError(err instanceof Error ? err.message : "Unknown error");
+      const result = await support.supportRequest("resume", { resumeId: id });
+      if (result) {
+        setActiveId(id);
+        closeMobile();
+      }
+      else setOpenError("The conversation could not be opened. Check your access and try again.");
     } finally {
       setOpeningId(null);
     }
@@ -230,34 +227,19 @@ export function TraxRail() {
               </div>
             )}
 
-            {history.isLoading ? (
+            {!recent && !busy && support.error ? (
+              /* Shown, not swallowed: a failed access check must not read as "no conversations". */
+              <div className="px-1.5">
+                <p className={SECTION_LABEL}>Conversations</p>
+                <p role="alert" className="break-words px-2.5 pt-1 text-[12px] text-destructive">{support.error}</p>
+              </div>
+            ) : !recent && busy ? (
               <div className="px-1.5" aria-busy="true" aria-label="Loading conversations">
                 <p className={SECTION_LABEL}>Conversations</p>
                 <div className="flex flex-col gap-1.5 pt-1">
                   {[72, 88, 64, 80, 56].map((w) => (
                     <Skeleton key={w} className="mx-1.5 h-7 rounded-lg bg-muted/80" style={{ width: `${w}%` }} />
                   ))}
-                </div>
-              </div>
-            ) : history.error ? (
-              /* Shown, not swallowed: supabase-js resolves with {error} rather
-                 than throwing, so a failed read that fell through to the empty
-                 copy would read as "you have no conversations" — data loss. */
-              <div className="px-1.5">
-                <p className={SECTION_LABEL}>Conversations</p>
-                <div role="alert" className="px-2.5 pt-1 text-[12px]">
-                  <p className="text-destructive">Couldn&apos;t load past conversations.</p>
-                  <p className="mt-0.5 break-words text-muted-foreground">{history.error}</p>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={history.refresh}
-                    disabled={refetching}
-                    className="-ml-2 mt-1.5 h-7 gap-1.5 px-2 text-[12px]"
-                  >
-                    <RotateCw className={cn("size-3.5", refetching && "animate-spin motion-reduce:animate-none")} />
-                    {refetching ? "Retrying…" : "Retry"}
-                  </Button>
                 </div>
               </div>
             ) : groups.length === 0 ? (
@@ -273,20 +255,19 @@ export function TraxRail() {
                   <p className={SECTION_LABEL}>{group.label}</p>
                   <SidebarMenu>
                     {group.items.map((c) => {
-                      const active = c.conversationId === chat.conversationId;
-                      const opening = openingId === c.conversationId;
+                      const opening = openingId === c.id;
                       return (
-                        <SidebarMenuItem key={c.conversationId}>
+                        <SidebarMenuItem key={c.id}>
                           <SidebarMenuButton
-                            isActive={active}
-                            onClick={() => void onOpen(c.conversationId)}
-                            disabled={!active && busy}
-                            aria-current={active ? "true" : undefined}
+                            isActive={c.id === activeId}
+                            aria-current={c.id === activeId ? "true" : undefined}
+                            onClick={() => void onOpen(c.id)}
+                            disabled={c.id !== activeId && busy}
                             aria-busy={opening || undefined}
-                            title={c.title}
+                            title={c.summary}
                             className={cn("h-8", opening && "animate-pulse motion-reduce:animate-none")}
                           >
-                            <span className="truncate text-[13px]">{c.title}</span>
+                            <span className="truncate text-[13px]">{c.summary}</span>
                           </SidebarMenuButton>
                         </SidebarMenuItem>
                       );
@@ -300,9 +281,9 @@ export function TraxRail() {
       </SidebarContent>
 
       <SidebarFooter className="px-4 pb-4 pt-2">
-        {!collapsed && history.conversations.length > 0 && (
+        {!collapsed && !!recent?.length && (
           <p className="text-[11px] leading-snug text-muted-foreground/80">
-            Showing conversations from your most recent {history.scanLimit} messages.
+            Opening a conversation re-checks your access first.
           </p>
         )}
       </SidebarFooter>

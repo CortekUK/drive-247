@@ -1,0 +1,42 @@
+{
+  "verifiedAt": "2026-09-14T23:56:06.016Z",
+  "targetedTests": {
+    "readiness": 6,
+    "messaging": 28,
+    "knowledge": 6,
+    "passed": 40
+  },
+  "focusedAdminTypecheck": "passed",
+  "knowledgeCheck": "passed",
+  "browser": {
+    "passed": true,
+    "liveEmail": false,
+    "liveTenants": false,
+    "actualSql": true,
+    "checks": [
+      "Support visible during missing setup",
+      "setup recovery opens authorized inbox",
+      "unassigned platform admin sees access state without ticket list",
+      "ordinary staff cannot see platform Support link",
+      "composer has no writes",
+      "atomic first send",
+      "Support 2 → 1",
+      "two-way automatic updates",
+      "failed draft retry",
+      "resolved ticket reopens",
+      "refresh restores conversation",
+      "offline reconnect catches up without duplicate messages",
+      "lost first-send response retries across refresh without duplicate",
+      "mobile no clipping"
+    ],
+    "errors": []
+  },
+  "observedLocalConfiguration": {
+    "endpoint": "/api/trax-messaging",
+    "httpStatus": 503,
+    "code": "local_configuration_required"
+  },
+  "liveDatabaseChanges": false,
+  "permissionGrantsChanged": false,
+  "liveEmailSent": false
+}

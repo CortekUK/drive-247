@@ -18,65 +18,11 @@ import type { UnavailableReason } from '@/lib/vehicles/types';
  * back to the fleet. Anything outside this set (Cancelled, Rejected, Closed,
  * Completed) frees the car.
  */
-export const OPEN_RENTAL_STATUSES = [
-  'Pending',
-  'Active',
-  'Upcoming',
-  'Confirmed',
-  'Started',
-] as const;
-
-/** Filter literal for `.not('status', 'in', …)` — the complement of the above. */
-const RELEASED_RENTAL_STATUSES = '(Cancelled,Rejected,Closed,Completed)';
-
-/** Statuses meaning the car is physically OUT right now, not merely future-booked. */
-const OUT_NOW_STATUSES = new Set(['Active', 'Started']);
-
-export interface OccupancyRental {
-  vehicle_id?: string | null;
-  status?: string | null;
-  /** 'YYYY-MM-DD' */
-  start_date: string;
-  /** 'YYYY-MM-DD', or null for an open-ended / PAYG rental. */
-  end_date: string | null;
-}
-
-/**
- * Does this OPEN rental occupy the vehicle across [reqStart, reqEnd]?
- *
- * Blocks when EITHER:
- *  - the rental overlaps the window — `start_date <= reqEnd` AND
- *    (`end_date IS NULL` OR `end_date >= reqStart`); a NULL end is open-ended
- *    and holds the car from its start date onward; OR
- *  - the rental is Active/Started with an end_date already in the past.
- *
- * That second clause is the whole reason this rule exists. Availability used to
- * be pure date overlap, so when a rental's end_date went stale — a paused
- * auto-extend, an overdue rental nobody closed — NO rental overlapped a future
- * search, and a car physically still out showed as bookable. The car has not
- * come back until the rental is Closed, whatever the date column says.
- *
- * Comparisons are string comparisons, which is correct and deliberate:
- * 'YYYY-MM-DD' sorts lexicographically in calendar order, so this avoids the
- * timezone parse entirely.
- */
-export function rentalOccupiesWindow(
-  rental: OccupancyRental,
-  reqStart: string,
-  reqEnd: string,
-  today: string = todayDateString(),
-): boolean {
-  const overlaps =
-    rental.start_date <= reqEnd &&
-    (rental.end_date === null || rental.end_date >= reqStart);
-
-  const stillOut =
-    !!rental.status &&
-    OUT_NOW_STATUSES.has(rental.status) &&
-    rental.end_date !== null &&
-    rental.end_date < today;
-
-  return overlaps || stillOut;
+export { OPEN_RENTAL_STATUSES } from '@/lib/vehicles/availability-rules';
+import { OPEN_RENTAL_STATUSES, RELEASED_RENTAL_STATUSES, OUT_NOW_STATUSES, rentalOccupiesWindow as occupiesWindow, bufferOccupiesPickup, type OccupancyRental } from '@/lib/vehicles/availability-rules';
+export type { OccupancyRental } from '@/lib/vehicles/availability-rules';
+export function rentalOccupiesWindow(rental: OccupancyRental, reqStart: string, reqEnd: string, today: string = todayDateString()): boolean {
+  return occupiesWindow(rental, reqStart, reqEnd, today);
 }
 
 /* ═════════════════════ fleet-wide availability filter ═════════════════════ */
@@ -236,7 +182,6 @@ export function useVehicleAvailability(
 
       // ── 3. turnaround buffer ──
       if (bufferMinutes > 0) {
-        const bufferMs = bufferMinutes * 60 * 1000;
         // The buffer can only bite when a rental ended shortly BEFORE pickup, so
         // bound the scan to that window instead of pulling the tenant's entire
         // completed history (v1 fetches all of it, unbounded, on every search).
@@ -276,7 +221,7 @@ export function useVehicleAvailability(
           if (Number.isNaN(endedAt)) continue;
 
           // Pickup lands after the car came back but before the buffer expires.
-          if (pickupAt >= endedAt && pickupAt < endedAt + bufferMs) {
+          if (bufferOccupiesPickup(pickupAt, endedAt, bufferMinutes)) {
             unavailable.set(rental.vehicle_id, 'buffer');
           }
         }

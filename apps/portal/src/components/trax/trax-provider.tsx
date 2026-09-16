@@ -11,12 +11,12 @@ import {
   type ReactNode,
 } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useChat } from "@/hooks/use-chat";
-import { useTraxConversations } from "@/hooks/use-trax-conversations";
-import type { UseChatReturn } from "@/types/chat";
 
 /**
- * One Trax conversation, shared by every surface that shows it.
+ * Where Trax is shown — the docked panel or the /trax page — shared by every surface.
+ * The conversation itself lives in TraxSupportProvider (components/trax/support/
+ * trax-support-context.tsx, driven by useTraxSupport); the notes below explain why
+ * one provider above the route is needed.
  *
  * ---------------------------------------------------------------------------
  * THE PROBLEM THIS SOLVES, AND WHY IT NEEDS A PROVIDER
@@ -74,19 +74,11 @@ import type { UseChatReturn } from "@/types/chat";
  */
 
 interface TraxContextValue {
-  /** The single conversation. Same object in the panel and on the full page. */
-  chat: UseChatReturn;
-  /** Past conversations, read back from `chat_messages`. */
-  history: ReturnType<typeof useTraxConversations>;
   sheetOpen: boolean;
   openSheet: () => void;
   closeSheet: () => void;
   /** ⌘J. Toggles the panel; on `/trax` it is `minimiseToPanel`. */
   toggleSheet: () => void;
-  /** Open a stored conversation into the live thread. Throws on a failed read. */
-  openConversation: (conversationId: string) => Promise<void>;
-  /** Start a fresh thread. Does not delete anything server-side. */
-  startNewConversation: () => void;
   /** Last in-app pathname + search outside `/trax`; `/` when there is none. */
   returnPath: string;
   /** Panel → full page, same thread. */
@@ -107,8 +99,6 @@ export function isTraxPath(pathname: string | null | undefined): boolean {
 }
 
 export function TraxProvider({ children }: { children: ReactNode }) {
-  const chat = useChat();
-  const history = useTraxConversations();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -160,21 +150,6 @@ export function TraxProvider({ children }: { children: ReactNode }) {
     setSheetOpen((prev) => !prev);
   }, [onTrax, minimiseToPanel]);
 
-  const openConversation = useCallback(
-    async (conversationId: string) => {
-      const messages = await history.loadMessages(conversationId);
-      /* Both, together: `sendMessage` threads `conversationId` back to the edge
-         function, so loading the messages without the id would make the next
-         reply fork a new conversation that reads as a continuation. */
-      chat.loadConversation(conversationId, messages);
-    },
-    [chat, history],
-  );
-
-  const startNewConversation = useCallback(() => {
-    chat.clearChat();
-  }, [chat]);
-
   /* ⌘J / Ctrl+J. The listener is registered once and reads the latest toggle
      through a ref, so a route change never leaves two listeners attached. */
   const toggleRef = useRef(toggleSheet);
@@ -192,26 +167,14 @@ export function TraxProvider({ children }: { children: ReactNode }) {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  /* Keep the conversation list honest: a brand-new thread only exists in the
-     database once the first reply has landed, which is when `conversationId`
-     first becomes non-null. */
-  useEffect(() => {
-    if (chat.conversationId) history.refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chat.conversationId]);
-
   const surface: TraxContextValue["surface"] = onTrax ? "page" : sheetOpen ? "panel" : null;
 
   const value = useMemo<TraxContextValue>(
     () => ({
-      chat,
-      history,
       sheetOpen,
       openSheet,
       closeSheet,
       toggleSheet,
-      openConversation,
-      startNewConversation,
       returnPath,
       expandToFullPage,
       minimiseToPanel,
@@ -219,14 +182,10 @@ export function TraxProvider({ children }: { children: ReactNode }) {
       surface,
     }),
     [
-      chat,
-      history,
       sheetOpen,
       openSheet,
       closeSheet,
       toggleSheet,
-      openConversation,
-      startNewConversation,
       returnPath,
       expandToFullPage,
       minimiseToPanel,

@@ -1,3 +1,4 @@
+import { applyWebsiteVisibility } from '@/lib/vehicles/availability-rules';
 /**
  * Server-side first paint for /fleet.
  *
@@ -78,7 +79,7 @@ export async function loadFleetSeed(
       return null;
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await applyWebsiteVisibility(supabase
       .from('vehicles')
       // Allowlist, never `select('*')`: that table has RLS off and a
       // table-level anon grant, so `*` ships lockbox_code, purchase_price,
@@ -86,20 +87,7 @@ export async function loadFleetSeed(
       .select(vehiclePublicColumns(tenant, VEHICLE_PHOTO_COLUMNS))
       // The isolation boundary, not an optimisation — see above.
       .eq('tenant_id', tenant.id)
-      // Mirrors useVehicles: a rented car stays listed because it may be free
-      // on other dates; anything else (Maintenance, Sold…) is off the market.
-      .or('status.ilike.available,status.ilike.rented')
-      .eq('is_paused', false)
-      // Website visibility, set per vehicle in the portal's
-      // Website Content -> Our Fleet. Browse-only, and deliberately NOT applied
-      // to a lookup of one vehicle by id: a customer who already started a
-      // booking, or holds a link to a car the operator has since hidden, must
-      // still reach that page. `NOT FALSE` rather than `= true` because the
-      // column is nullable on rows written before it existed.
-      .not('show_on_website', 'is', false)
-      // `NOT TRUE`, not `= false`: the column is nullable and `= false` would
-      // drop every row that never had it set.
-      .not('is_disposed', 'is', true)
+      )
       .order('display_order', {
         referencedTable: 'vehicle_photos',
         ascending: true,

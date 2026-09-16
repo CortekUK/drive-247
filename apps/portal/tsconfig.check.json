@@ -17,6 +17,10 @@
   //
   // Usage:  npx tsc --noEmit -p apps/portal/tsconfig.check.json
   "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // Offline tests import Deno modules using their required explicit extensions.
+    "allowImportingTsExtensions": true
+  },
   "include": ["src/**/*.ts", "src/**/*.tsx"],
   "exclude": ["node_modules", ".next"]
 }

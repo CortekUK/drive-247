@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { useSidebar } from './SidebarContext';
+import { useAdminSupport } from '@/lib/use-support-messaging';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
@@ -38,6 +39,7 @@ interface NavItem {
   href: string;
   icon: React.ElementType;
   badgeCount?: number;
+  badgeUnavailable?: boolean;
 }
 
 interface NavGroup {
@@ -47,6 +49,7 @@ interface NavGroup {
 
 function useNavigation() {
   const { user } = useAuthStore();
+  const support = useAdminSupport();
 
   const salesOnly = !!user?.is_sales_agent && !user?.is_super_admin;
 
@@ -81,6 +84,9 @@ function useNavigation() {
         { name: 'Signup Plans', href: '/admin/signup-plans', icon: BadgeDollarSign },
         { name: 'Global Blacklist', href: '/admin/blacklist', icon: Ban },
         { name: 'Contact Requests', href: '/admin/contacts', icon: Mail },
+        // Keep the destination discoverable when support is unconfigured or offline.
+        // The page and API still require the separate, server-verified support grant.
+        ...(user?.is_super_admin ? [{ name: 'Support', href: '/admin/support', icon: MessageSquareText, badgeCount: support.allowed ? support.count ?? undefined : undefined, badgeUnavailable: support.allowed && support.count === null }] : []),
         { name: 'Mode Requests', href: '/admin/requests', icon: ArrowUpCircle },
         { name: 'Announcements', href: '/admin/announcements', icon: Megaphone },
         { name: 'Welcome Pack', href: '/admin/welcome-pack', icon: BookOpen },
@@ -145,7 +151,7 @@ function NavGroupComponent({
           {group.items.map((item) => {
             const Icon = item.icon;
             const active = isActive(item.href);
-            const showBadge = (item.badgeCount ?? 0) > 0;
+            const showBadge = (item.badgeCount ?? 0) > 0 || item.badgeUnavailable;
             return (
               <Link
                 key={item.name}
@@ -162,6 +168,7 @@ function NavGroupComponent({
                 <span className="flex-1">{item.name}</span>
                 {showBadge && (
                   <span
+                    title={item.badgeUnavailable ? 'Unread count unavailable. Reconnecting…' : undefined}
                     className={cn(
                       'inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold tabular-nums',
                       active
@@ -169,7 +176,7 @@ function NavGroupComponent({
                         : 'bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/40'
                     )}
                   >
-                    {item.badgeCount! > 99 ? '99+' : item.badgeCount}
+                    {item.badgeUnavailable ? '?' : item.badgeCount! > 99 ? '99+' : item.badgeCount}
                   </span>
                 )}
               </Link>
