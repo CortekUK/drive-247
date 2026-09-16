@@ -1,6 +1,6 @@
 # Test TRAX locally in the V2 portal
 
-The normal local entry point is `http://northwind.portal.localhost:4002`. Click **Trax** in the V2 top bar or press **Ctrl+J** (Cmd+J on macOS). The panel header carries the workspace: conversation history, a new conversation, Open Support, full screen and close. Open Support leaves TRAX for the portal's Support section (`/support`) — the same place the profile menu's Support item opens — and the AI conversation and any unsent draft are kept. No deployment is required for this development path. Other tenants use their own subdomain and must already be enrolled in V2 through the existing rollout policy. Do not change tenant enrollment to run a test.
+The normal local entry point is `http://northwind.portal.localhost:4002`. Click **Trax** in the V2 top bar or press **Ctrl+J** (Cmd+J on macOS). TRAX opens as a panel FLOATING over the page in the bottom-right corner: the page keeps its width, its scroll position and its own scrolling, and there is no backdrop over it. Its header carries the workspace: conversation history, a new conversation, Open Support, expand and close. Expand makes the floating panel larger over the same page — it is not a route — and Restore size puts it back. Below `md` the panel is a near-full-screen overlay instead. Open Support leaves TRAX for the portal's Support section (`/support`) — the same place the profile menu's Support item opens — and the AI conversation and any unsent draft are kept. No deployment is required for this development path. Other tenants use their own subdomain and must already be enrolled in V2 through the existing rollout policy. Do not change tenant enrollment to run a test.
 
 ## What this test can establish
 
@@ -81,6 +81,8 @@ node tests/trax/browser.mjs --manual
 This opens a separate, clearly labelled fixture browser using the real V2 dialog, hook and backend handler with anonymized authorization fixtures. Chrome or Edge must be installed. Only the test server and intercepted offline API are allowed. It requires no sign-in, reads no tenant records, and does not deploy anything. **It is not the signed-in Northwind portal.** Navigation is validated and displayed in the fixture instead of opening real portal pages. Close the browser or use Ctrl+C to stop.
 
 For the automated guidance browser smoke check, omit `--manual`. Use `node tests/trax/browser.mjs --operational` for scripted-model operational fixtures, including the fresh recheck with a remaining block. Those fixtures never call a model provider or live database. Neither mode establishes that the configured Supabase access works. The real portal test above is still needed for that.
+
+For the floating panel itself, run `node tests/trax/panel-browser.mjs` (add `--manual` to drive it by hand). It mounts the real panel and providers over a stand-in dashboard and measures the page while Trax opens, expands, restores and closes: the content column keeps its width and position, nothing overflows horizontally, no backdrop or scroll lock appears over the page, the panel keeps a readable corner size, and the conversation and an unsent draft survive closing. Screenshots are in `artifacts/trax-panel`.
 
 ## Implementation references
 

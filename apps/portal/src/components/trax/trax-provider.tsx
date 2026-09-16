@@ -13,7 +13,7 @@ import {
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 /**
- * Where Trax is shown — the docked panel or the /trax page — shared by every surface.
+ * Where Trax is shown — the floating panel or the /trax page — shared by every surface.
  * The conversation itself lives in TraxSupportProvider (components/trax/support/
  * trax-support-context.tsx, driven by useTraxSupport); the notes below explain why
  * one provider above the route is needed.
@@ -26,7 +26,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
  * its OWN conversation. That was invisible while Trax had exactly one surface,
  * and becomes the central problem the moment it has two: a panel and a full
  * page each calling `useChat()` would be two threads that each forget what the
- * other was told, and "expand to full screen" would silently drop the
+ * other was told, and moving from one to the other would silently drop the
  * conversation the operator was in the middle of.
  *
  * Calling it ONCE here and passing it down is what makes the panel and the page
@@ -36,21 +36,23 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
  * preserves the thread without persisting anything.
  *
  * ---------------------------------------------------------------------------
- * THE TWO SURFACES, AND THE THREE WAYS BETWEEN THEM
+ * THE TWO SURFACES, AND THE WAYS BETWEEN THEM
  *
- *   panel — docked beside whatever page is open (trax-panel.tsx).
+ *   panel — floating over whatever page is open (trax-panel.tsx). Its own
+ *           Expand control only makes the floating panel bigger; it does not
+ *           come here, because the page underneath must not change.
  *   page  — `/trax`, where the app sidebar becomes the conversation rail
  *           (trax-rail.tsx) and the page is one centred conversation column.
+ *           Reached by its own URL and by the featured card that links to it.
  *
- *   expandToFullPage  panel → page. Closes the panel and pushes `/trax`.
  *   minimiseToPanel   page → panel. Opens the panel and returns to the page the
  *                     operator came from, so they land back beside that record.
  *   leaveFullPage     page → that same page, panel closed (the rail's Back).
  *
- * The two surfaces are mutually exclusive: entering `/trax` by ANY route (the
- * expand button, a featured card linking there, a pasted URL) closes the panel,
- * so a browser Back does not resurrect a docked copy of the conversation the
- * operator was just reading full screen.
+ * The two surfaces are mutually exclusive: entering `/trax` by ANY route (a
+ * featured card linking there, a pasted URL) closes the panel, so a browser Back
+ * does not resurrect a floating copy of the conversation the operator was just
+ * reading full screen.
  *
  * `returnPath` is where "back" goes: the last in-app location OUTSIDE `/trax`,
  * query string included (a Settings tab, a record section). It is in memory
@@ -81,8 +83,6 @@ interface TraxContextValue {
   toggleSheet: () => void;
   /** Last in-app pathname + search outside `/trax`; `/` when there is none. */
   returnPath: string;
-  /** Panel → full page, same thread. */
-  expandToFullPage: () => void;
   /** Full page → panel, back on the page the operator came from. */
   minimiseToPanel: () => void;
   /** Full page → the page the operator came from, panel closed. */
@@ -126,11 +126,6 @@ export function TraxProvider({ children }: { children: ReactNode }) {
 
   const openSheet = useCallback(() => setSheetOpen(true), []);
   const closeSheet = useCallback(() => setSheetOpen(false), []);
-
-  const expandToFullPage = useCallback(() => {
-    setSheetOpen(false);
-    router.push("/trax");
-  }, [router]);
 
   const minimiseToPanel = useCallback(() => {
     setSheetOpen(true);
@@ -176,7 +171,6 @@ export function TraxProvider({ children }: { children: ReactNode }) {
       closeSheet,
       toggleSheet,
       returnPath,
-      expandToFullPage,
       minimiseToPanel,
       leaveFullPage,
       surface,
@@ -187,7 +181,6 @@ export function TraxProvider({ children }: { children: ReactNode }) {
       closeSheet,
       toggleSheet,
       returnPath,
-      expandToFullPage,
       minimiseToPanel,
       leaveFullPage,
       surface,

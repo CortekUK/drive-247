@@ -909,31 +909,40 @@ body.v2-theme {
   border-radius: var(--v2-radius-4xl);
 }
 
-/* --- Trax docked panel: width and offset --------------------------------
- * ONE definition of the docked panel's width, on the root, because two kinds of
- * consumer need it and only one of them lives inside the layout's flex row:
+/* --- Trax floating panel: size and offset --------------------------------
+ * Trax floats ABOVE the page (components/trax/trax-panel.tsx, portalled to
+ * <body>). Opening it does not narrow the page any more, so nothing here
+ * reserves a column. What is left is the panel's own size, and how far the two
+ * VIEWPORT-pinned overlays must step aside so the panel does not cover them:
  *
- *   --trax-width   the panel and its flow gap (components/trax/trax-panel.tsx).
- *                  A clamp because breakpoints read the viewport, not the
- *                  narrowed column: 34vw, never below 380px, never above 600px.
- *                  Wide enough for the assistant workspace — conversation,
- *                  history and the support inbox all render inside it.
- *   --trax-offset  how far a VIEWPORT-pinned overlay must stay from the right
- *                  edge so it does not sit under the panel — the setup guide
- *                  (portalled to <body>) and the Appearance save bar. It is the
- *                  width only while the panel is open AND docked (md+); below md
- *                  the panel is a full-screen sheet with no column beside it.
+ *   --trax-width / --trax-height    the floating card in the bottom-right
+ *                  corner. Wide enough to read a conversation in, small enough
+ *                  to leave the record beside it visible; never taller than the
+ *                  viewport allows.
+ *   --trax-expanded-*  the larger focused overlay behind the Expand control.
+ *   --trax-offset  how far the setup guide (portalled to <body>) and the
+ *                  Appearance save bar keep clear of the panel's column. 0px
+ *                  when Trax is closed, and below `md`, where the panel is a
+ *                  near-full-screen overlay and the guide hides instead.
  *
- * Keyed on `data-trax-panel`, which TraxPanel sets on <html> while it is
- * mounted. TraxPanel is v2-only, so no v1 page ever matches; every consumer
- * writes `var(--trax-offset, 0px)`, which is exactly its old position. */
+ * Keyed on `data-trax-panel` / `data-trax-size`, which TraxPanel sets on <html>
+ * while it is mounted. TraxPanel is v2-only, so no v1 page ever matches; every
+ * consumer writes `var(--trax-offset, 0px)`, which is exactly its old position. */
 html[data-trax-panel] {
-  --trax-width: clamp(380px, 34vw, 600px);
+  --trax-width: clamp(400px, 30vw, 480px);
+  /* 7rem keeps the top bar uncovered on a short screen: the panel is anchored to
+     the bottom, so the height is what decides where its top edge lands. */
+  --trax-height: min(720px, calc(100dvh - 7rem));
+  --trax-expanded-width: min(1100px, calc(100vw - 4rem));
+  --trax-expanded-height: min(900px, calc(100dvh - 7rem));
   --trax-offset: 0px;
 }
 @media (min-width: 768px) {
   html[data-trax-panel="open"] {
-    --trax-offset: var(--trax-width);
+    --trax-offset: calc(var(--trax-width) + 1rem);
+  }
+  html[data-trax-panel="open"][data-trax-size="expanded"] {
+    --trax-offset: calc(var(--trax-expanded-width) + 1rem);
   }
 }
 
