@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TraxSupportThread } from '@/components/trax/support/TraxSupportThread';
 
 // Offline: the support conversation, composer, greeting, messages and workspace are mocked.
-const mocks = vi.hoisted(() => ({ support: null as any, workspace: null as any, state: null as any }));
+const mocks = vi.hoisted(() => ({ support: null as any, workspace: null as any, state: null as any, message: null as any }));
 vi.mock('@/components/trax/support/trax-support-context', () => ({
   useTraxSupportChat: () => mocks.support,
   useTraxSupportWorkspace: () => mocks.state,
@@ -14,7 +14,7 @@ vi.mock('@/components/trax/trax-composer', () => ({
 }));
 vi.mock('@/components/trax/trax-greeting', () => ({ TraxGreeting: () => createElement('div', { 'data-testid': 'greeting' }) }));
 vi.mock('@/components/trax/support/ChatMessage', () => ({
-  ChatMessage: (p: any) => createElement('div', { 'data-testid': 'message', 'data-check-again': String(!!p.onCheckAgain), 'data-navigate': String(!!p.onVerifyNavigation) }),
+  ChatMessage: (p: any) => { mocks.message = p; return createElement('div', { 'data-testid': 'message', 'data-check-again': String(!!p.onCheckAgain), 'data-navigate': String(!!p.onVerifyNavigation) }); },
 }));
 vi.mock('@/components/trax/support/SupportWorkspace', () => ({
   SupportWorkspace: (p: any) => { mocks.workspace = p; return createElement('div', { 'data-testid': 'workspace' }, p.children); },
@@ -25,7 +25,7 @@ const base = () => ({
   sendMessage: vi.fn(async () => {}), confirmAction: vi.fn(async () => {}), rejectAction: vi.fn(), clearChat: vi.fn(),
   navigate: vi.fn(async () => true), checkAgain: vi.fn(async () => {}),
   capabilities: { modelReady: true, operationalChecks: true, finance: false } as any,
-  supportRequest: vi.fn(async () => null), issues: [{ id: 'i1', topic: 'payments', summary: 'Payment', score: 100, state: 'needs_support', reason: null, checks: 2 }],
+  supportRequest: vi.fn(async () => null), requestTicket: vi.fn(async () => null), issues: [{ id: 'i1', topic: 'payments', summary: 'Payment', score: 100, state: 'needs_support', reason: null, checks: 2 }],
   activeIssueId: 'i1', recentConversations: [], contextKey: 'scope-a',
 });
 
@@ -39,7 +39,7 @@ const buttons = (label: string) => [...document.querySelectorAll('button')].filt
 
 beforeEach(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
-  mocks.support = base(); mocks.workspace = null;
+  mocks.support = base(); mocks.workspace = null; mocks.message = null;
   mocks.state = { view: 'conversation', setView: vi.fn(), startNew: vi.fn(), activate: vi.fn() };
   Element.prototype.scrollIntoView = vi.fn();
 });
@@ -76,11 +76,22 @@ describe('TraxSupportThread in the Trax panel', () => {
     expect(rendered.every((m) => m.dataset.navigate === 'true')).toBe(true);
     expect(document.querySelector('[data-testid="greeting"]')).toBeNull();
   });
-  it('passes issues and the support request to the workspace for the issue state and handoff', () => {
+  it('passes the support request to the workspace, and no issue state to display', () => {
     render();
     expect(mocks.workspace.request).toBe(mocks.support.supportRequest);
-    expect(mocks.workspace.issues).toHaveLength(1);
-    expect(mocks.workspace.activeIssueId).toBe('i1');
+    // The issue selector and the investigation footer are gone with their props.
+    expect(mocks.workspace.issues).toBeUndefined();
+    expect(mocks.workspace.activeIssueId).toBeUndefined();
+  });
+  it('gives a confirmed ticket its Support destination and a failed one its retry', () => {
+    mocks.support.messages = [{ id: 'm1', role: 'assistant', content: 'Ticket created.', timestamp: new Date(), ticket: { id: 't1', reference: 'TRX-1' } }];
+    const onOpenSupport = vi.fn();
+    const node = document.createElement('div'); document.body.append(node); root = createRoot(node);
+    act(() => root!.render(createElement(TraxSupportThread, { density: 'sheet', onOpenSupport })));
+    expect(mocks.message?.onOpenSupport).toBe(onOpenSupport);
+    expect(typeof mocks.message?.onRetryTicket).toBe('function');
+    act(() => mocks.message.onRetryTicket());
+    expect(mocks.support.requestTicket).toHaveBeenCalled();
   });
   it('shows the payment progress line and errors honestly', () => {
     mocks.support.capabilities = { modelReady: true, operationalChecks: true, finance: true };

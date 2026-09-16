@@ -86,6 +86,10 @@ export interface ChatMessage {
   provenance?: TraxProvenance;
   evidence?: TraxEvidence[];
   canRecheck?: boolean;
+  /** The support ticket the server created or reused for this issue. */
+  ticket?: { id: string; reference: string };
+  /** The automatic handoff failed; offer the retry rather than a false success. */
+  ticketRetry?: boolean;
 }
 /** Server-built, allowlisted destinations only. The model never supplies these. */
 export interface TraxPaymentAction { kind:'stripe_dashboard'|'receipt'; label:'Open in Stripe'|'View receipt'; href:string; note:string }
@@ -109,7 +113,9 @@ export interface TraxEvidence {
   data?:{paymentCards?:TraxPaymentCard[];totals?:TraxPaymentTotal[];explanations?:TraxPaymentExplanation[];coverage?:string;[key:string]:unknown};
 }
 export interface TraxCapabilities { modelReady:boolean; operationalChecks:boolean; finance:boolean;supportStorage?:boolean;supportSubmission?:boolean;supportAgent?:boolean;managePolicy?:boolean }
-export interface TraxIssue {id:string;topic:string;summary:string;score:number;state:'investigating'|'needs_support'|'resolved'|'submitted';reason:string|null;ticketId?:string;checks:number}
+/** No escalation score and no check counter: support policy state stays on the
+ * server (supabase/functions/trax-support/support/issues.ts:issueView). */
+export interface TraxIssue {id:string;topic:string;summary:string;state:'investigating'|'needs_support'|'resolved'|'submitted';ticketId?:string}
 export interface TraxTicket {id:string;reference:string;tenant_id:string;user_id:string;issue_id:string;summary:string;status:'open'|'in_progress'|'closed';created_at:string;updated_at:string;closed_at:string|null;handoff?:Record<string,unknown>;staff_note?:string;retention_hold:boolean;review_due?:boolean}
 export interface TraxRetentionPolicy {conversation_days:number;closed_ticket_days:number;inactive_open_days:number;cleanup_enabled:boolean}
 
@@ -136,6 +142,7 @@ export interface ChatApiResponse {
   canRecheck?: boolean;
   issues?:TraxIssue[];
   activeIssueId?:string;
+  ticketRetry?:boolean;
   recentConversations?:{id:string;lastActivityAt:string;summary:string}[];
   resumedMessages?:{role:'user'|'assistant';content:string;at:string}[];
   ticket?:TraxTicket;
@@ -156,6 +163,8 @@ export interface UseChatReturn {
   navigate: (action: TraxNavigation) => Promise<boolean>;
   capabilities?: TraxCapabilities;
   checkAgain?: () => Promise<void>;
+  /** Retry the automatic support handoff for an issue whose ticket did not persist. */
+  requestTicket?: (issueId?: string) => Promise<ChatApiResponse | null>;
   issues?:TraxIssue[];
   activeIssueId?:string;
   recentConversations?:ChatApiResponse['recentConversations'];

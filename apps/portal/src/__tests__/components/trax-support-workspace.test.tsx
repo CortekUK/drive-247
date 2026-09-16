@@ -3,7 +3,6 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SupportWorkspace } from '@/components/trax/support/SupportWorkspace';
 
-const issue = { id: 'i1', topic: 'payments', summary: 'Payment missing in Stripe', score: 100, state: 'needs_support' as const, reason: null, checks: 2 };
 const recent = [
   { id: 'c1', lastActivityAt: '2026-09-15T10:00:00Z', summary: 'Which vehicles are out on rent?' },
   { id: 'c2', lastActivityAt: '2026-09-14T09:00:00Z', summary: 'Payment missing in Stripe' },
@@ -18,7 +17,7 @@ function render(props: Record<string, unknown> = {}) {
   root = createRoot(node);
   act(() => root!.render(createElement(SupportWorkspace, {
     request, capabilities: { modelReady: true, operationalChecks: true, finance: false, supportStorage: true, supportSubmission: true } as any,
-    issues: [issue], activeIssueId: 'i1', recent, busy: false, onOpenSupport, view: 'conversation', onView: setView,
+    recent, busy: false, onOpenSupport, view: 'conversation', onView: setView,
     ...props,
   } as any, createElement('div', { 'data-testid': 'conversation' }))));
 }
@@ -28,27 +27,18 @@ beforeEach(() => { vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true); vi.clearAllM
 afterEach(() => { act(() => root?.unmount()); root = null; document.body.replaceChildren(); vi.unstubAllGlobals(); });
 
 describe('TRAX support workspace views', () => {
-  it('shows the conversation with its issue state, and no ticket interface inside TRAX', () => {
+  it('gives the conversation the whole area: no issue selector, no investigation footer', () => {
     render();
     expect(document.querySelector('[data-testid="conversation"]')).not.toBeNull();
-    expect(document.querySelector('[data-testid="trax-issue-state"]')).not.toBeNull();
-    // Tickets, replies and the old bottom picker all live in the portal's Support section.
+    // The dropdown under the header, the score strip and its controls are gone.
+    expect(document.querySelector('#trax-issue')).toBeNull();
+    expect(document.querySelector('[data-testid="trax-issue-state"]')).toBeNull();
+    const text = document.body.textContent ?? '';
+    for (const gone of ['Investigating this issue', 'Support level', 'checks', 'This is resolved', 'Request human support', 'Communicate with Support', 'Continue a previous issue', 'My Tickets']) {
+      expect(text, gone).not.toContain(gone);
+    }
+    // And nothing here renders a ticket interface.
     expect(document.querySelector('[data-testid="support-inbox"]')).toBeNull();
-    expect(document.querySelector('#trax-resume')).toBeNull();
-    expect(document.body.textContent).not.toContain('Continue a previous issue');
-    expect(document.body.textContent).not.toContain('My Tickets');
-  });
-  it('opens the portal Support section for this issue, creating nothing, when support is requested', () => {
-    render();
-    act(() => button('Communicate with Support')!.click());
-    expect(onOpenSupport).toHaveBeenCalledWith({ issueId: 'i1' });
-    expect(request).not.toHaveBeenCalled();
-    expect(setView).not.toHaveBeenCalled();
-  });
-  it('opens the existing ticket conversation once the issue has one', () => {
-    render({ issues: [{ ...issue, state: 'submitted', ticketId: 't1' }] });
-    act(() => button('Open support conversation')!.click());
-    expect(onOpenSupport).toHaveBeenCalledWith({ ticketId: 't1' });
   });
   it('asks the server to reopen a stored conversation from the history view', async () => {
     render({ view: 'history' });

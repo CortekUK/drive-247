@@ -126,7 +126,7 @@ try{
   if(financeMode){
     await page.getByRole('textbox',{name:'Ask TRAX'}).fill('Please investigate the payment for rental DEMO-104.');
     await page.getByRole('textbox',{name:'Ask TRAX'}).press('Enter');
-    await page.getByText('Human support recommended',{exact:true}).waitFor();
+    await page.getByText('no ticket was created',{exact:false}).waitFor();
     await page.getByText('USD 50.00 refunded',{exact:false}).first().waitFor();
     await page.getByText('Drive247 and Stripe disagree',{exact:false}).first().waitFor();
     // The only external links are the server-built, hook-validated Stripe destinations for this payment.
@@ -135,7 +135,8 @@ try{
     assert.equal(await stripeLink.getAttribute('target'),'_blank');
     assert.equal(await stripeLink.getAttribute('rel'),'noopener noreferrer');
     assert.equal(await page.getByRole('link',{name:'View receipt'}).first().getAttribute('href'),'https://pay.stripe.com/receipts/payment/offline');
-    assert.equal(await page.getByLabel('Current support issue').locator('option').count(),1);
+    assert.equal(await page.getByLabel('Current support issue').count(),0); // The issue selector is gone.
+    assert.equal(await page.locator('[data-testid="trax-issue-state"]').count(),0);
     await page.screenshot({path:resolve(screenshots,'payment-investigation.png'),fullPage:true,animations:'disabled'});
     await page.getByRole('textbox',{name:'Ask TRAX'}).fill('What is my available Stripe balance?');
     await page.getByRole('textbox',{name:'Ask TRAX'}).press('Enter');
@@ -147,45 +148,62 @@ try{
     await page.screenshot({path:resolve(screenshots,'mobile.png'),fullPage:true,animations:'disabled'});
     await page.getByRole('button',{name:'Close TRAX',exact:true}).click();
   }else if(supportMode){
+    // 1 — an issue TRAX cannot resolve becomes a real ticket in the same answer.
     await page.getByRole('textbox',{name:'Ask TRAX'}).fill('My payment has not arrived. Please help investigate.');
     await page.getByRole('textbox',{name:'Ask TRAX'}).press('Enter');
-    await page.getByText('Human support recommended',{exact:true}).waitFor();
-    assert.equal(supportFixture.tickets.size,0);
-    // Tickets are not inside TRAX: TRAX is the AI conversation, support is the portal's own section.
+    await page.getByRole('button',{name:/^Open support ticket/}).waitFor();
+    assert.equal(supportFixture.tickets.size,1);
+    const created=[...supportFixture.tickets.values()][0];
+    const thread=page.locator('[data-slot="trax-conversation"]');
+    assert.match((await thread.innerText()).replace(/\s+/g,' '),new RegExp(`created support ticket #${created.reference}`,'i'));
+    // 2 — no support policy state on screen, and no ticket interface inside TRAX.
+    const shown=(await thread.innerText()).replace(/\s+/g,' ');
+    for(const gone of ['Support level','Investigating this issue','This is resolved','Request human support','Communicate with Support','Contact Support','Nothing has been submitted yet'])assert.ok(!shown.includes(gone),`TRAX still shows "${gone}"`);
+    assert.equal(await page.locator('#trax-issue').count(),0);
+    assert.equal(await page.getByTestId('trax-issue-state').count(),0);
     assert.equal(await page.getByTestId('support-inbox').count(),0);
     await page.screenshot({path:resolve(screenshots,'escalation-desktop.png'),fullPage:true,animations:'disabled'});
-    // The handoff leaves TRAX for the Support section, carrying the issue and closing TRAX behind it.
-    await page.getByRole('button',{name:'Communicate with Support',exact:true}).click();
-    assert.match(await page.evaluate(()=>window.lastNavigation??''),/^\/support\?issue=/);
-    assert.equal(await page.getByTestId('trax-issue-state').count(),0);
-    await page.getByTestId('support-inbox').waitFor();
-    assert.equal(supportFixture.tickets.size,0); // Opening Support creates nothing.
-    await page.screenshot({path:resolve(screenshots,'support-section.png'),fullPage:true,animations:'disabled'});
-    await page.getByLabel('Your message',{exact:true}).fill('Please review this issue with the recorded checks.');
-    await page.getByRole('button',{name:'Cancel',exact:true}).click();
-    assert.equal(supportFixture.tickets.size,0);
+
+    // 3 — the same issue asked again reuses that ticket rather than opening another.
+    await page.getByRole('textbox',{name:'Ask TRAX'}).fill('I still need a human agent for this payment.');
+    await page.getByRole('textbox',{name:'Ask TRAX'}).press('Enter');
+    await page.getByText('already linked to support ticket',{exact:false}).waitFor();
+    assert.equal(supportFixture.tickets.size,1);
+
+    // 4 — a failed handoff says so, invents nothing, and the retry creates it once.
     const originalSubmit=supportFixture.store.submit;
     supportFixture.store.submit=async()=>{throw Error('Isolated submission failure');};
-    await page.getByRole('button',{name:'New ticket',exact:true}).click();
-    await page.getByLabel('Your message',{exact:true}).fill('Please review this issue with the recorded checks.');
-    await page.getByRole('button',{name:'Send',exact:true}).click();
-    await page.getByRole('button',{name:'Retry send',exact:true}).waitFor();
-    assert.equal(supportFixture.tickets.size,0);
-    supportFixture.store.submit=originalSubmit;
-    const submittedResponse=page.waitForResponse(r=>r.url().endsWith('/trax-support')&&r.request().postDataJSON()?.type==='submit_ticket');
-    await page.getByRole('button',{name:'Retry send',exact:true}).click();
-    assert.equal((await submittedResponse).status(),200);
+    await page.locator('button[aria-label="Clear conversation"]').click();
+    await page.getByRole('textbox',{name:'Ask TRAX'}).fill('I want to speak to a human agent about a refund.');
+    await page.getByRole('textbox',{name:'Ask TRAX'}).press('Enter');
+    await page.getByRole('button',{name:'Try creating the ticket again',exact:true}).waitFor();
     assert.equal(supportFixture.tickets.size,1);
-    // The AI conversation survived the handoff, and knows the issue reached support.
-    await page.getByRole('button',{name:'Ask AI',exact:true}).click();
-    await page.getByText('Shared with support',{exact:true}).waitFor();
+    assert.ok(!(await thread.innerText()).includes('TRX-FIXTURE-2'),'a reference was shown for a ticket that was never created');
+    await page.screenshot({path:resolve(screenshots,'handoff-failed.png'),fullPage:true,animations:'disabled'});
+    supportFixture.store.submit=originalSubmit;
+    await page.getByRole('button',{name:'Try creating the ticket again',exact:true}).click();
+    await page.getByRole('button',{name:/^Open support ticket/}).waitFor();
+    assert.equal(supportFixture.tickets.size,2);
+    const second=[...supportFixture.tickets.values()][1];
     await page.screenshot({path:resolve(screenshots,'submitted-conversation.png'),fullPage:true,animations:'disabled'});
+
+    // 5 — the ticket opens in the portal's Support section, not inside TRAX.
+    await page.getByRole('button',{name:/^Open support ticket/}).click();
+    assert.equal(await page.evaluate(()=>window.lastNavigation??''),`/support?ticket=${second.id}`);
+    await page.getByTestId('support-inbox').waitFor();
+    assert.equal(await page.getByRole('button',{name:'Close TRAX',exact:true}).isVisible(),false);
+    await page.screenshot({path:resolve(screenshots,'support-section.png'),fullPage:true,animations:'disabled'});
+
+    // 6 — TRAX kept its conversation behind the navigation, history included.
+    await page.getByRole('button',{name:'Ask AI',exact:true}).click();
+    await page.getByRole('button',{name:/^Open support ticket/}).waitFor();
     await page.getByRole('button',{name:'History',exact:true}).click();
     await page.getByLabel('Previous TRAX conversations').getByRole('button').first().click();
-    await page.getByText('Shared with support',{exact:true}).waitFor();
-    assert.equal(supportFixture.tickets.size,1);
+    await page.getByRole('textbox',{name:'Ask TRAX'}).waitFor();
+    assert.equal(supportFixture.tickets.size,2);
     await page.getByRole('button',{name:'Close TRAX',exact:true}).click();
-    // Retention belongs with support, so it lives in the Support section too.
+
+    // 7 — retention stays with support, in the Support section.
     await page.getByRole('button',{name:'Retention',exact:true}).click();
     await page.getByRole('button',{name:'Save retention periods',exact:true}).click();
     await page.getByRole('button',{name:'Preview cleanup',exact:true}).click();
@@ -244,6 +262,6 @@ try{
     assert.equal(supportRequests,checkedRequests);
   }
   assert.deepEqual(errors,[]);
-  console.log(JSON.stringify({status:'passed',mode:financeMode?'scripted-model-finance-fixtures':supportMode?'offline-support-storage-fixtures':operationalMode?'scripted-model-operational-fixtures':'prepared-guidance-fixtures',checks:financeMode?['actual-dialog-hook-handler','linked-payment-check','refund-discrepancy','multi-currency-account-funds','explicit-handoff-offer','V1-excluded','mobile-no-clipping']:supportMode?['real-dialog-hook-handler','no-ticket-before-click','failed-submit-preserves-context','successful-retry','composer-opens-without-ticket','first-message-required','retention-save-and-dry-run','handoff-leaves-trax-for-support','no-ticket-ui-inside-trax','support-opens-no-ticket','resume-submitted-issue','V1-excluded','other-tenants-excluded','mobile-no-horizontal-clipping','no-page-errors']:operationalMode?['real-dialog-hook-handler','scripted-model-tools','unrecorded-return','fresh-recheck-remaining-block','V1-excluded','other-tenants-excluded','mobile-no-horizontal-clipping','no-page-errors']:['Northwind-V2-launcher','V1-excluded','other-tenants-excluded','actual-dialog','English-guidance','server-verified-navigation','conversation-survives-close','Roman-Urdu','mobile-no-horizontal-clipping','no-page-errors'],screenshots}));
+  console.log(JSON.stringify({status:'passed',mode:financeMode?'scripted-model-finance-fixtures':supportMode?'offline-support-storage-fixtures':operationalMode?'scripted-model-operational-fixtures':'prepared-guidance-fixtures',checks:financeMode?['actual-dialog-hook-handler','linked-payment-check','refund-discrepancy','multi-currency-account-funds','honest-unconfigured-handoff','no-issue-controls','V1-excluded','mobile-no-clipping']:supportMode?['real-dialog-hook-handler','automatic-ticket-on-escalation','no-score-or-issue-controls','no-ticket-ui-inside-trax','existing-ticket-reused','failed-handoff-invents-nothing','retry-creates-once','ticket-opens-support-section','conversation-kept-behind-navigation','retention-save-and-dry-run','V1-excluded','other-tenants-excluded','mobile-no-horizontal-clipping','no-page-errors']:operationalMode?['real-dialog-hook-handler','scripted-model-tools','unrecorded-return','fresh-recheck-remaining-block','V1-excluded','other-tenants-excluded','mobile-no-horizontal-clipping','no-page-errors']:['Northwind-V2-launcher','V1-excluded','other-tenants-excluded','actual-dialog','English-guidance','server-verified-navigation','conversation-survives-close','Roman-Urdu','mobile-no-horizontal-clipping','no-page-errors'],screenshots}));
   }
 }finally{await browser?.close();await new Promise((resolve)=>server.close(resolve));}

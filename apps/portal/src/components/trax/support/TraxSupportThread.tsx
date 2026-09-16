@@ -47,7 +47,7 @@ export interface TraxSupportThreadProps {
 export function TraxSupportThread({ density = "page", autoFocus = false, onOpenSupport, className }: TraxSupportThreadProps) {
   const {
     messages, isLoading, error, sendMessage, confirmAction, rejectAction, navigate, capabilities,
-    checkAgain, supportRequest, issues, activeIssueId, recentConversations, contextKey,
+    checkAgain, supportRequest, requestTicket, recentConversations, contextKey,
   } = useTraxSupportChat();
   const { view, setView } = useTraxSupportWorkspace();
   const endRef = useRef<HTMLDivElement>(null);
@@ -76,8 +76,6 @@ export function TraxSupportThread({ density = "page", autoFocus = false, onOpenS
         key={contextKey}
         request={supportRequest}
         capabilities={capabilities}
-        issues={issues}
-        activeIssueId={activeIssueId}
         recent={recentConversations}
         busy={isLoading}
         onOpenSupport={onOpenSupport}
@@ -108,6 +106,8 @@ export function TraxSupportThread({ density = "page", autoFocus = false, onOpenS
                     onRejectAction={rejectAction}
                     onVerifyNavigation={navigate}
                     onCheckAgain={m.id === messages.at(-1)?.id ? checkAgain : undefined}
+                    onOpenSupport={onOpenSupport}
+                    onRetryTicket={requestTicket && (() => void requestTicket())}
                     isLoading={isLoading}
                   />
                 ))}

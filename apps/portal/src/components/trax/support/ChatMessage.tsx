@@ -1,6 +1,6 @@
 'use client';
 
-import { User, Copy, Check } from 'lucide-react';
+import { User, Copy, Check, LifeBuoy, RotateCcw } from 'lucide-react';
 import { TraxIcon } from '@/components/chat/TraxIcon';
 import { useAuthStore } from '@/stores/auth-store';
 import { useState } from 'react';
@@ -22,9 +22,13 @@ interface ChatMessageProps {
   isLoading?: boolean;
   onVerifyNavigation?: (action: TraxNavigation) => Promise<boolean>;
   onCheckAgain?: () => Promise<void>;
+  /** Open the ticket the server created for this issue, in the portal's Support section. */
+  onOpenSupport?: (target: { ticketId?: string; issueId?: string }) => void;
+  /** Retry an automatic handoff that did not persist. */
+  onRetryTicket?: () => void;
 }
 
-export function ChatMessage({ message, onConfirmAction, onRejectAction, onNavigate, onVerifyNavigation, onCheckAgain, isLoading }: ChatMessageProps) {
+export function ChatMessage({ message, onConfirmAction, onRejectAction, onNavigate, onVerifyNavigation, onCheckAgain, onOpenSupport, onRetryTicket, isLoading }: ChatMessageProps) {
   const isUser = message.role === 'user';
   const [copied, setCopied] = useState(false);
   const { branding } = useTenantBranding();
@@ -59,22 +63,15 @@ export function ChatMessage({ message, onConfirmAction, onRejectAction, onNaviga
             className="h-7 w-7 shrink-0 rounded-full object-cover shadow-sm"
           />
         ) : (
-          <div
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full shadow-sm"
-            style={{ background: `linear-gradient(135deg, ${accentColor}, ${accentColor}dd)` }}
-          >
-            <User className="h-3.5 w-3.5 text-white" />
+          /* Both avatars wear the same tinted surface from the theme — the one the
+             v2 bubble primitive uses — rather than a chat-only colour. */
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary dark:bg-primary/25">
+            <User className="h-3.5 w-3.5" />
           </div>
         )
       ) : (
-        <div
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
-          style={{
-            background: `${accentColor}15`,
-            border: `1px solid ${accentColor}25`,
-          }}
-        >
-          <TraxIcon size={18} color={accentColor} />
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary dark:bg-primary/25">
+          <TraxIcon size={18} color="currentColor" />
         </div>
       )}
 
@@ -90,10 +87,9 @@ export function ChatMessage({ message, onConfirmAction, onRejectAction, onNaviga
           className={cn(
             'relative rounded-xl px-3.5 py-2.5 text-sm leading-relaxed',
             isUser
-              ? 'text-white rounded-tr-sm'
+              ? 'bg-primary text-primary-foreground rounded-tr-sm'
               : 'bg-secondary/40 text-foreground rounded-tl-sm border border-border/40'
           )}
-          style={isUser ? { background: `linear-gradient(135deg, ${accentColor}, ${accentColor}dd)` } : undefined}
         >
           {/* Message content — markdown for assistant, plain for user */}
           {isUser ? (
@@ -199,6 +195,30 @@ export function ChatMessage({ message, onConfirmAction, onRejectAction, onNaviga
             {Array.isArray(result.data?.paymentCards) && <div className="mt-2"><PaymentEvidence cards={result.data!.paymentCards!} totals={result.data!.totals} explanations={result.data!.explanations} /></div>}
           </div>
         ))}
+        {/* The reference and the destination are the server's; nothing here is composed
+            by the model, and there is no ticket interface inside TRAX. */}
+        {!isUser && message.ticket && onOpenSupport && (
+          <button
+            type="button"
+            onClick={() => onOpenSupport({ ticketId: message.ticket!.id })}
+            className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium hover:bg-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+          >
+            <LifeBuoy className="h-3.5 w-3.5 text-primary" aria-hidden />
+            Open support ticket
+            <span className="text-muted-foreground">#{message.ticket.reference}</span>
+          </button>
+        )}
+        {!isUser && message.ticketRetry && onRetryTicket && (
+          <button
+            type="button"
+            disabled={isLoading}
+            onClick={onRetryTicket}
+            className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium hover:bg-secondary focus-visible:outline focus-visible:outline-2 disabled:opacity-50"
+          >
+            <RotateCcw className="h-3.5 w-3.5" aria-hidden />
+            Try creating the ticket again
+          </button>
+        )}
         {!isUser && message.canRecheck && onCheckAgain && <button type="button" disabled={isLoading} onClick={()=>void onCheckAgain()} className="rounded-lg border border-border px-3 py-2 text-xs font-medium hover:bg-secondary focus-visible:outline focus-visible:outline-2 disabled:opacity-50">Check Again</button>}
         {!isUser && onVerifyNavigation && !!message.navigation?.length && (
           <div className="flex flex-wrap gap-2">
@@ -251,7 +271,7 @@ export function ChatMessage({ message, onConfirmAction, onRejectAction, onNaviga
         {/* Footer with timestamp */}
         <div
           className={cn(
-            'flex items-center gap-2 text-[11px] text-muted-foreground/60',
+            'flex items-center gap-2 text-[11px] text-muted-foreground',
             isUser ? 'flex-row-reverse' : 'flex-row'
           )}
         >

@@ -363,7 +363,7 @@ function ThinkingIndicator({ accentColor }: { accentColor: string }) {
 function TraxSupportDialogInner({ isOpen, setIsOpen }: { isOpen: boolean; setIsOpen: (open: boolean) => void }) {
   /* One conversation per app: the shared TRAX conversation (TraxSupportProvider),
      never a second instance of the hook. */
-  const { messages, isLoading, error, sendMessage, confirmAction, rejectAction, clearChat, navigate, capabilities, checkAgain, supportRequest, issues, activeIssueId, recentConversations, contextKey } = useTraxSupportChat();
+  const { messages, isLoading, error, sendMessage, confirmAction, rejectAction, clearChat, navigate, capabilities, checkAgain, supportRequest, requestTicket, recentConversations, contextKey } = useTraxSupportChat();
   const router = useRouter();
   /* Human support is the portal's Support section; this dialog closes behind it. */
   const openSupport = (target: { ticketId?: string; issueId?: string }) => { router.push(supportHref(target)); setIsOpen(false); };
@@ -400,6 +400,7 @@ function TraxSupportDialogInner({ isOpen, setIsOpen }: { isOpen: boolean; setIsO
 
       {/* Dialog */}
       <div
+        data-slot="trax-conversation"
         className={cn(
           'fixed z-[9999] flex flex-col',
           'bg-background border border-border/50 rounded-xl sm:rounded-2xl shadow-2xl',
@@ -461,7 +462,7 @@ function TraxSupportDialogInner({ isOpen, setIsOpen }: { isOpen: boolean; setIsO
           </div>
         </div>
 
-        <SupportWorkspace key={contextKey} request={supportRequest} capabilities={capabilities} issues={issues} activeIssueId={activeIssueId} recent={recentConversations} busy={isLoading} onOpenSupport={openSupport}>
+        <SupportWorkspace key={contextKey} request={supportRequest} capabilities={capabilities} recent={recentConversations} busy={isLoading} onOpenSupport={openSupport}>
         {/* Messages area */}
         <ScrollArea ref={scrollAreaRef} className="flex-1 min-h-0">
           <div className="flex flex-col gap-1 px-3 py-2 sm:px-5">
@@ -485,6 +486,8 @@ function TraxSupportDialogInner({ isOpen, setIsOpen }: { isOpen: boolean; setIsO
                   onNavigate={() => setIsOpen(false)}
                   onVerifyNavigation={navigate}
                   onCheckAgain={message.id===messages.at(-1)?.id?checkAgain:undefined}
+                  onOpenSupport={openSupport}
+                  onRetryTicket={requestTicket && (() => void requestTicket())}
                   isLoading={isLoading}
                 />
               ))

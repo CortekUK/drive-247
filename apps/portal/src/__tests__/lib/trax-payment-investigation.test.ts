@@ -311,7 +311,7 @@ describe('payment conversation through the real handler',()=>{
     expect(two.body.evidence.find((e:any)=>e.data?.explanations).data.explanations[0].text).toContain('I verified this transaction');
     const three=await request(deps(scripted(call('resolve_payment_dashboard_action',{rentalId:rentalA,paymentId:paymentA}),answer('Use the Open in Stripe button.'))),continued(two,'Is wali payment ka Stripe link do'));
     expect(three.body.evidence.find((e:any)=>e.data?.paymentCards).data.paymentCards[0].actions[0]).toMatchObject({label:'Open in Stripe',href:'https://dashboard.stripe.com/payments/pi_A1'});
-    expect(three.body.ticket).toBeUndefined();expect(three.body.issues.find((i:any)=>i.topic==='payments').score).toBeLessThan(100);
+    expect(three.body.ticket).toBeUndefined();expect(three.body.issues.find((i:any)=>i.topic==='payments').state).toBe('investigating');
     const before=vi.mocked(finance.stripe.evidence!).mock.calls.length;
     const four=await request(deps(scripted(answer('I checked it again with fresh records.'))),continued(three,'Check again',{type:'recheck'}));
     expect(four.status).toBe(200);expect(vi.mocked(finance.stripe.evidence!).mock.calls.length).toBe(before+1);expect(operational.findRentals).toHaveBeenCalledTimes(1);
@@ -327,10 +327,10 @@ describe('payment conversation through the real handler',()=>{
     const three=await request(deps(scripted(call('investigate_rental_payment',{rentalId:rentalA,paymentId:'deadbeef'}),answer('Which payment do you mean?'))),{message:'And the other one?',conversationId:two.body.conversationId,contextScope:two.body.contextScope});
     expect(three.status).toBe(200);expect(vi.mocked(finance.stripe.evidence!).mock.calls.length).toBe(before);
   });
-  it('escalates only an unresolved discrepancy, through the explicit handoff offer',async()=>{
+  it('escalates only an unresolved discrepancy, and writes no ticket while support submission is unconfigured',async()=>{
     finance.stripe.evidence=vi.fn(async()=>{throw new SupportError('stripe_mapping_missing','missing',503);});
     const r=await request(deps(scripted(call('get_rental_payment_evidence',{rentalId:rentalA,offset:null}),call('request_support_handoff',{reason:'diagnostics_exhausted'}),answer('I could not verify it; you can contact support.'))),{message:'These payments show in Drive247 but not in Stripe',pageContext:{kind:'rental',id:rentalA}});
-    expect(r.body.issues.find((i:any)=>i.topic==='payments')).toMatchObject({score:100,state:'needs_support'});expect(r.body.ticket).toBeUndefined();
+    expect(r.body.issues.find((i:any)=>i.topic==='payments')).toMatchObject({state:'needs_support'});expect(r.body.ticket).toBeUndefined();
   });
   it('does not expose the payment tools to a role without payment access',async()=>{
     staff.role='viewer';const model=scripted(call('get_rental_payment_evidence',{rentalId:rentalA,offset:null}),answer('Payment checks are unavailable.'));
