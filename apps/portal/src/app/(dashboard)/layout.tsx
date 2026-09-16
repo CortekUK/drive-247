@@ -182,8 +182,14 @@ export default function DashboardLayout({
      the first. */
   const isTraxWorkspace = pathname === "/trax" || !!pathname?.startsWith("/trax/");
 
+  /* Support is the third one: a ticket list and a conversation that scroll
+     inside themselves, so the reply box stays on screen instead of sitting at
+     the bottom of a long page. Like Trax it keeps the sidebar, and unlike Trax
+     it keeps the top bar — hence a third flag rather than widening either. */
+  const isSupportWorkspace = pathname === "/support" || !!pathname?.startsWith("/support/");
+
   /* Routes that bound their own height instead of letting the document scroll. */
-  const isBoundedHeight = isMessagesWorkspace || isTraxWorkspace;
+  const isBoundedHeight = isMessagesWorkspace || isTraxWorkspace || isSupportWorkspace;
 
   /* Trax's shared conversation, provided to the top bar, the floating panel and
      the full page so all three are the SAME thread. v2 only: for v1 this is a

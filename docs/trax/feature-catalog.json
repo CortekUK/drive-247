@@ -1074,10 +1074,23 @@
           "symbols": [
             "PortalSupport"
           ]
+        },
+        {
+          "path": "apps/portal/src/components/support/support-inbox.tsx",
+          "symbols": [
+            "SupportInboxView"
+          ]
+        },
+        {
+          "path": "shared/trax-support/use-support-inbox.ts",
+          "symbols": [
+            "useSupportInbox"
+          ]
         }
       ],
       "tests": [
-        "apps/portal/src/__tests__/components/portal-support.test.tsx"
+        "apps/portal/src/__tests__/components/portal-support.test.tsx",
+        "apps/portal/src/__tests__/components/support-inbox.test.tsx"
       ],
       "guides": [],
       "limits": "Not eligible for Phase 1 retrieval or navigation until the deployed ticket workflow, notifications and permissions are reviewed."

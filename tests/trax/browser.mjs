@@ -39,7 +39,7 @@ export const supabase={auth:{getSession:async()=>({data:{session:{access_token:'
 export default function Link({children,href,...props}){return React.createElement('a',{href,...props},children);}
 `;
 const config=loadConfig(resolve(root,'apps/portal/tailwind.config.ts'));
-config.content=[resolve(root,'shared/trax-support/**/*.{ts,tsx}'),resolve(root,'apps/portal/src/components/trax/**/*.{ts,tsx}'),resolve(root,'apps/portal/src/components/chat/**/*.{ts,tsx}'),resolve(root,'apps/portal/src/components/ui/**/*.{ts,tsx}')];
+config.content=[resolve(root,'shared/trax-support/**/*.{ts,tsx}'),resolve(root,'apps/portal/src/components/trax/**/*.{ts,tsx}'),resolve(root,'apps/portal/src/components/support/**/*.{ts,tsx}'),resolve(root,'apps/portal/src/components/chat/**/*.{ts,tsx}'),resolve(root,'apps/portal/src/components/ui/**/*.{ts,tsx}'),resolve(root,'apps/portal/src/components/ui-v2/**/*.{ts,tsx}')];
 const css=(await postcss([tailwind(config)]).process((await readFile(resolve(root,'apps/portal/src/global.css'),'utf8'))+'\n'+(await readFile(resolve(root,'apps/portal/src/styles/v2-theme.css'),'utf8')),{from:undefined})).css;
 await writeFile(resolve(temp,'style.css'),css);
 const mocks=new Set(['@/integrations/supabase/client','@/stores/auth-store','@/contexts/TenantContext','@/hooks/use-manager-permissions','@/hooks/use-tenant-branding','@/lib/v2-context','next/navigation','next/link']);
@@ -65,7 +65,10 @@ function Harness(){
       React.createElement('p',{role:'status','data-testid':'navigation-result',style:{marginTop:20,overflowWrap:'anywhere'}},navigation?'Navigation verified: '+navigation:'No navigation selected.')),
     React.createElement(TraxLauncher,{ref}),
     /* The portal's Support section, mounted on navigation exactly as /support does. */
-    navigation.startsWith('/support')&&React.createElement('section',{'data-testid':'portal-support',style:{display:'flex',flexDirection:'column',height:640,maxWidth:900,margin:'0 auto 24px',padding:'0 24px'}},
+    /* Bounded to the viewport, the way the dashboard layout bounds the real route,
+       and left below the harness controls so they stay clickable. Inline styles:
+       this file is not one of the sources Tailwind compiled classes from. */
+    navigation.startsWith('/support')&&React.createElement('section',{'data-testid':'portal-support',style:{position:'fixed',left:16,right:16,top:330,bottom:16,zIndex:20,display:'flex',flexDirection:'column',overflow:'hidden',borderRadius:12,border:'1px solid rgba(0,0,0,0.08)',background:'white',padding:12}},
       React.createElement(PortalSupport,{
         initialTicketId:new URL(navigation,'http://offline.invalid').searchParams.get('ticket')||undefined,
         composeIssueId:new URL(navigation,'http://offline.invalid').searchParams.get('issue')||undefined})));
@@ -163,7 +166,7 @@ try{
     assert.equal(supportFixture.tickets.size,0);
     const originalSubmit=supportFixture.store.submit;
     supportFixture.store.submit=async()=>{throw Error('Isolated submission failure');};
-    await page.getByRole('button',{name:'New request',exact:true}).click();
+    await page.getByRole('button',{name:'New ticket',exact:true}).click();
     await page.getByLabel('Your message',{exact:true}).fill('Please review this issue with the recorded checks.');
     await page.getByRole('button',{name:'Send',exact:true}).click();
     await page.getByRole('button',{name:'Retry send',exact:true}).waitFor();
@@ -188,6 +191,8 @@ try{
     await page.getByRole('button',{name:'Preview cleanup',exact:true}).click();
     await page.getByText('Nothing was deleted.',{exact:false}).waitFor();
     await page.screenshot({path:resolve(screenshots,'retention.png'),fullPage:true,animations:'disabled'});
+    await page.keyboard.press('Escape'); // The retention dialog is modal; the page behind it is next.
+    await page.getByRole('button',{name:'Preview cleanup',exact:true}).waitFor({state:'hidden'});
     await page.setViewportSize({width:390,height:844});
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth),false);
     await page.screenshot({path:resolve(screenshots,'mobile.png'),fullPage:true,animations:'disabled'});

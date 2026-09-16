@@ -25,9 +25,14 @@ export default async function SupportPage() {
     notFound();
   }
 
+  /* The dashboard layout bounds this route's height (isSupportWorkspace) and
+     drops main's padding, so the section supplies its own and fills what is
+     left: the list and the conversation scroll, the page itself does not. */
   return (
-    <Suspense fallback={<p className="p-4 text-sm text-muted-foreground">Loading Support…</p>}>
-      <SupportView />
-    </Suspense>
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col p-3 sm:p-4">
+      <Suspense fallback={<p className="text-sm text-muted-foreground">Loading Support…</p>}>
+        <SupportView />
+      </Suspense>
+    </div>
   );
 }
