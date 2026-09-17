@@ -1416,15 +1416,40 @@ const Settings = () => {
     setShowTabWarning(false);
   }, []);
 
+  // v2 (northwind): why the last "Save & Leave" / "Save & Switch" failed, shown
+  // inside the unsaved-changes dialog that stays open. Always null for v1.
+  const [v2LeaveSaveError, setV2LeaveSaveError] = useState<unknown>(null);
+
   // Save all dirty main forms (for "Save & Leave")
   const saveAllDirtyForms = useCallback(async (): Promise<boolean> => {
     try {
+      if (v2Chrome) setV2LeaveSaveError(null);
       const saves: Promise<void>[] = [];
 
       if (generalFormDirty) {
         saves.push((async () => {
           setIsSavingGeneral(true);
           try {
+            // v2: the General page's own Save, unchanged payloads. The tenants row
+            // is written first and checked, so a refused or zero-row write throws
+            // before the org settings land. Written the v1 way round, a refused
+            // tenants write left the form comparing clean against the org value
+            // that had saved: "Unsaved changes" vanished, and a second Save & Leave
+            // left the page without retrying the tenants write.
+            if (v2Chrome) {
+              await BusinessV2.saveGeneralSettingsV2({
+                tenantId: tenant?.id,
+                values: generalForm,
+                policyVersionChanged:
+                  generalForm.privacy_policy_version !== (tenant?.privacy_policy_version || '1.0') ||
+                  generalForm.terms_version !== (tenant?.terms_version || '1.0'),
+                writeTenant: async (patch) =>
+                  await supabase.from('tenants').update(patch as never).eq('id', tenant?.id as string).select('id'),
+                writeOrg: (patch) => updateSettingsAsync(patch),
+              });
+              await refetchTenant();
+              return;
+            }
             await updateSettingsAsync({
               currency_code: generalForm.currency_code,
               distance_unit: generalForm.distance_unit,
@@ -1515,6 +1540,13 @@ const Settings = () => {
       // v2: say why. A v2 section's leave save rejects with what to fix ("Enter an
       // age between 16 and 99…") or "Couldn't save your booking rules.", and the
       // leave dialog stays open, so "Please try again" alone left no way forward.
+      if (v2Chrome) {
+        // Also said inline in the dialog, which stays open with the form still
+        // dirty, so the reason does not fade with the toast.
+        setV2LeaveSaveError(err);
+        // The org-settings hook has already toasted its own failure.
+        if (BusinessV2.isAlreadyToasted(err)) return false;
+      }
       toast({
         title: v2Chrome ? "Couldn't save your changes" : 'Error',
         description: v2Chrome ? describeSaveError(err) : 'Failed to save some settings. Please try again.',
@@ -1531,6 +1563,12 @@ const Settings = () => {
     cancelLeave,
     isSaving: isSavingNav,
   } = useUnsavedChangesWarning({ hasChanges: hasUnsavedChanges, onSave: saveAllDirtyForms });
+
+  // v2: a failed leave-save's message belongs to that dialog. Once it closes
+  // (Cancel, Escape, Don't Save, or a save that went through) it is gone.
+  useEffect(() => {
+    if (!unsavedDialogOpen && !showTabWarning) setV2LeaveSaveError(null);
+  }, [unsavedDialogOpen, showTabWarning]);
 
   // Save & switch tab handler (needs saveAllDirtyForms defined above)
   const [isSavingForTab, setIsSavingForTab] = useState(false);
@@ -3358,6 +3396,7 @@ const Settings = () => {
           }}
           onSave={v2CanSaveAll ? saveAndLeave : undefined}
           isSaving={isSavingNav}
+          error={v2LeaveSaveError ? <SettingsSaveState status="error" error={v2LeaveSaveError} /> : null}
         />
         <UnsavedChangesDialog
           open={showTabWarning}
@@ -3368,6 +3407,7 @@ const Settings = () => {
           }}
           onSave={v2CanSaveAll ? handleTabSaveAndSwitch : undefined}
           isSaving={isSavingForTab}
+          error={v2LeaveSaveError ? <SettingsSaveState status="error" error={v2LeaveSaveError} /> : null}
         />
       </>
     );

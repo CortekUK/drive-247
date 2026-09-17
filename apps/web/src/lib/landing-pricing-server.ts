@@ -5,17 +5,26 @@
 // live signup journey on the main domain and off again afterwards.
 //
 // Read through `public.landing_pricing_enabled()`, a security-definer function
-// that returns that one boolean: `admin_settings` itself is authenticated-only
-// and holds staff email addresses, so the anon key cannot and must not read it.
+// that returns that one boolean. `admin_settings` holds staff email addresses
+// and is meant to be staff-only (its policies say so, though RLS is currently
+// disabled on it in production), so the public site never reads the table.
 //
 // FAILS CLOSED. Missing env, an HTTP error, a timeout or anything but a literal
 // `true` hides the section, so an outage can never put an untested signup flow
-// in front of the public. Cached for the same ~10s as the plan catalogue, so a
-// flip reaches the page on the same schedule as a plan edit.
+// in front of the public.
+//
+// READ FRESH ON EVERY REQUEST (`cache: "no-store"`), which renders the landing
+// page per request. It used to share the plan catalogue's 10-second ISR window,
+// and Vercel serves the STALE copy to the first visitor after that window: an
+// admin flipped the switch, reloaded once, still saw the old page and reported
+// the toggle as broken. Now a flip shows on the very next page load. The plan
+// catalogue keeps its own 10-second cache; only this one boolean is uncached.
+//
+// The timeout is short on purpose: this read now sits in front of every landing
+// page render, so a slow Supabase must cost at most 1.5s and then hide pricing,
+// never hang the page.
 
-import { PLANS_REVALIDATE_SECONDS } from "@/lib/plans-server";
-
-const FETCH_TIMEOUT_MS = 5000;
+const FETCH_TIMEOUT_MS = 1500;
 
 export async function fetchLandingPricingEnabled(): Promise<boolean> {
   const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -29,7 +38,7 @@ export async function fetchLandingPricingEnabled(): Promise<boolean> {
   }
 
   try {
-    // GET works because the function is STABLE, and it lets Next cache the read.
+    // GET works because the function is STABLE.
     const res = await fetch(
       `${baseUrl.replace(/\/$/, "")}/rest/v1/rpc/landing_pricing_enabled`,
       {
@@ -39,7 +48,7 @@ export async function fetchLandingPricingEnabled(): Promise<boolean> {
           Accept: "application/json",
         },
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-        next: { revalidate: PLANS_REVALIDATE_SECONDS },
+        cache: "no-store",
       },
     );
     if (!res.ok) {

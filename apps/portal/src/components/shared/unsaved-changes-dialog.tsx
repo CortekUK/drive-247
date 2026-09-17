@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
+import type { ReactNode } from 'react';
 
 interface UnsavedChangesDialogProps {
   open: boolean;
@@ -17,6 +18,11 @@ interface UnsavedChangesDialogProps {
   onDiscard: () => void;
   onSave?: () => void;
   isSaving?: boolean;
+  /**
+   * Why the last save failed, shown above the buttons while the dialog stays
+   * open. Only v2 settings pass it; without it nothing extra renders.
+   */
+  error?: ReactNode;
 }
 
 export function UnsavedChangesDialog({
@@ -25,6 +31,7 @@ export function UnsavedChangesDialog({
   onDiscard,
   onSave,
   isSaving = false,
+  error,
 }: UnsavedChangesDialogProps) {
   return (
     <AlertDialog
@@ -42,6 +49,7 @@ export function UnsavedChangesDialog({
             What would you like to do?
           </AlertDialogDescription>
         </AlertDialogHeader>
+        {error ? <div className="min-w-0">{error}</div> : null}
         <AlertDialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-2">
           <Button
             variant="outline"
