@@ -44,8 +44,56 @@ interface PgError {
   code?: string;
 }
 
+/**
+ * Shown when a write reaches the database WITHOUT a signed-in user. The browser
+ * session had expired (Sep 17 2026: a tab left open for hours sent Save as the
+ * anon role, and Postgres answered "permission denied for function
+ * admin_save_portal_announcement"), so the raw message blamed permissions that
+ * the super admin actually has.
+ */
+export const SESSION_EXPIRED_MESSAGE =
+  'Your sign-in has expired. Sign in again (a new tab is fine), then press Save here again. Your edits are kept.';
+export const NOT_SUPER_ADMIN_MESSAGE = 'Only a super admin can change announcements.';
+
+/**
+ * Anon-role refusals: Postgres "permission denied for function/table …" (42501)
+ * and PostgREST's JWT errors. The RPCs' own super-admin check raises 42501 with
+ * "not permitted", which is a real permission problem, not an expired session.
+ */
+export function isSessionError(error: PgError | null | undefined): boolean {
+  if (!error) return false;
+  if (error.code === 'PGRST301' || error.code === 'PGRST302' || error.code === 'PGRST303') return true;
+  return error.code === '42501' && /permission denied for (function|table|relation|schema)/i.test(error.message || '');
+}
+
 function fail<T>(error: PgError | null | undefined, fallback: string): Result<T> {
+  if (isSessionError(error)) return { ok: false, message: SESSION_EXPIRED_MESSAGE, code: 'SESSION_EXPIRED' };
+  if (error?.code === '42501' && /not permitted/i.test(error.message || '')) {
+    return { ok: false, message: NOT_SUPER_ADMIN_MESSAGE, code: '42501' };
+  }
   return { ok: false, message: error?.message || fallback, code: error?.code ?? null };
+}
+
+/**
+ * Makes sure a write goes out with a live session: supabase-js refreshes an
+ * expired access token from the refresh token here. False when no session can
+ * be restored, so the caller shows SESSION_EXPIRED_MESSAGE instead of sending
+ * the write as anon.
+ */
+async function ensureSession(): Promise<boolean> {
+  try {
+    const { data } = await supabase.auth.getSession();
+    const session = data.session;
+    if (session && (!session.expires_at || session.expires_at * 1000 > Date.now() + 30_000)) return true;
+    const refreshed = await supabase.auth.refreshSession();
+    return !!refreshed.data.session;
+  } catch {
+    return false;
+  }
+}
+
+function sessionExpired<T>(): Result<T> {
+  return { ok: false, message: SESSION_EXPIRED_MESSAGE, code: 'SESSION_EXPIRED' };
 }
 
 function thrown<T>(e: unknown, fallback: string): Result<T> {
@@ -139,6 +187,7 @@ export async function loadAnnouncementsData(): Promise<LoadAnnouncementsResult> 
 
 export async function saveAnnouncement(args: SaveAnnouncementArgs): Promise<Result<string>> {
   try {
+    if (!(await ensureSession())) return sessionExpired();
     const { data, error } = await supabase.rpc(ANNOUNCEMENT_RPC.save, args);
     if (error) return fail(error, 'Could not save the announcement.');
     return { ok: true, data: typeof data === 'string' ? data : '' };
@@ -149,6 +198,7 @@ export async function saveAnnouncement(args: SaveAnnouncementArgs): Promise<Resu
 
 export async function reorderAnnouncements(kind: AnnouncementKind, ids: string[]): Promise<Result<null>> {
   try {
+    if (!(await ensureSession())) return sessionExpired();
     const { error } = await supabase.rpc(ANNOUNCEMENT_RPC.reorder, { p_kind: kind, p_ids: ids });
     if (error) return fail(error, 'Could not save the new order.');
     return { ok: true, data: null };
@@ -160,6 +210,7 @@ export async function reorderAnnouncements(kind: AnnouncementKind, ids: string[]
 /** Zero rows back means RLS refused or the row is gone: both are failures, not silent successes. */
 export async function setAnnouncementActive(id: string, isActive: boolean): Promise<Result<null>> {
   try {
+    if (!(await ensureSession())) return sessionExpired();
     const { data, error } = await supabase
       .from(ANNOUNCEMENT_TABLES.content)
       .update({ is_active: isActive })
@@ -167,6 +218,7 @@ export async function setAnnouncementActive(id: string, isActive: boolean): Prom
       .select('id');
     if (error) return fail(error, 'Could not change Active.');
     if (!Array.isArray(data) || data.length !== 1) {
+      if (!(await ensureSession())) return sessionExpired();
       return { ok: false, message: 'The announcement was not updated. Reload the page and try again.', code: null };
     }
     return { ok: true, data: null };
@@ -177,9 +229,11 @@ export async function setAnnouncementActive(id: string, isActive: boolean): Prom
 
 export async function deleteAnnouncement(id: string): Promise<Result<null>> {
   try {
+    if (!(await ensureSession())) return sessionExpired();
     const { data, error } = await supabase.from(ANNOUNCEMENT_TABLES.content).delete().eq('id', id).select('id');
     if (error) return fail(error, 'Could not delete the announcement.');
     if (!Array.isArray(data) || data.length !== 1) {
+      if (!(await ensureSession())) return sessionExpired();
       return { ok: false, message: 'The announcement was not deleted. Reload the page and try again.', code: null };
     }
     return { ok: true, data: null };
@@ -219,10 +273,15 @@ export async function uploadAnnouncementImage(slot: ImageSlot, file: File): Prom
   if (!check.ok) return { ok: false, message: check.error, code: null };
   const path = newAnnouncementImagePath(slot, check.mime, crypto.randomUUID());
   try {
+    if (!(await ensureSession())) return sessionExpired();
     const { error } = await supabase.storage
       .from(ANNOUNCEMENT_BUCKET)
       .upload(path, file, { contentType: file.type, upsert: false, cacheControl: '31536000' });
-    if (error) return fail(error, 'Upload failed.');
+    if (error) {
+      // Storage answers an anon upload with an RLS message, not 42501.
+      if (/row-level security|unauthori[sz]ed|jwt/i.test(error.message || '') && !(await ensureSession())) return sessionExpired();
+      return fail(error, 'Upload failed.');
+    }
     const { data } = supabase.storage.from(ANNOUNCEMENT_BUCKET).getPublicUrl(path);
     const url = data?.publicUrl;
     if (!isAnnouncementImageUrl(url)) {
