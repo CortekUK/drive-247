@@ -46,9 +46,22 @@ const rpc = vi.fn((name: string, _args: Record<string, unknown>) =>
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: { rpc: (name: string, args: Record<string, unknown>) => rpc(name, args) },
 }));
-vi.mock('@/contexts/TenantContext', () => ({ useTenant: () => ({ tenant }) }));
+// `tenantSlug` as well as `tenant`: the lean half of the feature gate is now
+// `useIsLean()`, which reads the slug the browser resolved from the hostname
+// — exactly what the real context exposes under that name.
+vi.mock('@/contexts/TenantContext', () => ({
+  useTenant: () => ({ tenant, tenantSlug: tenant?.slug ?? null }),
+}));
 vi.mock('@/stores/auth-store', () => ({ useAuth: () => ({ appUser }) }));
-vi.mock('@/lib/v2-context', () => ({ useV2: (area: string) => area === 'dashboard' && v2Dashboard }));
+vi.mock('@/lib/v2-context', () => ({
+  useV2: (area: string) => area === 'dashboard' && v2Dashboard,
+  // The provider now carries the tenant-level half of the same answer
+  // (`onV2` = tenants.portal_experience, `lean` = that OR the slug list).
+  // All-false here leaves the `LEAN_TENANTS` slug list to decide, which is
+  // what these cases meant before the column existed.
+  usePortalExperience: () => ({ onV2: false, lean: false }),
+  usePortalOnV2: () => false,
+}));
 
 const queryOptions: any[] = [];
 vi.mock('@tanstack/react-query', async (importOriginal) => {

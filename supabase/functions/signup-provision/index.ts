@@ -722,10 +722,22 @@ Deno.serve(async (req) => {
     // this same colour, but the booking site reads primary_color directly and a
     // NULL there falls back to the old platform green.
     //
-    // secondary/accent keep whatever was extracted. v2 ignores them, and if a
-    // cached browser bundle ever posts `businessColours` again they still give
-    // the BOOKING site something of the operator's own.
-    const palette = buildTenantPalette({ ...colors, primary: V2_DEFAULT_BRAND_COLOR });
+    // EXACTLY TWO COLUMNS ARE PINNED, and which two is deliberate. v2 paints the
+    // portal from `light_primary_color || primary_color` (apps/portal/src/hooks/
+    // use-dynamic-theme.ts:159) and reads nothing else, so those two are all the
+    // Northwind match needs. Overriding the primary BEFORE buildTenantPalette
+    // instead would also rewrite `light_header_footer_color` and
+    // `dark_primary_color`, which it derives from the primary — and
+    // light_header_footer_color is the operator's public BOOKING site header and
+    // footer (apps/booking/src/hooks/useDynamicTheme.ts:179). Repainting that
+    // purple is a different product surface and a separate decision, so the rest
+    // of the palette keeps the extractor's colours and renders exactly as it does
+    // for a tenant provisioned today.
+    const palette = {
+      ...buildTenantPalette(colors),
+      primary_color: V2_DEFAULT_BRAND_COLOR,
+      light_primary_color: V2_DEFAULT_BRAND_COLOR,
+    };
     await markMilestone(supabase, authUserId, "brand_ready");
 
     // =====================================================================

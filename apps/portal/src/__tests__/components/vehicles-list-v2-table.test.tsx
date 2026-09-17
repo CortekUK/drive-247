@@ -45,10 +45,21 @@ vi.mock('@/integrations/supabase/client', () => {
 vi.mock('@/contexts/TenantContext', () => ({
   useTenant: () => ({ tenant: { id: 't1', currency_code: 'USD', slug: 'northwind' }, tenantSlug: 'northwind' }),
 }));
-vi.mock('@/lib/v2-context', () => ({ useV2: () => true }));
-vi.mock('@/lib/lean-areas', () => ({
-  isAreaHidden: () => true,
-  isLeanTenant: () => false,
+vi.mock('@/lib/v2-context', () => ({
+  useV2: () => true,
+  // The provider now carries the tenant-level half of the same answer
+  // (`onV2` = tenants.portal_experience, `lean` = that OR the slug list).
+  // All-false here leaves the `LEAN_TENANTS` slug list to decide, which is
+  // what these cases meant before the column existed.
+  usePortalExperience: () => ({ onV2: false, lean: false }),
+  usePortalOnV2: () => false,
+}));
+// The gates are read as HOOKS now (the answer is no longer derivable from the
+// slug alone — it is the slug list OR tenants.portal_experience, resolved on
+// the server), so the doubles move to the hook module. Same two answers.
+vi.mock('@/lib/lean-context', () => ({
+  useIsAreaHidden: () => true,
+  useIsLean: () => false,
 }));
 vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: vi.fn() }), toast: vi.fn() }));
 vi.mock('@/hooks/use-forced-empty-state', () => ({ useForcedEmptyState: () => false }));

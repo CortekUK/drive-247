@@ -37,7 +37,15 @@ vi.mock("next/link", () => ({
     </a>
   ),
 }));
-vi.mock("@/lib/v2-context", () => ({ useV2: () => s.v2 }));
+vi.mock("@/lib/v2-context", () => ({
+  useV2: () => s.v2,
+  // The provider now carries the tenant-level half of the same answer
+  // (`onV2` = tenants.portal_experience, `lean` = that OR the slug list).
+  // All-false here leaves the `LEAN_TENANTS` slug list to decide, which is
+  // what these cases meant before the column existed.
+  usePortalExperience: () => ({ onV2: false, lean: false }),
+  usePortalOnV2: () => false,
+}));
 vi.mock("@/contexts/TenantContext", () => ({ useTenant: () => ({ tenant: { id: s.tenantId, company_name: "Northwind Rentals" } }) }));
 vi.mock("@/hooks/use-manager-permissions", () => ({
   useManagerPermissions: () => ({

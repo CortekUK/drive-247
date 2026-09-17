@@ -73,7 +73,15 @@ vi.mock('@/stores/auth-store', () => ({
     loading: false,
   }),
 }));
-vi.mock('@/lib/v2-context', () => ({ useV2: () => v2Chrome }));
+vi.mock('@/lib/v2-context', () => ({
+  useV2: () => v2Chrome,
+  // The provider now carries the tenant-level half of the same answer
+  // (`onV2` = tenants.portal_experience, `lean` = that OR the slug list).
+  // All-false here leaves the `LEAN_TENANTS` slug list to decide, which is
+  // what these cases meant before the column existed.
+  usePortalExperience: () => ({ onV2: false, lean: false }),
+  usePortalOnV2: () => false,
+}));
 vi.mock('next/navigation', () => ({
   usePathname: () => currentPath,
   useRouter: () => ({

@@ -99,8 +99,13 @@ describe('the legacy portal announcement system', () => {
     // A failure is logged, never a bare rethrow into render.
     expect(code).not.toMatch(/if \(error\) throw error;/);
     expect(code).toContain('console.warn(');
-    // Feature rows stay behind the canary, keyed on the slug (never the id).
-    expect(code).toMatch(/isLeanTenant\(tenant\?\.slug\)/);
+    // Feature rows stay behind the canary. The gate is read through
+    // `useIsLean()` now — the slug list OR `tenants.portal_experience`,
+    // resolved once per request on the server — and it is still keyed on the
+    // SLUG and never on the tenant id, which is the part that matters:
+    // northwind has a different primary key in every environment.
+    expect(code).toMatch(/const isCanary = useIsLean\(\);/);
+    expect(code).toMatch(/featuresEnabled = v2Dashboard && isCanary/);
     expect(code).not.toMatch(/isLeanTenant\(tenant\?\.id/);
   });
 
