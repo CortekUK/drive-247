@@ -322,9 +322,18 @@ test('an anonymous visitor gets the booking website, and nothing private', async
   await as('anon', null, `insert into public.identity_verifications(id,tenant_id) values($1,$2)`, [id(904), TENANT_A]);
   await as('anon', null, `insert into public.contact_requests(id,tenant_id) values($1,$2)`, [id(905), TENANT_A]);
   assert.equal(Number((await db.query(`select count(*)::int as n from public.rentals where rental_number='A-NEW'`)).rows[0].n), 1, 'checkout was broken by the fix');
-  // What it still cannot do: read any of it back, or delete.
+  // What it still cannot do: read any of it back.
   assert.equal(await countAs('anon', null, 'customers'), 0);
-  await assert.rejects(as('anon', null, `delete from public.customers where id=$1`, [id(900)]), /permission denied/i);
+  // Stage 0b deliberately leaves anon's DELETE grant on customers and rentals
+  // until the checkout cleanup moves server-side. Row-level security is what
+  // stops it being useful: the privilege is there, the rows are not visible, so
+  // the statement matches nothing instead of deleting someone's booking.
+  const deleted = await as('anon', null, `delete from public.customers where id=$1 returning id`, [id(900)]);
+  assert.equal(deleted.rows.length, 0, 'an anonymous caller deleted a customer row');
+  assert.equal(Number((await db.query(`select count(*)::int as n from public.customers where id=$1`, [id(900)])).rows[0].n), 1,
+    'the row was removed despite the policy');
+  // Where the grant is gone as well, it fails outright.
+  await assert.rejects(as('anon', null, `delete from public.payments where id=$1`, [id(400)]), /permission denied/i);
 });
 
 test('a signed-in customer sees their own records only', async () => {

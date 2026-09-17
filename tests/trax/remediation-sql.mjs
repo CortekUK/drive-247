@@ -70,14 +70,24 @@ const rls = async (table) => (await db.query(`select relrowsecurity as on from p
 const policies = async (table) => (await db.query(`select policyname from pg_policies where schemaname='public' and tablename=$1 order by policyname`, [table])).rows.map((r) => r.policyname);
 const grants = async (table, grantee) => (await db.query(`select privilege_type from information_schema.role_table_grants where table_schema='public' and table_name=$1 and grantee=$2`, [table, grantee])).rows.map((r) => r.privilege_type);
 
-test('stage 0 removes the destructive anon grants and nothing else', async () => {
+test('stage 0b removes the destructive anon grants it can, and says so about the rest', async () => {
   await db.exec(await script('01-revoke-destructive-anon-grants.sql'));
+  // customers and rentals keep DELETE deliberately: the browser cleanup paths in
+  // booking-cancelled/page.tsx and BookingCheckoutStep.tsx still use it until the
+  // stage 2 endpoint replaces them. Everything else loses it now.
+  const KEEPS_DELETE = new Set(['customers', 'rentals']);
   for (const table of TABLES) {
     const anon = await grants(table, 'anon');
-    assert.ok(!anon.includes('DELETE'), `${table}: anon kept DELETE`);
+    if (KEEPS_DELETE.has(table)) {
+      assert.ok(anon.includes('DELETE'), `${table}: group B was revoked early, which breaks the checkout cleanup`);
+    } else {
+      assert.ok(!anon.includes('DELETE'), `${table}: anon kept DELETE`);
+    }
+    // TRUNCATE goes everywhere, for both roles.
     assert.ok(!anon.includes('TRUNCATE'), `${table}: anon kept TRUNCATE`);
+    assert.ok(!(await grants(table, 'authenticated')).includes('TRUNCATE'), `${table}: staff kept TRUNCATE`);
     // Reading and the checkout inserts are untouched by this stage.
-    assert.ok(anon.includes('SELECT') && anon.includes('INSERT'), `${table}: stage 0 removed a read or insert grant`);
+    assert.ok(anon.includes('SELECT') && anon.includes('INSERT'), `${table}: stage 0b removed a read or insert grant`);
     assert.ok((await grants(table, 'authenticated')).includes('DELETE'), `${table}: staff lost DELETE`);
   }
 });
