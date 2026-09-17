@@ -77,7 +77,7 @@ export function VehicleList({ selected, onSelect, vehicles, currency = "$" }: Ve
                   onClick={() => onSelect(v.id)}
                   className={cn(
                     "w-full flex items-center gap-3 rounded-xl px-2.5 py-2 text-left transition-colors",
-                    isActive ? "bg-primary/10" : "hover:bg-primary/5 dark:hover:bg-primary/10"
+                    isActive ? "bg-primary/10" : "hover:bg-primary/5 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]"
                   )}
                 >
                   <span

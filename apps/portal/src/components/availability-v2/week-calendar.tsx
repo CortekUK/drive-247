@@ -202,7 +202,7 @@ function DayColumn({
             'focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-primary/60',
             isToday && !isException && 'bg-primary/[0.035]',
             isException && 'bg-warning/[0.07]',
-            canEdit && 'cursor-pointer hover:bg-primary/5 dark:hover:bg-primary/10',
+            canEdit && 'cursor-pointer hover:bg-primary/5 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]',
             !canEdit && 'cursor-default',
           )}
         >

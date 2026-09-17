@@ -153,7 +153,7 @@ function IntegrationCard({
           "focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
           pinned
             ? "text-primary hover:bg-primary/10"
-            : "text-muted-foreground/30 hover:bg-primary/10 hover:text-primary dark:hover:bg-primary/15",
+            : "text-muted-foreground/30 hover:bg-primary/10 hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-indigo-300",
         )}
       >
         <Pin className={cn("size-4", pinned && "fill-current")} />

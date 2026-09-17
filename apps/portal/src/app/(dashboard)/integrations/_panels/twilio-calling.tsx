@@ -385,7 +385,7 @@ function ModeOption({
       onClick={onSelect}
       className={cn(
         "w-full rounded-xl border px-3.5 py-2.5 text-left transition-colors disabled:opacity-50",
-        active ? "border-primary/40 bg-primary/5" : "border-border hover:border-primary/30 hover:bg-primary/5",
+        active ? "border-primary/40 bg-primary/5" : "border-border hover:border-primary/30 hover:bg-primary/5 dark:hover:border-indigo-300/30 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]",
       )}
     >
       <div className="flex items-center gap-2">
