@@ -29,7 +29,15 @@
     "switching tickets moves all three areas",
     "ticket without TRAX says so",
     "record permission failure hides TRAX context without calling it absent",
-    "status control in the Details drawer"
+    "status control in the Details drawer",
+    "badge counts support messages: 1, 2, 3",
+    "status change is not an unread message",
+    "duplicate delivery, refresh events and reload keep the count",
+    "support reading does not clear the requester",
+    "hidden tab does not mark read",
+    "reading one conversation leaves the other ticket counted",
+    "reply in the open conversation is read when shown",
+    "reply in a background conversation stays unread"
   ],
   "errors": []
 }

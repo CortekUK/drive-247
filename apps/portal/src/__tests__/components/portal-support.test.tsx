@@ -7,7 +7,8 @@ import { SupportRailProvider, useSupportRail } from '../../../../../shared/trax-
 // Offline: the messaging client, the inbox hook and the TRAX conversation are mocked.
 const mocks = vi.hoisted(() => ({ options: null as any, inbox: null as any, view: null as any, trax: null as any }));
 vi.mock('@/hooks/use-support-messaging', () => ({
-  useSupportMessaging: () => ({ call: mocks.options?.call ?? (() => {}), scope: 'scope-a', count: 2, allowed: true, checking: false, errorCode: null, retry: vi.fn() }),
+  // The page takes only the client; the unread badge is the sidebar's (useSupportUnreadMessages).
+  useSupportClient: () => ({ call: mocks.options?.call ?? (() => {}), scope: 'scope-a', uploadAttachment: vi.fn(), enabled: true }),
 }));
 vi.mock('../../../../../shared/trax-support/use-support-inbox', () => ({
   useSupportInbox: (options: any) => { mocks.options = options; return mocks.inbox; },

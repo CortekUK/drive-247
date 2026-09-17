@@ -7,7 +7,7 @@ import { useSupportInbox, type SupportCompose } from '../../../../../shared/trax
 import { useSupportRailHost } from '../../../../../shared/trax-support/support-rail';
 import { SupportInboxView } from './support-inbox';
 import { RetentionDialog } from './retention-dialog';
-import { useSupportMessaging } from '@/hooks/use-support-messaging';
+import { useSupportClient } from '@/hooks/use-support-messaging';
 import { useTraxSupportOptional } from '@/components/trax/support/trax-support-context';
 
 /**
@@ -20,7 +20,7 @@ import { useTraxSupportOptional } from '@/components/trax/support/trax-support-c
  * component owns the inbox and lends it to the rail; where the rail is not showing
  * the list (a phone, a collapsed sidebar) the page shows it, with its own heading.
  *
- * This is the ONE destination for support. The profile menu's Support item and
+ * This is the ONE destination for support. The main sidebar's Support item and
  * TRAX's Support control both open it, so both entry points show the same
  * authorized tickets. TRAX itself is the AI conversation only — it renders no
  * tickets, and nothing here sends a tenant to the platform (super-admin) inbox
@@ -40,7 +40,7 @@ import { useTraxSupportOptional } from '@/components/trax/support/trax-support-c
  * plain new request and says so rather than silently dropping the context.
  */
 export function PortalSupport({ initialTicketId, composeIssueId }: { initialTicketId?: string; composeIssueId?: string }) {
-  const human = useSupportMessaging();
+  const human = useSupportClient();
   const trax = useTraxSupportOptional();
   const support = trax?.support;
   const activate = trax?.activate;

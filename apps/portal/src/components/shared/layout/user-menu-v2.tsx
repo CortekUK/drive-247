@@ -1,8 +1,6 @@
 "use client";
 
 import { useState, useRef, useCallback } from 'react';
-import Link from 'next/link';
-import { SUPPORT_ROUTE } from '@/lib/support-route';
 import { useAuth, useAuthStore } from '@/stores/auth-store';
 import { useTenant } from '@/contexts/TenantContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -19,7 +17,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui-v2/avatar';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui-v2/dialog';
 import { Input } from '@/components/ui-v2/input';
 import { Label } from '@/components/ui-v2/label';
-import { User, LogOut, Key, Camera, Loader2, Moon, Sun, ChevronsUpDown, LifeBuoy, Send, SlidersHorizontal, Compass } from 'lucide-react';
+import { User, LogOut, Key, Camera, Loader2, Moon, Sun, ChevronsUpDown, Send, SlidersHorizontal, Compass } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Switch } from '@/components/ui-v2/switch';
 import { useFeedbackStore } from '@/stores/feedback-store';
@@ -409,20 +407,14 @@ export const UserMenuV2 = ({ variant = 'icon' }: { variant?: 'icon' | 'row' } = 
             </DropdownMenuItem>
           </div>
 
+          {/* Support is not here: it is a main sidebar item (below Fines) with its
+              unread-message badge — see app-sidebar-v2.tsx. Feedback and the tour
+              share this group, which is left out entirely when neither applies,
+              so no empty section and double divider remain. */}
+          {(feedbackEnabled || tourEligible) && (<>
           <DropdownMenuSeparator className="m-0" />
 
-          {/* Support & feedback */}
           <div className="p-1.5">
-            <DropdownMenuItem asChild>
-              {/* The portal's own Support section — tickets and replies with the
-                  Drive247 team. TRAX's Support control opens exactly this, so both
-                  entry points show the same authorized records. It replaced a
-                  mailto: an email left no ticket, no history and no unread count. */}
-              <Link href={SUPPORT_ROUTE} className="cursor-pointer rounded-lg px-2.5 py-1.5 text-[13px]">
-                <LifeBuoy className="mr-2.5 h-4 w-4 text-muted-foreground" />
-                <span>Support</span>
-              </Link>
-            </DropdownMenuItem>
             {/* The in-app dialog, not a mailto — this is the v1 sidebar's
                 "Send Feedback" button rehomed here, so the feedback still
                 lands in `tenant_feedback` rather than someone's inbox.
@@ -453,6 +445,7 @@ export const UserMenuV2 = ({ variant = 'icon' }: { variant?: 'icon' | 'row' } = 
               </DropdownMenuItem>
             )}
           </div>
+          </>)}
 
           <DropdownMenuSeparator className="m-0" />
 

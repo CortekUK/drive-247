@@ -37,9 +37,9 @@ const traxHandoff = {
 function state(over: Partial<SupportInboxState> = {}): SupportInboxState {
   return {
     id: null, creating: false, tickets: [], next: null, thread: null, search: '', filter: '',
-    draft: '', subject: '', status: '', busy: false, loading: false, error: null, notice: '',
+    draft: '', subject: '', busy: false, loading: false, error: null, notice: '',
     retrying: false, canSend: false, canAttach: false, attachments: [], scrollRef: { current: null },
-    setSearch: vi.fn(), setFilter: vi.fn(), setDraft: vi.fn(), setSubject: vi.fn(), setStatus: vi.fn(),
+    setSearch: vi.fn(), setFilter: vi.fn(), setDraft: vi.fn(), setSubject: vi.fn(),
     choose: vi.fn(), clearSelection: vi.fn(), beginNew: vi.fn(), cancelNew: vi.fn(),
     loadMore: vi.fn(), loadOlder: vi.fn(), onThreadScroll: vi.fn(), send: vi.fn(),
     addAttachments: vi.fn(), removeAttachment: vi.fn(), setTicketStatus: vi.fn(async () => true),

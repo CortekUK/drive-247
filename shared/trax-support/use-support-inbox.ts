@@ -62,7 +62,7 @@ export function useSupportInbox({call,admin=false,initialId,compose,scope,upload
   const [id,setId]=useState<string|null>(initialId??null),[creating,setCreating]=useState(!!compose);
   const [tickets,setTickets]=useState<HumanTicket[]>([]),[next,setNext]=useState<number|null>(null);
   const [thread,setThread]=useState<SupportThread|null>(null),[search,setSearch]=useState(''),[filter,setFilter]=useState('');
-  const [draft,setDraft]=useState(''),[subject,setSubject]=useState(compose?.summary??''),[status,setStatus]=useState('');
+  const [draft,setDraft]=useState(''),[subject,setSubject]=useState(compose?.summary??'');
   const [busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[error,setError]=useState<string|null>(null),[notice,setNotice]=useState('');
   const listRequest=useRef(0),threadRequest=useRef(0),selected=useRef(id);selected.current=id;
   const scrollRef=useRef<HTMLDivElement>(null),opened=useRef<string|null>(null),readThrough=useRef(0),marking=useRef(false),sending=useRef(false);
@@ -136,7 +136,7 @@ export function useSupportInbox({call,admin=false,initialId,compose,scope,upload
     });
   },[]);
   const removeAttachment=useCallback((key:string)=>setAttachments(old=>old.filter(a=>a.key!==key)),[]);
-  const choose=useCallback((ticketId:string)=>{if(ticketId===id)return;setId(ticketId);setCreating(false);setDraft('');setAttachments([]);outgoing.current=null;setRetrying(false);setStatus('');setNotice('');},[id]);
+  const choose=useCallback((ticketId:string)=>{if(ticketId===id)return;setId(ticketId);setCreating(false);setDraft('');setAttachments([]);outgoing.current=null;setRetrying(false);setNotice('');},[id]);
   const beginNew=useCallback(()=>{let value=crypto.randomUUID();try{value=sessionStorage.getItem(nonceKey)||value;sessionStorage.setItem(nonceKey,value);}catch{}setNonce(value);setCreating(true);setId(null);setSubject(compose?.summary??'');setDraft('');setAttachments([]);outgoing.current=null;setRetrying(false);setNotice('');},[compose,nonceKey]);
   /** Back to the list on a narrow screen: nothing is selected, nothing is lost. */
   const clearSelection=useCallback(()=>{setId(null);},[]);
@@ -173,7 +173,7 @@ export function useSupportInbox({call,admin=false,initialId,compose,scope,upload
     if(sending.current||!draft.trim()||(creating&&!subject.trim()))return;sending.current=true;setBusy(true);setError(null);
     /* One payload per submission: an uncertain send is RETRIED with its original
        nonce, so support never receives the same message twice. */
-    if(!outgoing.current){outgoing.current={action:creating?'create':admin&&status?'status':'send',data:{...(id&&!creating?{id}:{}),nonce:creating?nonce:crypto.randomUUID(),body:draft.trim(),...(creating?{subject:subject.trim()}:{}),...(admin&&status&&!creating?{status}:{})}};setRetrying(true);}
+    if(!outgoing.current){outgoing.current={action:creating?'create':'send',data:{...(id&&!creating?{id}:{}),nonce:creating?nonce:crypto.randomUUID(),body:draft.trim(),...(creating?{subject:subject.trim()}:{})}};setRetrying(true);}
     try{
       const out=outgoing.current;
       /* Files first, under the message's own nonce: the message that follows
@@ -189,12 +189,12 @@ export function useSupportInbox({call,admin=false,initialId,compose,scope,upload
       }
       const result=creating&&compose?.submit?await compose.submit(String(out.data.body),String(out.data.nonce),String(out.data.subject)):await call(out.action,out.data);
       if(!result)throw Error('Your message was not confirmed. Retry to check the same submission.');
-      setDraft('');setAttachments([]);uploaded.current.clear();outgoing.current=null;setRetrying(false);setStatus('');setNotice('Message sent.');
+      setDraft('');setAttachments([]);uploaded.current.clear();outgoing.current=null;setRetrying(false);setNotice('Message sent.');
       if(creating){try{sessionStorage.removeItem(nonceKey);}catch{}setNonce(crypto.randomUUID());setCreating(false);setId(result.id);}
       else{await loadThread();requestAnimationFrame(()=>{if(scrollRef.current)scrollRef.current.scrollTop=scrollRef.current.scrollHeight;});}
       await loadList();window.dispatchEvent(new Event('trax-support-read'));
     }catch(e){fail(e);}finally{sending.current=false;setBusy(false);}
-  },[admin,attachments,call,compose,creating,draft,fail,id,loadList,loadThread,nonce,nonceKey,status,subject,uploadAttachment]);
+  },[attachments,call,compose,creating,draft,fail,id,loadList,loadThread,nonce,nonceKey,subject,uploadAttachment]);
 
   /* Never another ticket's content: between choosing a ticket and its first
      response, the previous thread is still in state for one render. Every view —
@@ -203,9 +203,9 @@ export function useSupportInbox({call,admin=false,initialId,compose,scope,upload
   const current=thread&&thread.ticket.id===id?thread:null;
 
   return {
-    id,creating,tickets,next,thread:current,search,filter,draft,subject,status,
+    id,creating,tickets,next,thread:current,search,filter,draft,subject,
     busy,loading,error,notice,retrying,canSend,canAttach,attachments,scrollRef,
-    setSearch,setFilter,setDraft,setSubject,setStatus,
+    setSearch,setFilter,setDraft,setSubject,
     choose,clearSelection,beginNew,cancelNew,loadMore,loadOlder,onThreadScroll,send,
     addAttachments,removeAttachment,setTicketStatus,
   };

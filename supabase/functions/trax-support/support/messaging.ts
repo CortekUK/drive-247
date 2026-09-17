@@ -15,10 +15,13 @@ export interface MessagingStorage {
 export interface TicketSources {traxLinked:boolean;generated:number[]}
 export interface MessagingDependencies {reads:SupportReads;db:MessagingDatabase;enabled:boolean;storage?:MessagingStorage;
   /** Optional: a deployment without it returns the thread unmarked, exactly as before. */
-  sources?:(ticketId:string)=>Promise<TicketSources|null>}
+  sources?:(ticketId:string)=>Promise<TicketSources|null>;
+  /** Optional: without it a requester's `count` carries no `unreadMessages`, and no badge is shown. */
+  unread?:(userId:string,tenantId:string)=>Promise<number|null>}
 
-/** The two tables, read with the server's own client. Only `ticketSourceReader` uses it. */
-interface SourceQuery extends PromiseLike<{data:unknown;error:unknown}> {eq(column:string,value:unknown):SourceQuery;maybeSingle():PromiseLike<{data:unknown;error:unknown}>}
+/** The support tables, read with the server's own client — only by the readers below,
+ *  and only after `trax_messaging_request` has authorized the same caller. */
+interface SourceQuery extends PromiseLike<{data:unknown;error:unknown}> {eq(column:string,value:unknown):SourceQuery;in(column:string,values:unknown[]):SourceQuery;maybeSingle():PromiseLike<{data:unknown;error:unknown}>}
 export interface SourceClient {from(table:string):{select(columns:string):SourceQuery}}
 /**
  * Which messages TRAX wrote, and whether a TRAX conversation is behind the ticket.
@@ -48,7 +51,65 @@ export function ticketSourceReader(client:SourceClient){
     return {traxLinked,generated:(messages.data as {seq:number}[]).map(m=>m.seq).filter(Number.isSafeInteger)};
   };
 }
+/* `status` still accepts a `body` from older clients and ignores it: the server writes that note. */
 const fields:Record<string,string[]>={count:[],list:['search','status','offset'],detail:['id','before'],read:['id','through'],send:['id','nonce','body'],status:['id','nonce','body','status'],create:['nonce','body','subject'],attach:['id','nonce','name','mime','size']};
+const STATUS_LABEL:Record<string,string>={open:'Open',in_progress:'In progress',closed:'Resolved'};
+
+/**
+ * A status change's note in the conversation is a lifecycle event, not a reply.
+ *
+ * The SERVER writes it — the words and the message id — so the two cannot drift
+ * from what happened. Its nonce is a standard UUIDv8 (RFC 9562's layout for
+ * application-defined ids) carrying a fixed `85a7` tag, derived from the caller's
+ * own retry nonce so a retried status change is still one message. Every other
+ * nonce is a random v4 (the composer) or a TRAX issue id (v4), so the tag is stored
+ * metadata a count can rely on, never a reading of the text.
+ */
+export const STATUS_NOTE_NONCE=/^[0-9a-f]{8}-[0-9a-f]{4}-85a7-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+export async function statusNoteNonce(callerNonce:string):Promise<string>{
+  const hash=new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(`trax-support-status-note:${callerNonce.toLowerCase()}`)));
+  const hex=Array.from(hash.slice(0,16),b=>b.toString(16).padStart(2,'0')).join('');
+  const variant=((parseInt(hex[16],16)&0x3)|0x8).toString(16);
+  return `${hex.slice(0,8)}-${hex.slice(8,12)}-85a7-${variant}${hex.slice(17,20)}-${hex.slice(20,32)}`;
+}
+
+/**
+ * How many messages human support has sent this requester that they have not read.
+ *
+ * MESSAGES, not tickets: two unread replies in one ticket are 2. Only support-authored
+ * messages count — never the requester's own, TRAX's generated summary (which is
+ * stored on the requester's side) or a status change's note (`STATUS_NOTE_NONCE`).
+ * "Unread" is the requester's own persisted read-through for that ticket, so another
+ * person's reading never clears it, and the number is recomputed from storage on
+ * every request rather than incremented: a repeated delivery cannot count twice.
+ *
+ * The ticket rule is the SQL's own (`tenant_id` and `user_id` of the authenticated
+ * requester), and this runs only after `trax_messaging_request('count')` has passed
+ * the same guard for the same caller. `null` means "could not be counted", which the
+ * portal shows as no badge rather than a guess.
+ */
+export function unreadMessageReader(client:SourceClient){
+  return async(userId:string,tenantId:string):Promise<number|null>=>{
+    const [tickets,reads]=await Promise.all([
+      client.from('trax_support_tickets').select('id,message_seq').eq('tenant_id',tenantId).eq('user_id',userId),
+      client.from('trax_support_reads').select('ticket_id,last_seq').eq('user_id',userId),
+    ]);
+    if(tickets.error||reads.error||!Array.isArray(tickets.data)||!Array.isArray(reads.data))return null;
+    const through=new Map((reads.data as {ticket_id:string;last_seq:number}[]).map(r=>[r.ticket_id,Number(r.last_seq)||0]));
+    // Only tickets holding anything past their read-through can hold an unread reply.
+    const candidates=(tickets.data as {id:string;message_seq:number}[]).filter(t=>Number(t.message_seq)>(through.get(t.id)??0)).map(t=>t.id);
+    let unread=0;
+    for(let i=0;i<candidates.length;i+=50){
+      const messages=await client.from('trax_support_messages').select('ticket_id,seq,nonce').eq('author_kind','support').in('ticket_id',candidates.slice(i,i+50));
+      if(messages.error||!Array.isArray(messages.data))return null;
+      for(const message of messages.data as {ticket_id:string;seq:number;nonce:string}[]){
+        if(Number(message.seq)>(through.get(message.ticket_id)??0)&&!STATUS_NOTE_NONCE.test(message.nonce))unread++;
+      }
+    }
+    return unread;
+  };
+}
+
 /** Screenshots and documents only: no SVG (script), archives or executables. */
 const ATTACHMENT_TYPES=['image/png','image/jpeg','image/webp','image/gif','application/pdf'];
 const ATTACHMENT_LIMIT=10*1024*1024;
@@ -80,6 +141,11 @@ export async function handleMessaging(req:Request,deps:MessagingDependencies):Pr
       if(typeof data.mime!=='string'||!ATTACHMENT_TYPES.includes(data.mime))throw new SupportError('invalid_input','Attach a PNG, JPEG, WebP, GIF or PDF.');
       if(!Number.isSafeInteger(data.size)||Number(data.size)<1||Number(data.size)>ATTACHMENT_LIMIT)throw new SupportError('invalid_input','Attach a file of up to 10 MB.');
       data.name=name;
+    }
+    if(body.action==='status'){
+      if(!STATUS_LABEL[String(data.status)])throw new SupportError('invalid_input','Invalid support status.');
+      data.body=`Support marked this ticket as ${STATUS_LABEL[String(data.status)]}.`;
+      data.nonce=await statusNoteNonce(String(data.nonce));
     }
     for(const key of ['body','subject'])if(fields[body.action].includes(key)){
       if(typeof data[key]!=='string'||!(data[key] as string).trim()||(data[key] as string).length>(key==='body'?4000:240))throw new SupportError('invalid_input','Enter a subject and a message of up to 4,000 characters.');
@@ -122,6 +188,14 @@ export async function handleMessaging(req:Request,deps:MessagingDependencies):Pr
       if(error.message?.includes('support_access_denied'))throw new SupportError('forbidden','This support conversation is not available with your current access.',403);
       if(error.message?.includes('support_rate_limited'))throw new SupportError('rate_limited','Please wait a minute before sending again. Your draft is preserved.',429);
       throw new SupportError('support_unavailable','Support could not confirm this request. Retry with the same draft; duplicate messages are prevented.',503);
+    }
+    if(body.action==='count'&&body.admin!==true&&tenantId&&result.data&&typeof result.data==='object'){
+      /* The ticket-level count is kept as it was. No ticket with an unread support
+         message means no unread message, so the per-message count is only read when
+         there is something to count. */
+      const count=result.data as {unread?:number};
+      const unreadMessages=!Number(count.unread)?0:deps.unread?await deps.unread(userId,tenantId).catch(()=>null):null;
+      return respond(unreadMessages===null?count:{...count,unreadMessages});
     }
     if(body.action==='list'&&result.data&&typeof result.data==='object'){
       /* One truncated line of the latest message per row. Its own authorized

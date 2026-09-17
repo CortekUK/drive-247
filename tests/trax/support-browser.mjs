@@ -122,7 +122,8 @@ const uploadAttachment=async(upload,file)=>{
   const base64=btoa(String.fromCharCode(...new Uint8Array(bytes)));
   uploads.set(upload.path,'data:'+file.type+';base64,'+base64);
 };
-export const useSupportMessaging=()=>({call,scope:'offline-fixture',uploadAttachment,count:1,allowed:true,checking:false,errorCode:null,retry:()=>{}});
+export const useSupportClient=()=>({call,scope:'offline-fixture',uploadAttachment,enabled:true});
+export const useSupportUnreadMessages=()=>({count:null,allowed:true,checking:false,errorCode:null,retry:()=>{}});
 export const useTraxSupportOptional=()=>null;
 export const useTenant=()=>({tenant:{id:'tenant-fixture',company_name:'Northwind Rentals'}});
 export const UserMenuV2=({variant})=>React.createElement('div',{className:'flex h-10 items-center gap-2 px-2 text-[13px]'},variant==='row'?'Offline operator · owner@fixture.invalid':'OO');
