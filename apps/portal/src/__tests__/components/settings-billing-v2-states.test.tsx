@@ -23,6 +23,7 @@ import { resolve } from "node:path";
 
 const h = vi.hoisted(() => ({
   v2: { on: true },
+  perms: { edit: true },
   search: { value: "" },
   router: { push: () => undefined, replace: () => undefined },
   sub: {} as any,
@@ -64,21 +65,44 @@ vi.mock("@/hooks/use-tenant-subscription", () => ({ useTenantSubscription: () =>
 vi.mock("@/hooks/use-subscription-plans", () => ({ useSubscriptionPlans: () => h.plans }));
 vi.mock("@/contexts/TenantContext", () => ({ useTenant: () => ({ tenant: h.tenant.value }) }));
 vi.mock("@/hooks/use-manager-permissions", () => ({
-  useManagerPermissions: () => ({ canEditSettings: () => true, canViewSettings: () => true }),
+  useManagerPermissions: () => ({ canEditSettings: () => h.perms.edit, canViewSettings: () => true }),
 }));
 vi.mock("@/lib/lean-areas", () => ({ isLeanTenant: (slug?: string | null) => slug === "northwind" }));
 vi.mock("@/components/subscription/pricing-card", () => ({
-  PricingCard: ({ plan }: any) => <div data-testid="pricing-card">{plan.name}</div>,
+  PricingCard: ({ plan, onSubscribe }: any) => (
+    <div data-testid="pricing-card">
+      {plan.name}
+      <button type="button" onClick={() => onSubscribe(plan.id, { termsAccepted: true })}>
+        Subscribe
+      </button>
+    </div>
+  ),
 }));
-vi.mock("@/components/billing/credits-panel", () => ({ CreditsPanel: () => <div data-testid="credits" /> }));
-vi.mock("@/components/subscription/cancel-subscription-card", () => ({ CancelSubscriptionCard: () => null }));
+vi.mock("@/components/billing/credits-panel", () => ({
+  CreditsPanel: ({ hideReadOnlyNotice, suppressCheckoutToast }: any) => (
+    <div
+      data-testid="credits"
+      data-hide-read-only-notice={String(!!hideReadOnlyNotice)}
+      data-suppress-checkout-toast={String(!!suppressCheckoutToast)}
+    />
+  ),
+}));
+vi.mock("@/components/subscription/cancel-subscription-card", () => ({
+  CancelSubscriptionCard: () => <button type="button">Contact support</button>,
+}));
 vi.mock("@/components/settings/usage-dashboard", () => ({
   UsageDashboard: () => <div data-testid="usage-dashboard" />,
   UsageSummary: () => <div data-testid="usage-summary" />,
 }));
 vi.mock("@/components/settings/subscription-settings", () => ({ LocalInvoiceView: () => null }));
 vi.mock("@/components/subscription/card-brand-icon", () => ({ CardBrandIcon: () => null, CardOnFile: () => null }));
-vi.mock("@/components/subscription/payment-methods", () => ({ PaymentMethods: () => null }));
+vi.mock("@/components/subscription/payment-methods", () => ({
+  PaymentMethods: ({ onManage }: any) => (
+    <button type="button" onClick={onManage}>
+      Manage payment methods
+    </button>
+  ),
+}));
 vi.mock("@/components/subscription/payment-methods-dialog", () => ({ PaymentMethodsDialog: () => null }));
 vi.mock("@/components/billing/billing-preview", () => ({
   useIsBillingPreviewTenant: () => false,
@@ -91,6 +115,12 @@ vi.mock("@/components/billing/billing-preview", () => ({
 }));
 
 import SubscriptionPage from "@/app/(dashboard)/subscription/page";
+import {
+  CHECKOUT_NOTE_MAX_AGE_MS,
+  guessCheckoutKind,
+  noteCheckoutStarted,
+  readCheckoutNote,
+} from "@/components/settings-v2/billing-states-v2";
 import { Button } from "@/components/ui/button";
 
 /* -------------------------------------------------------------------------- */
@@ -163,7 +193,9 @@ beforeEach(() => {
   document.body.appendChild(container);
   root = createRoot(container);
   h.v2.on = true;
+  h.perms.edit = true;
   h.search.value = "";
+  window.sessionStorage.clear();
   h.tenant.value = { id: "t1", slug: "northwind", company_name: "Northwind Rentals" };
   h.toast = Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() });
   resetSub();
@@ -401,5 +433,198 @@ describe("settings page (v2): Customer messages entry points", () => {
       link.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 }));
     });
     expect(opened).toHaveBeenCalledTimes(1);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* View only                                                                   */
+/* -------------------------------------------------------------------------- */
+
+describe("billing page (v2): view only", () => {
+  const NOTICE = "View only — ask an admin to make billing changes";
+
+  it("subscribed: one notice, money controls disabled, Refresh and receipts still usable", () => {
+    h.perms.edit = false;
+    resetSub({ isSubscribed: true, subscription: ACTIVE_SUBSCRIPTION, invoices: [{ id: "i1" }] });
+    render(<SubscriptionPage />);
+    expect(container.querySelectorAll('[data-settings-state="read-only"]')).toHaveLength(1);
+    expect(text()).toContain(NOTICE);
+    expect(buttonByText("Manage payment methods").matches(":disabled")).toBe(true);
+    expect(buttonByText("Contact support").matches(":disabled")).toBe(true);
+    expect(buttonByText("Refresh").matches(":disabled")).toBe(false);
+    expect(container.querySelector('[data-testid="usage-dashboard"]')).not.toBeNull();
+    // The page shows the notice, so the Credits section is told not to repeat it.
+    const credits = container.querySelector('[data-testid="credits"]') as HTMLElement;
+    expect(credits.dataset.hideReadOnlyNotice).toBe("true");
+  });
+
+  it("not subscribed: the plans are shown, but Subscribe is disabled", () => {
+    h.perms.edit = false;
+    resetPlans({ data: [{ id: "p1", name: "Growth" }] });
+    render(<SubscriptionPage />);
+    expect(text()).toContain("Choose your plan");
+    expect(text()).toContain(NOTICE);
+    expect(buttonByText("Subscribe").matches(":disabled")).toBe(true);
+  });
+
+  it("payment required: the invoice link stays, Update payment method is disabled", () => {
+    h.perms.edit = false;
+    resetSub({ subscription: { status: "past_due", plan_name: "Growth" }, outstandingInvoiceUrl: "https://pay.example/inv" });
+    render(<SubscriptionPage />);
+    expect(text()).toContain(NOTICE);
+    expect(buttonByText("Update payment method").disabled).toBe(true);
+    expect(container.querySelector('a[href="https://pay.example/inv"]')).not.toBeNull();
+  });
+
+  it("an editor sees no notice and every control enabled", () => {
+    resetSub({ isSubscribed: true, subscription: ACTIVE_SUBSCRIPTION });
+    render(<SubscriptionPage />);
+    expect(container.querySelector('[data-settings-state="read-only"]')).toBeNull();
+    expect(buttonByText("Manage payment methods").matches(":disabled")).toBe(false);
+    expect(buttonByText("Contact support").matches(":disabled")).toBe(false);
+  });
+
+  it("v1 is unchanged: a viewer gets no notice and no disabled controls", () => {
+    h.v2.on = false;
+    h.perms.edit = false;
+    resetSub({ isSubscribed: true, subscription: ACTIVE_SUBSCRIPTION });
+    render(<SubscriptionPage />);
+    expect(container.querySelector('[data-settings-state="read-only"]')).toBeNull();
+    expect(container.querySelector("fieldset")).toBeNull();
+    expect(buttonByText("Manage payment methods").matches(":disabled")).toBe(false);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* Plan details layout                                                         */
+/* -------------------------------------------------------------------------- */
+
+describe("billing page (v2): plan details", () => {
+  const nextPaymentRow = () =>
+    Array.from(container.querySelectorAll(".divide-y > div")).find((row) => row.textContent?.includes("Next Payment"));
+
+  it("the cancel card sits below the list, not inside the Next Payment row", () => {
+    resetSub({ isSubscribed: true, subscription: ACTIVE_SUBSCRIPTION });
+    render(<SubscriptionPage />);
+    expect(nextPaymentRow()?.textContent).not.toContain("Contact support");
+    expect(text()).toContain("Contact support");
+  });
+
+  it("v1 is unchanged: the card is still where it was", () => {
+    h.v2.on = false;
+    resetSub({ isSubscribed: true, subscription: ACTIVE_SUBSCRIPTION });
+    render(<SubscriptionPage />);
+    expect(nextPaymentRow()?.textContent).toContain("Contact support");
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* Which checkout came back                                                    */
+/* -------------------------------------------------------------------------- */
+
+describe("billing-states-v2: telling the two checkouts apart", () => {
+  // 2026-09-17 12:00:00 UTC
+  const arrivedAt = Date.UTC(2026, 8, 17, 12, 0, 0);
+  const minutesBefore = (m: number) => new Date(arrivedAt - m * 60_000).toISOString();
+
+  it("seen unsubscribed on this visit: a subscription checkout, whatever the row's age", () => {
+    expect(guessCheckoutKind({ sawUnsubscribed: true, subscriptionCreatedAt: minutesBefore(60 * 24 * 200), arrivedAt })).toBe("subscription");
+    expect(guessCheckoutKind({ sawUnsubscribed: true, subscriptionCreatedAt: null, arrivedAt })).toBe("subscription");
+  });
+
+  it("already subscribed: a row up to 30 minutes old is the subscription just bought", () => {
+    expect(guessCheckoutKind({ sawUnsubscribed: false, subscriptionCreatedAt: minutesBefore(10), arrivedAt })).toBe("subscription");
+    expect(guessCheckoutKind({ sawUnsubscribed: false, subscriptionCreatedAt: minutesBefore(30), arrivedAt })).toBe("subscription");
+    expect(guessCheckoutKind({ sawUnsubscribed: false, subscriptionCreatedAt: minutesBefore(31), arrivedAt })).toBe("credits");
+    // Database clock up to 5 minutes ahead of the browser still counts.
+    expect(guessCheckoutKind({ sawUnsubscribed: false, subscriptionCreatedAt: minutesBefore(-4), arrivedAt })).toBe("subscription");
+    expect(guessCheckoutKind({ sawUnsubscribed: false, subscriptionCreatedAt: minutesBefore(-6), arrivedAt })).toBe("credits");
+    expect(guessCheckoutKind({ sawUnsubscribed: false, subscriptionCreatedAt: null, arrivedAt })).toBe("credits");
+    expect(guessCheckoutKind({ sawUnsubscribed: false, subscriptionCreatedAt: "not a date", arrivedAt })).toBe("credits");
+  });
+
+  it("a note counts only for the page it names, within the hour", () => {
+    const now = arrivedAt;
+    noteCheckoutStarted("credits", "/subscription", now - 59 * 60_000);
+    expect(readCheckoutNote("/subscription", now)).toBe("credits");
+    expect(readCheckoutNote("/credits", now)).toBeNull();
+    // Reading does not use it up.
+    expect(readCheckoutNote("/subscription", now)).toBe("credits");
+
+    noteCheckoutStarted("subscription", "/subscription", now - CHECKOUT_NOTE_MAX_AGE_MS - 1);
+    expect(readCheckoutNote("/subscription", now)).toBeNull();
+
+    noteCheckoutStarted("subscription", "/subscription", now + 1000);
+    expect(readCheckoutNote("/subscription", now)).toBeNull();
+
+    window.sessionStorage.setItem("drive247:v2-checkout-started", "{not json");
+    expect(readCheckoutNote("/subscription", now)).toBeNull();
+    window.sessionStorage.setItem("drive247:v2-checkout-started", JSON.stringify({ kind: "refund", path: "/subscription", at: now }));
+    expect(readCheckoutNote("/subscription", now)).toBeNull();
+  });
+});
+
+describe("billing page (v2): back from a checkout that was not a subscription", () => {
+  const OLD_SUBSCRIPTION = { ...ACTIVE_SUBSCRIPTION, created_at: "2026-01-05T09:00:00Z" };
+  const credits = () => container.querySelector('[data-testid="credits"]') as HTMLElement;
+
+  it("credits top-up, no note: no 'subscription is active', and Credits announces it", () => {
+    h.search.value = "status=success";
+    resetSub({ isSubscribed: true, subscription: OLD_SUBSCRIPTION });
+    render(<SubscriptionPage />);
+    expect(h.toast.success).not.toHaveBeenCalledWith("Your subscription is active");
+    expect(credits().dataset.suppressCheckoutToast).toBe("false");
+  });
+
+  it("credits note wins even over a brand-new subscription row", () => {
+    noteCheckoutStarted("credits", "/subscription");
+    h.search.value = "status=success";
+    resetSub({ isSubscribed: true, subscription: { ...ACTIVE_SUBSCRIPTION, created_at: new Date().toISOString() } });
+    render(<SubscriptionPage />);
+    expect(h.toast.success).not.toHaveBeenCalled();
+    expect(credits().dataset.suppressCheckoutToast).toBe("false");
+    expect(text()).not.toContain("Confirming your subscription");
+    // Used up on arrival.
+    expect(window.sessionStorage.getItem("drive247:v2-checkout-started")).toBeNull();
+  });
+
+  it("subscription note, webhook already landed: 'active' once, and Credits stays quiet", () => {
+    noteCheckoutStarted("subscription", "/subscription");
+    h.search.value = "status=success";
+    resetSub({ isSubscribed: true, subscription: OLD_SUBSCRIPTION });
+    render(<SubscriptionPage />);
+    expect(h.toast.success).toHaveBeenCalledTimes(1);
+    expect(h.toast.success).toHaveBeenCalledWith("Your subscription is active");
+    expect(credits().dataset.suppressCheckoutToast).toBe("true");
+  });
+
+  it("no note, a subscription created a minute ago: treated as the subscription return", () => {
+    h.search.value = "status=success";
+    resetSub({ isSubscribed: true, subscription: { ...ACTIVE_SUBSCRIPTION, created_at: new Date(Date.now() - 60_000).toISOString() } });
+    render(<SubscriptionPage />);
+    expect(h.toast.success).toHaveBeenCalledWith("Your subscription is active");
+    expect(credits().dataset.suppressCheckoutToast).toBe("true");
+  });
+
+  it("Subscribe notes the checkout before leaving for Stripe (v2 only)", async () => {
+    resetPlans({ data: [{ id: "p1", name: "Growth" }] });
+    resetSub({ createCheckoutSession: { mutateAsync: vi.fn().mockResolvedValue({ url: "#stripe-checkout" }), isPending: false } });
+    render(<SubscriptionPage />);
+    await act(async () => {
+      buttonByText("Subscribe").click();
+    });
+    expect(h.sub.createCheckoutSession.mutateAsync).toHaveBeenCalledTimes(1);
+    expect(readCheckoutNote("/subscription")).toBe("subscription");
+  });
+
+  it("v1 is unchanged: Subscribe writes no note", async () => {
+    h.v2.on = false;
+    resetPlans({ data: [{ id: "p1", name: "Growth" }] });
+    resetSub({ createCheckoutSession: { mutateAsync: vi.fn().mockResolvedValue({ url: "#stripe-checkout" }), isPending: false } });
+    render(<SubscriptionPage />);
+    await act(async () => {
+      buttonByText("Subscribe").click();
+    });
+    expect(window.sessionStorage.getItem("drive247:v2-checkout-started")).toBeNull();
   });
 });

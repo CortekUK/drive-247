@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Bot, CircleDollarSign, MessageCircle, Search, SlidersHorizontal } from "lucide-react";
+import { Bot, CircleDollarSign, MessageCircle, Search, SlidersHorizontal, X } from "lucide-react";
 
 import { Button } from "@/components/ui-v2/button";
 import { Separator } from "@/components/ui-v2/separator";
@@ -141,6 +141,21 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
      not invented here. */
   const [term, setTerm] = useState("");
 
+  /* Phones. Below `sm` the bar has no room for the page's field beside Trax and
+     the icons, so it used to be hidden outright, and a page's search (Settings,
+     the blacklist, every v2 list) could not be reached at all: the phone Search
+     button opens the global dialog, which searches bookings, customers and
+     vehicles only. With a page field, that button opens the field in the bar
+     instead, the way the field replaces the ⌘K pill on wider screens. It stays
+     open while it holds a term, so a filtered list always shows what filters
+     it, and its X clears the term and closes it. */
+  const [phoneFieldOpen, setPhoneFieldOpen] = useState(false);
+  const phoneField = !!slot && (phoneFieldOpen || term !== "");
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (phoneFieldOpen) inputRef.current?.focus();
+  }, [phoneFieldOpen]);
+
   /**
    * Values this field has pushed to the page whose echo has not come back yet,
    * oldest first. This is how the field tells its own echo from a real change.
@@ -187,6 +202,7 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
     clearTimeout(pendingPush.current);
     inFlight.current = [];
     setTerm(slot?.value ?? "");
+    setPhoneFieldOpen(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slot?.placeholder]);
 
@@ -261,7 +277,7 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
           local with nothing saying which, is the confusion this bar removes. */}
       {slot ? (
         <div
-          className={`hidden sm:flex ${FIELD}`}
+          className={`${phoneField ? "flex" : "hidden sm:flex"} ${FIELD}`}
           /* Carried from the search box this replaces. `tab-tours/rentals.ts`
              and `payments.ts` anchor a step to it, and a missing anchor does not
              fail loudly — it waits out the full timeout, skips, and starves the
@@ -270,6 +286,7 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
         >
           <Search className="size-4 shrink-0 text-primary" aria-hidden />
           <input
+            ref={inputRef}
             value={term}
             onChange={(e) => setTerm(e.target.value)}
             placeholder={slot.placeholder}
@@ -319,14 +336,30 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
         </button>
       )}
 
-      <button
-        type="button"
-        onClick={open}
-        aria-label="Search"
-        className="inline-flex size-8 shrink-0 items-center justify-center rounded-full border border-primary/25 bg-primary/[0.07] text-primary sm:hidden"
-      >
-        <Search className="size-4" aria-hidden />
-      </button>
+      {phoneField && (
+        <button
+          type="button"
+          onClick={() => {
+            setPhoneFieldOpen(false);
+            setTerm("");
+          }}
+          aria-label="Clear and close search"
+          className="inline-flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-primary/10 hover:text-foreground sm:hidden"
+        >
+          <X className="size-4" aria-hidden />
+        </button>
+      )}
+
+      {!phoneField && (
+        <button
+          type="button"
+          onClick={slot ? () => setPhoneFieldOpen(true) : open}
+          aria-label={slot ? "Search this page" : "Search"}
+          className="inline-flex size-8 shrink-0 items-center justify-center rounded-full border border-primary/25 bg-primary/[0.07] text-primary sm:hidden"
+        >
+          <Search className="size-4" aria-hidden />
+        </button>
+      )}
 
       {/* TRAX — right after the search field, not at the far end of the icon
           cluster (team lead, Sep 2026): the two are the ways to ask the portal
@@ -348,7 +381,9 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
               onClick={trax.sheetOpen ? trax.closeSheet : trax.openSheet}
               className={
                 "h-8 gap-1.5 px-2.5 text-[13px] font-medium text-primary hover:bg-primary/10 hover:text-primary aria-expanded:bg-primary/10 dark:hover:bg-primary/15 " +
-                (trax.sheetOpen ? "bg-primary/10" : "")
+                (trax.sheetOpen ? "bg-primary/10" : "") +
+                // On a phone the open page field takes the row (see phoneField).
+                (phoneField ? " max-sm:hidden" : "")
               }
             >
               <Bot className="size-4" aria-hidden />
@@ -363,7 +398,7 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
 
       {/* gap-0.5, and 8px side padding on credits: the icons sit a little closer
           together (team lead, Sep 2026) while each keeps its full hover pill. */}
-      <div className="ml-auto flex items-center gap-0.5">
+      <div className={`ml-auto flex items-center gap-0.5${phoneField ? " max-sm:hidden" : ""}`}>
         <Separator
           orientation="vertical"
           /* The `data-[orientation=vertical]:` prefix has to be repeated: the

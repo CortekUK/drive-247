@@ -132,6 +132,7 @@ import { EmailNotificationSettingsV2, ReminderRulesConfigV2 } from "@/components
 import { EmailTemplateEditorV2, EmailTemplatesListV2 } from "@/components/settings-v2/email-templates-v2";
 import { AgreementTemplateEditorV2, AgreementTemplatesPageV2 } from "@/components/settings-v2/agreement-templates-v2";
 import { PushNotificationSettings } from "@/components/settings/push-notification-settings";
+import { AgreementTemplateStatusV2, EmailTemplatesStatusV2 } from "@/components/settings-v2/templates-status-v2";
 import { EMAIL_TEMPLATE_TYPES } from "@/lib/email-template-variables";
 
 /* -------------------------------------------------------------------------- */
@@ -884,5 +885,206 @@ describe("PushNotificationSettings (v2 gate)", () => {
     render(<PushNotificationSettings />);
     expect(buttonByText("Send notification").disabled).toBe(true);
     expect(text()).toContain("This browser can't receive push notifications.");
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* Save errors, long lists, phone layout and retries (verifier follow-ups)     */
+/* -------------------------------------------------------------------------- */
+
+describe("EmailNotificationSettingsV2: a failed save says so beside the control", () => {
+  const prefs = { masterEnabled: true, recipientEmail: "ops@fleet.io", contactEmail: "", categories: allOff };
+
+  it("master switch: the reason under it, cleared by the next attempt", () => {
+    resetEmailPrefs({ prefs });
+    render(<EmailNotificationSettingsV2 />);
+    const master = () => container.querySelector('[aria-label="Send alerts by email"]') as HTMLButtonElement;
+    click(master());
+    const [value, options] = h.emailPrefs.setMasterEnabled.mutate.mock.calls[0];
+    expect(value).toBe(false);
+    act(() => options.onError({ message: "permission denied for table tenants", code: "42501" }));
+    // "Couldn't save, so this is unchanged." + the kit's 42501 sentence.
+    expect(text()).toContain("Couldn't save, so this is unchanged. You don't have permission to change this. Ask an admin.");
+    expect(h.toast).toHaveBeenCalledTimes(1);
+
+    click(master());
+    expect(text()).not.toContain("Couldn't save, so this is unchanged.");
+  });
+
+  it("category: the reason sits in that row only, without 'your changes are still here'", () => {
+    resetEmailPrefs({ prefs });
+    render(<EmailNotificationSettingsV2 />);
+    click(container.querySelector('[data-category="payments"] [role="switch"]') as HTMLButtonElement);
+    const [, options] = h.emailPrefs.setCategoryEnabled.mutate.mock.calls[0];
+    act(() => options.onError({ message: "Failed to fetch" }));
+    const payments = container.querySelector('[data-category="payments"] [role="alert"]');
+    expect(payments?.textContent).toBe("Couldn't save, so this is unchanged. We couldn't reach the server.");
+    expect(container.querySelector('[data-category="bookings"] [role="alert"]')).toBeNull();
+  });
+
+  it("recipient: the typed address stays in the field, with the reason", () => {
+    resetEmailPrefs({ prefs });
+    render(<EmailNotificationSettingsV2 />);
+    const input = container.querySelector("#v2-notification-recipient") as HTMLInputElement;
+    setValue(input, "dispatch@fleet.io");
+    blur(input);
+    const [, options] = h.emailPrefs.setRecipientEmail.mutate.mock.calls[0];
+    act(() => options.onError({ message: "Failed to fetch" }));
+    expect(input.value).toBe("dispatch@fleet.io");
+    expect(text()).toContain(
+      "Couldn't save this address. We couldn't reach the server. It's still in the field; move out of the field to try again.",
+    );
+  });
+
+  it("loading: one skeleton row per loaded row (master, recipient, six categories)", () => {
+    resetEmailPrefs();
+    render(<EmailNotificationSettingsV2 />);
+    const skeleton = container.querySelector('[role="status"][aria-busy="true"] [aria-hidden="true"]') as HTMLElement;
+    expect(skeleton.children).toHaveLength(8);
+  });
+});
+
+describe("ReminderRulesConfigV2: a long group scrolls inside its own box", () => {
+  const rules = (n: number) => Array.from({ length: n }, (_, i) => rule({ id: `r${i}` }));
+
+  it("13 rules: a labelled, focusable scroll region", () => {
+    resetRules({ Vehicle: { MOT: rules(13) } });
+    render(<ReminderRulesConfigV2 />);
+    const region = container.querySelector('[role="region"]') as HTMLElement;
+    expect(region.getAttribute("aria-label")).toBe("MOT reminders, 13 rules");
+    expect(region.tabIndex).toBe(0);
+    expect(region.className).toContain("overflow-y-auto");
+    expect(region.querySelectorAll("[data-rule-id]")).toHaveLength(13);
+  });
+
+  it("12 rules: laid out in the page as before", () => {
+    resetRules({ Vehicle: { MOT: rules(12) } });
+    render(<ReminderRulesConfigV2 />);
+    expect(container.querySelector('[role="region"]')).toBeNull();
+    expect(container.querySelectorAll("[data-rule-id]")).toHaveLength(12);
+  });
+});
+
+describe("Customer messages: status lines retry a failed read", () => {
+  it("emails: Try again refetches", async () => {
+    resetEmailTemplates({ isError: true, error: { message: "Failed to fetch" }, refetch: vi.fn().mockResolvedValue(undefined) });
+    render(<EmailTemplatesStatusV2 />);
+    expect(text()).toContain("Couldn't check which emails are customized.");
+    await act(async () => {
+      buttonByText("Try again").click();
+    });
+    expect(h.strictList.refetch).toHaveBeenCalledTimes(1);
+    expect(buttonByText("Try again").disabled).toBe(false); // back to idle once the refetch settles
+  });
+
+  it("agreement: Try again refetches", async () => {
+    resetSelection({ error: { message: "Failed to fetch" }, refetch: vi.fn().mockResolvedValue(undefined) });
+    render(<AgreementTemplateStatusV2 />);
+    expect(text()).toContain("Couldn't check which agreement is active.");
+    await act(async () => {
+      buttonByText("Try again").click();
+    });
+    expect(h.selection.refetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("Email templates list: Reset all", () => {
+  it("is a labelled button, not a bare icon", () => {
+    const first = EMAIL_TEMPLATE_TYPES[0];
+    resetEmailTemplates({
+      data: [{ id: "e1", tenant_id: "t1", template_key: first.key, template_name: first.name, subject: "Hi", template_content: "<p>x</p>" }],
+    });
+    render(<EmailTemplatesListV2 />);
+    const reset = container.querySelector('[aria-label="Reset all emails to default"]') as HTMLButtonElement;
+    expect(reset.textContent?.trim()).toBe("Reset all");
+  });
+
+  it("loading: rows shaped like the list, not a table", () => {
+    resetEmailTemplates({});
+    render(<EmailTemplatesListV2 />);
+    const status = container.querySelector('[role="status"][aria-busy="true"]') as HTMLElement;
+    expect(status).not.toBeNull();
+    expect(status.querySelector(".border-b")).toBeNull(); // the table variant draws row borders
+  });
+});
+
+describe("Rental agreement: snippet, disclaimer and header", () => {
+  const props = { disclaimerHtml: "<hr/><p><strong>Platform Disclaimer</strong></p><p>Fixed text.</p>", depositClauseSample: "" };
+
+  it("the snippet's padding is on a wrapper, so the clamp cannot show a third line", () => {
+    h.rental = { settings: { pay_as_you_go_enabled: false }, isLoading: false };
+    resetSelection({
+      defaultTemplate: { template_content: "<p>Terms</p>", updated_at: null },
+      customTemplate: { template_content: "" },
+    });
+    render(<AgreementTemplatesPageV2 />);
+    const clamp = container.querySelector('[data-option="default"] .line-clamp-2') as HTMLElement;
+    expect(clamp.className).not.toMatch(/\bp-3\b/);
+    expect((clamp.parentElement as HTMLElement).className).toMatch(/\bp-3\b/);
+  });
+
+  it("editing: the fixed disclaimer folds on a phone and stays open from md up", () => {
+    h.search.value = "type=default&category=standard";
+    resetSelection({ defaultTemplate: { template_content: "<p>Terms</p>" } });
+    render(<AgreementTemplateEditorV2 {...props} />);
+    const details = container.querySelector("details") as HTMLDetailsElement;
+    expect(details.open).toBe(false);
+    expect(details.className).toContain("md:hidden");
+    expect(details.querySelector("summary")?.textContent).toContain("Platform disclaimer · fixed");
+  });
+
+  it("view only: no fold, because the pane is inert and it could never be opened", () => {
+    h.perms.edit = false;
+    h.search.value = "type=default&category=standard";
+    resetSelection({ defaultTemplate: { template_content: "<p>Terms</p>" } });
+    render(<AgreementTemplateEditorV2 {...props} />);
+    expect(container.querySelector("details")).toBeNull();
+    expect(text()).toContain("Fixed text.");
+  });
+
+  it("header: the title keeps a 12rem basis, so the view-only chip wraps under it (jsdom has no layout; the harness renders it)", () => {
+    h.perms.edit = false;
+    h.search.value = "type=default&category=standard";
+    resetSelection({ defaultTemplate: { template_content: "<p>Terms</p>" } });
+    render(<AgreementTemplateEditorV2 {...props} />);
+    const header = container.querySelector("header") as HTMLElement;
+    const [titleBlock, actions] = Array.from(header.children) as HTMLElement[];
+    expect(titleBlock.className).toContain("flex-[1_1_12rem]");
+    expect(actions.className).not.toContain("shrink-0");
+    expect(actions.querySelector('[data-settings-state="read-only"]')).not.toBeNull();
+  });
+});
+
+describe("PushNotificationSettings: title and truncation (v2 gate)", () => {
+  const entry = { id: "l1", title: "Your Northwind rental at Harbour Road starts tomorrow", status: "failed", error: "Received 410 Gone from the push service", created_at: new Date().toISOString() };
+
+  it("v2, blank title: Send is disabled and says why", () => {
+    resetPush();
+    render(<PushNotificationSettings />);
+    setValue(container.querySelector("#push-title") as HTMLInputElement, "  ");
+    expect(text()).toContain("Add a title to send.");
+    expect(buttonByText("Send notification").disabled).toBe(true);
+  });
+
+  it("v1 is unchanged: no reason under a blank title", () => {
+    h.v2.on = false;
+    resetPush();
+    render(<PushNotificationSettings />);
+    setValue(container.querySelector("#push-title") as HTMLInputElement, "");
+    expect(text()).not.toContain("Add a title to send.");
+  });
+
+  it("v2: a truncated title and error keep their full text in a title attribute; v1 has none", () => {
+    resetPush({}, { data: [entry] });
+    render(<PushNotificationSettings />);
+    const [title, error] = Array.from(container.querySelectorAll("p.truncate")) as HTMLElement[];
+    expect(title.getAttribute("title")).toBe(entry.title);
+    expect(error.getAttribute("title")).toBe(entry.error);
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    h.v2.on = false;
+    render(<PushNotificationSettings />);
+    for (const p of Array.from(container.querySelectorAll("p.truncate"))) expect(p.hasAttribute("title")).toBe(false);
   });
 });

@@ -86,7 +86,7 @@ function RowContent({
           onClick={onPin}
           aria-label={`Pin ${label} to the main rail`}
           title="Pin to main"
-          className="rounded-md p-1 text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground"
+          className="rounded-md p-1 text-muted-foreground/60 transition-colors hover:bg-[hsl(var(--v2-hover,var(--muted)))] hover:text-foreground"
         >
           <ArrowUp className="size-4" />
         </button>
@@ -97,7 +97,7 @@ function RowContent({
           onClick={onUnpin}
           aria-label={`Return ${label} to its group`}
           title="Return to its group"
-          className="rounded-md p-1 text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground"
+          className="rounded-md p-1 text-muted-foreground/60 transition-colors hover:bg-[hsl(var(--v2-hover,var(--muted)))] hover:text-foreground"
         >
           <ArrowDown className="size-4" />
         </button>
@@ -107,7 +107,7 @@ function RowContent({
           type="button"
           onClick={onShow}
           aria-label={`Show ${label}`}
-          className="rounded-md p-1 text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground"
+          className="rounded-md p-1 text-muted-foreground/60 transition-colors hover:bg-[hsl(var(--v2-hover,var(--muted)))] hover:text-foreground"
         >
           <Eye className="size-4" />
         </button>
@@ -116,7 +116,7 @@ function RowContent({
           type="button"
           onClick={onHide}
           aria-label={`Hide ${label}`}
-          className="rounded-md p-1 text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground"
+          className="rounded-md p-1 text-muted-foreground/60 transition-colors hover:bg-[hsl(var(--v2-hover,var(--muted)))] hover:text-foreground"
         >
           <EyeOff className="size-4" />
         </button>

@@ -6,9 +6,35 @@
  * opening each page. v2 ONLY (rendered from the settings page's v2 branch).
  */
 
+import { useState } from "react";
 import { EMAIL_TEMPLATE_TYPES } from "@/lib/email-template-variables";
 import { useEmailTemplatesStrict } from "@/hooks/use-template-reads-v2";
 import { useTemplateSelection } from "@/hooks/use-agreement-templates";
+
+/**
+ * A failed status read, with a retry. A plain <button>: this line sits in a row
+ * description, outside any read-only fieldset, and retrying a read is not a
+ * change, so view-only users can use it too.
+ */
+function StatusError({ text, onRetry }: { text: string; onRetry: () => Promise<unknown> }) {
+  const [retrying, setRetrying] = useState(false);
+  return (
+    <span role="alert" className="mt-0.5 flex flex-wrap items-baseline gap-x-2 text-destructive">
+      <span>{text}</span>
+      <button
+        type="button"
+        disabled={retrying}
+        onClick={() => {
+          setRetrying(true);
+          void onRetry().finally(() => setRetrying(false));
+        }}
+        className="font-medium text-foreground underline underline-offset-2 hover:no-underline disabled:cursor-default disabled:opacity-60"
+      >
+        {retrying ? "Checking…" : "Try again"}
+      </button>
+    </span>
+  );
+}
 
 function Pending() {
   return (
@@ -19,9 +45,9 @@ function Pending() {
 }
 
 export function EmailTemplatesStatusV2() {
-  const { data, isError } = useEmailTemplatesStrict();
+  const { data, isError, refetch } = useEmailTemplatesStrict();
   if (!data && isError) {
-    return <span className="mt-0.5 block text-destructive">Couldn&apos;t check which emails are customized.</span>;
+    return <StatusError text="Couldn't check which emails are customized." onRetry={() => refetch()} />;
   }
   if (!data) return <Pending />;
   const keys = new Set(data.map((t) => t.template_key));
@@ -34,9 +60,9 @@ export function EmailTemplatesStatusV2() {
 }
 
 export function AgreementTemplateStatusV2() {
-  const { activeType, customTemplate, isLoading, error } = useTemplateSelection("standard");
+  const { activeType, customTemplate, isLoading, error, refetch } = useTemplateSelection("standard");
   if (error) {
-    return <span className="mt-0.5 block text-destructive">Couldn&apos;t check which agreement is active.</span>;
+    return <StatusError text="Couldn't check which agreement is active." onRetry={() => refetch()} />;
   }
   if (isLoading) return <Pending />;
   const custom = activeType === "custom" && !!customTemplate?.template_content?.trim();

@@ -18,6 +18,14 @@ import {
   PreviewDisabledNote,
 } from "@/components/billing/billing-preview";
 import { usePlatformTos } from "@/hooks/use-platform-tos";
+// v2 chrome only: the view-only state and the checkout-return note.
+import { useManagerPermissions } from "@/hooks/use-manager-permissions";
+import { SettingsReadOnlyNotice } from "@/components/settings-v2/section-states";
+import {
+  BILLING_READ_ONLY_COPY,
+  clearCheckoutNote,
+  noteCheckoutStarted,
+} from "@/components/settings-v2/billing-states-v2";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -107,7 +115,15 @@ function TransactionTypeBadge({ type }: { type: CreditTransaction["type"] }) {
 // container/padding stay with whichever page hosts this — see credits/page.tsx
 // and subscription/page.tsx.
 
-export function CreditsPanel() {
+export function CreditsPanel({
+  hideReadOnlyNotice = false,
+  suppressCheckoutToast = false,
+}: {
+  /** v2: the host page already shows the view-only notice. */
+  hideReadOnlyNotice?: boolean;
+  /** v2: this `?status=success` is a subscription return, which the host announces. */
+  suppressCheckoutToast?: boolean;
+} = {}) {
   const searchParams = useSearchParams();
   const {
     wallet: realWallet,
@@ -160,6 +176,11 @@ export function CreditsPanel() {
   // and previews the same sample rows v1 does. Above the early return.
   const v2Chrome = useV2("chrome");
   const { tenant } = useTenant();
+  // v2: credits are billing (Settings › Subscription). A viewer, or a manager
+  // without an editor grant on it, sees the balance and history but cannot buy
+  // or change auto-refill. Always false for v1.
+  const { canEditSettings } = useManagerPermissions();
+  const readOnly = v2Chrome && !canEditSettings("subscription");
   const transactionsV2Query = useCreditTransactionsV2(v2Chrome && !previewActive);
   const transactionsV2 = previewActive
     ? previewTransactions
@@ -210,12 +231,20 @@ export function CreditsPanel() {
     // next line opens a real Stripe payment that really charges a card.
     if (previewActive) return;
     if (buyCredits.isPending) return;
-    buyCredits.mutate({
-      credits: liveBuyAmount,
-      /* Still reported when it is already on record, so the purchase carries
-         the same acceptance evidence it always did where one exists. */
-      termsAccepted: needsAcceptance ? undefined : true,
-    });
+    if (readOnly) return;
+    // v2: the lean return URL is the page the buy started on, which on
+    // /subscription is the subscription checkout's return URL too. Note which
+    // checkout this is; the payload below is unchanged.
+    if (v2Chrome) noteCheckoutStarted("credits", window.location.pathname);
+    buyCredits.mutate(
+      {
+        credits: liveBuyAmount,
+        /* Still reported when it is already on record, so the purchase carries
+           the same acceptance evidence it always did where one exists. */
+        termsAccepted: needsAcceptance ? undefined : true,
+      },
+      v2Chrome ? { onError: () => clearCheckoutNote() } : undefined,
+    );
   };
 
   useEffect(() => {
@@ -228,7 +257,9 @@ export function CreditsPanel() {
 
   useEffect(() => {
     if (searchParams.get("status") === "success") {
-      toast.success("Credits purchased successfully!");
+      if (!suppressCheckoutToast) toast.success("Credits purchased successfully!");
+      // v2: this return is used up (on /credits nothing else reads the note).
+      if (v2Chrome && !suppressCheckoutToast) clearCheckoutNote();
       const interval = setInterval(() => refetch(), 2000);
       const timeout = setTimeout(() => clearInterval(interval), 15000);
       return () => { clearInterval(interval); clearTimeout(timeout); };
@@ -283,6 +314,7 @@ export function CreditsPanel() {
     // Writes through an edge function to the real wallet row. Preview must not
     // persist anything, so this is inert while it is on.
     if (previewActive) return;
+    if (readOnly) return;
     updateAutoRefill.mutate({
       enabled: autoRefillEnabled,
       threshold: autoRefillThreshold,
@@ -316,6 +348,7 @@ export function CreditsPanel() {
         </p>
         {previewActive && <PreviewDataPill />}
       </div>
+      {readOnly && !hideReadOnlyNotice && <SettingsReadOnlyNotice copy={BILLING_READ_ONLY_COPY} />}
       {previewActive && <PreviewDisabledNote />}
 
       {/* ── One wide card: balance, amount, buy ────────────────────────────
@@ -344,10 +377,11 @@ export function CreditsPanel() {
           <div className="flex flex-wrap items-end gap-3">
             <div>
               <p className="mb-1.5 text-xs font-medium text-muted-foreground">Amount to buy</p>
-              <div className="flex w-fit items-center rounded-lg border bg-background">
+              <div className={"flex w-fit items-center rounded-lg border bg-background" + (readOnly ? " opacity-50" : "")}>
                 <button
                   type="button"
                   aria-label="Fewer credits"
+                  disabled={readOnly}
                   onClick={() => setLiveBuyAmount((v) => Math.max(MIN_PURCHASE_CREDITS, v - 5))}
                   className="flex h-9 w-9 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
                 >
@@ -358,6 +392,7 @@ export function CreditsPanel() {
                   min={MIN_PURCHASE_CREDITS}
                   max={10000}
                   value={liveBuyAmount}
+                  disabled={readOnly}
                   onChange={(e) =>
                     setLiveBuyAmount(Math.max(MIN_PURCHASE_CREDITS, parseInt(e.target.value) || MIN_PURCHASE_CREDITS))
                   }
@@ -366,6 +401,7 @@ export function CreditsPanel() {
                 <button
                   type="button"
                   aria-label="More credits"
+                  disabled={readOnly}
                   onClick={() => setLiveBuyAmount((v) => Math.min(10000, v + 5))}
                   className="flex h-9 w-9 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
                 >
@@ -376,7 +412,7 @@ export function CreditsPanel() {
 
             <Button
               onClick={handleBuyCredits}
-              disabled={buyCredits.isPending || previewActive}
+              disabled={buyCredits.isPending || previewActive || readOnly}
               className="h-9 gap-2"
             >
               {buyCredits.isPending ? (
@@ -572,6 +608,7 @@ export function CreditsPanel() {
             <Switch
               checked={autoRefillEnabled}
               onCheckedChange={setAutoRefillEnabled}
+              disabled={readOnly}
             />
           </div>
 
@@ -586,6 +623,7 @@ export function CreditsPanel() {
                     max={100}
                     value={autoRefillThreshold}
                     onChange={(e) => setAutoRefillThreshold(parseInt(e.target.value) || 10)}
+                    disabled={readOnly}
                     className="w-24"
                   />
                   <span className="text-sm text-muted-foreground">credits</span>
@@ -602,6 +640,7 @@ export function CreditsPanel() {
                     step={10}
                     value={autoRefillAmount}
                     onChange={(e) => setAutoRefillAmount(parseInt(e.target.value) || 50)}
+                    disabled={readOnly}
                     className="w-24"
                   />
                   <span className="text-sm text-muted-foreground">credits</span>
@@ -612,7 +651,7 @@ export function CreditsPanel() {
 
           <Button
             onClick={handleSaveAutoRefill}
-            disabled={updateAutoRefill.isPending || previewActive}
+            disabled={updateAutoRefill.isPending || previewActive || readOnly}
             title={previewActive ? "Not available while previewing sample data" : undefined}
           >
             {updateAutoRefill.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}

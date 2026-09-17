@@ -280,9 +280,23 @@ export function resolveBlacklistView({
   return error ? "error-stale" : "rows";
 }
 
-/** "1 company", "3 companies"; a missing or broken count reads "—". */
+/**
+ * A block count that is really blocking: a whole number above zero. The only
+ * counts the Total blocks tile adds up and the Status column shows in red.
+ */
+export function isPositiveCount(n: unknown): n is number {
+  return typeof n === "number" && Number.isInteger(n) && n > 0;
+}
+
+/**
+ * "1 company", "3 companies". "0 companies" is a real value: a row stays on the
+ * list once its blocks are lifted, and the count is updated to what is left
+ * (`check_and_update_global_blacklist`). A missing, negative or fractional
+ * count cannot come from that function, so it reads "—" rather than
+ * "-3 companies".
+ */
 export function formatCompanyCount(n: number | null | undefined): string {
-  if (typeof n !== "number" || !Number.isFinite(n)) return "—";
+  if (typeof n !== "number" || !Number.isInteger(n) || n < 0) return "—";
   return `${n.toLocaleString("en-US")} ${n === 1 ? "company" : "companies"}`;
 }
 

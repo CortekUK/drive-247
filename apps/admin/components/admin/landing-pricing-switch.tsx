@@ -17,9 +17,10 @@ import { Badge } from '@/components/ui/badge';
  *
  * Stored as `admin_settings.landing_pricing_enabled` on every row, read as
  * "true if any row is true" like the table's other global flags. The landing
- * page cannot read `admin_settings` (authenticated-only, and it holds staff
- * email addresses), so it calls `public.landing_pricing_enabled()`, which
- * returns this one boolean. Default off; the page fails closed.
+ * page never reads `admin_settings` itself (it holds staff email addresses and
+ * is meant to be staff-only); it calls `public.landing_pricing_enabled()`,
+ * which returns this one boolean. Default off; the page fails closed, and it
+ * reads the value fresh on every load, so a flip shows on the next reload.
  */
 export function LandingPricingSwitch() {
   const [enabled, setEnabled] = useState<boolean | null>(null);
@@ -62,7 +63,7 @@ export function LandingPricingSwitch() {
       return;
     }
     toast.success(next ? 'Pricing section is on' : 'Pricing section is off', {
-      description: 'drive-247.com picks this up in about 10 seconds; you may need to reload twice.',
+      description: 'Reload drive-247.com to see it; it takes effect on the next page load.',
     });
   };
 

@@ -65,7 +65,8 @@ export function PushNotificationSettings({ canEdit = true }: Props) {
   // The feature is per-tenant. Showing the screen to an operator who cannot use
   // it would just generate support questions.
   if (v2Chrome && !tenant) {
-    return <SettingsSectionSkeleton variant="form" rows={3} label="Loading push notification settings" />;
+    // Three stacked panels, like the loaded page (this device, send, recent sends).
+    return <SettingsSectionSkeleton variant="stack" rows={3} label="Loading push notification settings" />;
   }
   if (v2Chrome && !isEnabledForTenant) {
     return (
@@ -412,6 +413,10 @@ export function PushNotificationSettings({ canEdit = true }: Props) {
             {v2Chrome && (
               <p className="text-xs text-muted-foreground">{title.length}/100</p>
             )}
+            {/* Send is disabled without a title; say why, as the URL field does. */}
+            {v2Chrome && canEdit && !title.trim() && (
+              <p className="text-xs text-destructive">{PUSH_BLOCK_COPY.title}</p>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -520,9 +525,9 @@ export function PushNotificationSettings({ canEdit = true }: Props) {
                     <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
                   )}
                   <div className="min-w-0">
-                    <p className="truncate font-medium">{entry.title}</p>
+                    <p className="truncate font-medium" title={v2Chrome ? entry.title : undefined}>{entry.title}</p>
                     {entry.error && (
-                      <p className="truncate text-xs text-destructive">{entry.error}</p>
+                      <p className="truncate text-xs text-destructive" title={v2Chrome ? entry.error : undefined}>{entry.error}</p>
                     )}
                   </div>
                 </div>

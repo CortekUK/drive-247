@@ -300,7 +300,7 @@ function InvoiceHistoryTable({
       {v2Chrome && (hiddenCount > 0 || v2Visible > RECENT_INVOICE_COUNT) && (
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 px-3 text-sm">
           {hiddenCount > 0 && (
-            <button type="button" onClick={() => setV2Visible((n) => n + 25)} className="font-medium text-primary hover:underline">
+            <button type="button" onClick={() => setV2Visible((n) => n + 25)} className="font-medium text-primary hover:underline dark:text-indigo-300">
               {`Show ${Math.min(25, hiddenCount)} more`}
             </button>
           )}
@@ -373,7 +373,7 @@ function UsageSummary() {
     return (
       <div role="alert" className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl bg-destructive/10 px-4 py-2 text-sm">
         <span className="min-w-0 flex-1">Couldn&apos;t load your metered usage.</span>
-        <button type="button" onClick={() => categories.forEach((c) => c.data.refetch?.())} className="font-medium text-primary hover:underline">
+        <button type="button" onClick={() => categories.forEach((c) => c.data.refetch?.())} className="font-medium text-primary hover:underline dark:text-indigo-300">
           Try again
         </button>
       </div>

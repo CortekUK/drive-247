@@ -151,7 +151,7 @@ export function OrgSwitcher({ collapsed }: { collapsed?: boolean }) {
           <button
             aria-label="Organization menu"
             title={orgName}
-            className="flex w-full cursor-pointer items-center justify-center rounded-lg p-1.5 outline-none transition-colors hover:bg-primary/10 data-[state=open]:bg-primary/10 dark:hover:bg-primary/15 dark:data-[state=open]:bg-primary/15"
+            className="flex w-full cursor-pointer items-center justify-center rounded-lg p-1.5 outline-none transition-colors hover:bg-primary/10 data-[state=open]:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:data-[state=open]:bg-[hsl(var(--v2-hover,var(--muted)))]"
           >
             {Logo}
           </button>
@@ -168,8 +168,8 @@ export function OrgSwitcher({ collapsed }: { collapsed?: boolean }) {
     // tenant's accent colour, so on a warm brand this went solid orange.
     <div
       className={cn(
-        "flex items-center rounded-lg transition-colors hover:bg-primary/10 dark:hover:bg-primary/15",
-        open && "bg-primary/10 dark:bg-primary/15"
+        "flex items-center rounded-lg transition-colors hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]",
+        open && "bg-primary/10 dark:bg-[hsl(var(--v2-hover,var(--muted)))]"
       )}
     >
       {/* Logo and name open the menu as well, but as a plain button rather than
@@ -194,7 +194,7 @@ export function OrgSwitcher({ collapsed }: { collapsed?: boolean }) {
           href="/settings"
           aria-label="Settings"
           title="Settings"
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary dark:hover:bg-primary/15"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-indigo-300"
         >
           <Settings className="h-4 w-4" />
         </Link>
@@ -204,7 +204,7 @@ export function OrgSwitcher({ collapsed }: { collapsed?: boolean }) {
         <DropdownMenuTrigger asChild>
           <button
             aria-label="Switch organization"
-            className="mr-1 flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-primary/10 hover:text-primary dark:hover:bg-primary/15"
+            className="mr-1 flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-primary/10 hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-indigo-300"
           >
             <ChevronsUpDown className="h-4 w-4" />
           </button>

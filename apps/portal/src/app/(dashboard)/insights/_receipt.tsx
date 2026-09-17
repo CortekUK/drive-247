@@ -169,7 +169,7 @@ function ReceiptRow({
       className={cn(
         shell,
         'group cursor-pointer rounded-3xl text-left transition-colors',
-        'hover:bg-primary/5 dark:hover:bg-primary/10 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+        'hover:bg-primary/5 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
       )}
     >
       {body}
@@ -467,7 +467,7 @@ function CapitalFootnote({
       className={cn(
         'group mt-2 grid w-full grid-cols-[minmax(0,1fr)_1rem] items-center gap-x-4',
         'cursor-pointer rounded-3xl px-3 py-2.5 text-left text-[13px] transition-colors',
-        'hover:bg-primary/10 dark:hover:bg-primary/15 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+        'hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
       )}
     >
       <span className="text-muted-foreground">

@@ -67,7 +67,7 @@ function PaymentCard({ card }: { card: SavedCard }) {
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           {card.isPrimary ? (
-            <span className="inline-flex h-5 items-center gap-1 rounded-full bg-primary/10 px-2 text-[10px] font-semibold uppercase tracking-wider text-primary">
+            <span className="inline-flex h-5 items-center gap-1 rounded-full bg-primary/10 px-2 text-[10px] font-semibold uppercase tracking-wider text-primary dark:text-indigo-300">
               <CheckCircle2 className="h-2.5 w-2.5" />
               Primary
             </span>

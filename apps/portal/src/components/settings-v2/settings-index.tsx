@@ -292,7 +292,7 @@ export function SettingsIndexV2({
                   data-tour={item.tourAnchor}
                   className="group -mx-3 block rounded-lg px-3 py-2.5 transition-colors hover:bg-muted"
                 >
-                  <span className="text-[15px] font-medium text-primary group-hover:underline">
+                  <span className="text-[15px] font-medium text-primary group-hover:underline dark:text-indigo-300">
                     {item.title}
                   </span>
                   <span className="mt-1 block max-w-[320px] text-[13px] leading-[1.45] text-muted-foreground">
@@ -307,7 +307,7 @@ export function SettingsIndexV2({
 
       <p className="border-t pt-6 text-[13px] text-muted-foreground">
         Payments, insurance, e-signatures and text messages are set up in{" "}
-        <Link href="/integrations" className="font-medium text-primary hover:underline">
+        <Link href="/integrations" className="font-medium text-primary hover:underline dark:text-indigo-300">
           Integrations
         </Link>
         .

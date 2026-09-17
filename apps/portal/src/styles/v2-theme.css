@@ -61,6 +61,10 @@
      which the lead asked to be not white. */
   --v2-hover: 248 68% 95%;
   --v2-outline-fill: transparent;
+  /* Table rows: half the control tint in light (primary/5 over white), so a
+     muted cell label keeps its contrast while hovered. Dark uses the full
+     tint, since a half step disappears on the dark card. */
+  --v2-row-hover: 248 68% 97.5%;
 
   --success: 142 76% 36%;
   --success-foreground: 0 0% 100%;
@@ -144,6 +148,7 @@
   --accent: 246 35% 17%;
   --accent-foreground: 0 0% 98%;
   --v2-hover: 246 35% 17%;
+  --v2-row-hover: 246 35% 17%;
 
   --success: 142 76% 52%;
   --success-foreground: 159 21% 8%;

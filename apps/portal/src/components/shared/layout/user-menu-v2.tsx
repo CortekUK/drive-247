@@ -280,8 +280,8 @@ export const UserMenuV2 = ({ variant = 'icon' }: { variant?: 'icon' | 'row' } = 
           // A row that is only a trigger should not be the loudest thing on
           // screen.
           <div
-            className={`flex w-full items-center rounded-lg transition-colors hover:bg-primary/10 dark:hover:bg-primary/15 ${
-              menuOpen ? 'bg-primary/10 dark:bg-primary/15' : ''
+            className={`flex w-full items-center rounded-lg transition-colors hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] ${
+              menuOpen ? 'bg-primary/10 dark:bg-[hsl(var(--v2-hover,var(--muted)))]' : ''
             }`}
           >
             {/* The customise button is a SIBLING of the trigger, not a child of
@@ -314,7 +314,7 @@ export const UserMenuV2 = ({ variant = 'icon' }: { variant?: 'icon' | 'row' } = 
               }
               aria-label="Customise sidebar"
               title="Customise sidebar"
-              className="shrink-0 rounded-lg p-1.5 text-muted-foreground outline-none transition-colors cursor-pointer hover:bg-primary/10 hover:text-primary dark:hover:bg-primary/15"
+              className="shrink-0 rounded-lg p-1.5 text-muted-foreground outline-none transition-colors cursor-pointer hover:bg-primary/10 hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-indigo-300"
             >
               <SlidersHorizontal className="h-4 w-4" />
             </button>
@@ -329,7 +329,7 @@ export const UserMenuV2 = ({ variant = 'icon' }: { variant?: 'icon' | 'row' } = 
               onPointerDown={(e) => e.stopPropagation()}
               onClick={() => setMenuOpen((open) => !open)}
               aria-label="Open account menu"
-              className="shrink-0 rounded-lg p-1.5 text-muted-foreground outline-none transition-colors cursor-pointer hover:bg-primary/10 hover:text-primary dark:hover:bg-primary/15"
+              className="shrink-0 rounded-lg p-1.5 text-muted-foreground outline-none transition-colors cursor-pointer hover:bg-primary/10 hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-indigo-300"
             >
               <ChevronsUpDown className="h-4 w-4" />
             </button>

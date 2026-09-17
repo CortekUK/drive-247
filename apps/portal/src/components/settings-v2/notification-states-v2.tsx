@@ -67,6 +67,26 @@ const CATEGORY_META: Record<EmailNotificationCategory, { label: string; descript
   fines: { label: "Fines", description: "Fines and penalty charges recorded" },
 };
 
+type EmailSaveTarget = "master" | "recipient" | EmailNotificationCategory;
+
+/** The reason under a control whose save failed. The toast says it too, but a
+ *  toast is gone in five seconds and does not point at the row. A switch goes
+ *  back to its stored state, so the kit's "your changes are still here" is not
+ *  true for one; that sentence is dropped. */
+function InlineSaveError({ error, lead, after }: { error: unknown; lead: string; after?: string }) {
+  const reason = describeSaveError(error)
+    .replace(/\s*Your changes are still here\.?/i, "")
+    .replace(/\s*Try again\.?$/i, "")
+    .trim();
+  return (
+    <p role="alert" className="text-xs text-destructive [overflow-wrap:anywhere]">
+      {lead}
+      {reason ? ` ${reason}` : ""}
+      {after ? ` ${after}` : ""}
+    </p>
+  );
+}
+
 function SectionHeading({ title, description, aside }: { title: string; description: string; aside?: React.ReactNode }) {
   return (
     <div className="flex flex-wrap items-start justify-between gap-3">
@@ -92,6 +112,7 @@ export function EmailNotificationSettingsV2({ canEdit = true }: { canEdit?: bool
 
   const [recipientDraft, setRecipientDraft] = useState("");
   const [recipientTouched, setRecipientTouched] = useState(false);
+  const [saveError, setSaveError] = useState<{ target: EmailSaveTarget; error: unknown } | null>(null);
 
   useEffect(() => {
     if (prefs) {
@@ -115,7 +136,9 @@ export function EmailNotificationSettingsV2({ canEdit = true }: { canEdit?: bool
     return (
       <section className="space-y-4" data-settings-section="email-notifications">
         {heading}
-        <SettingsSectionSkeleton variant="form" rows={4} label="Loading email preferences" />
+        {/* Eight rows, like the loaded section: the master switch, the
+            recipient and the six categories. */}
+        <SettingsSectionSkeleton variant="rows" rows={8} label="Loading email preferences" />
       </section>
     );
   }
@@ -137,6 +160,12 @@ export function EmailNotificationSettingsV2({ canEdit = true }: { canEdit?: bool
 
   const failToast = (err: unknown) =>
     toast({ title: "Couldn't save", description: describeSaveError(err), variant: "destructive" });
+  const failFor = (target: EmailSaveTarget) => (err: unknown) => {
+    setSaveError({ target, error: err });
+    failToast(err);
+  };
+  const clearFor = (target: EmailSaveTarget) => setSaveError((current) => (current?.target === target ? null : current));
+  const errorFor = (target: EmailSaveTarget) => (saveError?.target === target ? saveError.error : undefined);
 
   const handleRecipientBlur = () => {
     setRecipientTouched(true);
@@ -144,6 +173,7 @@ export function EmailNotificationSettingsV2({ canEdit = true }: { canEdit?: bool
     if (trimmed === (prefs.recipientEmail ?? "").trim()) return;
     // The helper under the field says what is wrong; nothing is written.
     if (trimmed && !isValidEmail(trimmed)) return;
+    clearFor("recipient");
     setRecipientEmail.mutate(trimmed, {
       onSuccess: () =>
         toast({
@@ -154,10 +184,9 @@ export function EmailNotificationSettingsV2({ canEdit = true }: { canEdit?: bool
               ? `Alert emails will go to your contact email, ${contactEmail}.`
               : "Recipient cleared.",
         }),
-      onError: (err) => {
-        failToast(err);
-        setRecipientDraft(prefs.recipientEmail ?? "");
-      },
+      // The typed address stays in the field (the form stays dirty), with the
+      // reason under it; leaving the field again retries.
+      onError: failFor("recipient"),
     });
   };
 
@@ -187,6 +216,9 @@ export function EmailNotificationSettingsV2({ canEdit = true }: { canEdit?: bool
             <p className="text-sm text-muted-foreground">
               {masterEnabled ? "On. Pick the categories below." : "Off. No alert emails are sent until you turn this on."}
             </p>
+            {saveError?.target === "master" && (
+              <InlineSaveError lead="Couldn't save, so this is unchanged." error={errorFor("master")} />
+            )}
           </div>
           <div className="flex items-center gap-2">
             {setMasterEnabled.isPending && (
@@ -194,7 +226,10 @@ export function EmailNotificationSettingsV2({ canEdit = true }: { canEdit?: bool
             )}
             <Switch
               checked={masterEnabled}
-              onCheckedChange={(checked) => setMasterEnabled.mutate(checked, { onError: failToast })}
+              onCheckedChange={(checked) => {
+                clearFor("master");
+                setMasterEnabled.mutate(checked, { onError: failFor("master") });
+              }}
               disabled={setMasterEnabled.isPending}
               aria-label="Send alerts by email"
             />
@@ -234,6 +269,13 @@ export function EmailNotificationSettingsV2({ canEdit = true }: { canEdit?: bool
           >
             {helper.text}
           </p>
+          {saveError?.target === "recipient" && (
+            <InlineSaveError
+              lead="Couldn't save this address."
+              after="It's still in the field; move out of the field to try again."
+              error={errorFor("recipient")}
+            />
+          )}
         </div>
 
         <div className="space-y-2">
@@ -260,14 +302,18 @@ export function EmailNotificationSettingsV2({ canEdit = true }: { canEdit?: bool
                     </Badge>
                   </div>
                   <p className="text-sm text-muted-foreground">{meta.description}</p>
+                  {saveError?.target === category && (
+                    <InlineSaveError lead="Couldn't save, so this is unchanged." error={errorFor(category)} />
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   {pending && <Loader2 className="size-4 animate-spin text-muted-foreground" aria-label="Saving" />}
                   <Switch
                     checked={prefs.categories[category] ?? false}
-                    onCheckedChange={(checked) =>
-                      setCategoryEnabled.mutate({ category, enabled: checked }, { onError: failToast })
-                    }
+                    onCheckedChange={(checked) => {
+                      clearFor(category);
+                      setCategoryEnabled.mutate({ category, enabled: checked }, { onError: failFor(category) });
+                    }}
                     disabled={!masterEnabled || pending}
                     aria-label={`${meta.label} emails`}
                   />
@@ -294,10 +340,13 @@ const CATEGORY_ICONS: Record<string, LucideIcon> = {
 };
 
 const SEVERITY_TONE: Record<string, string> = {
-  info: "bg-primary/10 text-primary",
+  info: "bg-primary/10 text-primary dark:text-indigo-300",
   warning: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
   critical: "bg-destructive/10 text-destructive",
 };
+
+/** Past this many rules a group scrolls inside its box. */
+const LONG_RULE_GROUP = 12;
 
 type RuleUpdate = { id: string; lead_days?: number; severity?: "info" | "warning" | "critical"; is_enabled?: boolean };
 
@@ -518,7 +567,7 @@ export function ReminderRulesConfigV2() {
                 onClick={() => setPicked(category)}
                 className={cn(
                   "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-sm font-medium transition-colors",
-                  selected ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                  selected ? "bg-primary/10 text-primary dark:text-indigo-300" : "text-muted-foreground hover:bg-muted hover:text-foreground",
                 )}
               >
                 <Icon className="size-4" aria-hidden="true" />
@@ -539,7 +588,17 @@ export function ReminderRulesConfigV2() {
               </p>
               <p className="text-xs text-muted-foreground">{groupDescription(ruleType)}</p>
             </div>
-            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+            {/* A long group scrolls inside its own box instead of stretching the
+                page (150 rules ran to 38,000px on a phone). */}
+            <div
+              className={cn(
+                "grid gap-3 md:grid-cols-2 lg:grid-cols-3",
+                rules.length > LONG_RULE_GROUP && "max-h-[70vh] overflow-y-auto overscroll-contain rounded-2xl pr-1",
+              )}
+              {...(rules.length > LONG_RULE_GROUP
+                ? { role: "region", tabIndex: 0, "aria-label": `${groupTitle(ruleType)}, ${rules.length} rules` }
+                : {})}
+            >
               {rules.map((rule) => (
                 <ReminderRuleCardV2
                   key={rule.id}
