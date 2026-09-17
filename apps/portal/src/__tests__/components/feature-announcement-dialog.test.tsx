@@ -1,6 +1,6 @@
 /**
  * The feature announcement dialog (components/announcements/feature-announcement-dialog.tsx):
- * the large "what's new" dialog with 2–3 slides, opened from the dashboard card
+ * the large "what's new" dialog with its slides, opened from the dashboard card
  * or by the announcement host.
  *
  * Every expected label and path below is written out by hand from the fixture

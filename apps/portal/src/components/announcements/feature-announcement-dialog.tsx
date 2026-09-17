@@ -16,7 +16,7 @@ import {
 import { cn } from '@/lib/utils';
 
 /**
- * The large "what's new" dialog: one feature, told in 2–3 slides.
+ * The large "what's new" dialog: one feature, told in its slides (1-10, set by the super admin).
  *
  * Opened two ways, and the dialog itself does not care which beyond one link:
  *   - `source="card"`: the operator clicked the feature card on the dashboard

@@ -233,11 +233,14 @@ describe('validateAnnouncementDraft', () => {
     expect(errorsOf(featureDraft({ image_url: 'https://cdn.example/card.png' })).image_url).toMatch(/Upload the image again/);
   });
 
-  it('feature: exactly 2 or 3 slides, each with a heading and text; images optional', () => {
+  it('feature: 1 to 10 slides, added and removed freely, each with a heading and text; images optional', () => {
     const d = featureDraft();
-    expect(errorsOf({ ...d, slides: d.slides.slice(0, 1) }).slides).toBe('Add 2 or 3 slides.');
-    expect(errorsOf({ ...d, slides: [...d.slides, d.slides[1]] }).slides).toBeUndefined();
-    expect(errorsOf({ ...d, slides: [...d.slides, d.slides[1], d.slides[1]] }).slides).toBe('Add 2 or 3 slides.');
+    const many = (n: number) => Array.from({ length: n }, (_, i) => d.slides[i % d.slides.length]);
+    expect(errorsOf({ ...d, slides: [] }).slides).toBe('Add between 1 and 10 slides.');
+    expect(errorsOf({ ...d, slides: many(1) }).slides).toBeUndefined();
+    expect(errorsOf({ ...d, slides: many(4) }).slides).toBeUndefined();
+    expect(errorsOf({ ...d, slides: many(10) }).slides).toBeUndefined();
+    expect(errorsOf({ ...d, slides: many(11) }).slides).toBe('Add between 1 and 10 slides.');
 
     const blankHeading = errorsOf({ ...d, slides: [{ ...d.slides[0], heading: ' ' }, d.slides[1]] });
     expect(blankHeading.slideErrors?.[0]?.heading).toBe('Slide heading is required.');
@@ -428,8 +431,14 @@ describe('normalizePortalAnnouncementRow', () => {
       }),
     )!;
     expect(feature.image_url).toBeNull();
-    expect(feature.slides.map((s) => s.heading)).toEqual(['One', 'Two', 'Three']);
+    // Invalid slides are dropped; valid ones are kept up to LIMITS.slidesMax (10).
+    expect(feature.slides.map((s) => s.heading)).toEqual(['One', 'Two', 'Three', 'Four']);
     expect(feature.slides[0].image_url).toBeNull();
+
+    const tooMany = normalizePortalAnnouncementRow(
+      rawFeature({ slides: Array.from({ length: 12 }, (_, i) => ({ heading: 'S' + (i + 1), body: 'Body' })) }),
+    )!;
+    expect(tooMany.slides.map((s) => s.heading)).toEqual(Array.from({ length: 10 }, (_, i) => 'S' + (i + 1)));
   });
 
   it('forces the server rules the UI relies on', () => {

@@ -110,8 +110,8 @@ export const LIMITS = {
   systemBodyBanner: 200,
   slideHeading: 60,
   slideBody: 400,
-  slidesMin: 2,
-  slidesMax: 3,
+  slidesMin: 1,
+  slidesMax: 10,
   ctaLabel: 30,
   ctaUrl: 300,
   imageUrl: 500,
@@ -969,7 +969,7 @@ export function validateSaveArgs(args: SaveAnnouncementArgs): { valid: boolean; 
     if (!row.image_url) errors.image_url = 'Upload the card illustration.';
     else if (!isAnnouncementImageUrl(row.image_url)) errors.image_url = 'Upload the image again; this link is not from the announcement image store.';
     if (row.slides.length < LIMITS.slidesMin || row.slides.length > LIMITS.slidesMax) {
-      errors.slides = 'Add ' + LIMITS.slidesMin + ' or ' + LIMITS.slidesMax + ' slides.';
+      errors.slides = 'Add between ' + LIMITS.slidesMin + ' and ' + LIMITS.slidesMax + ' slides.';
     }
     const slideErrors: Array<SlideErrors | null> = row.slides.map((s) => {
       const e: SlideErrors = {};
