@@ -285,14 +285,21 @@ function ChartPlaceholder({
             </span>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5" aria-hidden>
-          <span className="flex items-baseline gap-1.5">
-            <span className={`font-heading text-3xl leading-none tracking-tight tabular-nums w-10 ${blank}`}>
-              {failed ? "—" : nbsp}
+        {/* The chart's second row: the number with its suffix and the change
+            chip on the left, the legend strip on the right. */}
+        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1.5" aria-hidden>
+          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
+            <span className="flex items-baseline gap-1.5">
+              <span className={`font-heading text-3xl leading-none tracking-tight tabular-nums w-10 ${blank}`}>
+                {failed ? "—" : nbsp}
+              </span>
+              <span className={`text-sm w-16 ${blank}`}>{nbsp}</span>
             </span>
-            <span className={`text-sm w-16 ${blank}`}>{nbsp}</span>
-          </span>
-          <span className={`text-sm w-28 ${blank}`}>{nbsp}</span>
+            <span className={`h-6 w-12 text-xs ${blank}`}>{nbsp}</span>
+          </div>
+          <div className="ml-auto flex min-h-[30px] flex-wrap items-center justify-end gap-x-4 gap-y-1 text-xs">
+            <span className={`w-56 ${blank}`}>{nbsp}</span>
+          </div>
         </div>
       </div>
 

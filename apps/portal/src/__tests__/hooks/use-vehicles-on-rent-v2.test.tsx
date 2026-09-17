@@ -478,7 +478,8 @@ describe('VehiclesOverview: the row', () => {
     expect(summary()).toBe('Cars on rent today: 4 of 4 cars + 1 disposed. On Aug 16: 0. Fleet today: 4.');
     expect(screen.getByText('Cars on rent today')).toBeInTheDocument();
     expect(screen.getByText('of 4 cars + 1 disposed')).toBeInTheDocument();
-    expect(document.body.textContent).toContain('vs 0 on Aug 16');
+    // The legend names that day with its count: "On Aug 16" then "0".
+    expect(screen.getByText('On Aug 16').closest('span')?.textContent).toBe('On Aug 160');
     // A level moves by cars, not by a percentage: 4 against 0 is up 4.
     const chip = document.querySelector('[data-change]');
     expect(chip?.getAttribute('data-change')).toBe('up');

@@ -64,6 +64,7 @@ import { useForcedEmptyState } from "@/hooks/use-forced-empty-state";
 import { isLeanTenant } from "@/lib/lean-areas";
 import { TabTourButton } from "@/components/onboarding/tab-tour-button";
 import { HEADER_ACTIONS_V2, HEADER_PRIMARY_V2, HeaderIconButton } from "@/components/shared/header-icon-button-v2";
+import { useViewportFillCap } from "@/components/shared/list-table-v2";
 import { csvDate, csvFilename, downloadCsv } from "@/lib/csv-export";
 
 /**
@@ -241,8 +242,11 @@ export function RentalsListV2() {
       startDateTo: searchParams.get("startDateTo")
         ? new Date(searchParams.get("startDateTo")!)
         : undefined,
-      sortBy: searchParams.get("sortBy") || "created_at",
-      sortOrder: (searchParams.get("sortOrder") as "asc" | "desc") || "desc",
+      // Newest added first, always. v2 lists cannot be re-ordered (team lead,
+      // Sep 2026), so an old `?sortBy=` / `?sortOrder=` link is ignored rather
+      // than quietly shuffling the list with no control on screen to undo it.
+      sortBy: "created_at",
+      sortOrder: "desc",
       // No `page`. The v2 list scrolls, so a `?page=` in the URL means nothing
       // here — and parsing it back would put it in the hook's query key, giving
       // the same rows a second cache entry for no reason. The hook still slices
@@ -339,7 +343,8 @@ export function RentalsListV2() {
     []
   );
 
-  // The table body scrolls INSIDE the card (`max-h-[520px]`), not with the
+  // The table body scrolls INSIDE the card (`max-h-[520px]`, or the room left
+  // in the window from `md` up — see `tableFillCap` below), not with the
   // page, so the sentinel is clipped by that container long before it would
   // ever reach the viewport. The observer therefore has to take the container
   // as its root — with the default (viewport) root it would only fire once the
@@ -367,6 +372,18 @@ export function RentalsListV2() {
     // list, and it also fills a viewport too tall for 25 rows on first paint.
   }, [hasMore, visibleCount, showMore]);
 
+  /**
+   * From `md` up the table's scroll box fills the window under it instead of
+   * stopping at 520px, so the list is the screen and the page itself does not
+   * scroll (the kit's `useViewportFillCap`, which the other window-filling
+   * lists get through `ListTable fillViewport`). Its condition is the table
+   * branch's below, word for word: the measurement runs when the box mounts,
+   * and a box that mounted without this turning true would never be measured.
+   */
+  const tableMounted =
+    !isLoading && currentView !== "calendar" && allRentals.length > 0 && !devForceEmptyRentals;
+  const tableFillCap = useViewportFillCap(scrollRootRef, tableMounted);
+
   const handleFiltersChange = (newFilters: RentalFilters) => {
     const params = new URLSearchParams();
     Object.entries(newFilters).forEach(([key, value]) => {
@@ -375,6 +392,9 @@ export function RentalsListV2() {
       // they are written against the paginated v1 contract. Drop it here rather
       // than writing a URL parameter that nothing on this screen reads.
       if (RESULT_KEY_IGNORED.has(key)) return;
+      // Fixed above (newest first), so writing them would only advertise a
+      // sort the list does not offer.
+      if (key === "sortBy" || key === "sortOrder") return;
       if (value && value !== "all" && value !== "" && value !== 1) {
         if (value instanceof Date) {
           params.set(key, value.toISOString().split("T")[0]);
@@ -588,10 +608,13 @@ export function RentalsListV2() {
                 wrapper. As a scroll container of its own, it was what the
                 sticky header pinned to, and it never scrolls vertically, so the
                 header scrolled away with the rows. Kept identical to
-                LIST_CLASSES.scrollRoot in components/shared/list-table-v2.tsx. */}
+                LIST_CLASSES.scrollRoot + LIST_CLASSES.fillViewport in
+                components/shared/list-table-v2.tsx; the inline max-height is
+                the measured window fill, and replaces the 520px from md up. */}
             <CardContent
               ref={scrollRootRef}
-              className="p-0 overflow-x-auto max-h-[520px] overflow-y-auto no-scrollbar relative [&>[data-slot=table-container]]:overflow-visible"
+              className="p-0 overflow-x-auto max-h-[520px] overflow-y-auto no-scrollbar relative [&>[data-slot=table-container]]:overflow-visible md:overscroll-contain"
+              style={tableFillCap !== undefined ? { maxHeight: tableFillCap } : undefined}
             >
               {/* `table-fixed` with declared widths, so the five columns keep
                   their proportions instead of handing every spare pixel to
@@ -605,19 +628,19 @@ export function RentalsListV2() {
                     separate slab sitting on the card. */}
                 <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur-sm">
                   <TableRow className="border-b hover:bg-transparent">
-                    <TableHead className="h-10 w-[20%] text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    <TableHead className="h-10 w-[20%] text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-center">
                       Rental #
                     </TableHead>
-                    <TableHead className="h-10 w-[28%] text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    <TableHead className="h-10 w-[28%] text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-center">
                       Customer
                     </TableHead>
-                    <TableHead className="h-10 w-[16%] text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    <TableHead className="h-10 w-[16%] text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-center">
                       Pickup
                     </TableHead>
-                    <TableHead className="h-10 w-[16%] text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    <TableHead className="h-10 w-[16%] text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-center">
                       Return
                     </TableHead>
-                    <TableHead className="h-10 w-[20%] text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    <TableHead className="h-10 w-[20%] text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-center">
                       Status
                     </TableHead>
                   </TableRow>
@@ -671,8 +694,8 @@ export function RentalsListV2() {
                             one: this is the string an operator reads out on
                             the phone and searches for, so it carries the row
                             rather than sitting in it. */}
-                        <TableCell className="py-3">
-                          <div className="flex flex-col gap-0.5">
+                        <TableCell className="py-3 text-center">
+                          <div className="flex flex-col items-center gap-0.5">
                             <span className="font-semibold tabular-nums tracking-tight text-foreground">
                               {rental.rental_number}
                             </span>
@@ -704,7 +727,7 @@ export function RentalsListV2() {
                             name is already on the record, so nothing is fetched
                             to fix this. No initials disc: at the user's request
                             the name carries the cell on its own. */}
-                        <TableCell className="py-3">
+                        <TableCell className="py-3 text-center">
                           <span className="block truncate font-medium text-foreground">
                             {rental.customer.name}
                           </span>
@@ -714,12 +737,12 @@ export function RentalsListV2() {
                             two columns line up down the page: proportional
                             digits give every row a different width and the
                             column reads as ragged noise. */}
-                        <TableCell className="py-3 tabular-nums">
+                        <TableCell className="py-3 text-center tabular-nums">
                           <span className="font-medium text-foreground">
                             {formatRentalDate(rental.start_date)}
                           </span>
                         </TableCell>
-                        <TableCell className="py-3 tabular-nums">
+                        <TableCell className="py-3 text-center tabular-nums">
                           {rental.end_date ? (
                             <span className="font-medium text-foreground">
                               {formatRentalDate(rental.end_date)}
@@ -739,8 +762,8 @@ export function RentalsListV2() {
                             "Active". PAYG and auto-extend are secondary and now
                             look it, so the coloured pill is the only thing in
                             the column asking for the eye. */}
-                        <TableCell className="py-3">
-                          <div className="flex flex-wrap items-center gap-1.5">
+                        <TableCell className="py-3 text-center">
+                          <div className="flex flex-wrap items-center justify-center gap-1.5">
                             <RentalStatusText status={rental.computed_status} />
                             {rental.is_pay_as_you_go && <MetaChip>PAYG</MetaChip>}
                             {(rental as any).auto_extend_enabled && <MetaChip>Auto-extend</MetaChip>}

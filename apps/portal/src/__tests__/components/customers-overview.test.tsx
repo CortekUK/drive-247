@@ -77,11 +77,11 @@ describe('CustomersOverview — the graph', () => {
     // The metric label, and again in the legend beside the second line.
     expect(screen.getAllByText('New customers')).toHaveLength(2);
     expect(screen.getByText('Verified')).toBeInTheDocument();
-    // 8 against 4 is up 100%, and the previous total is said in words.
+    // 8 against 4 is up 100%, and the legend names the previous 30 days with their total.
     const chip = container.querySelector('[data-change]');
     expect(chip?.getAttribute('data-change')).toBe('up');
     expect(chip?.textContent).toBe('100%');
-    expect(container.textContent).toContain('vs 4 previous 30 days');
+    expect(screen.getByText('Previous 30 days').closest('span')?.textContent).toBe('Previous 30 days4');
   });
 
   it('draws no axis labels under the chart', () => {
