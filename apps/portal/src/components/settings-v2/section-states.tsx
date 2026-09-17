@@ -170,8 +170,6 @@ export function SettingsSectionSkeleton({
       data-settings-state="loading"
       className={cn("space-y-4", className)}
     >
-      <span className="sr-only">{label}</span>
-
       {header && (
         <div aria-hidden="true" className="flex items-center justify-between gap-4">
           <div className="space-y-2">
@@ -271,6 +269,14 @@ export function SettingsSectionSkeleton({
           ))}
         </div>
       )}
+
+      {/* Last, not first: as the first child it made the first shape a later
+          sibling, so space-y-4 gave it a 16px top margin. Inside a fieldset,
+          grid or flex item that margin cannot collapse away, and the skeleton
+          sat 16px below where the loaded section appears (Fees & tax, Deposit,
+          Installments, Pricing rules, Locations); after a space-y-3 heading it
+          sat 4px low. */}
+      <span className="sr-only">{label}</span>
     </div>
   );
 }

@@ -1168,7 +1168,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                   onClick={() => switchView(tab.key)}
                   className={`relative z-10 flex items-center justify-between gap-1.5 cursor-pointer rounded-md px-2.5 py-1 text-[12px] font-medium transition-colors ${
                     view === tab.key
-                      ? "text-primary"
+                      ? "text-primary dark:text-indigo-300"
                       : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
@@ -1176,7 +1176,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                   <kbd
                     className={`rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold transition-colors ${
                       view === tab.key
-                        ? "bg-primary/15 text-primary"
+                        ? "bg-primary/15 text-primary dark:text-indigo-300"
                         : "bg-foreground/10 text-foreground/70"
                     }`}
                   >
@@ -1306,7 +1306,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                             onClick={() => outlinePick?.(section.id)}
                             className={`flex w-full cursor-pointer items-center gap-2 rounded-md px-2.5 py-1 text-left text-[12px] leading-tight transition-colors ${
                               outlineActiveId === section.id
-                                ? "font-medium text-primary"
+                                ? "font-medium text-primary dark:text-indigo-300"
                                 : "text-sidebar-foreground/55 hover:text-foreground"
                             }`}
                           >

@@ -251,8 +251,11 @@ export function SettingsIndexV2({
   // No mx-auto: the page starts where the top bar's search field starts. Both sit
   // 16px inside the inset (main p-4, header sm:px-4), so centring the column
   // pushed the title and every section off that line on wide screens.
+  // Switch row alignment: at md+ <main>'s content starts at y=50 and the h1 is a
+  // 32px line, so 26px of top padding centres it at 50 + 26 + 16 = 92, the
+  // sidebar Portal / Website switch's row (md:pt-7 left it 2px low, at 94).
   return (
-    <div className="w-full max-w-[1160px] space-y-9 pb-16 md:pt-7" data-tour="settings-index">
+    <div className="w-full max-w-[1160px] space-y-9 pb-16 md:pt-[26px]" data-tour="settings-index">
       <h1 className="text-2xl font-medium tracking-tight text-foreground">Settings</h1>
 
       {notice}

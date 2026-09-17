@@ -173,8 +173,10 @@ export function TabTourButton({ tour, className }: TabTourButtonProps) {
             // 32px on every header (team lead, Sep 16 2026); `size` no longer changes it.
             'size-8',
             // One look in both states, matching the header's other icons
-            // (HeaderIconButton): purple at rest, deeper on hover.
-            'border-primary/30 bg-primary/5 text-primary hover:border-primary/50 hover:bg-primary/10 dark:bg-primary/10 dark:hover:bg-primary/15',
+            // (HeaderIconButton): purple at rest, deeper on hover. Dark mode
+            // uses the same indigo-300 glyph and v2 hover tint it does.
+            'border-primary/30 bg-primary/5 text-primary hover:border-primary/50 hover:bg-primary/10 dark:bg-primary/10',
+            'dark:border-indigo-300/30 dark:text-indigo-300 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:border-indigo-300/50 dark:hover:text-indigo-300',
             className,
           )}
         >

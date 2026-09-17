@@ -76,7 +76,7 @@ import { SettingsIndexV2 } from '@/components/settings-v2/settings-index';
 import * as BusinessV2 from '@/components/settings-v2/business-settings-states';
 import { BusinessRentalGate, DurationPageV2, LockboxPageV2, RequirementsPageV2, ReturnReminderPanelV2, makeBusinessSave } from '@/components/settings-v2/business-rules-pages';
 import { businessEditsCoveredBySections, businessPageDirty, keepUnsavedBusinessEdits } from '@/components/settings-v2/business-rules-logic';
-import { SettingsField, SettingsPageHeader, SettingsPanel, SettingsRow, Unit } from '@/components/settings-v2/settings-kit';
+import { SettingsField, SettingsPageHeader, SettingsPageHeaderSkeleton, SettingsPanel, SettingsRow, Unit } from '@/components/settings-v2/settings-kit';
 import { AgreementTemplateStatusV2, EmailTemplatesStatusV2 } from '@/components/settings-v2/templates-status-v2';
 import { PricingRulesV2 } from '@/components/settings-v2/pricing-rules-v2';
 import { DepositSettingsV2, FeesSettingsV2 } from '@/components/settings-v2/fees-deposit-v2';
@@ -3319,7 +3319,11 @@ const Settings = () => {
     return (
       <>
         {!pageMeta && v2TabNotice.kind === 'wait' ? (
-          <div className="w-full max-w-[1160px] pb-16 md:pt-7">
+          // A deep link waiting on a manager's permissions: shaped like the
+          // detail page it resolves to (same wrapper, a header placeholder),
+          // so the panel does not jump ~90px down when the tab appears.
+          <div className="w-full max-w-[1160px] space-y-6 pb-16 md:pt-8">
+            <SettingsPageHeaderSkeleton />
             <SettingsSectionSkeleton variant="form" rows={4} label="Loading settings" />
           </div>
         ) : !pageMeta ? (
@@ -3337,7 +3341,9 @@ const Settings = () => {
             }
           />
         ) : (
-          <div className="w-full max-w-[1160px] space-y-6 pb-16 md:pt-7">
+          // md:pt-8: the header's first line is the 20px breadcrumb, so it
+          // centres at 50 + 32 + 10 = 92, the sidebar switch's row.
+          <div className="w-full max-w-[1160px] space-y-6 pb-16 md:pt-8">
             <SettingsPageHeader
               section={pageMeta.section}
               title={pageMeta.title}

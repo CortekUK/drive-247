@@ -246,7 +246,9 @@ export function EmailTemplatesListV2() {
 
   return (
     <TooltipProvider>
-      <div className="w-full max-w-[1160px] space-y-6 pb-16 md:pt-7">
+      {/* md:pt-8: the header's first line is the 20px breadcrumb, so it centres
+          at 50 + 32 + 10 = 92, the sidebar switch's row (see SettingsPageHeader). */}
+      <div className="w-full max-w-[1160px] space-y-6 pb-16 md:pt-8">
         {header}
         {body}
       </div>

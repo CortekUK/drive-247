@@ -66,7 +66,7 @@ export function CustomerList({ selected, onSelect, onInvite, customers }: Custom
           <button
             type="button"
             onClick={onInvite}
-            className="w-full inline-flex items-center justify-center gap-1.5 rounded-xl border border-primary/30 bg-primary/10 px-3 py-2 text-sm font-medium text-primary hover:bg-primary/20 transition-colors"
+            className="w-full inline-flex items-center justify-center gap-1.5 rounded-xl border border-primary/30 bg-primary/10 px-3 py-2 text-sm font-medium text-primary dark:text-indigo-300 dark:border-indigo-300/30 hover:bg-primary/20 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:border-indigo-300/50 transition-colors"
           >
             <Link2 className="h-4 w-4" />
             Invite new customer

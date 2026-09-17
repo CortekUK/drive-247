@@ -470,11 +470,15 @@ function SidebarMenuItem({ className, ...props }: React.ComponentProps<"li">) {
 }
 
 const sidebarMenuButtonVariants = cva(
-  "peer/menu-button group/menu-button flex w-full cursor-pointer items-center gap-2 overflow-hidden rounded-lg px-3 py-2 text-left text-sm text-sidebar-foreground/70 ring-sidebar-ring outline-none transition-colors group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 group-data-[collapsible=icon]:!size-8 group-data-[collapsible=icon]:!p-2 hover:text-sidebar-foreground focus-visible:ring-2 active:text-sidebar-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[state=open]:hover:text-sidebar-foreground data-[active=true]:bg-primary/10 data-[active=true]:font-medium data-[active=true]:text-primary [&[data-active=true]_svg]:text-primary [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-sidebar-foreground/60 [&>span:last-child]:truncate",
+  "peer/menu-button group/menu-button flex w-full cursor-pointer items-center gap-2 overflow-hidden rounded-lg px-3 py-2 text-left text-sm text-sidebar-foreground/70 ring-sidebar-ring outline-none transition-colors group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 group-data-[collapsible=icon]:!size-8 group-data-[collapsible=icon]:!p-2 hover:text-sidebar-foreground focus-visible:ring-2 active:text-sidebar-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[state=open]:hover:text-sidebar-foreground data-[active=true]:bg-primary/10 data-[active=true]:font-medium data-[active=true]:text-primary [&[data-active=true]_svg]:text-primary dark:data-[active=true]:bg-[hsl(var(--v2-hover,var(--muted)))] dark:data-[active=true]:text-indigo-300 dark:[&[data-active=true]_svg]:text-indigo-300 [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-sidebar-foreground/60 [&>span:last-child]:truncate",
   {
     variants: {
       variant: {
-        default: "hover:bg-primary/10 hover:text-primary [&:hover_svg]:text-primary",
+        // Dark --primary (246 61% 42%) measures 1.9:1 as text on the dark
+        // sidebar, and primary/10 is a 1.03:1 step there: dark mode swaps in
+        // the v2 hover tint and a light indigo label and icon.
+        default:
+          "hover:bg-primary/10 hover:text-primary [&:hover_svg]:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-indigo-300 dark:[&:hover_svg]:text-indigo-300",
         outline:
           "bg-background shadow-[0_0_0_1px_hsl(var(--sidebar-border))] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:shadow-[0_0_0_1px_hsl(var(--sidebar-accent))]",
       },
@@ -670,7 +674,7 @@ function SidebarMenuSubButton({
       data-size={size}
       data-active={isActive}
       className={cn(
-        "flex h-7 min-w-0 -translate-x-px items-center gap-2 overflow-hidden rounded-xl px-3 text-sidebar-foreground ring-sidebar-ring outline-none group-data-[collapsible=icon]:hidden hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[size=md]:text-sm data-[size=sm]:text-xs data-[active=true]:bg-primary/10 data-[active=true]:font-medium data-[active=true]:text-primary [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-sidebar-foreground/60 [&[data-active=true]>svg]:text-primary",
+        "flex h-7 min-w-0 -translate-x-px items-center gap-2 overflow-hidden rounded-xl px-3 text-sidebar-foreground ring-sidebar-ring outline-none group-data-[collapsible=icon]:hidden hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[size=md]:text-sm data-[size=sm]:text-xs data-[active=true]:bg-primary/10 data-[active=true]:font-medium data-[active=true]:text-primary dark:data-[active=true]:text-indigo-300 [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-sidebar-foreground/60 [&[data-active=true]>svg]:text-primary dark:[&[data-active=true]>svg]:text-indigo-300",
         className
       )}
       {...props}

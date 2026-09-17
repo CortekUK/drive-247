@@ -846,7 +846,7 @@ function IconPicker({
               "flex size-8 cursor-pointer items-center justify-center rounded-2xl transition-colors disabled:cursor-default",
               on
                 ? "bg-primary text-primary-foreground"
-                : "bg-muted/60 text-muted-foreground hover:bg-primary/10 hover:text-primary"
+                : "bg-muted/60 text-muted-foreground hover:bg-primary/10 hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-indigo-300"
             )}
           >
             <Icon className="size-4" />
@@ -986,7 +986,7 @@ function GalleryField({
           type="button"
           disabled={isUploading}
           onClick={() => input.current?.click()}
-          className="flex size-16 cursor-pointer items-center justify-center rounded-2xl border border-dashed border-foreground/15 text-muted-foreground/50 transition-colors hover:border-primary/40 hover:text-primary disabled:opacity-50"
+          className="flex size-16 cursor-pointer items-center justify-center rounded-2xl border border-dashed border-foreground/15 text-muted-foreground/50 transition-colors hover:border-primary/40 hover:text-primary dark:hover:border-indigo-300/40 dark:hover:text-indigo-300 disabled:opacity-50"
         >
           {isUploading ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
         </button>
