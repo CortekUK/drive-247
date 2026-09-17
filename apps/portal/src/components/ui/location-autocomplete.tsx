@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { MapPin, Loader2 } from "lucide-react";
 import { useGoogleMapsLoader } from "@/hooks/use-google-maps-loader";
 import { PlacesSessionManager } from "@/lib/google-places-session";
+import { cn } from "@/lib/utils";
 
 interface LocationAutocompleteProps {
   id?: string;
@@ -171,7 +172,7 @@ export function LocationAutocomplete({
           onChange={(e) => handleInputChange(e.target.value)}
           onFocus={handleFocus}
           placeholder={placeholder}
-          className={className}
+          className={v2States ? cn(className, "pr-9") : className}
           autoComplete="off"
           disabled={disabled}
         />

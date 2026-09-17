@@ -34,6 +34,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useManagerPermissions } from '@/hooks/use-manager-permissions';
 import { useV2 } from '@/lib/v2-context';
+import { HEADER_ACTIONS_V2, HEADER_PRIMARY_V2, HeaderIconButton } from '@/components/shared/header-icon-button-v2';
 
 const capitalize = (str: string) => str.charAt(0).toUpperCase() + str.slice(1);
 
@@ -49,8 +50,9 @@ export default function RemindersPageEnhanced() {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const { canEdit } = useManagerPermissions();
   // v2 chrome (northwind only; fails closed to v1). Used only to put this page's
-  // header on the sidebar switch's row at md; every other tenant renders the
-  // classes it did before. Above the early returns, as every hook must be.
+  // header on the sidebar switch's row at md and to draw its header controls at
+  // the v2 size; every other tenant renders the classes it did before. Above the
+  // early returns, as every hook must be.
   const v2Chrome = useV2('chrome');
 
   const { data: reminders = [], isLoading, error } = useReminders(filters);
@@ -176,7 +178,22 @@ export default function RemindersPageEnhanced() {
           <p className="text-muted-foreground text-sm sm:text-base">Monitor and manage fleet compliance reminders</p>
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* v2: every control here is 32px and the cluster sits on the subtitle
+            line (HEADER_ACTIONS_V2 / HEADER_PRIMARY_V2, team lead Sep 16 2026).
+            v1 keeps "flex items-center gap-2" and its outline icon Buttons
+            byte for byte. */}
+        <div className={`flex items-center gap-2${v2Chrome ? ` ${HEADER_ACTIONS_V2}` : ""}`}>
+          {v2Chrome ? (
+            <>
+              <HeaderIconButton label="Export CSV" onClick={exportReminders} disabled={reminders.length === 0}>
+                <Download className="h-4 w-4" />
+              </HeaderIconButton>
+              <HeaderIconButton label="Reminder analytics" href="/reminders/analytics">
+                <BarChart3 className="h-4 w-4" />
+              </HeaderIconButton>
+            </>
+          ) : (
+            <>
           <Button
             variant="outline"
             size="icon"
@@ -192,9 +209,11 @@ export default function RemindersPageEnhanced() {
               <BarChart3 className="h-4 w-4" />
             </Button>
           </Link>
+            </>
+          )}
 
           {canEdit('reminders') && (
-            <Button onClick={() => setShowAddDialog(true)} className="flex-1 sm:flex-none">
+            <Button onClick={() => setShowAddDialog(true)} className={`flex-1 sm:flex-none${v2Chrome ? ` ${HEADER_PRIMARY_V2}` : ""}`}>
               <Plus className="h-4 w-4 mr-2" />
               New Reminder
             </Button>

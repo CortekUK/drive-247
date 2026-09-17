@@ -75,6 +75,7 @@ import { LIST_CLASSES } from "@/components/shared/list-table-v2";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { formatCurrency } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
+import { describeSaveError } from "@/components/settings-v2/settings-error-copy";
 
 /* -------------------------------------------------------------------------- */
 /* Shared action shape                                                         */
@@ -177,11 +178,13 @@ export function SettingsSectionSkeleton({
       {variant === "table" && (
         // Same shell as `ListTable`: the v2 Card with a p-0 body, a 40px head
         // row and 45px body rows (py-3 cell + 20px line + 1px row border).
+        // `min-w-0` on every column: the fixed-width header bars otherwise set
+        // a minimum that pushed the last one past the card edge on a phone.
         <Card aria-hidden="true">
           <CardContent className="p-0">
             <div className="flex h-10 items-center gap-6 border-b px-3">
               {Array.from({ length: columns }).map((_, c) => (
-                <div key={c} className="flex-1">
+                <div key={c} className="min-w-0 flex-1">
                   <Skeleton className={cn("h-2.5 rounded-full", c === 0 ? "w-24 max-w-full" : "w-16 max-w-full")} />
                 </div>
               ))}
@@ -192,7 +195,7 @@ export function SettingsSectionSkeleton({
                 className={cn("flex h-[45px] items-center gap-6 px-3", r < count - 1 && "border-b")}
               >
                 {Array.from({ length: columns }).map((_, c) => (
-                  <div key={c} className="flex-1">
+                  <div key={c} className="min-w-0 flex-1">
                     <Skeleton className={cn("h-3.5 rounded-full", BAR_WIDTHS[(r + c) % BAR_WIDTHS.length])} />
                   </div>
                 ))}
@@ -286,7 +289,7 @@ export function SettingsEmptyState({
       <div className={cn("mx-auto flex flex-col items-center text-center", compact ? "max-w-sm" : "max-w-lg")}>
         <span
           className={cn(
-            "flex items-center justify-center bg-primary/10 text-primary",
+            "flex items-center justify-center bg-primary/10 text-primary dark:text-indigo-300",
             compact ? "size-9 rounded-xl" : "size-11 rounded-2xl",
           )}
         >
@@ -311,7 +314,7 @@ export function SettingsEmptyState({
             {points.slice(0, 3).map((point) => (
               <li key={point} className="flex items-start gap-2.5">
                 <span className="mt-[3px] flex size-4 shrink-0 items-center justify-center rounded-full bg-primary/10">
-                  <Check className="size-2.5 text-primary" strokeWidth={3} aria-hidden="true" />
+                  <Check className="size-2.5 text-primary dark:text-indigo-300" strokeWidth={3} aria-hidden="true" />
                 </span>
                 <span className="text-sm leading-snug text-foreground/80">{point}</span>
               </li>
@@ -571,6 +574,10 @@ export function settingsControlProps(canEdit: boolean, busy = false) {
  * Disables every native control inside when `readOnly` (browser-enforced:
  * inputs, selects, textareas and buttons, which covers Radix Switch, Select
  * and Checkbox triggers). Keep view-only actions outside it.
+ *
+ * The v2 Switch dims only on its own `disabled` prop (`data-[disabled]`), which
+ * a disabled fieldset never sets, so a view-only switch kept full colour beside
+ * dimmed inputs and looked editable. The fieldset dims it the same way.
  */
 export function SettingsReadOnlyFieldset({
   readOnly,
@@ -585,7 +592,10 @@ export function SettingsReadOnlyFieldset({
     <fieldset
       disabled={readOnly}
       data-read-only={readOnly || undefined}
-      className={cn("m-0 min-w-0 border-0 p-0", className)}
+      className={cn(
+        "m-0 min-w-0 border-0 p-0 [&_[role=switch]:disabled]:cursor-not-allowed [&_[role=switch]:disabled]:opacity-50",
+        className,
+      )}
     >
       {children}
     </fieldset>
@@ -632,7 +642,7 @@ export function SettingsDependencyNotice({
           aria-hidden="true"
           className={cn(
             "mt-0.5 size-4 shrink-0",
-            tone === "warning" ? "text-amber-600 dark:text-amber-400" : "text-primary",
+            tone === "warning" ? "text-amber-600 dark:text-amber-400" : "text-primary dark:text-indigo-300",
           )}
         />
         <div className="min-w-0 [overflow-wrap:anywhere]">
@@ -664,43 +674,8 @@ export interface SettingsSaveStateProps {
   className?: string;
 }
 
-/**
- * A short reason for a failed save, in the operator's words. Database and
- * transport internals ("violates check constraint", "duplicate key", SQL
- * codes) are translated; a plain human message (e.g. from an edge function)
- * passes through, capped at 140 characters. The form keeps its values either
- * way, so every branch can promise that.
- */
-export function describeSaveError(error: unknown): string {
-  const msg =
-    typeof error === "string"
-      ? error
-      : error && typeof error === "object" && "message" in error
-        ? String((error as { message?: unknown }).message ?? "")
-        : "";
-  const code =
-    error && typeof error === "object" && "code" in error ? String((error as { code?: unknown }).code ?? "") : "";
-  const clean = msg.replace(/\s+/g, " ").trim();
-  const text = clean.toLowerCase();
-
-  if (!clean && !code) return "Your changes are still here. Try again.";
-  if ((typeof navigator !== "undefined" && navigator.onLine === false) || text.includes("failed to fetch") || text.includes("network")) {
-    return "We couldn't reach the server. Your changes are still here.";
-  }
-  if (code === "23505" || text.includes("duplicate key") || text.includes("already exists")) {
-    return "Something with that name already exists. Use a different one.";
-  }
-  if (code === "42501" || text.includes("permission denied") || text.includes("row-level security") || text.includes("not authorized")) {
-    return "You don't have permission to change this. Ask an admin.";
-  }
-  if (
-    /^(23|22|42|P0)/.test(code) ||
-    /violates|constraint|null value in column|invalid input syntax|out of range|relation "|column "|syntax error/.test(text)
-  ) {
-    return "One of the values isn't allowed. Check the fields and try again.";
-  }
-  return clean.length > 140 ? `${clean.slice(0, 137)}…` : clean;
-}
+// Lives in a plain module so hooks can share it; re-exported for the kit's callers.
+export { describeSaveError };
 
 /**
  * Inline, next to the section's Save button. It complements the toast rather
@@ -890,6 +865,9 @@ export function TruncatedText({
 }) {
   const ref = useRef<HTMLSpanElement>(null);
   const [cut, setCut] = useState(false);
+  // Always controlled: switching `open` between `false` and `undefined` made
+  // Radix warn "changing from controlled to uncontrolled" once a row measured.
+  const [tipOpen, setTipOpen] = useState(false);
   const value = text ?? "";
 
   const measure = () => {
@@ -919,7 +897,7 @@ export function TruncatedText({
 
   return (
     <TooltipProvider delayDuration={300}>
-      <Tooltip open={cut ? undefined : false}>
+      <Tooltip open={cut && tipOpen} onOpenChange={setTipOpen}>
         <TooltipTrigger asChild>{span}</TooltipTrigger>
         <TooltipContent className="max-w-sm break-words">{value}</TooltipContent>
       </Tooltip>

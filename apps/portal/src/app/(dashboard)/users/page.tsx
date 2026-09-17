@@ -50,6 +50,7 @@ import { ManagerPermissionsSelector } from '@/components/users/manager-permissio
 import type { AddUserFormValues, PermissionEntry } from '@/client-schemas/users/add-user';
 import { useAuditLog } from '@/hooks/use-audit-log';
 import { useV2 } from '@/lib/v2-context';
+import { HEADER_ACTIONS_V2, HEADER_PRIMARY_V2 } from '@/components/shared/header-icon-button-v2';
 import { UsersTableV2 } from '@/components/admin-v2/users-table-v2';
 
 interface UserCredentials {
@@ -414,6 +415,19 @@ export default function UsersManagement() {
             <p className="text-muted-foreground text-sm sm:text-base">Create and manage user accounts for your team</p>
           </div>
         </div>
+        {v2Chrome ? (
+          // v2: the 32px Add User pill, centred on the subtitle line (team lead
+          // Sep 16 2026; the subtitle is text-base from sm, HEADER_ACTIONS_V2's box).
+          <div className={`flex items-center gap-2 ${HEADER_ACTIONS_V2}`}>
+            <Button
+              onClick={() => setShowAddDialog(true)}
+              className={`bg-gradient-primary text-primary-foreground w-full sm:w-auto ${HEADER_PRIMARY_V2}`}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Add User
+            </Button>
+          </div>
+        ) : (
         <Button
           onClick={() => setShowAddDialog(true)}
           className="bg-gradient-primary text-primary-foreground w-full sm:w-auto"
@@ -421,6 +435,7 @@ export default function UsersManagement() {
           <Plus className="mr-2 h-4 w-4" />
           Add User
         </Button>
+        )}
       </div>
 
       {/* Search Bar */}

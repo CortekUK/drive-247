@@ -4,6 +4,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Upload, X, Image, ZoomIn, ZoomOut, RotateCcw, Loader2 } from 'lucide-react';
+import { ImageOff } from 'lucide-react';
+import { useImageLoadFailed } from '@/components/settings-v2/business-settings-states';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import {
@@ -25,6 +27,11 @@ interface LogoUploadWithResizeProps {
    * removing it must not delete the live file first. Only the form clears.
    */
   deferStorageDelete?: boolean;
+  /**
+   * v2 (Appearance, northwind): a logo file that fails to load keeps its preview
+   * frame with a "Couldn't load" placeholder instead of collapsing to an empty square.
+   */
+  v2States?: boolean;
 }
 
 export function LogoUploadWithResize({
@@ -33,7 +40,9 @@ export function LogoUploadWithResize({
   label = "Company Logo",
   description = "Upload and resize your company logo",
   deferStorageDelete = false,
+  v2States = false,
 }: LogoUploadWithResizeProps) {
+  const v2LogoFailed = useImageLoadFailed(v2States ? currentLogoUrl : null);
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -252,6 +261,16 @@ export function LogoUploadWithResize({
         <div className="space-y-3">
           <div className="relative inline-block">
             <div className="border rounded-lg p-3 bg-muted/30">
+              {v2States && v2LogoFailed ? (
+                <div
+                  role="img"
+                  aria-label="Your logo file couldn't be loaded"
+                  className="flex h-16 w-40 max-w-full flex-col items-center justify-center gap-1 text-xs text-muted-foreground"
+                >
+                  <ImageOff className="h-5 w-5" aria-hidden="true" />
+                  Couldn&apos;t load logo
+                </div>
+              ) : (
               <img
                 src={currentLogoUrl}
                 alt="Logo preview"
@@ -260,6 +279,7 @@ export function LogoUploadWithResize({
                   (e.target as HTMLImageElement).style.display = 'none';
                 }}
               />
+              )}
             </div>
             <Button
               type="button"

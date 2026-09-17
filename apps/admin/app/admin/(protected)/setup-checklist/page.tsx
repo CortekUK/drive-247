@@ -113,7 +113,7 @@ const DEFAULT_CHECKLIST_ITEMS: ChecklistItem[] = [
     item_key: 'payg',
     title: 'Pay as you go',
     description:
-      'The settings under pay-as-you-go are the fiddliest in the product. Go through them once with someone rather than guessing.',
+      'Rentals charged day by day with no return date — how the daily charges build up, how the customer pays them, and the limits that catch people out.',
     video_url: '',
     video_length: '',
     guide_url: '/settings?tab=payg',

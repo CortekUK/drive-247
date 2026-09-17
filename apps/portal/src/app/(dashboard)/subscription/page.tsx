@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/card";
 // Shared with Settings so both surfaces render the same billing history and the
 // same Stripe-style receipt, instead of drifting into two implementations.
-import { UsageDashboard } from "@/components/settings/usage-dashboard";
+import { UsageDashboard, UsageSummary } from "@/components/settings/usage-dashboard";
 import { LocalInvoiceView } from "@/components/settings/subscription-settings";
 import { CardBrandIcon, CardOnFile } from "@/components/subscription/card-brand-icon";
 import { PaymentMethods, type SavedCard } from "@/components/subscription/payment-methods";
@@ -53,6 +53,9 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
+// v2 chrome (northwind only): the read-error, confirming and empty states below.
+import { useV2 } from "@/lib/v2-context";
+import { SettingsEmptyState, SettingsLoadError } from "@/components/settings-v2/section-states";
 
 function formatCurrency(amount: number, currency: string) {
   return new Intl.NumberFormat("en-US", {
@@ -99,16 +102,32 @@ export default function SubscriptionPage() {
     isLoading,
     invoices,
     invoicesLoading,
+    subscriptionError,
+    invoicesError,
     createCheckoutSession,
     createPortalSession,
     refetch,
   } = useTenantSubscription();
-  const { data: plans, isLoading: plansLoading } = useSubscriptionPlans();
+  const {
+    data: plans,
+    isLoading: plansLoading,
+    error: plansError,
+    refetch: refetchPlans,
+    isFetching: plansFetching,
+  } = useSubscriptionPlans();
   const { tenant } = useTenant();
 
   const [subscribingPlanId, setSubscribingPlanId] = useState<string | null>(null);
   const [viewingInvoice, setViewingInvoice] = useState<TenantSubscriptionInvoice | null>(null);
   const [methodsOpen, setMethodsOpen] = useState(false);
+
+  // v2 chrome (northwind only; every other tenant renders exactly as before).
+  const v2Chrome = useV2("chrome");
+  /* v2: back from Stripe Checkout, the webhook has not necessarily landed. v1
+     toasts "activated" at once and, if the webhook is late, shows that toast
+     beside the pricing cards. v2 says it is confirming, says "active" only once
+     the subscription row does, and after the 15s poll says it is slow. */
+  const [v2Checkout, setV2Checkout] = useState<"idle" | "confirming" | "slow">("idle");
 
   // ── Preview mode (canary tenant only) ──────────────────────────────────────
   //
@@ -192,11 +211,14 @@ export default function SubscriptionPage() {
     const status = searchParams.get("status");
     if (status !== "success" && status !== "payment-updated") return;
 
-    toast.success(
-      status === "success"
-        ? "Subscription activated successfully!"
-        : "Payment method updated",
-    );
+    // v2 announces a checkout only once it is confirmed (v2Checkout below).
+    if (!(v2Chrome && status === "success")) {
+      toast.success(
+        status === "success"
+          ? "Subscription activated successfully!"
+          : "Payment method updated",
+      );
+    }
     const interval = setInterval(() => {
       refetch();
     }, 2000);
@@ -206,6 +228,48 @@ export default function SubscriptionPage() {
       clearTimeout(timeout);
     };
   }, [searchParams]);
+
+  // Keyed on the value, not the URLSearchParams object: a re-render must never
+  // restart the 15s clock or put "slow" back to "confirming".
+  const v2ReturnStatus = searchParams.get("status");
+  useEffect(() => {
+    if (!v2Chrome) return;
+    if (v2ReturnStatus === "canceled") {
+      toast("Checkout canceled", { description: "No charge was made." });
+      return;
+    }
+    if (v2ReturnStatus !== "success") return;
+    setV2Checkout("confirming");
+    // Same 15s as the poll above: once it stops, say so rather than spin forever.
+    const slow = setTimeout(() => setV2Checkout((phase) => (phase === "confirming" ? "slow" : phase)), 15000);
+    return () => clearTimeout(slow);
+  }, [v2Chrome, v2ReturnStatus]);
+
+  useEffect(() => {
+    if (!v2Chrome || v2Checkout === "idle" || !isSubscribed) return;
+    setV2Checkout("idle");
+    toast.success("Your subscription is active");
+  }, [v2Chrome, v2Checkout, isSubscribed]);
+
+  /* v2: what the invoices area shows when there is no invoice to list. A failed
+     read is not "No invoices yet", and metered usage recorded before the first
+     invoice is still shown (the dashboard only mounts once an invoice exists). */
+  const v2InvoicesFallback =
+    !v2Chrome || previewActive || invoices.length > 0 || invoicesLoading ? null : invoicesError ? (
+      // The card, not the "inline" variant: that one says "showing what was last
+      // loaded", and nothing was.
+      <SettingsLoadError thing="your invoices" error={invoicesError} onRetry={refetch} />
+    ) : (
+      <div className="space-y-6">
+        <UsageSummary />
+        <SettingsEmptyState
+          variant="compact"
+          icon={Download}
+          headline="No invoices yet"
+          body="Your invoices and receipts appear here after your first billing date."
+        />
+      </div>
+    );
 
   const handleSubscribe = async (
     planId: string,
@@ -255,6 +319,16 @@ export default function SubscriptionPage() {
       <div className="p-6 space-y-6">
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-[400px] w-full max-w-sm mx-auto rounded-2xl" />
+      </div>
+    );
+  }
+
+  // v2: a failed subscription read is not "not subscribed". v1 falls through to
+  // the pricing cards, where Subscribe fails with a 409 for a tenant who pays.
+  if (v2Chrome && subscriptionError && !subscription) {
+    return (
+      <div className="mx-auto w-full max-w-2xl p-6">
+        <SettingsLoadError thing="your billing details" error={subscriptionError} onRetry={refetch} />
       </div>
     );
   }
@@ -331,7 +405,13 @@ export default function SubscriptionPage() {
               )}
               Update payment method
             </Button>
-            {!outstandingInvoiceUrl && (
+            {v2Chrome && !outstandingInvoiceUrl && invoicesLoading && (
+              <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                Loading your invoice link…
+              </p>
+            )}
+            {!outstandingInvoiceUrl && !(v2Chrome && invoicesLoading) && (
               <p className="text-sm">
                 We could not load your invoice link. Please contact{" "}
                 <a
@@ -342,6 +422,12 @@ export default function SubscriptionPage() {
                 </a>{" "}
                 to settle it.
               </p>
+            )}
+            {v2Chrome && !outstandingInvoiceUrl && !!invoicesError && !invoicesLoading && (
+              <Button variant="ghost" size="sm" onClick={refetch}>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Try loading it again
+              </Button>
             )}
           </CardContent>
         </Card>
@@ -359,6 +445,32 @@ export default function SubscriptionPage() {
   if (!isSubscribed && !previewActive) {
     const hasPlans = plans && plans.length > 0;
 
+    // v2: just back from Checkout. Pricing cards here would invite a second
+    // checkout for a subscription that is already being created.
+    if (v2Chrome && v2Checkout !== "idle") {
+      return (
+        <div className="mx-auto w-full max-w-2xl space-y-6 p-6">
+          {v2Checkout === "confirming" ? (
+            <div role="status" className="flex flex-col items-center gap-3 rounded-2xl bg-card px-6 py-12 text-center">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" aria-hidden="true" />
+              <h1 className="font-heading text-lg font-semibold tracking-tight text-foreground">Confirming your subscription…</h1>
+              <p className="max-w-sm text-sm text-muted-foreground">
+                Your checkout is complete. Stripe usually confirms it within a few seconds, and this page updates by itself.
+              </p>
+            </div>
+          ) : (
+            <SettingsEmptyState
+              icon={CalendarDays}
+              headline="Activation is taking longer than usual"
+              body="Your checkout is complete, but Stripe hasn't confirmed it yet. Check again in a minute. Please don't start a second checkout."
+              primaryAction={{ label: "Check again", onClick: refetch, icon: RefreshCw }}
+              secondaryAction={{ label: "Contact support", href: "mailto:support@drive-247.com" }}
+            />
+          )}
+        </div>
+      );
+    }
+
     return (
       <div className="p-6">
         {/* Header */}
@@ -374,7 +486,11 @@ export default function SubscriptionPage() {
           </p>
         </div>
 
-        {hasPlans ? (
+        {v2Chrome && plansError && !plans ? (
+          <div className="mx-auto max-w-2xl">
+            <SettingsLoadError thing="your plans" error={plansError} onRetry={() => refetchPlans()} retrying={plansFetching} />
+          </div>
+        ) : hasPlans ? (
           <>
             <div className={`flex flex-wrap justify-center gap-8 ${plans.length === 1 ? '' : 'max-w-5xl mx-auto'}`}>
               {plans.map((plan) => (
@@ -420,6 +536,11 @@ export default function SubscriptionPage() {
         {/* A cancelled tenant is unsubscribed but still needs their receipts.
             Mirrors subscription-settings.tsx. */}
         {billingHistory}
+        {v2Chrome && !!invoicesError && invoices.length === 0 && (
+          <div className="mx-auto mt-10 max-w-2xl">
+            <SettingsLoadError thing="your invoices" error={invoicesError} onRetry={refetch} />
+          </div>
+        )}
       </div>
     );
   }
@@ -607,7 +728,8 @@ export default function SubscriptionPage() {
               a "Show all" escape hatch, a per-row download, and the Stripe-style
               receipt viewer. The bespoke table that used to live here mapped the
               FULL invoice list and had no receipt view. */}
-          {invoicesLoading && !previewActive ? (
+          {v2InvoicesFallback}
+          {!v2InvoicesFallback && (invoicesLoading && !previewActive ? (
             <div className="space-y-3">
               {[...Array(3)].map((_, i) => (
                 <Skeleton key={i} className="h-10 w-full" />
@@ -619,7 +741,7 @@ export default function SubscriptionPage() {
             </div>
           ) : (
             billingHistory
-          )}
+          ))}
           </section>
         </div>
       ) : (
@@ -779,7 +901,8 @@ export default function SubscriptionPage() {
               a "Show all" escape hatch, a per-row download, and the Stripe-style
               receipt viewer. The bespoke table that used to live here mapped the
               FULL invoice list and had no receipt view. */}
-          {invoicesLoading && !previewActive ? (
+          {v2InvoicesFallback}
+          {!v2InvoicesFallback && (invoicesLoading && !previewActive ? (
             <div className="space-y-3">
               {[...Array(3)].map((_, i) => (
                 <Skeleton key={i} className="h-10 w-full" />
@@ -791,7 +914,7 @@ export default function SubscriptionPage() {
             </div>
           ) : (
             billingHistory
-          )}
+          ))}
           </TabsContent>
 
         </Tabs>

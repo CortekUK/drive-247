@@ -531,3 +531,10 @@ export function UsageDashboard({
     </div>
   );
 }
+
+/**
+ * The usage block on its own, for the v2 billing page: a tenant accruing
+ * metered usage before its first invoice still sees that usage (the dashboard
+ * above only mounts once an invoice exists). Renders nothing without history.
+ */
+export { UsageSummary };

@@ -99,6 +99,7 @@ export function Band({
   hint,
   action,
   aside,
+  gridClassName,
   children,
 }: {
   title: string;
@@ -106,6 +107,15 @@ export function Band({
   action?: string;
   /** A control at the right of the title row, centred on the title's line (not the hint). */
   aside?: ReactNode;
+  /**
+   * Replaces the grid's classes. Only the desk band passes it: its column count
+   * follows how many cards are visible (`DESK_GRID_CLASSES` in
+   * lib/announcements/contract.ts), so two cards stretch across the row instead
+   * of leaving an empty third column. Every other band keeps the default.
+   * (The default grid's lines below are kept verbatim, hence their indentation
+   * inside the ternary: this was an add-only edit.)
+   */
+  gridClassName?: string;
   children: ReactNode;
 }) {
   return (
@@ -141,9 +151,13 @@ export function Band({
       {/* Three equal columns. Variety comes from what is inside a card — a
           lead item, a headline figure, checkboxes, a chart — rather than from
           one card being wider than its neighbours. */}
+      {gridClassName !== undefined ? (
+        <div className={gridClassName}>{children}</div>
+      ) : (
       <div className="grid items-stretch gap-5 md:grid-cols-2 xl:grid-cols-3">
         {children}
       </div>
+      )}
     </section>
   );
 }

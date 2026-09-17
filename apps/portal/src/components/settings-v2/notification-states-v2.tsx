@@ -49,7 +49,6 @@ import {
   SettingsEmptyState,
   SettingsLoadError,
   SettingsReadOnlyFieldset,
-  SettingsReadOnlyNotice,
   SettingsSectionSkeleton,
   describeSaveError,
 } from "./section-states";
@@ -101,11 +100,12 @@ export function EmailNotificationSettingsV2({ canEdit = true }: { canEdit?: bool
     }
   }, [prefs?.recipientEmail]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // No read-only chip here: the settings page that mounts this section already
+  // shows one above it, and a second identical chip a few pixels lower is noise.
   const heading = (
     <SectionHeading
       title="Email notifications"
       description="Choose which alerts your team also gets by email, and where they go. The in-app bell stays on for every category."
-      aside={!canEdit ? <SettingsReadOnlyNotice /> : undefined}
     />
   );
 
@@ -472,16 +472,12 @@ export function ReminderRulesConfigV2() {
       </Tooltip>
     ) : null;
 
+  // The page above already shows the read-only chip; viewers simply get no Reset.
   const heading = (
     <SectionHeading
       title="Reminder timing"
       description="When reminders are created for each kind of event."
-      aside={
-        <>
-          {!canEdit && <SettingsReadOnlyNotice />}
-          {resetButton}
-        </>
-      }
+      aside={resetButton}
     />
   );
 

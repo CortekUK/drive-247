@@ -9,19 +9,17 @@
  * with hand-worked expectations.
  *
  * ---------------------------------------------------------------------------
- * THREE SOURCES, IN THIS ORDER
+ * TWO SOURCES, IN THIS ORDER
  *
- *   (a) Platform announcements (`feature_announcements`, via
- *       useFeatureAnnouncements) whose CTA is a same-origin path under this
- *       tab's route prefixes. Critical ones first, then by sort_priority and
- *       publish date.
- *   (b) Recommendations the page derives from data it already holds
+ *   (a) Recommendations the page derives from data it already holds
  *       ("3 cars have no photo"). Hidden at a count of 0.
- *   (c) Feature cards from `FEATURE_CARDS` below, by priority, newer first at
+ *   (b) Feature cards from `FEATURE_CARDS` below, by priority, newer first at
  *       equal priority.
  *
- * An announcement pointing at the same route as a feature card REPLACES that
- * card, so the same feature is never advertised twice in one deck.
+ * Platform announcements are NOT a source any more (Sep 16 2026). They live on
+ * the dashboard's "On your desk" band only (components/announcements/), read
+ * from `get_portal_announcements`; the hero decks never showed more than one
+ * card, so an announcement here was near-invisible anyway.
  *
  * ---------------------------------------------------------------------------
  * THE RULE EVERY CARD OBEYS
@@ -32,9 +30,6 @@
  *     AND its gate can be evaluated from `FeaturedContext` — the same gate the
  *     destination itself enforces;
  *   - a card whose handler the tab did not supply is ineligible;
- *   - an announcement inherits the gate of any registry card at the same route,
- *     so "Turo Sync is here" can never show to a tenant who cannot reach
- *     /turo-bridge;
  *   - every destination must pass `canAccessRoute`, the manager route check the
  *     dashboard layout enforces.
  *
@@ -43,7 +38,6 @@
 
 import type { V2Area } from '@/lib/v2';
 import type { LeanHiddenArea } from '@/lib/lean-areas';
-import type { FeatureAnnouncement } from '@/hooks/use-feature-announcements';
 import { safeHref } from '@/lib/safe-href';
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
@@ -131,8 +125,7 @@ export interface FeatureCardDef {
   /**
    * The same-origin URL where this feature lives, when a handler card has one
    * (Calendar View is `/rentals?view=calendar`). An href card's route is its
-   * href. Used for de-duplication against announcements, gate inheritance and
-   * the route check.
+   * href. Used for the route check.
    */
   route?: string;
   /** Higher shows first. */
@@ -168,10 +161,10 @@ export interface FeaturedRecommendation {
   priority?: number;
 }
 
-export type DeckBadge = 'New' | 'Important' | 'Suggested';
+export type DeckBadge = 'New' | 'Suggested';
 
 interface DeckCardBase {
-  /** Namespaced by source, so an announcement id can never collide with a card id. */
+  /** Namespaced by source, so a recommendation id can never collide with a card id. */
   id: string;
   title: string;
   subtitle: string;
@@ -180,12 +173,6 @@ interface DeckCardBase {
 }
 
 export type DeckCard =
-  | (DeckCardBase & {
-      source: 'announcement';
-      announcement: FeatureAnnouncement;
-      /** A vetted image for the art slot, or null for the generic art. */
-      imageUrl: string | null;
-    })
   | (DeckCardBase & { source: 'recommendation'; action: FeaturedAction })
   | (DeckCardBase & { source: 'feature'; featureId: FeatureCardId; action: FeaturedAction });
 
@@ -301,6 +288,36 @@ export const FEATURE_CARDS: readonly FeatureCardDef[] = [
   },
 ];
 
+/* ─── One card per tab ──────────────────────────────────────────────────── */
+
+/**
+ * The ONE card each hero tab shows. Team lead, Sep 16 2026: no carousel and no
+ * rotation — "keep it minimal and show a single card". Rentals shows Calendar
+ * View by name, as asked. Vehicles and Customers name their closest equivalent.
+ *
+ * `buildDeck` still decides what is ELIGIBLE (gates, permissions, handlers);
+ * this only decides which one eligible card is shown.
+ */
+export const HERO_CARD: Readonly<Record<FeaturedTab, FeatureCardId>> = {
+  rentals: 'calendar-view',
+  vehicles: 'availability',
+  customers: 'invite-customers',
+};
+
+/**
+ * The single card for a tab, as a one-item deck (or empty).
+ *
+ * The named card when it is eligible for this viewer; otherwise the first
+ * eligible FEATURE card; otherwise whatever the deck built first. So one gate
+ * refusing the named card never empties the slot while something else could
+ * fill it.
+ */
+export function pickHeroCard(tab: FeaturedTab, cards: readonly DeckCard[]): DeckCard[] {
+  const named = cards.find((c) => c.source === 'feature' && c.featureId === HERO_CARD[tab]);
+  const pick = named ?? cards.find((c) => c.source === 'feature') ?? cards[0];
+  return pick ? [pick] : [];
+}
+
 /* ─── Routes ────────────────────────────────────────────────────────────── */
 
 /** A placeholder origin: only ever compared with itself, never fetched. */
@@ -368,18 +385,6 @@ export function isSameRoute(target: ResolvedPath, route: ResolvedPath): boolean 
   return true;
 }
 
-/**
- * Is `target` the feature at `route`, or a page beneath it? This is the GATE
- * test, wider than `isSameRoute` (which stays the de-duplication test): an
- * announcement for `/turo-bridge/review` must pass Turo Sync's gate just as
- * `/turo-bridge` does. A route that names query parameters is a VIEW of its
- * page, not a tree: `/rentals/new` is not beneath `/rentals?view=calendar`.
- */
-export function isUnderFeature(target: ResolvedPath, route: ResolvedPath): boolean {
-  if (isSameRoute(target, route)) return true;
-  return route.search === '' && isUnderRoutePrefix(target.pathname, [route.pathname]);
-}
-
 /** Where a registry card lives, resolved, or null for a handler with no URL. */
 export function featureRoute(def: FeatureCardDef): ResolvedPath | null {
   const raw = def.route ?? (def.action.kind === 'href' ? def.action.href : undefined);
@@ -437,77 +442,15 @@ export function isRecommendationEligible(rec: FeaturedRecommendation, ctx: Featu
   return !!path && ctx.canAccessRoute(path.pathname);
 }
 
-/**
- * The dev-only preview rows in use-feature-announcements.ts (`preview-…`).
- *
- * Left out of the deck. They are invented product news that exists so the
- * dashboard carousel has something to fan on a dev server; here they would push
- * real cards aside on exactly the screen someone is checking — "Fleet Calendar"
- * (/blocked-dates, promising drag-to-block) would REPLACE the Availability card,
- * whose v2 screen is read-only. Production never has them either way.
- */
-export function isPreviewAnnouncement(a: Pick<FeatureAnnouncement, 'id'>): boolean {
-  return typeof a.id === 'string' && a.id.startsWith('preview-');
-}
-
-/**
- * The resolved CTA path when this announcement belongs in this tab's deck,
- * else null.
- */
-export function admitAnnouncement(
-  a: FeatureAnnouncement,
-  routePrefixes: readonly string[],
-  ctx: FeaturedContext,
-  registry: readonly FeatureCardDef[] = FEATURE_CARDS,
-): ResolvedPath | null {
-  if (!a || typeof a.id !== 'string' || isPreviewAnnouncement(a)) return null;
-  if (typeof a.title !== 'string' || a.title.trim().length === 0) return null;
-  const path = resolveSameOriginPath(a.cta_url);
-  if (!path || !isUnderRoutePrefix(path.pathname, routePrefixes)) return null;
-  if (!ctx.canAccessRoute(path.pathname)) return null;
-  // Gate inheritance: pointing at a gated feature, or anywhere beneath it, is
-  // only allowed to someone that feature's own gate lets in — whichever tab the
-  // registry card is on.
-  for (const def of registry) {
-    const route = featureRoute(def);
-    if (route && isUnderFeature(path, route) && !destinationOpen(def, ctx)) return null;
-  }
-  return path;
-}
-
 /* ─── Ordering ──────────────────────────────────────────────────────────── */
-
-function publishedAt(a: FeatureAnnouncement): number {
-  const t = a.published_at ? Date.parse(a.published_at) : NaN;
-  return Number.isFinite(t) ? t : Number.NEGATIVE_INFINITY;
-}
 
 function finite(n: unknown): number {
   return typeof n === 'number' && Number.isFinite(n) ? n : 0;
 }
 
-/**
- * Critical first; then higher `sort_priority`; then more recently published.
- * A row with no (or an unparseable) publish date counts as oldest. Equal rows
- * keep their input order (Array.prototype.sort is stable).
- */
-export function compareAnnouncements(a: FeatureAnnouncement, b: FeatureAnnouncement): number {
-  const critical = Number(b.severity === 'critical') - Number(a.severity === 'critical');
-  if (critical !== 0) return critical;
-  const priority = finite(b.sort_priority) - finite(a.sort_priority);
-  if (priority !== 0) return priority;
-  const ta = publishedAt(a);
-  const tb = publishedAt(b);
-  if (ta === tb) return 0;
-  return tb > ta ? 1 : -1;
-}
-
 export interface BuildDeckInput {
   tab: FeaturedTab;
   ctx: FeaturedContext;
-  /** Route prefixes an announcement's CTA must fall under, e.g. ["/rentals"]. */
-  routePrefixes: readonly string[];
-  announcements?: readonly FeatureAnnouncement[];
   recommendations?: readonly FeaturedRecommendation[];
   /** Defaults to FEATURE_CARDS. */
   registry?: readonly FeatureCardDef[];
@@ -518,35 +461,11 @@ export interface BuildDeckInput {
 export function buildDeck({
   tab,
   ctx,
-  routePrefixes,
-  announcements = [],
   recommendations = [],
   registry = FEATURE_CARDS,
   now,
 }: BuildDeckInput): DeckCard[] {
-  // (a) announcements
-  const seenAnnouncements = new Set<string>();
-  const admitted: { a: FeatureAnnouncement; path: ResolvedPath }[] = [];
-  for (const a of announcements) {
-    if (!a || seenAnnouncements.has(a.id)) continue;
-    const path = admitAnnouncement(a, routePrefixes, ctx, registry);
-    if (!path) continue;
-    seenAnnouncements.add(a.id);
-    admitted.push({ a, path });
-  }
-  admitted.sort((x, y) => compareAnnouncements(x.a, y.a));
-  const announcementCards: DeckCard[] = admitted.map(({ a }) => ({
-    source: 'announcement',
-    id: `announcement:${a.id}`,
-    title: a.title.trim(),
-    subtitle: a.summary?.trim() || 'Find out more',
-    art: 'announcement',
-    badge: a.severity === 'critical' ? 'Important' : 'New',
-    announcement: a,
-    imageUrl: safeImageSrc(a.image_url),
-  }));
-
-  // (b) recommendations
+  // (a) recommendations
   const seenRecommendations = new Set<string>();
   const recommendationCards: DeckCard[] = recommendations
     .filter((rec) => {
@@ -566,13 +485,9 @@ export function buildDeck({
       action: rec.action,
     }));
 
-  // (c) features, minus any an admitted announcement replaces
+  // (b) features
   const featureCards: DeckCard[] = registry
     .filter((def) => isFeatureEligible(def, tab, ctx))
-    .filter((def) => {
-      const route = featureRoute(def);
-      return !(route && admitted.some(({ path }) => isSameRoute(path, route)));
-    })
     .map((def) => ({ def, isNew: isFeatureNew(def, now) }))
     .sort((x, y) => y.def.priority - x.def.priority || Number(y.isNew) - Number(x.isNew))
     .map(({ def, isNew }) => ({
@@ -586,7 +501,7 @@ export function buildDeck({
       action: def.action,
     }));
 
-  return [...announcementCards, ...recommendationCards, ...featureCards];
+  return [...recommendationCards, ...featureCards];
 }
 
 /* ─── Rotation by visit ─────────────────────────────────────────────────── */
@@ -595,8 +510,7 @@ export const ROTATION_KEY_PREFIX = 'portal:featured-deck:last-shown';
 
 /**
  * Per tab and per signed-in app user, so two staff sharing a browser each get
- * their own rotation (the announcements dismissal list, by contrast, is per
- * browser — see use-feature-announcements.ts).
+ * their own rotation.
  */
 export function rotationKey(tab: FeaturedTab, appUserId: string | null | undefined): string {
   return `${ROTATION_KEY_PREFIX}:${tab}:${appUserId || 'anonymous'}`;

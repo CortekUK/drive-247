@@ -66,6 +66,9 @@ export function LogoStudio({
   const v2Chrome = useV2('chrome');
   const logoFailed = useImageLoadFailed(v2Chrome ? logoUrl : null);
   const darkLogoFailed = useImageLoadFailed(v2Chrome ? darkLogoUrl : null);
+  // v2: which logo the current advice is about, so a new upload shows
+  // "Checking…" instead of nothing (or the previous logo's advice).
+  const [analyzedUrl, setAnalyzedUrl] = useState<string | null>(null);
 
   // Re-diagnose whenever the logo changes.
   useEffect(() => {
@@ -74,8 +77,10 @@ export function LogoStudio({
       setAnalysis(null);
       return;
     }
+    if (v2Chrome) setAnalysis(null);
     analyzeLogo(logoUrl).then((result) => {
       if (!cancelled) setAnalysis(result);
+      if (!cancelled && v2Chrome) setAnalyzedUrl(logoUrl);
     });
     return () => {
       cancelled = true;
@@ -185,6 +190,7 @@ export function LogoStudio({
           currentLogoUrl={logoUrl || undefined}
           onLogoChange={onLogoChange}
           deferStorageDelete={deferStorageDelete}
+          v2States={v2Chrome}
           label="Logo"
           description="PNG with a transparent background works best. We'll tell you if something's off."
         />
@@ -226,12 +232,20 @@ export function LogoStudio({
                     </div>
                     <p className="text-center text-[11px] text-muted-foreground">
                       {panel.label}
-                      {panel.label === 'Dark mode' && darkLogoUrl && ' · using your light version'}
+                      {panel.label === 'Dark mode' && darkLogoUrl && !(v2Chrome && darkLogoFailed) && ' · using your light version'}
+                      {v2Chrome && panel.label === 'Dark mode' && darkLogoUrl && darkLogoFailed && " · your dark-mode logo couldn't load"}
                     </p>
                   </div>
                 ))}
               </div>
             </div>
+
+            {v2Chrome && analyzedUrl !== logoUrl && !logoFailed && (
+              <p role="status" className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                Checking how your logo looks on light and dark…
+              </p>
+            )}
 
             {warnings.map((warning) => (
               <div

@@ -13,7 +13,7 @@
  * does; the dialog now warns when that clears a holiday's vehicle exclusions.
  */
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { CalendarRange, Loader2, Pencil, Plus, Trash2, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import { Input } from "@/components/ui-v2/input";
@@ -74,6 +74,7 @@ import {
   BLOCKED_SAVE_MESSAGE,
   EMPTY_HOLIDAY_FORM,
   WEEKEND_DAY_LIMIT,
+  describeHolidayDeleteError,
   excludedVehicleCount,
   formatHolidayDates,
   formatPercent,
@@ -494,7 +495,7 @@ function HolidayPricingSection({ canEdit }: { canEdit: boolean }) {
               <ListTableHeader>
                 <ListHead>Holiday</ListHead>
                 <ListHead className="hidden w-[30%] sm:table-cell">Dates</ListHead>
-                <ListHead className="w-[6.5rem] sm:w-[16%]">Surcharge</ListHead>
+                <ListHead className="w-[8rem] sm:w-[16%]">Surcharge</ListHead>
                 <ListHead className="hidden w-[12%] md:table-cell">Repeats</ListHead>
                 {canEdit && (
                   <ListHead className="w-[5.5rem] text-right">
@@ -534,8 +535,11 @@ function HolidayPricingSection({ canEdit }: { canEdit: boolean }) {
                         </span>
                       </ListCell>
                       <ListCell>
-                        <TabularValue className={past ? "text-muted-foreground" : undefined}>
-                          {formatPercent(holiday.surcharge_percent, true)}
+                        {/* Never cut: a percentage missing digits reads as a different
+                            one. Too wide for its column, it wraps at a thousands
+                            separator inside the cell instead of running under Edit. */}
+                        <TabularValue className={cn("max-w-full whitespace-normal", past && "text-muted-foreground")}>
+                          <BreakAtCommas text={formatPercent(holiday.surcharge_percent, true)} />
                         </TabularValue>
                       </ListCell>
                       <ListCell className="hidden md:table-cell">
@@ -704,7 +708,7 @@ function HolidayPricingSection({ canEdit }: { canEdit: boolean }) {
           </AlertDialogHeader>
           {deleteError != null && (
             <p role="alert" className="text-sm text-destructive [overflow-wrap:anywhere]">
-              <span className="font-medium">Couldn&apos;t delete.</span> {describeSaveError(deleteError)}
+              <span className="font-medium">Couldn&apos;t delete.</span> {describeHolidayDeleteError(deleteError)}
             </p>
           )}
           <AlertDialogFooter>
@@ -723,6 +727,25 @@ function HolidayPricingSection({ canEdit }: { canEdit: boolean }) {
         </AlertDialogContent>
       </AlertDialog>
     </section>
+  );
+}
+
+/** "+99,999,999,999.99%" with a line-break opportunity after each comma, so it never splits mid-group. */
+function BreakAtCommas({ text }: { text: string }) {
+  const parts = text.split(",");
+  return (
+    <>
+      {parts.map((part, i) => (
+        <Fragment key={i}>
+          {part}
+          {i < parts.length - 1 && (
+            <>
+              ,<wbr />
+            </>
+          )}
+        </Fragment>
+      ))}
+    </>
   );
 }
 

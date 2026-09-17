@@ -14,13 +14,12 @@
  *   ask-trax           all three           10
  */
 import { describe, expect, it } from 'vitest';
+import { HERO_CARD, pickHeroCard, type DeckCard } from '@/lib/featured-cards';
 import {
   FEATURE_CARDS,
   SUBTITLE_MAX,
   TITLE_MAX,
-  admitAnnouncement,
   buildDeck,
-  compareAnnouncements,
   featureRoute,
   isFeatureEligible,
   isFeatureNew,
@@ -40,7 +39,6 @@ import {
   type FeaturedTab,
   type KeyValueStorage,
 } from '@/lib/featured-cards';
-import type { FeatureAnnouncement } from '@/hooks/use-feature-announcements';
 
 const NOW = new Date('2026-09-15T12:00:00.000Z');
 
@@ -58,23 +56,6 @@ function ctx(overrides: Partial<FeaturedContext> = {}): FeaturedContext {
     handlers: ['openCalendar', 'openTrax', 'openInvite', 'openImport'],
     adopted: {},
     ...overrides,
-  };
-}
-
-function ann(fields: Partial<FeatureAnnouncement> & { id: string }): FeatureAnnouncement {
-  return {
-    title: 'An announcement',
-    summary: null,
-    body_html: null,
-    image_url: null,
-    cta_label: null,
-    cta_url: null,
-    severity: 'major',
-    published_at: null,
-    expires_at: null,
-    sort_priority: 0,
-    audience_filter: null,
-    ...fields,
   };
 }
 
@@ -295,143 +276,10 @@ describe('recommendations', () => {
   });
 });
 
-describe('announcements: which ones join a tab', () => {
-  const RENTALS = ['/rentals'];
-
-  it('admits a CTA under the tab, and nothing else', () => {
-    expect(admitAnnouncement(ann({ id: 'a', cta_url: '/rentals?view=calendar' }), RENTALS, ctx())).toEqual({
-      pathname: '/rentals',
-      search: '?view=calendar',
-    });
-    expect(admitAnnouncement(ann({ id: 'b', cta_url: '/payments' }), RENTALS, ctx())).toBeNull();
-    expect(admitAnnouncement(ann({ id: 'c', cta_url: '/rentals/../payments' }), RENTALS, ctx())).toBeNull();
-    expect(admitAnnouncement(ann({ id: 'd', cta_url: null }), RENTALS, ctx())).toBeNull();
-    expect(admitAnnouncement(ann({ id: 'e', cta_url: '//evil.com/rentals' }), RENTALS, ctx())).toBeNull();
-    expect(admitAnnouncement(ann({ id: 'f', cta_url: 'javascript:alert(1)' }), RENTALS, ctx())).toBeNull();
-    expect(admitAnnouncement(ann({ id: 'g', cta_url: 'https://drive-247.com/rentals' }), RENTALS, ctx())).toBeNull();
-  });
-
-  it('drops a blank title and the dev-only preview rows', () => {
-    expect(admitAnnouncement(ann({ id: 'h', title: '  ', cta_url: '/rentals' }), RENTALS, ctx())).toBeNull();
-    expect(admitAnnouncement(ann({ id: 'preview-auto-extension', cta_url: '/rentals' }), RENTALS, ctx())).toBeNull();
-  });
-
-  it('inherits the gate of the registry card at the same route', () => {
-    const turo = ann({ id: 't', cta_url: '/turo-bridge?tab=review' });
-    const prefixes = ['/rentals', '/turo-bridge'];
-    expect(admitAnnouncement(turo, prefixes, ctx())).not.toBeNull();
-    expect(admitAnnouncement(turo, prefixes, ctx({ v2: {} }))).toBeNull();
-    expect(admitAnnouncement(turo, prefixes, ctx({ turoBridgeEnabled: null }))).toBeNull();
-  });
-
-  it('inherits it for a page BENEATH that route too', () => {
-    // /turo-bridge/review lies under Turo Sync's /turo-bridge: same gate.
-    const prefixes = ['/rentals', '/turo-bridge'];
-    const off = ctx({ turoBridgeEnabled: false });
-    for (const url of ['/turo-bridge', '/turo-bridge/', '/turo-bridge?tab=review', '/turo-bridge#x', '/turo-bridge/review']) {
-      expect(admitAnnouncement(ann({ id: url, cta_url: url }), prefixes, off), url).toBeNull();
-      expect(admitAnnouncement(ann({ id: url, cta_url: url }), prefixes, ctx()), url).not.toBeNull();
-    }
-    // /turo-bridgeX is a different route, not beneath it (and not under a prefix).
-    expect(admitAnnouncement(ann({ id: 'x', cta_url: '/turo-bridgeX' }), prefixes, off)).toBeNull();
-    expect(admitAnnouncement(ann({ id: 'x', cta_url: '/turo-bridgeX' }), ['/turo-bridgeX'], off)).toEqual({
-      pathname: '/turo-bridgeX',
-      search: '',
-    });
-  });
-
-  it('treats a route with query parameters as a view of its page, not a tree', () => {
-    // A closed feature living at /rentals?view=closed. Only URLs carrying that
-    // view inherit its gate; /rentals and /rentals/new are other pages.
-    const closed: FeatureCardDef = {
-      id: 'calendar-view',
-      tabs: ['rentals'],
-      title: 'Closed view',
-      subtitle: 'x',
-      art: 'calendar',
-      action: { kind: 'handler', handler: 'openCalendar' },
-      route: '/rentals?view=closed',
-      priority: 1,
-      gate: () => false,
-    };
-    const admit = (url: string) => admitAnnouncement(ann({ id: url, cta_url: url }), RENTALS, ctx(), [closed]);
-    expect(admit('/rentals?view=closed')).toBeNull();
-    expect(admit('/rentals?view=closed&x=1')).toBeNull();
-    expect(admit('/rentals')).toEqual({ pathname: '/rentals', search: '' });
-    expect(admit('/rentals/new')).toEqual({ pathname: '/rentals/new', search: '' });
-    expect(admit('/rentals/new?view=closed')).toEqual({ pathname: '/rentals/new', search: '?view=closed' });
-  });
-
-  it('needs the route check on its own path', () => {
-    const a = ann({ id: 'i', cta_url: '/rentals/new' });
-    expect(admitAnnouncement(a, RENTALS, ctx({ canAccessRoute: (p) => p !== '/rentals/new' }))).toBeNull();
-  });
-});
-
-describe('buildDeck: de-duplication', () => {
-  it('an announcement at a feature card’s route replaces that card', () => {
-    const deck = buildDeck({
-      tab: 'rentals',
-      ctx: ctx(),
-      routePrefixes: ['/rentals', '/turo-bridge'],
-      announcements: [ann({ id: 'a1', cta_url: '/turo-bridge?tab=review' })],
-      now: NOW,
-    });
-    expect(deck.map((c) => c.id)).toEqual(['announcement:a1', 'feature:calendar-view', 'feature:ask-trax']);
-  });
-
-  it('/rentals is not Calendar View, but /rentals?view=calendar is', () => {
-    const plain = buildDeck({
-      tab: 'rentals',
-      ctx: ctx(),
-      routePrefixes: ['/rentals'],
-      announcements: [ann({ id: 'a2', cta_url: '/rentals' })],
-      now: NOW,
-    });
-    expect(plain.map((c) => c.id)).toEqual([
-      'announcement:a2',
-      'feature:turo-sync',
-      'feature:calendar-view',
-      'feature:ask-trax',
-    ]);
-
-    const calendar = buildDeck({
-      tab: 'rentals',
-      ctx: ctx(),
-      routePrefixes: ['/rentals'],
-      announcements: [ann({ id: 'a3', cta_url: '/rentals?view=calendar' })],
-      now: NOW,
-    });
-    expect(calendar.map((c) => c.id)).toEqual(['announcement:a3', 'feature:turo-sync', 'feature:ask-trax']);
-  });
-
-  it('replaces Availability on Vehicles, and keeps one copy of a repeated row', () => {
-    const deck = buildDeck({
-      tab: 'vehicles',
-      ctx: ctx(),
-      routePrefixes: ['/vehicles', '/blocked-dates'],
-      announcements: [ann({ id: 'b1', cta_url: '/blocked-dates' }), ann({ id: 'b1', cta_url: '/blocked-dates' })],
-      now: NOW,
-    });
-    expect(deck.map((c) => c.id)).toEqual(['announcement:b1', 'feature:turo-sync', 'feature:ask-trax']);
-  });
-});
-
 describe('buildDeck: ordering', () => {
-  it('critical, then announcements by priority and date, then recommendations, then features', () => {
-    // Announcements, given scrambled:
-    //   c1 critical  p0  Sep 01  -> first: critical always leads
-    //   n1 minor     p9  (none)  -> second: highest sort_priority of the rest
-    //   m2 major     p5  Sep 12  -> the three p5 rows, newest first
-    //   m1 major     p5  Sep 10
-    //   i1 info      p5  (none)  -> no publish date counts as oldest
-    const announcements = [
-      ann({ id: 'm1', cta_url: '/rentals', sort_priority: 5, published_at: '2026-09-10T00:00:00Z' }),
-      ann({ id: 'i1', cta_url: '/rentals', sort_priority: 5, severity: 'info' }),
-      ann({ id: 'n1', cta_url: '/rentals', sort_priority: 9, severity: 'minor' }),
-      ann({ id: 'c1', cta_url: '/rentals', severity: 'critical', published_at: '2026-09-01T00:00:00Z' }),
-      ann({ id: 'm2', cta_url: '/rentals', sort_priority: 5, published_at: '2026-09-12T00:00:00Z' }),
-    ];
+  it('recommendations first, then features', () => {
+    // Announcements are no longer a source (they left the hero decks on
+    // Sep 16 2026), so a deck is recommendations then registry cards.
     // Recommendations, given scrambled: priority 5, then 1, then unset (0);
     // the zero count never shows.
     const href = { kind: 'href', href: '/rentals?status=pending' } as const;
@@ -445,18 +293,11 @@ describe('buildDeck: ordering', () => {
     const deck = buildDeck({
       tab: 'rentals',
       ctx: ctx(),
-      routePrefixes: ['/rentals'],
-      announcements,
       recommendations,
       now: NOW,
     });
 
     expect(deck.map((c) => c.id)).toEqual([
-      'announcement:c1',
-      'announcement:n1',
-      'announcement:m2',
-      'announcement:m1',
-      'announcement:i1',
       'recommendation:r-high',
       'recommendation:r-low',
       'recommendation:r-none',
@@ -465,11 +306,6 @@ describe('buildDeck: ordering', () => {
       'feature:ask-trax',
     ]);
     expect(deck.map((c) => c.badge)).toEqual([
-      'Important',
-      'New',
-      'New',
-      'New',
-      'New',
       'Suggested',
       'Suggested',
       'Suggested',
@@ -486,7 +322,7 @@ describe('buildDeck: ordering', () => {
       { ...card('ask-trax'), priority: 20, isNewUntil: '2026-10-01', gate: always },
       { ...card('turo-sync'), priority: 50, isNewUntil: '2026-09-01', gate: always }, // expired
     ];
-    const deck = buildDeck({ tab: 'rentals', ctx: ctx(), routePrefixes: [], registry, now: NOW });
+    const deck = buildDeck({ tab: 'rentals', ctx: ctx(), registry, now: NOW });
     expect(deck.map((c) => c.id)).toEqual(['feature:turo-sync', 'feature:ask-trax', 'feature:calendar-view']);
     expect(deck.map((c) => c.badge)).toEqual([null, 'New', null]);
   });
@@ -497,29 +333,6 @@ describe('buildDeck: ordering', () => {
     expect(isFeatureNew(def, new Date('2026-11-01T00:00:00.000Z'))).toBe(false);
     expect(isFeatureNew({ isNewUntil: 'soon' }, NOW)).toBe(false);
     expect(isFeatureNew({}, NOW)).toBe(false);
-  });
-
-  it('treats an unparseable publish date as the oldest', () => {
-    const dated = ann({ id: 'x', published_at: '2020-01-01T00:00:00Z' });
-    const garbage = ann({ id: 'y', published_at: 'not a date' });
-    expect(compareAnnouncements(dated, garbage)).toBe(-1);
-    expect(compareAnnouncements(garbage, dated)).toBe(1);
-  });
-
-  it('carries summary, fallback subtitle and a vetted image onto announcement cards', () => {
-    const deck = buildDeck({
-      tab: 'rentals',
-      ctx: ctx({ hasTrax: false, v2: {}, handlers: [] }),
-      routePrefixes: ['/rentals'],
-      announcements: [
-        ann({ id: 'p', title: '  Deposit Holds ', summary: ' Holds refresh ', cta_url: '/rentals', image_url: 'https://x.supabase.co/a.png' }),
-        ann({ id: 'q', cta_url: '/rentals', image_url: 'http://example.com/a.png' }),
-      ],
-      now: NOW,
-    });
-    expect(deck).toHaveLength(2);
-    expect(deck[0]).toMatchObject({ title: 'Deposit Holds', subtitle: 'Holds refresh', imageUrl: 'https://x.supabase.co/a.png' });
-    expect(deck[1]).toMatchObject({ subtitle: 'Find out more', imageUrl: null });
   });
 });
 
@@ -587,5 +400,50 @@ describe('rotation by visit', () => {
     expect(() => writeLastShown(throwing, 'k', 'x')).not.toThrow();
     expect(readLastShown(null, 'k')).toBeNull();
     expect(() => writeLastShown(undefined, 'k', 'x')).not.toThrow();
+  });
+});
+
+describe('pickHeroCard — one card per tab (team lead, Sep 16 2026)', () => {
+  const feat = (featureId: FeatureCardId): DeckCard => ({
+    source: 'feature',
+    id: `feature:${featureId}`,
+    featureId,
+    title: featureId,
+    subtitle: '',
+    art: 'calendar',
+    badge: null,
+    action: { kind: 'handler', handler: 'openCalendar' },
+  });
+  const rec: DeckCard = {
+    source: 'recommendation',
+    id: 'recommendation:no-photo',
+    title: '3 cars have no photo',
+    subtitle: '',
+    art: 'suggestion',
+    badge: 'Suggested',
+    action: { kind: 'href', href: '/vehicles' },
+  };
+  const ids = (cards: DeckCard[]) => cards.map((c) => c.id);
+
+  it('names Calendar View on Rentals', () => {
+    expect(HERO_CARD.rentals).toBe('calendar-view');
+  });
+
+  it('returns the named card alone, even when others rank above it', () => {
+    expect(ids(pickHeroCard('rentals', [rec, feat('turo-sync'), feat('calendar-view'), feat('ask-trax')]))).toEqual([
+      'feature:calendar-view',
+    ]);
+  });
+
+  it('stands in the first feature card when the named one is not eligible', () => {
+    expect(ids(pickHeroCard('vehicles', [rec, feat('turo-sync'), feat('ask-trax')]))).toEqual(['feature:turo-sync']);
+  });
+
+  it('falls back to whatever the deck built first when there is no feature card', () => {
+    expect(ids(pickHeroCard('customers', [rec]))).toEqual(['recommendation:no-photo']);
+  });
+
+  it('is empty for an empty deck', () => {
+    expect(pickHeroCard('rentals', [])).toEqual([]);
   });
 });

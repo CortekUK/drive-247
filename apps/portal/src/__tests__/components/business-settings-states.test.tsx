@@ -63,7 +63,7 @@ import {
   isLocationFormDirty,
   isSupportedCurrency,
   locationFormFromSettings,
-  roundMoney,
+  PARTIAL_GENERAL_SAVE_MESSAGE,
   saveGeneralSettingsV2,
   useImageLoadFailed,
   validateLocationDraft,
@@ -74,6 +74,7 @@ import { LocationAutocomplete, sanitizeAddressInputV2 } from "@/components/ui/lo
 import { LocationSettings } from "@/components/settings/location-settings";
 import { V2Provider } from "@/lib/v2-context";
 import { kmToDisplayUnit } from "@/lib/format-utils";
+import { describeSaveError } from "@/components/settings-v2/section-states";
 
 /* -------------------------------------------------------------------------- */
 /* Harness                                                                     */
@@ -267,6 +268,17 @@ describe("saveGeneralSettingsV2", () => {
     }
     expect(isAlreadyToasted(caught)).toBe(true);
     expect(isAlreadyToasted(new Error("x"))).toBe(false);
+    // The tenants row is already written, so the reason says the save was partial.
+    expect((caught as Error).message).toBe(PARTIAL_GENERAL_SAVE_MESSAGE);
+    expect(describeSaveError(caught)).toBe(
+      "Only part of this change was saved, so some screens may still show the old setting. Retry to finish saving it.",
+    );
+  });
+
+  it("describes an edge-function transport failure in plain words", () => {
+    expect(describeSaveError(new Error("Failed to update settings: Edge Function returned a non-2xx status code"))).toBe(
+      "The server couldn't save this right now. Your changes are still here. Try again.",
+    );
   });
 });
 
@@ -327,6 +339,38 @@ describe("area and save validation", () => {
     );
   });
 
+  it("checks price bands inline: none, negative fee, zero distance, duplicate distance, and the distance cap", () => {
+    const tiered = { ...area, deliveryTiersEnabled: true };
+    expect(areaFieldErrors({ ...tiered, tiers: [] }, "mi").bands).toBe(
+      "Add at least one price band, or turn off tiered pricing.",
+    );
+    const bad = areaFieldErrors(
+      { ...tiered, tiers: [{ up_to: 10, fee: 5 }, { up_to: 0, fee: 5 }, { up_to: 30, fee: -5 }, { up_to: null, fee: 40 }] },
+      "mi",
+    );
+    expect(bad.bandRows).toEqual({ 1: "Distance must be more than 0 mi.", 2: "Fee can't be negative." });
+    expect(
+      validateLocationSettingsV2(
+        { ...tiered, tiers: [{ up_to: 10, fee: 5 }, { up_to: 30, fee: -5 }] },
+        { unitLabel: "mi", pickupActiveLocations: null, returnActiveLocations: null },
+      ),
+    ).toBe('Price band "Up to 30 mi": Fee can\'t be negative.');
+    expect(areaFieldErrors({ ...tiered, tiers: [{ up_to: 20, fee: 5 }, { up_to: 20, fee: 9 }] }, "km").bands).toBe(
+      "Two bands have the same distance. Give each band its own distance.",
+    );
+    // Out of order is fine (v1 sorts); only a repeat is not.
+    expect(areaFieldErrors({ ...tiered, tiers: [{ up_to: 40, fee: 9 }, { up_to: 20, fee: 5 }] }, "km")).toEqual({});
+    expect(
+      areaFieldErrors({ ...tiered, tiers: [{ up_to: 20, fee: 5 }, { up_to: 40, fee: 9 }], maxDeliveryDistance: 30 }, "mi")
+        .maxDistance,
+    ).toBe("Must be at least your furthest band (40 mi).");
+    expect(
+      areaFieldErrors({ ...tiered, tiers: [{ up_to: 20, fee: 5 }], maxDeliveryDistance: -1 }, "mi").maxDistance,
+    ).toBe("Enter a distance above 0, or leave it blank for no limit.");
+    // Bands are only checked while tiered pricing is on.
+    expect(areaFieldErrors({ ...area, tiers: [{ up_to: 0, fee: -1 }] }, "mi")).toEqual({});
+  });
+
   it("blocks saving a delivery list with nothing active, and skips the check while the list is unknown", () => {
     const withList = { ...base, pickupMultipleEnabled: true };
     expect(
@@ -362,8 +406,10 @@ describe("location drafts", () => {
       name: "Airport",
       address: "1 Terminal Rd",
       description: null,
-      delivery_fee: 4.13, // 412.5 cents rounds up
+      delivery_fee: 4.125, // sent as typed, exactly like v1; numeric(10,2) stores 4.13
     });
+    // Math.round(1.005 * 100) / 100 is 1, but Postgres stores 1.005 as 1.01: never pre-round.
+    expect(buildLocationPayload({ ...draft, delivery_fee: 1.005 }, { editing: true, mode: "pickup" }).delivery_fee).toBe(1.005);
     expect(buildLocationPayload({ ...draft, delivery_fee: null }, { editing: false, mode: "return" })).toEqual({
       name: "Airport",
       address: "1 Terminal Rd",
@@ -372,7 +418,6 @@ describe("location drafts", () => {
       is_pickup_enabled: false,
       is_return_enabled: true,
     });
-    expect(roundMoney(9.999)).toBe(10);
   });
 
   it("filters by name, address or description", () => {
@@ -602,6 +647,16 @@ describe("LocationsListV2", () => {
     expect(p.onConfirmDelete).toHaveBeenCalledWith("b", "Airport");
   });
 
+  it("a row being deleted says so and offers no actions", () => {
+    const rows = [location({ id: "a", name: "Airport" }), location({ id: "b", name: "Harbour" })];
+    render(<LocationsListV2 {...listProps({ locations: rows, pendingDeleteId: "a" })} />);
+    const items = container.querySelectorAll("li");
+    expect(items[0].getAttribute("aria-busy")).toBe("true");
+    expect(items[0].textContent).toContain("Deleting…");
+    expect(container.querySelector('[aria-label="Delete Airport"]')).toBeNull();
+    expect(container.querySelector('[aria-label="Delete Harbour"]')).not.toBeNull();
+  });
+
   it("view-only: no add, edit or delete, and the active switch is disabled", () => {
     render(<LocationsListV2 {...listProps({ locations: [location()], readOnly: true })} />);
     expect(container.querySelector('[aria-label^="Edit"]')).toBeNull();
@@ -698,6 +753,61 @@ describe("LocationSettings", () => {
       description: null,
       delivery_fee: 10,
     });
+  });
+
+  it("v2 view-only: controls are locked, but list search and Try again still work", () => {
+    perms.edit = false;
+    const many = Array.from({ length: 9 }, (_, i) => location({ id: `l${i}`, name: `Stop ${i}`, description: null }));
+    const h = hook({
+      locationSettings: settingsRow({ pickup_multiple_locations_enabled: true, return_multiple_locations_enabled: true }),
+      locations: many,
+      settingsError: new Error("Failed to fetch"),
+    });
+    pickup.value = h;
+    renderV2();
+    const disabledBy = (el: Element) => (el as HTMLInputElement).disabled || !!el.closest("fieldset:disabled");
+    const search = container.querySelector('input[aria-label="Search delivery locations"]') as HTMLInputElement;
+    expect(disabledBy(search)).toBe(false);
+    const retry = container.querySelector('[aria-label="Try loading your pickup and return settings again"]')!;
+    expect(disabledBy(retry)).toBe(false);
+    act(() => (retry as HTMLButtonElement).click());
+    expect(h.refetchSettings).toHaveBeenCalledTimes(1);
+    const address = container.querySelector('input[placeholder="Enter your pickup address..."]')!;
+    expect(disabledBy(address)).toBe(true);
+    const optionSwitches = Array.from(container.querySelectorAll('[role="switch"]')).filter((el) => !el.closest("ul"));
+    expect(optionSwitches.length).toBe(6);
+    expect(optionSwitches.every(disabledBy)).toBe(true);
+    expect(container.textContent).not.toContain("Save changes");
+
+    pickup.value = hook({
+      locationSettings: settingsRow({ pickup_multiple_locations_enabled: true }),
+      locationsError: new Error("Failed to fetch"),
+    });
+    renderV2();
+    const listRetry = container.querySelector('[aria-label="Try loading your delivery locations again"]')!;
+    expect(disabledBy(listRetry)).toBe(false);
+  });
+
+  it("v2: a validation message beside Save offers no Retry (it would only fail again)", async () => {
+    pickup.value = hook({
+      locationSettings: settingsRow({ pickup_multiple_locations_enabled: true }),
+      locations: [location({ is_active: false, is_return_enabled: false })],
+    });
+    renderV2();
+    const address = container.querySelector('input[placeholder="Enter your pickup address..."]') as HTMLInputElement;
+    act(() => typeInto(address, "1 Depot Way, Unit 2"));
+    await act(async () => buttonByText("Save changes", container).click());
+    const status = container.querySelector('[data-settings-state="save-error"]');
+    expect(status?.textContent).toContain("Delivery locations is on but none are active.");
+    expect(status?.textContent).not.toContain("Retry");
+  });
+
+  it("v2: a failed write keeps Retry", () => {
+    pickup.value = hook({ settingsUpdateError: { message: "permission denied for table tenants", code: "42501" } });
+    renderV2();
+    const status = container.querySelector('[data-settings-state="save-error"]');
+    expect(status?.textContent).toContain("You don't have permission to change this.");
+    expect(status?.textContent).toContain("Retry");
   });
 
   it("v1 (flag off): renders the original controls and none of the v2 states", () => {

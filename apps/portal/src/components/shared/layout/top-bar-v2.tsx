@@ -21,7 +21,8 @@ import { usePageSearchSlot } from "@/components/shared/layout/page-search-slot";
  *
  * Modelled on the Stripe dashboard: a bar spanning the CONTENT column only
  * (right of the sidebar, never the full window), search on the left, a
- * right-aligned icon cluster, a hairline bottom border, pinned while the page
+ * right-aligned icon cluster (credits, messages, notifications), Trax beside
+ * the search field, a hairline bottom border, pinned while the page
  * scrolls under it.
  *
  * It replaces two things the v2 chrome had instead of a bar:
@@ -82,7 +83,7 @@ import { usePageSearchSlot } from "@/components/shared/layout/page-search-slot";
 
 /** 32px, matching the icon buttons, so the row reads as one band of controls. */
 const FIELD =
-  "group relative flex h-9 w-full max-w-[460px] items-center gap-2 overflow-hidden rounded-full " +
+  "group relative flex h-8 w-full max-w-[380px] items-center gap-2 overflow-hidden rounded-full " +
   "border border-primary/25 bg-primary/[0.07] px-2.5 text-left backdrop-blur-[2px] transition-colors " +
   "hover:border-primary/40 hover:bg-primary/10 " +
   "focus-visible:border-primary/50 focus-visible:bg-primary/10 focus-visible:outline-none " +
@@ -96,7 +97,8 @@ const FIELD =
  */
 const BELL_FIX =
   "[&>button]:relative [&>button]:size-8 [&>button]:rounded-4xl [&>button]:text-muted-foreground " +
-  "[&>button:hover]:bg-muted [&>button:hover]:text-foreground [&>button>svg]:!size-4";
+  "[&>button:hover]:bg-primary/10 dark:[&>button:hover]:bg-primary/15 [&>button[aria-expanded=true]]:bg-primary/10 " +
+  "[&>button:hover]:text-foreground [&>button>svg]:!size-4";
 
 /** The v2 tooltip surface, matching what the dock used, so labels feel in-place. */
 const TIP =
@@ -326,7 +328,42 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
         <Search className="size-4" aria-hidden />
       </button>
 
-      <div className="ml-auto flex items-center gap-1">
+      {/* TRAX — right after the search field, not at the far end of the icon
+          cluster (team lead, Sep 2026): the two are the ways to ask the portal
+          something, so they sit together. Named, not just an icon. Its own control rather than a mode of
+          the search field: only we know which search is global, so a magnifier
+          that sometimes answers as an AI is a guess the operator would have to
+          make every time.
+          The label is deliberate. An unlabelled glyph is discoverable only by
+          hovering, and Trax is the one thing in this bar nobody arrives
+          already knowing. */}
+      {trax && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label="Ask Trax"
+              aria-expanded={trax.sheetOpen}
+              onClick={trax.sheetOpen ? trax.closeSheet : trax.openSheet}
+              className={
+                "h-8 gap-1.5 px-2.5 text-[13px] font-medium text-primary hover:bg-primary/10 hover:text-primary aria-expanded:bg-primary/10 dark:hover:bg-primary/15 " +
+                (trax.sheetOpen ? "bg-primary/10" : "")
+              }
+            >
+              <Bot className="size-4" aria-hidden />
+              Trax
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={8} className={TIP}>
+            Ask Trax · ⌘J
+          </TooltipContent>
+        </Tooltip>
+      )}
+
+      {/* gap-0.5, and 8px side padding on credits: the icons sit a little closer
+          together (team lead, Sep 2026) while each keeps its full hover pill. */}
+      <div className="ml-auto flex items-center gap-0.5">
         <Separator
           orientation="vertical"
           /* The `data-[orientation=vertical]:` prefix has to be repeated: the
@@ -336,6 +373,38 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
           className="mx-1 hidden data-[orientation=vertical]:h-5 data-[orientation=vertical]:self-center sm:block"
         />
 
+        {/* Order, left to right: credits, messages, notifications. Notifications
+            sit at the extreme right (team lead, Sep 2026). */}
+        {/* CREDITS, deliberately on the face of every page.
+            Presentation is v2's rather than reusing `CreditBalance`, which is the
+            v1 pill: it hardcodes `text-[#404040]` and pulls the v1 Tooltip, both
+            of which read wrong in this bar and in v2 dark mode. The LOGIC is not
+            duplicated — both read the same `useCreditWallet`, so the low-balance
+            threshold lives in one place. Same split as app-sidebar / -v2. */}
+        {!creditsLoading && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Link
+                href="/credits"
+                aria-label={`Credits: ${balance.toFixed(0)}${isLowBalance ? " (low)" : ""}`}
+                className={
+                  "flex h-8 items-center gap-1.5 rounded-4xl px-2 text-[13px] font-medium transition-colors hover:bg-primary/10 " +
+                  (isLowBalance ? "text-destructive" : "text-foreground")
+                }
+              >
+                <CircleDollarSign
+                  className={`size-4 shrink-0 ${isLowBalance ? "text-destructive" : "text-emerald-500"}`}
+                  aria-hidden
+                />
+                <span className="tabular-nums">{balance.toFixed(0)}</span>
+              </Link>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={8} className={TIP}>
+              {isLowBalance ? "Credits running low" : "Credits"}
+            </TooltipContent>
+          </Tooltip>
+        )}
+
         <MessagesSheet
           trigger={
             <Tooltip>
@@ -344,7 +413,7 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
                   variant="ghost"
                   size="icon-sm"
                   aria-label="Messages"
-                  className="relative text-muted-foreground hover:text-foreground"
+                  className="relative text-muted-foreground hover:bg-primary/10 hover:text-foreground aria-expanded:bg-primary/10 aria-expanded:text-foreground dark:hover:bg-primary/15"
                 >
                   <MessageCircle />
                   {chatUnread > 0 && (
@@ -372,66 +441,9 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
           <NotificationBell />
         </div>
 
-        {/* CREDITS, deliberately on the face of every page.
-            Presentation is v2's rather than reusing `CreditBalance`, which is the
-            v1 pill: it hardcodes `text-[#404040]` and pulls the v1 Tooltip, both
-            of which read wrong in this bar and in v2 dark mode. The LOGIC is not
-            duplicated — both read the same `useCreditWallet`, so the low-balance
-            threshold lives in one place. Same split as app-sidebar / -v2. */}
-        {!creditsLoading && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Link
-                href="/credits"
-                aria-label={`Credits: ${balance.toFixed(0)}${isLowBalance ? " (low)" : ""}`}
-                className={
-                  "flex h-8 items-center gap-1.5 rounded-4xl px-2.5 text-[13px] font-medium transition-colors hover:bg-muted " +
-                  (isLowBalance ? "text-destructive" : "text-foreground")
-                }
-              >
-                <CircleDollarSign
-                  className={`size-4 shrink-0 ${isLowBalance ? "text-destructive" : "text-emerald-500"}`}
-                  aria-hidden
-                />
-                <span className="tabular-nums">{balance.toFixed(0)}</span>
-              </Link>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={8} className={TIP}>
-              {isLowBalance ? "Credits running low" : "Credits"}
-            </TooltipContent>
-          </Tooltip>
-        )}
 
-        {/* TRAX — named, not just an icon. Its own control rather than a mode of
-            the search field: only we know which search is global, so a magnifier
-            that sometimes answers as an AI is a guess the operator would have to
-            make every time.
-            The label is deliberate. An unlabelled glyph is discoverable only by
-            hovering, and Trax is the one thing in this bar nobody arrives
-            already knowing. */}
-        {trax && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                aria-label="Ask Trax"
-                aria-expanded={trax.sheetOpen}
-                onClick={trax.sheetOpen ? trax.closeSheet : trax.openSheet}
-                className={
-                  "h-8 gap-1.5 px-2.5 text-[13px] font-medium text-primary hover:bg-primary/10 hover:text-primary " +
-                  (trax.sheetOpen ? "bg-primary/10" : "")
-                }
-              >
-                <Bot className="size-4" aria-hidden />
-                Trax
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={8} className={TIP}>
-              Ask Trax · ⌘J
-            </TooltipContent>
-          </Tooltip>
-        )}
+
+
       </div>
 
       {/* The canary's ONLY GlobalSearch mount. It used to live in the sidebar and

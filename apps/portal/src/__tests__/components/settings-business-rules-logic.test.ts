@@ -9,9 +9,13 @@
 
 import { describe, it, expect } from "vitest";
 import {
+  BUSINESS_FORM_KEYS,
+  BUSINESS_SECTION_KEYS,
+  businessEditsCoveredBySections,
   businessPageDirty,
   clampReminderHours,
   describeBuffer,
+  describeDriverAge,
   describeDurationRange,
   describeHours,
   describeLeadHours,
@@ -19,9 +23,13 @@ import {
   describeReminderLead,
   documentTypeOptions,
   hasErrors,
+  keepUnsavedBusinessEdits,
   leadTimeHours,
   lockboxMethodStatus,
   normalizeLoadedLead,
+  numberBoxWidth,
+  reminderHoursRangeNote,
+  renderLockboxSmsExample,
   savedFieldsFor,
   sendOffsetOptions,
   switchLeadUnit,
@@ -30,10 +38,10 @@ import {
   validateDuration,
 } from "@/components/settings-v2/business-rules-logic";
 
-const AGE_MSG = "Enter an age between 16 and 99, or leave it blank for no minimum.";
+const AGE_MSG = "Enter an age between 16 and 99, or leave it blank to use the booking site's default of 21.";
 
 describe("validateDriverAge", () => {
-  it("treats blank as no minimum", () => {
+  it("accepts blank (the booking site's default applies)", () => {
     expect(validateDriverAge("")).toBeNull();
     expect(validateDriverAge(null)).toBeNull();
     expect(validateDriverAge(undefined)).toBeNull();
@@ -249,6 +257,20 @@ describe("return reminder hours", () => {
     expect(clampReminderHours("168", 24)).toEqual({ value: 168, note: null });
   });
 
+  it("flags a stored value outside 1–168 on load, formatted, and nothing inside the range", () => {
+    expect(reminderHoursRangeNote(9999)).toBe(
+      "The saved value, 9,999 hours, is outside the allowed 1–168 hours (7 days). Enter a value in that range and save.",
+    );
+    expect(reminderHoursRangeNote(0)).toBe(
+      "The saved value, 0 hours, is outside the allowed 1–168 hours (7 days). Enter a value in that range and save.",
+    );
+    expect(reminderHoursRangeNote(169)).toContain("169 hours");
+    expect(reminderHoursRangeNote(1)).toBeNull();
+    expect(reminderHoursRangeNote(168)).toBeNull();
+    expect(reminderHoursRangeNote(null)).toBeNull();
+    expect(reminderHoursRangeNote(Number.NaN)).toBeNull();
+  });
+
   it("describes the lead", () => {
     expect(describeReminderLead(5)).toBe("5 hours");
     expect(describeReminderLead(24)).toBe("1 day");
@@ -327,5 +349,169 @@ describe("businessPageDirty + savedFieldsFor", () => {
     expect(form).toEqual({ return_reminder_enabled: false, return_reminder_hours: 24 });
     expect(businessPageDirty("return-reminder", form, {})).toBe(false);
     expect(businessPageDirty("return-reminder", { ...form, return_reminder_enabled: true }, {})).toBe(true);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* Finish pass: blank-age copy, lockbox SMS estimate, sibling-save merge       */
+/* -------------------------------------------------------------------------- */
+
+describe("describeDriverAge", () => {
+  // The booking form falls back to 21 when no age is saved
+  // (apps/booking MultiStepBookingWidget validateStep4: `|| 21`), so blank must
+  // never be described as "no minimum".
+  it("says a blank age means the booking site's default of 21", () => {
+    const blank = "No age is set, so your booking site uses its default: drivers must be at least 21. Enter an age to set your own.";
+    expect(describeDriverAge("")).toBe(blank);
+    expect(describeDriverAge(null)).toBe(blank);
+    expect(describeDriverAge(undefined)).toBe(blank);
+  });
+
+  it("says where a set age is enforced", () => {
+    expect(describeDriverAge(25)).toBe("The booking form checks each driver's date of birth against this. Younger drivers can't book.");
+  });
+});
+
+describe("renderLockboxSmsExample", () => {
+  const DEFAULT_SMS = "Your vehicle {{vehicle_reg}} has been delivered. Lockbox code: {{lockbox_code}}. Ref: {{booking_ref}}";
+
+  it("fills the default text message with example values and the tenant's code length", () => {
+    const out = renderLockboxSmsExample(DEFAULT_SMS, { codeLength: 6 });
+    expect(out).toBe("Your vehicle ABC-1234 has been delivered. Lockbox code: 123456. Ref: BK-104233");
+    // Counted by hand, piece by piece:
+    //   "Your vehicle " 13 + "ABC-1234" 8 + " has been delivered. Lockbox code: " 35
+    //   + "123456" 6 + ". Ref: " 7 + "BK-104233" 9
+    expect(out.length).toBe(13 + 8 + 35 + 6 + 7 + 9);
+    // The raw template is 13 + 15 + 35 + 16 + 7 + 15 = 101 characters, so the old counter read 23 too high.
+    expect(DEFAULT_SMS.length).toBe(13 + 15 + 35 + 16 + 7 + 15);
+  });
+
+  it("uses a 4-digit code when no valid length is set (what Generate makes)", () => {
+    expect(renderLockboxSmsExample("{{lockbox_code}}")).toBe("1234");
+    expect(renderLockboxSmsExample("{{lockbox_code}}", { codeLength: null })).toBe("1234");
+    expect(renderLockboxSmsExample("{{lockbox_code}}", { codeLength: 0 })).toBe("1234");
+    expect(renderLockboxSmsExample("{{lockbox_code}}", { codeLength: 25 })).toBe("1234");
+    expect(renderLockboxSmsExample("{{lockbox_code}}", { codeLength: 20 })).toBe("12345678901234567890");
+  });
+
+  it("fills the default instructions, blanks odometer and notes, and leaves unknown tokens as typed", () => {
+    expect(renderLockboxSmsExample("[{{default_instructions}}]", { defaultInstructions: "Box on the left" })).toBe("[Box on the left]");
+    expect(renderLockboxSmsExample("a{{odometer}}b{{notes}}c")).toBe("abc");
+    expect(renderLockboxSmsExample("Hi {{nickname}}")).toBe("Hi {{nickname}}");
+    expect(renderLockboxSmsExample("{{customer_name}}, {{vehicle_name}} at {{delivery_address}} ({{lockbox_instructions}})")).toBe(
+      "Jordan Smith, Toyota Camry at 221B Baker Street, London (Rear left wheel arch)",
+    );
+  });
+
+  it("gets a message over one text right: 154 letters + space + 6-digit code = 161", () => {
+    const out = renderLockboxSmsExample(`${"a".repeat(154)} {{lockbox_code}}`, { codeLength: 6 });
+    expect(out.length).toBe(161);
+  });
+});
+
+describe("keepUnsavedBusinessEdits", () => {
+  it("takes the fresh row whole on the first fill", () => {
+    const next = { lockbox_enabled: true, tax_percentage: 5 };
+    expect(keepUnsavedBusinessEdits({ lockbox_enabled: false, tax_percentage: 0 }, null, next)).toBe(next);
+  });
+
+  it("keeps an unsaved business edit when another section's save refreshes the row", () => {
+    // Operator switched lockbox on (unsaved); saving the instructions refreshed the row.
+    const lastSynced = { lockbox_enabled: false, lockbox_notification_methods: ["email"], tax_percentage: 5 };
+    const current = { lockbox_enabled: true, lockbox_notification_methods: ["email"], tax_percentage: 5 };
+    const next = { lockbox_enabled: false, lockbox_notification_methods: ["sms"], tax_percentage: 7 };
+    expect(keepUnsavedBusinessEdits(current, lastSynced, next)).toEqual({
+      lockbox_enabled: true, // edited, kept
+      lockbox_notification_methods: ["sms"], // untouched (a new array equal to the old one), fresh value
+      tax_percentage: 7, // untouched, fresh value
+    });
+  });
+
+  it("never holds on to a field outside the business pages (v1 behaviour for pricing and fees)", () => {
+    const out = keepUnsavedBusinessEdits({ tax_percentage: 9, min_rental_days: 0 }, { tax_percentage: 5, min_rental_days: 0 }, { tax_percentage: 7, min_rental_days: 2 });
+    expect(out).toEqual({ tax_percentage: 7, min_rental_days: 2 });
+  });
+
+  it("after the edited section saves, the kept value is the saved value", () => {
+    const out = keepUnsavedBusinessEdits({ max_rental_days: 30 }, { max_rental_days: 90 }, { max_rental_days: 30 });
+    expect(out).toEqual({ max_rental_days: 30 });
+  });
+
+  it("covers exactly the fields the business pages save and discard", () => {
+    const pages = ["requirements", "duration", "lockbox", "return-reminder"] as const;
+    const owned = pages.flatMap((page) => Object.keys(savedFieldsFor(page, {}))).sort();
+    expect([...BUSINESS_FORM_KEYS].sort()).toEqual(owned);
+  });
+});
+
+describe("businessEditsCoveredBySections (v2 Save & Leave)", () => {
+  // What the page last filled in from the tenant row, in the form's shape.
+  const synced = {
+    ...savedFieldsFor("requirements", { minimum_rental_age: 21, verification_document_type: "passport" }),
+    ...savedFieldsFor("duration", { booking_lead_time_hours: 24, min_rental_days: 0, min_rental_hours: 4, max_rental_days: 90, buffer_time_minutes: 0 }),
+    ...savedFieldsFor("lockbox", { lockbox_enabled: false }),
+    ...savedFieldsFor("return-reminder", { return_reminder_enabled: true, return_reminder_hours: 24 }),
+    tax_percentage: 5,
+    installment_config: { grace_period_days: 3 },
+  };
+  const saved = {
+    minimum_rental_age: 21,
+    verification_document_type: "passport",
+    booking_lead_time_hours: 24,
+    min_rental_days: 0,
+    min_rental_hours: 4,
+    max_rental_days: 90,
+    buffer_time_minutes: 0,
+    lockbox_enabled: false,
+    return_reminder_enabled: true,
+    return_reminder_hours: 24,
+    tax_percentage: 5,
+  };
+
+  it("uses the keys the pages register under", () => {
+    expect(BUSINESS_SECTION_KEYS).toEqual({
+      requirements: "business-requirements",
+      duration: "business-duration",
+      lockbox: "business-lockbox",
+      "return-reminder": "business-return-reminder",
+    });
+  });
+
+  it("covers an age edit once Driver requirements has registered its save", () => {
+    const form = { ...synced, minimum_rental_age: 30 };
+    expect(businessEditsCoveredBySections(form, synced, saved, ["business-requirements"])).toBe(true);
+    expect(businessEditsCoveredBySections(form, synced, saved, [])).toBe(false);
+    expect(businessEditsCoveredBySections(form, synced, saved, ["business-duration"])).toBe(false);
+  });
+
+  it("needs every dirty business page registered", () => {
+    const form = { ...synced, minimum_rental_age: 30, lockbox_enabled: true };
+    expect(businessEditsCoveredBySections(form, synced, saved, ["business-requirements"])).toBe(false);
+    expect(businessEditsCoveredBySections(form, synced, saved, ["business-requirements", "business-lockbox"])).toBe(true);
+  });
+
+  it("never covers a field no business page saves (a fee, an installment rule)", () => {
+    const registered = Object.values(BUSINESS_SECTION_KEYS);
+    expect(businessEditsCoveredBySections({ ...synced, minimum_rental_age: 30, tax_percentage: 9 }, synced, saved, registered)).toBe(false);
+    expect(
+      businessEditsCoveredBySections({ ...synced, installment_config: { grace_period_days: 5 } }, synced, saved, registered),
+    ).toBe(false);
+  });
+
+  it("is false until the page has filled the form in", () => {
+    expect(businessEditsCoveredBySections(synced, null, saved, ["business-requirements"])).toBe(false);
+    expect(businessEditsCoveredBySections(synced, synced, null, ["business-requirements"])).toBe(false);
+  });
+});
+
+describe("numberBoxWidth", () => {
+  it("keeps the normal width for anything typeable and widens for a longer stored value", () => {
+    expect(numberBoxWidth("", "w-20")).toBe("w-20");
+    expect(numberBoxWidth(null, "w-16")).toBe("w-16");
+    expect(numberBoxWidth(3650, "w-16")).toBe("w-16");
+    expect(numberBoxWidth(-5, "w-16")).toBe("w-16");
+    expect(numberBoxWidth(99999, "w-20")).toBe("w-24");
+    expect(numberBoxWidth(999999, "w-20")).toBe("w-24");
+    expect(numberBoxWidth(9999999, "w-20")).toBe("w-32");
   });
 });

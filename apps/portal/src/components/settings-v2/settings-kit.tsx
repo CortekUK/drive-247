@@ -38,7 +38,7 @@ export function SettingsPageHeader({
         <button
           type="button"
           onClick={onBack}
-          className="font-medium text-primary hover:underline"
+          className="font-medium text-primary hover:underline dark:text-indigo-300"
         >
           {rootLabel}
         </button>

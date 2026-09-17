@@ -63,6 +63,7 @@ import { useTenant } from "@/contexts/TenantContext";
 import { isInsuranceExemptTenant } from "@/config/tenant-config";
 import { useV2 } from "@/lib/v2-context";
 import { InsurancePolicyListV2 } from "@/components/insurance-v2/insurance-policy-list-v2";
+import { HEADER_ACTIONS_V2, HEADER_PRIMARY_V2 } from "@/components/shared/header-icon-button-v2";
 
 type SortField = "customer" | "vehicle" | "policy_number" | "provider" | "start_date" | "expiry_date" | "status" | "docs_count";
 type SortDirection = "asc" | "desc";
@@ -274,10 +275,23 @@ export default function InsuranceListEnhanced() {
             Comprehensive compliance tracking for customer insurance policies
           </p>
         </div>
+        {v2Chrome ? (
+          // v2: the 32px Add Policy pill, centred on the subtitle line (team lead
+          // Sep 16 2026). The subtitle inherits the body size, which v2 sets to
+          // 16px/24px below 769px and 14px/20px above, so the box follows it:
+          // h-6 from sm, h-5 from md.
+          <div className={`flex items-center gap-2 ${HEADER_ACTIONS_V2} md:h-5`}>
+            <Button onClick={handleAddPolicy} className={`flex items-center gap-2 ${HEADER_PRIMARY_V2}`}>
+              <Plus className="h-4 w-4" />
+              Add Policy
+            </Button>
+          </div>
+        ) : (
         <Button onClick={handleAddPolicy} className="flex items-center gap-2">
           <Plus className="h-4 w-4" />
           Add Policy
         </Button>
+        )}
       </div>
 
       {/* KPIs */}

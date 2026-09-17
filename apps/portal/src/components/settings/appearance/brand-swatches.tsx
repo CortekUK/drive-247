@@ -18,6 +18,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui-v2/popo
 import { Input } from '@/components/ui-v2/input';
 import { Label } from '@/components/ui-v2/label';
 import { readableForegroundOn, sameColor } from '@/lib/appearance/color';
+import { useV2 } from '@/lib/v2-context';
 import { cn } from '@/lib/utils';
 
 /** Every one of these clears 4.5:1 against its chosen foreground. */
@@ -45,6 +46,9 @@ interface BrandSwatchesProps {
 export function BrandSwatches({ value, onChange, disabled }: BrandSwatchesProps) {
   const [customOpen, setCustomOpen] = useState(false);
   const isCustom = !SWATCHES.some((s) => sameColor(s.hex, value));
+  // v2 dark: --input carries its own alpha under .v2-theme, so the field's
+  // bg-input/50 is invalid and the hex box rendered with no fill (northwind only).
+  const v2Chrome = useV2('chrome');
 
   return (
     <div className="space-y-2.5">
@@ -131,7 +135,7 @@ export function BrandSwatches({ value, onChange, disabled }: BrandSwatchesProps)
                     else if (next.length <= 7) onChange(next.toUpperCase());
                   }}
                   placeholder="#C6A256"
-                  className="h-9 font-mono text-xs uppercase"
+                  className={cn('h-9 font-mono text-xs uppercase', v2Chrome && 'dark:bg-muted')}
                   maxLength={7}
                 />
               </div>

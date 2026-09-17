@@ -3,6 +3,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
 import { toast } from '@/hooks/use-toast';
 import { useAuditLog } from '@/hooks/use-audit-log';
+import { useV2 } from '@/lib/v2-context';
+import { describeSaveError } from '@/components/settings-v2/settings-error-copy';
 
 export interface PickupLocation {
   id: string;
@@ -115,6 +117,9 @@ export const usePickupLocations = () => {
   const { tenant } = useTenant();
   const queryClient = useQueryClient();
   const { logAction } = useAuditLog();
+  // v2 (northwind): failure toasts in the operator's words, never raw database
+  // text. Every other tenant keeps the v1 toasts below, unchanged.
+  const v2 = useV2('chrome');
 
   // ============================================
   // Fetch location settings from tenants table
@@ -332,6 +337,10 @@ export const usePickupLocations = () => {
       });
     },
     onError: (error: Error) => {
+      if (v2) {
+        toast({ title: "Couldn't save your pickup and return settings", description: describeSaveError(error), variant: "destructive" });
+        return;
+      }
       toast({
         title: "Error",
         description: `Failed to update settings: ${error.message}`,
@@ -381,6 +390,10 @@ export const usePickupLocations = () => {
       logAction({ action: "location_created", entityType: "location", entityId: data.id, details: { name: data.name } });
     },
     onError: (error: Error) => {
+      if (v2) {
+        toast({ title: "Couldn't add the location", description: describeSaveError(error), variant: "destructive" });
+        return;
+      }
       toast({
         title: "Error",
         description: error.message.includes('unique')
@@ -421,6 +434,10 @@ export const usePickupLocations = () => {
       logAction({ action: "location_updated", entityType: "location", entityId: data.id, details: {} });
     },
     onError: (error: Error) => {
+      if (v2) {
+        toast({ title: "Couldn't update the location", description: describeSaveError(error), variant: "destructive" });
+        return;
+      }
       toast({
         title: "Error",
         description: error.message.includes('unique')
@@ -456,6 +473,20 @@ export const usePickupLocations = () => {
       logAction({ action: "location_deleted", entityType: "location", entityId: id, details: {} });
     },
     onError: (error: Error) => {
+      if (v2) {
+        // rentals.pickup_location_id / return_location_id reference the row with
+        // no ON DELETE rule, so a location any booking used can't be deleted.
+        const code = String((error as { code?: unknown })?.code ?? '');
+        const inUse = code === '23503' || /foreign key/i.test(String(error?.message ?? ''));
+        toast({
+          title: "Couldn't delete the location",
+          description: inUse
+            ? "Bookings still use this location, so it can't be deleted. Switch it off to hide it from customers."
+            : describeSaveError(error),
+          variant: "destructive",
+        });
+        return;
+      }
       toast({
         title: "Error",
         description: `Failed to delete location: ${error.message}`,

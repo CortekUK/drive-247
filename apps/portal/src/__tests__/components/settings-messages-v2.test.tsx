@@ -129,7 +129,7 @@ import {
   smsSegments,
 } from "@/components/settings-v2/message-rules";
 import { EmailNotificationSettingsV2, ReminderRulesConfigV2 } from "@/components/settings-v2/notification-states-v2";
-import { EmailTemplatesListV2 } from "@/components/settings-v2/email-templates-v2";
+import { EmailTemplateEditorV2, EmailTemplatesListV2 } from "@/components/settings-v2/email-templates-v2";
 import { AgreementTemplateEditorV2, AgreementTemplatesPageV2 } from "@/components/settings-v2/agreement-templates-v2";
 import { PushNotificationSettings } from "@/components/settings/push-notification-settings";
 import { EMAIL_TEMPLATE_TYPES } from "@/lib/email-template-variables";
@@ -448,7 +448,9 @@ describe("EmailNotificationSettingsV2", () => {
     render(<EmailNotificationSettingsV2 canEdit={false} />);
     expect((container.querySelector("fieldset") as HTMLFieldSetElement).disabled).toBe(true);
     expect((container.querySelector('[role="switch"]') as HTMLElement).matches(":disabled")).toBe(true);
-    expect(text()).toContain("View only");
+    // The settings page shows the one "View only" chip above this section; a
+    // second copy inside it was noise.
+    expect(container.querySelector('[data-settings-state="read-only"]')).toBeNull();
   });
 });
 
@@ -536,6 +538,24 @@ describe("ReminderRulesConfigV2", () => {
     render(<ReminderRulesConfigV2 />);
     expect(container.querySelector('[aria-label="Reset all rules to defaults"]')).toBeNull();
     expect((container.querySelector('[role="switch"]') as HTMLButtonElement).disabled).toBe(true);
+    expect(container.querySelector('[data-settings-state="read-only"]')).toBeNull();
+  });
+
+  it("view only: a viewer can still switch categories to read the other rules", () => {
+    h.perms.edit = false;
+    resetRules({
+      Vehicle: { MOT: [rule()] },
+      Insurance: { Expiry: [rule({ id: "r2", category: "Insurance", rule_type: "Expiry", lead_days: 14 })] },
+    });
+    render(<ReminderRulesConfigV2 />);
+    expect(text()).toContain("MOT reminders");
+    const insuranceTab = Array.from(container.querySelectorAll('[role="tab"]')).find((b) =>
+      b.textContent?.includes("Insurance"),
+    ) as HTMLButtonElement;
+    expect(insuranceTab.disabled).toBe(false);
+    click(insuranceTab);
+    expect(text()).toContain("Policy expiry reminders");
+    expect(text()).not.toContain("MOT reminders");
   });
 });
 
@@ -590,6 +610,95 @@ describe("EmailTemplatesListV2", () => {
     expect(text()).toContain("zzzz-nothing");
     click(buttonByText("Clear search"));
     expect(container.querySelectorAll("li[data-template-key]")).toHaveLength(EMAIL_TEMPLATE_TYPES.length);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* Email template editor                                                       */
+/* -------------------------------------------------------------------------- */
+
+function resetEmailEditor(strict: Record<string, unknown>) {
+  h.emailTemplates = {
+    resetTemplateAsync: vi.fn().mockResolvedValue(undefined),
+    saveTemplateAsync: vi.fn().mockResolvedValue(undefined),
+    isSaving: false,
+    isResetting: false,
+  };
+  h.strictOne = { data: undefined, isError: false, error: null, refetch: vi.fn(), isFetching: false, ...strict };
+}
+
+// lib/default-email-templates.ts, key "rental_reminder": the subject a reset restores.
+const RETURN_REMINDER_DEFAULT_SUBJECT = "Return Reminder - {{rental_number}} | {{company_name}}";
+
+describe("EmailTemplateEditorV2", () => {
+  const subjectInput = () => container.querySelector("#v2-email-subject") as HTMLInputElement | null;
+  const hasButton = (name: string) =>
+    Array.from(container.querySelectorAll("button")).some((b) => b.textContent?.trim() === name);
+
+  it("unknown key: a not-found state with a way back, no editor and no Save", () => {
+    resetEmailEditor({ data: undefined });
+    render(<EmailTemplateEditorV2 templateKey="no_such_email" />);
+    expect(text()).toContain("This email template doesn't exist");
+    expect(container.querySelector('[data-testid="tiptap"]')).toBeNull();
+    expect(hasButton("Save")).toBe(false);
+    click(buttonByText("Back to email templates"));
+    expect(h.router.push).toHaveBeenCalledWith("/settings/email-templates");
+  });
+
+  it("read failed: the retry card, never an editor seeded with the default wording", () => {
+    resetEmailEditor({ isError: true, error: { message: "Failed to fetch" } });
+    render(<EmailTemplateEditorV2 templateKey="rental_reminder" />);
+    expect(text()).toContain("Couldn't load this email template");
+    expect(container.querySelector('[data-testid="tiptap"]')).toBeNull();
+    expect(subjectInput()).toBeNull();
+    expect(hasButton("Save")).toBe(false);
+    click(buttonByText("Try again"));
+    expect(h.strictOne.refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("a blank subject keeps Save disabled and says why", () => {
+    resetEmailEditor({ data: { customTemplate: null } });
+    render(<EmailTemplateEditorV2 templateKey="rental_reminder" />);
+    expect(subjectInput()!.value).toBe(RETURN_REMINDER_DEFAULT_SUBJECT);
+    expect(buttonByText("Save").disabled).toBe(true); // nothing changed yet
+    setValue(subjectInput()!, "   ");
+    expect(text()).toContain("Add a subject line.");
+    expect(buttonByText("Save").disabled).toBe(true);
+    setValue(subjectInput()!, "Your car is due back");
+    expect(buttonByText("Save").disabled).toBe(false);
+  });
+
+  it("reset to default: the default becomes the saved state, not an unsaved change", async () => {
+    resetEmailEditor({
+      data: { customTemplate: { id: "e1", template_key: "rental_reminder", subject: "Custom hi", template_content: "<p>Mine</p>" } },
+    });
+    render(<EmailTemplateEditorV2 templateKey="rental_reminder" />);
+    expect(subjectInput()!.value).toBe("Custom hi");
+
+    click(container.querySelector('[aria-label="Reset to default"]') as HTMLButtonElement);
+    const confirm = Array.from(document.body.querySelectorAll('[role="alertdialog"] button')).find(
+      (b) => b.textContent?.trim() === "Reset to default",
+    ) as HTMLButtonElement;
+    await act(async () => {
+      confirm.click();
+    });
+    expect(h.emailTemplates.resetTemplateAsync).toHaveBeenCalledWith("rental_reminder");
+    expect(subjectInput()!.value).toBe(RETURN_REMINDER_DEFAULT_SUBJECT);
+    expect(text()).not.toContain("Unsaved changes");
+    expect(buttonByText("Save").disabled).toBe(true);
+  });
+
+  it("view only: the editor is inert, the subject is read-only, and there is no Save or Reset", () => {
+    h.perms.edit = false;
+    resetEmailEditor({
+      data: { customTemplate: { id: "e1", template_key: "rental_reminder", subject: "Custom hi", template_content: "<p>Mine</p>" } },
+    });
+    render(<EmailTemplateEditorV2 templateKey="rental_reminder" />);
+    expect(container.querySelector("[inert]")).not.toBeNull();
+    expect(subjectInput()!.readOnly).toBe(true);
+    expect(hasButton("Save")).toBe(false);
+    expect(container.querySelector('[aria-label="Reset to default"]')).toBeNull();
+    expect(text()).toContain("View only");
   });
 });
 

@@ -297,8 +297,16 @@ export function AvailabilityV2() {
             it is a statement about the page, not a control.
 
             The tour button stays HERE, matching the other four tab tours, and
-            because it acts on the whole screen rather than on the week. */}
-        <TabTourButton tour="availability" size="h-9" />
+            because it acts on the whole screen rather than on the week.
+
+            It sits on the SUBTITLE line, not the heading (team lead, Sep 16
+            2026): the wrapper is the subtitle's own line box (13px at the
+            inherited 1.5 line-height = 19.5px) pinned to the bottom of the
+            header row, so the 32px button centres on that line. Below `sm` it
+            keeps its natural height. */}
+        <div className="flex sm:h-[19.5px] sm:items-center sm:self-end">
+          <TabTourButton tour="availability" size="h-9" />
+        </div>
       </header>
 
       {/* ── the toolbar ──────────────────────────────────────────────────

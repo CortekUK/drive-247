@@ -34,6 +34,7 @@ import { useTenant } from "@/contexts/TenantContext";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
 import { useV2 } from "@/lib/v2-context";
+import { HEADER_PRIMARY_V2 } from "@/components/shared/header-icon-button-v2";
 import { BlockedCustomersTableV2, BlockedIdentitiesTableV2 } from "@/components/customers-v2/blocked-customers-tables-v2";
 
 interface BlockedCustomer {
@@ -71,7 +72,8 @@ const BlockedCustomers = () => {
 
   const { unblockCustomer, addBlockedIdentity, removeBlockedIdentity, isLoading } = useCustomerBlockingActions();
   const { canEdit } = useManagerPermissions();
-  // v2 (northwind) draws both lists as the rentals list's table; every other tenant keeps v1.
+  // v2 (northwind) draws both lists as the rentals list's table and the header's
+  // button at the v2 size; every other tenant keeps v1.
   const v2Chrome = useV2("chrome");
 
   useAuditLogOnOpen({
@@ -257,10 +259,22 @@ const BlockedCustomers = () => {
           </p>
         </div>
         {canEdit('blocked_customers') && (
+          v2Chrome ? (
+            // v2: the 32px Add to Blocklist pill, centred on the subtitle line
+            // (team lead Sep 16 2026). HEADER_ACTIONS_V2 with the box matched to
+            // this subtitle's line: text-sm (20px) from sm, text-base (24px) from md.
+            <div className="flex items-center gap-2 sm:self-end sm:h-5 sm:items-center md:h-6">
+              <Button onClick={() => setAddIdentityDialogOpen(true)} className={`w-full sm:w-auto ${HEADER_PRIMARY_V2}`}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add to Blocklist
+              </Button>
+            </div>
+          ) : (
           <Button onClick={() => setAddIdentityDialogOpen(true)} className="w-full sm:w-auto">
             <Plus className="h-4 w-4 mr-2" />
             Add to Blocklist
           </Button>
+          )
         )}
       </div>
 

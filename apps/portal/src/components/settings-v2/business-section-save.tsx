@@ -11,7 +11,7 @@
  * values, so it stays dirty and Retry works), and a success flashes "Saved".
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import {
@@ -19,6 +19,7 @@ import {
   useSettingsSaveStatus,
   type SettingsSaveStatus,
 } from "@/components/settings-v2/section-states";
+import type { RegisterSectionSave } from "@/components/settings-v2/pricing-money-parts";
 import { cn } from "@/lib/utils";
 
 export interface SectionSave {
@@ -59,6 +60,48 @@ export function useSectionSave(isDirty: boolean): SectionSave {
   };
 
   return { isPending, error, status, run };
+}
+
+/**
+ * While the section holds unsaved edits, give the settings page a save for its
+ * leave guard. Registering is what makes leaving warn at all: the page's own
+ * `rentalFormDirty` misses advance notice, the lockbox delivery method, the
+ * auto-send timing and the lockbox messages, so going to another screen from
+ * the sidebar dropped those edits without a word. "Save & Leave" calls `save`,
+ * which must REJECT when it did not save, so the page stays put.
+ */
+export function useRegisterLeaveSave(
+  registerSave: RegisterSectionSave | undefined,
+  key: string,
+  isDirty: boolean,
+  save: () => Promise<void>,
+) {
+  const latest = useRef(save);
+  latest.current = save;
+  const stable = useCallback(() => latest.current(), []);
+
+  useEffect(() => {
+    registerSave?.(key, isDirty ? stable : null);
+  }, [registerSave, key, isDirty, stable]);
+
+  useEffect(() => () => registerSave?.(key, null), [registerSave, key]);
+}
+
+/**
+ * The page keeps one shared form across its settings pages, so an edit left
+ * behind with "Don't Save" used to still be there when the page was opened
+ * again, and kept every later navigation asking about unsaved changes. When a
+ * section unmounts while dirty, put its fields back to what is saved.
+ */
+export function useDiscardOnUnmount(isDirty: boolean, discard: () => void) {
+  const latest = useRef({ isDirty, discard });
+  latest.current = { isDirty, discard };
+  useEffect(
+    () => () => {
+      if (latest.current.isDirty) latest.current.discard();
+    },
+    [],
+  );
 }
 
 /** The inline status on the left, one labelled Save on the right. Wraps on a phone. */

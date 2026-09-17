@@ -20,6 +20,7 @@ import { Button } from "@/components/ui-v2/button";
 import { Input } from "@/components/ui-v2/input";
 import { Switch } from "@/components/ui-v2/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui-v2/select";
+import { Skeleton } from "@/components/ui-v2/skeleton";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -101,6 +102,67 @@ export function useImageLoadFailed(src: string | null | undefined): boolean {
   return !!src && failedSrc === src;
 }
 
+/**
+ * Loading placeholder with the exact frame of a `SettingsPanel` of `SettingsRow`s
+ * (bordered, a title bar when `title`, one ~64px row per setting), so the page
+ * does not jump when the real panel replaces it.
+ */
+export function SettingsPanelSkeleton({
+  rows = 2,
+  title = false,
+  footer = false,
+  descriptionLines = 1,
+  label = "Loading",
+  className,
+}: {
+  rows?: number;
+  title?: boolean;
+  /** The Save bar a panel shows to someone who can edit. */
+  footer?: boolean;
+  /** Help lines under each row label (a long description wraps to two). */
+  descriptionLines?: 1 | 2;
+  label?: string;
+  className?: string;
+}) {
+  return (
+    <section
+      role="status"
+      aria-busy="true"
+      aria-live="polite"
+      data-settings-state="loading"
+      className={cn("rounded-xl border bg-card", className)}
+    >
+      <span className="sr-only">{label}</span>
+      {title && (
+        <div aria-hidden="true" className="space-y-1.5 border-b px-5 py-3.5">
+          <Skeleton className="h-4 w-32 rounded-full" />
+          <Skeleton className="h-3 w-72 max-w-full rounded-full" />
+        </div>
+      )}
+      <div aria-hidden="true" className="divide-y">
+        {Array.from({ length: Math.max(1, rows) }).map((_, i) => (
+          <div
+            key={i}
+            className="flex flex-col gap-3 px-5 py-4 md:flex-row md:items-center md:justify-between md:gap-8"
+          >
+            <div className="min-w-0 space-y-1.5">
+              <Skeleton className="h-3.5 w-24 rounded-full" />
+              <Skeleton className="h-3 w-56 max-w-full rounded-full" />
+              {descriptionLines === 2 && <Skeleton className="h-3 w-40 max-w-full rounded-full" />}
+            </div>
+            <Skeleton className="h-9 w-56 max-w-full shrink-0 rounded-3xl" />
+          </div>
+        ))}
+      </div>
+      {footer && (
+        <div aria-hidden="true" className="flex items-center justify-end border-t px-5 py-3">
+          <Skeleton className="h-8 w-[88px] rounded-full" />
+        </div>
+      )}
+    </section>
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /* General: regional settings                                                  */
 /* -------------------------------------------------------------------------- */
@@ -142,6 +204,9 @@ export interface GeneralSaveDeps {
   writeOrg: (patch: { currency_code: string; distance_unit: "km" | "miles" }) => Promise<unknown>;
 }
 
+export const PARTIAL_GENERAL_SAVE_MESSAGE =
+  "Only part of this change was saved, so some screens may still show the old setting. Retry to finish saving it.";
+
 /** Marks an error whose toast has already been shown by a hook. */
 export function isAlreadyToasted(error: unknown): boolean {
   return !!error && typeof error === "object" && (error as { alreadyToasted?: unknown }).alreadyToasted === true;
@@ -177,8 +242,10 @@ export async function saveGeneralSettingsV2({
   try {
     await writeOrg({ currency_code: values.currency_code, distance_unit: values.distance_unit });
   } catch (orgError) {
-    const wrapped = orgError instanceof Error ? orgError : new Error(String(orgError));
-    throw Object.assign(wrapped, { alreadyToasted: true });
+    // The tenants row is already written, so say it was a partial save: a Retry
+    // writes both again (the tenants write is idempotent) and finishes the job.
+    // The org hook has toasted the transport failure itself.
+    throw Object.assign(new Error(PARTIAL_GENERAL_SAVE_MESSAGE), { alreadyToasted: true, cause: orgError });
   }
 }
 
@@ -253,7 +320,7 @@ export function BusinessRegionalPanel({
     );
   }
   if (!ready) {
-    return <SettingsSectionSkeleton variant="form" rows={2} label="Loading regional settings" />;
+    return <SettingsPanelSkeleton rows={2} footer={canEdit} label="Loading regional settings" />;
   }
 
   return (
@@ -413,12 +480,24 @@ export function isLocationFormDirty(current: LocationFormState, saved: LocationF
   return current.tiers.some((t, i) => t.up_to !== saved.tiers[i].up_to || t.fee !== saved.tiers[i].fee);
 }
 
-/** Inline errors for the Area Settings fields. Empty when area delivery is off. */
-export function areaFieldErrors(
-  f: LocationFormState,
-  unitLabel: string,
-): { center?: string; radius?: string; fee?: string } {
-  const out: { center?: string; radius?: string; fee?: string } = {};
+export interface AreaFieldErrors {
+  center?: string;
+  radius?: string;
+  fee?: string;
+  /** The price bands as a whole: none left, or two at the same distance. */
+  bands?: string;
+  /** One reason per invalid band, keyed by its index in `tiers`. */
+  bandRows?: Record<number, string>;
+  maxDistance?: string;
+}
+
+/**
+ * Inline errors for the Area Settings fields. Empty when area delivery is off.
+ * The price-band checks are v1's save-time checks (which only ever toasted),
+ * shown beside the band instead.
+ */
+export function areaFieldErrors(f: LocationFormState, unitLabel: string): AreaFieldErrors {
+  const out: AreaFieldErrors = {};
   if (!(f.pickupAreaEnabled || f.returnAreaEnabled)) return out;
   if (!f.areaCenterLat || !f.areaCenterLon) out.center = "Pick a center point from the address suggestions.";
   if (f.areaRadius == null || !Number.isFinite(f.areaRadius)) {
@@ -429,7 +508,47 @@ export function areaFieldErrors(
   if (!f.deliveryTiersEnabled && f.areaDeliveryFee != null && f.areaDeliveryFee < 0) {
     out.fee = "Fee can't be negative.";
   }
+  if (f.deliveryTiersEnabled) {
+    if (f.tiers.length === 0) out.bands = "Add at least one price band, or turn off tiered pricing.";
+    const rows: Record<number, string> = {};
+    f.tiers.forEach((t, i) => {
+      if (t.up_to !== null && (!Number.isFinite(t.up_to) || t.up_to <= 0)) {
+        rows[i] = `Distance must be more than 0 ${unitLabel}.`;
+      } else if (!Number.isFinite(t.fee)) {
+        rows[i] = "Enter a valid fee.";
+      } else if (t.fee < 0) {
+        rows[i] = "Fee can't be negative.";
+      }
+    });
+    if (Object.keys(rows).length > 0) out.bandRows = rows;
+    const bounded = f.tiers
+      .map((t) => t.up_to)
+      .filter((u): u is number => u !== null && Number.isFinite(u) && u > 0)
+      .sort((a, b) => a - b);
+    if (!out.bands && bounded.some((u, i) => i > 0 && u <= bounded[i - 1])) {
+      out.bands = "Two bands have the same distance. Give each band its own distance.";
+    }
+    if (f.maxDeliveryDistance != null) {
+      const furthest = bounded.length > 0 ? bounded[bounded.length - 1] : 0;
+      if (!Number.isFinite(f.maxDeliveryDistance) || f.maxDeliveryDistance <= 0) {
+        out.maxDistance = "Enter a distance above 0, or leave it blank for no limit.";
+      } else if (furthest > 0 && f.maxDeliveryDistance < furthest) {
+        out.maxDistance = `Must be at least your furthest band (${formatSettingsNumber(furthest)} ${unitLabel}).`;
+      }
+    }
+  }
   return out;
+}
+
+/** "Up to 20 mi" / "Anywhere further": how a band is named in an error. */
+export function bandLabel(tier: { up_to: number | null }, unitLabel: string): string {
+  return tier.up_to === null ? "Anywhere further" : `Up to ${formatSettingsNumber(tier.up_to)} ${unitLabel}`;
+}
+
+/** v1 shows a stored centre point (it has no address) as "lat, lon" in the address field. */
+export function centerCoordinateLabel(lat: number | null, lon: number | null): string | null {
+  if (!lat || !lon) return null;
+  return `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
 }
 
 /**
@@ -453,8 +572,20 @@ export function validateLocationSettingsV2(
     return "Collection locations is on but none are active. Add or switch on a location, or turn it off.";
   }
   const area = areaFieldErrors(f, ctx.unitLabel);
-  return area.center ?? area.radius ?? area.fee ?? null;
+  const firstBand = area.bandRows ? Number(Object.keys(area.bandRows)[0]) : null;
+  const bandRow =
+    firstBand !== null && area.bandRows
+      ? `Price band "${bandLabel(f.tiers[firstBand], ctx.unitLabel)}": ${area.bandRows[firstBand]}`
+      : undefined;
+  return area.center ?? area.radius ?? area.fee ?? area.bands ?? bandRow ?? area.maxDistance ?? null;
 }
+
+/**
+ * v1 markup inside the v2 Locations page tints icons and dialog glyphs with
+ * `text-primary`. The v2 dark primary is a deep indigo that nearly disappears
+ * on a dark card, so text-primary reads as a lighter indigo in dark mode there.
+ */
+export const LOCATIONS_V2_CLASS = "dark:[&_.text-primary]:text-indigo-300";
 
 /** Phone layout and contrast for the Area Settings card, applied from a wrapper. */
 export const AREA_SETTINGS_V2_CLASS = [
@@ -508,10 +639,6 @@ export function validateLocationDraft(d: LocationDraft): LocationDraftErrors {
   return out;
 }
 
-export function roundMoney(amount: number): number {
-  return Math.round(amount * 100) / 100;
-}
-
 /**
  * The row to write. A NEW location is put on the side its dialog was opened
  * from. An EDIT sends no flags at all, so a location used for both delivery and
@@ -532,7 +659,9 @@ export function buildLocationPayload(
     name: d.name.trim(),
     address: d.address.trim(),
     description: d.description.trim() || null,
-    delivery_fee: roundMoney(d.delivery_fee ?? 0),
+    // Exactly what v1 sends. pickup_locations.delivery_fee is numeric(10,2), so
+    // Postgres rounds half-cents; Math.round(x * 100) / 100 disagrees (1.005 -> 1.00).
+    delivery_fee: d.delivery_fee ?? 0,
   };
   if (editing) return base;
   return { ...base, is_pickup_enabled: mode === "pickup", is_return_enabled: mode === "return" };
@@ -561,6 +690,8 @@ export interface LocationsListV2Props {
   isUpdating: boolean;
   currencyCode: string;
   readOnly: boolean;
+  /** The row whose delete is in flight: it shows "Deleting…" and can't be acted on. */
+  pendingDeleteId?: string | null;
 }
 
 function IconAction({
@@ -607,6 +738,7 @@ export function LocationsListV2({
   isUpdating,
   currencyCode,
   readOnly,
+  pendingDeleteId = null,
 }: LocationsListV2Props) {
   const [query, setQuery] = useState("");
   const noun = side === "pickup" ? "delivery" : "collection";
@@ -686,12 +818,14 @@ export function LocationsListV2({
             {visible.map((location) => {
               const fee = Number(location.delivery_fee);
               const free = !Number.isFinite(fee) || fee === 0;
+              const deleting = pendingDeleteId === location.id;
               return (
                 <li
                   key={location.id}
+                  aria-busy={deleting || undefined}
                   className={cn(
                     "flex items-center gap-3 rounded-2xl bg-muted/50 px-3 py-2.5",
-                    !location.is_active && "opacity-60",
+                    (!location.is_active || deleting) && "opacity-60",
                   )}
                 >
                   <div className="min-w-0 flex-1">
@@ -710,6 +844,12 @@ export function LocationsListV2({
                       <TruncatedText text={location.description} className="text-xs text-muted-foreground/80" />
                     )}
                   </div>
+                  {deleting ? (
+                    <span role="status" className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+                      <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+                      Deleting…
+                    </span>
+                  ) : (
                   <div className="flex shrink-0 items-center gap-1">
                     <Switch
                       checked={location.is_active}
@@ -732,6 +872,7 @@ export function LocationsListV2({
                       </>
                     )}
                   </div>
+                  )}
                 </li>
               );
             })}

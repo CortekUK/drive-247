@@ -75,7 +75,7 @@ import { PromoCodesTableV2 } from '@/components/settings-v2/promo-codes-table-v2
 import { SettingsIndexV2 } from '@/components/settings-v2/settings-index';
 import * as BusinessV2 from '@/components/settings-v2/business-settings-states';
 import { BusinessRentalGate, DurationPageV2, LockboxPageV2, RequirementsPageV2, ReturnReminderPanelV2, makeBusinessSave } from '@/components/settings-v2/business-rules-pages';
-import { businessPageDirty } from '@/components/settings-v2/business-rules-logic';
+import { businessEditsCoveredBySections, businessPageDirty, keepUnsavedBusinessEdits } from '@/components/settings-v2/business-rules-logic';
 import { SettingsField, SettingsPageHeader, SettingsPanel, SettingsRow, Unit } from '@/components/settings-v2/settings-kit';
 import { AgreementTemplateStatusV2, EmailTemplatesStatusV2 } from '@/components/settings-v2/templates-status-v2';
 import { PricingRulesV2 } from '@/components/settings-v2/pricing-rules-v2';
@@ -93,6 +93,7 @@ import {
   SettingsReadOnlyNotice,
   SettingsSaveState,
   SettingsSectionSkeleton,
+  describeSaveError,
 } from '@/components/settings-v2/section-states';
 import {
   canSaveAllDirty,
@@ -183,6 +184,20 @@ const V2_SETTINGS_PAGES: Record<string, { section: string; title: string; descri
  * Subscription is the sidebar's Billing page. Query strings are carried across,
  * so a Stripe checkout returning `&status=success` still lands with it.
  */
+/**
+ * v2 pages that disable their own controls for a viewer, so the page-level
+ * read-only fieldset (which would also lock Try again and list search) skips them.
+ * Requirements, Booking rules, Key handover and Customer messages wrap every
+ * control in their own fieldset (business-rules-pages, lockbox-templates-v2);
+ * their Try again on a failed or stale read must stay usable.
+ * Pricing rules, Tax and fees and Security deposit do the same per section
+ * (pricing-rules-v2, fees-deposit-v2), with Try again outside each fieldset.
+ */
+const V2_PAGES_GATING_OWN_CONTROLS = new Set(['reminders', 'push', 'general', 'locations', 'booking-site', 'requirements', 'duration', 'lockbox', 'templates', 'pricing', 'fees', 'preauth']);
+
+/** v2 pages that show "Unsaved changes" beside their own Save; the header chip would repeat it. */
+const V2_PAGES_WITH_OWN_SAVE_STATUS = new Set(['general', 'locations', 'booking-site', 'requirements', 'duration', 'lockbox', 'templates']);
+
 const V2_SETTINGS_REDIRECTS: Record<string, string> = {
   branding: '/settings/appearance',
   blacklist: '/settings/blacklist',
@@ -315,6 +330,8 @@ const Settings = () => {
    * the early returns, so it runs on every render.
    */
   const v2Chrome = useV2('chrome');
+  // v2: which in-app payment reminder switch is saving, so its row shows the spinner.
+  const [v2ReminderKey, setV2ReminderKey] = useState<string | null>(null);
 
   /**
    * The four SEO columns, included in a branding save ONLY while this page
@@ -959,10 +976,23 @@ const Settings = () => {
     blog_enabled: false,
   });
 
+  // v2 (northwind): any rental save re-runs the sync below. Replacing the whole
+  // form wiped unsaved edits in a sibling section (on Key handover, saving the
+  // lockbox instructions undid an unsaved "turn lockbox on"), so v2 keeps the
+  // Business-rules fields the operator has edited (keepUnsavedBusinessEdits).
+  // Every other tenant gets exactly setRentalForm(next), as before.
+  const lastSyncedRentalForm = React.useRef<typeof rentalForm | null>(null);
+  const syncRentalForm = (next: typeof rentalForm) => {
+    const lastSynced = lastSyncedRentalForm.current;
+    lastSyncedRentalForm.current = next;
+    if (v2Chrome) setRentalForm(prev => keepUnsavedBusinessEdits(prev, lastSynced, next));
+    else setRentalForm(next);
+  };
+
   // Sync rental form with loaded settings
   useEffect(() => {
     if (rentalSettings) {
-      setRentalForm({
+      syncRentalForm({
         minimum_rental_age: rentalSettings.minimum_rental_age || '',
         tax_enabled: rentalSettings.tax_enabled ?? false,
         tax_percentage: rentalSettings.tax_percentage ?? 0,
@@ -1476,15 +1506,18 @@ const Settings = () => {
       });
       await Promise.all(saves);
       return true;
-    } catch {
+    } catch (err) {
+      // v2: say why. A v2 section's leave save rejects with what to fix ("Enter an
+      // age between 16 and 99…") or "Couldn't save your booking rules.", and the
+      // leave dialog stays open, so "Please try again" alone left no way forward.
       toast({
-        title: 'Error',
-        description: 'Failed to save some settings. Please try again.',
+        title: v2Chrome ? "Couldn't save your changes" : 'Error',
+        description: v2Chrome ? describeSaveError(err) : 'Failed to save some settings. Please try again.',
         variant: 'destructive',
       });
       return false;
     }
-  }, [generalFormDirty, brandingFormDirty, generalForm, brandingForm, tenant, tenantBranding, updateSettingsAsync, updateTenantBranding, updateOrgBranding, refetchTenant, supabase, toast]);
+  }, [generalFormDirty, brandingFormDirty, generalForm, brandingForm, tenant, tenantBranding, updateSettingsAsync, updateTenantBranding, updateOrgBranding, refetchTenant, supabase, toast, v2Chrome]);
 
   const {
     isDialogOpen: unsavedDialogOpen,
@@ -2412,8 +2445,13 @@ const Settings = () => {
       rental: { settings: rentalSettings, error: rentalSettingsError },
     });
 
-    // "Save & Leave" only saves General and Branding; see canSaveAllDirty.
-    const v2CanSaveAll = canSaveAllDirty({ rental: rentalFormDirty, locations: locationsDirty, pricing: pricingDirty });
+    // "Save & Leave" saves General, Branding and the registered v2 sections; see
+    // canSaveAllDirty. Rental-form edits count as saveable only when every one is
+    // a Business-rules field whose page registered its save.
+    const v2RentalEditsCovered =
+      rentalFormDirty &&
+      businessEditsCoveredBySections(rentalForm, lastSyncedRentalForm.current, rentalSettings, v2DirtySections);
+    const v2CanSaveAll = canSaveAllDirty({ rental: rentalFormDirty && !v2RentalEditsCovered, locations: locationsDirty, pricing: pricingDirty });
 
     const v2PageDirty: Record<string, boolean> = {
       general: generalFormDirty,
@@ -2429,6 +2467,25 @@ const Settings = () => {
     };
     // v2 sections that track their own unsaved edits (deposit switches, weekend pricing).
     if (v2Page && v2DirtySections.length > 0) v2PageDirty[v2Page] = true;
+
+    // "Don't Save" has to drop the edits it warned about. This component stays
+    // mounted between the index and each settings page, so the forms it owns
+    // (General, the booking-site colours, and the rental form behind Tax and
+    // fees, Security deposit, Pricing rules and the Business-rules pages) kept
+    // the discarded values: reopening the page brought them back as "Unsaved
+    // changes", and the index went on warning. Put each back to what was loaded.
+    // Sections holding their own state (weekend pricing, locations) reset when
+    // they unmount.
+    const discardV2PageEdits = () => {
+      if (lastSyncedRentalForm.current) setRentalForm(lastSyncedRentalForm.current);
+      setGeneralForm({
+        currency_code: settings?.currency_code || tenant?.currency_code || 'USD',
+        distance_unit: (settings?.distance_unit as 'km' | 'miles') || (tenant?.distance_unit as 'km' | 'miles') || 'miles',
+        privacy_policy_version: tenant?.privacy_policy_version || '1.0',
+        terms_version: tenant?.terms_version || '1.0',
+      });
+      resetBrandingForm();
+    };
 
     // Back to the index, through the same unsaved-changes dialog a tab switch uses.
     const openSettingsIndex = () => {
@@ -2507,7 +2564,7 @@ const Settings = () => {
 
               {(isV2("turo", tenantSlug) || !hideVehicleOwnersToggle || !isAreaHidden('fleet-health', tenantSlug)) && (
                 !tenant ? (
-                  <SettingsSectionSkeleton variant="form" rows={2} header label="Loading optional modules" />
+                  <BusinessV2.SettingsPanelSkeleton title rows={1} descriptionLines={2} label="Loading optional modules" />
                 ) : (
                 <SettingsPanel
                   title="Optional modules"
@@ -2589,6 +2646,7 @@ const Settings = () => {
                 saved={rentalSettings}
                 canEdit={canEditPage}
                 onSave={makeBusinessSave(updateRentalSettings, refetchTenant)}
+                registerSave={registerV2SectionSave}
                 idWaiver={{
                   enabled: idWaiverEnabled,
                   canChange: isHeadAdmin,
@@ -2619,6 +2677,7 @@ const Settings = () => {
                 saved={rentalSettings}
                 canEdit={canEditPage}
                 onSave={makeBusinessSave(updateRentalSettings, refetchTenant)}
+                registerSave={registerV2SectionSave}
               />
             </BusinessRentalGate>
           );
@@ -2632,6 +2691,7 @@ const Settings = () => {
                 saved={rentalSettings}
                 canEdit={canEditPage}
                 onSave={makeBusinessSave(updateRentalSettings, refetchTenant)}
+                registerSave={registerV2SectionSave}
                 smsReady={!!tenant?.integration_twilio_sms}
                 integrationsHref="/integrations?open=Twilio%20Messages"
                 vehiclesHref="/vehicles"
@@ -2739,6 +2799,7 @@ const Settings = () => {
                     thing="your header and footer colours"
                     error={v2BrandingState?.error}
                     onRetry={() => queryClient.refetchQueries({ queryKey: ['tenant-branding', tenant?.id] })}
+                    retrying={v2BrandingState?.fetchStatus === 'fetching'}
                   />
                 ) : (
                   <SettingsSectionSkeleton variant="form" rows={2} header label="Loading header and footer colours" />
@@ -3049,12 +3110,22 @@ const Settings = () => {
                       ['reminder_overdue_multi', 'Payment several days overdue', true],
                     ] as const).map(([key, label, fallback]) => (
                       <SettingsRow key={key} label={label}>
-                        <Switch
-                          checked={(settings as any)?.[key] ?? fallback}
-                          onCheckedChange={() => toggleReminder(key)}
-                          disabled={isUpdating}
-                          aria-label={label}
-                        />
+                        {/* Every switch waits while one saves (the org-settings save
+                            replaces the whole cached row); the spinner says which. */}
+                        <div className="flex items-center gap-2">
+                          {isUpdating && v2ReminderKey === key && (
+                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-label="Saving" />
+                          )}
+                          <Switch
+                            checked={(settings as any)?.[key] ?? fallback}
+                            onCheckedChange={() => {
+                              setV2ReminderKey(key);
+                              toggleReminder(key);
+                            }}
+                            disabled={isUpdating || !canEditPage}
+                            aria-label={label}
+                          />
+                        </div>
                       </SettingsRow>
                     ))}
                   </SettingsPanel>
@@ -3088,6 +3159,7 @@ const Settings = () => {
                   saved={rentalSettings}
                   canEdit={canEditPage}
                   onSave={makeBusinessSave(updateRentalSettings, refetchTenant)}
+                  registerSave={registerV2SectionSave}
                   smsReady={!!tenant?.integration_twilio_sms}
                   emailTemplateHref="/settings/email-templates/rental_reminder"
                   integrationsHref="/integrations?open=Twilio%20Messages"
@@ -3095,23 +3167,43 @@ const Settings = () => {
               </BusinessRentalGate>
 
               <SettingsPanel>
-                {/* Opening a template is reading, not changing: `pointer-events-auto`
-                    lets a view-only user through this page's pointer-events-none
-                    wrapper, and both editors are read-only for them. */}
+                {/* Opening a template is reading, not changing. The return reminder
+                    above sits in a disabled <fieldset> for view-only users, which
+                    disables every <button> inside it, so these are links (a
+                    fieldset never disables an <a>), safe inside or outside one.
+                    Both editors are read-only for those users. */}
                 <SettingsRow
                   label="Email templates"
                   description={<>Booking confirmations, receipts and the other emails customers receive.<EmailTemplatesStatusV2 /></>}
                 >
-                  <Button variant="outline" size="sm" className="pointer-events-auto" onClick={() => router.push('/settings/email-templates')}>
-                    {canEditPage ? 'Edit emails' : 'View emails'}
+                  <Button asChild variant="outline" size="sm">
+                    <a
+                      href="/settings/email-templates"
+                      onClick={(e) => {
+                        if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+                        e.preventDefault();
+                        router.push('/settings/email-templates');
+                      }}
+                    >
+                      {canEditPage ? 'Edit emails' : 'View emails'}
+                    </a>
                   </Button>
                 </SettingsRow>
                 <SettingsRow
                   label="Rental agreement"
                   description={<>The contract customers sign before they drive.<AgreementTemplateStatusV2 /></>}
                 >
-                  <Button variant="outline" size="sm" className="pointer-events-auto" onClick={() => router.push('/settings/agreement-templates')}>
-                    {canEditPage ? 'Edit agreement' : 'View agreement'}
+                  <Button asChild variant="outline" size="sm">
+                    <a
+                      href="/settings/agreement-templates"
+                      onClick={(e) => {
+                        if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+                        e.preventDefault();
+                        router.push('/settings/agreement-templates');
+                      }}
+                    >
+                      {canEditPage ? 'Edit agreement' : 'View agreement'}
+                    </a>
                   </Button>
                 </SettingsRow>
               </SettingsPanel>
@@ -3156,10 +3248,18 @@ const Settings = () => {
               rootLabel={v2Page === 'insurance' ? 'Integrations' : undefined}
               onBack={v2Page === 'insurance' ? () => router.push('/integrations?open=Bonzah') : openSettingsIndex}
             />
-            {canEditPage && v2Page && v2PageDirty[v2Page] && (
+            {canEditPage && v2Page && v2PageDirty[v2Page] && !V2_PAGES_WITH_OWN_SAVE_STATUS.has(v2Page) && (
               <SettingsSaveState status={isSavingNav || isSavingForTab ? 'saving' : 'dirty'} />
             )}
-            {v2PageData.kind === 'loading' ? (
+            {v2PageData.kind === 'loading' && v2Page === 'general' ? (
+              // Shaped like the loaded page: the regional panel, then Optional modules.
+              <div className="space-y-6">
+                <BusinessV2.SettingsPanelSkeleton rows={2} footer={canEditPage} label="Loading regional settings" />
+                {(isV2("turo", tenantSlug) || !hideVehicleOwnersToggle || !isAreaHidden('fleet-health', tenantSlug)) && (
+                  <BusinessV2.SettingsPanelSkeleton title rows={1} descriptionLines={2} label="Loading optional modules" />
+                )}
+              </div>
+            ) : v2PageData.kind === 'loading' ? (
               <SettingsSectionSkeleton variant="form" rows={4} label={`Loading ${pageMeta.title}`} />
             ) : v2PageData.kind === 'error' ? (
               <SettingsLoadError
@@ -3172,8 +3272,14 @@ const Settings = () => {
               <>
                 {!canEditPage && <SettingsReadOnlyNotice />}
                 {/* A native disabled fieldset: keyboard-safe, unlike the old
-                    pointer-events wrapper, and values stay selectable. */}
-                <SettingsReadOnlyFieldset readOnly={!canEditPage}>
+                    pointer-events wrapper, and values stay selectable.
+                    Team emails, Push, General, Locations, Booking site and the
+                    Business-rules pages gate every control themselves, so they
+                    sit outside it: a disabled fieldset would also disable the
+                    reading actions a viewer needs there (Try again on a failed
+                    read, the reminder category tabs, searching a long location
+                    list). */}
+                <SettingsReadOnlyFieldset readOnly={!canEditPage && !V2_PAGES_GATING_OWN_CONTROLS.has(v2Page as string)}>
                   {renderBody(v2Page as string)}
                 </SettingsReadOnlyFieldset>
               </>
@@ -3187,14 +3293,20 @@ const Settings = () => {
         <UnsavedChangesDialog
           open={unsavedDialogOpen}
           onCancel={cancelLeave}
-          onDiscard={confirmLeave}
+          onDiscard={() => {
+            discardV2PageEdits();
+            confirmLeave();
+          }}
           onSave={v2CanSaveAll ? saveAndLeave : undefined}
           isSaving={isSavingNav}
         />
         <UnsavedChangesDialog
           open={showTabWarning}
           onCancel={handleTabCancel}
-          onDiscard={handleTabDiscardAndSwitch}
+          onDiscard={() => {
+            discardV2PageEdits();
+            handleTabDiscardAndSwitch();
+          }}
           onSave={v2CanSaveAll ? handleTabSaveAndSwitch : undefined}
           isSaving={isSavingForTab}
         />

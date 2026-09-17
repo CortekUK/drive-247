@@ -45,6 +45,7 @@ import {
   type ListTone,
 } from "@/components/shared/list-table-v2";
 import { useV2 } from "@/lib/v2-context";
+import { HEADER_ACTIONS_V2, HEADER_PRIMARY_V2, HeaderIconButton } from "@/components/shared/header-icon-button-v2";
 
 // v2 only: the Status column's hue, by meaning, keyed on the lower-cased label.
 // Open waits on the operator (charge or waive); Charged, Partially Paid and the
@@ -739,18 +740,28 @@ const FinesList = () => {
             Track and manage traffic fines
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        {/* v2: every control here is 32px and the cluster sits on the subtitle
+            line (HEADER_ACTIONS_V2 / HEADER_PRIMARY_V2, team lead Sep 16 2026).
+            v1 keeps "flex items-center gap-2" and its outline icon Button byte
+            for byte. */}
+        <div className={`flex items-center gap-2${v2Chrome ? ` ${HEADER_ACTIONS_V2}` : ""}`}>
           {allFines.length > 0 && (
+            v2Chrome ? (
+              <HeaderIconButton label="Fine analytics" href="/fines/analytics">
+                <BarChart3 className="h-4 w-4" />
+              </HeaderIconButton>
+            ) : (
             <Link href="/fines/analytics" className="shrink-0">
               <Button variant="outline" size="icon" className="border-primary/20 hover:border-primary/40 hover:bg-primary/5">
                 <BarChart3 className="h-4 w-4" />
               </Button>
             </Link>
+            )
           )}
           {canEdit('fines') && (
             <Button
               onClick={() => setShowAddFineDialog(true)}
-              className="bg-gradient-primary flex-1 sm:flex-none"
+              className={`bg-gradient-primary flex-1 sm:flex-none${v2Chrome ? ` ${HEADER_PRIMARY_V2}` : ""}`}
             >
               <Plus className="h-4 w-4 mr-2" />
               Add Fine

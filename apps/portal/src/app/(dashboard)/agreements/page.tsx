@@ -30,6 +30,7 @@ import { AgreementsTeachingEmptyState } from "@/components/empty-states/lean-emp
 import { useForcedEmptyState } from "@/hooks/use-forced-empty-state";
 import { useV2 } from "@/lib/v2-context";
 import { AgreementsTableV2 } from "@/components/agreements-v2/agreements-table-v2";
+import { HEADER_ACTIONS_V2, HEADER_PRIMARY_V2, HeaderIconButton } from "@/components/shared/header-icon-button-v2";
 
 interface AgreementDoc {
   id: string;
@@ -680,7 +681,33 @@ export default function AgreementsList() {
           <h1 className="text-2xl sm:text-3xl font-bold">Agreements</h1>
           <p className="text-muted-foreground text-sm sm:text-base">Manage rental agreements and signed documents</p>
         </div>
-        <div className="flex items-center gap-2">
+        {/* v2: every control here is 32px and the cluster sits on the subtitle
+            line (HEADER_ACTIONS_V2 / HEADER_PRIMARY_V2, team lead Sep 16 2026).
+            Generate Agreement is the one labelled button, so Export PDFs becomes
+            an icon with its name in the tooltip. v1 keeps all three controls
+            byte for byte. */}
+        <div className={`flex items-center gap-2${v2Chrome ? ` ${HEADER_ACTIONS_V2}` : ""}`}>
+          {v2Chrome ? (
+            <>
+              {allAgreements.length > 0 && (
+                <HeaderIconButton label="Agreement analytics" href="/agreements/analytics">
+                  <BarChart3 className="h-4 w-4" />
+                </HeaderIconButton>
+              )}
+              <HeaderIconButton
+                label="Export PDFs"
+                onClick={handleDownloadAll}
+                disabled={isDownloadingAll || allAgreements.length === 0}
+              >
+                {isDownloadingAll ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4" />
+                )}
+              </HeaderIconButton>
+            </>
+          ) : (
+            <>
           {allAgreements.length > 0 && (
             <Link href="/agreements/analytics" className="shrink-0">
               <Button variant="outline" size="icon" className="border-primary/20 hover:border-primary/40 hover:bg-primary/5">
@@ -701,7 +728,9 @@ export default function AgreementsList() {
             )}
             Export PDFs
           </Button>
-          <Button onClick={() => setGenerateOpen(true)} className="bg-gradient-primary">
+            </>
+          )}
+          <Button onClick={() => setGenerateOpen(true)} className={`bg-gradient-primary${v2Chrome ? ` ${HEADER_PRIMARY_V2}` : ""}`}>
             <Plus className="h-4 w-4 mr-2" />
             Generate Agreement
           </Button>

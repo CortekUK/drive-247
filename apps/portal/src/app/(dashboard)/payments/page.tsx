@@ -53,6 +53,7 @@ import { parseLocalDate } from "@/lib/date-utils";
 import { useTenant } from "@/contexts/TenantContext";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { TabTourButton } from "@/components/onboarding/tab-tour-button";
+import { HEADER_ACTIONS_V2, HEADER_PRIMARY_V2, HeaderIconButton } from "@/components/shared/header-icon-button-v2";
 import {
   LIST_CLASSES,
   LIST_ROW_ACTION,
@@ -467,24 +468,41 @@ const PaymentsList = () => {
             Record and manage customer payments
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        {/* v2: every control here is 32px and the cluster sits on the subtitle
+            line (HEADER_ACTIONS_V2 / HEADER_PRIMARY_V2, team lead Sep 16 2026).
+            v1 keeps "flex items-center gap-2" and its outline icon Buttons
+            byte for byte. */}
+        <div className={`flex items-center gap-2${v2Chrome ? ` ${HEADER_ACTIONS_V2}` : ""}`}>
           {/* Canary-only: self-gates on the resolved tenant slug, so this
               shared v1 header is unchanged for the other 56 tenants. */}
           <TabTourButton tour="payments" size="h-10" />
-          <Link href="/payments/analytics" className="shrink-0">
-            <Button variant="outline" size="icon" data-tour="payments-analytics" className="border-primary/20 hover:border-primary/40 hover:bg-primary/5">
-              <BarChart3 className="h-4 w-4" />
-            </Button>
-          </Link>
-          <Button variant="outline" size="icon" data-tour="payments-export" onClick={handleExportCSV} className="shrink-0">
-            <Download className="h-4 w-4" />
-          </Button>
+          {v2Chrome ? (
+            <>
+              <HeaderIconButton label="Payment analytics" href="/payments/analytics" data-tour="payments-analytics">
+                <BarChart3 className="h-4 w-4" />
+              </HeaderIconButton>
+              <HeaderIconButton label="Export CSV" onClick={handleExportCSV} data-tour="payments-export">
+                <Download className="h-4 w-4" />
+              </HeaderIconButton>
+            </>
+          ) : (
+            <>
+              <Link href="/payments/analytics" className="shrink-0">
+                <Button variant="outline" size="icon" data-tour="payments-analytics" className="border-primary/20 hover:border-primary/40 hover:bg-primary/5">
+                  <BarChart3 className="h-4 w-4" />
+                </Button>
+              </Link>
+              <Button variant="outline" size="icon" data-tour="payments-export" onClick={handleExportCSV} className="shrink-0">
+                <Download className="h-4 w-4" />
+              </Button>
+            </>
+          )}
           <AddPaymentDialog
             open={showAddDialog}
             onOpenChange={setShowAddDialog}
           />
           {canEdit('payments') && (
-            <Button onClick={() => setShowAddDialog(true)} data-tour="payments-record" className="bg-gradient-primary flex-1 sm:flex-none">
+            <Button onClick={() => setShowAddDialog(true)} data-tour="payments-record" className={`bg-gradient-primary flex-1 sm:flex-none${v2Chrome ? ` ${HEADER_PRIMARY_V2}` : ""}`}>
               <Plus className="h-4 w-4 mr-2" />
               Record Payment
             </Button>
