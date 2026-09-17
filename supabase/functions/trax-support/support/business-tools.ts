@@ -1,6 +1,8 @@
 import { object, onlyKeys, SupportError } from './types.ts';
 import type { OperationalResult } from './operational-types.ts';
 import { authorizedDatasets, parseSpec, runBusinessQuery, type BusinessContext } from './business-query.ts';
+import { canView } from './auth.ts';
+import { BALANCE_DEFINITION } from './balance-tools.ts';
 import { BUSINESS_CATALOG } from './business-catalog.ts';
 
 /**
@@ -31,6 +33,8 @@ function discoverBusinessData(input: unknown, env: BusinessContext): Operational
     limitations: datasets.length ? [] : ['Your role cannot read any business dataset, so no figures can be produced.'],
     data: {
       catalogVersion: BUSINESS_CATALOG.version,
+      // Capabilities that are not a single-table sum, so they have their own tool.
+      derived: derivedCapabilities(env),
       datasets: datasets.map((dataset) => ({
         dataset: dataset.name, title: dataset.title, meaning: dataset.meaning,
         metrics: dataset.metrics.map((metric) => ({ metric: metric.name, label: metric.label, definition: metric.definition, perCurrency: metric.currency === 'per_currency' })),
@@ -51,6 +55,25 @@ export const BUSINESS_TOOLS = Object.freeze({
   discover_business_data: discoverBusinessData,
   query_business_data: queryBusinessData,
 });
+
+
+/**
+ * Composite figures that cannot be expressed as one dataset and one metric, so
+ * they have a dedicated tool. Listed here with the same honesty as a dataset: if
+ * the caller may not read it, it is not offered.
+ */
+function derivedCapabilities(env: BusinessContext) {
+  const capabilities: { tool: string; answers: string; definition: string; arguments: string[] }[] = [];
+  if ((env.financeScopes ?? []).includes('rental_payments') && canView(env.auth, 'customers')) {
+    capabilities.push({
+      tool: 'query_customer_balances',
+      answers: 'Who owes money, how much each customer owes, who owes the most, and one customer’s balance.',
+      definition: BALANCE_DEFINITION,
+      arguments: ['limit', 'minimumOwed', 'customerId', 'includeCredit'],
+    });
+  }
+  return capabilities;
+}
 
 /** Which support issue a dataset question belongs to, for the escalation policy. */
 export function businessTopic(dataset: unknown): 'fleet_counts' | 'bookings' | 'payments' | 'other' {

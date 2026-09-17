@@ -8,9 +8,10 @@ import type { Conversation } from './conversation.ts';
 import type { Evidence, OperationalResult } from './operational-types.ts';
 import { getAccountCounts, listAccountBookings, findAvailableVehicles, type FleetReads } from './fleet-tools.ts';
 import { newIssue, issueView, recordIssueCheck, recordIssueEvent, redactSupportText, ISSUE_TOPICS, DEFAULT_ESCALATION_POLICY, type SupportIssue, type EscalationPolicy } from './issues.ts';
-import { digest } from './auth.ts';
+import { digest, canView } from './auth.ts';
 import { FINANCE_TOOLS } from './finance-tools.ts';
 import { BUSINESS_TOOLS, businessTopic } from './business-tools.ts';
+import { BALANCE_TOOLS } from './balance-tools.ts';
 import type { BusinessReads } from './business-query.ts';
 import { PAYMENT_INVESTIGATION_TOOLS, paymentReferences } from './payment-investigation.ts';
 import { financeScopes, databaseFinanceScopes, type FinanceServices } from './finance-types.ts';
@@ -82,7 +83,11 @@ export async function modelConversation(message:string,locale:Locale,conversatio
   // Stripe tools use `scopes`, which needs the Stripe policy. Reading the account's
   // own money records does not, so the business query layer gets the staff rule alone.
   const dataScopes=databaseFinanceScopes(env.auth);
-  const tools=MODEL_TOOLS.filter(t=>!Object.hasOwn(FINANCE,t.function.name)||(t.function.name==='get_stripe_account_summary'?scopes.includes('account_balance'):scopes.includes('rental_payments')));
+  const tools=MODEL_TOOLS
+    .filter(t=>!Object.hasOwn(FINANCE,t.function.name)||(t.function.name==='get_stripe_account_summary'?scopes.includes('account_balance'):scopes.includes('rental_payments')))
+    // A balance names customers and states money: offer it only where both hold,
+    // so the model is never shown a tool this caller would be refused.
+    .filter(t=>!Object.hasOwn(BALANCE_TOOLS,t.function.name)||(dataScopes.includes('rental_payments')&&canView(env.auth,'customers')));
   const paymentIds=new Set<string>();
   // A record already validated in this conversation stays addressable for follow-ups, but only after a
   // fresh tenant/permission check. Its old results are never reused as evidence.
@@ -163,13 +168,15 @@ export async function modelConversation(message:string,locale:Locale,conversatio
         const resolved=await runTool(name,{target:a.target,...(a.entityId?{entityId:a.entityId}:{})},env);
         if(!('action'in resolved))throw Error();
         const id=navId(resolved.action);actions.set(id,resolved.action);result={navigationId:id,label:resolved.action.label};
-      } else if(Object.hasOwn(BUSINESS_TOOLS,name)) {
+      } else if(Object.hasOwn(BUSINESS_TOOLS,name)||Object.hasOwn(BALANCE_TOOLS,name)) {
         const a=object(input);
         if(!env.business)throw new SupportError('business_unavailable','Business data queries are not configured in this environment.',503);
         if(name==='query_business_data')issue=selectIssue(businessTopic(a.dataset));
+        if(name==='query_customer_balances')issue=selectIssue('payments');
         const checkKey=await digest(name+JSON.stringify(a));
         if(failures.has(checkKey))throw new SupportError('duplicate_failed_check','This query already failed in this request. Change the question or offer support.');
-        const r=await BUSINESS_TOOLS[name as keyof typeof BUSINESS_TOOLS](input,{...env,business:env.business,financeScopes:dataScopes,
+        const run=Object.hasOwn(BALANCE_TOOLS,name)?BALANCE_TOOLS[name as keyof typeof BALANCE_TOOLS]:BUSINESS_TOOLS[name as keyof typeof BUSINESS_TOOLS];
+        const r=await run(input,{...env,business:env.business,financeScopes:dataScopes,
           timezone:(tenant:string)=>env.fleet?env.fleet.timezone(tenant):Promise.resolve(null),
           currency:async(tenant:string)=>(await env.finance?.reads.tenant(tenant))?.currency_code??null,
           now:env.observe?.()??env.now});
@@ -178,10 +185,19 @@ export async function modelConversation(message:string,locale:Locale,conversatio
         for(const s of r.sources)sources.set(s.id,s);
         // Register the measured totals so the answer may state them. Only groups
         // carrying a currency are money; counts stay ordinary numbers.
-        if(r.status!=='error')for(const group of (((r.data as {answer?:{groups?:{value?:unknown;currency?:unknown}[]}}|undefined)?.answer?.groups)??[])){
-          if(!group.currency)continue;
-          const key=moneyKey(String(group.value??''));
-          if(key)verifiedMoney.add(key);
+        if(r.status!=='error'){
+          const measured=(r.data as {answer?:{groups?:{value?:unknown;currency?:unknown;outstanding?:unknown;credit?:unknown}[];total?:unknown}}|undefined)?.answer;
+          for(const group of measured?.groups??[]){
+            if(!group.currency)continue;
+            for(const figure of [group.value,group.outstanding,group.credit]){
+              const key=moneyKey(String(figure??''));
+              if(key)verifiedMoney.add(key);
+            }
+          }
+          if(measured?.total!=null&&(measured.groups??[]).some(g=>g.currency)){
+            const key=moneyKey(String(measured.total));
+            if(key)verifiedMoney.add(key);
+          }
         }
         evidence.push(r);
         result=r;

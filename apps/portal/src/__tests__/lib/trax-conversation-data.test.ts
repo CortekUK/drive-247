@@ -86,9 +86,22 @@ beforeEach(() => {
       ...Array.from({ length: 6 }, (_, i) => ({ id: `b${i}`, tenant_id: tenantB, reg: `BOR-${i}`, make: 'Kia', model: 'Ceed', status: 'Available', is_paused: false, is_disposed: false, show_on_website: true })),
     ],
     payments: [
-      { id: 'pa1', tenant_id: tenantA, customer_id: customer, amount: 400, refund_amount: 0, status: 'Applied', capture_status: null, payment_date: '2026-08-14', payment_type: 'Card' },
-      { id: 'pb1', tenant_id: tenantB, customer_id: 'other', amount: 7777, refund_amount: 0, status: 'Applied', capture_status: null, payment_date: '2026-08-14', payment_type: 'Card' },
+      { id: 'pa1', tenant_id: tenantA, customer_id: customer, amount: 400, refund_amount: 0, status: 'Applied', capture_status: null, payment_date: '2026-08-14', payment_type: 'Card', remaining_amount: 0 },
+      { id: 'pb1', tenant_id: tenantB, customer_id: 'other', amount: 7777, refund_amount: 0, status: 'Applied', capture_status: null, payment_date: '2026-08-14', payment_type: 'Card', remaining_amount: 7777 },
     ],
+    customers: [
+      { id: customer, tenant_id: tenantA, name: 'Ada Okafor', status: 'active' },
+      { id: 'other', tenant_id: tenantB, name: 'Borealis Customer', status: 'active' },
+    ],
+    rentals: [
+      { id: 'ra1', tenant_id: tenantA, customer_id: customer, status: 'Active', approval_status: 'approved', is_pay_as_you_go: false, payg_closed_at: null },
+      { id: 'rb1', tenant_id: tenantB, customer_id: 'other', status: 'Active', approval_status: 'approved', is_pay_as_you_go: false, payg_closed_at: null },
+    ],
+    ledger_entries: [
+      { id: 'la1', tenant_id: tenantA, customer_id: customer, rental_id: 'ra1', type: 'Charge', category: 'Rental', due_date: '2026-09-01', remaining_amount: 250 },
+      { id: 'lb1', tenant_id: tenantB, customer_id: 'other', rental_id: 'rb1', type: 'Charge', category: 'Rental', due_date: '2026-09-01', remaining_amount: 9999 },
+    ],
+    payg_accruals: [],
   };
   reads = {
     authenticate: vi.fn(async () => ({ id: 'user-a' })),
@@ -267,5 +280,43 @@ describe('discovery tells the truth about what can be asked', () => {
     expect(modelSaw()).not.toContain('Revenue and cost entries');
     // The datasets a viewer may read are still offered.
     expect(modelSaw()).toContain('Vehicles');
+  });
+});
+
+describe('who owes the most, through a conversation', () => {
+  it('names the customer and states the balance it measured', async () => {
+    deps.model = scripted(
+      call('discover_business_data', {}),
+      call('query_customer_balances', { limit: 5 }),
+      answer('Ada Okafor owes the most, at GBP 250.00 outstanding with no credit on account.', ['business_query:customers:balance']),
+    );
+    const out = await ask('Which customers owe the most?');
+    expect(out.status).toBe(200);
+    expect(out.body.response).toContain('Ada Okafor');
+    expect(out.body.response).toContain('250.00');
+    expect(out.body.provenance.engine).toBe('model');
+    // The other account owes 9,999.00 and it is nowhere in play.
+    expect(modelSaw()).not.toContain('9999');
+    expect(modelSaw()).not.toContain('Borealis Customer');
+  });
+
+  it('offers the balance capability to an admin and withholds it from a viewer', async () => {
+    deps.model = scripted(call('discover_business_data', {}), answer('I can look up balances.', []));
+    await ask('What can you tell me about money owed?');
+    expect(modelSaw()).toContain('query_customer_balances');
+
+    staff.role = 'viewer';
+    deps.model = scripted(call('discover_business_data', {}), answer('I can count vehicles.', []));
+    await ask('What can you tell me about money owed?');
+    expect(modelSaw()).not.toContain('query_customer_balances');
+  });
+
+  it('refuses the balance question for a role without the finance permission', async () => {
+    staff.role = 'ops';
+    deps.model = scripted(call('query_customer_balances', {}), answer('I cannot read that here.', []));
+    const out = await ask('Which customers owe the most?');
+    expect(out.status).toBe(200);
+    expect(modelSaw()).toMatch(/finance permission/i);
+    expect(modelSaw()).not.toContain('250.00');
   });
 });

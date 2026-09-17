@@ -21,7 +21,8 @@ Columns: **Knowledge** = reviewed guidance exists · **Data** = authorized datas
 
 | Module | What a user will ask | What it needs | Status |
 |---|---|---|---|
-| **Customer / rental balances** | "Who owes the most?", "Show active rentals with overdue amounts" | The full rule: due charges' `remaining_amount` excluding cancelled/rejected and PAYG rentals, **plus** open PAYG accruals, **minus** captured unapplied credit (`use-customer-balance.ts:67,16,129`), and for a rental the `rental_extension_totals` view (`:303`). Needs a ledger dataset plus a composite metric, not a single sum. | **not implemented** — deliberately not approximated |
+| **Customer balances** | "Who owes the most?", "What does this customer owe?" | Implemented in `balance-tools.ts` as a composite tool: due charges excluding cancelled/rejected and PAYG rentals, plus open PAYG accruals, minus captured unapplied credit. 17 unit tests with hand-derived expectations, plus three conversation tests. | **implemented and offline tested** |
+| **Rental-level balances and ageing** | "Show active rentals with overdue amounts", "what is 60 days overdue?" | Per-rental figures need the `rental_extension_totals` view (`use-customer-balance.ts:303`); ageing needs due-date buckets over the same ledger rows | not implemented |
 | **Invoices** | "Export unpaid invoices grouped by customer" | `invoices` dataset (status pending/paid/cancelled), and a decision on invoice vs ledger as the source of "unpaid" | not implemented |
 | **Deposits** | "Which deposits are still held?" | `rentals.deposit_hold_*` columns + `deposit_hold_links`; state machine in `payments-model.ts:816` | not implemented |
 | **Refunds** | "How much did we refund last month?" | Refunds live as `payments.refund_amount` and `ledger_entries` of type Refund — two representations that must not be double-counted | not implemented |
@@ -64,8 +65,10 @@ Isolation is now proven at three levels, and the gap between them is the point.
 | Isolation remediation scripts (stages 0, 1, 3, 4 and both rollbacks) | **Offline tested** (not applied) | `node tests/trax/remediation-sql.mjs` — 4 passed; `tenant-isolation.mjs` applies all four stages and the rollback |
 | Deployed database exposure (61 tables, 15 blanket policies, 16 owner-rights views) | **Authorized live-read verified** (read-only, catalogue and counts only) | `docs/trax/db-isolation-remediation.md` §1 |
 | TRAX tool wiring (discover/query through the orchestrator) | **Implemented**, offline model-loop suites pass | `node tests/trax/browser.mjs --support`, `node tests/trax/browser.mjs` |
-| Conversation-to-data path for the example questions | **Not verified** | no fixture drives a model through discover → query → follow-up yet |
-| Customer balances, overdue, "who owes the most" | **Not implemented** | rule specified in `data-catalog.md`; no code |
+| Conversation-to-data path (count, money total, balance ranking) | **End-to-end application tested** (offline model) | `npx vitest run src/__tests__/lib/trax-conversation-data.test.ts` — 14 passed: real handler, model loop, tool registry and query layer over a two-tenant database |
+| Customer balances, "who owes the most" | **Offline tested** | `npx vitest run src/__tests__/lib/trax-customer-balances.test.ts` — 17 passed, expectations derived by hand from `use-customer-balance.ts` |
+| Money figures in an answer | **End-to-end application tested** | the orchestrator allows a figure only if the query layer measured it in that request; an invented total is refused and the fallback is served |
+| Rental-level balances, ageing buckets, overdue lists | **Not implemented** | needs `rental_extension_totals` and due-date buckets |
 | Reports (PDF/CSV/XLSX), job states, private storage, download | **Not implemented** | no renderer, no bucket, no job table |
 | Remaining modules (invoices, deposits, refunds, fines, expenses, subscriptions, integration health, provider reads) | **Not implemented** | — |
 | Multi-tenant account switch | **Not implemented** | `get_user_tenant_id()` uses `LIMIT 1`; 0 of 89 users have a second membership today (verified 2026-09-18) |
