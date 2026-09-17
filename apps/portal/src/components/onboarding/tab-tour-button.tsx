@@ -66,7 +66,7 @@ import { useEffect, useState } from 'react';
 import { useTenant } from '@/contexts/TenantContext';
 import { useAuth } from '@/stores/auth-store';
 import { useV2 } from '@/lib/v2-context';
-import { isLeanTenant } from '@/lib/lean-areas';
+import { useIsLean } from '@/lib/lean-context';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui-v2/tooltip';
 import {
@@ -91,6 +91,7 @@ export function TabTourButton({ tour, className }: TabTourButtonProps) {
   const { tenant } = useTenant();
   const { appUser } = useAuth();
   const hasV2Chrome = useV2('chrome');
+  const isCanary = useIsLean();
 
   /**
    * Which tour is available right now — the short empty-tab one, or the full
@@ -148,7 +149,7 @@ export function TabTourButton({ tour, className }: TabTourButtonProps) {
   // Two of the three pages this renders on are shared v1 list pages that all 57
   // tenants load, so this gate is the only thing keeping the button off their
   // screens. It fails CLOSED — an unresolved tenant renders nothing.
-  if (!isLeanTenant(tenant?.slug) || !hasV2Chrome) return null;
+  if (!isCanary || !hasV2Chrome) return null;
 
   // The label says which tour this is. Someone who took the short version on an
   // empty tab and comes back after adding their first record is not being

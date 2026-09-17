@@ -18,7 +18,10 @@ export function useTraxSupport(enabled = true, surfaceVisible = true): UseChatRe
   const { tenant } = useTenant();
   const chromeEnabled=useV2('chrome');
   // Follow the reviewed V2 rollout, including tenants enrolled after Northwind.
-  enabled=enabled && chromeEnabled && isV2('chrome',tenant?.slug);
+  // `chromeEnabled` is the RESOLVED flag (slug list OR `portal_experience`);
+  // the slug term is OR'd rather than ANDed so a tenant switched over by the
+  // column is not gated back out by a list it cannot be in.
+  enabled=enabled && (chromeEnabled || isV2('chrome', tenant?.slug));
   const { permissions } = useManagerPermissions();
   const pathname=usePathname();const router=useRouter();
   const userId=user?.id??appUser?.auth_user_id;

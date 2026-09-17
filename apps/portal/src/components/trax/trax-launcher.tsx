@@ -42,7 +42,10 @@ export const TraxLauncher = forwardRef<TraxLauncherHandle>(function TraxLauncher
     [],
   );
 
-  if (!chrome || !isV2('chrome',tenant?.slug)) return null;
+  // `chrome` is the RESOLVED flag (slug list OR `portal_experience`); the
+  // slug term is OR'd rather than ANDed so a tenant switched over by the
+  // column is not gated back out of TRAX by a list it cannot be in.
+  if (!chrome && !isV2('chrome', tenant?.slug)) return null;
 
   return (
     <div ref={hostRef} className="contents [&>button]:hidden">

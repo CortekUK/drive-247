@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
-import { isLeanTenant } from "@/lib/lean-areas";
+import { useIsLean } from "@/lib/lean-context";
 import {
   dismissRentalGate,
   getRentalGateDismissalServerVersion,
@@ -43,7 +43,7 @@ import {
  */
 export function useRentalCreationGate() {
   const { tenant, tenantSlug } = useTenant();
-  const lean = isLeanTenant(tenantSlug);
+  const lean = useIsLean();
 
   // Re-render this consumer when any component dismisses the gate. The version
   // is only a change signal; the actual answer is read below, per slug.
@@ -86,16 +86,16 @@ export function useRentalCreationGate() {
   const dismissed = canDismiss && isRentalGateDismissed(tenantSlug);
 
   const dismiss = useCallback(() => {
-    if (!isLeanTenant(tenantSlug)) return;
+    if (!lean) return;
     dismissRentalGate(tenantSlug);
-  }, [tenantSlug]);
+  }, [lean, tenantSlug]);
 
   return {
     /**
      * True only for a lean tenant whose Connect account cannot take money and
      * who has not waved the gate away during this visit.
      */
-    blocked: isRentalCreationBlocked(data, tenantSlug) && !dismissed,
+    blocked: isRentalCreationBlocked(data, tenantSlug, lean) && !dismissed,
     /** True while the lookup is in flight; callers must not block on unknown. */
     isLoading: lean && isLoading,
     /** True only for the canary: drives whether a close control may exist. */

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ArrowUpRight, Wrench } from "lucide-react";
 
 import { useTenant } from "@/contexts/TenantContext";
-import { isLeanTenant } from "@/lib/lean-areas";
+import { useIsLean } from "@/lib/lean-context";
 import { DEV_ROUTE, isLocalhostHost } from "@/lib/dev-actions";
 
 /**
@@ -79,6 +79,8 @@ export function DevSection() {
 
 function DevSectionBody() {
   const { tenant } = useTenant();
+  /** GATE 2b, read here so it is never a conditional hook call. */
+  const isCanary = useIsLean();
 
   /**
    * GATE 2a — the hostname. Resolved in an effect rather than read inline so
@@ -91,7 +93,7 @@ function DevSectionBody() {
   }, []);
 
   /** GATE 2b — the tenant, by slug, from the row that actually loaded. */
-  if (!onLocalhost || !isLeanTenant(tenant?.slug)) return null;
+  if (!onLocalhost || !isCanary) return null;
 
   return (
     <Link

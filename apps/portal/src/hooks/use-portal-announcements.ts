@@ -6,7 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
 import { useAuth } from '@/stores/auth-store';
 import { useV2 } from '@/lib/v2-context';
-import { isLeanTenant } from '@/lib/lean-areas';
+import { useIsLean } from '@/lib/lean-context';
 import {
   ANNOUNCEMENTS_POLL_MS,
   ANNOUNCEMENTS_STALE_MS,
@@ -151,7 +151,10 @@ export function usePortalAnnouncements(): PortalAnnouncementsState {
   const { tenant } = useTenant();
   const { appUser } = useAuth();
   const v2Dashboard = useV2('dashboard');
-  const featuresEnabled = v2Dashboard && isLeanTenant(tenant?.slug);
+  // Hoisted: as the right operand of an && this would be a CONDITIONAL
+  // hook call.
+  const isCanary = useIsLean();
+  const featuresEnabled = v2Dashboard && isCanary;
 
   const tenantId: string | undefined = tenant?.id || undefined;
   const appUserId: string | undefined = appUser?.id || undefined;

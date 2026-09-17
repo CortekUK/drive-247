@@ -6,6 +6,7 @@ import { useTenant } from "@/contexts/TenantContext";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useTraxOptional } from "@/components/trax/trax-provider";
 import { LEAN_HIDDEN_AREAS, isLeanTenant } from "@/lib/lean-areas";
+import { useIsLean } from "@/lib/lean-context";
 import {
   buildDeck,
   pickHeroCard,
@@ -152,7 +153,10 @@ export function FeaturedDeck({
       : null;
 
   const slug = tenantSlug ?? tenant?.slug ?? null;
-  const lean = isLeanTenant(slug);
+  // The resolved answer (slug list OR `portal_experience`) OR'd with this
+  // deck's own slug fallback, which also accepts `tenant.slug` when the
+  // header slug is absent. Never narrower than it was.
+  const lean = useIsLean() || isLeanTenant(slug);
   const ctx: FeaturedContext = {
     v2: { turo, availability },
     isLean: lean,

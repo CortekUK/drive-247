@@ -41,7 +41,8 @@ import {
 import { V2_GENERAL_PERM_TABS, findSettingsSearchHandoff } from "@/components/settings-v2/settings-shell-state";
 import { SETTINGS_PAGE_TITLE, SETTINGS_SECTION_TITLE } from "@/components/settings-v2/settings-kit";
 import { usePageSearch } from "@/components/shared/layout/page-search-slot";
-import { isSettingsTabHidden } from "@/lib/lean-areas";
+import { isSettingsTabHiddenForLean } from "@/lib/lean-areas";
+import { useIsLean } from "@/lib/lean-context";
 
 export interface SettingsIndexItem {
   title: string;
@@ -174,12 +175,15 @@ export function SettingsIndexV2({
   });
 
   // May this user open the entry at all (permission, head-admin-only, lean gate)?
+  // `useIsLean` is a hook, so it is read here and CLOSED OVER by the
+  // predicate rather than called inside it.
+  const leanTenant = useIsLean();
   const allowed = useCallback(
     (item: SettingsIndexItem) =>
       (item.anyOfTabs ?? [item.tab]).some(canView) &&
       (!item.headAdminOnly || isHeadAdmin) &&
-      !isSettingsTabHidden(item.tab, tenantSlug),
-    [canView, isHeadAdmin, tenantSlug]
+      !isSettingsTabHiddenForLean(item.tab, leanTenant),
+    [canView, isHeadAdmin, leanTenant]
   );
 
   const sections = useMemo(() => {

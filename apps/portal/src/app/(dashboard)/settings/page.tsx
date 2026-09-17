@@ -25,7 +25,6 @@ import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Be
 import { toast } from '@/hooks/use-toast';
 import { useOrgSettings } from '@/hooks/use-org-settings';
 import { useTenantBranding } from '@/hooks/use-tenant-branding';
-import { isV2 } from "@/lib/v2";
 import { useTenant } from '@/contexts/TenantContext';
 import { useRentalSettings } from '@/hooks/use-rental-settings';
 import { LogoUploadWithResize } from '@/components/settings/logo-upload-with-resize';

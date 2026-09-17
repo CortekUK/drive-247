@@ -13,7 +13,7 @@ import { parseLocalDate } from "@/lib/date-utils";
 import Link from "next/link";
 import { useState, useCallback } from "react";
 import { useTenant } from "@/contexts/TenantContext";
-import { isAreaHidden, isLeanTenant } from "@/lib/lean-areas";
+import { useIsAreaHidden, useIsLean } from "@/lib/lean-context";
 import { InsurancesTeachingEmptyState } from "@/components/empty-states/lean-empty-states";
 import { useForcedEmptyState } from "@/hooks/use-forced-empty-state";
 import { Input } from "@/components/ui/input";
@@ -159,7 +159,10 @@ export default function InsurancesList() {
   // INSHUR row, ID-card button, mode chip and status badge in the table below.
   // Nothing INSHUR-shaped can reach a lean tenant's screen while it is false.
   const inshur = useInshur();
-  const inshurEnabled = inshur.enabled === true && !isAreaHidden("inshur", tenantSlug);
+  // Hoisted: `useIsAreaHidden` is a hook, and as the right operand of an &&
+  // it would be a CONDITIONAL hook call.
+  const inshurHidden = useIsAreaHidden("inshur");
+  const inshurEnabled = inshur.enabled === true && !inshurHidden;
 
   const {
     data: inshurCoverage = [],
@@ -284,7 +287,7 @@ export default function InsurancesList() {
   // `devForceEmpty` is the /dev preview switch (lib/dev-overrides.ts): inert
   // outside development, and INSIDE the slug gate so it reaches nobody else.
   const devForceEmpty = useForcedEmptyState("insurances");
-  const teachEmptyInsurances = isLeanTenant(tenantSlug) && (allInsurances.length === 0 || devForceEmpty);
+  const teachEmptyInsurances = useIsLean() && (allInsurances.length === 0 || devForceEmpty);
 
   const filteredInsurances = allInsurances.filter((doc) => {
     const needle = searchQuery.toLowerCase();

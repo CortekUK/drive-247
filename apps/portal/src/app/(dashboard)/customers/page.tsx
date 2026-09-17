@@ -35,7 +35,7 @@ import { toast } from "sonner";
 import { useTenant } from "@/contexts/TenantContext";
 import { useDeleteCustomer } from "@/hooks/use-delete-customer";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
-import { isLeanTenant } from "@/lib/lean-areas";
+import { useIsLean } from "@/lib/lean-context";
 import { CustomersTeachingEmptyState } from "@/components/empty-states/lean-empty-states";
 import { useForcedEmptyState } from "@/hooks/use-forced-empty-state";
 import {
@@ -651,7 +651,10 @@ const CustomersList = () => {
   // `devForceEmpty` is the /dev preview switch (lib/dev-overrides.ts): inert
   // outside development, and INSIDE the slug gate so it reaches nobody else.
   const devForceEmpty = useForcedEmptyState("customers");
-  const teachEmptyCustomers = isLeanTenant(tenantSlug) && (!customers?.length || devForceEmpty);
+  // Hoisted: the three Blocked-customers entry points below are JSX
+  // branches, which a hook cannot be called from.
+  const leanTenant = useIsLean();
+  const teachEmptyCustomers = leanTenant && (!customers?.length || devForceEmpty);
 
   /**
    * v2 only: hand the top bar this page's search and filter button. `null` on
@@ -717,7 +720,7 @@ const CustomersList = () => {
             the loaded graph's height; 13rem is the card's when the row stacks. */}
         {v2Chrome && (
           <div className="grid grid-cols-1 gap-6 py-2 lg:grid-cols-4">
-            {canEdit('customers') || (isLeanTenant(tenantSlug) && canView('blocked_customers')) ? (
+            {canEdit('customers') || (leanTenant && canView('blocked_customers')) ? (
               <>
                 <Skeleton className="h-[260px] lg:col-span-3" />
                 <Skeleton className="h-52 lg:h-[260px]" />
@@ -814,7 +817,7 @@ const CustomersList = () => {
               v2 icon sits beside it under the same condition. */}
           {!v2Chrome && (
             <>
-          {isLeanTenant(tenantSlug) && canView('blocked_customers') && (
+          {leanTenant && canView('blocked_customers') && (
             <Link href="/blocked-customers" className="shrink-0" data-tour="customers-blocked">
               <Button variant="outline" className="flex-1 sm:flex-none">
                 <Ban className="h-4 w-4 mr-2" />
@@ -824,7 +827,7 @@ const CustomersList = () => {
           )}
             </>
           )}
-          {v2Chrome && isLeanTenant(tenantSlug) && canView('blocked_customers') && (
+          {v2Chrome && leanTenant && canView('blocked_customers') && (
             <HeaderIconButton href="/blocked-customers" label="Blocked customers" size="icon-lg" data-tour="customers-blocked">
               <Ban className="h-4 w-4" />
             </HeaderIconButton>

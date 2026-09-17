@@ -57,7 +57,7 @@ import { cn } from "@/lib/utils";
 import { useTenant } from "@/contexts/TenantContext";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui-v2/badge";
-import { isAreaHidden } from "@/lib/lean-areas";
+import { useIsAreaHidden } from "@/lib/lean-context";
 import { isBonzahSellable, bonzahBlockedReason } from "@/lib/bonzah";
 // Bonzah refuses to start a policy today — the earliest insurable night begins
 // tomorrow, Pacific. Every UI that gates a purchase has to mirror the clamp in
@@ -189,6 +189,9 @@ function daysBetween(from: string | null | undefined, to: string | null | undefi
 
 export function StageInsurance({ detail, onStage, refetch }: StageProps) {
   const { tenant, tenantSlug } = useTenant();
+  // Hoisted: the off-trip cover Section is behind a JSX branch, which a
+  // hook cannot be called from.
+  const inshurHidden = useIsAreaHidden("inshur");
   const { toast } = useToast();
 
   const rental = detail.rental;
@@ -631,7 +634,7 @@ export function StageInsurance({ detail, onStage, refetch }: StageProps) {
           own block explains its absence when the integration is off — so without
           this gate the canary would be told to go and configure a product it has
           not been sold. Gated exactly as v1 gates it. */}
-      {!isAreaHidden("inshur", tenantSlug) && tenant?.integration_inshur && (
+      {!inshurHidden && tenant?.integration_inshur && (
         <Section
           title="Off-trip cover"
           description="INSHUR writes the general fleet policy, which Bonzah does not cover."

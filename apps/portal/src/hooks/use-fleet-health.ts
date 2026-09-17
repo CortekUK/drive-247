@@ -3,7 +3,7 @@ import { supabaseUntyped as supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
 import { useRentalSettings } from "@/hooks/use-rental-settings";
-import { isAreaHidden } from "@/lib/lean-areas";
+import { useIsAreaHidden } from "@/lib/lean-context";
 import type {
   VehicleHealthRow,
   VehicleHealthStatus,
@@ -57,8 +57,8 @@ function invalidateFleetHealth(qc: ReturnType<typeof useQueryClient>) {
  */
 export function useFleetHealthEnabled(): boolean {
   const { settings } = useRentalSettings();
-  const { tenantSlug } = useTenant();
-  if (isAreaHidden("fleet-health", tenantSlug)) return false;
+  const fleetHealthHidden = useIsAreaHidden("fleet-health");
+  if (fleetHealthHidden) return false;
   return (
     (settings as unknown as { fleet_health_enabled?: boolean } | null)
       ?.fleet_health_enabled === true

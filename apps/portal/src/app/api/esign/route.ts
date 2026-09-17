@@ -19,6 +19,7 @@ import {
     type RentalTimeFacts,
 } from '@/lib/agreement-datetime';
 import { resolveBoldSignMode } from '@/lib/lean-areas';
+import { readTenantOnV2ById } from '@/lib/portal-tenant';
 
 // BoldSign configuration — resolved per-request based on tenant mode
 const BOLDSIGN_BASE_URL = process.env.BOLDSIGN_BASE_URL || 'https://api.boldsign.com';
@@ -1587,9 +1588,19 @@ export async function POST(request: NextRequest) {
         // This is the CREATE path, so the mode chosen here is what gets recorded
         // on the agreement/rental rows below — which is how the webhook later
         // downloads the signed PDF with the matching key.
+        //
+        // A tenant is lean by slug list OR by `tenants.portal_experience = 'v2'`,
+        // and the second is read in a query of its OWN rather than added to the
+        // tenant select above. That select names `boldsign_mode`: if
+        // `portal_experience` is not yet readable Postgres refuses the WHOLE row,
+        // the mode would come back undefined, and every tenant on `live` would
+        // silently start issuing agreements against the BoldSign sandbox — which
+        // watermarks them and deletes them after 14 days.
+        const onV2 = await readTenantOnV2ById(supabase, body.tenantId);
         const boldsignMode: 'test' | 'live' = resolveBoldSignMode(
             tenant?.boldsign_mode,
             (tenant as { slug?: string | null } | null)?.slug,
+            onV2,
         );
         outerMode = boldsignMode;
         outerRental = rental;

@@ -50,6 +50,7 @@
 import { useSyncExternalStore } from "react";
 import { useTenant } from "@/contexts/TenantContext";
 import { isLeanTenant } from "@/lib/lean-areas";
+import { usePortalOnV2 } from "@/lib/v2-context";
 import {
   readBillingScenario,
   subscribeDevOverrides,
@@ -163,14 +164,19 @@ export function applyBillingScenario<T extends Overridable>(
   real: T,
   scenario: BillingScenarioId,
   tenantSlug: string | null | undefined,
+  onV2: boolean = false,
 ): T {
   if (scenario === "off") return real;
-  if (!tenantSlug || !isLeanTenant(tenantSlug)) return real;
+  if (!tenantSlug || !isLeanTenant(tenantSlug, onV2)) return real;
   return { ...real, ...patchFor(scenario) };
 }
 
 export function useBillingScenarioOverride<T extends Overridable>(real: T): T {
   const { tenant } = useTenant();
+  /* GATE 2 now has two halves: the canary slug list and the tenant's own
+     `portal_experience` column, resolved once per request on the server. Read
+     here and passed down, so `applyBillingScenario` stays pure and testable. */
+  const onV2 = usePortalOnV2();
 
   /* Subscribed rather than read once: selecting a state in another tab, or in
      the /dev page itself, has to move this screen without a reload. The server
@@ -185,5 +191,5 @@ export function useBillingScenarioOverride<T extends Overridable>(real: T): T {
      a production build). GATES 2 and 3 are in `applyBillingScenario`, which is
      why a planted key on a live operator's browser cannot do anything even if
      the first somehow passed. */
-  return applyBillingScenario(real, scenario, tenant?.slug);
+  return applyBillingScenario(real, scenario, tenant?.slug, onV2);
 }

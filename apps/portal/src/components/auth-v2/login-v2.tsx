@@ -45,7 +45,7 @@ import { ThemeToggle } from "@/components/shared/layout/theme-toggle";
 import { brandInk, brandSurface } from "@/components/auth-v2/brand-surface";
 import { useTenantBranding } from "@/hooks/use-tenant-branding";
 import { useTenant } from "@/contexts/TenantContext";
-import { isAreaHidden } from "@/lib/lean-areas";
+import { useIsAreaHidden } from "@/lib/lean-context";
 import { useTheme } from "next-themes";
 
 import { PLATFORM_PRIVACY_URL, PLATFORM_TERMS_URL } from "@/lib/legal/urls";
@@ -177,6 +177,9 @@ function LoginV2Content() {
   const { user, signIn, loading, appUser } = useAuth();
   const { branding } = useTenantBranding();
   const { tenant, tenantSlug } = useTenant();
+  // Read here and CLOSED OVER by getRedirectPath() below, which is a plain
+  // function and not a position a hook can be called from.
+  const reportsHidden = useIsAreaHidden("reports");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [resetEmail, setResetEmail] = useState("");
@@ -298,7 +301,7 @@ function LoginV2Content() {
       // there, so landing on it would drop them somewhere they cannot navigate
       // back to. The route itself still answers for everyone — this follows the
       // gate, it does not add a second one.
-      return isAreaHidden("reports", tenantSlug) ? "/insights" : "/reports";
+      return reportsHidden ? "/insights" : "/reports";
     }
     return "/"; // Default fallback
   };
