@@ -176,21 +176,16 @@ export const readPortalOnV2 = cache(
  * The narrowest thing this needs from a Supabase client, so a route handler can
  * pass the service-role client it already built without dragging generated
  * table generics through here.
+ *
+ * `from` returns `any` DELIBERATELY. Spelling the builder chain out structurally
+ * made TypeScript compare it against the generated `Database` types and answer
+ * TS2589 ("type instantiation is excessively deep") at the call site in
+ * `app/api/esign/route.ts` — a real new error in a file that had none. This is
+ * the same reason `supabaseUntyped` exists.
  */
 type TenantByIdReader = {
-  from: (table: 'tenants') => {
-    select: (columns: string) => {
-      eq: (
-        column: 'id',
-        value: string
-      ) => {
-        maybeSingle: () => PromiseLike<{
-          data: { portal_experience?: string | null } | null;
-          error: { message?: string } | null;
-        }>;
-      };
-    };
-  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  from: (table: string) => any;
 };
 
 /**
@@ -224,11 +219,14 @@ export async function readTenantOnV2ById(
 ): Promise<boolean> {
   if (!tenantId) return false;
   try {
-    const { data, error } = await client
+    const { data, error } = (await client
       .from('tenants')
       .select(EXPERIENCE_COLUMN)
       .eq('id', tenantId)
-      .maybeSingle();
+      .maybeSingle()) as {
+      data: { portal_experience?: string | null } | null;
+      error: { message?: string } | null;
+    };
     if (error) return false;
     return isV2Experience(data?.portal_experience);
   } catch {
