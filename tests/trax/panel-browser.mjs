@@ -77,7 +77,7 @@ createRoot(document.getElementById('root')).render(
     b.onResolve({filter:/.*/},(args)=>{
       if(mocks.has(args.path))return {path:args.path,namespace:'fixture'};
       if(args.path==='react'||args.path==='react-dom'||args.path==='react-dom/client'||args.path.startsWith('react/'))return {path:resolve(root,'node_modules',args.path==='react'?'react/index.js':args.path==='react-dom'?'react-dom/index.js':args.path==='react-dom/client'?'react-dom/client.js':args.path+'.js')};
-      if(args.path.startsWith('@/'))return {path:resolve(root,'apps/portal/src',args.path.slice(2))+(args.path.endsWith('.json')?'':(args.path.includes('/components/')?'.tsx':'.ts'))};
+      if(args.path.startsWith('@/')){/* `@/x` as the portal resolves it: the file as named, or its .ts/.tsx/index. */const base=resolve(root,'apps/portal/src',args.path.slice(2));const found=[base+'.ts',base+'.tsx',resolve(base,'index.ts'),resolve(base,'index.tsx'),base].find(c=>existsSync(c)&&!c.endsWith(args.path.slice(2)+'/'));return {path:args.path.endsWith('.json')?base:found??base+(args.path.includes('/components/')?'.tsx':'.ts')};}
     });
     b.onLoad({filter:/.*/,namespace:'fixture'},()=>({contents:fixture,loader:'jsx',resolveDir:root}));
   }}],logLevel:'silent'});
@@ -170,6 +170,54 @@ try{
   assert.equal(await page.evaluate(()=>document.elementFromPoint(320,420)?.closest('[data-testid="page"]')!==null),true,'the page is not reachable beside the panel');
   await page.screenshot({path:resolve(screenshots,'floating-desktop.png'),fullPage:false,animations:'disabled'});
 
+  // 1b — hover, focus and pressed states use the sidebar's highlight, never white.
+  /* The sidebar's highlight, resolved from the theme's own --primary (what
+     `bg-primary/10` compiles to), so this checks the token, not a copied colour. */
+  const highlightOf=async(page)=>page.evaluate(()=>{const probe=document.createElement('div');probe.style.backgroundColor='hsl(var(--primary) / 0.1)';probe.style.color='hsl(var(--primary))';document.body.append(probe);const cs=getComputedStyle(probe);const out={bg:cs.backgroundColor,fg:cs.color};probe.remove();return out;});
+  const paintOf=(locator)=>locator.evaluate((el)=>{const cs=getComputedStyle(el);const svg=el.querySelector('svg');return {bg:cs.backgroundColor,fg:cs.color,icon:svg?getComputedStyle(svg).color:null};});
+  const isWhite=(bg)=>/^rgba?\(255, 255, 255(, 1)?\)$/.test(bg)||/^rgb\(24[0-9], 24[0-9], 24[0-9]\)$/.test(bg)||/^rgb\(25[0-5], 25[0-5], 25[0-5]\)$/.test(bg);
+  const hoverPaint=async(page,locator)=>{await locator.hover();await page.waitForTimeout(220);const p=await paintOf(locator);await page.mouse.move(2,2);await page.waitForTimeout(120);return p;};
+  const highlight=await highlightOf(page);
+  const panelEl=page.locator('[data-slot="trax-panel"]');
+  for(const name of ['Conversation history','Open Support','Expand panel','Close Trax']){
+    const button=panelEl.getByRole('button',{name,exact:true});
+    const painted=await hoverPaint(page,button);
+    assert.equal(painted.bg,highlight.bg,`${name} hovers ${painted.bg}, not the sidebar highlight`);
+    assert.equal(painted.fg,highlight.fg,`${name}'s hover text is not the highlight colour`);
+    assert.equal(painted.icon,highlight.fg,`${name}'s hover icon is not the highlight colour`);
+    assert.equal(isWhite(painted.bg),false,`${name} hovers white`);
+  }
+  await panelEl.getByRole('button',{name:'Conversation history',exact:true}).hover();
+  await page.screenshot({path:resolve(screenshots,'header-hover.png'),clip:await panelEl.boundingBox().then(b=>({x:b.x,y:b.y,width:b.width,height:140})),animations:'disabled'});
+  await page.mouse.move(2,2);
+  // Keyboard focus reads the same.
+  await panelEl.getByRole('button',{name:'Open Support',exact:true}).focus();
+  await page.keyboard.press('Tab');
+  await page.waitForTimeout(250); // the button's own colour transition
+  const focused=await page.evaluate(()=>({label:document.activeElement?.getAttribute('aria-label'),visible:document.activeElement?.matches(':focus-visible'),bg:getComputedStyle(document.activeElement).backgroundColor}));
+  assert.equal(focused.label,'Expand panel',`Tab moved focus to ${focused.label}`);
+  assert.equal(focused.visible,true,'keyboard focus is not :focus-visible');
+  assert.equal(focused.bg,highlight.bg,'keyboard focus is not the highlight');
+  await page.mouse.move(2,2);
+  // Pressed: History open keeps its button highlighted, and the history rows hover the same way.
+  await panelEl.getByRole('button',{name:'Conversation history',exact:true}).click();
+  await panelEl.getByLabel('Previous TRAX conversations').waitFor();
+  await page.mouse.move(2,2);await page.waitForTimeout(300);
+  const pressed=await paintOf(panelEl.getByRole('button',{name:'Conversation history',exact:true}));
+  assert.equal(pressed.bg,highlight.bg,'History open is not shown with the highlight');
+  const back=panelEl.getByRole('button',{name:'Back to conversation',exact:true});
+  assert.equal((await hoverPaint(page,back)).bg,highlight.bg,'Back to conversation hovers off-system');
+  const historyRow=panelEl.getByLabel('Previous TRAX conversations').getByRole('button').first();
+  if(await historyRow.count())assert.equal((await hoverPaint(page,historyRow)).bg,highlight.bg,'a history row hovers off-system');
+  await back.click();
+  await page.getByRole('textbox',{name:'Ask TRAX'}).waitFor();
+  // Suggestions and the composer's "+".
+  const chip=panelEl.getByRole('button',{name:'Vehicles out now'});
+  assert.ok(await chip.count(),'the suggestion to check is not in the panel');
+  if(await chip.count()){const c=await hoverPaint(page,chip);assert.equal(c.bg,highlight.bg,'a suggestion hovers off-system');}
+  const attach=panelEl.getByRole('button',{name:/^Attach files$/});
+  if(await attach.count()&&!(await attach.getAttribute('aria-disabled')))assert.equal((await hoverPaint(page,attach)).bg,highlight.bg,'the composer + hovers off-system');
+
   // 2 — a conversation, so what follows can prove it survives.
   await page.getByRole('textbox',{name:'Ask TRAX'}).fill('How do I record returned keys?');
   await page.getByRole('textbox',{name:'Ask TRAX'}).press('Enter');
@@ -218,7 +266,7 @@ try{
   await page.screenshot({path:resolve(screenshots,'floating-mobile.png'),fullPage:false,animations:'disabled'});
 
   assert.deepEqual(errors,[],'page errors: '+errors.join(' || '));
-  console.log(JSON.stringify({status:'passed',mode:'floating-panel-layout',checks:['no-flow-gap','portalled-overlay-layer','page-width-unchanged','no-horizontal-overflow','no-scroll-jump','no-backdrop-or-scroll-lock','page-usable-beside-panel','readable-corner-size','expand-and-restore','conversation-and-draft-kept','phone-overlay','no-page-errors'],screenshots}));
+  console.log(JSON.stringify({status:'passed',mode:'floating-panel-layout',checks:['no-flow-gap','portalled-overlay-layer','page-width-unchanged','no-horizontal-overflow','no-scroll-jump','no-backdrop-or-scroll-lock','header-hover-focus-pressed-use-sidebar-highlight','history-and-suggestions-use-sidebar-highlight','page-usable-beside-panel','readable-corner-size','expand-and-restore','conversation-and-draft-kept','phone-overlay','no-page-errors'],screenshots}));
   }
 }finally{
   await browser?.close();

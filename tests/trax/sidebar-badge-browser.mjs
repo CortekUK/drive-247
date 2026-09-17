@@ -115,6 +115,23 @@ try {
   assert.equal(Math.round(s.x), Math.round(f.x));
   assert.ok(Math.abs(s.y - (f.y + f.height)) < 8, 'Support does not follow Fines');
 
+  // Hover and selected use the sidebar's own highlight (the Fines treatment), never white.
+  const paint = (locator) => locator.evaluate((el) => { const cs = getComputedStyle(el); return { bg: cs.backgroundColor, fg: cs.color, icon: getComputedStyle(el.querySelector('svg')).color, radius: cs.borderRadius }; });
+  const dashboard = rail.locator('a[href="/"]').first();
+  const selected = await paint(dashboard);
+  await page.mouse.move(5, 790);
+  await fines.hover(); await page.waitForTimeout(250);
+  const finesHover = await paint(fines);
+  await support.hover(); await page.waitForTimeout(250);
+  const supportHover = await paint(support);
+  await page.screenshot({ path: resolve(out, 'sidebar-support-hover.png'), clip: { x: 0, y: 380, width: 300, height: 220 } });
+  assert.deepEqual(supportHover, finesHover, 'Support does not hover like Fines');
+  assert.equal(supportHover.bg, selected.bg, 'Support\u2019s hover is not the selected item\u2019s tint');
+  assert.equal(supportHover.fg, selected.fg);
+  assert.equal(supportHover.icon, selected.icon);
+  assert.notEqual(supportHover.bg, 'rgb(255, 255, 255)', 'Support hovers white');
+  await page.mouse.move(5, 790); await page.waitForTimeout(250);
+
   const label = support.locator('span').first();
   const badge = support.locator('span[aria-hidden="true"]');
   await badge.waitFor();
@@ -163,7 +180,7 @@ try {
   assert.equal(await page.evaluate(() => window.lastNavigation), '/support');
 
   assert.deepEqual(errors, [], 'page errors: ' + errors.join(' || '));
-  console.log(JSON.stringify({ status: 'passed', mode: 'support-sidebar-badge', checks: ['directly-below-fines', 'same-row-height-and-inset', 'badge-right-aligned-and-centred', 'accessible-name-with-count', 'label-fixed-as-count-changes', 'singular-message', 'hidden-at-zero', 'dark-mode', 'collapsed-corner-badge', 'opens-support-route', 'no-page-errors'], screenshots: out }));
+  console.log(JSON.stringify({ status: 'passed', mode: 'support-sidebar-badge', checks: ['directly-below-fines', 'same-row-height-and-inset', 'badge-right-aligned-and-centred', 'accessible-name-with-count', 'label-fixed-as-count-changes', 'singular-message', 'hidden-at-zero', 'dark-mode', 'collapsed-corner-badge', 'opens-support-route', 'support-hover-matches-fines-and-selected', 'no-page-errors'], screenshots: out }));
 } finally {
   await browser?.close();
   server.close();

@@ -5,6 +5,8 @@ import { createPortal } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
 import { History, LifeBuoy, Maximize2, Minimize2, SquarePen, X } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
+import { SIDEBAR_HIGHLIGHT_ACTIVE, SIDEBAR_HIGHLIGHT_FOCUS, SIDEBAR_HIGHLIGHT_HOVER } from "@/components/ui-v2/sidebar";
+import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui-v2/tooltip";
 import { TraxSupportThread } from "./support/TraxSupportThread";
 import { useTraxSupportOptional } from "./support/trax-support-context";
@@ -103,10 +105,14 @@ function PanelAction({
           aria-pressed={active}
           disabled={disabled}
           onClick={onClick}
-          className={
-            "text-muted-foreground hover:text-foreground " +
-            (active ? "bg-muted text-foreground" : "")
-          }
+          /* The sidebar's highlight on hover, keyboard focus and while pressed
+             (history open, panel expanded) — never the ghost button's white. */
+          className={cn(
+            "text-muted-foreground",
+            SIDEBAR_HIGHLIGHT_HOVER,
+            SIDEBAR_HIGHLIGHT_FOCUS,
+            active && SIDEBAR_HIGHLIGHT_ACTIVE,
+          )}
         >
           {icon}
         </Button>

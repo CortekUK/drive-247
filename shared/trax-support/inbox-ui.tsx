@@ -89,7 +89,7 @@ export function TicketRow({ ticket, selected, disabled, onSelect, subtitle }: {
   const unread = count !== null ? count > 0 : !!ticket.unread;
   return (
     <button type="button" disabled={disabled} onClick={onSelect} aria-current={selected ? 'true' : undefined}
-      className={`flex w-full flex-col gap-1 rounded-lg px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 ${selected ? 'bg-primary/10' : 'hover:bg-muted/60'}`}>
+      className={`flex w-full flex-col gap-1 rounded-lg px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:bg-primary/10 disabled:opacity-60 ${selected ? 'bg-primary/10' : 'hover:bg-primary/10'}`}>
       <span className="flex items-start gap-2">
         <span className={`line-clamp-2 min-w-0 flex-1 text-[13px] leading-snug ${unread ? 'font-semibold' : 'font-medium'}`}>
           {ticket.summary}
@@ -253,6 +253,9 @@ export function Composer({ inbox, placeholder, label, children }: { inbox: Suppo
   );
 }
 
+/* Hover, focus and selection in the Support lists use the portal sidebar's highlight
+   (ui-v2/sidebar.tsx SIDEBAR_HIGHLIGHT_*): bg-primary/10 with primary text. */
+
 /**
  * The ticket list — search, a status filter and the rows — wherever the app puts
  * it: the Support rail in the sidebar's slot on a desktop, or the page itself on a
@@ -288,7 +291,7 @@ export function TicketList({ inbox, admin = false, onChosen, className = '' }: {
           </ul>
         )}
         {next !== null && (
-          <button type="button" className="mt-1 w-full rounded-lg px-3 py-2 text-[12px] text-muted-foreground hover:bg-muted" onClick={inbox.loadMore}>Load more</button>
+          <button type="button" className="mt-1 w-full rounded-lg px-3 py-2 text-[12px] text-muted-foreground hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:bg-primary/10 focus-visible:text-primary" onClick={inbox.loadMore}>Load more</button>
         )}
       </div>
     </section>

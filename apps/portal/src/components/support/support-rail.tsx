@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { ArrowLeft, List, Plus } from "lucide-react";
 import {
+  SIDEBAR_HIGHLIGHT_FOCUS,
+  SIDEBAR_HIGHLIGHT_HOVER,
   Sidebar,
   SidebarContent,
   SidebarFooter,
@@ -13,6 +15,7 @@ import {
   useSidebar,
 } from "@/components/ui-v2/sidebar";
 import { Button } from "@/components/ui-v2/button";
+import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui-v2/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui-v2/tooltip";
 import { UserMenuV2 } from "@/components/shared/layout/user-menu-v2";
@@ -81,7 +84,7 @@ export function SupportRail() {
           <Link
             href="/"
             onClick={closeMobile}
-            className="flex h-8 items-center gap-2 rounded-md px-1 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+            className={cn("flex h-8 items-center gap-2 rounded-md px-1 text-muted-foreground transition-colors", SIDEBAR_HIGHLIGHT_HOVER, SIDEBAR_HIGHLIGHT_FOCUS)}
           >
             <ArrowLeft className="h-4 w-4 shrink-0" />
             <span className="text-[13px]">Back to portal</span>
@@ -132,7 +135,7 @@ export function SupportRail() {
 
 /** An icon-only rail action, named by its tooltip and its aria-label. */
 function IconAction({ label, href, onClick, disabled, children }: { label: string; href?: string; onClick?: () => void; disabled?: boolean; children: React.ReactNode }) {
-  const className = "flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground disabled:opacity-50";
+  const className = cn("flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors disabled:opacity-50", SIDEBAR_HIGHLIGHT_HOVER, SIDEBAR_HIGHLIGHT_FOCUS);
   return (
     <Tooltip>
       <TooltipTrigger asChild>

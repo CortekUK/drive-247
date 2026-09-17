@@ -12,6 +12,7 @@ import {
 } from "react";
 import { AlertCircle, ArrowUp, Loader2, Plus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { SIDEBAR_HIGHLIGHT_FOCUS, SIDEBAR_HIGHLIGHT_HOVER } from "@/components/ui-v2/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui-v2/tooltip";
 import type { ChatAttachment, TraxAttachmentCapability } from "@/types/chat";
 import { ATTACH_EXTENSIONS, AttachmentChip, prepareAttachments } from "./trax-attachments";
@@ -289,7 +290,7 @@ export function TraxComposer({
                   className={cn(
                     "flex size-8 items-center justify-center rounded-full text-muted-foreground transition-colors",
                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                    canAttach ? "hover:bg-muted hover:text-foreground" : "cursor-not-allowed opacity-50",
+                    canAttach ? cn(SIDEBAR_HIGHLIGHT_HOVER, SIDEBAR_HIGHLIGHT_FOCUS) : "cursor-not-allowed opacity-50",
                   )}
                 >
                   <Plus className="size-[18px]" aria-hidden />

@@ -469,12 +469,25 @@ function SidebarMenuItem({ className, ...props }: React.ComponentProps<"li">) {
   )
 }
 
+/**
+ * The sidebar's highlight — a soft primary tint with primary text and icon, on
+ * hover and when selected (the treatment of an item like Fines). Exported so the
+ * controls that belong to the same navigation — TRAX's header and history, the
+ * Support rail — use this one treatment rather than a white or grey hover.
+ * `dark:hover:` restates the tint so a ghost Button's own dark hover cannot win.
+ */
+export const SIDEBAR_HIGHLIGHT_HOVER =
+  "hover:bg-primary/10 hover:text-primary [&:hover_svg]:text-primary dark:hover:bg-primary/10"
+export const SIDEBAR_HIGHLIGHT_FOCUS =
+  "focus-visible:bg-primary/10 focus-visible:text-primary [&:focus-visible_svg]:text-primary"
+export const SIDEBAR_HIGHLIGHT_ACTIVE = "bg-primary/10 text-primary [&_svg]:text-primary"
+
 const sidebarMenuButtonVariants = cva(
   "peer/menu-button group/menu-button flex w-full cursor-pointer items-center gap-2 overflow-hidden rounded-lg px-3 py-2 text-left text-sm text-sidebar-foreground/70 ring-sidebar-ring outline-none transition-colors group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 group-data-[collapsible=icon]:!size-8 group-data-[collapsible=icon]:!p-2 hover:text-sidebar-foreground focus-visible:ring-2 active:text-sidebar-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[state=open]:hover:text-sidebar-foreground data-[active=true]:bg-primary/10 data-[active=true]:font-medium data-[active=true]:text-primary [&[data-active=true]_svg]:text-primary [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-sidebar-foreground/60 [&>span:last-child]:truncate",
   {
     variants: {
       variant: {
-        default: "hover:bg-primary/10 hover:text-primary [&:hover_svg]:text-primary",
+        default: SIDEBAR_HIGHLIGHT_HOVER,
         outline:
           "bg-background shadow-[0_0_0_1px_hsl(var(--sidebar-border))] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:shadow-[0_0_0_1px_hsl(var(--sidebar-accent))]",
       },

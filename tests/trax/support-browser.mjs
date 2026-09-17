@@ -250,6 +250,21 @@ try{
   assert.ok(page1.doc<=page1.view+1,`the page scrolls (${page1.doc} > ${page1.view})`);
   assert.equal(page1.overflowX,false,'horizontal overflow');
   await page.screenshot({path:resolve(screenshots,'workspace-empty.png'),animations:'disabled'});
+  // Hover in the Support rail is the sidebar highlight — Back to portal and every ticket row.
+  /* The sidebar's highlight, resolved from the theme's own --primary (what
+     `bg-primary/10` compiles to), so this checks the token, not a copied colour. */
+  const highlightOf=async(page)=>page.evaluate(()=>{const probe=document.createElement('div');probe.style.backgroundColor='hsl(var(--primary) / 0.1)';probe.style.color='hsl(var(--primary))';document.body.append(probe);const cs=getComputedStyle(probe);const out={bg:cs.backgroundColor,fg:cs.color};probe.remove();return out;});
+  const paintOf=(locator)=>locator.evaluate((el)=>{const cs=getComputedStyle(el);const svg=el.querySelector('svg');return {bg:cs.backgroundColor,fg:cs.color,icon:svg?getComputedStyle(svg).color:null};});
+  const isWhite=(bg)=>/^rgba?\(255, 255, 255(, 1)?\)$/.test(bg)||/^rgb\(24[0-9], 24[0-9], 24[0-9]\)$/.test(bg)||/^rgb\(25[0-5], 25[0-5], 25[0-5]\)$/.test(bg);
+  const hoverPaint=async(page,locator)=>{await locator.hover();await page.waitForTimeout(220);const p=await paintOf(locator);await page.mouse.move(2,2);await page.waitForTimeout(120);return p;};
+  const highlight=await highlightOf(page);
+  const backLink=page.getByRole('link',{name:'Back to portal'});
+  const backPaint=await hoverPaint(page,backLink);
+  assert.equal(backPaint.bg,highlight.bg,`Back to portal hovers ${backPaint.bg}`);
+  assert.equal(backPaint.fg,highlight.fg);
+  const rowPaint=await hoverPaint(page,rows.nth(2).getByRole('button'));
+  assert.equal(rowPaint.bg,highlight.bg,`a ticket row hovers ${rowPaint.bg}`);
+  assert.equal(isWhite(rowPaint.bg),false,'a ticket row hovers white');
 
   // 2 — the TRAX-escalated ticket: centre is people, right is Details | TRAX Summary.
   await rows.first().getByRole('button').click();
@@ -442,7 +457,7 @@ try{
   await page.screenshot({path:resolve(screenshots,'workspace-mobile-list.png'),animations:'disabled'});
 
   assert.deepEqual(errors,[],'page errors: '+errors.join(' || '));
-  console.log(JSON.stringify({status:'passed',mode:'support-three-column-workspace',checks:['ticket-list-in-sidebar-slot','back-to-portal-and-tenant-identity','no-row-markers','row-preview','no-outer-page-scroll','centre-between-rail-and-details','trax-message-is-an-event-not-a-bubble','trax-mention-stays-a-message','no-context-strip-or-issue-details-button','details-tab-fields-and-record-link','tenant-status-read-only','trax-summary-and-labelled-conversation','no-score-no-composer','switch-clears-stale-content','row-unread-badges-per-ticket','list-load-reads-nothing','reading-one-ticket-keeps-others','nothing-read-under-the-drawer','no-trax-conversation-empty-state','content-sized-bubbles','composer-and-panel-fixed-while-scrolling','no-jump-while-reading','failed-send-keeps-draft','attachment-sent-and-shown','unsupported-file-refused','filters-and-empty-result','new-ticket-from-rail','collapsed-rail-returns-list-to-page','details-drawer-below-xl','phone-list-conversation-and-drawer','no-page-errors'],screenshots}));
+  console.log(JSON.stringify({status:'passed',mode:'support-three-column-workspace',checks:['ticket-list-in-sidebar-slot','back-to-portal-and-tenant-identity','no-row-markers','row-preview','rail-hover-uses-sidebar-highlight','no-outer-page-scroll','centre-between-rail-and-details','trax-message-is-an-event-not-a-bubble','trax-mention-stays-a-message','no-context-strip-or-issue-details-button','details-tab-fields-and-record-link','tenant-status-read-only','trax-summary-and-labelled-conversation','no-score-no-composer','switch-clears-stale-content','row-unread-badges-per-ticket','list-load-reads-nothing','reading-one-ticket-keeps-others','nothing-read-under-the-drawer','no-trax-conversation-empty-state','content-sized-bubbles','composer-and-panel-fixed-while-scrolling','no-jump-while-reading','failed-send-keeps-draft','attachment-sent-and-shown','unsupported-file-refused','filters-and-empty-result','new-ticket-from-rail','collapsed-rail-returns-list-to-page','details-drawer-below-xl','phone-list-conversation-and-drawer','no-page-errors'],screenshots}));
   }
 }finally{
   await browser?.close();

@@ -18,6 +18,7 @@ import { Skeleton } from "@/components/ui-v2/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui-v2/tooltip";
 import { useTraxSupportChat } from "./support/trax-support-context";
 import { cn } from "@/lib/utils";
+import { SIDEBAR_HIGHLIGHT_FOCUS, SIDEBAR_HIGHLIGHT_HOVER } from "@/components/ui-v2/sidebar";
 import { TraxMark } from "./trax-greeting";
 import { useTrax } from "./trax-provider";
 
@@ -148,7 +149,7 @@ export function TraxRail() {
                   type="button"
                   onClick={onBack}
                   aria-label="Back"
-                  className="flex h-8 w-full items-center justify-center rounded-md transition-colors hover:bg-muted/50"
+                  className={cn("flex h-8 w-full items-center justify-center rounded-md transition-colors", SIDEBAR_HIGHLIGHT_HOVER, SIDEBAR_HIGHLIGHT_FOCUS)}
                 >
                   <ArrowLeft className="h-4 w-4 shrink-0" />
                 </button>
@@ -159,7 +160,7 @@ export function TraxRail() {
             <button
               type="button"
               onClick={onBack}
-              className="flex h-8 items-center gap-2 rounded-md px-1 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+              className={cn("flex h-8 items-center gap-2 rounded-md px-1 text-muted-foreground transition-colors", SIDEBAR_HIGHLIGHT_HOVER, SIDEBAR_HIGHLIGHT_FOCUS)}
             >
               <ArrowLeft className="h-4 w-4 shrink-0" />
               <span className="text-[13px]">Back</span>

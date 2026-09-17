@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { CalendarClock, CreditCard, HelpCircle, KeyRound, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { SIDEBAR_HIGHLIGHT_FOCUS, SIDEBAR_HIGHLIGHT_HOVER } from "@/components/ui-v2/sidebar";
 import { TraxComposer } from "@/components/trax/trax-composer";
 import { TraxGreeting } from "@/components/trax/trax-greeting";
 import { ChatMessage } from "./ChatMessage";
@@ -144,10 +145,12 @@ export function TraxSupportThread({ density = "page", autoFocus = false, onOpenS
                     onClick={() => send(prompt)}
                     className={cn(
                       "items-center text-muted-foreground transition-colors",
-                      "hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50",
                       page
-                        ? "inline-flex gap-1.5 rounded-full bg-card/50 px-3 py-1.5 text-[12px] backdrop-blur hover:bg-card"
-                        : "flex w-full gap-2.5 rounded-xl border border-border/40 bg-card/40 px-3 py-2.5 text-left text-[13px] hover:bg-card/80",
+                        ? "inline-flex gap-1.5 rounded-full bg-card/50 px-3 py-1.5 text-[12px] backdrop-blur"
+                        : "flex w-full gap-2.5 rounded-xl border border-border/40 bg-card/40 px-3 py-2.5 text-left text-[13px]",
+                      SIDEBAR_HIGHLIGHT_HOVER,
+                      SIDEBAR_HIGHLIGHT_FOCUS,
                     )}
                   >
                     <Icon className="size-3.5 shrink-0 text-primary dark:text-[hsl(var(--chart-2))]" aria-hidden />

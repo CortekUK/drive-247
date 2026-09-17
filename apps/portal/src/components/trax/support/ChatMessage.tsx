@@ -7,6 +7,7 @@ import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { cn } from '@/lib/utils';
+import { SIDEBAR_HIGHLIGHT_FOCUS, SIDEBAR_HIGHLIGHT_HOVER } from '@/components/ui-v2/sidebar';
 import { ChatChart } from '@/components/chat/ChatChart';
 import { ChatRentalCards } from '@/components/chat/ChatRentalCards';
 import { ChatActionCard, ActionResultBadge } from '@/components/chat/ChatActionCard';
@@ -166,7 +167,7 @@ export function ChatMessage({ message, onConfirmAction, onRejectAction, onNaviga
                 'absolute -right-2 -top-2 p-1.5 rounded-lg',
                 'bg-background border border-border/50 shadow-sm',
                 'opacity-0 group-hover:opacity-100 transition-all duration-200',
-                'hover:bg-secondary hover:scale-110'
+                'hover:scale-110', SIDEBAR_HIGHLIGHT_HOVER, SIDEBAR_HIGHLIGHT_FOCUS
               )}
             >
               {copied ? (
@@ -201,7 +202,7 @@ export function ChatMessage({ message, onConfirmAction, onRejectAction, onNaviga
           <button
             type="button"
             onClick={() => onOpenSupport({ ticketId: message.ticket!.id })}
-            className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium hover:bg-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+            className={cn("inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2", SIDEBAR_HIGHLIGHT_HOVER, SIDEBAR_HIGHLIGHT_FOCUS)}
           >
             <LifeBuoy className="h-3.5 w-3.5 text-primary" aria-hidden />
             Open support ticket
@@ -213,13 +214,13 @@ export function ChatMessage({ message, onConfirmAction, onRejectAction, onNaviga
             type="button"
             disabled={isLoading}
             onClick={onRetryTicket}
-            className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium hover:bg-secondary focus-visible:outline focus-visible:outline-2 disabled:opacity-50"
+            className={cn("inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium focus-visible:outline focus-visible:outline-2 disabled:opacity-50", SIDEBAR_HIGHLIGHT_HOVER, SIDEBAR_HIGHLIGHT_FOCUS)}
           >
             <RotateCcw className="h-3.5 w-3.5" aria-hidden />
             Try creating the ticket again
           </button>
         )}
-        {!isUser && message.canRecheck && onCheckAgain && <button type="button" disabled={isLoading} onClick={()=>void onCheckAgain()} className="rounded-lg border border-border px-3 py-2 text-xs font-medium hover:bg-secondary focus-visible:outline focus-visible:outline-2 disabled:opacity-50">Check Again</button>}
+        {!isUser && message.canRecheck && onCheckAgain && <button type="button" disabled={isLoading} onClick={()=>void onCheckAgain()} className={cn("rounded-lg border border-border px-3 py-2 text-xs font-medium focus-visible:outline focus-visible:outline-2 disabled:opacity-50", SIDEBAR_HIGHLIGHT_HOVER, SIDEBAR_HIGHLIGHT_FOCUS)}>Check Again</button>}
         {!isUser && onVerifyNavigation && !!message.navigation?.length && (
           <div className="flex flex-wrap gap-2">
             {message.navigation.map((action) => (
@@ -227,7 +228,7 @@ export function ChatMessage({ message, onConfirmAction, onRejectAction, onNaviga
                 key={`${action.target}:${action.entityId || ''}`}
                 type="button"
                 disabled={isLoading}
-                className="rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium hover:bg-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-50"
+                className={cn("rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-50", SIDEBAR_HIGHLIGHT_HOVER, SIDEBAR_HIGHLIGHT_FOCUS)}
                 onClick={async () => { if (await onVerifyNavigation(action)) onNavigate?.(); }}
               >
                 {action.label}

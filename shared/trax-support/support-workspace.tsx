@@ -89,7 +89,7 @@ export function SupportWorkspace({ inbox, viewer, listInRail = false, listHeader
                   </p>
                 </div>
                 <button type="button" onClick={() => showInfo(tab)} aria-haspopup="dialog" aria-expanded={drawer}
-                  className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2 text-[12px] text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring xl:hidden">
+                  className={`flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2 text-[12px] text-muted-foreground hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring xl:hidden ${drawer ? 'bg-primary/10 text-primary' : ''}`}>
                   <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="size-3.5"><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" strokeLinecap="round" /></svg>
                   Details
                 </button>
@@ -153,7 +153,7 @@ export function SupportWorkspace({ inbox, viewer, listInRail = false, listHeader
 function BackButton({ onClick }: { onClick: () => void }) {
   return (
     <button type="button" aria-label="Back to tickets" onClick={onClick}
-      className="-ml-1 flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:hidden">
+      className="-ml-1 flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:hidden">
       <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="size-4"><path d="M19 12H5M11 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" /></svg>
     </button>
   );
