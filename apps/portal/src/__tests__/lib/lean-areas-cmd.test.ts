@@ -115,8 +115,8 @@ const read = (p: string) => readFileSync(join(SRC, p), "utf8");
 describe("CMD gate call sites", () => {
   it("gates the customer-detail CMD tab and dialog", () => {
     const src = read("app/(dashboard)/customers/[id]/page.tsx");
-    expect(src).toMatch(/import \{ isAreaHidden \} from "@\/lib\/lean-areas";/);
-    expect(src).toMatch(/const cmdHidden = isAreaHidden\("cmd", tenantSlug\);/);
+    expect(src).toMatch(/import \{ useIsAreaHidden \} from "@\/lib\/lean-context";/);
+    expect(src).toMatch(/const cmdHidden = useIsAreaHidden\("cmd"\);/);
     // hasCmd drives the entire CMD tab block; the dialog is gated separately.
     expect(src).toMatch(/const hasCmd = !!cmdVerification && !cmdHidden;/);
     expect(src).toMatch(/\{customer && !cmdHidden && \(/);
@@ -125,7 +125,7 @@ describe("CMD gate call sites", () => {
   it("gates the CMD queries at the hook, not just the markup", () => {
     // Gating only the markup would still issue the reads for the canary.
     const src = read("hooks/use-cmd-verification.ts");
-    expect(src).toMatch(/const cmdHidden = isAreaHidden\("cmd", tenantSlug\);/);
+    expect(src).toMatch(/const cmdHidden = useIsAreaHidden\("cmd"\);/);
     expect(src).toMatch(/enabled: !!customerId && !!tenant\?\.id && !cmdHidden,/);
     expect(src).toMatch(/enabled: !!applicantVerificationId && !cmdHidden,/);
   });
@@ -157,7 +157,7 @@ describe("CMD gate call sites", () => {
 
   it("drops the two CMD checklist rows from the canary dashboard", () => {
     const src = read("hooks/use-platform-status.ts");
-    expect(src).toMatch(/const cmdHidden = isAreaHidden\("cmd", tenantSlug\);/);
+    expect(src).toMatch(/const cmdHidden = useIsAreaHidden\("cmd"\);/);
     expect(src).toMatch(/\.\.\.\(cmdHidden\s*\n\s*\? \[\]/);
     // Both rows must stay in the file for every other tenant.
     expect(src).toMatch(/id: "cmd-driver-verification"/);
