@@ -174,7 +174,7 @@ export default async function RootLayout({
   let brandStyle: CSSProperties | undefined;
   if (v2Flags.theme && tenantSlug) {
     try {
-      const tenant = await readPortalTenant(tenantSlug, true);
+      const tenant = await readPortalTenant(tenantSlug);
       const vars = v2BrandVars(tenant?.light_primary_color || tenant?.primary_color);
       brandStyle = vars ? (vars as CSSProperties) : undefined;
     } catch {
@@ -200,7 +200,12 @@ export default async function RootLayout({
         )}
       </head>
       <body suppressHydrationWarning className={themeClass} style={brandStyle}>
-        <V2Provider flags={v2Flags}>
+        {/* `experience` carries the tenant-level half of the same answer:
+            `onV2` is the row's portal_experience, `lean` is that OR'd with the
+            LEAN_TENANTS slug list. The lean-area hooks in lib/lean-context read
+            it, so a self-serve tenant's hidden areas resolve on the server with
+            the rest of the gates and nothing re-queries per component. */}
+        <V2Provider flags={v2Flags} experience={{ onV2, lean }}>
           <Providers>{children}</Providers>
         </V2Provider>
       </body>

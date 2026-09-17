@@ -51,7 +51,7 @@ import { useVoidPaymentLink } from "@/hooks/use-void-payment-link";
 import { useOrgSettings } from "@/hooks/use-org-settings";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
-import { isLeanTenant } from "@/lib/lean-areas";
+import { useIsLean } from "@/lib/lean-context";
 import { PaymentsTeachingEmptyState } from "@/components/empty-states/lean-empty-states";
 import { useForcedEmptyState } from "@/hooks/use-forced-empty-state";
 import { formatCurrency } from "@/lib/format-utils";
@@ -447,7 +447,7 @@ const PaymentsList = () => {
   // query at all, so the shared page costs them nothing. `head: true` fetches
   // no rows, and `.eq('tenant_id')` is applied before anything else because RLS
   // is off on `payments` (V2_PLAN §5).
-  const teachEligible = isLeanTenant(tenantSlug);
+  const teachEligible = useIsLean();
   const { data: lifetimePayments } = useQuery({
     queryKey: ["payments-lifetime-count", tenant?.id],
     queryFn: async () => {

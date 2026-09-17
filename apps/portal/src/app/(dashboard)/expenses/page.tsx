@@ -15,7 +15,7 @@ import {
 import { Plus, Tag } from "lucide-react";
 import { notFound } from "next/navigation";
 import { useTenant } from "@/contexts/TenantContext";
-import { isAreaHidden } from "@/lib/lean-areas";
+import { useIsAreaHidden } from "@/lib/lean-context";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format-utils";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
@@ -49,7 +49,8 @@ export default function ExpensesPage() {
   // PRESENTATION ONLY. The `vehicle_expense_pnl_trigger` trigger on
   // `vehicle_expenses` is what feeds `pnl_entries`, and it runs in the
   // database. Nothing here can reach it.
-  if (isAreaHidden("expenses", tenantSlug)) notFound();
+  const expensesHidden = useIsAreaHidden("expenses");
+  if (expensesHidden) notFound();
   const currencyCode = tenant?.currency_code || "USD";
   const { canEdit } = useManagerPermissions();
   const editable = canEdit("expenses");

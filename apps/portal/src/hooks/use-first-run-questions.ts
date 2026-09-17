@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
-import { isLeanTenant } from '@/lib/lean-areas';
+import { useIsLean } from '@/lib/lean-context';
 import {
   FIRST_RUN_QUESTIONS,
   type FirstRunOption,
@@ -130,7 +130,7 @@ export function useFirstRunQuestions(): FirstRunQuestionsState {
    * Fails CLOSED — an unresolved tenant reads nothing and takes the compiled
    * list, which is the same set the table is seeded with.
    */
-  const isCanary = isLeanTenant(tenant?.slug);
+  const isCanary = useIsLean();
 
   const { data, isLoading } = useQuery({
     // No tenant in the key: the set is platform-wide, so one cache entry serves

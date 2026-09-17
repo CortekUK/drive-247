@@ -71,7 +71,7 @@ import { toast } from "@/hooks/use-toast";
 import { extractFunctionError } from "@/lib/edge-error";
 import { isBonzahSellable } from "@/lib/bonzah";
 import { BONZAH_LINKS } from "@/lib/bonzah-compliance";
-import { isTestModeUiHidden } from "@/lib/lean-areas";
+import { useIsTestModeUiHidden } from "@/lib/lean-context";
 import { getBonzahPortalUrl } from "@/hooks/use-bonzah-balance";
 import { useBonzahAlertConfig } from "@/hooks/use-bonzah-alert-config";
 import { useBonzahRetryAll } from "@/hooks/use-bonzah-retry-all";
@@ -376,7 +376,7 @@ export default function BonzahPanel({ tenant, onClose }: IntegrationPanelProps) 
   const router = useRouter();
   const queryClient = useQueryClient();
   const { refetchTenant } = useTenant();
-  const leanUi = isTestModeUiHidden(tenant.slug);
+  const leanUi = useIsTestModeUiHidden();
 
   const rowQuery = useBonzahTenantRow(tenant.id);
   const row = rowQuery.data;

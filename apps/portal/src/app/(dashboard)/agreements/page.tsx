@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/dialog";
 import { GenerateAgreementDialog } from "@/components/agreements/generate-agreement-dialog";
 import { useRouter } from "next/navigation";
-import { isLeanTenant } from "@/lib/lean-areas";
+import { useIsLean } from "@/lib/lean-context";
 import { AgreementsTeachingEmptyState } from "@/components/empty-states/lean-empty-states";
 import { useForcedEmptyState } from "@/hooks/use-forced-empty-state";
 import { useV2 } from "@/lib/v2-context";
@@ -204,7 +204,7 @@ export default function AgreementsList() {
   // `devForceEmpty` is the /dev preview switch (lib/dev-overrides.ts): inert
   // outside development, and INSIDE the slug gate so it reaches nobody else.
   const devForceEmpty = useForcedEmptyState("agreements");
-  const teachEmptyAgreements = isLeanTenant(tenantSlug) && (allAgreements.length === 0 || devForceEmpty);
+  const teachEmptyAgreements = useIsLean() && (allAgreements.length === 0 || devForceEmpty);
 
   const filteredAgreements = allAgreements.filter((doc) => {
     const matchesSearch = doc.document_name.toLowerCase().includes(searchQuery.toLowerCase()) ||

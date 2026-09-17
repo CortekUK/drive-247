@@ -47,7 +47,7 @@ import { FineStatusBadge } from "@/components/shared/status/fine-status-badge";
 import { format } from "date-fns";
 import { parseLocalDate } from "@/lib/date-utils";
 import { useTenant } from "@/contexts/TenantContext";
-import { isAreaHidden } from "@/lib/lean-areas";
+import { useIsAreaHidden } from "@/lib/lean-context";
 import { useRentalCreationGate } from "@/hooks/use-rental-creation-gate";
 import { ConnectStripeRequiredDialog } from "@/components/rentals/connect-stripe-required-dialog";
 import { formatCurrency, getCurrencySymbol } from "@/lib/format-utils";
@@ -137,7 +137,7 @@ const CustomerDetail = () => {
   // CheckMyDriver is not part of the lean product. Gated in the presentation
   // layer only: the hooks, edge functions and tables stay on main and keep
   // serving the other 56 tenants. Fails OPEN on an unresolved slug.
-  const cmdHidden = isAreaHidden("cmd", tenantSlug);
+  const cmdHidden = useIsAreaHidden("cmd");
   const { toast } = useToast();
   // Lean tenants only; a constant false for everyone else. All four New Rental
   // entry points on this page route through goToNewRental below.

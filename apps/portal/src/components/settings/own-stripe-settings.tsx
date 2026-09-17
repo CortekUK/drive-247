@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Link2, CheckCircle2, Loader2, ExternalLink, TestTube2, Zap } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useTenant } from '@/contexts/TenantContext';
-import { isTestModeUiHidden } from '@/lib/lean-areas';
+import { useIsTestModeUiHidden } from '@/lib/lean-context';
 
 interface OwnStripeStatus {
   id: string;
@@ -30,7 +30,7 @@ export function OwnStripeSettings() {
   const { tenant: tenantContext, tenantSlug } = useTenant();
   // Lean tenants have no test modes — the Test/Live chip is a concept they
   // do not have. UI only: stripe_mode itself is untouched.
-  const hideTestModeUi = isTestModeUiHidden(tenantSlug);
+  const hideTestModeUi = useIsTestModeUiHidden();
   const [connecting, setConnecting] = useState(false);
 
   // Surface the OAuth redirect result (?oauth=ok|incomplete|error) once on mount

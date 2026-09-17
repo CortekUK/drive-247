@@ -35,7 +35,7 @@ import {
 
 import { useFleetHealth, useFleetHealthStats, useRecomputeFleetHealth } from "@/hooks/use-fleet-health";
 import { useTenant } from "@/contexts/TenantContext";
-import { isAreaHidden } from "@/lib/lean-areas";
+import { useIsAreaHidden } from "@/lib/lean-context";
 // The column below renders vehicles.current_mileage, which Fleet Health stores
 // in miles for every tenant. It was printed raw under a unit-less "Mileage"
 // header, so a km tenant read a mile count with nothing saying so.
@@ -142,7 +142,8 @@ export default function FleetHealthPage() {
   //
   // Fails open on an unresolved slug (see isAreaHidden), so the tenants running
   // Fleet Health keep it during the first-paint tick before TenantContext resolves.
-  if (isAreaHidden("fleet-health", tenantSlug)) notFound();
+  const fleetHealthHidden = useIsAreaHidden("fleet-health");
+  if (fleetHealthHidden) notFound();
 
   return (
     <div className="container mx-auto space-y-6 p-6">

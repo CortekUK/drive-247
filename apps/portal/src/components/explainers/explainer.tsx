@@ -30,7 +30,7 @@ import { useState } from "react";
 import { ExternalLink, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTenant } from "@/contexts/TenantContext";
-import { isLeanTenant } from "@/lib/lean-areas";
+import { useIsLean } from "@/lib/lean-context";
 import {
   Dialog,
   DialogContent,
@@ -166,7 +166,8 @@ export function ExplainerChip({
   // The canary sees the stand-in reel so the affordance can be built and
   // reviewed before any video exists; every other tenant keeps the empty-URL
   // contract and sees no control at all. See `ExplainerLookupOptions`.
-  const explainer = getExplainer(id, { allowPlaceholder: isLeanTenant(tenantSlug) });
+  const allowPlaceholder = useIsLean();
+  const explainer = getExplainer(id, { allowPlaceholder });
 
   if (!explainer) return null;
 
@@ -227,7 +228,8 @@ export function ExplainerShelfButton({ className }: { className?: string }) {
   const { tenantSlug } = useTenant();
   // Same rule as the individual chips, so the shelf and the rows can never
   // disagree about which videos exist.
-  const ready = listReadyExplainers({ allowPlaceholder: isLeanTenant(tenantSlug) });
+  const allowPlaceholder = useIsLean();
+  const ready = listReadyExplainers({ allowPlaceholder });
 
   if (ready.length === 0) return null;
 

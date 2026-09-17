@@ -51,7 +51,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/stores/auth-store";
-import { isTestModeUiHidden } from "@/lib/lean-areas";
+import { useIsTestModeUiHidden } from "@/lib/lean-context";
 import { Button } from "@/components/ui-v2/button";
 
 import type { IntegrationPanelProps, IntegrationState, PanelTenant } from "./_kit";
@@ -533,7 +533,7 @@ export default function StripeConnectPanel({ tenant }: IntegrationPanelProps) {
 
   // Lean tenants have no test/live concept, so no mode row and no TEST badge.
   // Presentation only — nothing here reads or writes `stripe_mode`.
-  const hideModeUi = isTestModeUiHidden(tenant.slug);
+  const hideModeUi = useIsTestModeUiHidden();
 
   const view = useMemo(() => (data ? derive(data) : null), [data]);
 

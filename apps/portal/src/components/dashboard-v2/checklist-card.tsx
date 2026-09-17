@@ -117,7 +117,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useTenant } from '@/contexts/TenantContext';
 import { useSetupChecklist } from '@/hooks/use-setup-checklist';
-import { isLeanTenant } from '@/lib/lean-areas';
+import { useIsLean } from '@/lib/lean-context';
 import {
   externalGuideLink,
   formatChecklistDuration,
@@ -526,7 +526,7 @@ export function ChecklistCard({ className }: { className?: string }) {
   // THE SAMPLE CLIP IS FOR THE CANARY ONLY, keyed on the slug exactly like
   // `ExplainerChip` and `useSetupChecklist`. Every other tenant keeps the
   // empty-URL contract: with no recorded video there is no play button.
-  const allowSample = isLeanTenant(tenantSlug);
+  const allowSample = useIsLean();
 
   // A row with nothing to play and nothing to read has nothing to offer, so it
   // is not shown — the hook already drops rows with no link; this holds for

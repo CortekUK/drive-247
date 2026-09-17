@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTenant } from "@/contexts/TenantContext";
-import { isAreaHidden } from "@/lib/lean-areas";
+import { useIsAreaHidden } from "@/lib/lean-context";
 import { useOwnerPayouts, useCancelPayout } from "@/hooks/use-owner-payouts";
 import { useVehicleOwners } from "@/hooks/use-vehicle-owners";
 import { CreatePayoutDialog } from "@/components/vehicle-owners/create-payout-dialog";
@@ -34,7 +34,8 @@ export default function OwnerPayoutsPage() {
   // actually settling payouts here -- Global Motion Transport above all, with
   // 15 live owner_payouts rows -- keep the page during the first-paint tick
   // before TenantContext resolves.
-  if (isAreaHidden("owners", tenantSlug)) notFound();
+  const ownersHidden = useIsAreaHidden("owners");
+  if (ownersHidden) notFound();
   const currency = tenant?.currency_code || "USD";
   const today = new Date();
 

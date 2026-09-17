@@ -89,7 +89,7 @@ import { useOrgSettings } from "@/hooks/use-org-settings";
 import { useRentalSettings } from "@/hooks/use-rental-settings";
 import { useFleetHealthStats } from "@/hooks/use-fleet-health";
 import { useTenant } from "@/contexts/TenantContext";
-import { isAreaHidden, isLeanTenant, isSettingsTabHidden } from "@/lib/lean-areas";
+import { isAreaHidden } from "@/lib/lean-areas";
 import { usePendingBookingsCount } from "@/hooks/use-pending-bookings";
 import { useAuthStore } from "@/stores/auth-store";
 import { useTenantSubscription } from "@/hooks/use-tenant-subscription";

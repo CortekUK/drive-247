@@ -3,7 +3,7 @@
 import { notFound } from 'next/navigation';
 
 import { useTenant } from '@/contexts/TenantContext';
-import { isAreaHidden } from '@/lib/lean-areas';
+import { useIsAreaHidden } from '@/lib/lean-context';
 import { WelcomePackView } from '@/components/welcome/welcome-pack-view';
 
 export default function WelcomePage() {
@@ -17,7 +17,8 @@ export default function WelcomePage() {
   // Fails open on an unresolved slug (see isAreaHidden), so the 14 tenants
   // already reading the pack keep it during the first-paint tick when
   // TenantContext has not resolved yet.
-  if (isAreaHidden('welcome', tenantSlug)) notFound();
+  const welcomeHidden = useIsAreaHidden('welcome');
+  if (welcomeHidden) notFound();
 
   return (
     <div className="mx-auto w-full max-w-6xl pt-4">

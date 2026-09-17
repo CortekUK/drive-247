@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useTenant } from '@/contexts/TenantContext';
 import { useAuth } from '@/stores/auth-store';
 import { useV2 } from '@/lib/v2-context';
-import { isLeanTenant } from '@/lib/lean-areas';
+import { useIsLean } from '@/lib/lean-context';
 import { getBookingBaseUrl } from '@/lib/booking-url';
 import { useFirstRunWizard } from '@/hooks/use-first-run-wizard';
 import { useManagerPermissions } from '@/hooks/use-manager-permissions';
@@ -249,7 +249,7 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
   /** The resume prompt stepped aside for a system dialog; bring it back without counting it again. */
   const promptYieldedRef = useRef(false);
 
-  const isCanary = isLeanTenant(tenant?.slug);
+  const isCanary = useIsLean();
   const appUserId = appUser?.id ?? null;
   const authReady = !authLoading && !!appUser?.is_active;
 
@@ -837,7 +837,8 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
 export function useFirstRentalTourEligible(): boolean {
   const { tenant } = useTenant();
   const hasV2Chrome = useV2('chrome');
-  return isLeanTenant(tenant?.slug) && hasV2Chrome;
+  const isCanary = useIsLean();
+  return isCanary && hasV2Chrome;
 }
 
 /** Ask the mounted tour to run again. See `REPLAY_TOUR_EVENT`. */

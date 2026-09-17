@@ -15,7 +15,7 @@ import {
   ExplainerShelfButton,
 } from "@/components/explainers/explainer";
 import { listReadyExplainers } from "@/lib/explainers";
-import { isLeanTenant } from "@/lib/lean-areas";
+import { useIsLean } from "@/lib/lean-context";
 
 type PanelState = "expanded" | "minimized" | "closed";
 
@@ -253,8 +253,9 @@ export function SetupGuide() {
   // is dropped along with the button it would otherwise wrap around nothing.
   // Same placeholder rule the chips use, so the shelf button cannot appear
   // while every row is empty, or vanish while the rows all offer a video.
+  const allowPlaceholder = useIsLean();
   const hasGuides =
-    listReadyExplainers({ allowPlaceholder: isLeanTenant(tenantSlug) }).length > 0;
+    listReadyExplainers({ allowPlaceholder }).length > 0;
 
   // Land the operator on the group they are actually working on, the way
   // Stripe opens "Test Connect" for you. Only ever seeds the initial value —

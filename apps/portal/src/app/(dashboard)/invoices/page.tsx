@@ -32,7 +32,7 @@ import { DeleteInvoiceDialog } from "@/components/invoices/delete-invoice-dialog
 import { SendInvoiceEmailDialog } from "@/components/invoices/send-invoice-email-dialog";
 import { useTenant } from "@/contexts/TenantContext";
 import { useRouter } from "next/navigation";
-import { isLeanTenant } from "@/lib/lean-areas";
+import { useIsLean } from "@/lib/lean-context";
 import { InvoicesTeachingEmptyState } from "@/components/empty-states/lean-empty-states";
 import { useForcedEmptyState } from "@/hooks/use-forced-empty-state";
 import { cn } from "@/lib/utils";
@@ -151,7 +151,7 @@ const InvoicesList = () => {
   // `devForceEmpty` is the /dev preview switch (lib/dev-overrides.ts): inert
   // outside development, and INSIDE the slug gate so it reaches nobody else.
   const devForceEmpty = useForcedEmptyState("invoices");
-  const teachEmptyInvoices = isLeanTenant(tenantSlug) && (!invoices?.length || devForceEmpty);
+  const teachEmptyInvoices = useIsLean() && (!invoices?.length || devForceEmpty);
 
   // v2 (northwind) swaps only the populated table for the rentals list's table,
   // with no pager. Loading, teaching and "no results" states stay shared.

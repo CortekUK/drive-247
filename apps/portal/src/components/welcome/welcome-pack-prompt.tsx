@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { BookOpen } from 'lucide-react';
 import { useWelcomePackPrompt } from '@/hooks/use-welcome-pack';
 import { useTenant } from '@/contexts/TenantContext';
-import { isAreaHidden } from '@/lib/lean-areas';
+import { useIsAreaHidden } from '@/lib/lean-context';
 import { useYieldToSystemAnnouncements } from '@/lib/announcements/system-priority';
 
 const DISMISS_KEY = 'welcome-pack-prompt-dismissed-v';
@@ -76,7 +76,7 @@ export function WelcomePackPrompt({ suppressed = false }: { suppressed?: boolean
   // predicate inside the component means every present and future caller
   // inherits it. `suppressed` stays what it always was — dialog stacking, not
   // tenancy — so the two concerns do not get tangled.
-  const hidden = isAreaHidden('welcome', tenantSlug);
+  const hidden = useIsAreaHidden('welcome');
   const { show: open, engage } = useYieldToSystemAnnouncements(
     shouldPrompt && !dismissed && !suppressed && !onPack && !hidden,
   );
