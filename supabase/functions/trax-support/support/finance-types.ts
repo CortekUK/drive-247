@@ -73,6 +73,26 @@ export interface ReadOnlyStripe {
   evidence?(route:PaymentRoute,refs:{intentId:string|null;sessionId:string|null},expect:{tenantId:string;rentalId:string},signal:AbortSignal):Promise<StripePaymentEvidence>;
 }
 export interface FinanceServices { policy:FinancePolicy; reads:FinanceReads; stripe:ReadOnlyStripe; sharedTestAccountId?:string }
+/**
+ * Finance authority for reading the account's OWN database records (payments,
+ * revenue, balances) through the business query layer.
+ *
+ * Same staff rule as financeScopes, deliberately without the FinancePolicy
+ * argument: that policy describes the read-only Stripe configuration, and a
+ * tenant reading its own payments table does not depend on Stripe being set up.
+ * Requiring it meant an admin asking "how much did we collect last month?" was
+ * refused whenever TRAX_FINANCE_READS was unset, which is every deployment today.
+ *
+ * Authority still comes from the authenticated staff record and nothing else:
+ * head admins and admins (super admins act as head admin) may read money;
+ * a manager needs the Payments tab, and Rentals as well for rental payments;
+ * ops and viewers get nothing.
+ */
+export function databaseFinanceScopes(auth:SupportContext):FinanceScope[] {
+  if(auth.role==='head_admin'||auth.role==='admin')return ['rental_payments','account_balance'];
+  if(auth.role!=='manager'||!auth.permissions.some(p=>p.tab_key==='payments'))return [];
+  return auth.permissions.some(p=>p.tab_key==='rentals')?['rental_payments','account_balance']:['account_balance'];
+}
 export function financeScopes(auth:SupportContext,policy:FinancePolicy|undefined):FinanceScope[] {
   // Access comes from the authenticated staff record in Supabase (app_users.role and the manager's
   // tab permissions), matching canReadGuidance: head admins and admins (super-admins act as head
