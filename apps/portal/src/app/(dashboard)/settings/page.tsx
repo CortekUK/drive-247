@@ -46,11 +46,10 @@ import { InshurSettings } from '@/components/settings/inshur-settings';
 import { ESignSettings } from '@/components/settings/esign-settings';
 import {
   SETTINGS_TAB_BOARD_ROUTE,
-  isAreaHidden,
-  isLeanTenant,
-  isSettingsTabHidden,
+  isSettingsTabHiddenForLean,
   settingsTabBoardCard,
 } from '@/lib/lean-areas';
+import { useIsAreaHidden, useIsLean } from '@/lib/lean-context';
 import { BonzahOnboardingForm } from '@/components/settings/bonzah-onboarding';
 import { TwilioSmsSettings } from '@/components/settings/twilio-sms-settings';
 import { WhatsAppMetaSettings } from '@/components/settings/whatsapp-meta-settings';
@@ -428,19 +427,26 @@ const Settings = () => {
   // self-serve test/live e-signature toggle would be a switch with nothing on
   // the other side. Hidden here; the mode itself is forced live server-side in
   // every BoldSign resolution point (see resolveBoldSignMode in lib/lean-areas).
-  const hideESignModeToggle = isLeanTenant(tenantSlug);
+  // ONE resolution of "is this tenant lean" for the whole page. Every gate
+  // below reads it, and the three call sites that cannot call a hook — the
+  // `?tab=` redirect effect, `resolveSettingsTabNotice`'s `isHidden` callback
+  // and the v1 mobile trigger row's `.filter()` — take it as an argument to
+  // `isSettingsTabHiddenForLean`. One answer per render instead of three that
+  // can disagree, which this file has already shipped twice.
+  const leanTenant = useIsLean();
+  const hideESignModeToggle = leanTenant;
 
   // Tesla Fleet is hidden from the lean canary and from that tenant ONLY.
   // Everything behind this tab stays on main and keeps serving the operators
   // who actually run Teslas — Jangram bills Supercharger sessions through it
   // hourly. Presentation-layer gate, exactly like Enquiries/Leads/Automations.
-  const hideTeslaTab = isAreaHidden('tesla', tenantSlug);
+  const hideTeslaTab = useIsAreaHidden('tesla');
   // Vehicle Owners + Owner Payouts. Hiding the two nav entries is not enough
   // on its own: this switch writes `tenants.vehicle_owners_enabled`, so a lean
   // tenant left holding it could turn the whole area back on for itself. The
   // toggle, the handler and the column are all untouched for everyone else --
   // 7 tenants have the flag on and keep the switch.
-  const hideVehicleOwnersToggle = isAreaHidden('owners', tenantSlug);
+  const hideVehicleOwnersToggle = useIsAreaHidden('owners');
 
   // Accounting (Xero + Zoho Books) is hidden from the lean canary and that
   // tenant ONLY. Everything behind this tab stays on main: the 15 edge
@@ -449,7 +455,7 @@ const Settings = () => {
   // the only way any of the other 56 tenants could ever connect a ledger, so
   // hiding it from them would remove the feature in the only sense that
   // matters — which is exactly what deleting it from main did.
-  const hideAccountingTab = isAreaHidden('accounting', tenantSlug);
+  const hideAccountingTab = useIsAreaHidden('accounting');
 
   // INSHUR / Period Z fleet insurance is hidden from the lean canary and that
   // tenant ONLY. Everything behind this tab stays on main: the seven edge
@@ -464,7 +470,7 @@ const Settings = () => {
   // `if (!settingsKey) return true;`, so dropping that line would EXPOSE the ABI
   // credential panel to every manager regardless of their granted permissions.
   // Removing the key widens access; it does not narrow it.
-  const hideInshurTab = isAreaHidden('inshur', tenantSlug);
+  const hideInshurTab = useIsAreaHidden('inshur');
 
   // ── Tabs the Integrations board now owns ──────────────────────────────────
   //
@@ -475,9 +481,9 @@ const Settings = () => {
   // for the other 56 tenants (`isV2('appearance', …)`), so every one of them
   // keeps reaching Stripe onboarding, Twilio setup, Bonzah credentials and the
   // BoldSign mode switch exactly where they always have. See lib/lean-areas.
-  const hidePaymentsTab = isAreaHidden('settings-payments', tenantSlug);
-  const hideMessagingTab = isAreaHidden('settings-messaging', tenantSlug);
-  const hideESignTab = isAreaHidden('settings-esign', tenantSlug);
+  const hidePaymentsTab = useIsAreaHidden('settings-payments');
+  const hideMessagingTab = useIsAreaHidden('settings-messaging');
+  const hideESignTab = useIsAreaHidden('settings-esign');
 
   // Insurance is the one that does NOT stop rendering. Bonzah's 10-step
   // application wizard lives only in components/settings/bonzah-onboarding/,
@@ -487,7 +493,18 @@ const Settings = () => {
   // part of this tab the panel does not carry. Everything else that was here
   // (credentials, verify, disconnect, balance, top-up, retry-all, low-balance
   // alert, brochure URL) is on the card, and only on the card.
-  const hideInsuranceNav = isAreaHidden('settings-insurance', tenantSlug);
+  const hideInsuranceNav = useIsAreaHidden('settings-insurance');
+
+  // Fleet Health and Reminders, hoisted for the same reason as the tabs above:
+  // both are asked from inside the v2 `if (v2Chrome)` branch and from JSX, and
+  // a hook cannot be called from either.
+  const hideFleetHealthRow = useIsAreaHidden('fleet-health');
+  const hideRemindersRows = useIsAreaHidden('reminders');
+  // The `turo` area from the RESOLVED flags rather than the slug list alone: a
+  // tenant switched over by `portal_experience` is in no slug list, and this
+  // gate is what decides whether the Turo Sync switch exists on this page at
+  // all. Both the v1 and v2 layouts read this one value.
+  const turoV2 = useV2('turo');
 
   // The tabs the lean gate hides, as one set so the fallback below can never
   // land on another hidden tab.
@@ -1124,7 +1141,7 @@ const Settings = () => {
   // a tab with no board card (`insurance`) is never redirected at all.
   useEffect(() => {
     const tabParam = searchParams.get('tab');
-    if (!tabParam || !isSettingsTabHidden(tabParam, tenantSlug)) return;
+    if (!tabParam || !isSettingsTabHiddenForLean(tabParam, leanTenant)) return;
     const card = settingsTabBoardCard(tabParam);
     if (card === null) return;
 
@@ -2685,7 +2702,7 @@ const Settings = () => {
       redirects: V2_SETTINGS_REDIRECTS,
       allTabs: allSettingsTabs,
       canView: canViewSettings,
-      isHidden: (t) => !tenantSlug || isSettingsTabHidden(t, tenantSlug),
+      isHidden: (t) => !tenantSlug || isSettingsTabHiddenForLean(t, leanTenant),
       boardCard: settingsTabBoardCard,
       permissionsLoading: isManager && v2PermissionsLoading,
     });
@@ -2739,7 +2756,7 @@ const Settings = () => {
           const v2FleetHealthFailed =
             !v2FleetHealthReady && queryClient.getQueryState(['rental-settings', tenant?.id])?.status === 'error';
           const v2ShowOptionalModules =
-            isV2("turo", tenantSlug) || !hideVehicleOwnersToggle || !isAreaHidden('fleet-health', tenantSlug);
+            turoV2 || !hideVehicleOwnersToggle || !hideFleetHealthRow;
 
           // Booking site: the header and footer colours, saved by the page's save bar.
           const v2BrandingState = queryClient.getQueryState(['tenant-branding', tenant?.id]);
@@ -3039,7 +3056,7 @@ const Settings = () => {
                   <BusinessV2.SettingsPanelSkeleton rows={1} descriptionLines={2} label="Loading optional modules" />
                 ) : (
                   <SettingsPanel>
-                    {isV2("turo", tenantSlug) && (
+                    {turoV2 && (
                       <SettingsRow
                         label="Turo Sync"
                         description="See your Turo trips here and import them as bookings. Needs the Drive247 Chrome extension and your Turo host account signed in."
@@ -3065,7 +3082,7 @@ const Settings = () => {
                         />
                       </SettingsRow>
                     )}
-                    {!isAreaHidden('fleet-health', tenantSlug) && (
+                    {!hideFleetHealthRow && (
                       <SettingsRow
                         label="Fleet health"
                         description="Checks your cars every night for services and documents that are due soon or overdue."
@@ -3349,7 +3366,7 @@ const Settings = () => {
               {/* Both of these only feed the reminders list, which the lean
                   product does not carry — so a lean tenant is not asked to
                   configure a list it cannot open. */}
-              {!isAreaHidden('reminders', tenantSlug) && (
+              {!hideRemindersRows && (
                 <>
                   <SettingsPanel title="In-app payment reminders" description="Shown in your reminders list. Nothing is sent to customers.">
                     {([
@@ -3635,7 +3652,7 @@ const Settings = () => {
                 { value: 'payments', icon: CreditCard, label: 'Payments' },
                 { value: 'accounting', icon: Landmark, label: 'Accounting' },
                 // NOTE: this list is the trigger row only. Every lean gate is
-                // applied in the single isSettingsTabHidden() filter below, and
+                // applied in the single isSettingsTabHiddenForLean() filter below, and
                 // again on the matching TabsContent.
                 { value: 'reminders', icon: Bell, label: 'Notifications' },
                 { value: 'push', icon: BellRing, label: 'Push' },
@@ -3662,7 +3679,7 @@ const Settings = () => {
                 // disagreeing is not hypothetical: E-Signatures was filtered out
                 // here and left in the sidebar, so a lean tenant could still
                 // click it and land on an empty page.
-                .filter(item => !isSettingsTabHidden(item.value, tenantSlug))
+                .filter(item => !isSettingsTabHiddenForLean(item.value, leanTenant))
                 .map(item => (
                 <TabsTrigger key={item.value} value={item.value} className="flex items-center gap-1.5 whitespace-nowrap text-xs px-3">
                   <item.icon className="h-3.5 w-3.5" />{item.label}
@@ -3868,7 +3885,7 @@ const Settings = () => {
                   turn on a page they cannot reach. Five tenants already carry
                   turo_bridge_enabled = true from the PoC; this gate is what
                   stops the toggle appearing for them before the widening. */}
-              {isV2("turo", tenantSlug) && (
+              {turoV2 && (
               <div className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0 flex-1 space-y-1">
                   <h4 className="font-medium">Turo Sync</h4>

@@ -89,7 +89,7 @@ import { useOrgSettings } from "@/hooks/use-org-settings";
 import { useRentalSettings } from "@/hooks/use-rental-settings";
 import { useFleetHealthStats } from "@/hooks/use-fleet-health";
 import { useTenant } from "@/contexts/TenantContext";
-import { isAreaHidden } from "@/lib/lean-areas";
+import { useIsAreaHidden } from "@/lib/lean-context";
 import { usePendingBookingsCount } from "@/hooks/use-pending-bookings";
 import { useAuthStore } from "@/stores/auth-store";
 import { useTenantSubscription } from "@/hooks/use-tenant-subscription";
@@ -222,6 +222,22 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   const { data: reminderStats } = useReminderStats();
   const { settings } = useOrgSettings();
   const { tenant, tenantSlug } = useTenant();
+  // Every lean-hidden area this rail asks about, resolved ONCE here.
+  //
+  // `useIsAreaHidden` is a hook, and the questions below are asked from inside
+  // array spreads and JSX branches — positions a hook cannot be called from.
+  // Hoisting them also means the rail asks each question exactly once, so two
+  // sites can no longer disagree about the same area.
+  const quotesHidden = useIsAreaHidden("quotes");
+  const leadsHidden = useIsAreaHidden("leads");
+  const automationsHidden = useIsAreaHidden("automations");
+  const ownersHidden = useIsAreaHidden("owners");
+  const expensesHidden = useIsAreaHidden("expenses");
+  const remindersHidden = useIsAreaHidden("reminders");
+  const reportsHidden = useIsAreaHidden("reports");
+  const plDashboardHidden = useIsAreaHidden("pl-dashboard");
+  const welcomeHidden = useIsAreaHidden("welcome");
+  const fleetHealthHidden = useIsAreaHidden("fleet-health");
   // Website rail + its publish switches. React Query dedupes this against the
   // /cms dashboard's own read, so the extra mount costs nothing.
   const {
@@ -247,7 +263,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   // about the other.
   const fleetHealthEnabled =
     (rentalSettings as unknown as { fleet_health_enabled?: boolean }).fleet_health_enabled === true &&
-    !isAreaHidden("fleet-health", tenantSlug);
+    !fleetHealthHidden;
   // Fleet Health alerting is pull-only by design — nothing is emailed or pushed —
   // so this badge is the only standing signal that work has come due.
   const { needsAttention: fleetNeedsAttention } = useFleetHealthStats();
@@ -547,7 +563,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
       label: "Bookings",
       icon: CalendarDays,
       items: [
-        ...(isAreaHidden("quotes", tenantSlug)
+        ...(quotesHidden
           ? []
           : [{ name: "Fleet Quotes", href: "/quotes", icon: CircleDollarSign }]),
         ...(showPendingBookings
@@ -600,13 +616,13 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
       icon: Users,
       items: [] as NavItem[],
     },
-    ...(leadManagementEnabled && !isAreaHidden("leads", tenantSlug)
+    ...(leadManagementEnabled && !leadsHidden
       ? [{
           label: "Pipeline",
           icon: Users,
           items: [
             { name: "Leads", href: "/leads", icon: UserPlus },
-            ...(automationsEnabled && !isAreaHidden("automations", tenantSlug)
+            ...(automationsEnabled && !automationsHidden
               ? [{ name: "Automations", href: "/automations", icon: Workflow }]
               : []),
           ],
@@ -618,7 +634,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
     // Settings -> Features. Nothing is removed -- the 7 tenants with the flag
     // on, Global Motion Transport among them (3 owners, 15 payouts), are
     // untouched.
-    ...(vehicleOwnersEnabled && !isAreaHidden("owners", tenantSlug)
+    ...(vehicleOwnersEnabled && !ownersHidden
       ? [{
           label: "Owners",
           icon: Users,
@@ -637,7 +653,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
       label: "Finance",
       icon: CreditCard,
       items: [
-        ...(isAreaHidden("expenses", tenantSlug)
+        ...(expensesHidden
           ? []
           : [{ name: "Expenses", href: "/expenses", icon: Wallet }]),
       ],
@@ -654,13 +670,13 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
         // lean-hidden. If Reminders is hidden too this group empties, and the
         // `.filter(g => g.items.length > 0)` below drops the whole "Records"
         // row rather than leaving a dead one.
-        ...(isAreaHidden("reminders", tenantSlug)
+        ...(remindersHidden
           ? []
           : [{ name: "Reminders", href: "/reminders", icon: Bell, badge: reminderStats?.due || 0 }]),
-        ...(isAreaHidden("reports", tenantSlug)
+        ...(reportsHidden
           ? []
           : [{ name: "Reports", href: "/reports", icon: BarChart3 }]),
-        ...(isAreaHidden("pl-dashboard", tenantSlug)
+        ...(plDashboardHidden
           ? []
           : [{ name: "P&L Dashboard", href: "/pl-dashboard", icon: TrendingUp }]),
       ],
@@ -1364,7 +1380,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                     which is the only tenant on this rail; it lights up on its
                     own for the next tenant that has Leads. A row that 404s
                     would be worse than a row that waits. */}
-                {!isAreaHidden("leads", tenantSlug) && (
+                {!leadsHidden && (
                   <SidebarMenuItem>
                     <SidebarMenuButton
                       asChild
@@ -1467,7 +1483,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                       sees; the v1 rail below carries the identical predicate so
                       the two cannot drift. Everyone else keeps the row — 16
                       operators across 14 tenants have read the pack. */}
-                  {!isAreaHidden("welcome", tenantSlug) && (
+                  {!welcomeHidden && (
                   <SidebarMenuItem>
                     <SidebarMenuButton
                       asChild
