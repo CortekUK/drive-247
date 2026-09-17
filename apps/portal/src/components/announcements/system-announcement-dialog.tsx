@@ -149,10 +149,16 @@ export interface SystemAnnouncementDialogProps {
  *     remains, the backdrop is the hard one.
  *   - The panel keeps one height for every page (all pages' text and buttons are laid
  *     out in the same cells, the hidden ones invisible and inert), so Previous and Next
- *     never move out from under the pointer.
+ *     never move out from under the pointer. The hidden sizers are clipped to what the
+ *     body can show, so a short page beside a long one has no empty space to scroll
+ *     through, and every page opens at the TOP of that one scrolling body.
  *   - A polite live region says "Announcement 2 of 3". When the page changes under a
  *     button that was pressed (Got it on a page that went away), focus goes back to the
- *     panel, so a second Enter can never land on the next page's Sign out.
+ *     panel, so a second Enter can never land on the next page's Sign out, and for
+ *     SYSTEM_DIALOG_PAGE_GUARD_MS the new page's own controls (its buttons, the X,
+ *     Escape, an outside click) do nothing at all, so neither can the second click of a
+ *     double click. Paging with Previous / Next or the arrow keys is the operator's own
+ *     move and is never held back.
  * With one item there is no pager and nothing else changes.
  *
  * Plain text only. The body keeps its line breaks and is never parsed as HTML.

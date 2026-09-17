@@ -338,6 +338,14 @@ function usePageHidden(): boolean {
  * being lost. A hard banner has no X: it stays until the admin deactivates it or the
  * tenant leaves its smart filter, and it slides like the others.
  *
+ * A CONTROL THAT CHANGES UNDER THE POINTER. Every banner's X and button live in one
+ * cell, so the arriving banner's control is exactly where the one just pressed was. For
+ * SYSTEM_BANNER_ACTIVATION_GUARD_MS after the bar moves on by ITSELF (a close, the
+ * automatic slide, a poll), the X and the button of the banner showing do nothing: the
+ * second click of a double click, or a tap that lands as the bar slides, must not close
+ * or follow a banner nobody has read. A move the operator made (a dot, an arrow key, a
+ * swipe) lifts it at once, and the dots are never held back.
+ *
  * IMPRESSIONS. `shown` is recorded once per banner (id + revision) when it is actually
  * the one showing in a visible tab with no modal over it, never while it waits hidden
  * in the stack or under a gate. The data hook also de-duplicates per page load.

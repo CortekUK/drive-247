@@ -11,6 +11,13 @@
  *
  * ROLES: the button renders only for a valid in-portal path the role may open, and
  * a hard blocker that leaves someone with nothing to press says who can clear it.
+ *
+ * PAGER (review round 5): every page's footer is laid out in ONE cell, so a page that
+ * takes over puts its own button where the one just pressed was. For
+ * SYSTEM_DIALOG_PAGE_GUARD_MS after a page changes by itself, that page's controls do
+ * nothing (a double click must never sign anyone out or dismiss an unread notice), the
+ * operator's own paging is not held back, and a page change puts the shared scrolling
+ * body back at the top.
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';

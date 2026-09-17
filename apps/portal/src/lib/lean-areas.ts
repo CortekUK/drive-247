@@ -28,6 +28,28 @@
  * module owns the same idea (id-keyed, with both environments' ids listed);
  * this one exists separately only to avoid editing a file another session is
  * currently rewriting. When merging, prefer this module's slug key.
+ *
+ * TWO SOURCES, ONE ANSWER (Sep 17 2026)
+ * -------------------------------------
+ * A tenant is lean when EITHER its slug is in `LEAN_TENANTS` below OR its row
+ * says `portal_experience = 'v2'`, which arrives here as the explicit `onV2`
+ * argument. Self-serve signups through drive-247.com are provisioned 'v2' and
+ * must land on the lean product, and a tenant that does not exist yet cannot be
+ * in a list compiled at build time.
+ *
+ * `onV2` DEFAULTS TO FALSE on every function in this module, which is what
+ * keeps this change inert for v1: every existing caller that has not been given
+ * the row — the esign route handlers, the non-React helpers, and every test
+ * written before the column existed — answers byte for byte what it answered
+ * before.
+ *
+ * This module stays PURE. It holds no state and issues no query, because it is
+ * shared across every request the server handles: a cached answer here would be
+ * one tenant's gate served to the next tenant. The row is read once per request
+ * in `lib/portal-tenant.ts`, the gates are resolved once in `lib/v2-server.ts`,
+ * and client components read the answers out of context through the hooks in
+ * `lib/lean-context.tsx` (`useIsLean`, `useIsAreaHidden`, …) rather than calling
+ * the functions below with a slug.
  */
 
 /**
@@ -311,6 +333,24 @@ export const LEAN_HIDDEN_AREAS = [
 export type LeanHiddenArea = (typeof LEAN_HIDDEN_AREAS)[number];
 
 /**
+ * Should `area` be hidden from a tenant we have ALREADY decided is lean?
+ *
+ * The one implementation of the rule "is this a lean-hidden area", split out so
+ * that the slug-taking `isAreaHidden` below and the `useIsAreaHidden` hook in
+ * `lib/lean-context.tsx` cannot drift apart. The hook has a resolved `lean`
+ * boolean out of context and no slug to offer; this is what it calls.
+ *
+ * An unregistered key answers false, which is deliberate and has bitten once:
+ * a gated-but-unregistered area is silently inert (`fleet-health` shipped that
+ * way). Registering a key ahead of its call sites is the safe direction — an
+ * unused key gates nothing.
+ */
+export function isAreaHiddenForLean(area: LeanHiddenArea, lean: boolean): boolean {
+  if (!lean) return false;
+  return LEAN_HIDDEN_AREAS.includes(area);
+}
+
+/**
  * Should `area` be hidden from the tenant identified by `tenantSlug`?
  *
  * Fails OPEN on every unknown: a null, undefined or not-yet-resolved slug
@@ -318,24 +358,37 @@ export type LeanHiddenArea = (typeof LEAN_HIDDEN_AREAS)[number];
  * one canary tenant — never to take them away from a tenant whose identity we
  * simply have not resolved yet (the slug is null for a tick on first paint,
  * and stays null on an unrecognised host).
+ *
+ * `onV2` is the tenant's `portal_experience = 'v2'` flag, read from the row
+ * once per request. It defaults to false, so a caller that does not pass it
+ * answers exactly what it answered before the column existed.
  */
 export function isAreaHidden(
   area: LeanHiddenArea,
   tenantSlug: string | null | undefined,
+  onV2: boolean = false,
 ): boolean {
-  if (!tenantSlug) return false;
-  if (!LEAN_HIDDEN_AREAS.includes(area)) return false;
-  return isLeanTenant(tenantSlug);
+  return isAreaHiddenForLean(area, isLeanTenant(tenantSlug, onV2));
 }
 
 /**
  * Is this tenant on the lean v2 product?
  *
+ * True when the slug is in `LEAN_TENANTS` (the canary list) OR `onV2` says the
+ * tenant's row carries `portal_experience = 'v2'`.
+ *
  * Same fail-open contract as `isAreaHidden`: an unresolved slug is NOT lean, so
- * every gate built on this keeps v1 behaviour until the tenant is known.
+ * every gate built on this keeps v1 behaviour until the tenant is known — and
+ * that holds even with `onV2` set, because `onV2` can only be true for a tenant
+ * whose row we just read BY that slug, so the combination does not arise. One
+ * rule: no resolved tenant, nothing hidden.
  */
-export function isLeanTenant(tenantSlug: string | null | undefined): boolean {
+export function isLeanTenant(
+  tenantSlug: string | null | undefined,
+  onV2: boolean = false,
+): boolean {
   if (!tenantSlug) return false;
+  if (onV2) return true;
   return LEAN_TENANTS.includes(tenantSlug);
 }
 
@@ -360,8 +413,17 @@ export function isLeanTenant(tenantSlug: string | null | undefined): boolean {
 export function resolveBoldSignMode(
   tenantMode: string | null | undefined,
   tenantSlug: string | null | undefined,
+  onV2: boolean = false,
 ): 'test' | 'live' {
-  if (isLeanTenant(tenantSlug)) return 'live';
+  return resolveBoldSignModeForLean(tenantMode, isLeanTenant(tenantSlug, onV2));
+}
+
+/** The same resolution for a tenant we have already decided is lean. */
+export function resolveBoldSignModeForLean(
+  tenantMode: string | null | undefined,
+  lean: boolean,
+): 'test' | 'live' {
+  if (lean) return 'live';
   return tenantMode === 'live' ? 'live' : 'test';
 }
 
@@ -378,8 +440,11 @@ export function resolveBoldSignMode(
  * Flipping a lean tenant's Stripe to live for real is a money decision, not a
  * UI cleanup, and is deliberately NOT done here.
  */
-export function isTestModeUiHidden(tenantSlug: string | null | undefined): boolean {
-  return isLeanTenant(tenantSlug);
+export function isTestModeUiHidden(
+  tenantSlug: string | null | undefined,
+  onV2: boolean = false,
+): boolean {
+  return isLeanTenant(tenantSlug, onV2);
 }
 
 /* ── Settings tabs the Integrations board now owns ─────────────────────────── */
@@ -423,10 +488,24 @@ const SETTINGS_TAB_AREAS: Readonly<Record<string, LeanHiddenArea>> = {
 export function isSettingsTabHidden(
   tabValue: string,
   tenantSlug: string | null | undefined,
+  onV2: boolean = false,
 ): boolean {
+  return isSettingsTabHiddenForLean(tabValue, isLeanTenant(tenantSlug, onV2));
+}
+
+/**
+ * The same question for a tenant we have already decided is lean.
+ *
+ * Exists for the same reason as `isAreaHiddenForLean`: the `useIsSettingsTabHidden`
+ * hook has a resolved `lean` boolean and no slug, and there must be exactly one
+ * implementation of the tab→area map lookup for the three navigation surfaces
+ * (desktop sidebar, mobile trigger row, typed `?tab=`) to agree. They have
+ * disagreed before, twice, in opposite directions.
+ */
+export function isSettingsTabHiddenForLean(tabValue: string, lean: boolean): boolean {
   const area = SETTINGS_TAB_AREAS[tabValue];
   if (!area) return false;
-  return isAreaHidden(area, tenantSlug);
+  return isAreaHiddenForLean(area, lean);
 }
 
 /**

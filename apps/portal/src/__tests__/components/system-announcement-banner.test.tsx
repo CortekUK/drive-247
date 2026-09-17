@@ -26,6 +26,9 @@
  *         changes while it slides;
  *       - `shown` once per banner, only when it is the one showing, uncovered, in a
  *         visible tab;
+ *       - X and the button of a banner that has only just slid in do nothing for
+ *         SYSTEM_BANNER_ACTIVATION_GUARD_MS (a double click on X must not close the
+ *         banner arriving); a dot, a key or a swipe lifts that at once;
  *   - the button renders only for a valid in-portal path the user's role may open;
  *   - tone classes come from the contract map; the text is never truncated.
  *

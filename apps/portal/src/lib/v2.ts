@@ -5,18 +5,40 @@
  * paying tenants are running on right now. Every v2 area is gated so that the
  * `northwind` canary sees it and nobody else does. See V2_PLAN.md §2.
  *
- * Deliberately NOT a column on `public.tenants`:
- *   - `tenants` already carries 269 columns, 73 of them boolean, many orphaned
- *     from features that shipped or were withdrawn years ago.
- *   - `anon` holds COLUMN-level SELECT grants on that table, so a new column
- *     without its own GRANT makes Postgres refuse the WHOLE row — taking every
- *     tenant's branding down, not just the flag you added.
- *   - A gate here costs no column, no grant, no migration and no query.
+ * TWO SOURCES, ONE ANSWER (Sep 17 2026)
+ * -------------------------------------
+ * A tenant is on v2 for an area when EITHER
+ *   (a) its slug is listed for that area in `V2_AREAS` below — the original
+ *       hand-widened canary list, unchanged; or
+ *   (b) `tenants.portal_experience = 'v2'` — a per-tenant switch carried on the
+ *       row, passed in here as `onV2`.
  *
- * Widening an area is an edit to `V2_AREAS` and a deploy: reviewed like any
- * other change, reverted like any other change, and recorded in `git log`.
- * Retiring one is deleting its entry, deleting the branch in the route, and
- * deleting the v1 directory. Three deletions, no judgement calls.
+ * (b) exists because self-serve signups through drive-247.com must LAND on v2:
+ * a tenant that does not exist yet cannot be in a list compiled at build time,
+ * and "deploy a slug then tell the operator to reload" is not a signup flow.
+ * (a) stays because it is how an EXISTING tenant is widened one at a time, and
+ * because it cannot fail: northwind keeps working with no column, no grant and
+ * no query, exactly as it does today.
+ *
+ * This module stays PURE — `onV2` is an argument, never a lookup. The row is
+ * read once per request on the server (`lib/portal-tenant.ts`), the gates are
+ * resolved once there (`lib/v2-server.ts`), and client components read the
+ * answers out of context (`lib/v2-context.tsx`). Nothing here holds state,
+ * because this module is shared across every request the server handles and a
+ * cached answer would be one tenant's gate served to the next tenant.
+ *
+ * Why a column is safe NOW when the header of this file used to argue it was
+ * not: the objection was never the idea, it was the GRANT. `anon` holds
+ * COLUMN-level SELECT grants on `tenants`, so a new column without its own
+ * GRANT makes Postgres refuse the WHOLE row — every tenant's branding, not just
+ * the new flag. So the grant ships with the column (see `ops/`), and the one
+ * reader retries without the column on a column/permission error, which keeps
+ * a missing grant to "everybody is v1" instead of "nobody has a title".
+ *
+ * Widening an area by SLUG is still an edit to `V2_AREAS` and a deploy:
+ * reviewed like any other change, reverted like any other change, and recorded
+ * in `git log`. Retiring one is deleting its entry, deleting the branch in the
+ * route, and deleting the v1 directory. Three deletions, no judgement calls.
  */
 
 /**
@@ -126,14 +148,52 @@ const V2_AREAS: Record<V2Area, readonly string[]> = {
 export const V2_AREA_LIST = Object.keys(V2_AREAS) as V2Area[];
 
 /**
+ * The value `tenants.portal_experience` must hold for a tenant to be on v2.
+ *
+ * Compared with `===`, so NULL, '', 'V2', 'v3' and a missing column are all v1.
+ * The column's CHECK constraint already restricts it to ('v1','v2'); this is
+ * the second half of the same guarantee, on the read side, for the window
+ * before the constraint exists and for any row that bypasses it.
+ */
+const V2_EXPERIENCE = 'v2';
+
+/**
+ * Is a tenant row's `portal_experience` the v2 one?
+ *
+ * Takes the raw column value and fails closed on everything that is not
+ * exactly `'v2'` — null, undefined, a typo, a future value this build has never
+ * heard of, or the `undefined` you get when the column was not selected at all
+ * because the grant is missing. All of those are tenants that are running fine
+ * on v1 right now, and none of them asked to be moved.
+ */
+export function isV2Experience(portalExperience: string | null | undefined): boolean {
+  return portalExperience === V2_EXPERIENCE;
+}
+
+/**
  * Is this tenant on v2 for this area?
  *
- * Fails to v1 on every unknown: a null, undefined or unrecognised tenant gets
- * the screen it already had. A gate that fails *open* puts all 57 tenants on
- * unfinished code at once, which is the one outcome this whole model exists to
- * prevent.
+ * Two independent ways in, OR'd:
+ *  - `tenantSlug` is listed for `area` in `V2_AREAS` (the canary list), or
+ *  - `onV2` is true, i.e. the tenant's row says `portal_experience = 'v2'`.
+ *
+ * `onV2` defaults to false so every caller that has not been given the row —
+ * and every test written before the column existed — keeps answering exactly
+ * what it answered before.
+ *
+ * Fails to v1 on every unknown, INCLUDING a missing slug with `onV2` set. That
+ * combination cannot arise in the product — `onV2` is only ever true because we
+ * read a row by that slug — so requiring the slug costs nothing and keeps one
+ * rule to state: no resolved tenant, no v2. A gate that fails *open* puts all
+ * 57 tenants on unfinished code at once, which is the one outcome this whole
+ * model exists to prevent.
  */
-export function isV2(area: V2Area, tenantSlug: string | null | undefined): boolean {
+export function isV2(
+  area: V2Area,
+  tenantSlug: string | null | undefined,
+  onV2: boolean = false,
+): boolean {
   if (!tenantSlug) return false;
+  if (onV2) return true;
   return V2_AREAS[area]?.includes(tenantSlug) ?? false;
 }

@@ -74,6 +74,31 @@ import { buildCmsContent, seedTenantCmsContent } from "../_shared/tenant-cms-con
 
 const LOG = "[signup-provision]";
 
+/**
+ * The v2 portal's default brand colour — #442DD7, hsl(248 68% 51%).
+ *
+ * Kept in step with `V2_DEFAULT_BRAND_COLOR` in
+ * apps/portal/src/lib/appearance/presets.ts: it is the v2 stylesheet's default,
+ * the "Indigo" preset, and what Settings → Branding → "Restore default colour"
+ * writes. A tenant provisioned with this colour is painted exactly like
+ * northwind, the first v2 sale.
+ */
+const V2_DEFAULT_BRAND_COLOR = "#442DD7";
+
+/**
+ * Does this write error mean "that column does not exist"?
+ *
+ * PostgREST answers PGRST204 with a message naming the column when its schema
+ * cache has no such column (42703 is the equivalent straight from Postgres).
+ * The column name is matched as well, so an unrelated schema fault is never
+ * quietly retried as if it were this one.
+ */
+function isMissingColumnError(error: unknown, column: string): boolean {
+  if (!error || typeof error !== "object") return false;
+  const e = error as { code?: string | null; message?: string | null };
+  if (e.code !== "PGRST204" && e.code !== "42703") return false;
+  return typeof e.message === "string" && e.message.includes(column);
+}
 
 /**
  * Escape user-supplied text before it goes into the welcome email's HTML.
@@ -681,7 +706,26 @@ Deno.serve(async (req) => {
     //    can never block a paid provision.
     // =====================================================================
     const colors = await extractBrandColorsFromText(businessColours, null);
-    const palette = buildTenantPalette(colors);
+    // The PRIMARY is not negotiable for a self-serve tenant: this path lands on
+    // the v2 portal (`portal_experience` at the insert below), and v2 paints its
+    // entire chrome from one colour — primary_color / light_primary_color.
+    //
+    // Leaving the extractor's answer there is what made the newest tenant look
+    // nothing like northwind. Its blank-input default is the platform slate
+    // #1E293B, and slate is a perfectly USABLE brand colour (hsl 217 33% 17%
+    // clears the portal's `isUsableV2Brand` guard at s >= 15, 12 <= l <= 92), so
+    // nothing downstream falls back for us — the whole portal simply comes up
+    // slate. Write the v2 default instead; the operator can change it in
+    // Settings → Branding whenever they like.
+    //
+    // Written EXPLICITLY rather than left NULL: the portal would fall back to
+    // this same colour, but the booking site reads primary_color directly and a
+    // NULL there falls back to the old platform green.
+    //
+    // secondary/accent keep whatever was extracted. v2 ignores them, and if a
+    // cached browser bundle ever posts `businessColours` again they still give
+    // the BOOKING site something of the operator's own.
+    const palette = buildTenantPalette({ ...colors, primary: V2_DEFAULT_BRAND_COLOR });
     await markMilestone(supabase, authUserId, "brand_ready");
 
     // =====================================================================
@@ -816,27 +860,66 @@ Deno.serve(async (req) => {
     // column is a display name, not a full legal name.
     const firstName = meta.fullName.split(/\s+/)[0] || meta.fullName;
 
-    const { data: tenant, error: tenantError } = await supabase
+    // WHICH PORTAL UI THIS TENANT GETS. Every tenant that arrives through
+    // drive-247.com lands on v2 — the UI northwind, the first v2 sale, is on.
+    // The switch is the row, not a deployed slug list, because a self-serve
+    // slug does not exist until the moment the operator pays.
+    //
+    // This is also the ONLY path that sets the column. A tenant a super admin
+    // creates in the admin app never names it and keeps the DEFAULT 'v1', which
+    // is what keeps the ~56 existing tenants where they are.
+    // See ops/portal_experience.sql.
+    const tenantRow = {
+      company_name: companyName,
+      admin_name: firstName,
+      slug,
+      contact_email: meta.email,
+      contact_phone: phoneDisplay,
+      address: location,
+      business_hours: businessHours,
+      status: "active",
+      tenant_type: isProduction ? "production" : "test",
+      portal_experience: "v2",
+      ...identityCols,
+      ...palette,
+      ...logoCols,
+      ...modeCols,
+      ...hourCols,
+      ...tzCols,
+    };
+
+    let { data: tenant, error: tenantError } = await supabase
       .from("tenants")
-      .insert({
-        company_name: companyName,
-        admin_name: firstName,
-        slug,
-        contact_email: meta.email,
-        contact_phone: phoneDisplay,
-        address: location,
-        business_hours: businessHours,
-        status: "active",
-        tenant_type: isProduction ? "production" : "test",
-        ...identityCols,
-        ...palette,
-        ...logoCols,
-        ...modeCols,
-        ...hourCols,
-        ...tzCols,
-      })
+      .insert(tenantRow)
       .select("id")
       .single();
+
+    /*
+     * ops/portal_experience.sql not applied yet? Then PostgREST has no
+     * `portal_experience` in its schema cache and rejects the whole INSERT
+     * (PGRST204). The card is already charged at this point, and every retry
+     * would hit the same wall, so the workspace must not die over the column
+     * that decides which CSS the operator sees: insert again without it and let
+     * them land on v1.
+     *
+     * This is a net, not a plan. The deploy order is the SQL first, then this
+     * function (the file's header says so), and the log line below is written to
+     * be findable afterwards because a tenant that came through here needs one
+     * UPDATE to end up where they were meant to be.
+     */
+    if (tenantError && isMissingColumnError(tenantError, "portal_experience")) {
+      console.error(
+        `${LOG} tenants.portal_experience does not exist — APPLY ops/portal_experience.sql. ` +
+          `Provisioning "${slug}" on the v1 portal instead; afterwards run: ` +
+          `UPDATE public.tenants SET portal_experience = 'v2' WHERE slug = '${slug}';`,
+      );
+      const { portal_experience: _unsupported, ...rowWithoutExperience } = tenantRow;
+      ({ data: tenant, error: tenantError } = await supabase
+        .from("tenants")
+        .insert(rowWithoutExperience)
+        .select("id")
+        .single());
+    }
 
     if (tenantError || !tenant) {
       console.error(`${LOG} tenant insert failed:`, tenantError);

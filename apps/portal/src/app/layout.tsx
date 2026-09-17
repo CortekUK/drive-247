@@ -1,18 +1,16 @@
 import type { Metadata } from "next";
 import type { CSSProperties } from "react";
-import { cache } from "react";
 import { headers } from "next/headers";
 import { Manrope } from "next/font/google";
-import { createClient } from "@supabase/supabase-js";
 import { Providers } from "./providers";
 import { v2BrandVars } from "@/lib/appearance/color";
 import "@/global.css";
 // Scoped v2 design tokens. Inert unless <body> carries `v2-theme`, which is
 // decided per-tenant below — so importing it changes nothing for v1 tenants.
 import "@/styles/v2-theme.css";
-import { isV2, V2_AREA_LIST } from "@/lib/v2";
-import { V2Provider, type V2Flags } from "@/lib/v2-context";
-import { tenantSlugFromHeaders } from "@/lib/tenant-server";
+import { V2Provider } from "@/lib/v2-context";
+import { readPortalTenant } from "@/lib/portal-tenant";
+import { resolvePortalGates } from "@/lib/v2-server";
 
 export const dynamic = "force-dynamic";
 
@@ -49,56 +47,18 @@ const defaultMetadata: Metadata = {
   icons: { icon: PLATFORM_FAVICONS, apple: "/icons/apple-touch-icon.png" },
 };
 
-type PortalTenantRow = {
-  app_name: string | null;
-  company_name: string | null;
-  meta_title: string | null;
-  meta_description: string | null;
-  favicon_url: string | null;
-  og_image_url: string | null;
-  primary_color?: string | null;
-  light_primary_color?: string | null;
-};
-
 /**
- * The one server-side read of the tenant row, shared by `generateMetadata` and
- * the layout below. React `cache` memoises it for the request, so a v2-theme
- * tenant, which needs its brand colour on <body> as well, still makes a single
- * round trip. `withBrand` is only ever true for a v2-theme tenant: every other
- * tenant's query names exactly the columns it always did.
+ * `readPortalTenant` now lives in `lib/portal-tenant.ts`, because a third
+ * caller needs it: the v2 gates. `tenants.portal_experience` decides whether a
+ * tenant is on v2, and that has to come out of the SAME round trip
+ * `generateMetadata` already makes rather than a second query.
  *
- * Null when Supabase is not configured. Throws only if the client itself does;
- * each caller keeps its own fallback.
+ * It no longer takes `withBrand`. That argument was the ordering trap — you
+ * cannot decide whether to select the brand columns from a flag that is itself
+ * one of the columns, and reading twice is the thing being avoided. The column
+ * list is fixed there; the brand PAINT below stays behind the resolved flag, so
+ * a v1 tenant's rendered output is byte for byte what it was.
  */
-const readPortalTenant = cache(
-  async (tenantSlug: string, withBrand: boolean): Promise<PortalTenantRow | null> => {
-    if (
-      !process.env.NEXT_PUBLIC_SUPABASE_URL ||
-      !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    ) {
-      return null;
-    }
-
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    );
-
-    const columns =
-      "app_name, company_name, meta_title, meta_description, favicon_url, og_image_url" +
-      (withBrand ? ", primary_color, light_primary_color" : "");
-
-    const { data } = await supabase
-      .from("tenants")
-      .select(columns)
-      .eq("slug", tenantSlug)
-      .single();
-
-    // A select built from a runtime string is untyped to supabase-js.
-    return (data as unknown as PortalTenantRow | null) ?? null;
-  }
-);
-
 export async function generateMetadata(): Promise<Metadata> {
   try {
     const headersList = await headers();
@@ -106,7 +66,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
     if (!tenantSlug) return defaultMetadata;
 
-    const tenant = await readPortalTenant(tenantSlug, isV2("theme", tenantSlug));
+    const tenant = await readPortalTenant(tenantSlug);
 
     if (!tenant) return defaultMetadata;
 
@@ -188,19 +148,18 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // The v2 theme gate, resolved on the server so the page paints correctly on
-  // the first byte. `tenantSlugFromHeaders` never throws and returns null on any
-  // failure, so a lookup problem leaves every tenant on the v1 theme rather
-  // than repainting them.
-  const tenantSlug = await tenantSlugFromHeaders();
-
-  // Every gate for this request, answered once. Client components read these
-  // through useV2() instead of looking the tenant up again — see lib/v2-context.
-  // The list comes FROM `lib/v2`, not a second copy kept in step by hand — a
-  // forgotten entry here is a gate that answers v1 for everyone, silently.
-  const v2Flags: V2Flags = Object.fromEntries(
-    V2_AREA_LIST.map((a) => [a, isV2(a, tenantSlug)])
-  );
+  // Every gate for this request, answered once, on the server, so the page
+  // paints correctly on the first byte. Two sources, OR'd: the `V2_AREAS` slug
+  // list and the tenant's own `portal_experience` column — see lib/v2-server.
+  //
+  // Fails closed the whole way down. The slug comes from `x-tenant-slug` and is
+  // null on anything unresolvable; the column read answers false on a missing
+  // row, a read error, an unknown value or a missing GRANT. So a lookup problem
+  // leaves every tenant on the v1 theme rather than repainting them.
+  //
+  // Client components read these through useV2() / useIsLean() instead of
+  // looking the tenant up again — see lib/v2-context and lib/lean-context.
+  const { tenantSlug, onV2, flags: v2Flags, lean } = await resolvePortalGates();
 
   const themeClass = v2Flags.theme ? "v2-theme" : undefined;
   // The font variable rides with the theme gate, so v1 tenants are untouched.
