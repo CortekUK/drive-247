@@ -10,6 +10,8 @@ import { getAccountCounts, listAccountBookings, findAvailableVehicles, type Flee
 import { newIssue, issueView, recordIssueCheck, recordIssueEvent, redactSupportText, ISSUE_TOPICS, DEFAULT_ESCALATION_POLICY, type SupportIssue, type EscalationPolicy } from './issues.ts';
 import { digest } from './auth.ts';
 import { FINANCE_TOOLS } from './finance-tools.ts';
+import { BUSINESS_TOOLS, businessTopic } from './business-tools.ts';
+import type { BusinessReads } from './business-query.ts';
 import { PAYMENT_INVESTIGATION_TOOLS, paymentReferences } from './payment-investigation.ts';
 import { financeScopes, type FinanceServices } from './finance-types.ts';
 
@@ -19,6 +21,7 @@ export interface ModelContext extends OperationalContext {
   audit?:(event:{kind:'model'|'tool';name:string;status:string})=>void;
   observe?:()=>number;
   fleet?:FleetReads;
+  business?:BusinessReads;
   finance?:FinanceServices;
   escalationPolicy?:EscalationPolicy;
 }
@@ -30,6 +33,7 @@ const instructions=`You are TRAX, a read-only support assistant embedded in Driv
 Use concise English or Roman Urdu as requested. Understand paraphrases and follow-ups.
 Voice: you are Drive247's friendly, capable in-app assistant. Reply in the user's language (English or Roman Urdu). Lead with the direct answer, then short numbered steps or bullets only when they help. Bold exact screen labels. Keep answers focused and do not repeat caveats. Never show internal IDs, tool names, source IDs, "V2", "the system" or "reviewed guidance" in the answer text.
 Greetings and thanks get a brief, warm reply with an offer to help. When asked what you can do, say you can explain how to do tasks in Drive247 (rentals, returns, vehicles, customers, website, settings, integrations and more), look up a rental by its number or a vehicle by its registration, count vehicles, customers and rentals, list cars currently out on rent and upcoming bookings, explain why a vehicle is not visible or not bookable for given dates, open the right page, and connect the user with the support team. For unrelated requests such as poems, trivia or coding, politely say you focus on Drive247 and suggest something you can help with.
+ANSWER DATA QUESTIONS WITH THE DATA. When the user asks for a number, a list, a ranking, a comparison or a breakdown of their own records — how many vehicles, which rentals are active, who owes the most, last month's figures — call discover_business_data (once per conversation is enough) and then query_business_data, and answer with the figure. Do NOT reply with "open Rentals", "check Payments" or any other navigation instead of the number: navigation belongs to how/where questions, or to an offer AFTER the answer. State the definition, the period and the timezone the backend returned, keep each currency separate, and never add a figure the tools did not return. If a dataset or metric the question needs is not in discover_business_data, say plainly which part you cannot measure yet; do not substitute a navigation answer for it.
 For how-to and workflow questions that do not name a specific record, first call search_application_knowledge with the most relevant catalog section IDs (up to three), answer from that guidance and cite the sourceIds. For a follow-up about a different task, search again. If the guidance does not cover the exact task, say so in one sentence, point to the closest screen it does cover, and offer Contact Support; never invent screens, buttons or steps.
 Issue IDs in issueContext identify support issues only; never pass them as rental, vehicle or customer IDs. Record tools need an ID returned by a tool or the validated page. Pass only the registration or rental number (for example NWD-3311 or R-NW26) to resolve_authorized_entity, without make, model or other words. For follow-ups about a record discussed earlier, resolve it again in this request. When a specific record is needed and none is known, ask for the rental number or vehicle registration instead of guessing.
 Convert a customer place or phrase such as "New York time" to its IANA timezone (America/New_York) before availability checks; ask only when the place is unclear. For "which cars are available right now", combine get_account_counts with list_account_bookings view out_now, say how many cars are currently out, and offer a date-range check with find_available_vehicles. When listing bookings, name the car for each booking when the tool provides it.
@@ -133,6 +137,21 @@ export async function modelConversation(message:string,locale:Locale,conversatio
         const resolved=await runTool(name,{target:a.target,...(a.entityId?{entityId:a.entityId}:{})},env);
         if(!('action'in resolved))throw Error();
         const id=navId(resolved.action);actions.set(id,resolved.action);result={navigationId:id,label:resolved.action.label};
+      } else if(Object.hasOwn(BUSINESS_TOOLS,name)) {
+        const a=object(input);
+        if(!env.business)throw new SupportError('business_unavailable','Business data queries are not configured in this environment.',503);
+        if(name==='query_business_data')issue=selectIssue(businessTopic(a.dataset));
+        const checkKey=await digest(name+JSON.stringify(a));
+        if(failures.has(checkKey))throw new SupportError('duplicate_failed_check','This query already failed in this request. Change the question or offer support.');
+        const r=await BUSINESS_TOOLS[name as keyof typeof BUSINESS_TOOLS](input,{...env,business:env.business,financeScopes:scopes,
+          timezone:(tenant:string)=>env.fleet?env.fleet.timezone(tenant):Promise.resolve(null),
+          currency:async(tenant:string)=>(await env.finance?.reads.tenant(tenant))?.currency_code??null,
+          now:env.observe?.()??env.now});
+        if(r.status==='error')failures.add(checkKey);
+        recordIssueCheck(issue,name,checkKey,r,env.now,policy);
+        for(const s of r.sources)sources.set(s.id,s);
+        evidence.push(r);
+        result=r;
       } else if(Object.hasOwn(OPERATIONAL_TOOLS,name)||Object.hasOwn(FINANCE,name)||['get_account_counts','list_account_bookings','find_available_vehicles'].includes(name)) {
         const a=object(input);
         const financeTool=Object.hasOwn(FINANCE,name);

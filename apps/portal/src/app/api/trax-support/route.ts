@@ -4,6 +4,7 @@ import { createSupportReads, type SupportDatabase } from '../../../../../../supa
 import { createOperationalReads, type OperationalDatabase } from '../../../../../../supabase/functions/trax-support/support/operational-reads';
 import { configuredModel } from '../../../../../../supabase/functions/trax-support/support/model';
 import { createFleetReads, type FleetDatabase } from '../../../../../../supabase/functions/trax-support/support/fleet-tools';
+import { createBusinessReads, type BusinessDatabase } from '../../../../../../supabase/functions/trax-support/support/business-query';
 import { createTicketStore, type TicketDatabase } from '../../../../../../supabase/functions/trax-support/support/support-store';
 import { configuredEscalationPolicy } from '../../../../../../supabase/functions/trax-support/support/issues';
 import { configuredFinance } from '../../../../../../supabase/functions/trax-support/support/finance-tools';
@@ -44,6 +45,7 @@ export async function POST(request: Request): Promise<Response> {
     const response = await handleSupportRequest(request, { reads: createSupportReads(db as unknown as SupportDatabase), signingSecret: secret,
       model:configuredModel(key=>process.env[key]),operational:createOperationalReads(db as unknown as OperationalDatabase),clock:calendarClock(fromZonedTime,formatInTimeZone),
       fleet:createFleetReads(db as unknown as FleetDatabase),
+      business:createBusinessReads(db as unknown as BusinessDatabase),
       finance:configuredFinance(db as unknown as FinanceDatabase,key=>process.env[key]),
       store:process.env.TRAX_SUPPORT_STORAGE==='enabled'?createTicketStore(db as unknown as TicketDatabase):undefined,
       escalationPolicy:configuredEscalationPolicy(process.env.TRAX_ESCALATION_POLICY),
