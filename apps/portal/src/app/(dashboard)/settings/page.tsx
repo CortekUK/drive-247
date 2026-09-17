@@ -83,7 +83,7 @@ import { DepositSettingsV2, FeesSettingsV2 } from '@/components/settings-v2/fees
 import { useSettingsReadState, type RegisterSectionSave } from '@/components/settings-v2/pricing-money-parts';
 import { AutoExtendSettingsV2, PayAsYouGoSettingsV2 } from '@/components/settings-v2/payment-modes-v2';
 import { PromoCodesSectionV2 } from '@/components/settings-v2/promo-codes-section-v2';
-import { validatePromoDraft, visiblePromoIssues } from '@/lib/settings-money-states';
+import { validatePromoDraft, validatePromoEdit, visiblePromoIssues, promoSaveError } from '@/lib/settings-money-states';
 import { parseLocalDate } from '@/lib/date-utils';
 import { useIsFetching } from '@tanstack/react-query';
 import {
@@ -192,11 +192,16 @@ const V2_SETTINGS_PAGES: Record<string, { section: string; title: string; descri
  * their Try again on a failed or stale read must stay usable.
  * Pricing rules, Tax and fees and Security deposit do the same per section
  * (pricing-rules-v2, fees-deposit-v2), with Try again outside each fieldset.
+ * Installments, Pay as you go and Auto-extension disable their own switches
+ * (InstallmentSettings, payment-modes-v2); Promo codes and Extras render no
+ * write control at all for a viewer. Inside the fieldset a viewer could not
+ * retry a failed read, copy a promo code, open an installment example or press
+ * "Show more" on a phone.
  */
-const V2_PAGES_GATING_OWN_CONTROLS = new Set(['reminders', 'push', 'general', 'locations', 'booking-site', 'requirements', 'duration', 'lockbox', 'templates', 'pricing', 'fees', 'preauth']);
+const V2_PAGES_GATING_OWN_CONTROLS = new Set(['reminders', 'push', 'general', 'locations', 'booking-site', 'requirements', 'duration', 'lockbox', 'templates', 'pricing', 'fees', 'preauth', 'installments', 'payg', 'auto-extend', 'promos', 'extras']);
 
 /** v2 pages that show "Unsaved changes" beside their own Save; the header chip would repeat it. */
-const V2_PAGES_WITH_OWN_SAVE_STATUS = new Set(['general', 'locations', 'booking-site', 'requirements', 'duration', 'lockbox', 'templates']);
+const V2_PAGES_WITH_OWN_SAVE_STATUS = new Set(['general', 'locations', 'booking-site', 'requirements', 'duration', 'lockbox', 'templates', 'installments']);
 
 const V2_SETTINGS_REDIRECTS: Record<string, string> = {
   branding: '/settings/appearance',
@@ -1736,7 +1741,8 @@ const Settings = () => {
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error.message || "Failed to create promo code",
+        // v2: the operator's words, never the raw database message.
+        description: v2Chrome ? describeSaveError(promoSaveError(error)) : error.message || "Failed to create promo code",
         variant: "destructive",
       });
     },
@@ -1765,6 +1771,8 @@ const Settings = () => {
   // Edit & Delete State
   const [editingPromo, setEditingPromo] = useState<any>(null);
   const [deletingPromo, setDeletingPromo] = useState<any>(null);
+  // v2: whether Save Changes was pressed once, so "missing" field errors wait for it.
+  const [editPromoSubmittedV2, setEditPromoSubmittedV2] = useState(false);
 
   // Validate promo code uniqueness for edit form
   useEffect(() => {
@@ -1872,7 +1880,7 @@ const Settings = () => {
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error.message || "Failed to update promo code",
+        description: v2Chrome ? describeSaveError(promoSaveError(error)) : error.message || "Failed to update promo code",
         variant: "destructive",
       });
     },
@@ -1904,7 +1912,7 @@ const Settings = () => {
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error.message || "Failed to delete promo code",
+        description: v2Chrome ? "Couldn't delete this code. Nothing was deleted." : error.message || "Failed to delete promo code",
         variant: "destructive",
       });
     },
@@ -2195,6 +2203,23 @@ const Settings = () => {
     );
   }
 
+  // v2 (northwind): the Edit dialog checks what the create form checks (a 150%
+  // discount, a new expiry in the past, no uses left) before anything is sent,
+  // and says under each field what is wrong. The payload for a valid edit is v1's.
+  const savedEditingPromoV2: any = v2Chrome && editingPromo ? promoCodes?.find((p: any) => p.id === editingPromo.id) : null;
+  const editPromoIssuesV2 =
+    v2Chrome && editingPromo ? visiblePromoIssues(validatePromoEdit(editingPromo, savedEditingPromoV2), editPromoSubmittedV2) : {};
+  const editPromoFieldErrorV2 = (message?: string) =>
+    v2Chrome && message ? <p role="alert" className="text-sm text-destructive">{message}</p> : null;
+  const handleUpdatePromoV2 = () => {
+    if (!editingPromo || updatePromoMutation.isPending) return;
+    if (Object.keys(validatePromoEdit(editingPromo, savedEditingPromoV2)).length > 0) {
+      setEditPromoSubmittedV2(true);
+      return;
+    }
+    handleUpdatePromo();
+  };
+
   // Shared by the v1 tabs and the v2 pages, so both render the same dialogs.
   const promoDialogs = (
     <>
@@ -2216,10 +2241,11 @@ const Settings = () => {
                       value={editingPromo.name}
                       onChange={(e) => setEditingPromo({ ...editingPromo, name: e.target.value })}
                     />
+                    {editPromoFieldErrorV2(editPromoIssuesV2.name)}
                   </div>
 
-                  <div className="flex gap-4">
-                    <div className="space-y-2 w-1/2">
+                  <div className={v2Chrome ? "flex flex-col gap-4 sm:flex-row" : "flex gap-4"}>
+                    <div className={v2Chrome ? "space-y-2 w-full min-w-0 sm:w-1/2" : "space-y-2 w-1/2"}>
                       <Label>Expiration Date</Label>
                       <Popover modal={true}>
                         <PopoverTrigger asChild>
@@ -2240,8 +2266,9 @@ const Settings = () => {
                           />
                         </PopoverContent>
                       </Popover>
+                      {editPromoFieldErrorV2(editPromoIssuesV2.expires_at)}
                     </div>
-                    <div className="space-y-2 w-1/2">
+                    <div className={v2Chrome ? "space-y-2 w-full min-w-0 sm:w-1/2" : "space-y-2 w-1/2"}>
                       <Label htmlFor="edit_max_users">Max Users</Label>
                       <Input
                         id="edit_max_users"
@@ -2254,11 +2281,12 @@ const Settings = () => {
                           setEditingPromo({ ...editingPromo, max_users: rawValue });
                         }}
                       />
+                      {editPromoFieldErrorV2(editPromoIssuesV2.max_users)}
                     </div>
                   </div>
 
-                  <div className="flex gap-4">
-                    <div className="space-y-2 w-1/2">
+                  <div className={v2Chrome ? "flex flex-col gap-4 sm:flex-row" : "flex gap-4"}>
+                    <div className={v2Chrome ? "space-y-2 w-full min-w-0 sm:w-1/2" : "space-y-2 w-1/2"}>
                       <Label htmlFor="edit_type">Type</Label>
                       <Select
                         value={editingPromo.type}
@@ -2273,7 +2301,7 @@ const Settings = () => {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-2 w-1/2">
+                    <div className={v2Chrome ? "space-y-2 w-full min-w-0 sm:w-1/2" : "space-y-2 w-1/2"}>
                       <Label htmlFor="edit_value">Value</Label>
                       <Input
                         id="edit_value"
@@ -2285,6 +2313,7 @@ const Settings = () => {
                           setEditingPromo({ ...editingPromo, value: rawValue });
                         }}
                       />
+                      {editPromoFieldErrorV2(editPromoIssuesV2.value)}
                     </div>
                   </div>
 
@@ -2334,9 +2363,19 @@ const Settings = () => {
                   </div>
                 </div>
               )}
+              {v2Chrome && updatePromoMutation.isError && (
+                <SettingsSaveState
+                  status="error"
+                  error={promoSaveError(updatePromoMutation.error)}
+                  onRetry={handleUpdatePromoV2}
+                />
+              )}
               <DialogFooter>
                 <Button variant="outline" onClick={() => setEditingPromo(null)}>Cancel</Button>
-                <Button onClick={handleUpdatePromo} disabled={updatePromoMutation.isPending || !!editPromoCodeError}>
+                <Button
+                  onClick={v2Chrome ? handleUpdatePromoV2 : handleUpdatePromo}
+                  disabled={updatePromoMutation.isPending || !!editPromoCodeError || (v2Chrome && Object.keys(editPromoIssuesV2).length > 0)}
+                >
                   {updatePromoMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Save Changes
                 </Button>
@@ -2357,11 +2396,23 @@ const Settings = () => {
                   This action cannot be undone and may affect active users trying to use this code.
                 </AlertDialogDescription>
               </AlertDialogHeader>
+              {v2Chrome && deletePromoMutation.isError && (
+                <p role="alert" className="text-sm text-destructive">
+                  Couldn&apos;t delete this code. Nothing was deleted. Try again.
+                </p>
+              )}
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                 <AlertDialogAction
                   className="bg-destructive hover:bg-destructive/90"
-                  onClick={() => deletingPromo && deletePromoMutation.mutate(deletingPromo.id)}
+                  onClick={v2Chrome
+                    ? (e) => {
+                        // v2: stay open until the delete lands, so a failure is seen here.
+                        e.preventDefault();
+                        if (deletingPromo && !deletePromoMutation.isPending) deletePromoMutation.mutate(deletingPromo.id);
+                      }
+                    : () => deletingPromo && deletePromoMutation.mutate(deletingPromo.id)}
+                  disabled={v2Chrome ? deletePromoMutation.isPending : undefined}
                 >
                   {deletePromoMutation.isPending ? "Deleting..." : "Delete Promo Code"}
                 </AlertDialogAction>
@@ -2907,7 +2958,7 @@ const Settings = () => {
         case 'installments':
           return (
             <div className="settings-v2-body">
-              <InstallmentSettings />
+              <InstallmentSettings registerSave={registerV2SectionSave} />
             </div>
           );
 
@@ -2919,8 +2970,9 @@ const Settings = () => {
 
         case 'promos': {
           const promoIssuesV2 = visiblePromoIssues(validatePromoDraft(promoForm), promoSubmittedV2);
-          // A failed list read means the code can't be checked for duplicates.
-          const promoCheckUnavailableV2 = !promoCodes && !!promoCodesErrorV2;
+          // Until the list is in (still loading, retrying, or failed) the code
+          // can't be checked for duplicates, so Add waits.
+          const promoCheckUnavailableV2 = !promoCodes;
           const handleCreatePromoV2 = () => {
             if (Object.keys(validatePromoDraft(promoForm)).length > 0) {
               setPromoSubmittedV2(true);
@@ -2940,7 +2992,7 @@ const Settings = () => {
                     <>
                     <SettingsSaveState
                       status={createPromoMutation.isPending ? 'saving' : createPromoMutation.isError ? 'error' : 'idle'}
-                      error={createPromoMutation.error}
+                      error={promoSaveError(createPromoMutation.error)}
                     />
                     <Button size="sm" onClick={handleCreatePromoV2} disabled={createPromoMutation.isPending || !!promoCodeError || promoCheckUnavailableV2}>
                       {createPromoMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -2982,7 +3034,7 @@ const Settings = () => {
                     <SettingsField
                       label="Code"
                       htmlFor="v2_promo_code"
-                      hint={promoCheckUnavailableV2 ? <span className="text-destructive">Couldn&apos;t check existing codes. Load the list below, then add.</span> : promoCodeError ? <span className="text-destructive">{promoCodeError}</span> : 'Made from the name and discount. You can change it.'}
+                      hint={promoCheckUnavailableV2 ? (promoCodesErrorV2 ? <span className="text-destructive">Couldn&apos;t check existing codes. Load the list below, then add.</span> : 'Checking existing codes…') : promoCodeError ? <span className="text-destructive">{promoCodeError}</span> : 'Made from the name and discount. You can change it.'}
                     >
                       <div className="flex gap-2">
                         <Input
@@ -3076,8 +3128,15 @@ const Settings = () => {
                   currencyCode={tenant?.currency_code || 'USD'}
                   resetKey={tenant?.id ?? ''}
                   // parseLocalDate: `new Date('yyyy-MM-dd')` is UTC midnight, the day before west of Greenwich.
-                  onEdit={(promo) => setEditingPromo({ ...promo, expires_at: parseLocalDate(promo.expires_at) })}
-                  onDelete={(promo) => setDeletingPromo(promo)}
+                  onEdit={(promo) => {
+                    updatePromoMutation.reset();
+                    setEditPromoSubmittedV2(false);
+                    setEditingPromo({ ...promo, expires_at: parseLocalDate(promo.expires_at) });
+                  }}
+                  onDelete={(promo) => {
+                    deletePromoMutation.reset();
+                    setDeletingPromo(promo);
+                  }}
                 />
               </div>
             </div>

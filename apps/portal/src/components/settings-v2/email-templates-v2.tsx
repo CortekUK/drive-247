@@ -14,7 +14,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Eye, FileText, Pencil, RotateCcw, Search, X } from "lucide-react";
+import { Eye, FileText, Loader2, Pencil, RotateCcw, Search, X } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import { Input } from "@/components/ui-v2/input";
 import { TooltipProvider } from "@/components/ui-v2/tooltip";
@@ -57,7 +57,7 @@ import {
   useSettingsSaveStatus,
 } from "./section-states";
 import { filterEmailTemplateTypes, isBlankHtml } from "./message-rules";
-import { EditorChip, IconActionButton, TemplateEditorShellV2 } from "./template-editor-shell-v2";
+import { EditorChip, TemplateEditorShellV2 } from "./template-editor-shell-v2";
 
 const TEMPLATES_HOME = "/settings?tab=templates";
 const LIST_HREF = "/settings/email-templates";
@@ -114,16 +114,21 @@ export function EmailTemplatesListV2() {
       />
       <div className="flex flex-wrap items-center gap-2">
         {!canEdit && <SettingsReadOnlyNotice />}
+        {/* Labelled, not a bare icon: on a phone this wraps under the page
+            description, where a lone red arrow read as a stray glyph. */}
         {canEdit && custom && customizedTypes.length > 0 && (
-          <IconActionButton
-            action={{
-              label: "Reset all emails to default",
-              icon: RotateCcw,
-              onClick: () => setResetOpen(true),
-              busy: resetting,
-              tone: "destructive",
-            }}
-          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setResetOpen(true)}
+            disabled={resetting}
+            aria-label="Reset all emails to default"
+            className="text-destructive hover:text-destructive"
+          >
+            {resetting ? <Loader2 className="animate-spin" data-icon="inline-start" /> : <RotateCcw data-icon="inline-start" />}
+            Reset all
+          </Button>
         )}
       </div>
     </div>
@@ -131,7 +136,8 @@ export function EmailTemplatesListV2() {
 
   let body: React.ReactNode;
   if (!custom && !strict.isError) {
-    body = <SettingsSectionSkeleton variant="table" rows={6} columns={3} label="Loading email templates" />;
+    // Shaped like the list it becomes: icon rows, not a table.
+    body = <SettingsSectionSkeleton variant="rows" thumbnail rows={6} label="Loading email templates" />;
   } else if (!custom) {
     body = (
       <SettingsLoadError
@@ -205,7 +211,7 @@ export function EmailTemplatesListV2() {
                     <span
                       className={cn(
                         "flex size-9 shrink-0 items-center justify-center rounded-xl",
-                        customized ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground",
+                        customized ? "bg-primary/10 text-primary dark:text-indigo-300" : "bg-muted text-muted-foreground",
                       )}
                       aria-hidden="true"
                     >

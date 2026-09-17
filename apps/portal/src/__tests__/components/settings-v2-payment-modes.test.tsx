@@ -197,6 +197,24 @@ describe("AutoExtendSettingsV2", () => {
     expect(rs.current.updateSettings).not.toHaveBeenCalled();
   });
 
+  it("explains a value already saved out of range, never corrects it, and widens the field for every digit", async () => {
+    rs.current = api({}, { auto_extend_enabled: true, auto_extend_default_lead_hours: 9999999, auto_extend_max_retries: -3 });
+    render(<AutoExtendSettingsV2 canEdit />);
+    const [lead, grace, retries] = inputs();
+    expect([lead.value, grace.value, retries.value]).toEqual(["9999999", "48", "-3"]);
+    expect(text()).toContain("Charge lead time: The saved value 9,999,999 is outside 0–168 hours. Enter a new value.");
+    expect(text()).toContain("Retries: The saved value -3 is outside 0–20 retries. Enter a new value.");
+    expect(lead.getAttribute("aria-invalid")).toBe("true");
+    expect(grace.getAttribute("aria-invalid")).toBeNull();
+    expect(lead.style.minWidth).toBe("calc(7ch + 1.75rem)");
+    expect(rs.current.updateSettings).not.toHaveBeenCalled();
+
+    typeInto(lead, "24");
+    await blur(lead);
+    expect(rs.current.updateSettings).toHaveBeenCalledWith({ auto_extend_default_lead_hours: 24 });
+    expect(text()).toContain("Retries: The saved value -3");
+  });
+
   it("saves a valid changed number as a number, under its own key", async () => {
     rs.current = api({}, { auto_extend_enabled: true });
     render(<AutoExtendSettingsV2 canEdit />);

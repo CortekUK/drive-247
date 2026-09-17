@@ -2,7 +2,7 @@
 --
 -- Two kinds in one table:
 --   feature  a card on the v2 dashboard's "On your desk" band (paper illustration,
---            heading, one line) that opens a 2-3 slide dialog. v2 canary only;
+--            heading, one line) that opens a slides dialog (1-10 slides). v2 canary only;
 --            the gate lives in the portal, not here.
 --   system   a notice in EVERY tenant portal, v1 and v2 chrome: a dialog or a
 --            full-width banner, soft (closable) or hard (blocks until the super
@@ -12,10 +12,14 @@
 -- every limit, pattern and predicate below is
 -- apps/{portal/src,admin}/lib/announcements/contract.ts. Change one, change both.
 --
--- NOT APPLIED BY THE CODE THAT ACCOMPANIES IT. Nothing in this file reaches
--- production until it has passed the PGlite suite below and an adversarial
--- review; the lead then applies it deliberately (Management API / MCP), with
--- someone watching, and deletes this note when it lands.
+-- APPLIED TO PRODUCTION on Sep 17 2026 through the Management API, as one
+-- transaction, after the PGlite suite (462 checks) and an adversarial review.
+-- Verified read-only afterwards: 3 tables with RLS, 13 functions, EXECUTE grants
+-- (anon none), 10 policies, the portal-announcement-media bucket. A rolled-back
+-- smoke test saved a targeted announcement as a super admin, the targeted
+-- tenant's staff read it, and another tenant's staff did not.
+-- It is written to be re-runnable, but a re-run does NOT alter the CHECK
+-- constraints of the existing tables: change those with an explicit ALTER.
 --
 -- Shipping the code first is safe. Until this runs, `get_portal_announcements`
 -- does not exist, the portal treats that like any read error and renders NOTHING
@@ -153,7 +157,7 @@ CREATE TABLE IF NOT EXISTS public.portal_announcements (
   body              text,
   -- feature: the card illustration, an object this system uploaded. system: NULL.
   image_url         text,
-  -- feature: 2-3 {heading, body, image_url}. system: [].
+  -- feature: 1-10 {heading, body, image_url} (was 2-3 until Sep 17 2026). system: [].
   slides            jsonb NOT NULL DEFAULT '[]'::jsonb,
   -- Both NULL or both set; the URL is an in-portal path (never a scheme, never //host).
   cta_label         text,
@@ -215,7 +219,7 @@ CREATE TABLE IF NOT EXISTS public.portal_announcements (
                                      AND summary ~ '[^\x09-\x0D\x20\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF]'
                                      AND image_url IS NOT NULL AND char_length(image_url) <= 500
                                      AND image_url ~ '^https://[A-Za-z0-9.-]+(:[0-9]+)?/storage/v1/object/public/portal-announcement-media/feature/(card|slide)/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(png|jpg|webp)$'
-                                     AND CASE WHEN jsonb_typeof(slides) = 'array' THEN jsonb_array_length(slides) BETWEEN 2 AND 3 ELSE false END
+                                     AND CASE WHEN jsonb_typeof(slides) = 'array' THEN jsonb_array_length(slides) BETWEEN 1 AND 10 ELSE false END
                                      AND public.portal_announcement_slides_valid(slides))),
   CONSTRAINT pa_system_shape    CHECK (kind <> 'system' OR (
                                          display IS NOT NULL AND tone IS NOT NULL
@@ -225,6 +229,19 @@ CREATE TABLE IF NOT EXISTS public.portal_announcements (
                                      AND body ~ '[^\x09-\x0D\x20\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF]'
                                      AND char_length(body) <= CASE WHEN display = 'banner' THEN 200 ELSE 400 END))
 );
+-- Slides were 2-3 until Sep 17 2026 (user: slides must be freely added and deleted).
+-- CREATE TABLE IF NOT EXISTS keeps an existing table's old CHECK, so rebuild it.
+ALTER TABLE public.portal_announcements DROP CONSTRAINT IF EXISTS pa_feature_shape;
+ALTER TABLE public.portal_announcements ADD CONSTRAINT pa_feature_shape CHECK (kind <> 'feature' OR (
+                                         blocking = 'soft' AND display IS NULL AND tone IS NULL AND body IS NULL
+                                     AND summary IS NOT NULL AND char_length(btrim(summary)) >= 1 AND char_length(summary) <= 120
+                                     AND summary !~ '[\x01-\x1F\x7F]'
+                                     AND summary ~ '[^\x09-\x0D\x20\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF]'
+                                     AND image_url IS NOT NULL AND char_length(image_url) <= 500
+                                     AND image_url ~ '^https://[A-Za-z0-9.-]+(:[0-9]+)?/storage/v1/object/public/portal-announcement-media/feature/(card|slide)/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(png|jpg|webp)$'
+                                     AND CASE WHEN jsonb_typeof(slides) = 'array' THEN jsonb_array_length(slides) BETWEEN 1 AND 10 ELSE false END
+                                     AND public.portal_announcement_slides_valid(slides)));
+
 -- The reader's scan: active rows in display order.
 CREATE INDEX IF NOT EXISTS portal_announcements_live_idx ON public.portal_announcements (kind, blocking, sort_order) WHERE is_active;
 

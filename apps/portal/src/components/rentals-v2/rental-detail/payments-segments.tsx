@@ -194,7 +194,7 @@ function Cell({
       className={cn(
         "flex shrink-0 cursor-pointer flex-col rounded-3xl px-3 py-2.5 text-left transition-colors",
         wide ? "w-[172px]" : "w-[152px]",
-        selected ? "bg-primary-light ring-2 ring-primary/40" : "bg-muted/40 hover:bg-muted/70"
+        selected ? "bg-primary-light ring-2 ring-primary/40" : "bg-muted/40 hover:bg-primary/10 dark:hover:bg-primary/15"
       )}
     >
       <span className="block truncate text-[11px] font-medium leading-snug">{label}</span>

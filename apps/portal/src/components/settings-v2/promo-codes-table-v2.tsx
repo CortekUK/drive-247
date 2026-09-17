@@ -55,7 +55,12 @@ import {
   ListTableHeader,
   useProgressiveRows,
 } from "@/components/shared/list-table-v2";
-import { formatSettingsMoney, formatSettingsNumber, TruncatedText } from "@/components/settings-v2/section-states";
+import {
+  formatSettingsMoney,
+  formatSettingsNumber,
+  SETTINGS_PHONE_FACTS,
+  TruncatedText,
+} from "@/components/settings-v2/section-states";
 import { parseLocalDate } from "@/lib/date-utils";
 import { isPromoExpired } from "@/lib/settings-money-states";
 import { cn } from "@/lib/utils";
@@ -99,10 +104,14 @@ function PromoDate({ value, expiry }: { value: string | null | undefined; expiry
     );
   }
   if (expiry && isPromoExpired(value)) {
+    // Each part keeps to one line; the pair wraps between them when the column
+    // is too narrow (the cell allows it), instead of running into Max users.
     return (
       <span className="block">
-        <span className="text-muted-foreground">{label}</span>{" "}
-        <ListStatusText tone="danger">Expired</ListStatusText>
+        <span className="whitespace-nowrap text-muted-foreground">{label}</span>{" "}
+        <span className="whitespace-nowrap">
+          <ListStatusText tone="danger">Expired</ListStatusText>
+        </span>
       </span>
     );
   }
@@ -198,18 +207,27 @@ export function PromoCodesTableV2<T extends PromoCodeRowV2>({
             <div className="min-w-0 flex-1 space-y-1">
               <TruncatedText text={promo.name} className={LIST_CLASSES.identifier} />
               <CopyCode code={promo.code} onCopy={onCopy} />
-              <p className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
-                <span className={`tabular-nums [overflow-wrap:anywhere] ${LIST_CLASSES.text}`}>
+              <p className={cn(SETTINGS_PHONE_FACTS.line, "text-sm")}>
+                <span
+                  className={cn(
+                    "tabular-nums [overflow-wrap:anywhere]",
+                    LIST_CLASSES.text,
+                    Number(promo.value) < 0 && "text-red-500 dark:text-red-400",
+                  )}
+                >
                   {promoValueLabel(promo, currencyCode)}
                 </span>
-                <span className="text-muted-foreground">·</span>
-                <span className="tabular-nums">
+                <span className={cn("tabular-nums", SETTINGS_PHONE_FACTS.afterDot)}>
                   <PromoDate value={promo.expires_at} expiry />
                 </span>
               </p>
-              <p className="text-xs text-muted-foreground tabular-nums">
-                {formatSettingsNumber(promo.max_users)} max uses ·{" "}
-                {(promo.min_duration_days ?? 0) > 0 ? `Applies by itself on ${promo.min_duration_days}+ days` : "Typed at checkout"}
+              <p className={cn(SETTINGS_PHONE_FACTS.line, "text-xs text-muted-foreground tabular-nums")}>
+                <span>{formatSettingsNumber(promo.max_users)} max uses</span>
+                <span className={SETTINGS_PHONE_FACTS.afterDot}>
+                  {(promo.min_duration_days ?? 0) > 0
+                    ? `Applies by itself on ${formatSettingsNumber(promo.min_duration_days)}+ days`
+                    : "Typed at checkout"}
+                </span>
               </p>
             </div>
             {canEdit && <PromoRowMenu promo={promo} onEdit={onEdit} onDelete={onDelete} />}
@@ -264,7 +282,7 @@ export function PromoCodesTableV2<T extends PromoCodeRowV2>({
                 <ListCell className="tabular-nums">
                   <PromoDate value={promo.created_at} />
                 </ListCell>
-                <ListCell className="tabular-nums">
+                <ListCell className="tabular-nums whitespace-normal">
                   <PromoDate value={promo.expires_at} expiry />
                 </ListCell>
                 <ListCell className="tabular-nums">

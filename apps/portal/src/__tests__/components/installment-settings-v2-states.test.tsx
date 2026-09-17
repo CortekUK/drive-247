@@ -62,8 +62,8 @@ function api(overrides: Record<string, unknown> = {}, settings: Record<string, u
   };
 }
 
-function render() {
-  act(() => root.render(<InstallmentSettings />));
+function render(props: Record<string, unknown> = {}) {
+  act(() => root.render(<InstallmentSettings {...props} />));
 }
 const text = () => container.textContent ?? "";
 const saveButton = () =>
@@ -105,13 +105,16 @@ describe("InstallmentSettings v2 states", () => {
     expect(rs.current.refetch).toHaveBeenCalledTimes(1);
   });
 
-  it("warns that no plan is on, that no provider is connected, and shows the saved minimum days", () => {
+  it("warns that no plan is on, that no provider is connected, and shows the minimum days checkout applies", () => {
     rs.current = api();
     render();
     expect(text()).toContain("Installments is on, but no plan is enabled");
     expect(text()).toContain("No payment provider is connected");
-    expect(text()).toContain("Available for rentals 14+ days");
-    expect(text()).toContain("Available for rentals 45+ days");
+    // Cadence shape: New Rental and checkout use 7 / 30 days. Checkout's section
+    // gate is min(14, 45) = 14, which only moves the weekly plan (online).
+    expect(text()).toContain("Available for rentals 7+ days (14+ when booked online)");
+    expect(text()).toContain("Available for rentals 30+ days");
+    expect(text()).not.toContain("45+");
     // Nothing changed yet, so nothing to save.
     expect(saveButton()!.disabled).toBe(true);
   });
@@ -146,6 +149,51 @@ describe("InstallmentSettings v2 states", () => {
     expect(container.querySelector<HTMLButtonElement>('[role="switch"]')!.disabled).toBe(true);
     expect(container.querySelector("fieldset[data-read-only]")).not.toBeNull();
     expect(saveButton()).toBeUndefined();
+  });
+
+  it("keeps See example usable for a read-only user while every plan control is disabled", () => {
+    flags.edit = false;
+    rs.current = api({}, { installment_config: { ...savedConfig, weekly_enabled: true, monthly_enabled: true } });
+    render();
+    const switches = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="switch"]'));
+    expect(switches).toHaveLength(3);
+    expect(switches.every((s) => s.disabled)).toBe(true);
+    const pills = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).filter((b) => /^\d×/.test(b.textContent ?? ""));
+    expect(pills.length).toBe(5);
+    expect(pills.every((b) => b.disabled)).toBe(true);
+    const examples = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).filter((b) => b.textContent?.includes("See example"));
+    expect(examples).toHaveLength(2);
+    // Not disabled, and not inside a disabled fieldset either.
+    expect(examples.every((b) => !b.matches(":disabled"))).toBe(true);
+  });
+
+  it("registers unsaved plans with the page's leave guard, and the leave save rejects when the write fails", async () => {
+    const registerSave = vi.fn();
+    const failure = new Error("Failed to fetch");
+    rs.current = api({ updateSettings: vi.fn().mockRejectedValue(failure) });
+    render({ registerSave });
+    expect(registerSave).toHaveBeenLastCalledWith("installments", null);
+    act(() => container.querySelector<HTMLButtonElement>("#weekly-enabled")!.click());
+    const [key, leaveSave] = registerSave.mock.calls[registerSave.mock.calls.length - 1];
+    expect(key).toBe("installments");
+    expect(typeof leaveSave).toBe("function");
+    let rejected: unknown = null;
+    await act(async () => {
+      await (leaveSave as () => Promise<void>)().catch((err) => {
+        rejected = err;
+      });
+    });
+    expect(rejected).toBe(failure);
+    expect(rs.current.updateSettings).toHaveBeenCalledWith({ installment_config: { ...savedConfig, weekly_enabled: true } });
+    expect(text()).toContain("Couldn't save.");
+  });
+
+  it("does not register a view-only user's plans with the leave guard", () => {
+    flags.edit = false;
+    const registerSave = vi.fn();
+    rs.current = api();
+    render({ registerSave });
+    expect(registerSave.mock.calls.every(([, save]) => save === null)).toBe(true);
   });
 });
 

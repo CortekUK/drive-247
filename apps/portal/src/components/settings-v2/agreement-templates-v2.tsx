@@ -16,7 +16,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { CalendarPlus, Check, Clock, CreditCard, Eye, FilePlus, FileText, Loader2, Lock, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { CalendarPlus, Check, ChevronDown, Clock, CreditCard, Eye, FilePlus, FileText, Loader2, Lock, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui-v2/radio-group";
@@ -102,9 +102,14 @@ function Snippet({ html, updatedAt }: { html: string | null | undefined; updated
   const updated = formatUpdated(updatedAt);
   return (
     <div className="space-y-1.5">
-      <p className="line-clamp-2 rounded-xl bg-muted/40 p-3 text-sm text-muted-foreground">
-        {text ?? <span className="italic">No text content</span>}
-      </p>
+      {/* Padding on a wrapper, not on the clamped <p>: line-clamp hides lines
+          past the second only inside the content box, so a third line used to
+          show through the bottom padding. */}
+      <div className="rounded-xl bg-muted/40 p-3">
+        <p className="line-clamp-2 text-sm text-muted-foreground [overflow-wrap:anywhere]">
+          {text ?? <span className="italic">No text content</span>}
+        </p>
+      </div>
       {updated && <p className="text-xs text-muted-foreground">Last updated {updated}</p>}
     </div>
   );
@@ -167,7 +172,7 @@ function AgreementCategorySectionV2({ category, canEdit }: { category: TemplateC
   if (!tenant || isLoading || initPhase === "running") {
     return (
       <SettingsSectionSkeleton
-        variant="cards"
+        variant="stack"
         rows={2}
         label={initPhase === "running" ? "Setting up agreements" : "Loading agreements"}
       />
@@ -404,7 +409,7 @@ export function AgreementTemplatesPageV2() {
                 onClick={() => setPicked(category)}
                 className={cn(
                   "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-sm font-medium transition-colors",
-                  selected ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                  selected ? "bg-primary/10 text-primary dark:text-indigo-300" : "text-muted-foreground hover:bg-muted hover:text-foreground",
                 )}
               >
                 <Icon className="size-4" aria-hidden="true" />
@@ -415,7 +420,7 @@ export function AgreementTemplatesPageV2() {
         </div>
 
         {waitingForPayg ? (
-          <SettingsSectionSkeleton variant="cards" rows={2} label="Loading agreements" />
+          <SettingsSectionSkeleton variant="stack" rows={2} label="Loading agreements" />
         ) : (
           <AgreementCategorySectionV2 key={active} category={active} canEdit={canEdit} />
         )}
@@ -577,7 +582,24 @@ export function AgreementTemplateEditorV2({
             <div className="min-h-[18rem] flex-1">
               <TipTapEditor content={content} onChange={setContent} placeholder="Start typing your agreement template..." />
             </div>
-            <div className="m-3 rounded-xl bg-muted/40 p-3">
+            {/* Phone, editing: folded, so the agreement itself gets the pane.
+                Otherwise the fixed disclaimer filled it and left ~100px to write
+                in. Not for view-only users: this pane is `inert` for them, so a
+                folded disclaimer could never be opened. */}
+            {canEdit && (
+            <details className="group m-3 rounded-xl bg-muted/40 p-3 md:hidden">
+              <summary className="flex cursor-pointer list-none items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground [&::-webkit-details-marker]:hidden">
+                <Lock className="size-3.5" aria-hidden="true" />
+                <span className="min-w-0 flex-1">Platform disclaimer · fixed</span>
+                <ChevronDown className="size-3.5 transition-transform group-open:rotate-180" aria-hidden="true" />
+              </summary>
+              <div
+                className="mt-2 select-none space-y-1.5 text-xs text-muted-foreground [&>hr]:hidden [&>p:first-of-type]:hidden"
+                dangerouslySetInnerHTML={{ __html: disclaimerHtml }}
+              />
+            </details>
+            )}
+            <div className={cn("m-3 rounded-xl bg-muted/40 p-3", canEdit && "hidden md:block")}>
               <p className="mb-2 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 <Lock className="size-3.5" aria-hidden="true" />
                 Platform disclaimer · fixed

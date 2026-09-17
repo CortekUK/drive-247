@@ -43,8 +43,24 @@
   --muted: 0 0% 96%;
   --muted-foreground: 0 0% 45%;
 
-  --accent: 0 0% 96%;
+  /* Light purple, not grey (team lead, Sep 16 2026: "our hover is a light
+     purple tint", never white or grey). `--accent` is what every shared
+     primitive highlights with (`hover:bg-accent`, `focus:bg-accent` on menu,
+     select and command items), so this one value turns those purple for v2
+     without touching their markup. It equals `primary/10` laid over white.
+     `--accent-foreground` stays near-black on purpose: the ui-v2 menus paint
+     destructive items with it. `--muted` stays grey: it is also a resting fill
+     (skeletons, tab tracks, progress, avatars). */
+  --accent: 248 68% 95%;
   --accent-foreground: 0 0% 9%;
+
+  /* The same tint for primitives that ALSO render for v1 tenants (ui-v2
+     Button). They read `hsl(var(--v2-hover, <their old token>))`; outside
+     `.v2-theme` this is undefined, so the fallback is exactly the old colour.
+     `--v2-outline-fill` does the same for the outline button's resting fill,
+     which the lead asked to be not white. */
+  --v2-hover: 248 68% 95%;
+  --v2-outline-fill: transparent;
 
   --success: 142 76% 36%;
   --success-foreground: 0 0% 100%;
@@ -123,8 +139,11 @@
   --muted: 0 0% 15%;
   --muted-foreground: 0 0% 63%;
 
-  --accent: 0 0% 15%;
+  /* The dark purple tint: the old 15% lightness step (so text contrast is
+     unchanged), in the indigo hue. See the light block for why both exist. */
+  --accent: 246 35% 17%;
   --accent-foreground: 0 0% 98%;
+  --v2-hover: 246 35% 17%;
 
   --success: 142 76% 52%;
   --success-foreground: 159 21% 8%;
@@ -977,3 +996,95 @@ html[data-trax-panel] {
   font-weight: 500;
   letter-spacing: normal;
 }
+
+/* `border-border/60` compiles to `hsl(var(--border) / 0.6)`. The dark v2
+ * `--border` already carries its alpha (`0 0% 100% / 10%`), so that colour is
+ * invalid and the border falls back to currentColor: a near-white 1px line
+ * round every Installments card and the example dialog's calendar. Inside a
+ * settings body, or a dialog that marks itself as one with
+ * `data-settings-v2-body`, give it the colour it means: 60% of the 10% white
+ * hairline. The light token has no alpha, so light mode is already right. The
+ * class is matched as an attribute string, not a class selector (see above). */
+.dark .v2-theme :is(.settings-v2-body, [data-settings-v2-body]) [class~="border-border/60"] {
+  border-color: hsl(0 0% 100% / 6%);
+}
+
+/* ── Pointer cursor on clickable controls ─────────────────────────────────────
+ * Team lead, Sep 16 2026: every clickable control shows the hand on hover.
+ *
+ * Buttons, [role=button] and <a href> already do (Tailwind 3.4 Preflight and
+ * the browser's own stylesheet), and so does every Radix trigger, switch,
+ * checkbox, radio, tab, accordion/collapsible trigger, toggle and calendar day,
+ * because each of those renders a <button>. What does NOT:
+ *   - Radix menu items and Select items, and cmdk items, which BOTH primitive
+ *     sets (components/ui and components/ui-v2) pin to `cursor-default`. Both
+ *     sets also render for v1 tenants, so their markup is not edited;
+ *   - native <select>, checkbox, radio and colour inputs, and <summary>;
+ *   - the <label> that toggles a checkbox, radio or switch.
+ *
+ * Scoped to `.v2-theme`, which sits on <body> and so also reaches Radix
+ * portals. v1 tenants never match. Specificity (0,3,1) and up beats
+ * `cursor-default` (0,1,0) whatever order the stylesheets load in.
+ *
+ * Disabled controls keep their own cursor. Radix marks them `data-disabled=""`;
+ * cmdk writes `data-disabled="true"`, and "false" when ENABLED, so a bare
+ * `[data-disabled]` here would drop every cmdk result. An element carrying an
+ * unconditional non-pointer cursor utility (not-allowed, grab, move, help,
+ * text) keeps it. `[class~=…]` is an attribute selector: like the rest of this
+ * file, no rule here may name a Tailwind utility as a CLASS selector.
+ *
+ * Deliberately NOT listed: [role=button] (Preflight has it, and dnd-kit drag
+ * handles use it with `cursor-grab`), [role=combobox] (cmdk's search input
+ * must keep the text cursor), and a bare `label[for]` (that would put the hand
+ * on every text-field label). */
+.v2-theme :is(
+    [role="menuitem"],
+    [role="menuitemcheckbox"],
+    [role="menuitemradio"],
+    [role="option"],
+    [role="tab"],
+    [role="switch"],
+    [role="checkbox"],
+    [role="radio"],
+    select,
+    input[type="checkbox"],
+    input[type="radio"],
+    input[type="color"],
+    summary
+  ):not(
+    :disabled,
+    [data-disabled=""],
+    [data-disabled="true"],
+    [aria-disabled="true"],
+    [class~="cursor-not-allowed"],
+    [class~="cursor-grab"],
+    [class~="cursor-move"],
+    [class~="cursor-help"],
+    [class~="cursor-text"]
+  ) {
+  cursor: pointer;
+}
+
+/* Labels that toggle an enabled checkbox, radio or switch. A separate rule
+ * because `:has()` is not forgiving: a browser without it drops the whole rule,
+ * and must not take the menu-item rule above down with it.
+ *   1. the label wraps the control;
+ *   2. the label sits right after it, or after the aria-hidden bubble <input>
+ *      Radix inserts next to a checkbox/switch/radio inside a <form>;
+ *   3. the label sits right before it;
+ *   4. settings rows: the label heads a text column that sits right before
+ *      the control, or right after it (skipped when that column also holds a
+ *      text field, whose label must keep the arrow).
+ * Every shape except the wrap needs `for`, without which a click toggles
+ * nothing. */
+.v2-theme label:has(:is([role="checkbox"], [role="radio"], [role="switch"], input[type="checkbox"], input[type="radio"]):not(:disabled, [data-disabled=""])),
+.v2-theme :is([role="checkbox"], [role="radio"], [role="switch"], input[type="checkbox"], input[type="radio"]):not(:disabled, [data-disabled=""]) + label[for],
+.v2-theme :is([role="checkbox"], [role="radio"], [role="switch"]):not(:disabled, [data-disabled=""]) + input[aria-hidden="true"] + label[for],
+.v2-theme label[for]:has(+ :is([role="checkbox"], [role="radio"], [role="switch"]):not(:disabled, [data-disabled=""])),
+.v2-theme :is(div, span):has(+ :is([role="switch"], [role="checkbox"], [role="radio"]):not(:disabled, [data-disabled=""])) > label[for]:not(:has(~ :is(input:not([type="checkbox"], [type="radio"]), textarea, select, [role="combobox"]))),
+.v2-theme :is([role="checkbox"], [role="radio"], [role="switch"]):not(:disabled, [data-disabled=""]) + :is(div, span) > label[for],
+.v2-theme :is([role="checkbox"], [role="radio"], [role="switch"]):not(:disabled, [data-disabled=""]) + input[aria-hidden="true"] + :is(div, span) > label[for] {
+  cursor: pointer;
+}
+/* ── end: pointer cursor on clickable controls (pinned by
+ * __tests__/components/v2-cursor-hover-polish.test.ts) ── */

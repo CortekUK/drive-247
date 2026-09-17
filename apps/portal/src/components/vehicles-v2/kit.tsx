@@ -626,7 +626,7 @@ export function SwitchRow({
       aria-pressed={checked}
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      className="flex w-full cursor-pointer items-center gap-4 px-5 py-3.5 text-left transition-colors hover:bg-foreground/[0.02] disabled:cursor-not-allowed disabled:opacity-60"
+      className="flex w-full cursor-pointer items-center gap-4 px-5 py-3.5 text-left transition-colors hover:bg-primary/5 dark:hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
     >
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-medium">{label}</span>

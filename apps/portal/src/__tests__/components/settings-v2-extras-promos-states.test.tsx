@@ -59,6 +59,8 @@ const buttonByText = (label: string) =>
 
 beforeEach(() => {
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
+  // jsdom has no scrollIntoView; the Add dialog scrolls its first field error into view.
+  if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = () => {};
   perms.edit = true;
   toastSpy.mockClear();
   container = document.createElement("div");
@@ -151,6 +153,16 @@ describe("ExtrasTableV2 extreme data", () => {
     render(table([extra()], false));
     expect(container.querySelector('[aria-label^="Actions for"]')).toBeNull();
   });
+
+  it("tints a negative price in the phone rows, and puts each dot with the fact after it", () => {
+    render(table([extra({ price: -25, max_quantity: 5, remaining_stock: 5 })]));
+    const phoneRow = container.querySelector('ul[aria-label="Rental extras"] li')!;
+    const price = Array.from(phoneRow.querySelectorAll("span")).find((el) => el.textContent === "-$25.00")!;
+    expect(price.className).toContain("text-red-500");
+    // No loose "·" item that could dangle at the end of a wrapped line.
+    expect(Array.from(phoneRow.querySelectorAll("span")).some((el) => el.textContent === "·")).toBe(false);
+    expect(phoneRow.querySelectorAll("[class*=\"before:content-\"]").length).toBeGreaterThanOrEqual(3);
+  });
 });
 
 function promo(overrides: Record<string, unknown> = {}) {
@@ -186,10 +198,22 @@ function section(props: Record<string, unknown>) {
 }
 
 describe("PromoCodesSectionV2 states", () => {
-  it("shows a table-shaped skeleton while the first read runs", () => {
+  it("shows a table-shaped skeleton while the first read runs, and stacked rows below sm", () => {
     render(section({ isLoading: true }).node);
     expect(text()).toContain("All promo codes");
-    expect(container.querySelector('[data-settings-state="loading"]')).not.toBeNull();
+    const skeletons = Array.from(container.querySelectorAll('[data-settings-state="loading"]'));
+    // Phones get the rows the loaded list shows there; sm+ the table.
+    expect(skeletons.map((el) => el.className.includes("sm:hidden"))).toEqual([true, false]);
+    expect(skeletons[1].className).toContain("hidden sm:block");
+  });
+
+  it("tints a negative value in the phone rows too, and lets 'Expired' wrap in the desktop cell", () => {
+    render(section({ promos: [promo({ type: "value", value: -25, expires_at: "2020-01-01" })] }).node);
+    const phoneRow = container.querySelector('ul[aria-label="Promo codes"] li')!;
+    const value = Array.from(phoneRow.querySelectorAll("span")).find((el) => el.textContent === "-$25.00")!;
+    expect(value.className).toContain("text-red-500");
+    const expiresCell = Array.from(container.querySelectorAll("td")).find((td) => td.textContent?.includes("Expired"))!;
+    expect(expiresCell.className).toContain("whitespace-normal");
   });
 
   it("shows the load error, never the empty copy, when the read failed", () => {
@@ -248,6 +272,31 @@ describe("PromoCodesSectionV2 states", () => {
   });
 });
 
+/** Radix menus and popovers measure with a constructible ResizeObserver, which the shared setup mock is not. */
+class ResizeObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+function openRowMenuItem(trigger: string, item: string) {
+  (globalThis as any).ResizeObserver = ResizeObserverStub;
+  const button = document.body.querySelector(`button[aria-label="${trigger}"]`) as HTMLButtonElement;
+  act(() => {
+    button.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0, pointerType: "mouse" }));
+  });
+  const entry = Array.from(document.body.querySelectorAll('[role="menuitem"]')).find((m) => m.textContent?.includes(item)) as HTMLElement;
+  act(() => entry.click());
+}
+const dialogButton = (label: string) =>
+  Array.from(document.body.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')).find((b) => b.textContent?.trim() === label);
+function typeValue(input: HTMLInputElement, value: string) {
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+  act(() => {
+    setter.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
 function extrasApi(overrides: Record<string, unknown> = {}) {
   return {
     extras: [],
@@ -273,7 +322,27 @@ describe("ExtrasSettings (v2) states", () => {
     render(<ExtrasSettings />);
     expect(text()).toContain("Rental Extras");
     expect(container.querySelector('[data-settings-state="loading"]')).not.toBeNull();
+    // Stacked rows (with a thumbnail) below sm, the table from sm up.
+    expect(container.querySelectorAll('[data-settings-state="loading"]')).toHaveLength(2);
     expect(buttonByText("Add Extra")).toBeUndefined();
+  });
+
+  it("keeps the Edit dialog open with the failure written in it when the save fails", async () => {
+    const failure = new Error("The extra was saved, but its vehicle prices couldn't be updated. Try saving again.");
+    ex.current = extrasApi({
+      extras: [extra({ image_urls: ["https://x.test/a.png"] })],
+      updateExtra: vi.fn().mockRejectedValue(failure),
+    });
+    render(<ExtrasSettings />);
+    openRowMenuItem("Actions for Child seat", "Edit");
+    await act(async () => dialogButton("Save Changes")!.click());
+    expect(ex.current.updateExtra).toHaveBeenCalledTimes(1);
+    expect(document.body.querySelector('[role="dialog"]')).not.toBeNull();
+    const inline = document.body.querySelector('[role="dialog"] [data-settings-state="save-error"]');
+    expect(inline?.textContent).toContain("its vehicle prices couldn't be updated");
+    // Retry runs the same save again.
+    await act(async () => dialogButton("Retry")!.click());
+    expect(ex.current.updateExtra).toHaveBeenCalledTimes(2);
   });
 
   it("shows the load error with a retry after a failed read, never 'no extras'", () => {
@@ -308,6 +377,43 @@ describe("ExtrasSettings (v2) states", () => {
     render(<ExtrasSettings />);
     expect(text()).toContain("Child seat is below 20% stock.");
     expect(toastSpy).not.toHaveBeenCalled();
+  });
+
+  it("asks before Cancel drops typed changes, and closes at once when nothing changed", () => {
+    ex.current = extrasApi({ extras: [extra({ image_urls: ["https://x.test/a.png"] })] });
+    render(<ExtrasSettings />);
+    openRowMenuItem("Actions for Child seat", "Edit");
+    act(() => dialogButton("Cancel")!.click());
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull();
+    expect(text()).not.toContain("Discard your changes?");
+
+    openRowMenuItem("Actions for Child seat", "Edit");
+    const name = document.body.querySelector<HTMLInputElement>('[role="dialog"] input')!;
+    typeValue(name, "Child seat XL");
+    act(() => dialogButton("Cancel")!.click());
+    expect(text()).toContain("Discard your changes?");
+    const keep = Array.from(document.body.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button')).find((b) => b.textContent === "Keep editing")!;
+    act(() => keep.click());
+    expect(document.body.querySelector<HTMLInputElement>('[role="dialog"] input')!.value).toBe("Child seat XL");
+
+    act(() => dialogButton("Cancel")!.click());
+    const discard = Array.from(document.body.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button')).find((b) => b.textContent === "Discard")!;
+    act(() => discard.click());
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull();
+    expect(ex.current.updateExtra).not.toHaveBeenCalled();
+  });
+
+  it("does not offer a 'New total' next to the whole-number error for a decimal stock", () => {
+    ex.current = extrasApi({ extras: [extra({ max_quantity: 10, booked_quantity: 2, remaining_stock: 8 })] });
+    render(<ExtrasSettings />);
+    openRowMenuItem("Actions for Child seat", "Update Stock");
+    const input = document.body.querySelector<HTMLInputElement>('[role="dialog"] input')!;
+    typeValue(input, "1.5");
+    expect(text()).toContain("Enter a whole number above 0.");
+    expect(text()).not.toContain("New total will be");
+    typeValue(input, "2500");
+    expect(text()).toContain("New total will be: 2,510");
+    expect(text()).not.toContain("Enter a whole number above 0.");
   });
 
   it("lists every field problem under its field on Save and does not create anything", async () => {

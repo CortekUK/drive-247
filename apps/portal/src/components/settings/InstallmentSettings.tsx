@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { Eye, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -12,7 +12,10 @@ import { useToast } from "@/hooks/use-toast";
 import { InstallmentCalendar, type InstallmentCalendarItem } from "@/components/installments/InstallmentCalendar";
 import { cn } from "@/lib/utils";
 import { useV2 } from "@/lib/v2-context";
+import type { RegisterSectionSave } from "@/components/settings-v2/pricing-money-parts";
+import { useRegisterLeaveSave } from "@/components/settings-v2/business-section-save";
 import {
+  formatSettingsNumber,
   SettingsDependencyNotice,
   SettingsLoadError,
   SettingsReadOnlyFieldset,
@@ -27,6 +30,7 @@ import {
   isInstallmentDraftDirty,
   paymentProviderState,
   planMinimumDays,
+  planOnlineMinimumDays,
 } from "@/lib/settings-money-states";
 
 interface InstallmentConfig {
@@ -59,7 +63,25 @@ function buildSampleSchedule(unit: "week" | "month", paymentsPerUnit: number, da
   });
 }
 
-export function InstallmentSettings() {
+/**
+ * v2: the plan rows' controls are locked for a view-only user and while the
+ * plans save. A context, so the pill buttons read it without a prop on each.
+ * Always false for every other tenant.
+ */
+const PlanLockV2 = createContext(false);
+
+/** v2: "Available for rentals 7+ days", with the online minimum when checkout's is later. */
+function planAvailabilityLabelV2(
+  cfg: Parameters<typeof planMinimumDays>[0],
+  plan: "weekly" | "monthly",
+): string {
+  const days = planMinimumDays(cfg, plan);
+  const online = planOnlineMinimumDays(cfg, plan);
+  const base = `Available for rentals ${formatSettingsNumber(days)}+ days`;
+  return online > days ? `${base} (${formatSettingsNumber(online)}+ when booked online)` : base;
+}
+
+export function InstallmentSettings({ registerSave }: { registerSave?: RegisterSectionSave } = {}) {
   const { tenant } = useTenant();
   const { toast } = useToast();
   const { settings, updateSettings, isUpdating } = useRentalSettings();
@@ -126,6 +148,18 @@ export function InstallmentSettings() {
   const plansDirtyV2 = v2Chrome && isInstallmentDraftDirty(config, tenantCfg);
   const plansStatusV2 = useSettingsSaveStatus({ isDirty: plansDirtyV2, isPending: savingPlansV2, error: plansErrorV2 });
   useWarnOnUnsavedChanges(plansDirtyV2);
+  // v2: a view-only user, or a save in flight (a toggle flipped mid-save would
+  // be overwritten by the saved row when it lands), cannot change the plans.
+  const planLockedV2 = v2Chrome && (!canEditV2 || savingPlansV2);
+
+  // v2: while the plans hold unsaved edits, the settings page's leave guard
+  // warns on Back / the Settings breadcrumb, and "Save & Leave" saves them.
+  // The leave save REJECTS when the write failed, so the page stays put.
+  const plansErrorRefV2 = useRef<unknown>(null);
+  useRegisterLeaveSave(v2Chrome ? registerSave : undefined, "installments", plansDirtyV2 && canEditV2, async () => {
+    if (await save()) return;
+    throw plansErrorRefV2.current ?? new Error("Couldn't save your installment plans.");
+  });
 
   async function save() {
     if (!tenant?.id) return;
@@ -144,11 +178,13 @@ export function InstallmentSettings() {
       await updateSettings({ installment_config: merged as any });
       toast({ title: "Saved", description: "Installment settings updated." });
       if (v2Chrome) setSavingPlansV2(false);
+      return true;
     } catch (error) {
       // useRentalSettings already shows an error toast — nothing to do here.
       if (v2Chrome) {
         setSavingPlansV2(false);
         setPlansErrorV2(error);
+        plansErrorRefV2.current = error;
       }
     }
   }
@@ -219,6 +255,7 @@ export function InstallmentSettings() {
           disabled={v2Chrome ? isUpdating || !canEditV2 : undefined}
         />
       </div>
+      </V2ReadOnly>
 
       {v2Chrome && masterErrorV2 && (
         <p role="alert" className="-mt-2 px-1 text-sm text-destructive">
@@ -248,9 +285,10 @@ export function InstallmentSettings() {
         />
       )}
 
+      <PlanLockV2.Provider value={planLockedV2}>
       <SectionRow
         label="Weekly Plan"
-        sublabel={`Available for rentals ${v2Chrome ? planMinimumDays(tenantCfg, "weekly") : WEEKLY_MIN_DAYS}+ days`}
+        sublabel={v2Chrome ? planAvailabilityLabelV2(tenantCfg, "weekly") : `Available for rentals ${WEEKLY_MIN_DAYS}+ days`}
         disabled={!installmentsEnabled}
       >
         <div className="space-y-4">
@@ -258,7 +296,7 @@ export function InstallmentSettings() {
             <Switch
               checked={config.weekly_enabled}
               onCheckedChange={(v) => setConfig({ ...config, weekly_enabled: v })}
-              disabled={!installmentsEnabled}
+              disabled={v2Chrome ? !installmentsEnabled || planLockedV2 : !installmentsEnabled}
               id="weekly-enabled"
             />
             <Label htmlFor="weekly-enabled" className="text-sm text-foreground/90">Enable weekly installments</Label>
@@ -284,7 +322,7 @@ export function InstallmentSettings() {
 
       <SectionRow
         label="Monthly Plan"
-        sublabel={`Available for rentals ${v2Chrome ? planMinimumDays(tenantCfg, "monthly") : MONTHLY_MIN_DAYS}+ days`}
+        sublabel={v2Chrome ? planAvailabilityLabelV2(tenantCfg, "monthly") : `Available for rentals ${MONTHLY_MIN_DAYS}+ days`}
         disabled={!installmentsEnabled}
       >
         <div className="space-y-4">
@@ -292,7 +330,7 @@ export function InstallmentSettings() {
             <Switch
               checked={config.monthly_enabled}
               onCheckedChange={(v) => setConfig({ ...config, monthly_enabled: v })}
-              disabled={!installmentsEnabled}
+              disabled={v2Chrome ? !installmentsEnabled || planLockedV2 : !installmentsEnabled}
               id="monthly-enabled"
             />
             <Label htmlFor="monthly-enabled" className="text-sm text-foreground/90">Enable monthly installments</Label>
@@ -316,6 +354,7 @@ export function InstallmentSettings() {
           )}
         </div>
       </SectionRow>
+      </PlanLockV2.Provider>
 
       {v2Chrome ? (
         canEditV2 ? (
@@ -347,7 +386,6 @@ export function InstallmentSettings() {
         </Button>
       </div>
       )}
-      </V2ReadOnly>
 
       {previewOpen && (
         <ExampleDialog
@@ -395,15 +433,18 @@ function SectionRow({ label, sublabel, disabled, children }: { label: string; su
 }
 
 function PillButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  const lockedV2 = useContext(PlanLockV2);
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={lockedV2 || undefined}
       className={cn(
         "px-3 py-1.5 rounded-md text-sm font-medium border transition-colors",
         active
           ? "bg-primary/15 border-indigo-500/50 text-indigo-700 dark:text-indigo-300"
           : "bg-card border-border text-muted-foreground hover:bg-muted/40",
+        lockedV2 && "cursor-not-allowed opacity-50",
       )}
     >
       {children}
@@ -421,10 +462,16 @@ function ExampleDialog({ open, onClose, unit, paymentsPerUnit, currencyCode }: {
     ? (paymentsPerUnit === 1 ? "Weekly" : "Twice weekly")
     : (paymentsPerUnit === 1 ? "Monthly" : paymentsPerUnit === 2 ? "Twice monthly" : "Weekly via monthly");
   const fmt = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: currencyCode }).format(n);
+  // v2: marks the portalled dialog as a settings body, for the dark-mode border
+  // fix in styles/v2-theme.css. No attribute for any other tenant.
+  const v2ChromeDialog = useV2("chrome");
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogContent
+        className="max-w-2xl max-h-[85vh] overflow-y-auto"
+        data-settings-v2-body={v2ChromeDialog || undefined}
+      >
         <DialogHeader>
           <DialogTitle>{label} — example</DialogTitle>
           <DialogDescription>

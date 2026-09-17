@@ -171,7 +171,7 @@ export function DateTimePicker({
           onKeyDown={onTriggerKeyDown}
           className={
             triggerClassName ??
-            "flex h-9 w-full items-center gap-2 rounded-md border border-border bg-background px-3 text-left text-sm tabular-nums outline-none transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 data-[empty=true]:text-muted-foreground data-[state=open]:ring-2 data-[state=open]:ring-ring"
+            "flex h-9 w-full items-center gap-2 rounded-md border border-border bg-transparent px-3 text-left text-sm tabular-nums outline-none transition-colors hover:border-primary/30 hover:bg-primary/5 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 data-[empty=true]:text-muted-foreground data-[state=open]:ring-2 data-[state=open]:ring-ring"
           }
         >
           <CalendarClock className="size-3.5 shrink-0" />

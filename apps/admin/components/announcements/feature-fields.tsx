@@ -2,6 +2,7 @@
 
 import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { LIMITS, type AnnouncementDraft, type AnnouncementSlide, type DraftErrors } from '@/lib/announcements/contract';
@@ -18,7 +19,7 @@ import {
 import { ImageUploadField } from './image-upload-field';
 import type { FeaturePreviewView } from './preview/announcement-preview';
 
-/** The dashboard card (title, one line, illustration) and its 2-3 dialog slides. */
+/** The dashboard card (title, one line, illustration) and its dialog slides (add or remove freely, 1-10). */
 export function FeatureFields({
   draft,
   slideKeys,
@@ -119,10 +120,14 @@ export function FeatureFields({
       </FormSection>
 
       <FormSection
-        title={'Slides (' + LIMITS.slidesMin + '-' + LIMITS.slidesMax + ')'}
-        description="Opening the card shows these in a large dialog. Newlines in the text are kept."
+        title={'Slides (' + slides.length + ')'}
+        description={
+          'Opening the card shows these in a large dialog. Add or remove slides as you need, up to ' +
+          LIMITS.slidesMax + '. Newlines in the text are kept.'
+        }
       >
         {slides.map((slide, index) => {
+          const atMinimum = slides.length <= LIMITS.slidesMin;
           const e = errors.slideErrors?.[index] ?? null;
           const base = 'ann-slide-' + index;
           const key = slideKeys[index] ?? 'slide-at-' + index;
@@ -155,17 +160,33 @@ export function FeatureFields({
                   >
                     <ArrowDown />
                   </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className={cn('h-8 w-8', QUIET_BUTTON)}
-                    aria-label={'Remove slide ' + (index + 1)}
-                    disabled={slides.length <= LIMITS.slidesMin}
-                    onClick={() => removeSlide(key, index)}
-                  >
-                    <Trash2 />
-                  </Button>
+                  {/* aria-disabled, not disabled: a disabled button gets no hover or
+                      focus, so its tooltip could never say WHY it does nothing
+                      (user, Sep 17 2026: "why am I unable to delete them"). */}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className={cn(
+                          'h-8 w-8',
+                          QUIET_BUTTON,
+                          atMinimum && 'cursor-not-allowed opacity-40 hover:bg-transparent dark:hover:bg-transparent',
+                        )}
+                        aria-label={'Remove slide ' + (index + 1)}
+                        aria-disabled={atMinimum || undefined}
+                        onClick={() => removeSlide(key, index)}
+                      >
+                        <Trash2 />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="max-w-xs text-xs">
+                      {atMinimum
+                        ? 'The dialog needs at least one slide. Add another slide first, then remove this one.'
+                        : 'Remove slide ' + (index + 1)}
+                    </TooltipContent>
+                  </Tooltip>
                 </div>
               </div>
               <FormField
@@ -218,17 +239,24 @@ export function FeatureFields({
             {errors.slides}
           </p>
         )}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className={QUIET_BUTTON}
-          onClick={addSlide}
-          disabled={slides.length >= LIMITS.slidesMax}
-        >
-          <Plus />
-          Add slide
-        </Button>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className={QUIET_BUTTON}
+            onClick={addSlide}
+            disabled={slides.length >= LIMITS.slidesMax}
+          >
+            <Plus />
+            Add slide
+          </Button>
+          {slides.length >= LIMITS.slidesMax && (
+            <p className="text-xs leading-5 text-muted-foreground">
+              {LIMITS.slidesMax} slides is the most one dialog shows. Remove one to add another.
+            </p>
+          )}
+        </div>
       </FormSection>
     </>
   );

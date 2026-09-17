@@ -136,7 +136,7 @@ export function RailHeader({
       <div className="flex h-11 items-center px-2">
         <Link
           href={backHref}
-          className="flex h-8 items-center gap-2 rounded-md px-1 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+          className="flex h-8 items-center gap-2 rounded-md px-1 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-foreground dark:hover:bg-primary/15"
         >
           <ArrowLeft className="size-4 shrink-0" />
           <span className="text-[13px]">{backLabel}</span>
@@ -277,7 +277,7 @@ export function StageItem({
   const style = filled ? { backgroundColor: `hsl(var(--primary) / ${tintFor(index)})` } : undefined;
   const className = cn(
     "block w-full cursor-pointer rounded-2xl px-3.5 py-2.5 text-left transition-all",
-    !filled && "bg-foreground/[0.055] hover:bg-foreground/[0.08]",
+    !filled && "bg-foreground/[0.055] hover:bg-primary/10 dark:hover:bg-primary/15",
     active && "ring-2 ring-primary/40"
   );
 
