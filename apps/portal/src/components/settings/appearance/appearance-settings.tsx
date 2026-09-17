@@ -357,33 +357,92 @@ export function AppearanceSettings() {
   // enabled controls for a moment before they lock.
   if (!loaded || (v2Chrome && permissionsLoading)) {
     if (v2Chrome) {
-      // Shaped like the page: header with its two actions, then the two sections.
+      // Shaped like the page, line box for line box, so nothing moves when it
+      // loads: the header (28px Back, 32px title, a description of two lines, or
+      // three on a phone) with its two actions, which wrap below it at the same
+      // widths the loaded ones do, then a separator before each of the two
+      // sections. The sr-only label goes last: as the first child it made the
+      // header a later sibling, so space-y-8 pushed it 32px down (Back at y=110,
+      // not the loaded button's 78), and the sections landed 49-97px short.
+      const line = (width: string) => (
+        <div className="flex h-5 items-center">
+          <Skeleton className={`h-3.5 ${width} rounded-full`} />
+        </div>
+      );
+      const upload = (
+        <div className="space-y-3">
+          <Skeleton className="h-3.5 w-16 rounded-full" />
+          <Skeleton className="h-3 w-2/3 rounded-full" />
+          <Skeleton className="h-[166px] w-full rounded-2xl" />
+        </div>
+      );
       return (
         <div role="status" aria-busy="true" className="space-y-8 pb-16 md:pt-7">
-          <span className="sr-only">Loading appearance</span>
           <div aria-hidden="true" className="flex flex-wrap items-start justify-between gap-4">
-            <div className="space-y-2">
-              <Skeleton className="h-7 w-20 rounded-full" />
-              <Skeleton className="h-8 w-40 rounded-full" />
-              <Skeleton className="h-4 w-72 max-w-[70vw] rounded-full" />
+            <div className="w-[42rem] max-w-full space-y-1">
+              <Skeleton className="h-7 w-[104px] rounded-full" />
+              <div className="flex h-8 items-center">
+                <Skeleton className="h-6 w-40 rounded-full" />
+              </div>
+              <div>
+                {line('w-full')}
+                {line('w-2/3')}
+                <div className="sm:hidden">{line('w-1/2')}</div>
+              </div>
             </div>
             <div className="flex gap-2">
-              <Skeleton className="h-8 w-20 rounded-full" />
-              <Skeleton className="h-8 w-32 rounded-full" />
+              <Skeleton className="h-8 w-[88px] rounded-full" />
+              <Skeleton className="h-8 w-[138px] rounded-full" />
             </div>
           </div>
-          {[0, 1].map((i) => (
-            <div key={i} aria-hidden="true" className="grid gap-8 lg:grid-cols-[304px_minmax(0,1fr)]">
-              <div className="space-y-2">
-                <Skeleton className="h-5 w-32 rounded-full" />
-                <Skeleton className="h-4 w-56 max-w-full rounded-full" />
+          <Separator />
+          <div aria-hidden="true" className="grid gap-8 lg:grid-cols-[304px_minmax(0,1fr)]">
+            <div>
+              <div className="flex h-6 items-center">
+                <Skeleton className="h-4 w-28 rounded-full" />
               </div>
-              <div className="max-w-xl space-y-3">
-                <Skeleton className="h-9 w-full rounded-3xl" />
-                <Skeleton className="h-24 w-full rounded-2xl" />
-              </div>
+              {line('w-full')}
+              {line('w-3/4')}
             </div>
-          ))}
+            <div className="max-w-xl space-y-6">
+              <div className="space-y-2.5">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  {Array.from({ length: 13 }).map((_, i) => (
+                    <Skeleton key={i} className="size-9 rounded-full" />
+                  ))}
+                </div>
+                <div>
+                  <div className="flex h-4 items-center">
+                    <Skeleton className="h-3 w-3/4 rounded-full" />
+                  </div>
+                  <div className="flex h-4 items-center sm:hidden">
+                    <Skeleton className="h-3 w-1/3 rounded-full" />
+                  </div>
+                </div>
+              </div>
+              <Skeleton className="h-[39px] w-full rounded-2xl" />
+            </div>
+          </div>
+          <Separator />
+          <div aria-hidden="true" className="grid gap-8 lg:grid-cols-[304px_minmax(0,1fr)]">
+            <div>
+              <div className="flex h-6 items-center">
+                <Skeleton className="h-4 w-28 rounded-full" />
+              </div>
+              {line('w-4/5')}
+              <div className="sm:hidden">{line('w-1/3')}</div>
+            </div>
+            <div className="max-w-xl space-y-6">
+              <div className="space-y-2">
+                <Skeleton className="h-3.5 w-24 rounded-full" />
+                <Skeleton className="h-9 w-full rounded-3xl" />
+                <Skeleton className="h-4 w-1/2 rounded-full" />
+              </div>
+              {upload}
+              {upload}
+            </div>
+          </div>
+          <span className="sr-only">Loading appearance</span>
         </div>
       );
     }

@@ -202,7 +202,7 @@ export function BookingModeGrid({ selected, onSelect, available }: BookingModeGr
                     "absolute right-4 top-4 inline-flex h-7 w-7 items-center justify-center rounded-full transition-colors",
                     isActive
                       ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:bg-primary/10 hover:text-primary"
+                      : "text-muted-foreground hover:bg-primary/10 hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-indigo-300"
                   )}
                 >
                   {isActive ? <Check className="h-4 w-4" strokeWidth={3} /> : <Info className="h-4 w-4" />}

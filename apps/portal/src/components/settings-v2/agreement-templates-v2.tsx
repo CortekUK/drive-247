@@ -373,7 +373,8 @@ export function AgreementTemplatesPageV2() {
 
   return (
     <TooltipProvider>
-      <div className="w-full max-w-[1160px] space-y-6 pb-16 md:pt-7">
+      {/* md:pt-8: the breadcrumb (20px line) centres at 50 + 32 + 10 = 92. */}
+      <div className="w-full max-w-[1160px] space-y-6 pb-16 md:pt-8">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <SettingsPageHeader
             rootLabel="Customer messages"

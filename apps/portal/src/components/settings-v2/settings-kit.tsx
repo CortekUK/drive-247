@@ -12,6 +12,7 @@
  */
 
 import type { ReactNode } from "react";
+import { Skeleton } from "@/components/ui-v2/skeleton";
 import { cn } from "@/lib/utils";
 
 export function SettingsPageHeader({
@@ -52,6 +53,26 @@ export function SettingsPageHeader({
         <p className="max-w-2xl text-sm text-muted-foreground">{description}</p>
       )}
     </header>
+  );
+}
+
+/** `SettingsPageHeader` before its page is known: the same three line boxes
+ *  (20px breadcrumb, 32px title, 20px description) and gaps, so whatever
+ *  follows it lands where the loaded page's first panel will. Decorative only;
+ *  pair it with a skeleton that carries the loading label. */
+export function SettingsPageHeaderSkeleton() {
+  return (
+    <div aria-hidden="true" className="space-y-1.5">
+      <div className="flex h-5 items-center">
+        <Skeleton className="h-3 w-36 rounded-full" />
+      </div>
+      <div className="flex h-8 items-center">
+        <Skeleton className="h-6 w-48 max-w-full rounded-full" />
+      </div>
+      <div className="flex h-5 items-center">
+        <Skeleton className="h-3.5 w-80 max-w-full rounded-full" />
+      </div>
+    </div>
   );
 }
 

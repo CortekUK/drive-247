@@ -276,14 +276,17 @@ export function Toggle({
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={cn(
-        "flex w-full items-center gap-4 rounded-3xl px-5 py-4 text-left ring-1 transition-all",
+        "group/toggle flex w-full items-center gap-4 rounded-3xl px-5 py-4 text-left ring-1 transition-all",
         disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer",
         checked ? on : "bg-muted/40 ring-foreground/5 hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]"
       )}
     >
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-medium">{label}</span>
-        {hint && <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">{hint}</span>}
+        {/* Muted text is 4.01:1 on the light primary/10 hover, so while this row
+            is hovered the hint reads --v2-muted-on-tint (v2 only; dark and v1
+            keep the muted token). */}
+        {hint && <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground group-hover/toggle:text-[hsl(var(--v2-muted-on-tint,var(--muted-foreground)))]">{hint}</span>}
       </span>
       <span
         className={cn("relative h-6 w-11 shrink-0 rounded-full transition-colors", checked ? knob : "bg-foreground/15")}

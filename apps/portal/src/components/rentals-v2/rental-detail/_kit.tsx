@@ -193,11 +193,11 @@ export function RailItem({
       className={cn(
         "flex w-full cursor-pointer items-center gap-2.5 overflow-hidden rounded-lg px-3 py-2 text-left transition-colors",
         active
-          ? "bg-primary/10 font-medium text-primary"
-          : "text-sidebar-foreground/70 hover:bg-primary/10 hover:text-primary"
+          ? "bg-primary/10 font-medium text-primary dark:bg-[hsl(var(--v2-hover,var(--muted)))] dark:text-indigo-300"
+          : "text-sidebar-foreground/70 hover:bg-primary/10 hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-indigo-300"
       )}
     >
-      <Icon className={cn("size-4 shrink-0", active ? "text-primary" : "text-sidebar-foreground/60")} />
+      <Icon className={cn("size-4 shrink-0", active ? "text-primary dark:text-indigo-300" : "text-sidebar-foreground/60")} />
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[13px] leading-tight">{label}</span>
         {summary && (

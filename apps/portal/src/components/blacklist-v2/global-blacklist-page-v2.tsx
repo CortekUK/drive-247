@@ -111,7 +111,9 @@ export function GlobalBlacklistPageV2<T extends GlobalBlacklistEntryRowV2>({
   return (
     // No mx-auto: like the Settings index and every v2 settings page, the page
     // starts on the top bar's search line instead of centring on wide screens.
-    <div className="w-full max-w-[1160px] space-y-6 pb-16 md:pt-7" data-blacklist-view={view}>
+    // md:pt-8: the breadcrumb (20px line) centres at 50 + 32 + 10 = 92, the
+    // sidebar switch's row.
+    <div className="w-full max-w-[1160px] space-y-6 pb-16 md:pt-8" data-blacklist-view={view}>
       <SettingsPageHeader
         section="Bookings"
         title="Global blacklist"

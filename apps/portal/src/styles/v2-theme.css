@@ -65,6 +65,10 @@
      muted cell label keeps its contrast while hovered. Dark uses the full
      tint, since a half step disappears on the dark card. */
   --v2-row-hover: 248 68% 97.5%;
+  /* Muted text laid on one of those purple tints. --muted-foreground (45%)
+     measures 4.34:1 on the row hover, 4.00 on --v2-hover and 4.22 on the top
+     bar's field; 40% clears 4.5 on all of them (5.03 / 4.84 / 5.08). */
+  --v2-muted-on-tint: 0 0% 40%;
 
   --success: 142 76% 36%;
   --success-foreground: 0 0% 100%;
@@ -149,6 +153,12 @@
   --accent-foreground: 0 0% 98%;
   --v2-hover: 246 35% 17%;
   --v2-row-hover: 246 35% 17%;
+  /* Dark muted text already clears 4.5 on the dark tints (6.31 on 17%). */
+  --v2-muted-on-tint: var(--muted-foreground);
+  /* The ui-v2 Button `link` variant's text (indigo-300). Dark only: dark
+     --primary is 1.97:1 as text on the dark page. Undefined in light v2 and
+     outside `.v2-theme`, so there the variant falls back to --primary. */
+  --v2-link: 230 94% 82%;
 
   --success: 142 76% 52%;
   --success-foreground: 159 21% 8%;
@@ -201,6 +211,42 @@
 
   --glow-gold-subtle: 0 0 25px -5px hsl(var(--primary) / 0.35), 0 0 50px -10px hsl(var(--primary) / 0.2);
   --glow-gold-intense: 0 0 35px -5px hsl(var(--primary) / 0.55), 0 0 70px -10px hsl(var(--primary) / 0.3);
+}
+
+/* ---------------------------------------------------------------------------
+ * Table rows: hovered, selected, and the controls inside a row, as three
+ * distinct steps.
+ *
+ * ui-v2 TableRow paints hover and a menu-open row (`has-[[aria-expanded]]`)
+ * with --v2-row-hover and a selected row with --v2-hover; a ghost/outline
+ * Button inside the row hovers (or shows its open menu) with --v2-hover too.
+ * In dark both tokens are the same 17% step, so a hovered row looked selected
+ * and the row's "..." button showed no pill at all (measured 1.000:1). In a
+ * light selected row the button's pill equalled the selected fill the same way.
+ *
+ * Only the custom property is re-pointed, never a background, so a call site's
+ * own `hover:bg-transparent` or `hover:bg-primary/10` still decides. The
+ * `:where()` keeps each rule at zero specificity: it beats inheritance from
+ * <body> but loses to a utility that sets its own `[--v2-hover:…]` (the
+ * forced-dark Select and submenu islands). The dark descendant rule sits after
+ * the light one because a dark selected row matches both.
+ * Selectors name only `.v2-theme`, `.dark` and attributes — never a utility.
+ * ------------------------------------------------------------------------- */
+:where(.v2-theme [data-slot="table-row"][data-state="selected"]) * {
+  --v2-hover: 248 68% 91%;
+}
+:where(.dark .v2-theme [data-slot="table-row"][data-state="selected"]) {
+  --v2-hover: 246 38% 23%;
+}
+:where(.dark .v2-theme [data-slot="table-row"]) * {
+  --v2-hover: 246 38% 29%;
+}
+/* Muted cell text measures 4.34:1 on a hovered light body row and 4.00:1 on
+   a selected one, so while a body row is tinted its muted text reads
+   --v2-muted-on-tint (light 5.03 / 4.84; in dark that token IS the muted
+   colour, so nothing changes there). Header rows keep theirs: they never tint. */
+:where(.v2-theme tbody > [data-slot="table-row"]:is(:hover, [data-state="selected"], :has([aria-expanded="true"]))) {
+  --muted-foreground: var(--v2-muted-on-tint);
 }
 
 /* ===========================================================================

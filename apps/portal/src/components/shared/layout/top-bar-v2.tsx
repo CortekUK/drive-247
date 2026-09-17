@@ -86,6 +86,9 @@ const FIELD =
   "group relative flex h-8 w-full max-w-[380px] items-center gap-2 overflow-hidden rounded-full " +
   "border border-primary/25 bg-primary/[0.07] px-2.5 text-left backdrop-blur-[2px] transition-colors " +
   "hover:border-primary/40 hover:bg-primary/10 " +
+  // Dark: primary/10 over the dark bar is a 1.01:1 step, so hover and keyboard
+  // focus use the v2 hover tint and a light indigo rim instead.
+  "dark:hover:border-indigo-300/40 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:focus-visible:bg-[hsl(var(--v2-hover,var(--muted)))] " +
   "focus-visible:border-primary/50 focus-visible:bg-primary/10 focus-visible:outline-none " +
   "focus-visible:ring-3 focus-visible:ring-ring/30";
 
@@ -97,7 +100,8 @@ const FIELD =
  */
 const BELL_FIX =
   "[&>button]:relative [&>button]:size-8 [&>button]:rounded-4xl [&>button]:text-muted-foreground " +
-  "[&>button:hover]:bg-primary/10 dark:[&>button:hover]:bg-primary/15 [&>button[aria-expanded=true]]:bg-primary/10 " +
+  "[&>button:hover]:bg-primary/10 dark:[&>button:hover]:bg-[hsl(var(--v2-hover,var(--muted)))] [&>button[aria-expanded=true]]:bg-primary/10 " +
+  "dark:[&>button[aria-expanded=true]]:bg-[hsl(var(--v2-hover,var(--muted)))] " +
   "[&>button:hover]:text-foreground [&>button>svg]:!size-4";
 
 /** The v2 tooltip surface, matching what the dock used, so labels feel in-place. */
@@ -284,14 +288,17 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
              rest of that route's steps of their wait budget. */
           data-tour={slot.tourAnchor}
         >
-          <Search className="size-4 shrink-0 text-primary" aria-hidden />
+          <Search className="size-4 shrink-0 text-primary dark:text-indigo-300" aria-hidden />
           <input
             ref={inputRef}
             value={term}
             onChange={(e) => setTerm(e.target.value)}
             placeholder={slot.placeholder}
             aria-label={slot.placeholder}
-            className="min-w-0 flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground"
+            /* Muted measures 4.22:1 on the field's light purple ground (4.01
+               hovered); --v2-muted-on-tint is the v2 step that clears 4.5, and
+               is the muted token itself in dark. */
+            className="min-w-0 flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-[hsl(var(--v2-muted-on-tint,var(--muted-foreground)))]"
           />
           {slot.filters && (
             <button
@@ -303,7 +310,7 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
                 "relative flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors " +
                 (slot.filters.open
                   ? "bg-primary text-primary-foreground"
-                  : "bg-primary/10 text-primary hover:bg-primary/20")
+                  : "bg-primary/10 text-primary hover:bg-primary/20 dark:text-indigo-300 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]")
               }
             >
               <SlidersHorizontal className="size-4" />
@@ -326,11 +333,13 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
           aria-label="Search"
           className={`hidden sm:flex ${FIELD}`}
         >
-          <Search className="size-4 shrink-0 text-primary" aria-hidden />
-          <span className="min-w-0 flex-1 truncate text-[13px] text-muted-foreground">
+          <Search className="size-4 shrink-0 text-primary dark:text-indigo-300" aria-hidden />
+          {/* Muted measures 4.22:1 on this light purple pill (4.01 hovered);
+              --v2-muted-on-tint clears 4.5 and is the muted token in dark. */}
+          <span className="min-w-0 flex-1 truncate text-[13px] text-[hsl(var(--v2-muted-on-tint,var(--muted-foreground)))]">
             Search bookings, customers, vehicles…
           </span>
-          <kbd className="shrink-0 rounded-full bg-primary/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-primary">
+          <kbd className="shrink-0 rounded-full bg-primary/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-primary dark:text-indigo-300">
             ⌘K
           </kbd>
         </button>
@@ -344,7 +353,7 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
             setTerm("");
           }}
           aria-label="Clear and close search"
-          className="inline-flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-primary/10 hover:text-foreground sm:hidden"
+          className="inline-flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-primary/10 hover:text-foreground dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] sm:hidden"
         >
           <X className="size-4" aria-hidden />
         </button>
@@ -355,7 +364,7 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
           type="button"
           onClick={slot ? () => setPhoneFieldOpen(true) : open}
           aria-label={slot ? "Search this page" : "Search"}
-          className="inline-flex size-8 shrink-0 items-center justify-center rounded-full border border-primary/25 bg-primary/[0.07] text-primary sm:hidden"
+          className="inline-flex size-8 shrink-0 items-center justify-center rounded-full border border-primary/25 bg-primary/[0.07] text-primary dark:text-indigo-300 sm:hidden"
         >
           <Search className="size-4" aria-hidden />
         </button>
@@ -380,8 +389,9 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
               aria-expanded={trax.sheetOpen}
               onClick={trax.sheetOpen ? trax.closeSheet : trax.openSheet}
               className={
-                "h-8 gap-1.5 px-2.5 text-[13px] font-medium text-primary hover:bg-primary/10 hover:text-primary aria-expanded:bg-primary/10 dark:hover:bg-primary/15 " +
-                (trax.sheetOpen ? "bg-primary/10" : "") +
+                "h-8 gap-1.5 px-2.5 text-[13px] font-medium text-primary dark:text-indigo-300 hover:bg-primary/10 hover:text-primary dark:hover:text-indigo-300 aria-expanded:bg-primary/10 " +
+                "dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:aria-expanded:bg-[hsl(var(--v2-hover,var(--muted)))] " +
+                (trax.sheetOpen ? "bg-primary/10 dark:bg-[hsl(var(--v2-hover,var(--muted)))]" : "") +
                 // On a phone the open page field takes the row (see phoneField).
                 (phoneField ? " max-sm:hidden" : "")
               }
@@ -423,7 +433,7 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
                 href="/credits"
                 aria-label={`Credits: ${balance.toFixed(0)}${isLowBalance ? " (low)" : ""}`}
                 className={
-                  "flex h-8 items-center gap-1.5 rounded-4xl px-2 text-[13px] font-medium transition-colors hover:bg-primary/10 " +
+                  "flex h-8 items-center gap-1.5 rounded-4xl px-2 text-[13px] font-medium transition-colors hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] " +
                   (isLowBalance ? "text-destructive" : "text-foreground")
                 }
               >
@@ -448,7 +458,7 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
                   variant="ghost"
                   size="icon-sm"
                   aria-label="Messages"
-                  className="relative text-muted-foreground hover:bg-primary/10 hover:text-foreground aria-expanded:bg-primary/10 aria-expanded:text-foreground dark:hover:bg-primary/15"
+                  className="relative text-muted-foreground hover:bg-primary/10 hover:text-foreground aria-expanded:bg-primary/10 aria-expanded:text-foreground dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:aria-expanded:bg-[hsl(var(--v2-hover,var(--muted)))]"
                 >
                   <MessageCircle />
                   {chatUnread > 0 && (
