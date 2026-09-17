@@ -1,0 +1,32 @@
+{
+  "statements": 17,
+  "everyStatementScoped": true,
+  "tenants": [
+    "00000000-0000-4000-8000-000000000001",
+    "00000000-0000-4000-8000-000000000002"
+  ],
+  "sample": [
+    {
+      "sql": "select count(*) from vehicles where tenant_id::text = $1",
+      "params": [
+        "00000000-0000-4000-8000-000000000001"
+      ],
+      "table": "vehicles"
+    },
+    {
+      "sql": "select count(*) from vehicles where tenant_id::text = $1",
+      "params": [
+        "00000000-0000-4000-8000-000000000002"
+      ],
+      "table": "vehicles"
+    },
+    {
+      "sql": "select count(*) from rentals where tenant_id::text = $1 and vehicle_id::text = $2",
+      "params": [
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000200"
+      ],
+      "table": "rentals"
+    }
+  ]
+}

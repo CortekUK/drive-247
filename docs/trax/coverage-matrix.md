@@ -38,7 +38,30 @@ Columns: **Knowledge** = reviewed guidance exists · **Data** = authorized datas
 - The model is instructed to **answer data questions with data**: call `discover_business_data`, then `query_business_data`, and state the figure with its definition, period and timezone. Navigation is for "how/where" questions or an offer after the answer, never a substitute for a number TRAX can measure.
 - When a dataset or metric is missing, TRAX must name the part it cannot measure rather than redirect to a screen. Those cases belong in this matrix as engineering gaps, not as support tickets.
 
+## Tenant isolation: what is proven, and what is still exposed
+
+TRAX's own query layer is **database-integration tested**: `node tests/trax/business-storage.mjs` runs the real `business-query.ts` against an isolated two-tenant Postgres (PGlite) through a PostgREST-shaped shim that compiles its filters into actual SQL. Every statement issued is recorded and asserted. Results: 8/8 pass; 17 statements, **all** carrying `tenant_id = $1` with the authenticated tenant (`artifacts/trax-business/isolation-statements.json`).
+
+Covered there: a 2-vehicle tenant and a 6-vehicle tenant where neither is ever told 8; a tenant that cannot be supplied, forged or filtered by the caller; another account's ids matching nothing; grouping and ranking that never name another account's rows; a revoked module permission and a missing finance grant refusing **before any statement is issued**; tenant switching in one process reusing no result, currency or timezone; money matching SQL-computed truth; and a 1,501-row total paged past one PostgREST window.
+
+That is a property of TRAX. It is **not** a fix for the database itself: on the deployed project, RLS is off on customers, rentals, payments, invoices, ledger_entries and payment_applications, and the public anon key holds full read/write on them — 608 customers, 318 rentals, 1,295 payments, 190 invoices and 2,759 ledger rows are reachable from any browser. See **`docs/trax/db-isolation-remediation.md`** for the verified finding, the staged fix (`docs/trax/remediation/*.sql`, **not applied**), the regression list and the rollback. The scripts themselves are validated by `node tests/trax/remediation-sql.mjs` (4/4): both stages execute against a throwaway Postgres, RLS ends up on, the blanket policies are gone, public vehicle browsing keeps its policy, and the rollback returns the previous state.
+
 ## Verification status
 
 - Unit tests: `apps/portal/src/__tests__/lib/trax-business-query.test.ts` — catalog validation and refusals, permissions including related entities, the finance grant, tenant scoping and foreign-row rejection, exact counts, filters, grouping and ranking, period presets in the tenant timezone, money in minor units net of refunds, the received-payment rule, the corrected revenue/cost rules, period comparison, empty vs zero, and partial results at the row cap.
-- Not yet done in this increment: a two-tenant end-to-end run against real SQL for the query layer, live authorized reads, generated-file validation, and deployment verification. Those belong with the next increments and must not be claimed until they run.
+### Levels reached, by capability
+
+| Capability | Level | Evidence |
+|---|---|---|
+| Query layer: catalog validation, permissions, money rules | **Offline tested** | `npx vitest run src/__tests__/lib/trax-business-query.test.ts` — 19 passed |
+| Query layer: tenant isolation, exact counts, paging, currency, money vs SQL truth | **Database integration tested** | `node tests/trax/business-storage.mjs` — 8 passed, real Postgres, two tenants |
+| Isolation remediation scripts | **Offline tested** (not applied) | `node tests/trax/remediation-sql.mjs` — 4 passed |
+| Deployed database exposure | **Authorized live-read verified** (read-only, counts only) | `docs/trax/db-isolation-remediation.md` §1 |
+| TRAX tool wiring (discover/query through the orchestrator) | **Implemented**, offline model-loop suites pass | `node tests/trax/browser.mjs --support`, `node tests/trax/browser.mjs` |
+| Conversation-to-data path for the example questions | **Not verified** | no fixture drives a model through discover → query → follow-up yet |
+| Customer balances, overdue, "who owes the most" | **Not implemented** | rule specified in `data-catalog.md`; no code |
+| Reports (PDF/CSV/XLSX), job states, private storage, download | **Not implemented** | no renderer, no bucket, no job table |
+| Remaining modules (invoices, deposits, refunds, fines, expenses, subscriptions, integration health, provider reads) | **Not implemented** | — |
+| Anything in production | **Not deployed** | no deployment or migration was performed in this increment |
+
+- Still outstanding for the query layer itself: authorized live reads against the real database (counts compared with the portal), and deployment verification. Neither is claimed.
