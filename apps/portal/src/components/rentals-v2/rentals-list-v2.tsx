@@ -63,7 +63,7 @@ import { RentalsTeachingEmptyState } from "@/components/empty-states/lean-empty-
 import { useForcedEmptyState } from "@/hooks/use-forced-empty-state";
 import { isLeanTenant } from "@/lib/lean-areas";
 import { TabTourButton } from "@/components/onboarding/tab-tour-button";
-import { HeaderIconButton } from "@/components/shared/header-icon-button-v2";
+import { HEADER_ACTIONS_V2, HEADER_PRIMARY_V2, HeaderIconButton } from "@/components/shared/header-icon-button-v2";
 import { csvDate, csvFilename, downloadCsv } from "@/lib/csv-export";
 
 /**
@@ -491,7 +491,7 @@ export function RentalsListV2() {
 
             Search is hidden in calendar view, where it has nothing to filter —
             New Rental stays. */}
-        <div className="flex w-full min-w-0 items-start gap-2 sm:w-auto sm:flex-1 sm:justify-end">
+        <div className={`flex w-full min-w-0 items-start gap-2 sm:w-auto sm:flex-1 sm:justify-end ${HEADER_ACTIONS_V2}`}>
           {/* The search field and its filter toggle used to be drawn here, in
               the page header, by `RentalsFilterBar`. They now live in the top
               bar — lent to it by the `usePageSearch` call above — because two
@@ -508,7 +508,8 @@ export function RentalsListV2() {
               view it turns into the way back to the list. Export writes the
               rentals the list is showing, filters and search applied.
               /rentals/analytics still resolves if navigated to directly. */}
-          {/* h-9 here, not h-10: this header is v2 and its Buttons are h-9. */}
+          {/* Every control here is 32px and the cluster sits on the subtitle line
+              (HEADER_ACTIONS_V2 / HEADER_PRIMARY_V2, team lead Sep 16 2026). */}
           <TabTourButton tour="rentals" size="h-9" />
           {currentView === "calendar" ? (
             <HeaderIconButton label="List view" onClick={() => handleViewChange("list")}>
@@ -539,7 +540,7 @@ export function RentalsListV2() {
                   : router.push("/rentals/new")
               }
               data-tour="new-rental"
-              className="bg-gradient-primary text-white hover:opacity-90 transition-all duration-200 shadow-md hover:shadow-lg flex-1 sm:flex-none"
+              className={`bg-gradient-primary text-white hover:opacity-90 transition-all duration-200 shadow-md hover:shadow-lg flex-1 sm:flex-none ${HEADER_PRIMARY_V2}`}
             >
               <Plus className="h-4 w-4 mr-2" />
               New Rental

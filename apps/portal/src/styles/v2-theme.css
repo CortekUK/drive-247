@@ -139,7 +139,15 @@
   --destructive-light: 0 84% 18%;
 
   --border: 0 0% 100% / 10%;
-  --input: 0 0% 100% / 15%;
+  /* Opaque, unlike --border. The ui-v2 controls use it with an opacity
+     modifier (bg-input/50 on Input, Textarea and Select; bg-input/90 on Switch,
+     Checkbox and RadioGroup; dark:bg-input/30 on Tabs and Button hovers), which
+     Tailwind 3 emits as hsl(var(--input) / 0.5). With an alpha already inside
+     the token that became hsl(0 0% 100% / 15% / 0.5), an invalid colour, so
+     those controls had no fill at all in dark mode. 20% grey is roughly the old
+     15% white laid over the dark page and card surfaces (about 18% and 23%),
+     and stays valid under any modifier. */
+  --input: 0 0% 20%;
   --ring: 0 0% 45%;
 
   --chart-1: 230 100% 82%;

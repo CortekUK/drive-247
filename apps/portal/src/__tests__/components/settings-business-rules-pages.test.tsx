@@ -33,7 +33,11 @@ vi.mock("@/components/settings/lockbox-templates-section", () => ({
 }));
 
 vi.mock("@/components/settings-v2/lockbox-templates-v2", () => ({
-  LockboxTemplatesSectionV2: () => <div data-testid="lockbox-messages">lockbox messages</div>,
+  LockboxTemplatesSectionV2: (props: { readOnlyNotice?: boolean }) => (
+    <div data-testid="lockbox-messages" data-read-only-notice={String(props.readOnlyNotice)}>
+      lockbox messages
+    </div>
+  ),
 }));
 
 vi.mock("next/link", () => ({
@@ -209,14 +213,16 @@ describe("RequirementsPageV2", () => {
   it("explains an out-of-range age and blocks Save", () => {
     mount(vi.fn());
     typeInto(input("#v2_minimum_rental_age"), "15");
-    expect(text()).toContain("Enter an age between 16 and 99, or leave it blank for no minimum.");
+    expect(text()).toContain("Enter an age between 16 and 99, or leave it blank to use the booking site's default of 21.");
     expect(button("Save").disabled).toBe(true);
   });
 
   it("says what a blank age means", () => {
     mount(vi.fn());
     typeInto(input("#v2_minimum_rental_age"), "");
-    expect(text()).toContain("No minimum is set, so any licensed driver can book.");
+    // Not "no minimum": the booking form falls back to 21.
+    expect(text()).toContain("No age is set, so your booking site uses its default: drivers must be at least 21.");
+    expect(text()).not.toContain("any licensed driver");
   });
 
   it("saves only this page's fields", async () => {
@@ -455,5 +461,401 @@ describe("ReturnReminderPanelV2", () => {
     expect(text()).toContain("so this is now 168.");
     expect(text()).toContain("Emailed 7 days before the car is due back.");
     expect(button("Save").disabled).toBe(false);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* Finish pass: leaving with unsaved edits, and the lockbox switch note        */
+/* -------------------------------------------------------------------------- */
+
+/** Like Harness, but the page can be closed while the form (the settings page's state) lives on. */
+function ClosableHarness({
+  page,
+  saved,
+  open,
+  render: renderPage,
+}: {
+  page: BusinessPage;
+  saved: Record<string, any>;
+  open: boolean;
+  render: (props: { form: any; setForm: any }) => React.ReactNode;
+}) {
+  const [form, setForm] = useState<Record<string, any>>(() => savedFieldsFor(page, saved));
+  return (
+    <>
+      <output data-testid="form">{JSON.stringify(form)}</output>
+      {open && renderPage({ form, setForm })}
+    </>
+  );
+}
+
+const formState = () => JSON.parse(container.querySelector('[data-testid="form"]')!.textContent!);
+
+describe("leaving a business page with unsaved edits", () => {
+  const saved = { minimum_rental_age: 21, verification_document_type: "passport" };
+  const waiver = { enabled: false, canChange: true, saving: false, onToggle: () => undefined };
+
+  const mountRequirements = (onSave: any, registerSave: any, open = true) =>
+    render(
+      <ClosableHarness
+        page="requirements"
+        saved={saved}
+        open={open}
+        render={({ form, setForm }) => (
+          <RequirementsPageV2
+            form={form}
+            setForm={setForm}
+            saved={saved}
+            canEdit
+            onSave={onSave}
+            registerSave={registerSave}
+            idWaiver={waiver}
+          />
+        )}
+      />,
+    );
+
+  const lastRegistration = (registerSave: ReturnType<typeof vi.fn>, key: string) =>
+    registerSave.mock.calls.filter(([k]) => k === key).at(-1)?.[1];
+
+  it("registers a save with the page only while dirty, so leaving warns", () => {
+    const registerSave = vi.fn();
+    mountRequirements(vi.fn(), registerSave);
+    expect(lastRegistration(registerSave, "business-requirements")).toBeNull();
+    typeInto(input("#v2_minimum_rental_age"), "25");
+    expect(typeof lastRegistration(registerSave, "business-requirements")).toBe("function");
+    typeInto(input("#v2_minimum_rental_age"), "21");
+    expect(lastRegistration(registerSave, "business-requirements")).toBeNull();
+  });
+
+  it("Save & Leave saves this page's fields, and refuses while a field is invalid", async () => {
+    const registerSave = vi.fn();
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    mountRequirements(onSave, registerSave);
+    typeInto(input("#v2_minimum_rental_age"), "25");
+    const leave = lastRegistration(registerSave, "business-requirements");
+    await act(async () => {
+      await leave();
+    });
+    expect(onSave).toHaveBeenCalledWith({ minimum_rental_age: 25, verification_document_type: "passport" });
+
+    // Still the same registered function (dirty never flipped), now reading the invalid age.
+    typeInto(input("#v2_minimum_rental_age"), "15");
+    let rejection: unknown = null;
+    await act(async () => {
+      await leave().catch((e: unknown) => (rejection = e));
+    });
+    expect((rejection as Error)?.message).toBe("Enter an age between 16 and 99, or leave it blank to use the booking site's default of 21.");
+    expect(onSave).toHaveBeenCalledTimes(1);
+  });
+
+  it("Save & Leave rejects when the write fails, and the error stays inline", async () => {
+    const registerSave = vi.fn();
+    mountRequirements(vi.fn().mockRejectedValue(new Error("Failed to fetch")), registerSave);
+    typeInto(input("#v2_minimum_rental_age"), "25");
+    let rejection: unknown = null;
+    await act(async () => {
+      await lastRegistration(registerSave, "business-requirements")().catch((e: unknown) => (rejection = e));
+    });
+    expect((rejection as Error)?.message).toBe("Couldn't save your driver requirements.");
+    expect(text()).toContain("We couldn't reach the server. Your changes are still here.");
+  });
+
+  it("Don't Save: closing the page puts its fields back and unregisters it", () => {
+    const registerSave = vi.fn();
+    mountRequirements(vi.fn(), registerSave);
+    typeInto(input("#v2_minimum_rental_age"), "30");
+    expect(formState().minimum_rental_age).toBe(30);
+    mountRequirements(vi.fn(), registerSave, false);
+    expect(formState()).toEqual({ minimum_rental_age: 21, verification_document_type: "passport" });
+    expect(lastRegistration(registerSave, "business-requirements")).toBeNull();
+  });
+
+  it("closing a clean page leaves the form alone", () => {
+    const registerSave = vi.fn();
+    mountRequirements(vi.fn(), registerSave);
+    mountRequirements(vi.fn(), registerSave, false);
+    expect(formState()).toEqual({ minimum_rental_age: 21, verification_document_type: "passport" });
+  });
+
+  it("registers Booking rules under its own key, including an advance-notice-only edit", () => {
+    const registerSave = vi.fn();
+    const durationSaved = {
+      booking_lead_time_hours: 24,
+      booking_lead_time_unit: "hours",
+      min_rental_days: 0,
+      min_rental_hours: 4,
+      max_rental_days: 90,
+      buffer_time_minutes: 0,
+    };
+    render(
+      <Harness
+        page="duration"
+        saved={durationSaved}
+        render={({ form, setForm }) => (
+          <DurationPageV2 form={form} setForm={setForm} saved={durationSaved} canEdit onSave={vi.fn()} registerSave={registerSave} />
+        )}
+      />,
+    );
+    typeInto(input('input[aria-label="Advance notice"]'), "48");
+    expect(typeof lastRegistration(registerSave, "business-duration")).toBe("function");
+  });
+
+  it("view-only never registers a save", () => {
+    const registerSave = vi.fn();
+    render(
+      <Harness
+        page="requirements"
+        saved={saved}
+        render={({ form, setForm }) => (
+          <RequirementsPageV2 form={form} setForm={setForm} saved={saved} canEdit={false} onSave={vi.fn()} registerSave={registerSave} idWaiver={waiver} />
+        )}
+      />,
+    );
+    expect(registerSave).not.toHaveBeenCalledWith("business-requirements", expect.any(Function));
+  });
+});
+
+describe("LockboxPageV2 switch", () => {
+  const off = { lockbox_enabled: false, lockbox_code_length: null, lockbox_notification_methods: ["email"], lockbox_send_offset_minutes: null };
+
+  it("says the switch needs Save while it differs from what is saved", () => {
+    render(
+      <Harness
+        page="lockbox"
+        saved={off}
+        render={({ form, setForm }) => (
+          <LockboxPageV2
+            form={form}
+            setForm={setForm}
+            saved={off}
+            canEdit
+            onSave={vi.fn()}
+            smsReady
+            integrationsHref="/integrations?open=Twilio%20Messages"
+            vehiclesHref="/vehicles"
+          />
+        )}
+      />,
+    );
+    expect(text()).not.toContain("Not applied yet.");
+    const toggle = container.querySelector<HTMLButtonElement>('button[role="switch"][aria-label="Enable lockbox handover"]')!;
+    act(() => toggle.click());
+    expect(text()).toContain("Not applied yet. Press Save to turn lockbox handover on.");
+    act(() => toggle.click());
+    expect(text()).not.toContain("Not applied yet.");
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* Fix pass: extreme stored values, the method radio, viewer copy              */
+/* -------------------------------------------------------------------------- */
+
+describe("business pages with extreme stored values", () => {
+  it("Requirements: a stored custom document type is named in full, on the box and below it", () => {
+    const savedRow = { minimum_rental_age: 25, verification_document_type: "residence_permit_with_biometric_chip_issued_abroad" };
+    render(
+      <Harness
+        page="requirements"
+        saved={savedRow}
+        render={({ form, setForm }) => (
+          <RequirementsPageV2
+            form={form}
+            setForm={setForm}
+            saved={savedRow}
+            canEdit
+            onSave={vi.fn()}
+            idWaiver={{ enabled: false, canChange: true, saving: false, onToggle: () => undefined }}
+          />
+        )}
+      />,
+    );
+    expect(container.querySelector("#v2_verification_document_type")?.getAttribute("title")).toBe(
+      "Residence permit with biometric chip issued abroad (current)",
+    );
+    expect(text()).toContain("Saved as “Residence permit with biometric chip issued abroad”, which isn't one of the standard choices.");
+  });
+
+  it("Requirements: a standard document type adds no note", () => {
+    const savedRow = { minimum_rental_age: 25, verification_document_type: "passport" };
+    render(
+      <Harness
+        page="requirements"
+        saved={savedRow}
+        render={({ form, setForm }) => (
+          <RequirementsPageV2
+            form={form}
+            setForm={setForm}
+            saved={savedRow}
+            canEdit
+            onSave={vi.fn()}
+            idWaiver={{ enabled: false, canChange: true, saving: false, onToggle: () => undefined }}
+          />
+        )}
+      />,
+    );
+    expect(text()).not.toContain("isn't one of the standard choices");
+  });
+
+  it("Booking rules: 7-digit stored values get a box wide enough, and an invalid buffer drops the 'booked again straight away' copy", () => {
+    const savedRow = {
+      booking_lead_time_hours: 9999999,
+      booking_lead_time_unit: "hours",
+      min_rental_days: 0,
+      min_rental_hours: 4,
+      max_rental_days: 9999999,
+      buffer_time_minutes: 9999999,
+    };
+    render(
+      <Harness
+        page="duration"
+        saved={savedRow}
+        render={({ form, setForm }) => <DurationPageV2 form={form} setForm={setForm} saved={savedRow} canEdit onSave={vi.fn()} />}
+      />,
+    );
+    expect(input('input[aria-label="Advance notice"]').className).toContain("w-32");
+    expect(input('input[aria-label="Longest rental days"]').className).toContain("w-32");
+    expect(input('input[aria-label="Time between rentals in minutes"]').className).toContain("w-32");
+    expect(input('input[aria-label="Shortest rental hours"]').className).toContain("w-16");
+    expect(text()).toContain("Keep this to 4,320 minutes (3 days) or less.");
+    expect(text()).not.toContain("A car can be booked again as soon as a rental ends.");
+    expect(text()).toContain("How long a car stays off the booking site after a rental ends, so you can clean and check it.");
+  });
+
+  it("Customer messages: a stored 9,999-hour reminder is flagged on load, before any blur", () => {
+    const savedRow = { return_reminder_enabled: true, return_reminder_hours: 9999 };
+    render(
+      <Harness
+        page="return-reminder"
+        saved={savedRow}
+        render={({ form, setForm }) => (
+          <ReturnReminderPanelV2
+            form={form}
+            setForm={setForm}
+            saved={savedRow}
+            canEdit
+            onSave={vi.fn()}
+            smsReady
+            emailTemplateHref="/settings/email-templates/rental_reminder"
+            integrationsHref="/integrations?open=Twilio%20Messages"
+          />
+        )}
+      />,
+    );
+    expect(text()).toContain("The saved value, 9,999 hours, is outside the allowed 1–168 hours (7 days). Enter a value in that range and save.");
+    expect(text()).not.toContain("Between 1 and 168 hours (7 days).");
+    // Nothing was changed for them: no unsaved edit, Save stays off.
+    expect(button("Save").disabled).toBe(true);
+  });
+
+  it("Customer messages: a viewer is offered to view the email, not edit it", () => {
+    const savedRow = { return_reminder_enabled: true, return_reminder_hours: 24 };
+    render(
+      <Harness
+        page="return-reminder"
+        saved={savedRow}
+        render={({ form, setForm }) => (
+          <ReturnReminderPanelV2
+            form={form}
+            setForm={setForm}
+            saved={savedRow}
+            canEdit={false}
+            onSave={vi.fn()}
+            smsReady
+            emailTemplateHref="/settings/email-templates/rental_reminder"
+            integrationsHref="/integrations?open=Twilio%20Messages"
+          />
+        )}
+      />,
+    );
+    expect(container.querySelector('a[href="/settings/email-templates/rental_reminder"]')?.textContent).toBe("View the email");
+  });
+});
+
+describe("Key handover: method radio and messages notice", () => {
+  const savedRow = { lockbox_enabled: true, lockbox_code_length: 6, lockbox_notification_methods: ["sms"], lockbox_send_offset_minutes: 45 };
+  const mountLockbox = () =>
+    render(
+      <Harness
+        page="lockbox"
+        saved={savedRow}
+        render={({ form, setForm }) => (
+          <LockboxPageV2
+            form={form}
+            setForm={setForm}
+            saved={savedRow}
+            canEdit
+            onSave={vi.fn()}
+            smsReady
+            integrationsHref="/integrations?open=Twilio%20Messages"
+            vehiclesHref="/vehicles"
+          />
+        )}
+      />,
+    );
+
+  it("marks the checked method with primary, not the v1 accent that is near-white under the v2 theme", () => {
+    mountLockbox();
+    const sms = container.querySelector("#v2-lockbox-method-sms")!;
+    expect(sms.getAttribute("data-state")).toBe("checked");
+    expect(sms.className).toContain("data-[state=checked]:border-primary");
+    expect(sms.className).not.toContain("data-[state=checked]:border-accent");
+    expect(sms.className).toContain("[&_svg]:fill-primary");
+    expect(sms.className).toContain("dark:[&_svg]:fill-indigo-300");
+  });
+
+  it("inline links lighten in dark mode", () => {
+    render(
+      <Harness
+        page="lockbox"
+        saved={{ ...savedRow, lockbox_enabled: false }}
+        render={({ form, setForm }) => (
+          <LockboxPageV2
+            form={form}
+            setForm={setForm}
+            saved={{ ...savedRow, lockbox_enabled: false }}
+            canEdit
+            onSave={vi.fn()}
+            smsReady
+            integrationsHref="/integrations?open=Twilio%20Messages"
+            vehiclesHref="/vehicles"
+          />
+        )}
+      />,
+    );
+    expect(container.querySelector('a[href="/vehicles"]')?.className).toContain("dark:text-indigo-300");
+  });
+
+  it("tells the messages section not to repeat the page's View only notice", () => {
+    mountLockbox();
+    expect(container.querySelector('[data-testid="lockbox-messages"]')?.getAttribute("data-read-only-notice")).toBe("false");
+  });
+});
+
+describe("settings page wiring for the Business-rules pages (v2 branch)", () => {
+  // Read as text: the page is too large to mount here. Behaviour of the helper is
+  // covered in settings-business-rules-logic.test.ts.
+  const source = require("node:fs").readFileSync(
+    require("node:path").resolve(__dirname, "../../app/(dashboard)/settings/page.tsx"),
+    "utf8",
+  ) as string;
+
+  it("offers Save & Leave when every unsaved rental edit belongs to a registered Business-rules page", () => {
+    expect(source).toContain(
+      "businessEditsCoveredBySections(rentalForm, lastSyncedRentalForm.current, rentalSettings, v2DirtySections)",
+    );
+    expect(source).toContain(
+      "const v2CanSaveAll = canSaveAllDirty({ rental: rentalFormDirty && !v2RentalEditsCovered, locations: locationsDirty, pricing: pricingDirty });",
+    );
+  });
+
+  it("does not repeat 'Unsaved changes' above pages whose sections show their own", () => {
+    expect(source).toContain(
+      "const V2_PAGES_WITH_OWN_SAVE_STATUS = new Set(['general', 'locations', 'booking-site', 'requirements', 'duration', 'lockbox', 'templates']);",
+    );
+  });
+
+  it("says why Save & Leave failed in v2, and keeps the v1 wording for everyone else", () => {
+    expect(source).toContain("description: v2Chrome ? describeSaveError(err) : 'Failed to save some settings. Please try again.',");
   });
 });

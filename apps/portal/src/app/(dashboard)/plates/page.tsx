@@ -51,6 +51,7 @@ import { format } from "date-fns";
 import { parseLocalDate } from "@/lib/date-utils";
 import { useV2 } from "@/lib/v2-context";
 import { PlatesTableV2 } from "@/components/fleet-v2/plates-table-v2";
+import { HEADER_ACTIONS_V2, HEADER_PRIMARY_V2, HeaderIconButton } from "@/components/shared/header-icon-button-v2";
 
 interface Plate {
   id: string;
@@ -409,6 +410,22 @@ export default function PlatesListEnhanced() {
             Manage license plates, assignments, and documentation
           </p>
         </div>
+        {v2Chrome ? (
+          // v2: one labelled button (Add Plate), export as a 32px round icon, and
+          // the cluster centred on the subtitle line (team lead Sep 15-16 2026).
+          // The subtitle inherits the body size, which v2 sets to 16px/24px below
+          // 769px and 14px/20px above, so the box follows it: h-6 from sm, h-5
+          // from md.
+          <div className={`flex items-center gap-2 ${HEADER_ACTIONS_V2} md:h-5`}>
+            <HeaderIconButton label="Export CSV" onClick={exportToCSV}>
+              <Download className="h-4 w-4" />
+            </HeaderIconButton>
+            <Button onClick={() => setAddPlateOpen(true)} className={HEADER_PRIMARY_V2}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Plate
+            </Button>
+          </div>
+        ) : (
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={exportToCSV}>
             <Download className="h-4 w-4 mr-2" />
@@ -419,6 +436,7 @@ export default function PlatesListEnhanced() {
             Add Plate
           </Button>
         </div>
+        )}
       </div>
 
       {/* Filters */}

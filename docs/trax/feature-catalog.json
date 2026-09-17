@@ -1917,10 +1917,16 @@
           ]
         },
         {
-          "path": "apps/portal/src/components/dashboard-v2/announcement-carousel.tsx",
+          "path": "apps/portal/src/components/announcements/feature-announcement-deck.tsx",
           "symbols": [
-            "Read more",
-            "Got it, hide this"
+            "See how it works"
+          ]
+        },
+        {
+          "path": "apps/portal/src/components/announcements/feature-announcement-dialog.tsx",
+          "symbols": [
+            "Don't show again",
+            "Got it"
           ]
         },
         {

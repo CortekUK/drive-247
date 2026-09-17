@@ -28,6 +28,7 @@ function useBreadcrumbs() {
     '/admin/admins': 'Manage Admins',
     '/admin/audit-logs': 'Audit Logs',
     '/admin/requests': 'Mode Requests',
+    '/admin/announcements': 'Announcements',
   };
 
   const segments = pathname.split('/').filter(Boolean);

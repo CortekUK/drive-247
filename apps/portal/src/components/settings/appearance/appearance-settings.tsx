@@ -18,6 +18,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { ArrowLeft, Loader2, RotateCcw, Save } from 'lucide-react';
 
 import { Button } from '@/components/ui-v2/button';
@@ -48,6 +49,8 @@ import { useV2 } from '@/lib/v2-context';
 import { useManagerPermissions } from '@/hooks/use-manager-permissions';
 import { useThemePreview } from '@/hooks/use-theme-preview';
 import { toast } from '@/hooks/use-toast';
+import { useUnsavedChangesWarning } from '@/hooks/use-unsaved-changes-warning';
+import { UnsavedChangesDialog } from '@/components/shared/unsaved-changes-dialog';
 import {
   DEFAULT_PRESET_ID,
   getPreset,
@@ -55,8 +58,11 @@ import {
 } from '@/lib/appearance/presets';
 import { shade } from '@/lib/appearance/color';
 import {
+  describeSaveError,
   SettingsLoadError,
   SettingsReadOnlyFieldset,
+  SettingsSaveState,
+  useSettingsSaveStatus,
   useWarnOnUnsavedChanges,
 } from '@/components/settings-v2/section-states';
 import { ScopeIf, isHexColor6, useImageLoadFailed } from '@/components/settings-v2/business-settings-states';
@@ -169,6 +175,11 @@ export function AppearanceSettings() {
    * form from values the tenant had not saved.
    */
   const savedRef = useRef<AppearanceForm | null>(null);
+  // v2: the tenant the form was hydrated for. On mount both effects below run
+  // in order, so the "tenant switched" reset used to undo the first hydration
+  // (loaded back to false, savedRef back to null) and, with the branding
+  // already cached, nothing re-ran it: the page sat on its skeleton.
+  const v2HydratedTenant = useRef<string | null>(null);
 
   // Hydrate once per tenant. Deliberately NOT keyed on `branding`, which now
   // mutates during preview.
@@ -179,10 +190,12 @@ export function AppearanceSettings() {
     savedRef.current = next;
     setForm(next);
     setLoaded(true);
+    v2HydratedTenant.current = tenant?.id ?? null;
   }, [branding, loaded, tenant?.company_name]);
 
   // Re-hydrate when the tenant is switched underneath us.
   useEffect(() => {
+    if (v2Chrome && v2HydratedTenant.current !== null && v2HydratedTenant.current === (tenant?.id ?? null)) return;
     setLoaded(false);
     savedRef.current = null;
   }, [tenant?.id]);
@@ -209,6 +222,20 @@ export function AppearanceSettings() {
   useWarnOnUnsavedChanges(v2Chrome && dirty && !readOnly);
   const faviconFailed = useImageLoadFailed(v2Chrome ? form.favicon_url : null);
   const v2HexInvalid = v2Chrome && !isHexColor6(form.light_primary_color);
+
+  // v2: a failed save stays on screen beside Save until the next edit (the
+  // toast disappears), and a second click while a save is in flight is ignored.
+  const [v2SaveError, setV2SaveError] = useState<unknown>(null);
+  const v2SaveInFlight = useRef(false);
+  useEffect(() => {
+    if (v2Chrome) setV2SaveError(null);
+  }, [form]);
+  // Inert for v1 (never dirty, never pending), so it adds no renders or timers there.
+  const v2SaveStatus = useSettingsSaveStatus({
+    isDirty: v2Chrome && dirty,
+    isPending: v2Chrome && isUpdating,
+    error: v2SaveError,
+  });
 
   /**
    * Apply a palette to the form *and* to the running portal, so the tenant sees
@@ -246,7 +273,12 @@ export function AppearanceSettings() {
         description: 'Enter a 6-digit hex code such as #C6A256, or pick a swatch.',
         variant: 'destructive',
       });
-      return;
+      return false;
+    }
+    if (v2Chrome) {
+      if (v2SaveInFlight.current) return false;
+      v2SaveInFlight.current = true;
+      setV2SaveError(null);
     }
     try {
       await updateBranding({
@@ -266,6 +298,7 @@ export function AppearanceSettings() {
         dark_logo_url: form.dark_logo_url,
         favicon_url: form.favicon_url,
       });
+      v2SaveInFlight.current = false;
       // The previewed palette is server truth now — advance both baselines, or
       // Save stays enabled and a later Discard resurrects the old colours.
       savedRef.current = { ...form };
@@ -274,14 +307,26 @@ export function AppearanceSettings() {
         title: 'Appearance saved',
         description: 'Your portal has been updated for everyone on your team.',
       });
+      return true;
     } catch (error) {
+      v2SaveInFlight.current = false;
+      if (v2Chrome) setV2SaveError(error ?? new Error('Save failed'));
       toast({
         title: "Couldn't save appearance",
-        description: error instanceof Error ? error.message : 'Please try again.',
+        description: v2Chrome ? describeSaveError(error) : error instanceof Error ? error.message : 'Please try again.',
         variant: 'destructive',
       });
+      return false;
     }
   };
+
+  // v2: leaving mid try-on (Back, the sidebar, the browser's back button) asks
+  // first. Unmounting restores the saved theme, so leaving used to drop the
+  // try-on without a word. "Save & Leave" saves and stays put if that fails.
+  const v2Leave = useUnsavedChangesWarning({
+    hasChanges: v2Chrome && dirty && !readOnly,
+    onSave: async () => (await handleSave()) === true,
+  });
 
   if (v2Chrome && !loaded && brandingError && !hasBrandingData) {
     return (
@@ -308,7 +353,9 @@ export function AppearanceSettings() {
     );
   }
 
-  if (!loaded) {
+  // v2: also wait for a manager's permissions, or a view-only manager sees
+  // enabled controls for a moment before they lock.
+  if (!loaded || (v2Chrome && permissionsLoading)) {
     if (v2Chrome) {
       // Shaped like the page: header with its two actions, then the two sections.
       return (
@@ -370,10 +417,21 @@ export function AppearanceSettings() {
             Settings
           </Button>
           <h1 className="text-2xl font-medium tracking-tight">Appearance</h1>
+          {v2Chrome ? (
+            <p className="max-w-2xl text-sm text-muted-foreground">
+              Choose how your portal looks for you and your team. Your customers&apos;
+              booking site is styled separately in{' '}
+              <Link href="/cms/site-settings" className="font-medium text-primary underline-offset-4 hover:underline dark:text-indigo-300">
+                Website → Site settings
+              </Link>
+              .
+            </p>
+          ) : (
           <p className="max-w-2xl text-sm text-muted-foreground">
             Choose how your portal looks for you and your team. Your customers&apos;
             booking site is styled separately under CMS.
           </p>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
@@ -405,7 +463,7 @@ export function AppearanceSettings() {
           <Button
             size="sm"
             onClick={handleSave}
-            disabled={readOnly || isUpdating || !dirty}
+            disabled={readOnly || isUpdating || !dirty || v2HexInvalid}
             className="gap-1.5"
           >
             {isUpdating ? (
@@ -417,6 +475,11 @@ export function AppearanceSettings() {
           </Button>
         </div>
       </div>
+
+      {/* Shown here only when the sticky bar (which carries the same error) is not. */}
+      {v2Chrome && v2SaveStatus === 'error' && !(dirty && !readOnly) && (
+        <SettingsSaveState status="error" error={v2SaveError} onRetry={handleSave} />
+      )}
 
       {readOnly && (
         <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2.5 text-xs text-amber-700 dark:text-amber-400">
@@ -472,6 +535,11 @@ export function AppearanceSettings() {
               id="app_name"
               value={form.app_name}
               maxLength={v2Chrome ? 60 : undefined}
+              // v2 dark: --input carries its own alpha there, so bg-input/50 is invalid
+              // and the field had no fill; the name floated with no box around it.
+              className={v2Chrome ? 'dark:bg-muted' : undefined}
+              // v2: a long name scrolls inside the box; hovering shows it whole.
+              title={v2Chrome && form.app_name ? form.app_name : undefined}
               disabled={readOnly}
               placeholder={tenant?.company_name || 'Your company'}
               onChange={(e) => setForm((p) => ({ ...p, app_name: e.target.value }))}
@@ -504,15 +572,21 @@ export function AppearanceSettings() {
           />
 
           <div className="space-y-2">
+            {/* v2: FaviconUpload already renders the "Favicon" label and its help line. */}
+            {!v2Chrome && (
             <Label>Favicon</Label>
+            )}
             <FaviconUpload
               currentFaviconUrl={form.favicon_url || undefined}
               onFaviconChange={(url) => setForm((p) => ({ ...p, favicon_url: url }))}
               deferStorageDelete={v2Chrome}
+              v2States={v2Chrome}
             />
+            {!v2Chrome && (
             <p className="text-xs text-muted-foreground">
               The small icon on your browser tab.
             </p>
+            )}
             {faviconFailed && (
               <p role="alert" className="text-xs text-destructive">
                 We couldn&apos;t load your favicon file. Upload it again to replace it.
@@ -523,12 +597,27 @@ export function AppearanceSettings() {
         </div>
       </section>
 
+      {v2Chrome && (
+        <UnsavedChangesDialog
+          open={v2Leave.isDialogOpen}
+          onCancel={v2Leave.cancelLeave}
+          onDiscard={v2Leave.confirmLeave}
+          onSave={v2HexInvalid ? undefined : v2Leave.saveAndLeave}
+          isSaving={v2Leave.isSaving}
+        />
+      )}
+
       {/* Sticky save affordance so a tenant deep in the page never loses changes.
           Its right edge stops at `--trax-offset` — the width the open Trax panel
           floats over in v2 (styles/v2-theme.css), 0px everywhere else — so Save
           and Discard stay beside the panel instead of under it. */}
       {dirty && !readOnly && (
         <div className="fixed bottom-0 left-0 right-[var(--trax-offset,0px)] z-40 border-t bg-background/95 px-4 py-3 backdrop-blur transition-[right] duration-200 ease-linear motion-reduce:transition-none supports-[backdrop-filter]:bg-background/80">
+          {v2Chrome && v2SaveStatus === 'error' && (
+            <div className="mx-auto mb-2 max-w-5xl">
+              <SettingsSaveState status="error" error={v2SaveError} onRetry={handleSave} />
+            </div>
+          )}
           <div className="mx-auto flex max-w-5xl items-center justify-between gap-4">
             <span className="text-sm text-muted-foreground">
               You&apos;re trying this out — nobody else sees it until you save.
@@ -542,7 +631,7 @@ export function AppearanceSettings() {
               >
                 Discard
               </Button>
-              <Button size="sm" onClick={handleSave} disabled={isUpdating} className="gap-1.5">
+              <Button size="sm" onClick={handleSave} disabled={isUpdating || v2HexInvalid} className="gap-1.5">
                 {isUpdating ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 ) : (

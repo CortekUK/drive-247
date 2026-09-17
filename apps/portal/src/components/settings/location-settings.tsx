@@ -71,6 +71,9 @@ import {
 } from '@/components/settings-v2/section-states';
 import {
   AREA_SETTINGS_V2_CLASS,
+  LOCATIONS_V2_CLASS,
+  bandLabel,
+  centerCoordinateLabel,
   LOCATION_NAME_MAX,
   LOCATION_TEXT_MAX,
   LocationsListV2,
@@ -146,6 +149,10 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
   const [v2SaveMessage, setV2SaveMessage] = useState<string | null>(null);
   const [locationDraftErrors, setLocationDraftErrors] = useState<LocationDraftErrors>({});
   const [v2SyncedSettings, setV2SyncedSettings] = useState<typeof locationSettings | null>(null);
+  // v2: the location whose delete is in flight, and whether the center address
+  // was typed rather than picked (typing alone never moves the center point).
+  const [v2DeletingId, setV2DeletingId] = useState<string | null>(null);
+  const [v2CenterTyped, setV2CenterTyped] = useState(false);
 
   // PICKUP options
   const [pickupFixedEnabled, setPickupFixedEnabled] = useState(true);
@@ -476,6 +483,7 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
   };
 
   const handleCenterAddressChange = (address: string, lat?: number, lon?: number) => {
+    if (v2) setV2CenterTyped(lat === undefined || lon === undefined);
     setAreaCenterAddress(address);
     if (lat !== undefined && lon !== undefined) {
       setAreaCenterLat(lat);
@@ -562,7 +570,20 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
     } catch (error) {}
   };
 
+  // v2: the row says "Deleting…" until the refreshed list no longer has it.
+  const deleteLocationV2 = async (id: string) => {
+    setV2DeletingId(id);
+    try {
+      await deleteLocation(id);
+      await refetchLocations();
+    } catch (error) {
+    } finally {
+      setV2DeletingId(null);
+    }
+  };
+
   const handleDeleteLocation = async (id: string) => {
+    if (v2) return deleteLocationV2(id);
     try { await deleteLocation(id); } catch (error) {}
   };
 
@@ -613,8 +634,17 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
     );
   }
 
+  // v2 read-only: each group of controls sits in its own disabled fieldset. The
+  // lists (search, Try again) and the refresh error stay outside, so a viewer
+  // can still read, search and retry; the lists disable their own switches.
+  const roFieldset = (children: React.ReactNode) => (
+    <SettingsReadOnlyFieldset readOnly={readOnly}>{children}</SettingsReadOnlyFieldset>
+  );
+  const v2CenterCoords = centerCoordinateLabel(areaCenterLat, areaCenterLon);
+  const v2CenterIsCoordsOnly = v2 && !!v2CenterCoords && areaCenterAddress === v2CenterCoords;
+
   return (
-    <ScopeIf on={v2} wrap={(children) => <SettingsReadOnlyFieldset readOnly={readOnly}>{children}</SettingsReadOnlyFieldset>}>
+    <ScopeIf on={v2} wrap={(children) => <div className={LOCATIONS_V2_CLASS}>{children}</div>}>
     <div className="space-y-6">
       {v2 && settingsError && hasSettingsData && (
         <SettingsLoadError
@@ -642,6 +672,7 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
           </div>
           <CardContent className="p-0 flex-1 flex flex-col">
             {/* Fixed Address */}
+            <ScopeIf on={v2} wrap={roFieldset}>
             <div className={cn(
               "p-5 border-b transition-colors xl:min-h-[180px]",
               pickupFixedEnabled && "bg-muted/20"
@@ -696,12 +727,14 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
                 </div>
               )}
             </div>
+            </ScopeIf>
 
             {/* Predefined Locations */}
             <div className={cn(
               "p-5 border-b transition-colors flex-1",
               pickupMultipleEnabled && "bg-muted/20"
             )}>
+              <ScopeIf on={v2} wrap={roFieldset}>
               <div className="flex items-start justify-between gap-3 sm:gap-4">
                 <div className="flex gap-3 min-w-0">
                   <div className={cn(
@@ -735,6 +768,7 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
                   onCheckedChange={handlePickupMultipleChange}
                 />
               </div>
+              </ScopeIf>
               {pickupMultipleEnabled && (
                 <div className="mt-4 pl-3 sm:pl-[52px]">
                   {v2 ? (
@@ -760,6 +794,7 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
                         isUpdating={isUpdating}
                         currencyCode={currencyCode}
                         readOnly={readOnly}
+                        pendingDeleteId={v2DeletingId}
                       />
                     </div>
                   ) : (
@@ -779,6 +814,7 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
             </div>
 
             {/* Area Delivery */}
+            <ScopeIf on={v2} wrap={roFieldset}>
             <div className={cn(
               "p-5 transition-colors xl:min-h-[88px]",
               pickupAreaEnabled && "bg-muted/20"
@@ -817,6 +853,7 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
                 />
               </div>
             </div>
+            </ScopeIf>
           </CardContent>
         </Card>
 
@@ -835,6 +872,7 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
           </div>
           <CardContent className="p-0 flex-1 flex flex-col">
             {/* Fixed Address */}
+            <ScopeIf on={v2} wrap={roFieldset}>
             <div className={cn(
               "p-5 border-b transition-colors xl:min-h-[180px]",
               returnFixedEnabled && "bg-muted/20"
@@ -893,12 +931,14 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
                 </div>
               )}
             </div>
+            </ScopeIf>
 
             {/* Predefined Locations */}
             <div className={cn(
               "p-5 border-b transition-colors flex-1",
               returnMultipleEnabled && "bg-muted/20"
             )}>
+              <ScopeIf on={v2} wrap={roFieldset}>
               <div className="flex items-start justify-between gap-3 sm:gap-4">
                 <div className="flex gap-3 min-w-0">
                   <div className={cn(
@@ -932,6 +972,7 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
                   onCheckedChange={handleReturnMultipleChange}
                 />
               </div>
+              </ScopeIf>
               {returnMultipleEnabled && (
                 <div className="mt-4 pl-3 sm:pl-[52px]">
                   {v2 ? (
@@ -957,6 +998,7 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
                         isUpdating={isUpdating}
                         currencyCode={currencyCode}
                         readOnly={readOnly}
+                        pendingDeleteId={v2DeletingId}
                       />
                     </div>
                   ) : (
@@ -976,6 +1018,7 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
             </div>
 
             {/* Area Collection */}
+            <ScopeIf on={v2} wrap={roFieldset}>
             <div className={cn(
               "p-5 transition-colors xl:min-h-[88px]",
               returnAreaEnabled && "bg-muted/20"
@@ -1014,13 +1057,21 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
                 />
               </div>
             </div>
+            </ScopeIf>
           </CardContent>
         </Card>
       </div>
 
       {/* AREA SETTINGS */}
       {(pickupAreaEnabled || returnAreaEnabled) && (
-        <ScopeIf on={v2} wrap={(children) => <div className={AREA_SETTINGS_V2_CLASS}>{children}</div>}>
+        <ScopeIf
+          on={v2}
+          wrap={(children) => (
+            <SettingsReadOnlyFieldset readOnly={readOnly} className={AREA_SETTINGS_V2_CLASS}>
+              {children}
+            </SettingsReadOnlyFieldset>
+          )}
+        >
         <Card>
           <div className="bg-muted/30 border-b px-6 py-4">
             <div className="flex items-center gap-3">
@@ -1038,16 +1089,33 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
               <div className="md:col-span-2 space-y-2">
                 <Label className="text-sm font-medium">Service Center Point</Label>
                 <LocationAutocomplete
-                  value={areaCenterAddress}
+                  value={v2CenterIsCoordsOnly ? '' : areaCenterAddress}
                   onChange={handleCenterAddressChange}
-                  placeholder="Search for center location..."
+                  placeholder={v2 && v2CenterCoords ? (readOnly ? 'Saved as a map point (below)' : 'Search an address to move it') : 'Search for center location...'}
                   v2States={v2}
                 />
+                {!v2 && (
+                <>
                 {areaCenterLat && areaCenterLon && (
                   <p className="text-xs text-muted-foreground">
                     Coordinates: {areaCenterLat.toFixed(4)}, {areaCenterLon.toFixed(4)}
                   </p>
                 )}
+                </>
+                )}
+                {v2 && (v2AreaErrors.center ? (
+                  <p role="alert" className="text-xs text-destructive">{v2AreaErrors.center}</p>
+                ) : v2CenterTyped ? (
+                  <p className="text-xs text-amber-700 dark:text-amber-400">
+                    Pick an address from the suggestions to move your center point. Until you do, it stays at{' '}
+                    <span className="tabular-nums">{v2CenterCoords}</span>.
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    {v2CenterIsCoordsOnly ? 'Your saved center point is at ' : 'Distances are measured from this address, at '}
+                    <span className="tabular-nums">{v2CenterCoords}</span>.
+                  </p>
+                ))}
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -1172,6 +1240,17 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
                     </div>
                   ))}
 
+                  {v2 && (v2AreaErrors.bands || v2AreaErrors.bandRows) && (
+                    <ul role="alert" className="space-y-1 text-xs text-destructive">
+                      {v2AreaErrors.bands && <li>{v2AreaErrors.bands}</li>}
+                      {Object.entries(v2AreaErrors.bandRows ?? {}).map(([i, message]) => (
+                        <li key={i} className="[overflow-wrap:anywhere]">
+                          <span className="font-medium">{bandLabel(tiers[Number(i)], distanceUnitLabel)}:</span> {message}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
                   <div className="flex items-center justify-between pt-1">
                     <Button type="button" variant="outline" size="sm" onClick={addBand}>
                       <Plus className="mr-1.5 h-3.5 w-3.5" /> Add band
@@ -1206,6 +1285,9 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
                       <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">{distanceUnitLabel}</span>
                     </div>
                   </div>
+                  {v2 && v2AreaErrors.maxDistance && (
+                    <p role="alert" className="text-xs text-destructive">{v2AreaErrors.maxDistance}</p>
+                  )}
 
                   {!hasOpenBand && maxDeliveryDistance == null && (
                     <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2">
@@ -1228,6 +1310,7 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
               </div>
             )}
 
+            {!(v2 && (v2AreaErrors.radius || v2AreaErrors.fee)) && (
             <div className="mt-4 p-3 rounded-lg bg-muted/50 border">
               <p className="text-sm text-muted-foreground">
                 Customers can enter any address {deliveryTiersEnabled ? 'measured from' : 'within '}
@@ -1238,6 +1321,7 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
                   : <>A fee of <strong className="text-foreground">{formatCurrency(areaDeliveryFee ?? 0, currencyCode)}</strong> will apply per delivery/collection.</>}
               </p>
             </div>
+            )}
           </CardContent>
         </Card>
         </ScopeIf>
@@ -1250,7 +1334,7 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
             <SettingsSaveState
               status={v2SaveStatus}
               error={v2SaveMessage ?? settingsUpdateError}
-              onRetry={v2SaveStatus === 'error' ? handleSaveSettingsV2 : undefined}
+              onRetry={v2SaveStatus === 'error' && !v2SaveMessage ? handleSaveSettingsV2 : undefined}
               className="mr-auto"
             />
             <ButtonV2

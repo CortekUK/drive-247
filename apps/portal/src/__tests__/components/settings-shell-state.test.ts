@@ -118,12 +118,12 @@ describe("resolveSettingsPageData", () => {
     });
   });
 
-  it("Fees waits on rental DEFAULTS (no _paygMigrationReady) and errors when the read failed", () => {
+  it("Booking rules waits on rental DEFAULTS (no _paygMigrationReady) and errors when the read failed", () => {
     const defaults = { tax_enabled: false, max_rental_days: 90 };
-    expect(resolveSettingsPageData({ page: "fees", org: realOrg, rental: { settings: defaults, error: null } })).toEqual({
+    expect(resolveSettingsPageData({ page: "duration", org: realOrg, rental: { settings: defaults, error: null } })).toEqual({
       kind: "loading",
     });
-    expect(resolveSettingsPageData({ page: "fees", org: realOrg, rental: { settings: defaults, error: boom } })).toEqual({
+    expect(resolveSettingsPageData({ page: "duration", org: realOrg, rental: { settings: defaults, error: boom } })).toEqual({
       kind: "error",
       source: "rental",
       error: boom,
@@ -131,7 +131,15 @@ describe("resolveSettingsPageData", () => {
   });
 
   it("a real rental row counts even when the marker's value is false", () => {
-    expect(resolveSettingsPageData({ page: "fees", org: realOrg, rental: realRental })).toEqual({ kind: "ready" });
+    expect(resolveSettingsPageData({ page: "duration", org: realOrg, rental: realRental })).toEqual({ kind: "ready" });
+  });
+
+  it("Pricing rules, Tax and fees and Security deposit never wait at page level: each section gates on its own read", () => {
+    const defaults = { tax_enabled: false, max_rental_days: 90 };
+    for (const page of ["pricing", "fees", "preauth"]) {
+      expect(resolveSettingsPageData({ page, org: realOrg, rental: { settings: defaults, error: null } })).toEqual({ kind: "ready" });
+      expect(resolveSettingsPageData({ page, org: realOrg, rental: { settings: defaults, error: boom } })).toEqual({ kind: "ready" });
+    }
   });
 
   it("pages reading neither query render regardless of their failures", () => {
@@ -140,12 +148,12 @@ describe("resolveSettingsPageData", () => {
     expect(resolveSettingsPageData({ page: "extras", org: broken, rental: broken })).toEqual({ kind: "ready" });
   });
 
-  it("General does not wait on rental settings, and Fees does not wait on org settings", () => {
+  it("General does not wait on rental settings, and Booking rules does not wait on org settings", () => {
     expect(
       resolveSettingsPageData({ page: "general", org: realOrg, rental: { settings: {}, error: boom } }),
     ).toEqual({ kind: "ready" });
     expect(
-      resolveSettingsPageData({ page: "fees", org: { settings: undefined, error: boom }, rental: realRental }),
+      resolveSettingsPageData({ page: "duration", org: { settings: undefined, error: boom }, rental: realRental }),
     ).toEqual({ kind: "ready" });
   });
 });

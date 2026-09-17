@@ -103,14 +103,20 @@ export function settingsTabNoticeCopy(notice: SettingsTabNotice): { title: strin
 /** v2 pages whose controls are filled from the org settings edge function. */
 export const V2_PAGES_READING_ORG_SETTINGS: ReadonlySet<string> = new Set(["general", "reminders"]);
 
-/** v2 pages whose controls are filled from the tenants row (`useRentalSettings`). */
+/**
+ * v2 pages whose controls are filled from the tenants row (`useRentalSettings`)
+ * and wait for it at page level.
+ *
+ * Pricing rules, Tax and fees and Security deposit also read that row but are
+ * not listed: each section gates itself on the cached read (`ReadGate` in
+ * pricing-money-parts), so a first load shows skeletons shaped like those
+ * sections, and a failed rental read no longer hides Weekend and Holiday
+ * pricing, which have reads of their own.
+ */
 export const V2_PAGES_READING_RENTAL_SETTINGS: ReadonlySet<string> = new Set([
   "requirements",
   "duration",
   "lockbox",
-  "pricing",
-  "fees",
-  "preauth",
   "payg",
   "auto-extend",
   "templates",

@@ -52,6 +52,9 @@ import { WelcomePackPrompt } from "@/components/welcome/welcome-pack-prompt";
 import { FirstRunWizard } from "@/components/onboarding/first-run-wizard";
 import { FirstRunHandoffGate } from "@/components/onboarding/first-run-handoff-gate";
 import { FirstRentalTour } from "@/components/onboarding/first-rental-tour";
+import { usePortalAnnouncements } from "@/hooks/use-portal-announcements";
+import { SystemAnnouncementBanner } from "@/components/announcements/system-announcement-banner";
+import { AnnouncementDialogHost } from "@/components/announcements/announcement-dialog-host";
 
 function LoadingSkeleton() {
   return (
@@ -138,6 +141,12 @@ export default function DashboardLayout({
   // revokes their session — immediately via realtime broadcast, and on tab
   // focus / reopen via a server-authoritative session check.
   useSessionGuard();
+
+  // Announcements from the super admin (system notices for every tenant, feature
+  // cards for the v2 dashboard). Called here, above every early return, so the read
+  // starts while the skeleton below is still held; the banner, the dialog host and
+  // the dashboard's desk band all read this same cached query.
+  usePortalAnnouncements();
 
   // Pages where the user MUST be able to reach even without a subscription —
   // otherwise they'd have no way to subscribe or contact us.
@@ -412,6 +421,15 @@ export default function DashboardLayout({
 
   return (
     <DynamicThemeProvider>
+      {/* The full-width system announcement banner, for every tenant in both
+          chromes. It is `position: fixed` across the top of the viewport and
+          renders its own in-flow spacer, so it sits OUTSIDE the sidebar wrapper
+          below and spans the sidebar column and the top bar end to end. It also
+          publishes `html[data-system-banner]` + `--system-banner-h`, which the
+          offsets in global.css use to move the fixed sidebars, the sticky top bar
+          and the docked Trax panel down. Renders nothing (no spacer, no attribute)
+          when there is no active banner, which is every tenant by default. */}
+      <SystemAnnouncementBanner />
       {/* The v2 page tint lives HERE, on the sidebar wrapper, exactly as it
           does on `improv/portal-side` — `<SidebarProvider className="bg-background
           bg-app-gradient">`. It is not a token: `--background` is plain white in
@@ -448,6 +466,11 @@ export default function DashboardLayout({
             .filter(Boolean)
             .join(" ") || undefined
         }
+        /* Marks the bounded-height routes for global.css, which shortens the
+           wrapper by the system banner's height while one is showing (otherwise
+           Messages and Trax would scroll the document by exactly that much).
+           No attribute at all on every other route. */
+        data-bounded-height={isBoundedHeight ? "" : undefined}
       >
         <TraxWrap>
         <SearchSlotWrap>
@@ -699,6 +722,20 @@ export default function DashboardLayout({
             operator cannot act on. It also self-gates on the first-run wizard
             having settled, so the two can never share the screen. */}
         <FirstRentalTour suppressed={showGate} />
+
+        {/* Announcement dialogs: system notices (soft or hard) for every tenant,
+            and the v2 dashboard's feature dialog. Mounted LAST, and it opens
+            nothing while any surface above owns the screen: it takes the same
+            paywall signal as the prompts above, and reads the migration,
+            wizard, tour, feedback and open-modal state itself (see
+            hooks/use-announcement-blocked.ts). One dialog at a time; a hard
+            blocker is not shown on the pages `isSubscriptionPage` keeps
+            reachable. */}
+        <AnnouncementDialogHost
+          showGate={showGate}
+          isSubscriptionPage={!!isSubscriptionPage}
+          pathname={pathname ?? "/"}
+        />
       </Provider>
     </DynamicThemeProvider>
   );

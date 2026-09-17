@@ -3,6 +3,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Upload, X, Image, Loader2 } from 'lucide-react';
+import { ImageOff } from 'lucide-react';
+import { useImageLoadFailed } from '@/components/settings-v2/business-settings-states';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 
@@ -14,13 +16,17 @@ interface FaviconUploadProps {
    * removing it must not delete the live file first. Only the form clears.
    */
   deferStorageDelete?: boolean;
+  /** v2 (Appearance, northwind): a favicon file that fails to load shows an image-off icon in its frame. */
+  v2States?: boolean;
 }
 
 export const FaviconUpload: React.FC<FaviconUploadProps> = ({
   currentFaviconUrl,
   onFaviconChange,
   deferStorageDelete = false,
+  v2States = false,
 }) => {
+  const v2FaviconFailed = useImageLoadFailed(v2States ? currentFaviconUrl : null);
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -191,6 +197,9 @@ export const FaviconUpload: React.FC<FaviconUploadProps> = ({
         <div className="flex items-center gap-4">
           <div className="relative">
             <div className="w-12 h-12 border rounded-lg bg-muted/30 flex items-center justify-center">
+              {v2States && v2FaviconFailed ? (
+                <ImageOff role="img" aria-label="Your favicon file couldn't be loaded" className="h-5 w-5 text-muted-foreground" />
+              ) : (
               <img
                 src={currentFaviconUrl}
                 alt="Favicon preview"
@@ -199,6 +208,7 @@ export const FaviconUpload: React.FC<FaviconUploadProps> = ({
                   (e.target as HTMLImageElement).style.display = 'none';
                 }}
               />
+              )}
             </div>
             <Button
               type="button"

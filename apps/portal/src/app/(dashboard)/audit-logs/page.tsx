@@ -53,6 +53,7 @@ import {
   AuditLogsFilters,
 } from "@/hooks/use-audit-logs";
 import { useV2 } from "@/lib/v2-context";
+import { HEADER_ACTIONS_V2, HEADER_PRIMARY_V2 } from "@/components/shared/header-icon-button-v2";
 import { useTenant } from "@/contexts/TenantContext";
 import { AuditLogsTableV2 } from "@/components/admin-v2/audit-logs-table-v2";
 
@@ -164,10 +165,22 @@ const AuditLogs = () => {
             </p>
           </div>
         </div>
+        {v2Chrome ? (
+          // v2: Export CSV is this page's one action, so it stays the labelled
+          // button, as the 32px pill centred on the subtitle line (team lead
+          // Sep 16 2026; the subtitle is text-base from sm, HEADER_ACTIONS_V2's box).
+          <div className={`flex items-center gap-2 ${HEADER_ACTIONS_V2}`}>
+            <Button onClick={handleExportCSV} className={`bg-gradient-primary w-full sm:w-auto ${HEADER_PRIMARY_V2}`}>
+              <Download className="h-4 w-4 mr-2" />
+              Export CSV
+            </Button>
+          </div>
+        ) : (
         <Button onClick={handleExportCSV} className="bg-gradient-primary w-full sm:w-auto">
           <Download className="h-4 w-4 mr-2" />
           Export CSV
         </Button>
+        )}
       </div>
 
       {/* Filter Bar */}

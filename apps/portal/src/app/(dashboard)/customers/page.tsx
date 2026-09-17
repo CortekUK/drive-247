@@ -54,7 +54,7 @@ import {
 } from "@/components/shared/list-table-v2";
 import { formatCurrency } from "@/lib/format-utils";
 import { TabTourButton } from "@/components/onboarding/tab-tour-button";
-import { HeaderIconButton } from "@/components/shared/header-icon-button-v2";
+import { HEADER_ACTIONS_V2, HEADER_PRIMARY_V2, HeaderIconButton } from "@/components/shared/header-icon-button-v2";
 import { csvDate, csvFilename, downloadCsv } from "@/lib/csv-export";
 import { useV2 } from "@/lib/v2-context";
 import { usePageSearch } from "@/components/shared/layout/page-search-slot";
@@ -816,7 +816,10 @@ const CustomersList = () => {
           <h1 className="text-2xl sm:text-3xl font-bold">Customers</h1>
           <p className="text-muted-foreground text-sm sm:text-base">Manage customers and account balances</p>
         </div>
-        <div className="flex items-center gap-2">
+        {/* v2: every control here is 32px and the cluster sits on the subtitle line
+            (HEADER_ACTIONS_V2 / HEADER_PRIMARY_V2, team lead Sep 16 2026). v1 keeps
+            "flex items-center gap-2" byte for byte. */}
+        <div className={`flex items-center gap-2${v2Chrome ? ` ${HEADER_ACTIONS_V2}` : ""}`}>
           {/*
             Blocked customers used to be its own sidebar entry, under a second
             "Customers" group. It belongs here instead: it is a view OF this
@@ -911,7 +914,7 @@ const CustomersList = () => {
             </HeaderIconButton>
           )}
           {canEdit('customers') && (
-            <Button className="bg-gradient-primary flex-1 sm:flex-none" data-tour="add-customer" onClick={handleAddCustomer}>
+            <Button className={`bg-gradient-primary flex-1 sm:flex-none${v2Chrome ? ` ${HEADER_PRIMARY_V2}` : ""}`} data-tour="add-customer" onClick={handleAddCustomer}>
               <Plus className="h-4 w-4 mr-2" />
               Add Customer
             </Button>

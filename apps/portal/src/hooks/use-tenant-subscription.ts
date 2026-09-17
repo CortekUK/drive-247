@@ -566,6 +566,10 @@ export function useTenantSubscription() {
     isResolved,
     invoices: invoicesQuery.data || [],
     invoicesLoading: invoicesQuery.isLoading,
+    // Additive, read only by v2 screens: a failed read is not "no subscription"
+    // or "no invoices", and the v2 billing page says so instead of guessing.
+    subscriptionError: subscriptionQuery.error,
+    invoicesError: invoicesQuery.error,
     createCheckoutSession,
     createPortalSession,
     refetch,

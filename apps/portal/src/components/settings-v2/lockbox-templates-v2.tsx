@@ -11,9 +11,16 @@
  * template read failed (one Save then overwrote the real template); kept Save
  * enabled with no changes and lost edits without warning; and a partial
  * "Reset all" said only "Failed to reset".
+ *
+ * Also here: the skeleton waits for the REAL rental settings (`hasLoaded`; the
+ * hook's placeholder says lockbox is off, which flashed the "off" notice), the
+ * text-message count is estimated with the variables filled in, a missing
+ * Twilio connection is said out loud, and unsaved messages register with the
+ * page so leaving from the sidebar warns and "Save & Leave" saves them.
  */
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import Link from "next/link";
 import { Loader2, RotateCcw, Save } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import { Input } from "@/components/ui-v2/input";
@@ -48,6 +55,9 @@ import {
 } from "./section-states";
 import { LOCKBOX_CODE_VARIABLE, SMS_SINGLE_LIMIT, lockboxTemplateIssues, smsSegments } from "./message-rules";
 import { IconActionButton } from "./template-editor-shell-v2";
+import { renderLockboxSmsExample } from "./business-rules-logic";
+import { useRegisterLeaveSave } from "./business-section-save";
+import type { RegisterSectionSave } from "./pricing-money-parts";
 
 export interface LockboxDefaults {
   instructions: string;
@@ -56,6 +66,18 @@ export interface LockboxDefaults {
 }
 
 type Phase = { phase: "idle" | "saving" | "saved" | "error"; error?: unknown };
+
+/**
+ * ui-v2 fields fill with `bg-input/50`. Under `.dark .v2-theme` --input carries
+ * its own alpha (`0 0% 100% / 15%`), so that colour is invalid and the fields
+ * rendered with no fill and no border: text floating on the card. A solid
+ * muted fill in dark mode puts the field back.
+ */
+const FIELD = "dark:bg-muted";
+
+/** A failed reset: the reason, without describeSaveError's "Your changes are still here" (a reset has no edits to keep). */
+const describeResetError = (err: unknown) =>
+  describeSaveError(err).replace(/\s*Your changes are still here\.\s*/, " ").trim();
 
 /** One block's save lifecycle: saving → saved (briefly) or error, kept until the next try. */
 function useBlockSave() {
@@ -102,7 +124,7 @@ function useFollowStored<T>(stored: T | null, equals: (a: T, b: T) => boolean) {
 
 function Block({ title, description, aside, children }: { title: string; description?: string; aside?: ReactNode; children: ReactNode }) {
   return (
-    <div className="space-y-3 rounded-2xl bg-card p-4 sm:p-5">
+    <div className="space-y-3 rounded-xl border bg-card p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0 space-y-0.5">
           <p className="text-sm font-medium text-foreground">{title}</p>
@@ -118,19 +140,35 @@ function Block({ title, description, aside, children }: { title: string; descrip
 export function LockboxTemplatesSectionV2({
   defaults,
   variables,
+  registerSave,
+  integrationsHref = "/integrations?open=Twilio%20Messages",
+  readOnlyNotice = true,
 }: {
   defaults: LockboxDefaults;
   variables: { key: string; desc: string }[];
+  /** The settings page's section-save registry, so leaving with unsaved messages warns. */
+  registerSave?: RegisterSectionSave;
+  integrationsHref?: string;
+  /** False when the page above already shows the "View only" notice. */
+  readOnlyNotice?: boolean;
 }) {
   const { tenant } = useTenant();
-  const { settings: rentalSettings, isLoading: rentalLoading, error: rentalError, refetch: refetchRental, updateSettings } =
-    useRentalSettings();
+  const {
+    settings: rentalSettings,
+    hasLoaded: rentalHasLoaded,
+    error: rentalError,
+    refetch: refetchRental,
+    isFetching: rentalFetching,
+    updateSettings,
+  } = useRentalSettings();
   const { templates, error: templatesError, refetch: refetchTemplates, isFetching, getEmailTemplate, getSmsTemplate, saveTemplate } =
     useLockboxTemplates();
   const { canEditSettings } = useManagerPermissions();
   const canEdit = canEditSettings("lockbox");
 
-  const settingsReady = !!tenant && !rentalLoading && !rentalError;
+  // Real settings only: the placeholder row says lockbox is off. A failed refresh
+  // over a loaded row keeps the editor (the page shows the stale-data notice).
+  const settingsReady = !!tenant && !!rentalHasLoaded;
   const storedInstructions = settingsReady ? rentalSettings?.lockbox_default_instructions || defaults.instructions : null;
   const storedEmail = templates ? getEmailTemplate() : null;
   const storedSms = templates ? getSmsTemplate().body : null;
@@ -156,6 +194,14 @@ export function LockboxTemplatesSectionV2({
     email !== null && storedEmail !== null && (email.subject !== storedEmail.subject || email.body !== storedEmail.body);
   const smsDirty = sms !== null && storedSms !== null && sms !== storedSms;
   useWarnOnUnsavedChanges(canEdit && (instructionsDirty || emailDirty || smsDirty));
+  // Filled in below, once the drafts exist; only ever called while something is dirty.
+  const saveDirtyForLeave = useRef<() => Promise<void>>(async () => undefined);
+  useRegisterLeaveSave(
+    canEdit ? registerSave : undefined,
+    "lockbox-messages",
+    instructionsDirty || emailDirty || smsDirty,
+    () => saveDirtyForLeave.current(),
+  );
 
   const failToast = (what: string, err: unknown) =>
     toast({ title: `Couldn't save the ${what}`, description: describeSaveError(err), variant: "destructive" });
@@ -167,7 +213,7 @@ export function LockboxTemplatesSectionV2({
         <p className="text-sm text-muted-foreground">What customers receive with their lockbox code.</p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        {!canEdit && <SettingsReadOnlyNotice />}
+        {!canEdit && readOnlyNotice && <SettingsReadOnlyNotice />}
         {canEdit && templates && rentalSettings?.lockbox_enabled && (
           <IconActionButton
             action={{ label: "Reset all messages to default", icon: RotateCcw, onClick: () => setResetOpen(true), busy: resetting, tone: "destructive" }}
@@ -186,11 +232,13 @@ export function LockboxTemplatesSectionV2({
     </TooltipProvider>
   );
 
-  if (!tenant || rentalLoading || (!rentalError && !templates && !templatesError)) {
+  if (!tenant || (!rentalHasLoaded && !rentalError)) {
     return wrap(<SettingsSectionSkeleton variant="form" rows={3} label="Loading lockbox messages" />);
   }
-  if (rentalError) {
-    return wrap(<SettingsLoadError thing="lockbox settings" error={rentalError} onRetry={() => refetchRental()} />);
+  if (!rentalHasLoaded) {
+    return wrap(
+      <SettingsLoadError thing="lockbox settings" error={rentalError} onRetry={() => refetchRental()} retrying={rentalFetching} />,
+    );
   }
   if (!rentalSettings?.lockbox_enabled) {
     return wrap(
@@ -199,6 +247,9 @@ export function LockboxTemplatesSectionV2({
         body="Turn on lockbox handover above and save. Then you can edit the email and text message that send the code."
       />,
     );
+  }
+  if (!templates && !templatesError) {
+    return wrap(<SettingsSectionSkeleton variant="form" rows={3} label="Loading lockbox messages" />);
   }
   if (!templates) {
     return wrap(
@@ -211,8 +262,14 @@ export function LockboxTemplatesSectionV2({
 
   const emailIssues = lockboxTemplateIssues({ channel: "email", subject: email.subject, body: email.body });
   const smsIssues = lockboxTemplateIssues({ channel: "sms", body: sms });
-  const smsLength = sms.length;
+  // Counted as it will be sent: every {{variable}} filled with a typical value
+  // (the tenant's real code length and default instructions where it has them).
+  const smsLength = renderLockboxSmsExample(sms, {
+    codeLength: rentalSettings?.lockbox_code_length,
+    defaultInstructions: instructions.trim() ? instructions : defaults.instructions,
+  }).length;
   const segments = smsSegments(smsLength);
+  const smsReady = !!tenant?.integration_twilio_sms;
 
   const saveInstructions = () =>
     instructionsSave.run(async () => {
@@ -262,25 +319,50 @@ export function LockboxTemplatesSectionV2({
     });
   };
 
+  // "Save & Leave": every dirty block, and a rejection (so the page stays) when
+  // one is invalid, would go out without the code, or fails.
+  saveDirtyForLeave.current = async () => {
+    if (instructionsDirty && !(await instructionsSave.run(() => updateSettings({ lockbox_default_instructions: instructions })))) {
+      throw new Error("Couldn't save the lockbox instructions.");
+    }
+    if (emailDirty) {
+      if (emailIssues.subjectError || emailIssues.bodyError) throw new Error(emailIssues.subjectError ?? emailIssues.bodyError ?? "");
+      if (emailIssues.missingCode) throw new Error("The lockbox email doesn't include {{lockbox_code}}. Save it on the page first.");
+      if (!(await emailSave.run(() => saveTemplate.mutateAsync({ channel: "email", subject: email.subject, body: email.body })))) {
+        throw new Error("Couldn't save the lockbox email.");
+      }
+    }
+    if (smsDirty) {
+      if (smsIssues.bodyError) throw new Error(smsIssues.bodyError);
+      if (smsIssues.missingCode) throw new Error("The lockbox text message doesn't include {{lockbox_code}}. Save it on the page first.");
+      if (!(await smsSave.run(() => saveTemplate.mutateAsync({ channel: "sms", body: sms })))) {
+        throw new Error("Couldn't save the lockbox text message.");
+      }
+    }
+  };
+
   const handleResetAll = async () => {
     setResetting(true);
     const done: string[] = [];
     try {
-      await updateSettings({ lockbox_default_instructions: defaults.instructions });
-      setInstructions(defaults.instructions);
-      done.push("instructions");
       await saveTemplate.mutateAsync({ channel: "email", subject: defaults.email.subject, body: defaults.email.body });
       setEmail({ ...defaults.email });
       done.push("email");
       await saveTemplate.mutateAsync({ channel: "sms", body: defaults.sms.body });
       setSms(defaults.sms.body);
       done.push("text message");
+      // Last on purpose: the rental-settings hook shows its own generic "Settings
+      // Updated" (or "Error") toast, which the toast below replaces in the same
+      // tick instead of flashing it over the open dialog mid-reset.
+      await updateSettings({ lockbox_default_instructions: defaults.instructions });
+      setInstructions(defaults.instructions);
+      done.push("instructions");
       toast({ title: "Lockbox messages reset", description: "The instructions, email and text message use the default wording again." });
       setResetOpen(false);
     } catch (err) {
       toast({
         title: "Couldn't reset everything",
-        description: `${done.length ? `Reset: ${done.join(", ")}. ` : "Nothing was reset. "}${describeSaveError(err)}`,
+        description: `${done.length ? `Reset: ${done.join(", ")}. ` : "Nothing was reset. "}${describeResetError(err)}`,
         variant: "destructive",
       });
     } finally {
@@ -297,7 +379,7 @@ export function LockboxTemplatesSectionV2({
 
   return wrap(
     <>
-      <div className="rounded-2xl bg-muted/40 p-3">
+      <div className="rounded-xl bg-muted/40 px-4 py-3 sm:px-5">
         <p className="mb-2 text-xs font-medium text-muted-foreground">Variables you can use</p>
         <div className="flex flex-wrap gap-1.5">
           {variables.map((v) => (
@@ -322,7 +404,7 @@ export function LockboxTemplatesSectionV2({
             value={instructions}
             onChange={(e) => setInstructions(e.target.value)}
             rows={7}
-            className="text-sm"
+            className={cn("text-sm", FIELD)}
             placeholder="Enter default lockbox instructions..."
           />
           {!instructions.trim() && <p className="text-xs text-muted-foreground">Leave empty to use the default instructions.</p>}
@@ -348,6 +430,8 @@ export function LockboxTemplatesSectionV2({
                 setEmailArmed(false);
               }}
               placeholder="Your vehicle keys - lockbox code"
+              maxLength={200}
+              className={FIELD}
               aria-invalid={!!emailIssues.subjectError || undefined}
             />
             {emailIssues.subjectError && <p className="text-xs text-destructive">{emailIssues.subjectError}</p>}
@@ -364,7 +448,7 @@ export function LockboxTemplatesSectionV2({
                 setEmailArmed(false);
               }}
               rows={9}
-              className="font-mono text-sm"
+              className={cn("font-mono text-sm", FIELD)}
               placeholder="Email body with {{variable}} placeholders..."
               aria-invalid={!!emailIssues.bodyError || undefined}
             />
@@ -394,8 +478,10 @@ export function LockboxTemplatesSectionV2({
                   smsLength > SMS_SINGLE_LIMIT ? "bg-amber-500/15 text-amber-700 dark:text-amber-400" : "bg-muted text-muted-foreground",
                 )}
               >
+                <span className="sr-only">About </span>
+                <span aria-hidden="true">~</span>
                 {smsLength} / {SMS_SINGLE_LIMIT}
-                {segments > 1 ? ` · ${segments} SMS parts` : ""}
+                {segments > 1 ? ` · ${segments} texts` : ""}
               </span>
             </div>
           }
@@ -411,16 +497,31 @@ export function LockboxTemplatesSectionV2({
               setSmsArmed(false);
             }}
             rows={3}
-            className="font-mono text-sm"
+            className={cn("font-mono text-sm", FIELD)}
             placeholder="SMS message with {{variable}} placeholders..."
             aria-invalid={!!smsIssues.bodyError || undefined}
           />
           {smsIssues.bodyError && <p className="text-xs text-destructive">{smsIssues.bodyError}</p>}
           {smsIssues.missingCode && missingCodeCopy(smsArmed)}
-          <p className="text-xs text-muted-foreground">
-            Over {SMS_SINGLE_LIMIT} characters sends as several parts. Variables are filled in when it sends, so the real
-            message can be longer than this count.
-          </p>
+          {!smsReady && (
+            <p className="text-xs text-amber-700 dark:text-amber-400">
+              Text messages aren&apos;t set up, so this message isn&apos;t sent yet.{" "}
+              <Link href={integrationsHref} className="pointer-events-auto font-medium underline underline-offset-4">
+                Connect Twilio
+              </Link>
+            </p>
+          )}
+          {segments > 1 ? (
+            <p className="text-xs text-amber-700 dark:text-amber-400">
+              Likely sent as {segments} texts: with the details filled in it comes to about {smsLength} characters, and one
+              text holds {SMS_SINGLE_LIMIT}.
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Counted with example details filled in (name, plate, code). Over {SMS_SINGLE_LIMIT} characters it goes out as
+              more than one text.
+            </p>
+          )}
           <Button
             type="button"
             size="sm"

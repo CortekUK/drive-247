@@ -43,8 +43,11 @@
  * the page's main action, and every other control an icon. So this is a round
  * compass with its name in a tooltip and in `aria-label`; the name still
  * changes with the tour on offer ("Take the tour" / "See what is inside"). The
- * unseen state keeps its tinted outline and adds a small dot, since there is
- * no label left to carry it.
+ * small dot the unseen state used to add was removed on request (team lead,
+ * Sep 16 2026). Every header icon is now purple at rest — the tinted outline
+ * this button already wore — so it no longer dims to grey once taken: the row
+ * reads as one set of controls. It is 32px like the header's other controls.
+ * Whether a tour was taken now only shapes the LABEL (see `seenVariant`).
  *
  * ---------------------------------------------------------------------------
  * THE BUTTON MUST NOT OUTRANK THE PAGE'S PRIMARY ACTION
@@ -67,7 +70,6 @@ import { isLeanTenant } from '@/lib/lean-areas';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui-v2/tooltip';
 import {
-  hasTakenTabTour,
   runTabTour,
   tabTourVariant,
   takenTabTourVariant,
@@ -78,29 +80,17 @@ import {
 export interface TabTourButtonProps {
   tour: TabTourId;
   /**
-   * Match the neighbouring controls. `h-10` on the v1 list headers (Customers,
-   * Vehicles), `h-9` on the v2 ones (Rentals).
+   * No longer changes anything: every header control is 32px (Sep 16 2026).
+   * Kept so the existing call sites compile unchanged.
    */
   size?: 'h-9' | 'h-10';
   className?: string;
 }
 
-export function TabTourButton({ tour, size = 'h-10', className }: TabTourButtonProps) {
+export function TabTourButton({ tour, className }: TabTourButtonProps) {
   const { tenant } = useTenant();
   const { appUser } = useAuth();
   const hasV2Chrome = useV2('chrome');
-
-  /**
-   * Whether they have taken it lives in localStorage, which the server cannot
-   * see. Reading it during render would produce different markup on the server
-   * and the client and hydrate wrong, so the first paint is always the QUIET
-   * state and it brightens in an effect if it turns out to be unseen.
-   *
-   * That direction matters: the quiet state is the one that is safe to show by
-   * mistake for a frame. Starting loud and dimming would flash a "new" badge at
-   * every operator who has already taken the tour, on every navigation.
-   */
-  const [taken, setTaken] = useState(true);
 
   /**
    * Which tour is available right now — the short empty-tab one, or the full
@@ -128,7 +118,6 @@ export function TabTourButton({ tour, size = 'h-10', className }: TabTourButtonP
     const check = () => {
       const v = tabTourVariant(tour);
       setVariant(v);
-      setTaken(hasTakenTabTour(tour, appUserId, v));
       setSeenVariant(takenTabTourVariant(tour, appUserId));
     };
     check();
@@ -175,27 +164,21 @@ export function TabTourButton({ tour, size = 'h-10', className }: TabTourButtonP
           data-tour="take-tab-tour"
           aria-label={label}
           onClick={() => {
-            // Dim it immediately rather than waiting for the run to finish. Someone
-            // who starts a tour and closes it on step two has still found the door,
-            // and the loud treatment has done its job.
-            setTaken(true);
             runTabTour(tour);
           }}
           className={cn(
             'relative inline-flex shrink-0 items-center justify-center rounded-full border',
             'transition-colors focus-visible:outline-none focus-visible:ring-2',
             'focus-visible:ring-ring focus-visible:ring-offset-2',
-            size === 'h-10' ? 'size-10' : 'size-9',
-            taken
-              ? 'border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground dark:bg-transparent'
-              : 'border-primary/30 bg-primary/5 text-primary hover:border-primary/50 hover:bg-primary/10',
+            // 32px on every header (team lead, Sep 16 2026); `size` no longer changes it.
+            'size-8',
+            // One look in both states, matching the header's other icons
+            // (HeaderIconButton): purple at rest, deeper on hover.
+            'border-primary/30 bg-primary/5 text-primary hover:border-primary/50 hover:bg-primary/10 dark:bg-primary/10 dark:hover:bg-primary/15',
             className,
           )}
         >
-          <Compass className="size-4" aria-hidden />
-          {!taken && (
-            <span aria-hidden className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-primary" />
-          )}
+          <Compass className="size-3.5" aria-hidden />
         </button>
       </TooltipTrigger>
       <TooltipContent side="bottom" sideOffset={6}>

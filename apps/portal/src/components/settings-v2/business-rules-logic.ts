@@ -25,13 +25,31 @@ const plural = (n: number, word: string) => `${fmtNumber(n)} ${word}${n === 1 ? 
 export const DRIVER_AGE_MIN = 16;
 export const DRIVER_AGE_MAX = 99;
 
-/** Blank means "no minimum age". Anything else must be a whole age in range. */
+/**
+ * A blank age is NOT "no minimum". The booking site keeps checking the
+ * driver's date of birth and falls back to 21 (apps/booking
+ * MultiStepBookingWidget: `tenant?.minimum_rental_age || 21` when the details
+ * step is submitted, and "Driver must be at least 21 years old" under the
+ * field). The copy has to say that, or an operator clears the box expecting
+ * 18-year-olds to be able to book.
+ */
+export const BOOKING_SITE_DEFAULT_MIN_AGE = 21;
+
+/** Blank means "use the booking site's default". Anything else must be a whole age in range. */
 export function validateDriverAge(value: number | "" | null | undefined): string | null {
   if (value === "" || value === null || value === undefined) return null;
   if (!Number.isInteger(value) || value < DRIVER_AGE_MIN || value > DRIVER_AGE_MAX) {
-    return `Enter an age between ${DRIVER_AGE_MIN} and ${DRIVER_AGE_MAX}, or leave it blank for no minimum.`;
+    return `Enter an age between ${DRIVER_AGE_MIN} and ${DRIVER_AGE_MAX}, or leave it blank to use the booking site's default of ${BOOKING_SITE_DEFAULT_MIN_AGE}.`;
   }
   return null;
+}
+
+/** The line under "Minimum driver age": what the saved value does on the booking site. */
+export function describeDriverAge(value: number | "" | null | undefined): string {
+  if (value === "" || value === null || value === undefined) {
+    return `No age is set, so your booking site uses its default: drivers must be at least ${BOOKING_SITE_DEFAULT_MIN_AGE}. Enter an age to set your own.`;
+  }
+  return "The booking form checks each driver's date of birth against this. Younger drivers can't book.";
 }
 
 export const DOCUMENT_TYPE_OPTIONS: { value: string; label: string }[] = [
@@ -228,6 +246,45 @@ export function lockboxMethodStatus(
   return { method, extraSaved, warning };
 }
 
+/**
+ * How long the lockbox text message is likely to be once it is sent.
+ *
+ * The editor used to count the raw template, so "{{customer_name}}" counted
+ * as 17 characters and a message that goes out as two texts looked like one.
+ * This fills every variable `notify-lockbox-code` replaces with a typical
+ * value (the tenant's real default instructions where it has them) and counts
+ * that. It is an estimate: real names, plates and addresses vary.
+ */
+export const LOCKBOX_SMS_EXAMPLE: Record<string, string> = {
+  customer_name: "Jordan Smith",
+  vehicle_name: "Toyota Camry",
+  vehicle_reg: "ABC-1234",
+  booking_ref: "BK-104233",
+  delivery_address: "221B Baker Street, London",
+  lockbox_instructions: "Rear left wheel arch",
+  odometer: "",
+  notes: "",
+};
+
+/** Generate makes a 4-digit code when no length is set. */
+export const LOCKBOX_DEFAULT_CODE_DIGITS = 4;
+
+export function renderLockboxSmsExample(
+  body: string,
+  { codeLength, defaultInstructions }: { codeLength?: number | null; defaultInstructions?: string | null } = {},
+): string {
+  const digits =
+    typeof codeLength === "number" && Number.isInteger(codeLength) && codeLength >= CODE_LENGTH_MIN && codeLength <= CODE_LENGTH_MAX
+      ? codeLength
+      : LOCKBOX_DEFAULT_CODE_DIGITS;
+  const values: Record<string, string> = {
+    ...LOCKBOX_SMS_EXAMPLE,
+    lockbox_code: "1234567890".repeat(2).slice(0, digits),
+    default_instructions: defaultInstructions ?? "",
+  };
+  return (body ?? "").replace(/\{\{(\w+)\}\}/g, (token, name: string) => (name in values ? values[name] : token));
+}
+
 export const SEND_OFFSET_PRESETS = [0, 5, 15, 30, 60, 120];
 
 /** 0 -> "Straight away", 60 -> "1 hour after", 90 -> "1 hour 30 minutes after". */
@@ -274,6 +331,18 @@ export function clampReminderHours(raw: string, fallback: number): { value: numb
   return { value: n, note: null };
 }
 
+/**
+ * A stored reminder lead outside 1–168 hours (written before the range was
+ * enforced, or by hand). Said as soon as the page loads, not only after the box
+ * is blurred, so "Emailed 416 days before" never sits beside "Between 1 and 168
+ * hours" unexplained. Presentation only: the saved value is not touched.
+ */
+export function reminderHoursRangeNote(hours: number | null | undefined): string | null {
+  if (typeof hours !== "number" || !Number.isFinite(hours)) return null;
+  if (hours >= REMINDER_HOURS_MIN && hours <= REMINDER_HOURS_MAX) return null;
+  return `The saved value, ${plural(hours, "hour")}, is outside the allowed 1–168 hours (7 days). Enter a value in that range and save.`;
+}
+
 /** 24 -> "1 day", 30 -> "1 day 6 hours", 5 -> "5 hours". */
 export function describeReminderLead(hours: number): string {
   return describeHours(Math.max(0, Math.round(hours || 0)));
@@ -284,6 +353,46 @@ export function describeReminderLead(hours: number): string {
 /* -------------------------------------------------------------------------- */
 
 export type BusinessPage = "requirements" | "duration" | "lockbox" | "return-reminder";
+
+/** Every `rentalForm` field the Business-rules pages own (the keys `savedFieldsFor` returns). */
+export const BUSINESS_FORM_KEYS = [
+  "minimum_rental_age",
+  "verification_document_type",
+  "booking_lead_time_unit",
+  "booking_lead_time_value",
+  "min_rental_days",
+  "min_rental_hours",
+  "max_rental_days",
+  "buffer_time_minutes",
+  "lockbox_enabled",
+  "lockbox_code_length",
+  "lockbox_notification_methods",
+  "lockbox_send_offset_minutes",
+  "return_reminder_enabled",
+  "return_reminder_hours",
+] as const;
+
+const sameValue = (a: unknown, b: unknown) => a === b || JSON.stringify(a) === JSON.stringify(b);
+
+/**
+ * The page re-fills its whole `rentalForm` from the tenant row whenever that
+ * row changes, and any rental save changes it. On Key handover, saving the
+ * lockbox instructions therefore wiped an unsaved "turn lockbox on" in the
+ * panel above it. This keeps a Business-rules field the operator has edited
+ * (it no longer matches what was last filled in) and takes the fresh value
+ * for everything else, so a save of one section never discards another's
+ * edits. Fields outside BUSINESS_FORM_KEYS always take the fresh value, as
+ * before. `lastSynced` is null on the first fill, which takes `next` whole.
+ */
+export function keepUnsavedBusinessEdits<T extends Rec>(current: T | null | undefined, lastSynced: Rec | null | undefined, next: T): T {
+  if (!current || !lastSynced) return next;
+  const kept: Rec = {};
+  for (const key of BUSINESS_FORM_KEYS) {
+    if (!(key in current)) continue;
+    if (!sameValue(current[key], lastSynced[key])) kept[key] = current[key];
+  }
+  return Object.keys(kept).length > 0 ? { ...next, ...kept } : next;
+}
 
 /**
  * The saved values for one page, in the page form's shape. Mirrors the sync
@@ -369,4 +478,52 @@ export function businessPageDirty(page: BusinessPage, form: Rec, saved: Rec | nu
         form.return_reminder_hours !== (saved.return_reminder_hours ?? 24)
       );
   }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Leaving with unsaved edits                                                 */
+/* -------------------------------------------------------------------------- */
+
+/** The key each Business-rules page registers its save under (useRegisterLeaveSave). */
+export const BUSINESS_SECTION_KEYS: Record<BusinessPage, string> = {
+  requirements: "business-requirements",
+  duration: "business-duration",
+  lockbox: "business-lockbox",
+  "return-reminder": "business-return-reminder",
+};
+
+/**
+ * Can the settings page's "Save & Leave" really save every unsaved edit in its
+ * shared rental form? `saveAllDirtyForms` writes the rental form only through
+ * the sections registered with it, so this is true only when (1) nothing outside
+ * the Business-rules fields differs from what the page last filled in, and
+ * (2) every Business-rules page with unsaved edits has registered its save.
+ * Anything else (a fee, a deposit, a field no section owns) keeps the button
+ * hidden, as before, so an edit is never reported saved when it was not.
+ */
+export function businessEditsCoveredBySections(
+  form: Rec | null | undefined,
+  lastSynced: Rec | null | undefined,
+  saved: Rec | null | undefined,
+  registered: readonly string[],
+): boolean {
+  if (!form || !lastSynced || !saved) return false;
+  const business = new Set<string>(BUSINESS_FORM_KEYS);
+  for (const key of new Set([...Object.keys(form), ...Object.keys(lastSynced)])) {
+    if (!business.has(key) && !sameValue(form[key], lastSynced[key])) return false;
+  }
+  return (Object.keys(BUSINESS_SECTION_KEYS) as BusinessPage[]).every(
+    (page) => !businessPageDirty(page, form, saved) || registered.includes(BUSINESS_SECTION_KEYS[page]),
+  );
+}
+
+/**
+ * Width for a digits box that can hold a stored value longer than anything
+ * typeable (9,999,999 minutes loaded from the row): wide enough to show it
+ * whole instead of clipping it to "999999". Typeable values keep `base`.
+ */
+export function numberBoxWidth(value: unknown, base: string): string {
+  const length = value === null || value === undefined ? 0 : String(value).length;
+  if (length <= 4) return base;
+  return length <= 6 ? "w-24" : "w-32";
 }

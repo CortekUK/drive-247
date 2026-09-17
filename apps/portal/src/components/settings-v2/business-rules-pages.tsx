@@ -27,6 +27,10 @@
  *   5. content     native fieldset-disabled when view-only (keyboard too);
  *                  per-section save status; inline validation instead of the
  *                  silent clamps (23 hours, 4,320 minutes, max 90).
+ *   6. leaving     each page registers its save with the page while dirty
+ *                  (`registerSave`), so leaving for another screen warns and
+ *                  "Save & Leave" really saves; "Don't Save" puts the fields
+ *                  back when the page closes (useDiscardOnUnmount).
  */
 
 import { useEffect, useState, type ReactNode } from "react";
@@ -41,7 +45,13 @@ import {
   SettingsReadOnlyFieldset,
   SettingsSectionBoundary,
 } from "@/components/settings-v2/section-states";
-import { SectionSaveBar, useSectionSave } from "@/components/settings-v2/business-section-save";
+import {
+  SectionSaveBar,
+  useDiscardOnUnmount,
+  useRegisterLeaveSave,
+  useSectionSave,
+} from "@/components/settings-v2/business-section-save";
+import type { RegisterSectionSave } from "@/components/settings-v2/pricing-money-parts";
 import {
   AVAILABLE_VARIABLES,
   DEFAULT_LOCKBOX_EMAIL,
@@ -54,6 +64,7 @@ import {
   businessPageDirty,
   clampReminderHours,
   describeBuffer,
+  describeDriverAge,
   describeDurationRange,
   describeLeadHours,
   describeReminderLead,
@@ -62,6 +73,8 @@ import {
   leadTimeHours,
   lockboxMethodStatus,
   normalizeLoadedLead,
+  numberBoxWidth,
+  reminderHoursRangeNote,
   savedFieldsFor,
   sendOffsetOptions,
   switchLeadUnit,
@@ -107,10 +120,23 @@ interface PageProps {
   saved: Rec | null | undefined;
   canEdit: boolean;
   onSave: SaveBusinessRules;
+  /** The settings page's `registerV2SectionSave`: makes leaving with unsaved edits warn, and Save & Leave save them. */
+  registerSave?: RegisterSectionSave;
 }
 
+/** A save for the page's leave dialog: rejects when the section is invalid or the write failed. */
+const leaveSave = (invalid: string | null, run: () => Promise<boolean>, what: string) => async () => {
+  if (invalid) throw new Error(invalid);
+  if (!(await run())) throw new Error(`Couldn't save ${what}.`);
+};
+
 const digitsOnly = (value: string) => value.replace(/[^0-9]/g, "");
-const inlineLink = "font-medium text-primary underline-offset-4 hover:underline";
+// Dark v2 --primary is a deep indigo (about 1.8:1 on the card), so links lighten in dark mode.
+const inlineLink = "font-medium text-primary underline-offset-4 hover:underline dark:text-indigo-300";
+// The v1 radio marks the checked item with --accent, a near-white grey under .v2-theme,
+// so the chosen method looked unselected. Primary in light, a light indigo in dark.
+const methodRadio =
+  "data-[state=checked]:border-primary [&_svg]:fill-primary [&_svg]:text-primary dark:data-[state=checked]:border-indigo-300 dark:[&_svg]:fill-indigo-300 dark:[&_svg]:text-indigo-300";
 const warnText = "text-amber-600 dark:text-amber-400";
 const METHOD_NAMES: Record<string, string> = { email: "Email", sms: "Text message", whatsapp: "WhatsApp" };
 
@@ -129,9 +155,10 @@ function FieldError({ id, children }: { id?: string; children?: ReactNode }) {
 
 /**
  * Loading and read-error states for any page that edits the tenant's rental
- * settings. `pointer-events-auto` undoes the page wrapper's view-only
- * `pointer-events-none` so Try again still works for a viewer; the controls
- * themselves are disabled by each page's fieldset.
+ * settings. The pages using it sit outside the settings page's read-only
+ * fieldset (V2_PAGES_GATING_OWN_CONTROLS), so Try again, here and on the
+ * stale-data notice, still works for a viewer; each page's own fieldset
+ * disables its controls.
  */
 export function BusinessRentalGate({
   thing,
@@ -179,12 +206,17 @@ export function RequirementsPageV2({
   saved,
   canEdit,
   onSave,
+  registerSave,
   idWaiver,
 }: PageProps & { idWaiver: IdWaiverControl }) {
   const isDirty = businessPageDirty("requirements", form, saved);
   const save = useSectionSave(isDirty);
   const ageError = validateDriverAge(form.minimum_rental_age);
   const docOptions = documentTypeOptions(form.verification_document_type);
+  const docLabel = docOptions.find((option) => option.value === form.verification_document_type)?.label;
+  // A stored type that isn't one of the choices ("residence_permit_with_…"): its
+  // long "(current)" label is cut off in the box, so say it in full below too.
+  const customDoc = !!docLabel && docLabel.endsWith(" (current)");
   const noMinimum = form.minimum_rental_age === "" || form.minimum_rental_age === null || form.minimum_rental_age === undefined;
 
   const submit = () =>
@@ -195,6 +227,8 @@ export function RequirementsPageV2({
       }),
     );
   const discard = () => setForm((prev) => ({ ...prev, ...savedFieldsFor("requirements", saved) }));
+  useRegisterLeaveSave(canEdit ? registerSave : undefined, "business-requirements", isDirty, leaveSave(ageError, submit, "your driver requirements"));
+  useDiscardOnUnmount(isDirty, discard);
 
   return (
     <SettingsReadOnlyFieldset readOnly={!canEdit}>
@@ -207,11 +241,7 @@ export function RequirementsPageV2({
       >
         <SettingsRow
           label="Minimum driver age"
-          description={
-            noMinimum
-              ? "No minimum is set, so any licensed driver can book. Enter an age to set one."
-              : "Customers younger than this cannot book. Clear it for no minimum."
-          }
+          description={describeDriverAge(noMinimum ? "" : form.minimum_rental_age)}
           htmlFor="v2_minimum_rental_age"
           note={ageError ? <FieldError id="v2_minimum_rental_age_error">{ageError}</FieldError> : undefined}
         >
@@ -237,12 +267,19 @@ export function RequirementsPageV2({
           label="ID document"
           description="The document customers verify before they can drive."
           htmlFor="v2_verification_document_type"
+          note={
+            customDoc && docLabel ? (
+              <p className="text-muted-foreground [overflow-wrap:anywhere]">
+                Saved as &ldquo;{docLabel.slice(0, -" (current)".length)}&rdquo;, which isn&apos;t one of the standard choices.
+              </p>
+            ) : undefined
+          }
         >
           <Select
             value={form.verification_document_type || undefined}
             onValueChange={(value) => setForm((prev) => ({ ...prev, verification_document_type: value }))}
           >
-            <SelectTrigger id="v2_verification_document_type" className="w-48">
+            <SelectTrigger id="v2_verification_document_type" className="w-48" title={docLabel}>
               <SelectValue placeholder="Choose a document" />
             </SelectTrigger>
             <SelectContent>
@@ -287,7 +324,7 @@ export function RequirementsPageV2({
 /* Booking rules                                                              */
 /* -------------------------------------------------------------------------- */
 
-export function DurationPageV2({ form, setForm, saved, canEdit, onSave }: PageProps) {
+export function DurationPageV2({ form, setForm, saved, canEdit, onSave, registerSave }: PageProps) {
   const [unitNote, setUnitNote] = useState<string | null>(null);
   const unit: LeadUnit = form.booking_lead_time_unit === "days" ? "days" : "hours";
 
@@ -340,6 +377,9 @@ export function DurationPageV2({ form, setForm, saved, canEdit, onSave }: PagePr
     setUnitNote(null);
     setForm((prev) => ({ ...prev, ...savedFieldsFor("duration", saved) }));
   };
+  const firstError = errors.lead ?? errors.min ?? errors.max ?? errors.buffer ?? null;
+  useRegisterLeaveSave(canEdit ? registerSave : undefined, "business-duration", isDirty, leaveSave(firstError, submit, "your booking rules"));
+  useDiscardOnUnmount(isDirty, discard);
 
   return (
     <SettingsReadOnlyFieldset readOnly={!canEdit}>
@@ -355,7 +395,7 @@ export function DurationPageV2({ form, setForm, saved, canEdit, onSave }: PagePr
           description={
             <>
               How long before pickup a booking must be made.
-              {leadHint && <span className="tabular-nums"> ({leadHint})</span>}
+              {leadHint && <span className="whitespace-nowrap tabular-nums"> ({leadHint})</span>}
             </>
           }
           note={
@@ -376,7 +416,7 @@ export function DurationPageV2({ form, setForm, saved, canEdit, onSave }: PagePr
               setNumber("booking_lead_time_value", e.target.value);
             }}
             placeholder={unit === "days" ? "2" : "24"}
-            className="w-20 tabular-nums"
+            className={cn(numberBoxWidth(form.booking_lead_time_value, "w-20"), "tabular-nums")}
             aria-label="Advance notice"
             aria-invalid={errors.lead ? true : undefined}
           />
@@ -410,7 +450,7 @@ export function DurationPageV2({ form, setForm, saved, canEdit, onSave }: PagePr
             value={form.min_rental_days || ""}
             onChange={(e) => setNumber("min_rental_days", e.target.value)}
             placeholder="0"
-            className="w-16 tabular-nums"
+            className={cn(numberBoxWidth(form.min_rental_days, "w-16"), "tabular-nums")}
             aria-label="Shortest rental days"
             aria-invalid={errors.min ? true : undefined}
           />
@@ -422,7 +462,7 @@ export function DurationPageV2({ form, setForm, saved, canEdit, onSave }: PagePr
             value={form.min_rental_hours || ""}
             onChange={(e) => setNumber("min_rental_hours", e.target.value)}
             placeholder="0"
-            className="w-16 tabular-nums"
+            className={cn(numberBoxWidth(form.min_rental_hours, "w-16"), "tabular-nums")}
             aria-label="Shortest rental hours"
             aria-invalid={errors.min ? true : undefined}
           />
@@ -447,7 +487,7 @@ export function DurationPageV2({ form, setForm, saved, canEdit, onSave }: PagePr
             value={form.max_rental_days || ""}
             onChange={(e) => setNumber("max_rental_days", e.target.value)}
             placeholder="90"
-            className="w-20 tabular-nums"
+            className={cn(numberBoxWidth(form.max_rental_days, "w-20"), "tabular-nums")}
             aria-label="Longest rental days"
             aria-invalid={errors.max ? true : undefined}
           />
@@ -458,9 +498,11 @@ export function DurationPageV2({ form, setForm, saved, canEdit, onSave }: PagePr
           label="Time between rentals"
           description={
             <>
-              {buffer > 0 && !errors.buffer
-                ? `A car stays off the booking site for ${describeBuffer(buffer)} after a rental ends, so you can clean and check it.`
-                : "A car can be booked again as soon as a rental ends."}{" "}
+              {errors.buffer
+                ? "How long a car stays off the booking site after a rental ends, so you can clean and check it."
+                : buffer > 0
+                  ? `A car stays off the booking site for ${describeBuffer(buffer)} after a rental ends, so you can clean and check it.`
+                  : "A car can be booked again as soon as a rental ends."}{" "}
               Up to 4,320 minutes (3 days).
             </>
           }
@@ -473,7 +515,7 @@ export function DurationPageV2({ form, setForm, saved, canEdit, onSave }: PagePr
             value={form.buffer_time_minutes || ""}
             onChange={(e) => setNumber("buffer_time_minutes", e.target.value)}
             placeholder="0"
-            className="w-20 tabular-nums"
+            className={cn(numberBoxWidth(form.buffer_time_minutes, "w-20"), "tabular-nums")}
             aria-label="Time between rentals in minutes"
             aria-invalid={errors.buffer ? true : undefined}
           />
@@ -494,6 +536,7 @@ export function LockboxPageV2({
   saved,
   canEdit,
   onSave,
+  registerSave,
   smsReady,
   integrationsHref,
   vehiclesHref,
@@ -519,6 +562,29 @@ export function LockboxPageV2({
       }),
     );
   const discard = () => setForm((prev) => ({ ...prev, ...savedFieldsFor("lockbox", saved) }));
+  useRegisterLeaveSave(canEdit ? registerSave : undefined, "business-lockbox", isDirty, leaveSave(codeError, submit, "your key handover settings"));
+  useDiscardOnUnmount(isDirty, discard);
+
+  // The switch is part of the form, not a live toggle like the waiver: say so
+  // while it differs from what is saved.
+  const enableChanged = canEdit && enabled !== !!saved?.lockbox_enabled;
+  const enableNote =
+    enableChanged || !enabled ? (
+      <div className="space-y-1">
+        {enableChanged && (
+          <p className={warnText}>Not applied yet. Press Save to turn lockbox handover {enabled ? "on" : "off"}.</p>
+        )}
+        {!enabled && (
+          <p className="text-muted-foreground">
+            Once it&apos;s on, you set each car&apos;s code on its{" "}
+            <Link href={vehiclesHref} className={inlineLink}>
+              vehicle page
+            </Link>
+            , and edit the message customers get below.
+          </p>
+        )}
+      </div>
+    ) : undefined;
 
   const methodNote = methodStatus.warning ? (
     <SettingsDependencyNotice
@@ -560,17 +626,7 @@ export function LockboxPageV2({
           <SettingsRow
             label="Lockbox handover"
             description="On delivery rentals, staff can leave the keys in a lockbox and the code is sent to the customer."
-            note={
-              !enabled ? (
-                <p className="text-muted-foreground">
-                  Once it&apos;s on, you set each car&apos;s code on its{" "}
-                  <Link href={vehiclesHref} className={inlineLink}>
-                    vehicle page
-                  </Link>
-                  , and edit the message customers get below.
-                </p>
-              ) : undefined
-            }
+            note={enableNote}
           >
             <Switch
               checked={enabled}
@@ -617,18 +673,18 @@ export function LockboxPageV2({
                   aria-label="Send the code by"
                 >
                   <label className="flex cursor-pointer items-center gap-2 text-sm">
-                    <RadioGroupItem value="email" id="v2-lockbox-method-email" />
+                    <RadioGroupItem value="email" id="v2-lockbox-method-email" className={methodRadio} />
                     Email
                   </label>
                   <label
                     className={cn("flex items-center gap-2 text-sm", smsReady ? "cursor-pointer" : "cursor-not-allowed opacity-60")}
                   >
-                    <RadioGroupItem value="sms" id="v2-lockbox-method-sms" disabled={!smsReady} />
+                    <RadioGroupItem value="sms" id="v2-lockbox-method-sms" disabled={!smsReady} className={methodRadio} />
                     Text message
                   </label>
                   {methodStatus.method === "whatsapp" && (
                     <label className="flex cursor-not-allowed items-center gap-2 text-sm opacity-60">
-                      <RadioGroupItem value="whatsapp" id="v2-lockbox-method-whatsapp" disabled />
+                      <RadioGroupItem value="whatsapp" id="v2-lockbox-method-whatsapp" disabled className={methodRadio} />
                       WhatsApp
                     </label>
                   )}
@@ -662,6 +718,9 @@ export function LockboxPageV2({
       <LockboxTemplatesSectionV2
         defaults={{ instructions: DEFAULT_LOCKBOX_INSTRUCTIONS, email: DEFAULT_LOCKBOX_EMAIL, sms: DEFAULT_LOCKBOX_SMS }}
         variables={AVAILABLE_VARIABLES}
+        registerSave={registerSave}
+        integrationsHref={integrationsHref}
+        readOnlyNotice={false}
       />
     </div>
   );
@@ -677,6 +736,7 @@ export function ReturnReminderPanelV2({
   saved,
   canEdit,
   onSave,
+  registerSave,
   smsReady,
   emailTemplateHref,
   integrationsHref,
@@ -690,6 +750,8 @@ export function ReturnReminderPanelV2({
   // `parseInt(...) || 24` snapped a cleared field back to 24 mid-edit.
   const [draft, setDraft] = useState(String(hours));
   const [clampNote, setClampNote] = useState<string | null>(null);
+  // A stored value outside 1–168 (e.g. 9,999) is flagged on load, not only after a blur.
+  const rangeNote = reminderHoursRangeNote(hours);
   useEffect(() => {
     setDraft((current) => (parseInt(current, 10) === hours ? current : String(hours)));
   }, [hours]);
@@ -707,6 +769,8 @@ export function ReturnReminderPanelV2({
     setClampNote(null);
     setForm((prev) => ({ ...prev, ...savedFieldsFor("return-reminder", saved) }));
   };
+  useRegisterLeaveSave(canEdit ? registerSave : undefined, "business-return-reminder", isDirty, leaveSave(null, submit, "your return reminder"));
+  useDiscardOnUnmount(isDirty, discard);
 
   return (
     <SettingsReadOnlyFieldset readOnly={!canEdit}>
@@ -722,7 +786,7 @@ export function ReturnReminderPanelV2({
               <>
                 Emailed <span className="tabular-nums">{describeReminderLead(hours)}</span> before the car is due back.{" "}
                 <Link href={emailTemplateHref} className={inlineLink}>
-                  Edit the email
+                  {canEdit ? "Edit the email" : "View the email"}
                 </Link>
               </>
             ) : (
@@ -732,7 +796,9 @@ export function ReturnReminderPanelV2({
           note={
             enabled ? (
               <div className="space-y-1">
-                <p className={clampNote ? warnText : "text-muted-foreground"}>{clampNote ?? "Between 1 and 168 hours (7 days)."}</p>
+                <p className={clampNote || rangeNote ? warnText : "text-muted-foreground"}>
+                  {clampNote ?? rangeNote ?? "Between 1 and 168 hours (7 days)."}
+                </p>
                 <p className="text-muted-foreground">
                   {smsReady ? (
                     "Also sent as a text message, because Twilio is connected."

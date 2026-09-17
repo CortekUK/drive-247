@@ -297,19 +297,19 @@ export function PushNotificationSettings({ canEdit = true }: Props) {
           {/* Enrolled device counts, split by audience — customer devices are on
               a different origin entirely, so they can never be enrolled here. */}
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-lg border p-3">
+            <div className={v2Chrome ? "rounded-2xl bg-muted/40 p-3" : "rounded-lg border p-3"}>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <UserCog className="h-4 w-4" /> Staff devices
               </div>
-              <p className="mt-1 text-2xl font-semibold">
+              <p className={v2Chrome ? "mt-1 text-2xl font-semibold tabular-nums" : "mt-1 text-2xl font-semibold"}>
                 {devicesLoading || (v2Chrome && devicesError) ? '—' : staffDevices.length}
               </p>
             </div>
-            <div className="rounded-lg border p-3">
+            <div className={v2Chrome ? "rounded-2xl bg-muted/40 p-3" : "rounded-lg border p-3"}>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Users className="h-4 w-4" /> Customer devices
               </div>
-              <p className="mt-1 text-2xl font-semibold">
+              <p className={v2Chrome ? "mt-1 text-2xl font-semibold tabular-nums" : "mt-1 text-2xl font-semibold"}>
                 {devicesLoading || (v2Chrome && devicesError) ? '—' : customerDevices.length}
               </p>
             </div>

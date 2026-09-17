@@ -15,6 +15,8 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -56,6 +58,7 @@ import {
   depositChargeGuard,
   depositDirtyState,
   depositPayload,
+  describeHolidayDeleteError,
   feesPayload,
   formatHolidayDates,
   formatPercent,
@@ -728,5 +731,196 @@ describe("PricingRulesV2", () => {
     );
     expect(text()).toContain("Loading monthly pricing");
     expect(container.querySelector('[aria-label="Monthly rate starts at"]')).toBeNull();
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* Verifier fixes: negative values, delete copy, view-only reads, discard      */
+/* -------------------------------------------------------------------------- */
+
+describe("negative stored values say what the field shows", () => {
+  it("tax -5%: its own line (not 'the rate is 0%'), and it does not hold Save back", () => {
+    const issue = taxIssue({ tax_enabled: true, tax_percentage: -5 });
+    expect(issue?.message).toBe("The rate is -5%. A tax rate can't be negative. Enter 0 or more.");
+    expect(issue?.tone).toBe("danger");
+    expect(issue?.blocksSave).toBeUndefined();
+    // Off still says nothing, whatever is stored.
+    expect(taxIssue({ tax_enabled: false, tax_percentage: -5 })).toBeNull();
+  });
+
+  it("service fee -10: percent, tenant currency, or a bare number (not 'set to 0')", () => {
+    expect(serviceFeeIssue({ service_fee_enabled: true, service_fee_type: "percentage", service_fee_value: -10 })?.message).toBe(
+      "The fee is -10%. A service fee can't be negative. Enter 0 or more.",
+    );
+    expect(
+      serviceFeeIssue({ service_fee_enabled: true, service_fee_type: "fixed_amount", service_fee_value: -10 }, "USD")?.message,
+    ).toBe("The fee is -$10.00. A service fee can't be negative. Enter 0 or more.");
+    expect(serviceFeeIssue({ service_fee_enabled: true, service_fee_type: "fixed_amount", service_fee_value: "-10" })?.message).toBe(
+      "The fee is -10. A service fee can't be negative. Enter 0 or more.",
+    );
+    expect(serviceFeeIssue({ service_fee_enabled: true, service_fee_type: "fixed_amount", service_fee_value: -10 })?.blocksSave).toBeUndefined();
+  });
+
+  it("deposit -250: formatted in the tenant currency (not 'The amount is $0.00')", () => {
+    const form = { security_deposit_enabled: true, deposit_charge_enabled: false, deposit_mode: "global", global_deposit_amount: -250 };
+    expect(depositAmountIssue(form, "USD")?.message).toBe("The amount is -$250.00. A deposit can't be negative. Enter 0 or more.");
+    expect(depositAmountIssue({ ...form, deposit_mode: "per_vehicle" }, "GBP")?.message).toBe(
+      "The amount is -£250.00. A deposit can't be negative. Enter 0 or more.",
+    );
+    expect(depositAmountIssue({ ...form, security_deposit_enabled: false }, "USD")).toBeNull();
+  });
+
+  it("Tax and fees renders the negative lines, with the payload untouched", () => {
+    render(
+      <FeesSettingsV2
+        {...({
+          form: { tax_enabled: true, tax_percentage: -5, service_fee_enabled: true, service_fee_type: "fixed_amount", service_fee_value: -10, service_fee_amount: -10 },
+          setForm: vi.fn(),
+          saved: { tax_enabled: true, tax_percentage: -5, service_fee_enabled: true, service_fee_type: "fixed_amount", service_fee_value: -10, service_fee_amount: -10 },
+          read: readState(),
+          canEdit: true,
+          currencyCode: "GBP",
+          onSave: vi.fn(async () => undefined),
+        } as any)}
+      />,
+    );
+    expect(text()).toContain("The rate is -5%. A tax rate can't be negative.");
+    expect(text()).toContain("The fee is -£10.00. A service fee can't be negative.");
+    expect(text()).not.toContain("the rate is 0%");
+    expect(text()).not.toContain("set to 0");
+  });
+});
+
+describe("describeHolidayDeleteError", () => {
+  it("a foreign-key refusal says the holiday is still referenced", () => {
+    expect(
+      describeHolidayDeleteError({
+        code: "23503",
+        message: 'update or delete on table "tenant_holidays" violates foreign key constraint "x_holiday_id_fkey"',
+      }),
+    ).toBe("Other records still point to this holiday, so it can't be deleted yet. Nothing was removed.");
+  });
+
+  it("any other constraint or trigger refusal never mentions fields", () => {
+    expect(describeHolidayDeleteError({ code: "P0001", message: "delete blocked" })).toBe(
+      "The database refused to delete this holiday. Nothing was removed. Try again.",
+    );
+  });
+
+  it("network and permission failures keep the save copy, minus 'your changes are still here'", () => {
+    expect(describeHolidayDeleteError(new Error("Failed to fetch"))).toBe("We couldn't reach the server. Nothing was removed.");
+    expect(describeHolidayDeleteError(new Error("permission denied for table tenant_holidays"))).toBe(
+      "You don't have permission to change this. Ask an admin.",
+    );
+  });
+
+  it("the delete confirm shows it", async () => {
+    h.reads["weekend-pricing"] = readState();
+    h.reads["tenant-holidays"] = readState();
+    h.holidays.holidays = [
+      { id: "h1", tenant_id: "t1", name: "Christmas", start_date: "2026-12-24", end_date: "2026-12-26", surcharge_percent: 20, excluded_vehicle_ids: [], recurs_annually: true, created_at: "", updated_at: "" },
+    ];
+    h.holidays.deleteHoliday = vi.fn(async () => {
+      throw { code: "23503", message: "violates foreign key constraint" };
+    });
+    render(<PricingRulesV2 canEdit />);
+    act(() => button("Delete Christmas").click());
+    act(() => button("Delete", document.querySelector('[role="alertdialog"]')!).click());
+    await flush();
+    expect(text()).toContain("Couldn't delete.");
+    expect(text()).toContain("Other records still point to this holiday");
+    expect(text()).not.toContain("Check the fields");
+  });
+});
+
+describe("extreme holiday surcharge on a phone", () => {
+  it("wraps inside its cell instead of running under Edit, and is never cut", () => {
+    h.reads["weekend-pricing"] = readState();
+    h.reads["tenant-holidays"] = readState();
+    h.holidays.holidays = [
+      { id: "h1", tenant_id: "t1", name: "Peak", start_date: "2026-12-24", end_date: "2026-12-26", surcharge_percent: 9999999.99, excluded_vehicle_ids: [], recurs_annually: true, created_at: "", updated_at: "" },
+    ];
+    render(<PricingRulesV2 canEdit />);
+    const value = Array.from(container.querySelectorAll("td span")).find((el) => el.textContent === "+9,999,999.99%")!;
+    expect(value).toBeDefined();
+    expect(value.className).toContain("whitespace-normal");
+    expect(value.className).not.toContain("whitespace-nowrap");
+    expect(value.className).not.toContain("truncate");
+    // It may only break after a thousands separator: "+9," "999," "999.99%".
+    expect(value.querySelectorAll("wbr")).toHaveLength(2);
+    expect(value.innerHTML).toBe("+9,<wbr>999,<wbr>999.99%");
+    const head = Array.from(container.querySelectorAll("th")).find((th) => th.textContent === "Surcharge")!;
+    expect(head.className).toContain("w-[8rem]");
+  });
+});
+
+describe("view-only reads on Security deposit", () => {
+  const form = { security_deposit_enabled: true, deposit_charge_enabled: false, deposit_mode: "global", global_deposit_amount: 250 };
+  const props = (over: Record<string, unknown>) => ({
+    form,
+    setForm: vi.fn(),
+    saved: { ...form, own_stripe_account_id: "acct_1" },
+    read: readState(),
+    holds: readState(),
+    liveHoldCount: 0,
+    canEdit: false,
+    currencyCode: "USD",
+    paymentProvider: null,
+    connectHref: "/integrations",
+    onRequestCharge: vi.fn(),
+    onSave: vi.fn(async () => undefined),
+    ...over,
+  });
+
+  it("a failed live-holds check shows no locked-switch line and no dead Try again", () => {
+    render(<DepositSettingsV2 {...(props({ holds: failedState() }) as any)} />);
+    expect(text()).not.toContain("Couldn't check for live deposit holds");
+    expect(findButton("Try again")).toBeUndefined();
+    expect(button("Collect the deposit as a real charge").matches(":disabled")).toBe(true);
+  });
+
+  it("live holds and a pending check say nothing to a viewer either", () => {
+    render(<DepositSettingsV2 {...(props({ liveHoldCount: 3 }) as any)} />);
+    expect(text()).not.toContain("have a live hold");
+    render(<DepositSettingsV2 {...(props({ holds: loadingState() }) as any)} />);
+    expect(text()).not.toContain("Checking for live deposit holds");
+  });
+
+  it("the read-only fieldset dims switches, which a disabled fieldset alone does not", () => {
+    render(<DepositSettingsV2 {...(props({}) as any)} />);
+    const fieldset = container.querySelector("fieldset[data-read-only]")!;
+    expect(fieldset).not.toBeNull();
+    expect(fieldset.className).toContain("[&_[role=switch]:disabled]:opacity-50");
+  });
+});
+
+describe("settings page wiring (source)", () => {
+  const page = readFileSync(resolve(__dirname, "../../app/(dashboard)/settings/page.tsx"), "utf8");
+  const v2Start = page.indexOf("  if (v2Chrome) {\n    const pageMeta =");
+  const v2End = page.indexOf("\n  return (", page.indexOf("isSaving={isSavingForTab}", v2Start));
+  const v2 = page.slice(v2Start, v2End);
+
+  it("Pricing rules, Tax and fees and Security deposit sit outside the page's read-only fieldset", () => {
+    expect(page).toMatch(/const V2_PAGES_GATING_OWN_CONTROLS = new Set\(\[[^\]]*'pricing', 'fees', 'preauth'\]\);/);
+  });
+
+  it("v2 'Don't Save' resets the page's forms before leaving; v1 dialogs are unchanged", () => {
+    expect(v2Start).toBeGreaterThan(-1);
+    expect(v2).toContain("if (lastSyncedRentalForm.current) setRentalForm(lastSyncedRentalForm.current);");
+    expect(v2).toContain("resetBrandingForm();");
+    expect(v2).toContain("discardV2PageEdits();\n            confirmLeave();");
+    expect(v2).toContain("discardV2PageEdits();\n            handleTabDiscardAndSwitch();");
+    expect(v2).not.toContain("onDiscard={confirmLeave}");
+    const v1 = page.slice(v2End);
+    expect(v1).toContain("onDiscard={confirmLeave}");
+    expect(v1).toContain("onDiscard={handleTabDiscardAndSwitch}");
+    expect(v1).not.toContain("discardV2PageEdits");
+  });
+
+  it("the dark v2 --input token carries no alpha, so bg-input/50 stays a valid colour", () => {
+    const css = readFileSync(resolve(__dirname, "../../styles/v2-theme.css"), "utf8");
+    const dark = css.slice(css.indexOf(".dark .v2-theme {"));
+    const input = dark.match(/--input:\s*([^;]+);/)![1];
+    expect(input).not.toContain("/");
   });
 });

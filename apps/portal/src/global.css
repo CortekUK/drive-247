@@ -467,3 +467,56 @@ All colors MUST be HSL.
     margin: 14mm;
   }
 }
+
+/* ─── System announcement banner offsets ─────────────────────────────────────
+   Owner: components/announcements/system-announcement-banner.tsx.
+
+   The banner is `position: fixed` across the top of the viewport and puts an
+   in-flow spacer of its own height before the app shell. That moves the page
+   down, but not what is already pinned to the viewport, so while a banner is up
+   it sets `html[data-system-banner]` and `--system-banner-h` and these rules
+   move those pinned pieces down by the same amount. With no banner the attribute
+   is absent and none of this applies: every tenant without an active banner
+   renders exactly as before.
+
+   Deliberately OUTSIDE every @layer and written with attribute selectors only
+   (`data-slot` hooks exist in both ui/sidebar.tsx and ui-v2/sidebar.tsx). A
+   selector naming a Tailwind utility class here is the circular-dependency trap
+   that takes every portal page down.
+
+   - sidebar-container   both chromes' fixed sidebar column starts below the banner
+   - sidebar-inset > header   the sticky v2 top bar pins below it (v1's header is
+                         static, so `top` does nothing there). NOT on the bounded
+                         routes: there the wrapper is the header's scroll container
+                         and already starts below the banner, so the offset would
+                         open a banner-high gap above the bar
+   - sidebar-wrapper, sidebar-inset, sidebar-gap   the viewport-high floors
+                         (`min-h-svh`, v1's `h-svh` gap) lose the banner height, so
+                         a short page does not scroll by exactly that much
+   - data-bounded-height   Messages and Trax bound the wrapper to the viewport
+   - trax-panel          the phone sheet (inset-3) starts below it. From md up the
+                         panel floats, anchored to the bottom-right corner with a
+                         height that already leaves room above it, so a `top` there
+                         would override its `bottom` and lift it under the banner. */
+html[data-system-banner] [data-slot="sidebar-container"] {
+  top: var(--system-banner-h, 0px);
+  height: calc(100svh - var(--system-banner-h, 0px));
+}
+html[data-system-banner] [data-slot="sidebar-wrapper"]:not([data-bounded-height]) [data-slot="sidebar-inset"] > header {
+  top: var(--system-banner-h, 0px);
+}
+html[data-system-banner] [data-slot="sidebar-wrapper"],
+html[data-system-banner] [data-slot="sidebar-inset"] {
+  min-height: calc(100svh - var(--system-banner-h, 0px));
+}
+html[data-system-banner] [data-slot="sidebar-gap"] {
+  height: calc(100svh - var(--system-banner-h, 0px));
+}
+html[data-system-banner] [data-bounded-height] {
+  height: calc(100svh - var(--system-banner-h, 0px));
+}
+@media (max-width: 767.98px) {
+  html[data-system-banner] [data-slot="trax-panel"] {
+    top: calc(var(--system-banner-h, 0px) + 0.75rem);
+  }
+}

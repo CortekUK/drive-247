@@ -374,7 +374,7 @@ VALUES
 
   ('payg',
    'Pay as you go',
-   'The settings under pay-as-you-go are the fiddliest in the product. Go through them once with someone rather than guessing.',
+   'Rentals charged day by day with no return date — how the daily charges build up, how the customer pays them, and the limits that catch people out.',
    NULL,
    NULL,
    '/settings?tab=payg',

@@ -87,7 +87,7 @@ export interface FeesSettingsV2Props {
 export function FeesSettingsV2({ form, setForm, saved, read, canEdit, currencyCode, onSave, registerSave }: FeesSettingsV2Props) {
   const dirty = read.hasData && isFeesDirty(form, saved);
   const tax = taxIssue(form);
-  const fee = serviceFeeIssue(form);
+  const fee = serviceFeeIssue(form, currencyCode);
   const blocked = hasBlockingIssue([tax, fee]);
   const payload = feesPayload(form);
 
@@ -394,19 +394,22 @@ export function DepositSettingsV2({
                     : "A temporary hold is placed and released. No money moves unless you charge against it."
                 }
                 note={Notes({
+                  // The live-holds lines explain why switching to charges is locked.
+                  // A view-only user can't switch either way, so they are not shown
+                  // (and the check's Try again would sit inside the disabled fieldset).
                   children: [
-                    guard === "blocked" ? (
+                    canEdit && guard === "blocked" ? (
                       <p key="blocked" className="text-destructive">
                         {liveHoldsMessage(liveHoldCount)}
                       </p>
                     ) : null,
-                    guard === "checking" ? (
+                    canEdit && guard === "checking" ? (
                       <p key="checking" className="inline-flex items-center gap-1.5 text-muted-foreground">
                         <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
                         Checking for live deposit holds…
                       </p>
                     ) : null,
-                    guard === "unknown" ? (
+                    canEdit && guard === "unknown" ? (
                       <div key="unknown" role="alert" className="flex flex-wrap items-center gap-x-2 gap-y-1">
                         <span className="text-destructive">
                           Couldn&apos;t check for live deposit holds, so switching to charges is locked for now.

@@ -1,0 +1,52 @@
+{
+  "_note": "Columns omitted from a row take the PRODUCTION default (scripts/v1-check/baseline.json). Expected values are hand-derived. relaxed=true rows violate a prod NOT NULL and are only evaluable in the relaxed table (they prove the NULL-proofing, and the strict table must REJECT them).",
+  "defaults": {
+    "payment_provider": "stripe", "country": null, "stripe_mode": "test", "payment_model": "own",
+    "stripe_account_id": null, "stripe_onboarding_complete": false, "stripe_account_status": "pending",
+    "own_stripe_account_id": null, "own_stripe_test_account_id": null,
+    "integration_bonzah": false, "bonzah_mode": "test", "bonzah_sandbox_override": false, "bonzah_username": null,
+    "migration_blocker": "off", "migration_blocker_dismissed_at": null, "subscription_account": "uae",
+    "status": "active", "tenant_type": null
+  },
+  "rows": [
+    {"id":"F01","why":"brand-new signup: all defaults","set":{},"expect":{"stripe":true,"bonzah":true,"migration":false}},
+    {"id":"F02","why":"own live id is empty string (JS falsy)","set":{"own_stripe_account_id":""},"expect":{"stripe":true,"bonzah":true,"migration":false}},
+    {"id":"F03","why":"test mode, own LIVE account connected","set":{"own_stripe_account_id":"acct_L1"},"expect":{"stripe":false,"bonzah":true,"migration":false}},
+    {"id":"F04","why":"legacy UK managed live, Express complete+active, no own","set":{"stripe_mode":"live","payment_model":"managed","stripe_account_id":"acct_M1","stripe_onboarding_complete":true,"stripe_account_status":"active"},"expect":{"stripe":false,"bonzah":true,"migration":false}},
+    {"id":"F05","why":"brokenRouting: own model + live + no own account (banner silent; documented gap)","set":{"stripe_mode":"live","payment_model":"own"},"expect":{"stripe":false,"bonzah":true,"migration":false}},
+    {"id":"F06","why":"test mode, only a TEST own account (isStripeConnectUsable says connected; banner shows)","set":{"own_stripe_test_account_id":"acct_T1"},"expect":{"stripe":true,"bonzah":true,"migration":false}},
+    {"id":"F07","why":"test mode, legacy Express complete+active, no own (isStripeConnectUsable says connected; banner shows)","set":{"payment_model":"managed","stripe_account_id":"acct_M2","stripe_onboarding_complete":true,"stripe_account_status":"active"},"expect":{"stripe":true,"bonzah":true,"migration":false}},
+    {"id":"F08","why":"Square tenant in stripe test mode (banner WOULD show: deliberate deviation)","set":{"payment_provider":"square","country":"US"},"expect":{"stripe":false,"bonzah":true,"migration":false}},
+    {"id":"F09","why":"Square tenant, stripe live","set":{"payment_provider":"square","country":"US","stripe_mode":"live"},"expect":{"stripe":false,"bonzah":true,"migration":false}},
+    {"id":"F10","why":"suspended tenant (predicate is status-agnostic)","set":{"status":"suspended"},"expect":{"stripe":true,"bonzah":true,"migration":false}},
+    {"id":"F11","why":"trial status + internal test tenant (status/type-agnostic)","set":{"status":"trial","tenant_type":"test"},"expect":{"stripe":true,"bonzah":true,"migration":false}},
+    {"id":"F12","why":"own live id is a single space (JS truthy)","set":{"own_stripe_account_id":" "},"expect":{"stripe":false,"bonzah":true,"migration":false}},
+    {"id":"F13","why":"stripe_mode NULL (impossible in prod)","relaxed":true,"set":{"stripe_mode":null},"expect":{"stripe":false,"bonzah":true,"migration":false}},
+    {"id":"F14","why":"payment_provider NULL (impossible in prod) treated as stripe","relaxed":true,"set":{"payment_provider":null},"expect":{"stripe":true,"bonzah":true,"migration":false}},
+
+    {"id":"F20","why":"Bonzah live + enabled + credentials","set":{"integration_bonzah":true,"bonzah_mode":"live","bonzah_username":"ops@x.com"},"expect":{"stripe":true,"bonzah":false,"migration":false}},
+    {"id":"F21","why":"Bonzah enabled, test mode, no override","set":{"integration_bonzah":true},"expect":{"stripe":true,"bonzah":true,"migration":false}},
+    {"id":"F22","why":"Bonzah enabled, test mode, sandbox override ON","set":{"integration_bonzah":true,"bonzah_sandbox_override":true},"expect":{"stripe":true,"bonzah":false,"migration":false}},
+    {"id":"F23","why":"Bonzah disabled, live, credentials (selling off)","set":{"bonzah_mode":"live","bonzah_username":"ops@x.com"},"expect":{"stripe":true,"bonzah":true,"migration":false}},
+    {"id":"F24","why":"integration_bonzah NULL, live","set":{"integration_bonzah":null,"bonzah_mode":"live"},"expect":{"stripe":true,"bonzah":true,"migration":false}},
+    {"id":"F25","why":"enabled + live but NO username (authoritative gate says sellable; rental forms skip)","set":{"integration_bonzah":true,"bonzah_mode":"live"},"expect":{"stripe":true,"bonzah":false,"migration":false}},
+    {"id":"F26","why":"enabled + credentials but still test (connected_not_activated)","set":{"integration_bonzah":true,"bonzah_username":"ops@x.com"},"expect":{"stripe":true,"bonzah":true,"migration":false}},
+    {"id":"F27","why":"disabled but override ON (override alone is not enough)","set":{"bonzah_sandbox_override":true},"expect":{"stripe":true,"bonzah":true,"migration":false}},
+    {"id":"F28","why":"bonzah_mode NULL, override off (impossible in prod)","relaxed":true,"set":{"integration_bonzah":true,"bonzah_mode":null},"expect":{"stripe":true,"bonzah":true,"migration":false}},
+    {"id":"F29","why":"bonzah_mode NULL, override on (impossible in prod)","relaxed":true,"set":{"integration_bonzah":true,"bonzah_mode":null,"bonzah_sandbox_override":true},"expect":{"stripe":true,"bonzah":false,"migration":false}},
+    {"id":"F30","why":"override NULL (impossible in prod)","relaxed":true,"set":{"integration_bonzah":true,"bonzah_sandbox_override":null},"expect":{"stripe":true,"bonzah":true,"migration":false}},
+
+    {"id":"F40","why":"not enrolled, UK sub, nothing connected","set":{"subscription_account":"uk"},"expect":{"stripe":true,"bonzah":true,"migration":false}},
+    {"id":"F41","why":"soft, UK sub, no own account","set":{"migration_blocker":"soft","subscription_account":"uk"},"expect":{"stripe":true,"bonzah":true,"migration":true}},
+    {"id":"F42","why":"hard, UAE sub, no own account","set":{"migration_blocker":"hard"},"expect":{"stripe":true,"bonzah":true,"migration":true}},
+    {"id":"F43","why":"hard, both steps done (prompt auto-hides)","set":{"migration_blocker":"hard","own_stripe_account_id":"acct_L2"},"expect":{"stripe":false,"bonzah":true,"migration":false}},
+    {"id":"F44","why":"soft, Stripe connected but payment still UK","set":{"migration_blocker":"soft","subscription_account":"uk","own_stripe_account_id":"acct_L3"},"expect":{"stripe":false,"bonzah":true,"migration":true}},
+    {"id":"F45","why":"soft, dismissed 1h ago (prompt hidden 24h, still pending)","set":{"migration_blocker":"soft","subscription_account":"uk","migration_blocker_dismissed_at":"__NOW_MINUS_1H__"},"expect":{"stripe":true,"bonzah":true,"migration":true}},
+    {"id":"F46","why":"hard, own id empty string, UAE sub","set":{"migration_blocker":"hard","own_stripe_account_id":""},"expect":{"stripe":true,"bonzah":true,"migration":true}},
+    {"id":"F47","why":"NOT enrolled, UAE sub, no own account (draft defect: must be false)","set":{},"expect":{"stripe":true,"bonzah":true,"migration":false}},
+    {"id":"F48","why":"migration_blocker NULL (impossible in prod)","relaxed":true,"set":{"migration_blocker":null},"expect":{"stripe":true,"bonzah":true,"migration":false}},
+    {"id":"F49","why":"hard, subscription_account NULL (impossible in prod), own connected","relaxed":true,"set":{"migration_blocker":"hard","subscription_account":null,"own_stripe_account_id":"acct_L4"},"expect":{"stripe":false,"bonzah":true,"migration":true}},
+    {"id":"F50","why":"soft, only TEST own account, UAE sub (test account does not count)","set":{"migration_blocker":"soft","own_stripe_test_account_id":"acct_T2"},"expect":{"stripe":true,"bonzah":true,"migration":true}},
+    {"id":"F51","why":"hard, own id single space (JS truthy), UAE sub","set":{"migration_blocker":"hard","own_stripe_account_id":" "},"expect":{"stripe":false,"bonzah":true,"migration":false}}
+  ]
+}

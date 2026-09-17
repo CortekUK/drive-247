@@ -23,6 +23,10 @@
  * reads (`useDashboardKPIs`, `usePendingBookingsCount`, `useTodayOperations`)
  * carries its own `.eq('tenant_id', tenant.id)` and is `enabled` only once a
  * tenant is resolved — see V2_PLAN §5, RLS is OFF on these tables.
+ * `usePortalAnnouncements` reads through `get_portal_announcements`, which
+ * resolves the caller's own app user and tenant server-side and returns only
+ * what is targeted at that tenant; the dashboard layout already mounts it, so
+ * this is the same cache entry, not a second request.
  */
 
 import { useMemo, type ReactNode } from 'react';
@@ -31,8 +35,12 @@ import { useTenant } from '@/contexts/TenantContext';
 import { useDashboardKPIs } from '@/hooks/use-dashboard-kpis';
 import { useManagerPermissions } from '@/hooks/use-manager-permissions';
 import { usePendingBookingsCount } from '@/hooks/use-pending-bookings';
+import { usePortalAnnouncements } from '@/hooks/use-portal-announcements';
 import { useTodayOperations, type Movement as OpsMovement } from '@/hooks/use-today-operations';
 import { formatCurrency } from '@/lib/format-utils';
+import { DESK_BAND_HINT, DESK_GRID_CLASSES, FEATURE_CARD_UI } from '@/lib/announcements/contract';
+import { cn } from '@/lib/utils';
+import { useAuth } from '@/stores/auth-store';
 import {
   BOOKINGS_SERIES,
   RATIOS,
@@ -57,7 +65,8 @@ import {
   Row,
   Spark,
 } from './ui';
-import { AnnouncementCarousel } from '@/components/dashboard-v2/announcement-carousel';
+import { FeatureAnnouncementDeck } from '@/components/announcements/feature-announcement-deck';
+import { useDeskFeaturePresence } from '@/components/announcements/use-desk-feature-presence';
 import { ChecklistCard } from '@/components/dashboard-v2/checklist-card';
 import { RemindersCard } from '@/components/dashboard-v2/reminders-card';
 
@@ -97,10 +106,21 @@ function toFlow(m: OpsMovement): Movement {
 export function HomeBands({ aside }: { aside?: ReactNode } = {}) {
   const router = useRouter();
   const { tenant } = useTenant();
+  const { appUser } = useAuth();
   const { canView } = useManagerPermissions();
   const { data: kpis } = useDashboardKPIs();
   const { data: pendingBookings } = usePendingBookingsCount();
   const { pickups, returns, overdue, staleCount, staleAfterDays } = useTodayOperations();
+  const { status: announcementsStatus, features } = usePortalAnnouncements();
+  const deskFeature = useDeskFeaturePresence(
+    { status: announcementsStatus, features },
+    tenant?.id,
+    appUser?.id,
+  );
+  // Visible desk cards: Checklist and Reminders always render, the feature
+  // card only when there is a feature (or, while loading, when this user's desk
+  // had one last time). Two cards stretch across the row; see DESK_GRID_CLASSES.
+  const deskCount = deskFeature === 'none' ? 2 : 3;
 
   const currencyCode = tenant?.currency_code || 'USD';
   const canSeeRentals = canView('rentals');
@@ -271,14 +291,29 @@ export function HomeBands({ aside }: { aside?: ReactNode } = {}) {
   return (
     <div className="space-y-16">
       {/* ── Important ─────────────────────────────────────────────────────── */}
-      {/* Rhythm: narrow · wide · narrow. The poster is a fixed shape; the list
-          that can ruin your morning gets the width. */}
+      {/* Feature card · checklist · reminders, all 352px tall at md+.
+
+          NO ANNOUNCEMENT, NO CARD (Sep 16 2026). When no feature is active for
+          this tenant the feature card is not rendered at all — no empty slot,
+          no "nothing new" placeholder — and the grid drops to two columns so
+          Checklist and Reminders stretch across the whole row. The grid comes
+          from the number of visible cards (DESK_GRID_CLASSES), and the hint
+          drops "What’s new" with the card. use-desk-feature-presence.ts decides
+          when the card may appear or go without shifting a card being read. */}
       <Band
         title="On your desk"
-        hint="What’s new, what to learn, and what you wrote down"
+        hint={deskCount === 3 ? DESK_BAND_HINT.withFeatures : DESK_BAND_HINT.withoutFeatures}
         aside={aside}
+        gridClassName={DESK_GRID_CLASSES[deskCount]}
       >
-        <AnnouncementCarousel className="min-h-[288px] rounded-2xl border-0 shadow-none" />
+        {deskFeature === 'deck' && <FeatureAnnouncementDeck features={features} />}
+        {deskFeature === 'skeleton' && (
+          <div
+            aria-hidden="true"
+            data-feature-deck-skeleton=""
+            className={cn(FEATURE_CARD_UI.root, 'animate-pulse motion-reduce:animate-none')}
+          />
+        )}
 
         {/* The middle slot is the CHECKLIST, per Ghulam's own assignment of these
             three cards: "ye hamare paas hai what's new wala card... aur ye wala

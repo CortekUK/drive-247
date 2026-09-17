@@ -56,7 +56,7 @@ import { useFleetHealth, useFleetHealthEnabled } from "@/hooks/use-fleet-health"
 import { HealthStatusChip } from "@/components/fleet-health/health-status-chip";
 import type { VehicleHealthStatus } from "@/types/fleet-health";
 import { TabTourButton } from "@/components/onboarding/tab-tour-button";
-import { HeaderIconButton } from "@/components/shared/header-icon-button-v2";
+import { HEADER_ACTIONS_V2, HeaderIconButton } from "@/components/shared/header-icon-button-v2";
 import { csvDate, csvFilename, downloadCsv } from "@/lib/csv-export";
 import { useV2 } from "@/lib/v2-context";
 import { usePageSearch } from "@/components/shared/layout/page-search-slot";
@@ -717,7 +717,10 @@ export default function VehiclesListEnhanced() {
             Manage your vehicle fleet and track performance
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        {/* v2: every control is 32px and the cluster sits on the subtitle line
+            (HEADER_ACTIONS_V2, team lead Sep 16 2026). v1 keeps its classes byte
+            for byte. */}
+        <div className={`flex items-center gap-2${v2Chrome ? ` ${HEADER_ACTIONS_V2}` : ""}`}>
           {/* Renders only for the northwind canary — it self-gates on the
               resolved tenant's slug — so the other 56 tenants see this shared
               v1 header exactly as they do today. */}
@@ -747,7 +750,18 @@ export default function VehiclesListEnhanced() {
           </>
           )}
           {canEdit('vehicles') && (
-            <div data-add-vehicle-trigger data-tour="add-vehicle" className="flex-1 sm:flex-none [&>button]:w-full sm:[&>button]:w-auto">
+            // v2: AddVehicleDialog draws its own trigger for every tenant, so it
+            // is shrunk from here to the HEADER_PRIMARY_V2 pill (32px, 13px
+            // text, 14px icon) rather than inside the dialog.
+            <div
+              data-add-vehicle-trigger
+              data-tour="add-vehicle"
+              className={`flex-1 sm:flex-none [&>button]:w-full sm:[&>button]:w-auto${
+                v2Chrome
+                  ? " [&>button]:h-8 [&>button]:gap-1.5 [&>button]:rounded-full [&>button]:px-3.5 [&>button]:text-[13px] [&>button_svg]:!size-3.5 [&>button_svg]:!mr-0"
+                  : ""
+              }`}
+            >
               <AddVehicleDialog />
             </div>
           )}
