@@ -2,7 +2,7 @@
 import React from 'react';
 import type { SupportInboxState } from './use-support-inbox';
 import { byDay, Composer, DaySeparator, MessageTurn, StatusBadge, SystemEvent, TicketList } from './inbox-ui';
-import { InfoDrawer, TicketInfoPanel, type InfoTab, type RecordLink } from './ticket-info';
+import { InfoDrawer, participantName, TicketInfoPanel, type InfoTab, type RecordLink } from './ticket-info';
 
 /** Where Details | TRAX Summary fits beside the conversation. Below it, a drawer. */
 const PANEL_BESIDE = '(min-width: 1280px)';
@@ -118,7 +118,8 @@ export function SupportWorkspace({ inbox, viewer, listInRail = false, listHeader
                           /* The viewer decides the side: support's own replies sit right
                              in the platform inbox, and left in the tenant's section. */
                           own={admin ? turn.author === 'support' : turn.author === 'tenant'}
-                          author={turn.author === 'support' ? (admin ? 'You · Drive247 Support' : 'Drive247 Support') : (admin ? thread.ticket.requester || 'Requester' : 'You')}
+                          /* The same name TRAX Summary gives this ticket's tenant side. */
+                          author={turn.author === 'support' ? (admin ? 'You · Drive247 Support' : 'Drive247 Support') : (admin ? participantName(thread.ticket) : 'You')}
                           messages={turn.items} files={thread.attachments} />
                       ))}
                     </div>

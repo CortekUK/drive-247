@@ -46,7 +46,10 @@
     "another administrator reading keeps this count",
     "reading one conversation leaves other rows",
     "row counts persist across reload",
-    "row counts and sidebar total agree"
+    "row counts and sidebar total agree",
+    "TRAX Summary names the requester on both pages",
+    "each ticket resolves its own participant",
+    "a missing name falls back without inventing one"
   ],
   "errors": []
 }

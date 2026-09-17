@@ -131,13 +131,13 @@ try{
   await admin.getByRole('button').filter({hasText:'Returned vehicle cannot be booked'}).click();
   await db.query("insert into rentals values($1,$2,'active')",[id(500),id(1)]);
   const scope='a'.repeat(64);
-  const escalate=async(actor,conversation,issue,subject)=>{
+  const escalate=async(actor,conversation,issue,subject,rental=id(500))=>{
     await db.query('insert into trax_support_conversations(id,tenant_id,user_id,scope,state) values($1,$2,$3,$4,$5)',[conversation,actor.tenant_id,actor.auth_user_id,scope,JSON.stringify({id:conversation,issues:[{id:issue,score:100,state:'needs_support'}]})]);
     const at=(m)=>new Date(Date.now()-m*60000).toISOString();
     const handoff={conversationId:conversation,issue:{id:issue,topic:'bookings',summary:subject,state:'needs_support'},
       reportedByUser:[{content:'which rentals are active',at:at(9)}],
       verifiedChecks:[{key:'k1',tool:'list_account_bookings',status:'verified',observedAt:at(8),findings:['10 recorded active rentals; showing 10.'],limitations:[]}],
-      recordReferences:[{kind:'rental',id:id(500)}],paymentReferences:[],unknowns:['Out on hire uses the recorded-state rule, not proof of possession.'],
+      recordReferences:[{kind:'rental',id:rental}],paymentReferences:[],unknowns:['Out on hire uses the recorded-state rule, not proof of possession.'],
       escalationHistory:[{key:'h1',reason:'human_requested',at:at(7)}],
       excerpt:[{role:'user',content:'which rentals are active',at:at(9)},{role:'assistant',content:'There are 10 rentals recorded as active right now.',at:at(8)},{role:'user',content:'Two were returned. I need a person.',at:at(7)}],
       disclosure:'User reports and historical system observations are separate.'};
@@ -359,5 +359,47 @@ try{
   await expectPill(two,'Retry across refresh',0,'the tenant’s reading left the badge');
   await expectCount(0,'the sidebar total after reading everything');
 
-  assert.deepEqual(errors,[]);await writeFile(resolve(out,'browser-results.json'),JSON.stringify({passed:true,liveEmail:false,liveTenants:false,actualSql:true,checks:['Support visible during missing setup','setup recovery opens authorized inbox','unassigned platform admin sees access state without ticket list','ordinary staff cannot see platform Support link','composer has no writes','atomic first send','Support 2 → 1','two-way automatic updates','failed draft retry','resolved ticket reopens','admin status selector persists','tenant sees the status without refreshing','failed status change keeps the stored status','tenant has no status control','refresh restores conversation','offline reconnect catches up without duplicate messages','lost first-send response retries across refresh without duplicate','mobile no clipping','support rail replaces the navigation on Support','TRAX handoff is an event on both sides','TRAX Summary shows the saved exchange on both sides','TRAX event is acknowledged as read','switching tickets moves all three areas','ticket without TRAX says so','record permission failure hides TRAX context without calling it absent','status control in the Details drawer','badge counts support messages: 1, 2, 3','status change is not an unread message','duplicate delivery, refresh events and reload keep the count','support reading does not clear the requester','hidden tab does not mark read','reading one conversation leaves the other ticket counted','reply in the open conversation is read when shown','reply in a background conversation stays unread','tenant row shows 2 for two support replies','admin row shows 3 for three tenant messages','TRAX summary not counted for support','requester first message counted for support','own replies and status changes add nothing','another administrator reading keeps this count','reading one conversation leaves other rows','row counts persist across reload','row counts and sidebar total agree'],errors},null,2));console.log('Messaging browser checks passed; isolated SQL and auth fixtures, no live email.');
+  // ── TRAX Summary names the person who was in the conversation ───────────────
+  // A second tenant's own escalation, so switching tickets has two names to resolve.
+  await db.query("insert into rentals values($1,$2,'active')",[id(501),id(2)]);
+  await escalate(actors.two,id(631),id(632),'Second tenant TRAX escalation',id(501));
+  const traxLabels=async(page,subject)=>{
+    await page.getByRole('button').filter({hasText:subject}).click({timeout:20000});
+    await page.getByTestId('ticket-info').getByRole('tab',{name:'TRAX Summary',exact:true}).click();
+    const turns=page.getByTestId('ticket-info').locator('[data-slot="trax-turn"]');
+    await turns.first().waitFor({timeout:20000});
+    return turns.evaluateAll(els=>els.map(el=>({role:el.dataset.role,who:el.querySelector('span')?.textContent})));
+  };
+  const tenantSide=(labels)=>labels.filter(l=>l.role==='user').map(l=>l.who);
+  const traxSide=(labels)=>labels.filter(l=>l.role==='assistant').map(l=>l.who);
+
+  // Support, moving between two tenants and a manager: each ticket resolves its own.
+  let labels=await traxLabels(admin,'Which rentals are active');
+  assert.deepEqual([...new Set(tenantSide(labels))],['Fixture operator'],'support did not see the requester’s name');
+  assert.deepEqual([...new Set(traxSide(labels))],['TRAX'],'the AI turns lost their TRAX label');
+  labels=await traxLabels(admin,'Second tenant TRAX escalation');
+  assert.deepEqual([...new Set(tenantSide(labels))],['Second operator'],'the previous tenant’s name was reused');
+  labels=await traxLabels(admin,'Manager escalation about active rentals');
+  assert.deepEqual([...new Set(tenantSide(labels))],['Fixture manager'],'a colleague’s message was attributed to someone else');
+  const adminPanel=await admin.getByTestId('ticket-info').innerText();
+  assert.equal(/(^|\s)Tenant(\s|$)/.test(adminPanel),false,'TRAX Summary still says "Tenant"');
+  assert.equal(adminPanel.includes('Support reviewer'),false,'the reading administrator’s name was used');
+  assert.equal(adminPanel.includes('isolated fixture'),false,'the company name was used as the sender');
+  await admin.screenshot({path:resolve(out,'admin-trax-summary-names.png')});
+
+  // The requesters' own pages say the same for the same messages.
+  assert.deepEqual([...new Set(tenantSide(await traxLabels(tenant,'Which rentals are active')))],['Fixture operator'],'the tenant page shows a different sender');
+  assert.deepEqual([...new Set(tenantSide(await traxLabels(two,'Second tenant TRAX escalation')))],['Second operator'],'the second tenant page shows a different sender');
+  await two.screenshot({path:resolve(out,'tenant-trax-summary-names.png')});
+  // And after a reload, resolved from the records again.
+  await admin.reload();await two.reload();
+  assert.deepEqual([...new Set(tenantSide(await traxLabels(admin,'Second tenant TRAX escalation')))],['Second operator'],'the name did not survive a reload');
+  assert.deepEqual([...new Set(tenantSide(await traxLabels(two,'Second tenant TRAX escalation')))],['Second operator'],'the name did not survive a reload');
+  // A ticket whose user record holds no name says so, rather than inventing one.
+  await db.query('update app_users set name=null where id=$1',[id(12)]);
+  await two.reload();
+  assert.deepEqual([...new Set(tenantSide(await traxLabels(two,'Second tenant TRAX escalation')))],['Name unavailable'],'a missing name was invented');
+  await db.query('update app_users set name=$2 where id=$1',[id(12),'Second operator']);
+
+  assert.deepEqual(errors,[]);await writeFile(resolve(out,'browser-results.json'),JSON.stringify({passed:true,liveEmail:false,liveTenants:false,actualSql:true,checks:['Support visible during missing setup','setup recovery opens authorized inbox','unassigned platform admin sees access state without ticket list','ordinary staff cannot see platform Support link','composer has no writes','atomic first send','Support 2 → 1','two-way automatic updates','failed draft retry','resolved ticket reopens','admin status selector persists','tenant sees the status without refreshing','failed status change keeps the stored status','tenant has no status control','refresh restores conversation','offline reconnect catches up without duplicate messages','lost first-send response retries across refresh without duplicate','mobile no clipping','support rail replaces the navigation on Support','TRAX handoff is an event on both sides','TRAX Summary shows the saved exchange on both sides','TRAX event is acknowledged as read','switching tickets moves all three areas','ticket without TRAX says so','record permission failure hides TRAX context without calling it absent','status control in the Details drawer','badge counts support messages: 1, 2, 3','status change is not an unread message','duplicate delivery, refresh events and reload keep the count','support reading does not clear the requester','hidden tab does not mark read','reading one conversation leaves the other ticket counted','reply in the open conversation is read when shown','reply in a background conversation stays unread','tenant row shows 2 for two support replies','admin row shows 3 for three tenant messages','TRAX summary not counted for support','requester first message counted for support','own replies and status changes add nothing','another administrator reading keeps this count','reading one conversation leaves other rows','row counts persist across reload','row counts and sidebar total agree','TRAX Summary names the requester on both pages','each ticket resolves its own participant','a missing name falls back without inventing one'],errors},null,2));console.log('Messaging browser checks passed; isolated SQL and auth fixtures, no live email.');
 }catch(e){console.log('Browser errors:',errors);await tenant.screenshot({path:resolve(out,'failure.png')});console.log((await tenant.locator('body').innerText()).slice(0,1200));throw e;}finally{await browser.close();server.close();await db.close();}

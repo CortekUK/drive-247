@@ -80,6 +80,22 @@ export function readHandoff(ticket: HumanTicket) {
   };
 }
 
+/**
+ * Who the tenant side of this ticket is, as the records name them.
+ *
+ * A TRAX conversation belongs to ONE signed-in person (`trax_support_conversations.user_id`,
+ * which is also the ticket's `user_id`), so every tenant-side turn saved with this ticket
+ * is theirs — the name the authenticated `detail` request resolved for that user id, per
+ * ticket, never the company and never whoever happens to be reading. A ticket whose user
+ * record holds no usable name says so rather than inventing one or showing an email, which
+ * `app_users.name` sometimes carries.
+ */
+export function participantName(ticket: HumanTicket): string {
+  const name = text(ticket.requester);
+  if (!name || name === 'Requester' || /\S+@\S+\.\S+/.test(name)) return 'Name unavailable';
+  return name;
+}
+
 /** How the app links a record reference; without it the id is shown as text. */
 export type RecordLink = (ref: { kind: string; id: string; children: React.ReactNode; className: string }) => React.ReactNode;
 
@@ -264,14 +280,14 @@ export function TraxSummary({ ticket, generated }: { ticket: HumanTicket; genera
         {handoff.excerpt.length ? (
           <>
             <p className="text-[11.5px] text-muted-foreground">
-              {handoff.excerpt.length === 1 ? 'The message' : `The ${handoff.excerpt.length} messages`} from the tenant’s TRAX conversation about this issue that were saved with the ticket. Read-only.
+              {handoff.excerpt.length === 1 ? 'The message' : `The ${handoff.excerpt.length} messages`} from {participantName(ticket)}’s TRAX conversation about this issue that were saved with the ticket. Read-only.
             </p>
             <ol aria-labelledby={conversationId} className="space-y-2">
               {handoff.excerpt.map((turn, index) => (
                 <li key={index} data-slot="trax-turn" data-role={turn.role}
                   className={`rounded-xl px-3 py-2 ${turn.role === 'user' ? 'bg-primary/10 dark:bg-primary/20' : 'bg-muted/70'}`}>
                   <p className="mb-0.5 flex items-baseline justify-between gap-2 text-[11px]">
-                    <span className="font-semibold text-foreground">{turn.role === 'user' ? 'Tenant' : 'TRAX'}</span>
+                    <span className="font-semibold text-foreground">{turn.role === 'user' ? participantName(ticket) : 'TRAX'}</span>
                     {turn.at && <time dateTime={turn.at} className="text-muted-foreground">{shortStamp(turn.at)}</time>}
                   </p>
                   <p className="whitespace-pre-wrap break-words text-foreground [overflow-wrap:anywhere]">{turn.content}</p>

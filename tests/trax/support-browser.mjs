@@ -303,7 +303,8 @@ try{
   assert.equal(await turns.count(),3);
   assert.deepEqual(await turns.evaluateAll((els)=>els.map((el)=>el.dataset.role)),['user','assistant','user']);
   assert.ok((await turns.nth(1).innerText()).startsWith('TRAX'),'the TRAX turn is not labelled');
-  assert.ok((await turns.nth(0).innerText()).startsWith('Tenant'),'the tenant turn is not labelled');
+  assert.ok((await turns.nth(0).innerText()).startsWith('Offline operator'),'the tenant turn is not named after the requester');
+  assert.equal(/(^|\s)Tenant(\s|$)/.test(await info.innerText()),false,'TRAX Summary still says "Tenant"');
   assert.equal(await turns.nth(1).locator('time').count(),1,'a TRAX turn has no timestamp');
   assert.equal(await info.locator('textarea, input').count(),0,'the TRAX Summary tab has a composer');
   assert.equal(/score/i.test(await info.innerText()),false,'the escalation score leaked');
@@ -457,7 +458,7 @@ try{
   await page.screenshot({path:resolve(screenshots,'workspace-mobile-list.png'),animations:'disabled'});
 
   assert.deepEqual(errors,[],'page errors: '+errors.join(' || '));
-  console.log(JSON.stringify({status:'passed',mode:'support-three-column-workspace',checks:['ticket-list-in-sidebar-slot','back-to-portal-and-tenant-identity','no-row-markers','row-preview','rail-hover-uses-sidebar-highlight','no-outer-page-scroll','centre-between-rail-and-details','trax-message-is-an-event-not-a-bubble','trax-mention-stays-a-message','no-context-strip-or-issue-details-button','details-tab-fields-and-record-link','tenant-status-read-only','trax-summary-and-labelled-conversation','no-score-no-composer','switch-clears-stale-content','row-unread-badges-per-ticket','list-load-reads-nothing','reading-one-ticket-keeps-others','nothing-read-under-the-drawer','no-trax-conversation-empty-state','content-sized-bubbles','composer-and-panel-fixed-while-scrolling','no-jump-while-reading','failed-send-keeps-draft','attachment-sent-and-shown','unsupported-file-refused','filters-and-empty-result','new-ticket-from-rail','collapsed-rail-returns-list-to-page','details-drawer-below-xl','phone-list-conversation-and-drawer','no-page-errors'],screenshots}));
+  console.log(JSON.stringify({status:'passed',mode:'support-three-column-workspace',checks:['ticket-list-in-sidebar-slot','back-to-portal-and-tenant-identity','no-row-markers','row-preview','rail-hover-uses-sidebar-highlight','no-outer-page-scroll','centre-between-rail-and-details','trax-message-is-an-event-not-a-bubble','trax-mention-stays-a-message','no-context-strip-or-issue-details-button','details-tab-fields-and-record-link','tenant-status-read-only','trax-summary-and-labelled-conversation','trax-turns-named-after-the-requester','no-score-no-composer','switch-clears-stale-content','row-unread-badges-per-ticket','list-load-reads-nothing','reading-one-ticket-keeps-others','nothing-read-under-the-drawer','no-trax-conversation-empty-state','content-sized-bubbles','composer-and-panel-fixed-while-scrolling','no-jump-while-reading','failed-send-keeps-draft','attachment-sent-and-shown','unsupported-file-refused','filters-and-empty-result','new-ticket-from-rail','collapsed-rail-returns-list-to-page','details-drawer-below-xl','phone-list-conversation-and-drawer','no-page-errors'],screenshots}));
   }
 }finally{
   await browser?.close();
