@@ -8,7 +8,7 @@
  * "Today" is Tue 15 Sep 2026, 14:00 local, unless a test says otherwise.
  */
 import { describe, expect, it } from 'vitest';
-import { flowSeries, stockSeries } from '@/lib/hero-series';
+import { HERO_RANGES, earliestEventDay, flowSeries, stockSeries } from '@/lib/hero-series';
 
 const TODAY = new Date(2026, 8, 15, 14, 0);
 const at = (y: number, m: number, d: number, h = 12) => new Date(y, m - 1, d, h, 0);
@@ -235,5 +235,206 @@ describe('stockSeries', () => {
   it('treats a non-number level as zero', () => {
     const s = stockSeries(() => Number.NaN, '7d', TODAY);
     expect(s.currentTotal).toBe(0);
+  });
+});
+
+describe('the four fixed ranges all have a previous period', () => {
+  it('says so, and HERO_RANGES names it', () => {
+    for (const range of ['7d', '30d', '3m', '12m'] as const) {
+      expect(flowSeries([], range, TODAY).hasPrevious).toBe(true);
+      expect(stockSeries(() => 1, range, TODAY).hasPrevious).toBe(true);
+    }
+    expect(HERO_RANGES.map((r) => [r.key, r.label, r.compareLabel])).toEqual([
+      ['7d', 'Last 7 days', 'Previous 7 days'],
+      ['30d', 'Last 30 days', 'Previous 30 days'],
+      ['3m', 'Last 3 months', 'Previous 3 months'],
+      ['12m', 'Last 12 months', 'Previous 12 months'],
+      ['all', 'All time', null],
+    ]);
+  });
+});
+
+describe('flowSeries — all time', () => {
+  it('draws a day a point when the first event is 10 days back, with no previous period', () => {
+    // Sep 5 .. Sep 15 is 11 days, both counted: 11 daily points from Sep 5.
+    const s = flowSeries(
+      [
+        { at: at(2026, 9, 5, 8), amount: 2 }, // index 0, the earliest event
+        { at: at(2026, 9, 10), amount: 3 }, // index 5
+        { at: at(2026, 9, 15, 9), amount: 1 }, // index 10, today
+        { at: at(2026, 9, 16), amount: 50 }, // tomorrow: not history, and not the start either
+        { at: new Date('not a date'), amount: 7 },
+      ],
+      'all',
+      TODAY,
+    );
+    expect(s.points.map((p) => p.current)).toEqual([2, 2, 2, 2, 2, 5, 5, 5, 5, 5, 6]);
+    expect(s.points.map((p) => p.previous)).toEqual(new Array(11).fill(null));
+    expect(s.points.every((p) => p.previousLabel === null)).toBe(true);
+    expect(s.currentTotal).toBe(6);
+    expect(s.previousTotal).toBeNull();
+    expect(s.hasPrevious).toBe(false);
+    expect(s.points[0].currentLabel).toBe('Sep 5');
+    expect(s.points[10].currentLabel).toBe('Sep 15');
+    expect(s.startLabel).toBe('Sep 5');
+    expect(s.endLabel).toBe('Today');
+  });
+
+  it('never draws fewer than 7 daily points', () => {
+    // First event Sep 13: 3 days, so 7 points, Sep 9 .. Sep 15; Sep 13 is index 4.
+    const s = flowSeries([{ at: at(2026, 9, 13), amount: 1 }], 'all', TODAY);
+    expect(s.points.map((p) => p.current)).toEqual([0, 0, 0, 0, 1, 1, 1]);
+    expect(s.startLabel).toBe('Sep 9');
+    // No events at all: the same 7 days, all zero.
+    const empty = flowSeries([], 'all', TODAY);
+    expect(empty.points).toHaveLength(7);
+    expect(empty.startLabel).toBe('Sep 9');
+    expect(empty.currentTotal).toBe(0);
+    expect(empty.previousTotal).toBeNull();
+  });
+
+  it('switches from days to weeks after 31 days', () => {
+    // Aug 16 .. Sep 15: 16 + 15 = 31 days, still daily.
+    const days = flowSeries([{ at: at(2026, 8, 16), amount: 1 }], 'all', TODAY);
+    expect(days.points).toHaveLength(31);
+    expect(days.startLabel).toBe('Aug 16');
+    // Aug 15 .. Sep 15: 32 days, so ceil(32 / 7) = 5 weeks = 35 days ending
+    // today, from Aug 12 (Sep 15 less 34 days).
+    const weeks = flowSeries([{ at: at(2026, 8, 15), amount: 1 }], 'all', TODAY);
+    expect(weeks.points).toHaveLength(5);
+    expect(weeks.points[0].currentLabel).toBe('Aug 12 – Aug 18');
+    expect(weeks.points[4].currentLabel).toBe('Sep 9 – Sep 15');
+    expect(weeks.points.map((p) => p.current)).toEqual([1, 1, 1, 1, 1]);
+  });
+
+  it('draws a week a point, ending exactly today, when the first event is 100 days back', () => {
+    // Jun 7 is 100 days before Sep 15 (23 to Jun 30, 31, 31, 15): 101 days, so
+    // ceil(101 / 7) = 15 weeks = 105 days ending today, from Jun 3.
+    const s = flowSeries(
+      [
+        { at: at(2026, 6, 7), amount: 1 }, // 4 days after Jun 3: week 0
+        { at: at(2026, 6, 17), amount: 1 }, // 14 days after: week 2
+        { at: at(2026, 9, 10), amount: 1 }, // 99 days after: week 14 (Sep 9 .. Sep 15)
+      ],
+      'all',
+      TODAY,
+    );
+    expect(s.points.map((p) => p.current)).toEqual([1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3]);
+    expect(s.points[0].currentLabel).toBe('Jun 3 – Jun 9');
+    expect(s.points[14].currentLabel).toBe('Sep 9 – Sep 15');
+    expect(s.startLabel).toBe('Jun 3');
+    expect(s.previousTotal).toBeNull();
+    expect(s.points[14].previous).toBeNull();
+  });
+
+  it('switches from weeks to months after 182 days', () => {
+    // Mar 18 is 181 days before Sep 15 (the 3-month previous window's first day):
+    // 182 days, exactly 26 weeks, starting on it.
+    const weeks = flowSeries([{ at: at(2026, 3, 18), amount: 1 }], 'all', TODAY);
+    expect(weeks.points).toHaveLength(26);
+    expect(weeks.startLabel).toBe('Mar 18');
+    // One day earlier is 183 days: months, March to September.
+    const months = flowSeries([{ at: at(2026, 3, 17), amount: 1 }], 'all', TODAY);
+    expect(months.points).toHaveLength(7);
+    expect(months.startLabel).toBe('Mar 2026');
+    expect(months.points[6].currentLabel).toBe('Sep 1 – Sep 15, 2026');
+  });
+
+  it('draws a month a point from the first month, the last one part-way, when the first event is two years back', () => {
+    // Oct 2024 .. Sep 2026: 24 months.
+    const s = flowSeries(
+      [
+        { at: at(2024, 10, 20), amount: 5 }, // index 0
+        { at: at(2025, 2, 10), amount: 1 }, // index 4 (Oct, Nov, Dec, Jan, Feb)
+        { at: at(2026, 9, 3), amount: 2 }, // index 23
+        { at: at(2026, 9, 16), amount: 100 }, // tomorrow
+      ],
+      'all',
+      TODAY,
+    );
+    expect(s.points).toHaveLength(24);
+    expect(s.points[0].current).toBe(5);
+    expect(s.points[3].current).toBe(5);
+    expect(s.points[4].current).toBe(6);
+    expect(s.points[22].current).toBe(6);
+    expect(s.points[23].current).toBe(8);
+    expect(s.currentTotal).toBe(8);
+    expect(s.previousTotal).toBeNull();
+    expect(s.points.every((p) => p.previous === null && p.previousLabel === null)).toBe(true);
+    expect(s.points[0].currentLabel).toBe('Oct 2024');
+    expect(s.points[22].currentLabel).toBe('Aug 2026');
+    expect(s.points[23].currentLabel).toBe('Sep 1 – Sep 15, 2026');
+    expect(s.startLabel).toBe('Oct 2024');
+  });
+
+  it('gives two event sets the same buckets from one shared since', () => {
+    const a = [
+      { at: at(2026, 6, 7), amount: 1 },
+      { at: at(2026, 9, 10), amount: 1 },
+    ];
+    const b = [{ at: at(2026, 9, 10), amount: 2 }];
+    // On its own, b starts Sep 10: 6 days, so the 7-day minimum.
+    expect(flowSeries(b, 'all', TODAY).points).toHaveLength(7);
+
+    const since = earliestEventDay([a, b], TODAY);
+    expect(since).toEqual(new Date(2026, 5, 7));
+    const sa = flowSeries(a, 'all', TODAY, { since });
+    const sb = flowSeries(b, 'all', TODAY, { since });
+    // Both: the 15 weeks from Jun 3 worked out above.
+    expect(sa.points).toHaveLength(15);
+    expect(sb.points).toHaveLength(15);
+    expect(sb.points.map((p) => p.currentLabel)).toEqual(sa.points.map((p) => p.currentLabel));
+    expect(sa.points[14].current).toBe(2);
+    expect(sb.points[13].current).toBe(0);
+    expect(sb.points[14].current).toBe(2);
+  });
+
+  it('takes the earliest valid event on or before today across every list', () => {
+    const future = [{ at: at(2026, 9, 16, 0), amount: 1 }];
+    const invalid = [{ at: new Date('not a date'), amount: 1 }];
+    const later = [{ at: at(2026, 9, 12, 18), amount: 1 }];
+    const earlier = [{ at: at(2026, 9, 10, 23), amount: 1 }];
+    expect(earliestEventDay([future, invalid, later, earlier], TODAY)).toEqual(new Date(2026, 8, 10));
+    // Later today still counts as today.
+    expect(earliestEventDay([[{ at: at(2026, 9, 15, 22), amount: 1 }]], TODAY)).toEqual(new Date(2026, 8, 15));
+    expect(earliestEventDay([future, invalid], TODAY)).toBeUndefined();
+  });
+
+  it('ignores since on the fixed ranges', () => {
+    // A since does not change "Last 7 days": still Sep 9 .. Sep 15 against Sep 2 .. Sep 8.
+    const s = flowSeries([{ at: at(2026, 9, 3), amount: 4 }], '7d', TODAY, { since: at(2024, 1, 1) });
+    expect(s.points).toHaveLength(7);
+    expect(s.previousTotal).toBe(4);
+    expect(s.hasPrevious).toBe(true);
+  });
+});
+
+describe('stockSeries — all time', () => {
+  const dayOfMonth = (d: Date) => d.getDate();
+
+  it("reads today's level with nothing to compare, each day from since", () => {
+    const s = stockSeries(dayOfMonth, 'all', TODAY, { since: at(2026, 9, 5) });
+    expect(s.points.map((p) => p.current)).toEqual([5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
+    expect(s.points.every((p) => p.previous === null && p.previousLabel === null)).toBe(true);
+    expect(s.currentTotal).toBe(15);
+    expect(s.previousTotal).toBeNull();
+    expect(s.previousDay).toBeUndefined();
+    expect(s.hasPrevious).toBe(false);
+    expect(s.averaged).toBe(false);
+  });
+
+  it('without a since, draws the 7-day minimum', () => {
+    const s = stockSeries(dayOfMonth, 'all', TODAY);
+    expect(s.points.map((p) => p.current)).toEqual([9, 10, 11, 12, 13, 14, 15]);
+  });
+
+  it('averages whole months from the start month, the month under way over its days so far', () => {
+    // Since Mar 17: 183 days, so months Mar .. Sep 2026.
+    const s = stockSeries(dayOfMonth, 'all', TODAY, { since: at(2026, 3, 17) });
+    expect(s.points).toHaveLength(7);
+    expect(s.points[0].current).toBe(16); // all of March: 496 / 31
+    expect(s.points[6].current).toBe(8); // Sep 1..15: 120 / 15
+    expect(s.averaged).toBe(true);
+    expect(s.currentTotal).toBe(15);
   });
 });

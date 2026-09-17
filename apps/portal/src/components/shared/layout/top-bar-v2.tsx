@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Bot, CircleDollarSign, MessageCircle, Search, SlidersHorizontal, X } from "lucide-react";
+import { CircleDollarSign, MessageCircle, Search, SlidersHorizontal, Sparkles, X } from "lucide-react";
 
 import { Button } from "@/components/ui-v2/button";
 import { Separator } from "@/components/ui-v2/separator";
@@ -378,14 +378,18 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
           make every time.
           The label is deliberate. An unlabelled glyph is discoverable only by
           hovering, and Trax is the one thing in this bar nobody arrives
-          already knowing. */}
+          already knowing.
+
+          Labelled "Help", not "Trax" (team lead, Sep 2026): operators read
+          "Help" and know what it is for, and Trax introduces itself on hover.
+          The generic AI sparkle replaces the robot for now. */}
       {trax && (
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
               variant="ghost"
               size="sm"
-              aria-label="Ask Trax"
+              aria-label="Help, ask Trax"
               aria-expanded={trax.sheetOpen}
               onClick={trax.sheetOpen ? trax.closeSheet : trax.openSheet}
               className={
@@ -396,12 +400,13 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
                 (phoneField ? " max-sm:hidden" : "")
               }
             >
-              <Bot className="size-4" aria-hidden />
-              Trax
+              <Sparkles className="size-4" aria-hidden />
+              Help
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={8} className={TIP}>
-            Ask Trax · ⌘J
+            Hi, I&apos;m Trax. How can I help?
+            <span className="ml-1.5 text-muted-foreground">⌘J</span>
           </TooltipContent>
         </Tooltip>
       )}

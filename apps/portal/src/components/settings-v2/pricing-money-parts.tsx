@@ -25,6 +25,7 @@ import {
   type SettingsSaveStatus,
 } from "@/components/settings-v2/section-states";
 import { ISSUE_TEXT_CLASS, type FieldIssue } from "@/components/settings-v2/pricing-money-logic";
+import { SETTINGS_SECTION_TITLE, useSettingsPageSave } from "@/components/settings-v2/settings-kit";
 import { cn } from "@/lib/utils";
 
 /* -------------------------------------------------------------------------- */
@@ -69,8 +70,18 @@ export function useSettingsReadState(queryKey: QueryKey, enabled = true): Settin
 /* Save state                                                                  */
 /* -------------------------------------------------------------------------- */
 
-/** The page's registry, so "Save & Leave" can save a section with unsaved edits. */
-export type RegisterSectionSave = (key: string, save: (() => Promise<unknown>) | null) => void;
+/**
+ * The page's registry. While a section holds unsaved edits it registers its
+ * `save` (which must REJECT when it did not save) and, optionally, a `discard`
+ * that puts its fields back to what is saved. The page's save bar and leave
+ * dialog run every registered save; Reset and "Don't save" run every discard.
+ * `null` unregisters both.
+ */
+export type RegisterSectionSave = (
+  key: string,
+  save: (() => Promise<unknown>) | null,
+  discard?: () => void,
+) => void;
 
 export interface SectionSave {
   status: SettingsSaveStatus;
@@ -94,6 +105,7 @@ export function useSectionSave({
   run,
   registerSave,
   signature,
+  discard,
 }: {
   sectionKey: string;
   isDirty: boolean;
@@ -101,12 +113,17 @@ export function useSectionSave({
   registerSave?: RegisterSectionSave;
   /** Changes whenever the form does; clears a stale save error. */
   signature: string;
+  /** Puts the section's fields back to what is saved (the page's Reset). */
+  discard?: () => void;
 }): SectionSave {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const savingRef = useRef(false);
   const runRef = useRef(run);
   runRef.current = run;
+  const discardRef = useRef(discard);
+  discardRef.current = discard;
+  const stableDiscard = useCallback(() => discardRef.current?.(), []);
 
   const save = useCallback(async () => {
     if (savingRef.current) return;
@@ -133,8 +150,8 @@ export function useSectionSave({
   }, [signature]);
 
   useEffect(() => {
-    registerSave?.(sectionKey, isDirty ? save : null);
-  }, [registerSave, sectionKey, isDirty, save]);
+    registerSave?.(sectionKey, isDirty ? save : null, isDirty ? stableDiscard : undefined);
+  }, [registerSave, sectionKey, isDirty, save, stableDiscard]);
 
   useEffect(() => () => registerSave?.(sectionKey, null), [registerSave, sectionKey]);
 
@@ -206,7 +223,7 @@ export function SectionHeader({
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
       <div className="min-w-0">
-        <h2 id={id} className="font-heading text-base font-medium text-foreground">
+        <h2 id={id} className={SETTINGS_SECTION_TITLE}>
           {title}
         </h2>
         {description && <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>}
@@ -224,7 +241,10 @@ export function IssueLine({ issue, id, className }: { issue: FieldIssue; id?: st
   );
 }
 
-/** Inline save state beside one labelled Save. */
+/**
+ * Inline save state beside one labelled Save. Inside a page save bar
+ * (`useSettingsPageSave`) the page owns Save, so this shows only a failed save.
+ */
 export function SaveFooter({
   save,
   disabled,
@@ -236,6 +256,10 @@ export function SaveFooter({
   onDiscard?: () => void;
   label?: string;
 }) {
+  const pageSave = useSettingsPageSave();
+  if (pageSave) {
+    return save.status === "error" ? <SettingsSaveState status="error" error={save.error} /> : null;
+  }
   return (
     <div className="flex w-full min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-2">
       <SettingsSaveState status={save.status} error={save.error} onRetry={save.retry} onDiscard={onDiscard} />

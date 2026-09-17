@@ -87,6 +87,15 @@ const EMPTY_FORM: ExtraFormData = {
   is_active: true,
 };
 
+/**
+ * v2 only: the Add/Edit Extra dialog's option cards and image tiles follow the
+ * v2 rounded system (cards 2xl) and hover light purple, with the --v2-hover
+ * tint in dark mode where primary/10 all but vanishes. Every tenant on v1 keeps
+ * `rounded-lg` and the grey `hover:bg-muted/50` it has today.
+ */
+const V2_CARD_RADIUS = 'rounded-2xl';
+const V2_OPTION_HOVER = 'hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]';
+
 function isLowStock(extra: RentalExtra): boolean {
   if (extra.max_quantity === null || extra.max_quantity === 0) return false;
   const remaining = extra.remaining_stock ?? extra.max_quantity;
@@ -104,12 +113,15 @@ function SortableImage({
   index,
   onRemove,
   touchVisible = false,
+  v2 = false,
 }: {
   url: string;
   index: number;
   onRemove: () => void;
   /** v2: the drag handle and remove button stay visible below `sm` (touch has no hover). */
   touchVisible?: boolean;
+  /** v2: rounded like the Add tile beside it (`rounded-2xl`); v1 keeps `rounded-lg`. */
+  v2?: boolean;
 }) {
   const {
     attributes,
@@ -131,19 +143,19 @@ function SortableImage({
     <div
       ref={setNodeRef}
       style={style}
-      className={`relative group flex-shrink-0 ${index === 0 ? 'ring-2 ring-primary rounded-lg' : ''}`}
+      className={`relative group flex-shrink-0 ${index === 0 ? `ring-2 ring-primary ${v2 ? V2_CARD_RADIUS : 'rounded-lg'}` : ''}`}
     >
       <div
         {...attributes}
         {...listeners}
-        className={`absolute top-0 left-0 right-0 h-6 flex items-center justify-center cursor-grab active:cursor-grabbing bg-black/40 rounded-t-lg ${touchVisible ? 'sm:opacity-0 sm:group-hover:opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity`}
+        className={`absolute top-0 left-0 right-0 h-6 flex items-center justify-center cursor-grab active:cursor-grabbing bg-black/40 ${v2 ? 'rounded-t-2xl' : 'rounded-t-lg'} ${touchVisible ? 'sm:opacity-0 sm:group-hover:opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity`}
       >
         <GripVertical className="h-3 w-3 text-white" />
       </div>
       <img
         src={url}
         alt={`Image ${index + 1}`}
-        className="w-20 h-20 rounded-lg object-cover border"
+        className={`w-20 h-20 ${v2 ? V2_CARD_RADIUS : 'rounded-lg'} object-cover border`}
       />
       {index === 0 && (
         <div className="absolute -top-1.5 -left-1.5 w-5 h-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
@@ -209,9 +221,13 @@ export function ExtrasSettings() {
   const [formOpenedAsV2, setFormOpenedAsV2] = useState('');
   const [confirmDiscardV2, setConfirmDiscardV2] = useState(false);
 
-  // Fetch all tenant vehicles for per-vehicle pricing picker
+  // Fetch all tenant vehicles for per-vehicle pricing picker. Its own key under
+  // the 'vehicles-list' prefix: /vehicles caches every column plus photos at
+  // exactly ['vehicles-list', tenantId], and sharing it served that page these
+  // reg-ordered, photo-less rows (or this picker Disposed cars) for up to the
+  // 60s stale time. Prefix invalidations of ['vehicles-list'] still reach it.
   const { data: allVehicles, isLoading: vehiclesLoadingV2, isError: vehiclesErrorV2, refetch: refetchVehiclesV2 } = useQuery({
-    queryKey: ['vehicles-list', tenant?.id],
+    queryKey: ['vehicles-list', tenant?.id, 'extras-picker'],
     queryFn: async () => {
       if (!tenant?.id) return [];
       const { data, error } = await supabase
@@ -998,10 +1014,10 @@ export function ExtrasSettings() {
                 <button
                   type="button"
                   onClick={() => setFormData((p) => ({ ...p, billing_type: 'per_trip' }))}
-                  className={`rounded-lg border p-3 text-left text-sm transition-colors ${
+                  className={`${v2Chrome ? V2_CARD_RADIUS : 'rounded-lg'} border p-3 text-left text-sm transition-colors ${
                     formData.billing_type === 'per_trip'
                       ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                      : 'hover:bg-muted/50'
+                      : v2Chrome ? V2_OPTION_HOVER : 'hover:bg-muted/50'
                   }`}
                 >
                   <p className="font-medium">Per trip</p>
@@ -1010,10 +1026,10 @@ export function ExtrasSettings() {
                 <button
                   type="button"
                   onClick={() => setFormData((p) => ({ ...p, billing_type: 'per_day' }))}
-                  className={`rounded-lg border p-3 text-left text-sm transition-colors ${
+                  className={`${v2Chrome ? V2_CARD_RADIUS : 'rounded-lg'} border p-3 text-left text-sm transition-colors ${
                     formData.billing_type === 'per_day'
                       ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                      : 'hover:bg-muted/50'
+                      : v2Chrome ? V2_OPTION_HOVER : 'hover:bg-muted/50'
                   }`}
                 >
                   <p className="font-medium">Per day</p>
@@ -1029,10 +1045,10 @@ export function ExtrasSettings() {
                 <button
                   type="button"
                   onClick={() => setFormData((p) => ({ ...p, pricing_type: 'global' }))}
-                  className={`flex items-center gap-2 rounded-lg border p-3 text-left text-sm transition-colors ${
+                  className={`flex items-center gap-2 ${v2Chrome ? V2_CARD_RADIUS : 'rounded-lg'} border p-3 text-left text-sm transition-colors ${
                     formData.pricing_type === 'global'
                       ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                      : 'hover:bg-muted/50'
+                      : v2Chrome ? V2_OPTION_HOVER : 'hover:bg-muted/50'
                   }`}
                 >
                   <div>
@@ -1043,10 +1059,10 @@ export function ExtrasSettings() {
                 <button
                   type="button"
                   onClick={() => setFormData((p) => ({ ...p, pricing_type: 'per_vehicle' }))}
-                  className={`flex items-center gap-2 rounded-lg border p-3 text-left text-sm transition-colors ${
+                  className={`flex items-center gap-2 ${v2Chrome ? V2_CARD_RADIUS : 'rounded-lg'} border p-3 text-left text-sm transition-colors ${
                     formData.pricing_type === 'per_vehicle'
                       ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                      : 'hover:bg-muted/50'
+                      : v2Chrome ? V2_OPTION_HOVER : 'hover:bg-muted/50'
                   }`}
                 >
                   <div>
@@ -1075,7 +1091,7 @@ export function ExtrasSettings() {
                           ? `${vp.vehicle_reg} - ${vp.vehicle_make || ''} ${vp.vehicle_model || ''}`
                           : vp.vehicle_id;
                       return (
-                        <div key={vp.vehicle_id} className="flex items-center gap-2 rounded-lg border p-2">
+                        <div key={vp.vehicle_id} className={`flex items-center gap-2 ${v2Chrome ? V2_CARD_RADIUS : 'rounded-lg'} border p-2`}>
                           <span className="flex-1 text-sm truncate">{label}</span>
                           <div className={v2Chrome && currencySymbolV2.length > 1 ? 'relative w-28 flex-shrink-0' : 'relative w-24'}>
                             <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">{v2Chrome ? currencySymbolV2 : '$'}</span>
@@ -1215,13 +1231,14 @@ export function ExtrasSettings() {
                             index={i}
                             onRemove={() => handleRemoveImage(i)}
                             touchVisible={v2Chrome}
+                            v2={v2Chrome}
                           />
                         ))}
                       </div>
                     </SortableContext>
                   </DndContext>
                 )}
-                <label className="w-20 h-20 rounded-lg border-2 border-dashed border-muted-foreground/30 flex flex-col items-center justify-center cursor-pointer hover:border-primary/50 hover:bg-muted/50 transition-colors flex-shrink-0">
+                <label className={`w-20 h-20 ${v2Chrome ? V2_CARD_RADIUS : 'rounded-lg'} border-2 border-dashed border-muted-foreground/30 flex flex-col items-center justify-center cursor-pointer hover:border-primary/50 ${v2Chrome ? V2_OPTION_HOVER : 'hover:bg-muted/50'} transition-colors flex-shrink-0`}>
                   {uploading ? (
                     <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                   ) : (
@@ -1245,7 +1262,7 @@ export function ExtrasSettings() {
 
             {/* Row 4: Toggles */}
             <div className={v2Chrome ? 'grid grid-cols-1 sm:grid-cols-2 gap-3' : 'grid grid-cols-2 gap-3'}>
-              <div className="flex items-center justify-between rounded-lg border p-2.5">
+              <div className={`flex items-center justify-between ${v2Chrome ? V2_CARD_RADIUS : 'rounded-lg'} border p-2.5`}>
                 <div>
                   <Label className="text-sm font-medium">Quantity-based</Label>
                   <p className="text-xs text-muted-foreground">Multiple units</p>
@@ -1272,7 +1289,7 @@ export function ExtrasSettings() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between rounded-lg border p-2.5">
+              <div className={`flex items-center justify-between ${v2Chrome ? V2_CARD_RADIUS : 'rounded-lg'} border p-2.5`}>
                 <div>
                   <Label className="text-sm font-medium">Active</Label>
                   <p className="text-xs text-muted-foreground">Visible to customers</p>

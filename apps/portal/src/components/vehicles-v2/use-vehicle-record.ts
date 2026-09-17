@@ -211,7 +211,10 @@ export function useVehicleRecord(id: string) {
     }
     setLastSavedAt(new Date());
     // The vehicles LIST and anything else keyed on this car reads the same row.
+    // The list page itself is keyed ["vehicles-list", tenantId], which the
+    // ["vehicles"] prefix does not reach.
     queryClient.invalidateQueries({ queryKey: ["vehicles"] });
+    queryClient.invalidateQueries({ queryKey: ["vehicles-list"] });
     queryClient.invalidateQueries({ queryKey: ["vehicle", id] });
   }, [tenant?.id, id, toast, queryClient, key]);
 
@@ -315,6 +318,10 @@ export function useVehiclePhotos(vehicleId: string) {
     queryClient.invalidateQueries({ queryKey: key });
     queryClient.invalidateQueries({ queryKey: vehicleKey(tenant?.id, vehicleId) });
     queryClient.invalidateQueries({ queryKey: ["vehicles"] });
+    // The vehicles list shows the first photo on hover. It is keyed
+    // ["vehicles-list", tenantId], which ["vehicles"] does not prefix, so
+    // without this a new cover or order showed there only after 60s.
+    queryClient.invalidateQueries({ queryKey: ["vehicles-list"] });
   };
 
   /** Keep `display_order` dense and `photo_url` pointing at whatever is first. */

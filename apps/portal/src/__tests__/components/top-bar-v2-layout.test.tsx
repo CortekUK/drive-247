@@ -4,7 +4,8 @@
  *   [search field][Trax] ................ [credits][messages][notifications]
  *
  * - the search field is a little smaller than it was (32px tall, 380px max),
- * - Trax sits right after the search field instead of at the far right,
+ * - Trax sits right after the search field instead of at the far right, labelled
+ *   "Help" with the AI sparkle, and greets "Hi, I'm Trax. How can I help?" on hover,
  * - notifications are at the extreme right, messages before them, credits
  *   before messages,
  * - hovering those controls shows the sidebar's light purple (`bg-primary/10`,
@@ -65,7 +66,7 @@ describe('v2 top bar layout', () => {
     render(<TopBarV2 />);
     // The sm+ field is the first "Search" control; the phone icon button follows it.
     const [searchField] = screen.getAllByRole('button', { name: 'Search' });
-    const trax = screen.getByRole('button', { name: 'Ask Trax' });
+    const trax = screen.getByRole('button', { name: 'Help, ask Trax' });
     const credits = screen.getByRole('link', { name: /Credits/ });
     const messages = screen.getByRole('button', { name: 'Messages' });
     const bell = screen.getByRole('button', { name: 'Notifications' });
@@ -96,7 +97,7 @@ describe('v2 top bar layout', () => {
 
   it('hovers every control in light purple, never white or grey', () => {
     render(<TopBarV2 />);
-    const trax = screen.getByRole('button', { name: 'Ask Trax' });
+    const trax = screen.getByRole('button', { name: 'Help, ask Trax' });
     const credits = screen.getByRole('link', { name: /Credits/ });
     const messages = screen.getByRole('button', { name: 'Messages' });
     const bellWrapper = screen.getByRole('button', { name: 'Notifications' }).parentElement!;
@@ -111,6 +112,24 @@ describe('v2 top bar layout', () => {
       'utf8',
     );
     expect(src).not.toMatch(/hover:bg-muted/);
+  });
+});
+
+describe('v2 top bar Help button', () => {
+  it('reads "Help" with the AI sparkle, and Trax introduces itself on hover', () => {
+    render(<TopBarV2 />);
+    const help = screen.getByRole('button', { name: 'Help, ask Trax' });
+    expect(help.textContent?.trim()).toBe('Help');
+    expect(help.querySelector('svg.lucide-sparkles')).not.toBeNull();
+    expect(help.querySelector('svg.lucide-bot')).toBeNull();
+
+    // The tooltip is stubbed out in this harness, so pin its copy at the source.
+    const src = readFileSync(
+      join(__dirname, '..', '..', 'components', 'shared', 'layout', 'top-bar-v2.tsx'),
+      'utf8',
+    );
+    expect(src).toContain("Hi, I&apos;m Trax. How can I help?");
+    expect(src).not.toContain('Ask Trax · ⌘J');
   });
 });
 

@@ -5,11 +5,13 @@
  *
  * The rentals list (`rentals-v2/rentals-list-v2.tsx`) is the reference. Its
  * table is a card whose body scrolls inside itself with the scrollbar hidden,
- * under a sticky, blurred header of small uppercase column names. The row's
- * identifier is weighted and everything else is plain text; status is coloured
- * TEXT, never a pill; the whole row opens the record; and there is no pager.
- * Rows arrive 25 at a time as the operator scrolls, with one quiet line under
- * the card saying how much of the set is on screen.
+ * under a sticky, blurred header of small uppercase column names. Headings and
+ * cells are centred. The row's identifier is weighted and everything else is
+ * plain text; status is coloured TEXT, never a pill; the whole row opens the
+ * record; and there is no pager. Rows arrive 25 at a time as the operator
+ * scrolls, with one quiet line under the card saying how much of the set is on
+ * screen. The order is the page's own (newest added first): columns do not
+ * sort.
  *
  * Every v2 list builds its table from these parts so the lists cannot drift
  * apart. The class strings are exported, and `list-table-v2.test.tsx` checks the
@@ -29,7 +31,6 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
-import { ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react";
 import { Card, CardContent } from "@/components/ui-v2/card";
 import { Button } from "@/components/ui-v2/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui-v2/table";
@@ -42,10 +43,22 @@ export const LIST_ROWS_PER_FILL = 25;
 export const LIST_CLASSES = {
   scrollRoot:
     "p-0 overflow-x-auto max-h-[520px] overflow-y-auto no-scrollbar relative [&>[data-slot=table-container]]:overflow-visible",
+  /**
+   * Added to the scroll root of a list that fills the window (`fillViewport`).
+   * Reaching the end of the rows does not hand the wheel on to the page, which
+   * would otherwise shove the header and overview off screen mid-flick. From
+   * `md` only, like the fill: on a phone the page has to keep scrolling past a
+   * 520px box.
+   */
+  fillViewport: "md:overscroll-contain",
   header: "sticky top-0 z-10 bg-card/95 backdrop-blur-sm",
   headerRow: "border-b hover:bg-transparent",
-  head: "h-10 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground",
-  cell: "py-3",
+  // `text-center` stays LAST: the lockstep test strips the width out of the
+  // rentals heading (`h-10 w-[20%] `) and matches the rest verbatim. It also
+  // replaces ui-v2 TableHead's own `text-left` through tailwind-merge, and a
+  // call site's `text-right` (a trailing actions column) still wins over it.
+  head: "h-10 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-center",
+  cell: "py-3 text-center",
   identifier: "font-semibold tabular-nums tracking-tight text-foreground",
   text: "font-medium text-foreground",
   metaChip:
@@ -166,6 +179,110 @@ export function useProgressiveRows<T>(rows: readonly T[], resetKey: string): Pro
   };
 }
 
+/** Tailwind's `md`. Below it a list keeps the fixed 520px box. */
+const FILL_VIEWPORT_MEDIA = "(min-width: 768px)";
+
+/** The shortest a window-filling list gets, however little room is left under its top. */
+export const LIST_FILL_MIN_HEIGHT = 320;
+
+/**
+ * How far the page runs on below `el`, in px: everything after it in each
+ * ancestor (the card's bottom padding, the count line, the gaps) plus each
+ * ancestor's bottom padding and border, up to and including `<main>`.
+ *
+ * Read from the elements AFTER `el` rather than from an ancestor's own bottom
+ * edge. `<main>` and the layout above it are stretched to at least the window,
+ * so their bottom edge on a short page is the window's, and taking the space
+ * down to it would count the empty gap under a short table, cap the table at
+ * its current height and keep it there as rows arrived. Siblings that sit
+ * beside `el` rather than under it (a flex row), are out of flow, or are hidden
+ * are skipped.
+ */
+function spaceBelow(el: HTMLElement): number {
+  let below = 0;
+  let node: HTMLElement = el;
+  let parent = node.parentElement;
+  while (parent && parent !== document.body) {
+    const nodeBottom = node.getBoundingClientRect().bottom;
+    let lowest = nodeBottom;
+    for (let sibling = node.nextElementSibling; sibling; sibling = sibling.nextElementSibling) {
+      const style = window.getComputedStyle(sibling);
+      if (style.display === "none" || style.position === "fixed" || style.position === "absolute") continue;
+      const rect = sibling.getBoundingClientRect();
+      if (rect.top >= nodeBottom - 1) lowest = Math.max(lowest, rect.bottom);
+    }
+    const parentStyle = window.getComputedStyle(parent);
+    below +=
+      lowest -
+      nodeBottom +
+      (parseFloat(parentStyle.paddingBottom) || 0) +
+      (parseFloat(parentStyle.borderBottomWidth) || 0);
+    if (parent.tagName === "MAIN") break;
+    node = parent;
+    parent = node.parentElement;
+  }
+  return below;
+}
+
+/**
+ * The height cap, in px, that makes a list's scroll box fill the window below
+ * where it starts, with the lines under it still on screen; `undefined` below
+ * `md` or while `enabled` is false, which leaves the box's 520px class in force.
+ *
+ * MEASURED, not `calc(100vh - Npx)`: the page above a list (header, overview
+ * card, a banner, the Trax panel narrowing the column) is a different height on
+ * every page and changes while the page is open, and a hardcoded offset is
+ * wrong for all of them. The box's top is taken in document coordinates, so the
+ * cap does not move as the page scrolls, and it never depends on the box's own
+ * height, so applying it cannot feed back into the next measurement. It is
+ * re-measured when the window resizes, when crossing `md`, and when any
+ * ancestor changes size (content above growing, rows arriving). Never below
+ * LIST_FILL_MIN_HEIGHT, so a short window still shows a usable list and the
+ * page scrolls instead.
+ *
+ * `enabled` must turn true in the render that mounts the element `ref` points
+ * at: the measurement runs in a layout effect keyed on it, so a box that mounts
+ * later with `enabled` already true is never measured.
+ */
+export function useViewportFillCap(ref: RefObject<HTMLElement | null>, enabled: boolean): number | undefined {
+  const [cap, setCap] = useState<number | undefined>(undefined);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!enabled || !el || typeof window === "undefined") {
+      setCap(undefined);
+      return;
+    }
+    const media = typeof window.matchMedia === "function" ? window.matchMedia(FILL_VIEWPORT_MEDIA) : null;
+    const measure = () => {
+      if (!media?.matches) {
+        setCap(undefined);
+        return;
+      }
+      const top = el.getBoundingClientRect().top + window.scrollY;
+      setCap(Math.max(LIST_FILL_MIN_HEIGHT, Math.floor(window.innerHeight - top - spaceBelow(el))));
+    };
+    measure();
+
+    window.addEventListener("resize", measure);
+    media?.addEventListener?.("change", measure);
+    let observer: ResizeObserver | undefined;
+    if (typeof ResizeObserver !== "undefined") {
+      observer = new ResizeObserver(() => measure());
+      for (let node = el.parentElement; node && node !== document.body; node = node.parentElement) {
+        observer.observe(node);
+      }
+    }
+    return () => {
+      window.removeEventListener("resize", measure);
+      media?.removeEventListener?.("change", measure);
+      observer?.disconnect();
+    };
+  }, [ref, enabled]);
+
+  return cap;
+}
+
 type RowsShell = Pick<ProgressiveRows<unknown>, "scrollRootRef" | "sentinelRef" | "hasMore">;
 
 /**
@@ -182,16 +299,31 @@ type RowsShell = Pick<ProgressiveRows<unknown>, "scrollRootRef" | "sentinelRef" 
 export function ListTable({
   rows,
   minWidth = "min-w-[720px]",
+  fillViewport = false,
   children,
 }: {
   rows: RowsShell;
   /** Below this the table scrolls sideways instead of crushing its columns. */
   minWidth?: string;
+  /**
+   * From `md` up, cap the body at the room left in the window under the table
+   * (see `useViewportFillCap`) instead of 520px, and keep a scroll that reaches
+   * the last row from moving the page. For a page whose list is the screen:
+   * rentals, vehicles, customers.
+   */
+  fillViewport?: boolean;
   children: ReactNode;
 }) {
+  // ListTable only renders with its table, so the scroll root is mounted by
+  // the time the hook's layout effect first runs.
+  const fillCap = useViewportFillCap(rows.scrollRootRef, fillViewport);
   return (
     <Card>
-      <CardContent ref={rows.scrollRootRef} className={LIST_CLASSES.scrollRoot}>
+      <CardContent
+        ref={rows.scrollRootRef}
+        className={cn(LIST_CLASSES.scrollRoot, fillViewport && LIST_CLASSES.fillViewport)}
+        style={fillCap !== undefined ? { maxHeight: fillCap } : undefined}
+      >
         {/* `table-fixed`: columns keep their declared widths instead of auto
             layout handing every spare pixel to the one unsized column. */}
         <Table className={cn(minWidth, "table-fixed")}>{children}</Table>
@@ -225,44 +357,31 @@ export function ListTableHeader({ children }: { children: ReactNode }) {
   );
 }
 
+/** @deprecated v2 lists do not sort. Kept only so `ListHead`'s old `sort` prop still type-checks. */
 export type ListSortDirection = "asc" | "desc" | null;
 
 /**
- * A column name. Pass `className` for its width (`w-[20%]`) and alignment.
- * Pass `sort` to make it a sort control: the arrow shows the active direction,
- * and an inactive sortable column shows a faint up/down mark.
+ * A column name. Pass `className` for its width (`w-[20%]`), or `text-right`
+ * for a trailing actions column.
+ *
+ * Plain text, never a sort control: every v2 list shows its rows newest added
+ * first and the operator cannot re-order them (team lead, Sep 2026). `sort` is
+ * still accepted so a call site not yet cleaned up keeps compiling, and it is
+ * ignored: no button, no arrow, no `aria-sort`.
  */
 export function ListHead({
   className,
   children,
-  sort,
+  sort: _ignoredSort,
   ...props
 }: Omit<ComponentProps<"th">, "children"> & {
   children?: ReactNode;
+  /** @deprecated Ignored. v2 lists do not sort; remove it from the call site. */
   sort?: { direction: ListSortDirection; onSort: () => void };
 }) {
-  if (!sort) {
-    return (
-      <TableHead className={cn(LIST_CLASSES.head, className)} {...props}>
-        {children}
-      </TableHead>
-    );
-  }
-  const Icon = sort.direction === "asc" ? ArrowUp : sort.direction === "desc" ? ArrowDown : ChevronsUpDown;
   return (
-    <TableHead
-      className={cn(LIST_CLASSES.head, className)}
-      aria-sort={sort.direction === "asc" ? "ascending" : sort.direction === "desc" ? "descending" : "none"}
-      {...props}
-    >
-      <button
-        type="button"
-        onClick={sort.onSort}
-        className="-mx-1 inline-flex items-center gap-1 rounded px-1 uppercase tracking-wider hover:text-foreground"
-      >
-        {children}
-        <Icon className={cn("size-3", sort.direction ? "text-foreground" : "opacity-50")} />
-      </button>
+    <TableHead className={cn(LIST_CLASSES.head, className)} {...props}>
+      {children}
     </TableHead>
   );
 }

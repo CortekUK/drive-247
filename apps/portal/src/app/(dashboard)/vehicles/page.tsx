@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Eye, Plus, Search, BarChart3, ChevronDown, X, ShieldCheck, Download } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui-v2/hover-card";
 import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/shared/data-display/empty-state";
 import { AddVehicleDialog } from "@/components/vehicles/add-vehicle-dialog";
@@ -184,12 +185,71 @@ function VehicleFilterPopover({
   );
 }
 
+/**
+ * v2: a vehicle's registration, linking to its record. When the car has a cover
+ * photo, hovering the registration (or focusing it from the keyboard) shows
+ * that photo large in a card beside it; with no photo it is the plain link, and
+ * no empty card opens. The row carries no thumbnail of its own.
+ *
+ * The photo is only fetched once the card opens (Radix mounts the content on
+ * open). Clicks inside the card stop there: React bubbles portal events through
+ * the component tree, so without it a click on the photo would reach the row's
+ * `onOpen` and navigate. A photo that fails to load says so in one muted line
+ * rather than showing a broken image, and the failure is remembered per URL so
+ * a replaced cover gets a fresh try.
+ */
+function VehicleRegLink({
+  vehicleId,
+  reg,
+  photoUrl,
+  className,
+}: {
+  vehicleId: string;
+  reg: string;
+  photoUrl?: string | null;
+  className?: string;
+}) {
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  const link = (
+    <Link href={`/vehicles/${vehicleId}`} onClick={(e) => e.stopPropagation()} className={className}>
+      {reg}
+    </Link>
+  );
+  if (!photoUrl) return link;
+  return (
+    <HoverCard openDelay={150} closeDelay={80}>
+      <HoverCardTrigger asChild>{link}</HoverCardTrigger>
+      <HoverCardContent
+        side="right"
+        align="start"
+        className="w-72 p-1.5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {failedUrl === photoUrl ? (
+          <p className="px-3 py-2 text-sm text-muted-foreground">Photo unavailable</p>
+        ) : (
+          <img
+            src={photoUrl}
+            alt={`Photo of ${reg}`}
+            className="aspect-[16/10] w-full rounded-[18px] object-cover"
+            onError={() => setFailedUrl(photoUrl)}
+          />
+        )}
+      </HoverCardContent>
+    </HoverCard>
+  );
+}
+
 export default function VehiclesListEnhanced() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { tenant, tenantSlug } = useTenant();
+  // v2 chrome (northwind only; fails closed to v1). Read up here because the
+  // sort below depends on it; see the usePageSearch call for what else it
+  // switches. A context read, so moving it changes no hook order.
+  const v2Chrome = useV2("chrome");
   // The Owner column and the Ownership filter are behind no feature flag --
   // every tenant gets them today, whatever `vehicle_owners_enabled` says. The
   // column also renders a live `/vehicle-owners/{id}` link, which would walk
@@ -262,9 +322,12 @@ export default function VehiclesListEnhanced() {
     setPageSize(urlPageSize);
   }, [searchParams]);
 
-  // Read sort params directly from URL
-  const sortField = searchParams.get('sort') as SortField | null;
-  const sortDirection = (searchParams.get('dir') as SortDirection) || 'asc';
+  // Read sort params directly from URL. v2 lists cannot be re-ordered (team
+  // lead, Sep 2026): the v2 table has no sort controls and always shows the
+  // query's order, newest added first, so an old `?sort=` link is ignored there
+  // (and, being null, is not written back by updateFilters either).
+  const sortField = v2Chrome ? null : (searchParams.get('sort') as SortField | null);
+  const sortDirection: SortDirection = v2Chrome ? 'asc' : (searchParams.get('dir') as SortDirection) || 'asc';
 
   // Update URL params when filters change
   const updateFilters = (newFilters: Partial<FiltersState>) => {
@@ -604,8 +667,9 @@ export default function VehiclesListEnhanced() {
    * No debounce here: this page never debounced its search — `updateFilters`
    * pushes the URL per keystroke — so the top bar's 400ms debounce is the only
    * one, and `onChange` is the raw setter.
+   *
+   * (`v2Chrome` itself is read at the top of the component.)
    */
-  const v2Chrome = useV2("chrome");
   // v2 only: the rentals behind the overview's "Cars on rent" graph. With v2
   // chrome off the query is disabled, so no other tenant issues the request.
   const onRentV2 = useVehiclesOnRentV2(v2Chrome);
@@ -619,22 +683,9 @@ export default function VehiclesListEnhanced() {
    */
   const vehicleRows = useProgressiveRows(
     filteredVehicles,
-    `${JSON.stringify(filters)}|${sortField}|${sortDirection}|${inshurFilter}`,
+    // No sort in the key: v2 has no sort (see `sortField`).
+    `${JSON.stringify(filters)}|${inshurFilter}`,
   );
-
-  /** A sortable v2 column, writing the same `sort` / `dir` params the page reads. */
-  const vehicleSort = (field: SortField) => ({
-    direction: sortField === field ? sortDirection : null,
-    onSort: () => {
-      const params = new URLSearchParams(searchParams.toString());
-      const nextDirection = sortField === field && sortDirection === 'asc' ? 'desc' : 'asc';
-      params.set('sort', field);
-      if (nextDirection === 'asc') params.delete('dir');
-      else params.set('dir', nextDirection);
-      params.delete('page');
-      router.push(`?${params.toString()}`);
-    },
-  });
   usePageSearch(
     v2Chrome
       ? {
@@ -979,66 +1030,77 @@ export default function VehiclesListEnhanced() {
       ) : (
         v2Chrome ? (
           // v2: the rentals list's table (components/shared/list-table-v2). No
-          // pager, rows arrive as it scrolls. The photo folds into the vehicle
-          // cell and the View column is gone: the row opens the vehicle.
-          <ListTable rows={vehicleRows} minWidth="min-w-[880px]">
+          // pager, rows arrive as it scrolls, and from md up the box fills the
+          // window under it. No thumbnail and no View column: the photo opens
+          // on hovering the registration, and the row opens the vehicle. No
+          // sort controls: newest added first, always. No Location column.
+          <ListTable
+            rows={vehicleRows}
+            fillViewport
+            // Five columns fit the kit's 720px; the gated Owner, INSHUR and
+            // Health columns need the room they had.
+            minWidth={!ownersHidden || inshurEnabled || fleetHealthEnabled ? "min-w-[880px]" : undefined}
+          >
             <ListTableHeader>
-              <ListHead className="w-[20%]" sort={vehicleSort('reg')}>Vehicle</ListHead>
-              <ListHead className="w-[18%]" sort={vehicleSort('make_model')}>Make / model</ListHead>
-              <ListHead className="w-[8%]" sort={vehicleSort('year')}>Year</ListHead>
-              <ListHead className="w-[10%]">Color</ListHead>
+              <ListHead className="w-[22%]">Vehicle</ListHead>
+              <ListHead className="w-[30%]">Make / model</ListHead>
+              <ListHead className="w-[12%]">Year</ListHead>
+              <ListHead className="w-[18%]">Color</ListHead>
               {!ownersHidden && <ListHead className="w-[12%]">Owner</ListHead>}
-              {hasPickupLocations && <ListHead className="w-[16%]">Location</ListHead>}
               {inshurEnabled && <ListHead className="w-[12%]">INSHUR</ListHead>}
-              {/* Not sortable: the page's sort compares the raw `status` column,
-                  but this column shows `resolveVehicleStatus`, so Paused and
-                  Unavailable cars would sort inside Available. */}
-              <ListHead className="w-[12%]">Status</ListHead>
+              <ListHead className="w-[18%]">Status</ListHead>
               {fleetHealthEnabled && <ListHead className="w-[10%]">Health</ListHead>}
             </ListTableHeader>
             <ListBody>
               {vehicleRows.visible.map((vehicle, index) => {
                 const status = resolveVehicleStatus(withRentalSignal(vehicle));
+                // Off sale: resolved 'Unavailable' only (every hire duration
+                // switched off), not Paused, Maintenance or Disposed. The row
+                // recedes and the car's name is struck through, while Status
+                // keeps full strength so the red word still reads. Dimmed per
+                // CELL, never on the row, so the row's purple hover stays at
+                // full strength.
+                const unavailable = (status || '').toLowerCase() === 'unavailable';
+                const dim = unavailable ? 'opacity-60' : undefined;
+                const struck = 'line-through decoration-muted-foreground';
                 return (
                   <ListRow
                     key={vehicle.id}
                     // Anchor for the Vehicles tab tour: the FIRST row only.
                     data-tour={index === 0 ? 'vehicle-row' : undefined}
+                    data-unavailable={unavailable || undefined}
                     onOpen={() => handleRowClick(vehicle.id)}
                   >
-                    <ListCell>
-                      <div className="flex min-w-0 items-center gap-3">
-                        <VehiclePhotoThumbnail
-                          photoUrl={vehicle.vehicle_photos?.[0]?.photo_url || vehicle.photo_url}
-                          vehicleReg={vehicle.reg}
-                          size="sm"
-                          className="h-7 w-10 shrink-0"
-                        />
+                    <ListCell className={dim}>
+                      <div className="flex min-w-0 items-center justify-center">
                         {/* A real link, so the record stays reachable by keyboard. */}
-                        <Link
-                          href={`/vehicles/${vehicle.id}`}
-                          onClick={(e) => e.stopPropagation()}
-                          className={`${LIST_CLASSES.identifier} truncate hover:underline`}
-                        >
-                          {vehicle.reg}
-                        </Link>
+                        <VehicleRegLink
+                          vehicleId={vehicle.id}
+                          reg={vehicle.reg}
+                          photoUrl={vehicle.vehicle_photos?.[0]?.photo_url || vehicle.photo_url}
+                          className={cn(
+                            LIST_CLASSES.identifier,
+                            'min-w-0 truncate',
+                            unavailable ? struck : 'hover:underline',
+                          )}
+                        />
                       </div>
                     </ListCell>
                     {/* One line, like every rentals cell: two-line cells made
                         these rows a quarter taller than the rentals rows. */}
-                    <ListCell>
-                      <span className={`block truncate ${LIST_CLASSES.text}`}>
+                    <ListCell className={dim}>
+                      <span className={cn('block truncate', LIST_CLASSES.text, unavailable && struck)}>
                         {vehicle.make} <span className="font-normal text-muted-foreground">{vehicle.model}</span>
                       </span>
                     </ListCell>
-                    <ListCell className="tabular-nums">
+                    <ListCell className={cn('tabular-nums', dim)}>
                       {vehicle.year ? (
                         <span className={LIST_CLASSES.text}>{vehicle.year}</span>
                       ) : (
                         <span className="text-muted-foreground">—</span>
                       )}
                     </ListCell>
-                    <ListCell>
+                    <ListCell className={dim}>
                       {vehicle.colour ? (
                         <span className={`block truncate ${LIST_CLASSES.text}`}>{vehicle.colour}</span>
                       ) : (
@@ -1046,7 +1108,7 @@ export default function VehiclesListEnhanced() {
                       )}
                     </ListCell>
                     {!ownersHidden && (
-                      <ListCell>
+                      <ListCell className={dim}>
                         {vehicle.owner_id ? (
                           <Link
                             href={`/vehicle-owners/${vehicle.owner_id}`}
@@ -1060,31 +1122,24 @@ export default function VehiclesListEnhanced() {
                         )}
                       </ListCell>
                     )}
-                    {hasPickupLocations && (
-                      <ListCell>
-                        {vehicle.pickup_location_id ? (
-                          <span className={`block truncate ${LIST_CLASSES.text}`}>
-                            {locationNameById.get(vehicle.pickup_location_id) ?? "—"}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">Any</span>
-                        )}
-                      </ListCell>
-                    )}
                     {inshurEnabled && (
                       // The whole row navigates; the badge's re-check button must not.
-                      <ListCell onClick={(e) => e.stopPropagation()}>
-                        <InshurEligibilityBadge
-                          compact
-                          state={inshurStateByVehicle.get(vehicle.id) ?? 'not_checked'}
-                          sourceMode={inshurEligibilityByVehicle.get(vehicle.id)?.source_mode ?? inshurConfig.mode}
-                          checkedAt={inshurEligibilityByVehicle.get(vehicle.id)?.checked_at}
-                          vin={vehicle.vin}
-                          vehicleState={vehicle.garaging_state}
-                          statesAllowed={inshurConfig.statesAllowed}
-                          isRechecking={inshurPendingVehicleId === vehicle.id}
-                          onRecheck={vehicle.vin ? () => recheckInshur(vehicle.id) : undefined}
-                        />
+                      <ListCell className={dim} onClick={(e) => e.stopPropagation()}>
+                        {/* The badge with its re-check button is a flex row, which
+                            does not follow the cell's text-center. */}
+                        <div className="flex justify-center">
+                          <InshurEligibilityBadge
+                            compact
+                            state={inshurStateByVehicle.get(vehicle.id) ?? 'not_checked'}
+                            sourceMode={inshurEligibilityByVehicle.get(vehicle.id)?.source_mode ?? inshurConfig.mode}
+                            checkedAt={inshurEligibilityByVehicle.get(vehicle.id)?.checked_at}
+                            vin={vehicle.vin}
+                            vehicleState={vehicle.garaging_state}
+                            statesAllowed={inshurConfig.statesAllowed}
+                            isRechecking={inshurPendingVehicleId === vehicle.id}
+                            onRecheck={vehicle.vin ? () => recheckInshur(vehicle.id) : undefined}
+                          />
+                        </div>
                       </ListCell>
                     )}
                     <ListCell>
@@ -1093,7 +1148,7 @@ export default function VehiclesListEnhanced() {
                       </ListStatusText>
                     </ListCell>
                     {fleetHealthEnabled && (
-                      <ListCell>
+                      <ListCell className={dim}>
                         <HealthStatusChip status={healthStatusFor(vehicle.id)} compact />
                       </ListCell>
                     )}

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { Users } from 'lucide-react';
+import { Users, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { loadTenantsByIds } from '@/lib/announcements/api';
@@ -51,6 +51,7 @@ export function TargetingField({
   onChange: (patch: { audience?: Audience; segment_key?: SegmentKey | null; tenant_ids?: string[] }) => void;
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [showAllChips, setShowAllChips] = useState(false);
   const [names, setNames] = useState<Record<string, string>>({});
 
   // Names for chips of an existing selection (the picker fills this in as well).
@@ -131,20 +132,35 @@ export function TargetingField({
           </div>
           {tenantIds.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
-              {tenantIds.slice(0, CHIP_LIMIT).map((id) => (
-                // A block, not inline-flex: text-overflow has no effect on a flex container.
+              {(showAllChips ? tenantIds : tenantIds.slice(0, CHIP_LIMIT)).map((id) => (
+                // The chip is a flex row (name + remove button); the NAME is the
+                // block that truncates, because text-overflow does nothing on a flex container.
                 <span
                   key={id}
-                  className="block max-w-[14rem] truncate rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-secondary-foreground"
-                  title={names[id]}
+                  className="inline-flex max-w-[16rem] items-center gap-0.5 rounded-full bg-secondary py-0.5 pl-2.5 pr-0.5 text-xs font-medium text-secondary-foreground"
                 >
-                  {names[id] ?? '…'}
+                  <span className="block min-w-0 truncate" title={names[id]}>
+                    {names[id] ?? '…'}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label={'Remove ' + (names[id] ?? 'this tenant')}
+                    title="Remove"
+                    onClick={() => onChange({ tenant_ids: tenantIds.filter((t) => t !== id) })}
+                    className="flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-indigo-100 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:bg-indigo-500/20"
+                  >
+                    <X className="size-3" aria-hidden="true" />
+                  </button>
                 </span>
               ))}
               {tenantIds.length > CHIP_LIMIT && (
-                <span className="inline-flex items-center rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-                  +{tenantIds.length - CHIP_LIMIT} more
-                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowAllChips((v) => !v)}
+                  className="inline-flex cursor-pointer items-center rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-indigo-100 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:bg-indigo-500/20"
+                >
+                  {showAllChips ? 'Show less' : '+' + (tenantIds.length - CHIP_LIMIT) + ' more'}
+                </button>
               )}
             </div>
           )}
