@@ -148,7 +148,7 @@ export function TraxRail() {
                   type="button"
                   onClick={onBack}
                   aria-label="Back"
-                  className="flex h-8 w-full items-center justify-center rounded-md transition-colors hover:bg-muted/50"
+                  className="flex h-8 w-full items-center justify-center rounded-full transition-colors hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]"
                 >
                   <ArrowLeft className="h-4 w-4 shrink-0" />
                 </button>
@@ -159,7 +159,7 @@ export function TraxRail() {
             <button
               type="button"
               onClick={onBack}
-              className="flex h-8 items-center gap-2 rounded-md px-1 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+              className="flex h-8 items-center gap-2 rounded-xl px-1 text-muted-foreground transition-colors hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] hover:text-foreground"
             >
               <ArrowLeft className="h-4 w-4 shrink-0" />
               <span className="text-[13px]">Back</span>

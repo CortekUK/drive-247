@@ -14,6 +14,13 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import {
+  Select as SelectV2,
+  SelectContent as SelectContentV2,
+  SelectItem as SelectItemV2,
+  SelectTrigger as SelectTriggerV2,
+  SelectValue as SelectValueV2,
+} from '@/components/ui-v2/select';
+import {
   Bell, BellRing, Send, Smartphone, Monitor, AlertCircle, Loader2,
   Share, PlusSquare, CheckCircle2, XCircle, Users, UserCog, Download, Check,
 } from 'lucide-react';
@@ -378,6 +385,29 @@ export function PushNotificationSettings({ canEdit = true }: Props) {
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="push-target">Send to</Label>
+            {v2Chrome ? (
+              // v2: the v2 dropdown, with the same value, options and handler.
+              <SelectV2
+                value={target}
+                onValueChange={(v) => setTarget(v as SendPushInput['target'])}
+                disabled={!canEdit}
+              >
+                <SelectTriggerV2 id="push-target" className="w-full sm:w-72">
+                  <SelectValueV2 />
+                </SelectTriggerV2>
+                <SelectContentV2>
+                  {(Object.keys(TARGET_LABELS) as SendPushInput['target'][]).map((key) => (
+                    <SelectItemV2 key={key} value={key}>
+                      {TARGET_LABELS[key]}
+                      {key === 'staff' && staffDevices.length > 0 && ` (${staffDevices.length})`}
+                      {key === 'customers' && customerDevices.length > 0 && ` (${customerDevices.length})`}
+                      {key === 'all' && totalDevices > 0 && ` (${totalDevices})`}
+                      {key !== 'self' && devicesKnown && pushAudienceCount(key, staffDevices.length, customerDevices.length) === 0 && ' (0)'}
+                    </SelectItemV2>
+                  ))}
+                </SelectContentV2>
+              </SelectV2>
+            ) : (
             <Select
               value={target}
               onValueChange={(v) => setTarget(v as SendPushInput['target'])}
@@ -398,6 +428,7 @@ export function PushNotificationSettings({ canEdit = true }: Props) {
                 ))}
               </SelectContent>
             </Select>
+            )}
           </div>
 
           <div className="space-y-2">

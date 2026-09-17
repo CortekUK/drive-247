@@ -206,7 +206,7 @@ export function EmailTemplatesListV2() {
                     <span
                       className={cn(
                         "flex size-9 shrink-0 items-center justify-center rounded-xl",
-                        customized ? "bg-primary/10 text-primary dark:text-indigo-300" : "bg-muted text-muted-foreground",
+                        customized ? "bg-primary/10 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" : "bg-muted text-muted-foreground",
                       )}
                       aria-hidden="true"
                     >

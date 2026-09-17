@@ -18,6 +18,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui-v2/popo
 import { Input } from '@/components/ui-v2/input';
 import { Label } from '@/components/ui-v2/label';
 import { readableForegroundOn, sameColor } from '@/lib/appearance/color';
+import { V2_BRAND_PRESETS, V2_DEFAULT_BRAND_COLOR } from '@/lib/appearance/presets';
 import { useV2 } from '@/lib/v2-context';
 import { cn } from '@/lib/utils';
 
@@ -49,6 +50,107 @@ export function BrandSwatches({ value, onChange, disabled }: BrandSwatchesProps)
   // v2 dark: --input carries its own alpha under .v2-theme, so the field's
   // bg-input/50 is invalid and the hex box rendered with no fill (northwind only).
   const v2Chrome = useV2('chrome');
+
+  // v2 (northwind): five named colours and a Custom pill, no helper line. The
+  // v1 row below (twelve unnamed dots and a dashed pipette) is unchanged.
+  if (v2Chrome) {
+    const isCustomV2 = !V2_BRAND_PRESETS.some((p) => sameColor(p.hex, value));
+    const hexComplete = /^#[0-9a-fA-F]{6}$/.test(value);
+    return (
+      <div className="flex flex-wrap items-start gap-2" data-brand-swatches="v2">
+        {V2_BRAND_PRESETS.map((preset) => {
+          const active = sameColor(preset.hex, value);
+          return (
+            <button
+              key={preset.id}
+              type="button"
+              disabled={disabled}
+              aria-label={preset.name}
+              aria-pressed={active}
+              onClick={() => onChange(preset.hex)}
+              className={cn(
+                'flex w-16 cursor-pointer flex-col items-center gap-1.5 rounded-xl py-1.5 outline-none transition-colors',
+                'hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]',
+                'focus-visible:ring-2 focus-visible:ring-ring',
+                disabled && 'pointer-events-none opacity-50'
+              )}
+            >
+              <span
+                aria-hidden="true"
+                className={cn(
+                  'flex size-9 items-center justify-center rounded-full',
+                  active && 'ring-2 ring-foreground ring-offset-2 ring-offset-background'
+                )}
+                style={{ background: preset.hex }}
+              >
+                {active && (
+                  <Check className="size-4" strokeWidth={3} style={{ color: readableForegroundOn(preset.hex) }} />
+                )}
+              </span>
+              <span className={cn('text-xs leading-4', active ? 'font-semibold text-foreground' : 'text-muted-foreground')}>
+                {preset.name}
+              </span>
+            </button>
+          );
+        })}
+
+        <Popover open={customOpen} onOpenChange={setCustomOpen}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              disabled={disabled}
+              aria-label={isCustomV2 && hexComplete ? `Custom colour, ${value.toUpperCase()}` : 'Custom colour'}
+              className={cn(
+                'mt-1.5 inline-flex h-9 cursor-pointer items-center gap-2 rounded-full border px-3.5 text-sm font-medium outline-none transition-colors',
+                'hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]',
+                'focus-visible:ring-2 focus-visible:ring-ring',
+                isCustomV2 ? 'border-foreground text-foreground' : 'text-muted-foreground',
+                disabled && 'pointer-events-none opacity-50'
+              )}
+            >
+              {isCustomV2 && hexComplete ? (
+                <span aria-hidden="true" className="size-4 rounded-full ring-1 ring-foreground/20" style={{ background: value }} />
+              ) : (
+                <Pipette className="size-3.5" aria-hidden="true" />
+              )}
+              Custom
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-64 space-y-3" align="start">
+            <div className="space-y-1.5">
+              <Label htmlFor="custom-hex" className="text-xs">
+                Your exact brand colour
+              </Label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={hexComplete ? value : V2_DEFAULT_BRAND_COLOR}
+                  onChange={(e) => onChange(e.target.value.toUpperCase())}
+                  className="h-9 w-9 shrink-0 cursor-pointer rounded-xl border bg-transparent p-0.5"
+                  aria-label="Colour picker"
+                />
+                <Input
+                  id="custom-hex"
+                  value={value}
+                  onChange={(e) => {
+                    const raw = e.target.value.trim();
+                    const next = raw.startsWith('#') ? raw : `#${raw}`;
+                    if (next.length <= 7) onChange(next.toUpperCase());
+                  }}
+                  placeholder={V2_DEFAULT_BRAND_COLOR}
+                  className="h-9 font-mono text-xs uppercase dark:bg-muted"
+                  maxLength={7}
+                />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Paste the hex from your brand guidelines, or pick from the wheel.
+            </p>
+          </PopoverContent>
+        </Popover>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-2.5">

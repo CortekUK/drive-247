@@ -72,6 +72,20 @@ describe('Delete on the v2 customer record', () => {
     expect(container.querySelector('[data-tour="customer-delete"]')).toBeNull();
   });
 
+  it('warns that history can go with the customer, never that history blocks the delete', () => {
+    // The repo's migration 20260103200000 made the rentals, payments, fines and
+    // ledger `customer_id` foreign keys ON DELETE CASCADE, so promising that a
+    // customer with rentals "cannot be deleted" would talk an operator into
+    // wiping that history.
+    renderSection(true);
+    expect(
+      screen.getByText(
+        'Removes this customer for good, and their sign-in if nothing else uses it. Their rentals, payments and fines can go with them, so to keep that history set them to Inactive instead.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/cannot be deleted/)).toBeNull();
+  });
+
   it('asks first, naming the customer, and deletes nothing until confirmed', () => {
     const { container } = renderSection(true);
     expect(container.querySelector('[data-tour="customer-delete"]')).not.toBeNull();

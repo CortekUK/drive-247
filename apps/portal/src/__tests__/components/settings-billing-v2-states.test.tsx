@@ -385,16 +385,19 @@ describe("settings page (v2): Customer messages entry points", () => {
     expect(templatesCase).toContain('href="/settings/email-templates"');
     expect(templatesCase).toContain('href="/settings/agreement-templates"');
     expect(templatesCase).not.toContain("<Button variant=\"outline\" size=\"sm\" className=\"pointer-events-auto\"");
-    expect(templatesCase).toContain("{canEditPage ? 'Edit emails' : 'View emails'}");
+    // The template links follow the Customer messages permission, not the page's
+    // (the page is also editable for someone who may only edit the lockbox message).
+    expect(templatesCase).toContain("const canEditTemplates = canEditSettings('templates');");
+    expect(templatesCase).toContain("{canEditTemplates ? 'Edit emails' : 'View emails'}");
   });
 
   it("Team emails and Push stay out of the page's read-only fieldset; their switches gate themselves", () => {
     expect(source).toContain("readOnly={!canEditPage && !V2_PAGES_GATING_OWN_CONTROLS.has(v2Page as string)}");
-    // General, Locations and Booking site also gate their own controls (their Try again and list search stay usable),
-    // and so do the Business-rules pages (each wraps its controls in its own fieldset).
-    // Pricing rules, Tax and fees and Security deposit gate per section too (their Try again on a failed read stays usable).
+    // General (each of its sections wraps its controls in its own fieldset) and
+    // Locations also gate their own controls (their Try again and list search
+    // stay usable). Custom pricing gates per section too.
     expect(source).toContain(
-      "const V2_PAGES_GATING_OWN_CONTROLS = new Set(['reminders', 'push', 'general', 'locations', 'booking-site', 'requirements', 'duration', 'lockbox', 'templates', 'pricing', 'fees', 'preauth', 'installments', 'payg', 'auto-extend', 'promos', 'extras']);",
+      "const V2_PAGES_GATING_OWN_CONTROLS = new Set(['reminders', 'push', 'general', 'locations', 'templates', 'pricing', 'installments', 'payg', 'auto-extend', 'promos', 'extras']);",
     );
     const reminders = source.slice(source.indexOf("        case 'reminders':"), source.indexOf("        case 'push':"));
     expect(reminders).toContain("disabled={isUpdating || !canEditPage}");

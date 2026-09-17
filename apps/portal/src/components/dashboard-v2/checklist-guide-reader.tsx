@@ -195,7 +195,7 @@ function PaperContent({
           <li key={i} className="flex gap-3 text-sm leading-relaxed">
             <span
               aria-hidden="true"
-              className="mt-[3px] flex size-5 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-[11px] font-semibold tabular-nums text-indigo-700 dark:bg-indigo-400/15 dark:text-indigo-300"
+              className="mt-[3px] flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold tabular-nums text-primary dark:bg-[hsl(var(--v2-link,var(--primary))_/_0.15)] dark:text-[hsl(var(--v2-link,var(--primary)))]"
             >
               {i + 1}
             </span>
@@ -347,11 +347,11 @@ export function ChecklistGuideReader({
             button, which is absolutely positioned in this corner. */}
         <DialogHeader className="flex-row items-center gap-3 pb-1 pl-6 pr-14 pt-5 sm:pl-8">
           <DialogTitle className="flex min-w-0 flex-1 items-center gap-2 text-base leading-snug">
-            {/* `dark:text-indigo-300`: the dark theme's `--primary` is a deep
-                indigo that measures 1.78:1 on the dark dialog. */}
+            {/* Dark reads --v2-link: the dark theme's `--primary` is a deep
+                shade that measures 1.78:1 on the dark dialog. */}
             <BookOpenText
               aria-hidden="true"
-              className="size-4 shrink-0 text-primary dark:text-indigo-300"
+              className="size-4 shrink-0 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]"
             />
             <span className="min-w-0 break-words sm:truncate">{shown?.title}</span>
           </DialogTitle>
@@ -445,7 +445,7 @@ export function ChecklistGuideReader({
                 className={cn(
                   'h-1.5 rounded-full transition-all duration-300',
                   i === current
-                    ? 'w-4 bg-primary dark:bg-indigo-300'
+                    ? 'w-4 bg-primary dark:bg-[hsl(var(--v2-link,var(--primary)))]'
                     : 'w-1.5 bg-muted-foreground/30',
                 )}
               />

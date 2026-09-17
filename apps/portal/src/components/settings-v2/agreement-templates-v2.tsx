@@ -382,10 +382,11 @@ export function AgreementTemplatesPageV2() {
         </div>
 
         {!picked && !waitingForPayg && resolved.notice === "payg-off" && (
+          // No "Open Pay As You Go": that settings page is hidden for now
+          // (V2_HIDDEN_SETTINGS_PAGES), so the link would only land on a notice.
           <SettingsDependencyNotice
             title="Pay As You Go is off"
             body="Its agreement is only used once Pay As You Go is on. Showing the standard agreement instead."
-            action={{ label: "Open Pay As You Go", href: "/settings?tab=payg" }}
           />
         )}
         {!picked && resolved.notice === "unknown" && (
@@ -405,7 +406,7 @@ export function AgreementTemplatesPageV2() {
                 onClick={() => setPicked(category)}
                 className={cn(
                   "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-sm font-medium transition-colors",
-                  selected ? "bg-primary/10 text-primary dark:text-indigo-300" : "text-muted-foreground hover:bg-primary/10 hover:text-foreground dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]",
+                  selected ? "bg-primary/10 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" : "text-muted-foreground hover:bg-primary/10 hover:text-foreground dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]",
                 )}
               >
                 <Icon className="size-4" aria-hidden="true" />

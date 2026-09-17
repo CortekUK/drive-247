@@ -42,6 +42,10 @@ import {
   tourProgressKey,
   writeTourProgress,
 } from '@/lib/first-rental-tour';
+import {
+  __resetSystemAnnouncementPriority,
+  setSystemAnnouncementPriority,
+} from '@/lib/announcements/system-priority';
 
 // ── Test doubles ───────────────────────────────────────────────────────────
 
@@ -146,6 +150,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
+  __resetSystemAnnouncementPriority();
 });
 
 // ── The three-way gate, through the hook ───────────────────────────────────
@@ -584,5 +589,142 @@ describe('walkthrough hook — replay from the menu', () => {
     act(() => void vi.advanceTimersByTime(2_000));
     expect(hook.result.current.phase).toBe('idle');
     expect(pushed).toEqual([]);
+  });
+});
+
+// ── System announcements go first ──────────────────────────────────────────
+
+describe('walkthrough hook — a system announcement dialog goes first', () => {
+  const priority = (p: 'idle' | 'pending' | 'open') => act(() => setSystemAnnouncementPriority(p));
+
+  it('autostart does not start while one is due or open (nothing marked seen), and starts once it is closed', () => {
+    priority('pending');
+    const hook = setup();
+    act(() => void vi.advanceTimersByTime(5_000));
+    expect(hook.result.current.phase).toBe('idle');
+    expect(hasSeenTour(USER)).toBe(false);
+    priority('open');
+    act(() => void vi.advanceTimersByTime(5_000));
+    expect(hook.result.current.phase).toBe('idle');
+    expect(hasSeenTour(USER)).toBe(false);
+
+    priority('idle');
+    autostart();
+    expect(hook.result.current.phase).toBe('showing');
+    expect(hook.result.current.current?.step.id).toBe('welcome');
+    expect(hook.result.current.yieldsToSystem).toBe(true);
+    expect(hasSeenTour(USER)).toBe(true);
+  });
+
+  it('a due dialog that arrives inside the autostart delay still wins', () => {
+    const hook = setup();
+    act(() => void vi.advanceTimersByTime(300));
+    priority('pending');
+    autostart();
+    expect(hook.result.current.phase).toBe('idle');
+    expect(hasSeenTour(USER)).toBe(false);
+  });
+
+  it('an autostarted run nobody has touched steps aside, putting "seen" and the progress back exactly; it returns after', () => {
+    const hook = setup();
+    autostart();
+    expect(hook.result.current.phase).toBe('showing');
+    expect(hasSeenTour(USER)).toBe(true);
+    expect(readTourProgress(USER)).not.toBeNull();
+
+    priority('pending');
+    expect(hook.result.current.phase).toBe('idle');
+    // Nothing recorded for yielding: not seen, no progress, no skip.
+    expect(hasSeenTour(USER)).toBe(false);
+    expect(readTourProgress(USER)).toBeNull();
+    act(() => void vi.advanceTimersByTime(10_000));
+    expect(hook.result.current.phase).toBe('idle');
+
+    priority('idle');
+    autostart();
+    expect(hook.result.current.phase).toBe('showing');
+    expect(hook.result.current.current?.step.id).toBe('welcome');
+  });
+
+  it('a run the operator is driving (they pressed Next) is NOT interrupted', () => {
+    mount(SIDEBAR);
+    const hook = setup();
+    autostart();
+    act(() => hook.result.current.next());
+    act(() => void vi.advanceTimersByTime(ANCHOR_POLL_MS));
+    expect(hook.result.current.current?.step.id).toBe('sidebar');
+    expect(hook.result.current.yieldsToSystem).toBe(false);
+
+    priority('pending');
+    act(() => void vi.advanceTimersByTime(10_000));
+    expect(hook.result.current.phase).toBe('showing');
+    expect(hook.result.current.current?.step.id).toBe('sidebar');
+    expect(readTourProgress(USER)).toMatchObject({ stepId: 'sidebar', status: 'active' });
+  });
+
+  it('a run started from the menu is NOT interrupted', () => {
+    markTourSeen(USER);
+    const hook = setup();
+    act(() => void window.dispatchEvent(new Event(REPLAY_TOUR_EVENT)));
+    act(() => void vi.advanceTimersByTime(ANCHOR_POLL_MS));
+    expect(hook.result.current.phase).toBe('showing');
+    expect(hook.result.current.yieldsToSystem).toBe(false);
+    priority('open');
+    act(() => void vi.advanceTimersByTime(10_000));
+    expect(hook.result.current.phase).toBe('showing');
+  });
+
+  it('the resume prompt is not offered, nor counted, while one is due; it is offered once it is closed', () => {
+    writeTourProgress(USER, { stepId: 'vehicles', status: 'paused' });
+    markTourSeen(USER);
+    priority('pending');
+    const hook = setup();
+    act(() => void vi.advanceTimersByTime(5_000));
+    expect(hook.result.current.phase).toBe('idle');
+    expect(readTourProgress(USER)).toMatchObject({ stepId: 'vehicles', status: 'paused', prompts: 0 });
+
+    priority('idle');
+    act(() => void vi.advanceTimersByTime(ANCHOR_POLL_MS));
+    expect(hook.result.current.phase).toBe('prompt');
+    expect(hook.result.current.yieldsToSystem).toBe(true);
+    expect(readTourProgress(USER)).toMatchObject({ stepId: 'vehicles', status: 'paused', prompts: 1 });
+  });
+
+  it('a prompt already up steps aside with NO answer recorded, and comes back without counting again', () => {
+    writeTourProgress(USER, { stepId: 'vehicles', status: 'paused' });
+    markTourSeen(USER);
+    const hook = setup();
+    act(() => void vi.advanceTimersByTime(ANCHOR_POLL_MS));
+    expect(hook.result.current.phase).toBe('prompt');
+    expect(readTourProgress(USER)?.prompts).toBe(1);
+
+    priority('pending');
+    expect(hook.result.current.phase).toBe('idle');
+    // Not dismissed (that would clear the progress), not skipped, not resumed.
+    expect(readTourProgress(USER)).toMatchObject({ stepId: 'vehicles', status: 'paused', prompts: 1 });
+    expect(hasSeenTour(USER)).toBe(true);
+    expect(pushed).toEqual([]);
+
+    priority('open');
+    priority('idle');
+    act(() => void vi.advanceTimersByTime(ANCHOR_POLL_MS));
+    expect(hook.result.current.phase).toBe('prompt');
+    expect(readTourProgress(USER)?.prompts).toBe(1);
+  });
+
+  it('the silent resume on a step page waits too, and picks up after', () => {
+    writeTourProgress(USER, { stepId: 'vehicles', status: 'active' });
+    markTourSeen(USER);
+    mount(FLEET_CHART);
+    currentPath = '/vehicles';
+    priority('pending');
+    const hook = setup();
+    act(() => void vi.advanceTimersByTime(5_000));
+    expect(hook.result.current.phase).toBe('idle');
+    expect(readTourProgress(USER)).toMatchObject({ stepId: 'vehicles', status: 'active' });
+    priority('idle');
+    act(() => void vi.advanceTimersByTime(ANCHOR_POLL_MS));
+    expect(hook.result.current.phase).toBe('showing');
+    expect(hook.result.current.current?.step.id).toBe('vehicles');
   });
 });

@@ -16,8 +16,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 
-import { HARD_DIALOG_HELPER, SystemAnnouncementDialog } from '@/components/announcements/system-announcement-dialog';
+import {
+  HARD_DIALOG_HELPER,
+  SYSTEM_DIALOG_PAGE_GUARD_MS,
+  SystemAnnouncementDialog,
+} from '@/components/announcements/system-announcement-dialog';
 import { SYSTEM_DIALOG_UI, TONE_CLASSES, type PortalAnnouncement } from '@/lib/announcements/contract';
+import { readPortalSource } from '../helpers/edge-source';
 
 let perms = {
   isManager: false,
@@ -317,5 +322,316 @@ describe('roles on a hard blocker', () => {
     renderDialog(hard());
     expect(button('Connect Stripe')).toBeInTheDocument();
     expect(screen.queryByText(HARD_DIALOG_HELPER)).toBeNull();
+  });
+});
+
+// ── The pager: two or more system dialogs in ONE dialog ─────────────────────
+
+describe('pager', () => {
+  const onPrevious = vi.fn();
+  const onNext = vi.fn();
+
+  const pagesOf = () => [
+    notice({ id: 'h', blocking: 'hard', tone: 'critical', title: 'Card payments are down', body: 'Hard body.', cta_label: 'Update card', cta_url: '/subscription' }),
+    notice({ id: 's1', tone: 'warning', title: 'Maintenance tonight', body: 'Soft body one.' }),
+    notice({ id: 's2', tone: 'info', title: 'New pricing rules', body: 'Soft body two.', cta_label: 'Open settings', cta_url: '/settings' }),
+  ];
+
+  function renderPaged(index: number, items = pagesOf(), turn: 1 | -1 = 1) {
+    const pager = { items, index, turn, onPrevious, onNext };
+    const el = (i: number) => (
+      <SystemAnnouncementDialog
+        announcement={items[i]}
+        open
+        onClose={onClose}
+        onCta={onCta}
+        onSignOut={onSignOut}
+        pager={{ ...pager, index: i }}
+      />
+    );
+    const view = render(el(index));
+    return { ...view, show: (i: number) => view.rerender(el(i)) };
+  }
+
+  const pagerBar = () => dialog()!.querySelector<HTMLElement>('[data-system-dialog-pager]');
+  const counter = () => dialog()!.querySelector<HTMLElement>('[data-system-dialog-counter]');
+  const liveRegion = () => dialog()!.querySelector<HTMLElement>('[data-system-dialog-live]');
+  const pageDots = () => Array.from(dialog()!.querySelectorAll<HTMLElement>('[data-system-dialog-dot]'));
+  const activeFooter = () => dialog()!.querySelector<HTMLElement>('[data-system-dialog-footer][data-active]')!;
+
+  beforeEach(() => {
+    onPrevious.mockClear();
+    onNext.mockClear();
+  });
+
+  it('one item: no pager chrome at all (the single dialog as it always was)', () => {
+    renderDialog(notice());
+    expect(dialog()!.querySelector('[data-system-dialog-pager]')).toBeNull();
+    expect(dialog()!.querySelector('[data-system-dialog-sizer], [data-system-dialog-footers], [data-system-dialog-dots]')).toBeNull();
+    expect(dialog()!.hasAttribute('data-page-count')).toBe(false);
+    expect(button('Previous announcement')).toBeNull();
+    expect(button('Next announcement')).toBeNull();
+    // A pager of ONE item is no pager either.
+    cleanup();
+    const only = notice({ id: 'only' });
+    render(
+      <SystemAnnouncementDialog announcement={only} open onClose={onClose} onCta={onCta} onSignOut={onSignOut}
+        pager={{ items: [only], index: 0, turn: 1, onPrevious, onNext }} />,
+    );
+    expect(dialog()!.querySelector('[data-system-dialog-pager]')).toBeNull();
+  });
+
+  it('Previous, the dots, "n of N" and Next, with a polite "Announcement n of N"', () => {
+    renderPaged(1);
+    expect(dialog()!.getAttribute('data-page-count')).toBe('3');
+    expect(dialog()!.getAttribute('data-page-index')).toBe('1');
+    expect(pagerBar()).not.toBeNull();
+    expect(pagerBar()!.getAttribute('role')).toBe('group');
+    expect(counter()).toHaveTextContent('2 of 3');
+    expect(liveRegion()).toHaveTextContent('Announcement 2 of 3');
+    expect(liveRegion()!.getAttribute('aria-live')).toBe('polite');
+    expect(liveRegion()!.className).toContain('sr-only');
+    // The dots: one per page, the page showing a wider pill in ITS tone.
+    expect(pageDots()).toHaveLength(3);
+    expect(pageDots().map((d) => d.hasAttribute('data-active'))).toEqual([false, true, false]);
+    expect(pageDots()[1].className.split(/\s+/)).toEqual(expect.arrayContaining(['w-4', 'h-1.5', 'rounded-full', TONE_CLASSES.warning.dialogAccent]));
+    expect(pageDots()[0].className.split(/\s+/)).toEqual(expect.arrayContaining(['w-1.5', 'h-1.5']));
+    expect(pageDots()[0].parentElement!.getAttribute('aria-hidden')).toBe('true');
+
+    fireEvent.click(button('Previous announcement')!);
+    expect(onPrevious).toHaveBeenCalledTimes(1);
+    fireEvent.click(button('Next announcement')!);
+    expect(onNext).toHaveBeenCalledTimes(1);
+  });
+
+  it('Left / Right arrow keys page from anywhere in the dialog; not with a modifier', () => {
+    renderPaged(0);
+    fireEvent.keyDown(dialog()!, { key: 'ArrowRight' });
+    expect(onNext).toHaveBeenCalledTimes(1);
+    fireEvent.keyDown(button('Sign out')!, { key: 'ArrowLeft' });
+    expect(onPrevious).toHaveBeenCalledTimes(1);
+    fireEvent.keyDown(dialog()!, { key: 'ArrowRight', altKey: true });
+    fireEvent.keyDown(dialog()!, { key: 'ArrowRight', shiftKey: true });
+    expect(onNext).toHaveBeenCalledTimes(1);
+  });
+
+  it('a HARD page: no X, Escape and outside clicks ignored, Sign out and its button; still pageable', async () => {
+    renderPaged(0);
+    expect(dialog()!.getAttribute('data-blocking')).toBe('hard');
+    expect(button('Close')).toBeNull();
+    expect(button('Got it')).toBeNull();
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+    await settle();
+    await clickOutside();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(dialog()).not.toBeNull();
+    expect(button('Sign out')).toBeInTheDocument();
+    fireEvent.click(button('Update card')!);
+    expect(onCta).toHaveBeenCalledWith('/subscription');
+    fireEvent.click(button('Next announcement')!);
+    expect(onNext).toHaveBeenCalledTimes(1);
+  });
+
+  it('a SOFT page while a hard one remains: its X, Escape, outside click and Got it each close THAT item (onClose)', async () => {
+    const { show } = renderPaged(1);
+    expect(dialog()!.getAttribute('data-blocking')).toBe('soft');
+    fireEvent.click(button('Close')!);
+    fireEvent.click(button('Got it')!);
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(3);
+    show(1);
+    await settle();
+    await clickOutside();
+    expect(onClose).toHaveBeenCalledTimes(4);
+    expect(button('Sign out')).toBeNull();
+  });
+
+  it('while any hard page remains the backdrop is the hard one, even on a soft page; soft pages only: the soft one', () => {
+    renderPaged(1);
+    expect(document.querySelector('.backdrop-blur-md')).not.toBeNull();
+    cleanup();
+    renderPaged(0, pagesOf().slice(1));
+    expect(document.querySelector('.backdrop-blur-md')).toBeNull();
+    expect(document.querySelector('.backdrop-blur-sm')).not.toBeNull();
+  });
+
+  it('each page keeps its own tone, icon, title, body and buttons', async () => {
+    const { show } = renderPaged(0);
+    const check = (tone: 'critical' | 'warning' | 'info', title: string, buttons: string[]) => {
+      expect(dialog()!.getAttribute('data-tone')).toBe(tone);
+      expect(screen.getByRole('dialog', { name: title })).toBeInTheDocument();
+      const page = dialog()!.querySelector('[data-system-dialog-page]')!;
+      expect(page.querySelector(`[data-tone-icon="${tone}"]`)).not.toBeNull();
+      expect(dialog()!.querySelector(`[aria-hidden="true"].${CSS.escape(TONE_CLASSES[tone].dialogAccent)}`)).not.toBeNull();
+      expect([...activeFooter().querySelectorAll('button')].map((b) => b.textContent)).toEqual(buttons);
+    };
+    check('critical', 'Card payments are down', ['Sign out', 'Update card']);
+    show(1);
+    check('warning', 'Maintenance tonight', ['Got it']);
+    show(2);
+    check('info', 'New pricing rules', ['Not now', 'Open settings']);
+    // This page has only just taken over, so its buttons wait out
+    // SYSTEM_DIALOG_PAGE_GUARD_MS first (see "a click that lands on the page that just
+    // took over"); a reader gets there long after.
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, SYSTEM_DIALOG_PAGE_GUARD_MS + 50));
+    });
+    fireEvent.click(button('Open settings')!);
+    expect(onCta).toHaveBeenCalledWith('/settings');
+  });
+
+  it('keeps ONE size for every page: every page is laid out in the same cells, only the one showing can be seen or pressed', () => {
+    renderPaged(1);
+    const sizers = Array.from(dialog()!.querySelectorAll<HTMLElement>('[data-system-dialog-sizer]'));
+    expect(sizers).toHaveLength(3);
+    for (const s of sizers) {
+      expect(s.getAttribute('aria-hidden')).toBe('true');
+      expect(s.hasAttribute('inert')).toBe(true);
+      expect(s.className.split(/\s+/)).toEqual(expect.arrayContaining(['invisible', 'col-start-1', 'row-start-1']));
+    }
+    const footers = Array.from(dialog()!.querySelectorAll<HTMLElement>('[data-system-dialog-footer]'));
+    expect(footers.map((f) => f.getAttribute('data-system-dialog-footer'))).toEqual(['h', 's1', 's2']);
+    for (const f of footers) {
+      expect(f.className.split(/\s+/)).toEqual(expect.arrayContaining(['col-start-1', 'row-start-1']));
+      const showingIt = f.getAttribute('data-system-dialog-footer') === 's1';
+      expect(f.hasAttribute('inert')).toBe(!showingIt);
+      expect(f.getAttribute('aria-hidden')).toBe(showingIt ? null : 'true');
+      expect(f.className.split(/\s+/)).toContain(showingIt ? 'visible' : 'invisible');
+    }
+    // Buttons on the other pages are not reachable by role.
+    expect(button('Sign out')).toBeNull();
+    expect(button('Update card')).toBeNull();
+    expect(button('Open settings')).toBeNull();
+    // One heading and one description are the dialog's: the sizers' copies are hidden.
+    expect(screen.getAllByRole('heading')).toHaveLength(1);
+  });
+
+  it('slides the page in from the side it came from (the feature dialog\'s motion)', () => {
+    renderPaged(1);
+    const page = dialog()!.querySelector<HTMLElement>('[data-system-dialog-page]')!;
+    expect(page.getAttribute('data-system-dialog-page')).toBe('s1');
+    const source = readPortalSource('components/announcements/system-announcement-dialog.tsx');
+    expect(source).toMatch(/initial=\{reduceMotion \? false : \{ opacity: 0, x: turn \* 16 \}\}/);
+    expect(source).toMatch(/animate=\{\{ opacity: 1, x: 0 \}\}/);
+  });
+
+  it('when the page changes under a pressed button, focus goes back to the panel; paging from the pager keeps it there', () => {
+    const { show } = renderPaged(1);
+    const gotIt = button('Got it')!;
+    act(() => gotIt.focus());
+    show(2);
+    expect(document.activeElement).toBe(dialog());
+    const next = button('Next announcement')!;
+    act(() => next.focus());
+    show(0);
+    expect(document.activeElement).toBe(next);
+  });
+
+  // Review round 5: every page's footer sits in ONE cell, so the second click of a
+  // double click on a soft page's "Got it" landed on whatever the next page puts in that
+  // spot — Sign out, a hard page's button, or another notice's "Got it".
+  describe('a click that lands on the page that just took over', () => {
+    /** Past the guard, without holding the suite up. */
+    const afterGuard = async () => {
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, SYSTEM_DIALOG_PAGE_GUARD_MS + 50));
+      });
+    };
+
+    it('a HARD page taking the place of a soft one: Sign out and its button do nothing for a moment', async () => {
+      const { show } = renderPaged(1);
+      fireEvent.click(button('Got it')!);
+      expect(onClose).toHaveBeenCalledTimes(1);
+      // What the host does next: the item is gone and the hard page takes the place.
+      show(0);
+      fireEvent.click(button('Sign out')!);
+      fireEvent.click(button('Update card')!);
+      expect(onSignOut).not.toHaveBeenCalled();
+      expect(onCta).not.toHaveBeenCalled();
+      await afterGuard();
+      fireEvent.click(button('Update card')!);
+      expect(onCta).toHaveBeenCalledWith('/subscription');
+      fireEvent.click(button('Sign out')!);
+      expect(onSignOut).toHaveBeenCalledTimes(1);
+    });
+
+    it('another SOFT page taking over: its Got it, X, Escape and an outside click cannot dismiss it unread', async () => {
+      const { show } = renderPaged(1);
+      fireEvent.click(button('Got it')!);
+      expect(onClose).toHaveBeenCalledTimes(1);
+      show(2);
+      fireEvent.click(button('Not now')!);
+      fireEvent.click(button('Open settings')!);
+      fireEvent.click(button('Close')!);
+      fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+      await clickOutside();
+      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(onCta).not.toHaveBeenCalled();
+      await afterGuard();
+      fireEvent.click(button('Not now')!);
+      expect(onClose).toHaveBeenCalledTimes(2);
+    });
+
+    it('the operator\'s own paging is never held back: Next, then that page\'s button at once', () => {
+      const { show } = renderPaged(1);
+      fireEvent.click(button('Next announcement')!);
+      show(2);
+      fireEvent.click(button('Open settings')!);
+      expect(onCta).toHaveBeenCalledWith('/settings');
+      // The arrow keys count as the operator's own move too.
+      fireEvent.keyDown(dialog()!, { key: 'ArrowLeft' });
+      show(1);
+      fireEvent.click(button('Got it')!);
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // Review round 5: the body is one scrolling element shared by every page, so a page
+  // opened after a long one was scrolled started below its own title.
+  describe('scrolling', () => {
+    const longShort = () => [
+      notice({ id: 'long', title: 'Long notice', body: Array.from({ length: 40 }, (_, i) => `Line ${i + 1}.`).join('\n') }),
+      notice({ id: 'short', title: 'Short notice', body: 'Tiny.' }),
+    ];
+    const bodyEl = () => dialog()!.querySelector<HTMLElement>('[data-system-dialog-body]')!;
+
+    it('a page change puts the body back at the top, whichever way the page changed', () => {
+      const { show } = renderPaged(0, longShort());
+      const body = bodyEl();
+      body.scrollTop = 1617;
+      show(1);
+      // The same element (the pages share it), scrolled back to the title.
+      expect(bodyEl()).toBe(body);
+      expect(body.scrollTop).toBe(0);
+      body.scrollTop = 900;
+      show(0);
+      expect(body.scrollTop).toBe(0);
+    });
+
+    it('the hidden sizers are clipped to the body, so a short page has no empty space to scroll through', () => {
+      renderPaged(1, longShort());
+      const clip = dialog()!.querySelector<HTMLElement>('[data-system-dialog-sizers]')!;
+      expect(clip).not.toBeNull();
+      // jsdom lays nothing out; the headless-Chrome probe proved the geometry. The clip
+      // is the body's cap less its own padding (pt-6 + pb-2 = 2rem).
+      expect(clip.className.split(/\s+/)).toEqual(
+        expect.arrayContaining([
+          'overflow-hidden',
+          'col-start-1',
+          'row-start-1',
+          'max-sm:max-h-[calc(100dvh-15.5rem)]',
+          'sm:max-h-[calc(100dvh-13.5rem)]',
+        ]),
+      );
+      expect(clip.querySelectorAll('[data-system-dialog-sizer]')).toHaveLength(2);
+    });
+  });
+
+  it('the single dialog\'s helper line appears once per page that needs it, on the page showing', () => {
+    perms = { isManager: false, isReadOnlyRole: true, canAccessRoute: () => true };
+    renderPaged(0);
+    const helpers = dialog()!.querySelectorAll('[data-announcement-helper]');
+    expect(helpers).toHaveLength(1);
+    expect(button('Update card')).toBeNull();
   });
 });

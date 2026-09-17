@@ -87,8 +87,8 @@ const FIELD =
   "border border-primary/25 bg-primary/[0.07] px-2.5 text-left backdrop-blur-[2px] transition-colors " +
   "hover:border-primary/40 hover:bg-primary/10 " +
   // Dark: primary/10 over the dark bar is a 1.01:1 step, so hover and keyboard
-  // focus use the v2 hover tint and a light indigo rim instead.
-  "dark:hover:border-indigo-300/40 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:focus-visible:bg-[hsl(var(--v2-hover,var(--muted)))] " +
+  // focus use the v2 hover tint and a light brand rim (--v2-link) instead.
+  "dark:hover:border-[hsl(var(--v2-link,var(--primary))_/_0.4)] dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:focus-visible:bg-[hsl(var(--v2-hover,var(--muted)))] " +
   "focus-visible:border-primary/50 focus-visible:bg-primary/10 focus-visible:outline-none " +
   "focus-visible:ring-3 focus-visible:ring-ring/30";
 
@@ -288,7 +288,7 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
              rest of that route's steps of their wait budget. */
           data-tour={slot.tourAnchor}
         >
-          <Search className="size-4 shrink-0 text-primary dark:text-indigo-300" aria-hidden />
+          <Search className="size-4 shrink-0 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" aria-hidden />
           <input
             ref={inputRef}
             value={term}
@@ -310,15 +310,18 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
                 "relative flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors " +
                 (slot.filters.open
                   ? "bg-primary text-primary-foreground"
-                  : "bg-primary/10 text-primary hover:bg-primary/20 dark:text-indigo-300 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]")
+                  : "bg-primary/10 text-primary hover:bg-primary/20 dark:text-[hsl(var(--v2-link,var(--primary)))] dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]")
               }
             >
               <SlidersHorizontal className="size-4" />
               {/* Only while the panel is shut. Open, the chips say it better —
                   and closed, this is the sole thing on screen telling you the
-                  list you are reading is not the whole list. */}
+                  list you are reading is not the whole list.
+                  Pinned to the button's own corner, not hung outside it: the
+                  field clips its overflow (for the rounded ends), which cut an
+                  outside badge in half. */}
               {!slot.filters.open && slot.filters.activeCount > 0 && (
-                <span className="absolute -right-1.5 -top-1.5 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+                <span className="absolute right-0 top-0 flex size-3.5 items-center justify-center rounded-full bg-primary text-[9px] font-semibold leading-none text-primary-foreground">
                   {slot.filters.activeCount}
                 </span>
               )}
@@ -333,13 +336,13 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
           aria-label="Search"
           className={`hidden sm:flex ${FIELD}`}
         >
-          <Search className="size-4 shrink-0 text-primary dark:text-indigo-300" aria-hidden />
+          <Search className="size-4 shrink-0 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" aria-hidden />
           {/* Muted measures 4.22:1 on this light purple pill (4.01 hovered);
               --v2-muted-on-tint clears 4.5 and is the muted token in dark. */}
           <span className="min-w-0 flex-1 truncate text-[13px] text-[hsl(var(--v2-muted-on-tint,var(--muted-foreground)))]">
             Search bookings, customers, vehicles…
           </span>
-          <kbd className="shrink-0 rounded-full bg-primary/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-primary dark:text-indigo-300">
+          <kbd className="shrink-0 rounded-full bg-primary/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
             ⌘K
           </kbd>
         </button>
@@ -364,7 +367,7 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
           type="button"
           onClick={slot ? () => setPhoneFieldOpen(true) : open}
           aria-label={slot ? "Search this page" : "Search"}
-          className="inline-flex size-8 shrink-0 items-center justify-center rounded-full border border-primary/25 bg-primary/[0.07] text-primary dark:text-indigo-300 sm:hidden"
+          className="inline-flex size-8 shrink-0 items-center justify-center rounded-full border border-primary/25 bg-primary/[0.07] text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] sm:hidden"
         >
           <Search className="size-4" aria-hidden />
         </button>
@@ -393,7 +396,7 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
               aria-expanded={trax.sheetOpen}
               onClick={trax.sheetOpen ? trax.closeSheet : trax.openSheet}
               className={
-                "h-8 gap-1.5 px-2.5 text-[13px] font-medium text-primary dark:text-indigo-300 hover:bg-primary/10 hover:text-primary dark:hover:text-indigo-300 aria-expanded:bg-primary/10 " +
+                "h-8 gap-1.5 px-2.5 text-[13px] font-medium text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] hover:bg-primary/10 hover:text-primary dark:hover:text-[hsl(var(--v2-link,var(--primary)))] aria-expanded:bg-primary/10 " +
                 "dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:aria-expanded:bg-[hsl(var(--v2-hover,var(--muted)))] " +
                 (trax.sheetOpen ? "bg-primary/10 dark:bg-[hsl(var(--v2-hover,var(--muted)))]" : "") +
                 // On a phone the open page field takes the row (see phoneField).

@@ -365,27 +365,20 @@ export function ListTableHeader({ children }: { children: ReactNode }) {
   );
 }
 
-/** @deprecated v2 lists do not sort. Kept only so `ListHead`'s old `sort` prop still type-checks. */
-export type ListSortDirection = "asc" | "desc" | null;
-
 /**
  * A column name. Pass `className` for its width (`w-[20%]`), or `text-right`
  * for a trailing actions column.
  *
  * Plain text, never a sort control: every v2 list shows its rows newest added
- * first and the operator cannot re-order them (team lead, Sep 2026). `sort` is
- * still accepted so a call site not yet cleaned up keeps compiling, and it is
- * ignored: no button, no arrow, no `aria-sort`.
+ * first and the operator cannot re-order them (team lead, Sep 2026). No button,
+ * no arrow, no `aria-sort`.
  */
 export function ListHead({
   className,
   children,
-  sort: _ignoredSort,
   ...props
 }: Omit<ComponentProps<"th">, "children"> & {
   children?: ReactNode;
-  /** @deprecated Ignored. v2 lists do not sort; remove it from the call site. */
-  sort?: { direction: ListSortDirection; onSort: () => void };
 }) {
   return (
     <TableHead className={cn(LIST_CLASSES.head, className)} {...props}>

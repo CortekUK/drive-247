@@ -15,6 +15,7 @@ import { BookOpen } from 'lucide-react';
 import { useWelcomePackPrompt } from '@/hooks/use-welcome-pack';
 import { useTenant } from '@/contexts/TenantContext';
 import { isAreaHidden } from '@/lib/lean-areas';
+import { useYieldToSystemAnnouncements } from '@/lib/announcements/system-priority';
 
 const DISMISS_KEY = 'welcome-pack-prompt-dismissed-v';
 
@@ -32,6 +33,10 @@ const DISMISS_KEY = 'welcome-pack-prompt-dismissed-v';
  * Dismissal is remembered per version in localStorage so it does not reappear
  * on every navigation in a session, while a genuine completion (written to the
  * database) suppresses it permanently and across devices.
+ *
+ * A SYSTEM announcement dialog goes first (lib/announcements/system-priority.ts):
+ * while one is due or open this stays closed, and if it is already open and
+ * untouched it closes WITHOUT recording a dismissal and comes back afterwards.
  */
 export function WelcomePackPrompt({ suppressed = false }: { suppressed?: boolean }) {
   const router = useRouter();
@@ -72,11 +77,13 @@ export function WelcomePackPrompt({ suppressed = false }: { suppressed?: boolean
   // inherits it. `suppressed` stays what it always was — dialog stacking, not
   // tenancy — so the two concerns do not get tangled.
   const hidden = isAreaHidden('welcome', tenantSlug);
-  const open = shouldPrompt && !dismissed && !suppressed && !onPack && !hidden;
+  const { show: open, engage } = useYieldToSystemAnnouncements(
+    shouldPrompt && !dismissed && !suppressed && !onPack && !hidden,
+  );
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && dismiss()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md" onPointerDownCapture={engage} onKeyDownCapture={engage}>
         <DialogHeader>
           <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
             <BookOpen className="h-5 w-5" />

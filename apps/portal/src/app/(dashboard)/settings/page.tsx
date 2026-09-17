@@ -57,7 +57,8 @@ import { WhatsAppMetaSettings } from '@/components/settings/whatsapp-meta-settin
 import { CommunicationSettings } from '@/components/settings/communication-settings';
 import { SubscriptionSettings } from '@/components/settings/subscription-settings';
 import { TeslaFleetSettings } from '@/components/settings/tesla-fleet-settings';
-import { LockboxTemplatesSection } from '@/components/settings/lockbox-templates-section';
+import { AVAILABLE_VARIABLES as LOCKBOX_VARIABLES, DEFAULT_LOCKBOX_EMAIL, DEFAULT_LOCKBOX_INSTRUCTIONS, DEFAULT_LOCKBOX_SMS, LockboxTemplatesSection } from '@/components/settings/lockbox-templates-section';
+import { LockboxTemplatesSectionV2 } from '@/components/settings-v2/lockbox-templates-v2';
 import { PricingRulesSettings } from '@/components/settings/pricing-rules-settings';
 import { InstallmentConfigDialog } from '@/components/settings/installment-config-dialog';
 import { InstallmentSettings } from '@/components/settings/InstallmentSettings';
@@ -76,7 +77,7 @@ import { SettingsIndexV2 } from '@/components/settings-v2/settings-index';
 import * as BusinessV2 from '@/components/settings-v2/business-settings-states';
 import { BusinessRentalGate, DurationPageV2, LockboxPageV2, RequirementsPageV2, ReturnReminderPanelV2, makeBusinessSave } from '@/components/settings-v2/business-rules-pages';
 import { keepUnsavedBusinessEdits, rentalEditsCoveredBySections, rentalFormDiffers } from '@/components/settings-v2/business-rules-logic';
-import { SettingsField, SettingsPageHeader, SettingsPageHeaderSkeleton, SettingsPageSaveProvider, SettingsPanel, SettingsRow, SettingsStickySaveBar, Unit } from '@/components/settings-v2/settings-kit';
+import { SettingsField, SettingsPageHeader, SettingsPageHeaderSkeleton, SettingsPageSaveProvider, SettingsPanel, SettingsRow, SettingsSection, SettingsStickySaveBar, Unit, useScrollToSection } from '@/components/settings-v2/settings-kit';
 import { SectionSaveRegistration } from '@/components/settings-v2/business-section-save';
 import { LeaveDialogV2 } from '@/components/settings-v2/leave-dialog-v2';
 import { useLeaveGuardV2 } from '@/hooks/use-leave-guard-v2';
@@ -99,11 +100,16 @@ import {
   describeSaveError,
 } from '@/components/settings-v2/section-states';
 import {
+  V2_GENERAL_SECTIONS,
   canSaveV2Edits,
+  canViewAny,
   resolveSettingsPageData,
   resolveSettingsTabNotice,
+  resolveV2SettingsRoute,
+  settingsSectionId,
   settingsTabNoticeCopy,
   v2HasUnsavedEdits,
+  v2NoticePages,
 } from '@/components/settings-v2/settings-shell-state';
 
 /**
@@ -150,25 +156,25 @@ const MovedToWebsite = ({
  * v2 (northwind) settings pages, keyed by the `?tab=` they answer to.
  *
  * `/settings` with no tab is the index. Each entry is one compact page; several
- * v1 tabs' cards now share a page where they belong together (Booking rules
- * holds notice, duration and buffer; Customer messages holds the return
- * reminder and the template links). `permTab` is the v1 tab whose manager
- * permission the page follows, so access is unchanged.
+ * v1 tabs' cards now share a page where they belong together (General holds
+ * the regional settings and, as sections, Driver requirements, Booking rules,
+ * Key handover, Tax and fees, Security deposit and Booking site — see
+ * V2_GENERAL_SECTIONS in settings-shell-state, whose old `?tab=` values open
+ * General at that section; Customer messages holds the return reminder, the
+ * lockbox message and the template links). `permTab` is the v1 tab whose
+ * manager permission the page follows, so access is unchanged; General opens
+ * when any of its sections may be viewed, and each section keeps its own.
  *
  * Tabs an Integrations card owns are absent on purpose — the effect that sends
  * them to /integrations still runs — and `insurance` is here only because the
- * Bonzah card deep-links to its application wizard.
+ * Bonzah card deep-links to its application wizard. Installments, Pay as you
+ * go, Auto-extension, Promo codes and Extras keep their entries and render
+ * cases but are hidden (V2_HIDDEN_SETTINGS_PAGES): nothing opens them.
  */
 const V2_SETTINGS_PAGES: Record<string, { section: string; title: string; description: string; permTab: string }> = {
-  general: { section: 'Business', title: 'General', description: 'Currency, distance units and optional modules.', permTab: 'general' },
+  general: { section: 'Business', title: 'General', description: 'Regional settings, driver and booking rules, key handover, fees and deposits, and your booking site.', permTab: 'general' },
   locations: { section: 'Business', title: 'Locations', description: 'Where customers pick up and return cars, and where you deliver.', permTab: 'locations' },
-  requirements: { section: 'Bookings', title: 'Driver requirements', description: 'Who can rent from you, and the ID they must verify.', permTab: 'requirements' },
-  duration: { section: 'Bookings', title: 'Booking rules', description: 'How far ahead customers book, how long a rental can be, and the gap between rentals.', permTab: 'duration' },
-  lockbox: { section: 'Bookings', title: 'Key handover', description: 'Leave the keys in a lockbox and send the code to the customer.', permTab: 'lockbox' },
-  'booking-site': { section: 'Bookings', title: 'Booking site', description: 'What customers see when they book on your website.', permTab: 'general' },
-  pricing: { section: 'Pricing and payments', title: 'Pricing rules', description: 'Surcharges for weekends and holidays, and when monthly pricing starts.', permTab: 'pricing' },
-  fees: { section: 'Pricing and payments', title: 'Tax and fees', description: 'Charges added on top of the rental price.', permTab: 'fees' },
-  preauth: { section: 'Pricing and payments', title: 'Security deposit', description: 'A refundable amount taken on online bookings.', permTab: 'preauth' },
+  pricing: { section: 'Pricing', title: 'Custom pricing', description: 'Weekend and holiday surcharges, and when monthly pricing starts.', permTab: 'pricing' },
   installments: { section: 'Pricing and payments', title: 'Installments', description: 'Let customers pay for a rental in weekly or monthly parts.', permTab: 'installments' },
   payg: { section: 'Pricing and payments', title: 'Pay as you go', description: 'Bill long rentals day by day instead of all upfront.', permTab: 'payg' },
   'auto-extend': { section: 'Pricing and payments', title: 'Auto-extension', description: 'Rentals that renew each week or month and are billed in advance.', permTab: 'auto-extend' },
@@ -176,47 +182,52 @@ const V2_SETTINGS_PAGES: Record<string, { section: string; title: string; descri
   extras: { section: 'Pricing and payments', title: 'Extras', description: 'Add-ons customers can buy with a rental.', permTab: 'extras' },
   reminders: { section: 'Notifications', title: 'Team emails', description: 'Which emails your team receives.', permTab: 'reminders' },
   push: { section: 'Notifications', title: 'Push notifications', description: "Alerts on your team's phones and browsers.", permTab: 'push' },
-  templates: { section: 'Notifications', title: 'Customer messages', description: 'Reminders and documents your customers receive.', permTab: 'templates' },
+  templates: { section: 'Notifications', title: 'Customer messages', description: 'The reminders, emails and agreement your customers receive, including the lockbox code email.', permTab: 'templates' },
   insurance: { section: 'Bonzah', title: 'Bonzah application', description: 'Apply for Bonzah insurance. Everything else about Bonzah is in its Integrations card.', permTab: 'insurance' },
 };
 
 /**
- * v2 tabs whose home is another screen: Branding is the Appearance page (the
- * same name, logo, favicon and colours), the blacklist has its own route, and
- * Subscription is the sidebar's Billing page. Query strings are carried across,
- * so a Stripe checkout returning `&status=success` still lands with it.
- */
-/**
  * v2 pages that disable their own controls for a viewer, so the page-level
  * read-only fieldset (which would also lock Try again and list search) skips them.
- * Requirements, Booking rules, Key handover and Customer messages wrap every
- * control in their own fieldset (business-rules-pages, lockbox-templates-v2);
- * their Try again on a failed or stale read must stay usable.
- * Pricing rules, Tax and fees and Security deposit do the same per section
- * (pricing-rules-v2, fees-deposit-v2), with Try again outside each fieldset.
+ * General's sections and Customer messages wrap every control in their own
+ * fieldset (business-rules-pages, fees-deposit-v2, lockbox-templates-v2), each
+ * following its own permission; their Try again on a failed or stale read must
+ * stay usable. Custom pricing does the same per section (pricing-rules-v2),
+ * with Try again outside each fieldset.
  * Installments, Pay as you go and Auto-extension disable their own switches
  * (InstallmentSettings, payment-modes-v2); Promo codes and Extras render no
  * write control at all for a viewer. Inside the fieldset a viewer could not
  * retry a failed read, copy a promo code, open an installment example or press
  * "Show more" on a phone.
  */
-const V2_PAGES_GATING_OWN_CONTROLS = new Set(['reminders', 'push', 'general', 'locations', 'booking-site', 'requirements', 'duration', 'lockbox', 'templates', 'pricing', 'fees', 'preauth', 'installments', 'payg', 'auto-extend', 'promos', 'extras']);
+const V2_PAGES_GATING_OWN_CONTROLS = new Set(['reminders', 'push', 'general', 'locations', 'templates', 'pricing', 'installments', 'payg', 'auto-extend', 'promos', 'extras']);
 
 /**
  * v2 pages whose forms save through ONE sticky bar at the end of the page
  * (Reset + Save changes). Every form on them registers its save and discard
  * with the page (`registerV2SectionSave`), and inside the bar's
  * SettingsPageSaveProvider no panel shows a Save of its own. Holiday pricing
- * and reminder rules stay per item (dialogs and cards). Locations keeps its own
- * Save until it registers under "locations"; Installments keeps its own too.
+ * and reminder rules stay per item (dialogs and cards), as do Locations'
+ * delivery and collection locations (Locations registers the rest under
+ * "locations"). Installments keeps its own Save.
  */
-const V2_PAGES_WITH_SAVE_BAR = new Set(['general', 'booking-site', 'requirements', 'duration', 'lockbox', 'templates', 'pricing', 'fees', 'preauth']);
+const V2_PAGES_WITH_SAVE_BAR = new Set(['general', 'templates', 'pricing', 'locations']);
 
+/**
+ * v2 tabs whose home is another screen: Branding is the Appearance page (the
+ * same name, logo, favicon and colours), and Subscription is the sidebar's
+ * Billing page. Query strings are carried across, so a Stripe checkout
+ * returning `&status=success` still lands with it. The global blacklist is
+ * not here: it is out of Settings for now, so `?tab=blacklist` lands on the
+ * index with "isn't part of your workspace".
+ */
 const V2_SETTINGS_REDIRECTS: Record<string, string> = {
   branding: '/settings/appearance',
-  blacklist: '/settings/blacklist',
   subscription: '/subscription',
 };
+
+/** Customer messages, scrolled to the lockbox message (Key handover's Templates button). */
+const V2_LOCKBOX_MESSAGES_HREF = `/settings?tab=templates#${settingsSectionId('lockbox-messages')}`;
 
 /**
  * Light → dark colour sync.
@@ -991,9 +1002,9 @@ const Settings = () => {
   });
 
   // v2 (northwind): any rental save re-runs the sync below. Replacing the whole
-  // form wiped unsaved edits in a sibling section (on Key handover, saving the
-  // lockbox instructions undid an unsaved "turn lockbox on"), so v2 keeps the
-  // Business-rules fields the operator has edited (keepUnsavedBusinessEdits).
+  // form wiped unsaved edits in a sibling section (on General, flipping the ID
+  // waiver undid an unsaved fee), so v2 keeps every field a v2 section saves
+  // that the operator has edited (keepUnsavedBusinessEdits).
   // Every other tenant gets exactly setRentalForm(next), as before.
   const lastSyncedRentalForm = React.useRef<typeof rentalForm | null>(null);
   const syncRentalForm = (next: typeof rentalForm) => {
@@ -1124,10 +1135,12 @@ const Settings = () => {
     router.replace(`${SETTINGS_TAB_BOARD_ROUTE}${qs ? `?${qs}` : ''}`);
   }, [searchParams, tenantSlug, router]);
 
-  // v2: which compact page `?tab=` opens (null = the index), and the tabs whose
-  // v2 home is another screen. v1 never reads either.
+  // v2: which compact page `?tab=` opens (null = the index), the section of it
+  // an old tab now points at (`?tab=fees` opens General at Tax and fees), and
+  // the tabs whose v2 home is another screen. v1 never reads any of them.
   const v2TabParam = searchParams.get('tab');
-  const v2Page = v2Chrome && v2TabParam && V2_SETTINGS_PAGES[v2TabParam] ? v2TabParam : null;
+  const v2Route = v2Chrome ? resolveV2SettingsRoute(v2TabParam, V2_SETTINGS_PAGES) : null;
+  const v2Page = v2Route?.page ?? null;
   useEffect(() => {
     if (!v2Chrome) return;
     const tabParam = searchParams.get('tab');
@@ -1543,9 +1556,23 @@ const Settings = () => {
       }
 
       // v2 (northwind) sections registered above; always empty for other tenants.
-      Object.values(v2SectionSaves.current).forEach((save) => {
+      const v2Saves = Object.values(v2SectionSaves.current);
+      v2Saves.forEach((save) => {
         saves.push(Promise.resolve(save()).then(() => undefined));
       });
+      if (v2Chrome) {
+        // Every section finishes before the outcome is reported, so a failed one
+        // never leaves the bar idle while the others are still writing.
+        const results = await Promise.allSettled(saves);
+        // General's sections write the same tenants row at once, and each
+        // write's reply replaces the cached row: the last reply to arrive can
+        // predate another section's write, so a saved fee would read as unsaved.
+        // One read afterwards puts the cache, and so the form, on what was saved.
+        if (v2Saves.length > 1) void refetchRentalSettings();
+        const failed = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
+        if (failed) throw failed.reason;
+        return true;
+      }
       await Promise.all(saves);
       return true;
     } catch (err) {
@@ -1566,7 +1593,7 @@ const Settings = () => {
       });
       return false;
     }
-  }, [generalFormDirty, brandingFormDirty, generalForm, brandingForm, tenant, tenantBranding, updateSettingsAsync, updateTenantBranding, updateOrgBranding, refetchTenant, supabase, toast, v2Chrome]);
+  }, [generalFormDirty, brandingFormDirty, generalForm, brandingForm, tenant, tenantBranding, updateSettingsAsync, updateTenantBranding, updateOrgBranding, refetchTenant, refetchRentalSettings, supabase, toast, v2Chrome]);
 
   const {
     isDialogOpen: unsavedDialogOpen,
@@ -1609,6 +1636,15 @@ const Settings = () => {
     discardV2PageEdits();
     setV2LeaveSaveError(null);
   };
+  // Locations reports its unsaved edits while it is open (and clean when it
+  // closes). A "Don't save" out of it once left the flag set: the index and
+  // every other page went on warning, and General's save bar said "Unsaved
+  // changes" with nothing to save. Its edits live only in its own state, which
+  // is gone once another page opens, so the flag is cleared here as well. v1
+  // keeps its own flag.
+  useEffect(() => {
+    if (v2Chrome && v2Page !== 'locations') setLocationsDirty(false);
+  }, [v2Chrome, v2Page]);
 
   // Genuine edits only: what the sections registered (each compares numbers as
   // numbers), plus any rental-form field no registered section saves.
@@ -1664,6 +1700,32 @@ const Settings = () => {
   useEffect(() => {
     if (v2Chrome && !v2PageHasEdits) setV2LeaveSaveError(null);
   }, [v2Chrome, v2PageHasEdits]);
+
+  // v2: a deep link to one section of a page. `?tab=fees` scrolls General to
+  // Tax and fees; a `#settings-…` hash (Key handover's Templates button opens
+  // Customer messages at its lockbox message) does the same on any page. It
+  // waits until the settings the sections above it read are in (or failed),
+  // so their skeletons have given way and the section is not pushed down after
+  // the jump. The hash is read after each navigation: search params change,
+  // the hash does not reach them.
+  const [v2Hash, setV2Hash] = useState<string | null>(null);
+  useEffect(() => {
+    if (!v2Chrome) return;
+    const readHash = () => {
+      const hash = window.location.hash.replace(/^#/, '');
+      setV2Hash(hash.startsWith('settings-') ? hash : null);
+    };
+    readHash();
+    window.addEventListener('hashchange', readHash);
+    return () => window.removeEventListener('hashchange', readHash);
+  }, [v2Chrome, searchParams]);
+  const v2ScrollTarget = v2Route?.anchor ? settingsSectionId(v2Route.anchor) : v2Page ? v2Hash : null;
+  const v2SectionsReady =
+    !!tenant &&
+    !(isManager && v2PermissionsLoading) &&
+    (BusinessV2.hasRealRentalSettings(rentalSettings) || !!rentalSettingsError) &&
+    (BusinessV2.hasRealOrgSettings(settings) || !!error);
+  useScrollToSection(v2ScrollTarget, v2Chrome && v2SectionsReady);
 
   // Save & switch tab handler (needs saveAllDirtyForms defined above)
   const [isSavingForTab, setIsSavingForTab] = useState(false);
@@ -2594,20 +2656,32 @@ const Settings = () => {
   // Every other tenant falls through to the v1 <Tabs> below, untouched. The
   // state, save handlers and validation are the ones above — only the layout is
   // new. Settings an Integrations card manages have no page here at all, and
-  // the tabs that moved elsewhere (Branding → Appearance, Blacklist, and
-  // Subscription → Billing) are forwarded by the effect near the top.
+  // the tabs that moved elsewhere (Branding → Appearance, Subscription →
+  // Billing) are forwarded by the effect near the top.
   if (v2Chrome) {
     const pageMeta =
-      v2Page && canViewSettings(V2_SETTINGS_PAGES[v2Page].permTab) ? V2_SETTINGS_PAGES[v2Page] : null;
-    const canEditPage = pageMeta ? canEditSettings(pageMeta.permTab) : false;
+      // The route's permission: one tab, or for General any of its sections'.
+      v2Page && v2Route?.permTab && canViewAny(v2Route.permTab, canViewSettings) ? V2_SETTINGS_PAGES[v2Page] : null;
+    // General's sections, each under its own permission (only those this user may see).
+    const v2GeneralSections = V2_GENERAL_SECTIONS.filter((section) => canViewSettings(section.permTab));
+    // Customer messages carries the lockbox message, which follows Key handover's permission.
+    const v2ShowLockboxMessages = canViewSettings('lockbox');
+    const canEditPage = !pageMeta
+      ? false
+      : v2Page === 'general'
+        ? v2GeneralSections.some((section) => canEditSettings(section.permTab))
+        : v2Page === 'templates'
+          ? canEditSettings('templates') || (v2ShowLockboxMessages && canEditSettings('lockbox'))
+          : canEditSettings(pageMeta.permTab);
 
     // Why a `?tab=` link opened the index instead of a page: no access, a tab
-    // this workspace hides, or a value that never existed. Until the slug
-    // resolves every known tab counts as hidden, so a board hand-off never
-    // flashes an "isn't part of your workspace" notice before it redirects.
+    // this workspace hides (or Settings no longer shows), or a value that never
+    // existed. Until the slug resolves every known tab counts as hidden, so a
+    // board hand-off never flashes an "isn't part of your workspace" notice
+    // before it redirects.
     const v2TabNotice = resolveSettingsTabNotice({
       tabParam: v2TabParam,
-      pages: V2_SETTINGS_PAGES,
+      pages: v2NoticePages(V2_SETTINGS_PAGES),
       redirects: V2_SETTINGS_REDIRECTS,
       allTabs: allSettingsTabs,
       canView: canViewSettings,
@@ -2652,187 +2726,22 @@ const Settings = () => {
     const renderBody = (page: string): React.ReactNode => {
       switch (page) {
         case 'general': {
-          // v2 states: nothing editable until the real org settings and tenant are
-          // in (the placeholder is USD / miles), a relabel confirm, an inline save
-          // error, and a Fleet Health switch that stays locked if its read failed.
+          // One page of sections (V2_GENERAL_SECTIONS), each shown and edited
+          // under its own permission, each loading and failing on its own:
+          // a failed org-settings read no longer hides the rental sections.
+          const canEditGeneral = canEditSettings('general');
+          // Regional: nothing editable until the real org settings and tenant
+          // are in (the placeholder is USD / miles), a relabel confirm, and an
+          // inline save error. Optional modules: a Fleet Health switch that
+          // stays locked if its read failed.
           const v2SavedCurrency = settings?.currency_code || tenant?.currency_code || 'USD';
           const v2FleetHealthReady = BusinessV2.hasRealRentalSettings(rentalSettings);
           const v2FleetHealthFailed =
             !v2FleetHealthReady && queryClient.getQueryState(['rental-settings', tenant?.id])?.status === 'error';
-          return (
-            <div className="space-y-10">
-              <BusinessV2.BusinessRegionalPanel
-                form={generalForm}
-                onFormChange={(patch) => setGeneralForm(prev => ({ ...prev, ...patch }))}
-                savedCurrency={v2SavedCurrency}
-                isDirty={generalFormDirty}
-                canEdit={canEditPage}
-                ready={BusinessV2.hasRealOrgSettings(settings) && !!tenant}
-                loadError={error}
-                onRetryLoad={() => queryClient.refetchQueries({ queryKey: ['org-settings'] })}
-                onSave={async () => {
-                  await BusinessV2.saveGeneralSettingsV2({
-                    tenantId: tenant?.id,
-                    values: generalForm,
-                    policyVersionChanged:
-                      generalForm.privacy_policy_version !== (tenant?.privacy_policy_version || '1.0') ||
-                      generalForm.terms_version !== (tenant?.terms_version || '1.0'),
-                    writeTenant: async (patch) =>
-                      await supabase.from('tenants').update(patch as never).eq('id', tenant?.id as string).select('id'),
-                    writeOrg: (patch) => updateSettingsAsync(patch),
-                  });
-                  await refetchTenant();
-                  logAction({ action: "settings_updated", entityType: "settings", entityId: tenant?.id || "unknown", details: { section: "general" } });
-                }}
-                onDiscard={() =>
-                  setGeneralForm({
-                    currency_code: v2SavedCurrency,
-                    distance_unit: (settings?.distance_unit as 'km' | 'miles') || (tenant?.distance_unit as 'km' | 'miles') || 'miles',
-                    privacy_policy_version: tenant?.privacy_policy_version || '1.0',
-                    terms_version: tenant?.terms_version || '1.0',
-                  })
-                }
-                registerSave={registerV2SectionSave}
-              />
+          const v2ShowOptionalModules =
+            isV2("turo", tenantSlug) || !hideVehicleOwnersToggle || !isAreaHidden('fleet-health', tenantSlug);
 
-              {(isV2("turo", tenantSlug) || !hideVehicleOwnersToggle || !isAreaHidden('fleet-health', tenantSlug)) && (
-                !tenant ? (
-                  <BusinessV2.SettingsPanelSkeleton title rows={1} descriptionLines={2} label="Loading optional modules" />
-                ) : (
-                <SettingsPanel
-                  title="Optional modules"
-                  description="Each one adds a page to your sidebar and saves as soon as you flip it. Switching one off hides the page and deletes nothing."
-                >
-                  {isV2("turo", tenantSlug) && (
-                    <SettingsRow
-                      label="Turo Sync"
-                      description="See your Turo trips here and import them as bookings. Needs the Drive247 Chrome extension and your Turo host account signed in."
-                    >
-                      <Switch
-                        checked={turoSyncEnabled}
-                        onCheckedChange={handleToggleTuroSync}
-                        disabled={savingTuroSync || !canEditSettings('general')}
-                        aria-label="Toggle Turo Sync feature"
-                      />
-                    </SettingsRow>
-                  )}
-                  {!hideVehicleOwnersToggle && (
-                    <SettingsRow
-                      label="Vehicle owners and payouts"
-                      description="Track who owns each car and pay them their share."
-                    >
-                      <Switch
-                        checked={vehicleOwnersEnabled}
-                        onCheckedChange={handleToggleVehicleOwners}
-                        disabled={savingVehicleOwners || !canEditSettings('general')}
-                        aria-label="Toggle Vehicle Owners feature"
-                      />
-                    </SettingsRow>
-                  )}
-                  {!isAreaHidden('fleet-health', tenantSlug) && (
-                    <SettingsRow
-                      label="Fleet health"
-                      description="Checks your cars every night for services and documents that are due soon or overdue."
-                      note={
-                        v2FleetHealthFailed ? (
-                          <SettingsDependencyNotice
-                            tone="warning"
-                            title="Couldn't load this setting"
-                            body="The switch stays locked until it loads, so it can't be flipped by mistake."
-                            action={{
-                              label: 'Try again',
-                              onClick: () => void queryClient.refetchQueries({ queryKey: ['rental-settings', tenant?.id] }),
-                            }}
-                          />
-                        ) : undefined
-                      }
-                    >
-                      <Switch
-                        checked={fleetHealthEnabled}
-                        onCheckedChange={handleToggleFleetHealth}
-                        aria-busy={!v2FleetHealthReady && !v2FleetHealthFailed}
-                        disabled={savingFleetHealth || !canEditSettings('general') || !v2FleetHealthReady}
-                        aria-label="Toggle Fleet Health feature"
-                      />
-                    </SettingsRow>
-                  )}
-                </SettingsPanel>
-                )
-              )}
-            </div>
-          );
-        }
-
-        case 'locations':
-          return (
-            <div className="settings-v2-body">
-              <LocationSettings onDirtyChangeV2={setLocationsDirty} />
-            </div>
-          );
-
-        case 'requirements':
-          return (
-            <BusinessRentalGate thing="your driver requirements" rows={3}>
-              <RequirementsPageV2
-                form={rentalForm}
-                setForm={setRentalForm}
-                saved={rentalSettings}
-                canEdit={canEditPage}
-                onSave={makeBusinessSave(updateRentalSettings, refetchTenant)}
-                registerSave={registerV2SectionSave}
-                idWaiver={{
-                  enabled: idWaiverEnabled,
-                  canChange: isHeadAdmin,
-                  saving: savingIdWaiver,
-                  onToggle: (next) =>
-                    savePricingFlag(
-                      'allow_rental_without_id_verification',
-                      next,
-                      idWaiverEnabled,
-                      persistedIdWaiver,
-                      setPendingIdWaiver,
-                      setSavingIdWaiver,
-                      next
-                        ? 'Staff can now create rentals without ID verification'
-                        : 'ID verification is required again',
-                    ),
-                }}
-              />
-            </BusinessRentalGate>
-          );
-
-        case 'duration':
-          return (
-            <BusinessRentalGate thing="your booking rules" rows={4}>
-              <DurationPageV2
-                form={rentalForm}
-                setForm={setRentalForm}
-                saved={rentalSettings}
-                canEdit={canEditPage}
-                onSave={makeBusinessSave(updateRentalSettings, refetchTenant)}
-                registerSave={registerV2SectionSave}
-              />
-            </BusinessRentalGate>
-          );
-
-        case 'lockbox':
-          return (
-            <BusinessRentalGate thing="your key handover settings" rows={4}>
-              <LockboxPageV2
-                form={rentalForm}
-                setForm={setRentalForm}
-                saved={rentalSettings}
-                canEdit={canEditPage}
-                onSave={makeBusinessSave(updateRentalSettings, refetchTenant)}
-                registerSave={registerV2SectionSave}
-                smsReady={!!tenant?.integration_twilio_sms}
-                integrationsHref="/integrations?open=Twilio%20Messages"
-                vehiclesHref="/vehicles"
-              />
-            </BusinessRentalGate>
-          );
-
-        case 'booking-site': {
+          // Booking site: the header and footer colours, saved by the page's save bar.
           const v2BrandingState = queryClient.getQueryState(['tenant-branding', tenant?.id]);
           const v2BrandingReady = v2BrandingState?.data !== undefined;
           const v2BrandingFailed = !v2BrandingReady && v2BrandingState?.status === 'error';
@@ -2840,8 +2749,8 @@ const Settings = () => {
             !!tenantBranding &&
             (brandingForm.light_header_footer_color !== (tenantBranding.light_header_footer_color || '') ||
               brandingForm.dark_header_footer_color !== (tenantBranding.dark_header_footer_color || ''));
-          // Saved by the page's save bar: the same payloads, and it rejects on a
-          // failure so the bar says so (the page toasts it).
+          // The same payloads as before, and it rejects on a failure so the bar
+          // says so (the page toasts it).
           const saveHeaderFooter = async () => {
             setIsSavingBranding(true);
             try {
@@ -2862,134 +2771,358 @@ const Settings = () => {
               light_header_footer_color: tenantBranding?.light_header_footer_color || '',
               dark_header_footer_color: tenantBranding?.dark_header_footer_color || '',
             }));
+
+          const sectionBody = (anchor: string): React.ReactNode => {
+            switch (anchor) {
+              case 'regional':
+                return (
+                  <BusinessV2.BusinessRegionalPanel
+                    form={generalForm}
+                    onFormChange={(patch) => setGeneralForm(prev => ({ ...prev, ...patch }))}
+                    savedCurrency={v2SavedCurrency}
+                    isDirty={generalFormDirty}
+                    canEdit={canEditGeneral}
+                    ready={BusinessV2.hasRealOrgSettings(settings) && !!tenant}
+                    loadError={error}
+                    onRetryLoad={() => queryClient.refetchQueries({ queryKey: ['org-settings'] })}
+                    onSave={async () => {
+                      await BusinessV2.saveGeneralSettingsV2({
+                        tenantId: tenant?.id,
+                        values: generalForm,
+                        policyVersionChanged:
+                          generalForm.privacy_policy_version !== (tenant?.privacy_policy_version || '1.0') ||
+                          generalForm.terms_version !== (tenant?.terms_version || '1.0'),
+                        writeTenant: async (patch) =>
+                          await supabase.from('tenants').update(patch as never).eq('id', tenant?.id as string).select('id'),
+                        writeOrg: (patch) => updateSettingsAsync(patch),
+                      });
+                      await refetchTenant();
+                      logAction({ action: "settings_updated", entityType: "settings", entityId: tenant?.id || "unknown", details: { section: "general" } });
+                    }}
+                    onDiscard={() =>
+                      setGeneralForm({
+                        currency_code: v2SavedCurrency,
+                        distance_unit: (settings?.distance_unit as 'km' | 'miles') || (tenant?.distance_unit as 'km' | 'miles') || 'miles',
+                        privacy_policy_version: tenant?.privacy_policy_version || '1.0',
+                        terms_version: tenant?.terms_version || '1.0',
+                      })
+                    }
+                    registerSave={registerV2SectionSave}
+                  />
+                );
+
+              case 'driver-requirements':
+                return (
+                  <BusinessRentalGate thing="your driver requirements" rows={3}>
+                    <RequirementsPageV2
+                      form={rentalForm}
+                      setForm={setRentalForm}
+                      saved={rentalSettings}
+                      canEdit={canEditSettings('requirements')}
+                      onSave={makeBusinessSave(updateRentalSettings, refetchTenant)}
+                      registerSave={registerV2SectionSave}
+                      idWaiver={{
+                        enabled: idWaiverEnabled,
+                        canChange: isHeadAdmin,
+                        saving: savingIdWaiver,
+                        onToggle: (next) =>
+                          savePricingFlag(
+                            'allow_rental_without_id_verification',
+                            next,
+                            idWaiverEnabled,
+                            persistedIdWaiver,
+                            setPendingIdWaiver,
+                            setSavingIdWaiver,
+                            next
+                              ? 'Staff can now create rentals without ID verification'
+                              : 'ID verification is required again',
+                          ),
+                      }}
+                    />
+                  </BusinessRentalGate>
+                );
+
+              case 'booking-rules':
+                return (
+                  <BusinessRentalGate thing="your booking rules" rows={4}>
+                    <DurationPageV2
+                      form={rentalForm}
+                      setForm={setRentalForm}
+                      saved={rentalSettings}
+                      canEdit={canEditSettings('duration')}
+                      onSave={makeBusinessSave(updateRentalSettings, refetchTenant)}
+                      registerSave={registerV2SectionSave}
+                    />
+                  </BusinessRentalGate>
+                );
+
+              case 'key-handover':
+                return (
+                  <BusinessRentalGate thing="your key handover settings" rows={4}>
+                    <LockboxPageV2
+                      form={rentalForm}
+                      setForm={setRentalForm}
+                      saved={rentalSettings}
+                      canEdit={canEditSettings('lockbox')}
+                      onSave={makeBusinessSave(updateRentalSettings, refetchTenant)}
+                      registerSave={registerV2SectionSave}
+                      vehiclesHref="/vehicles"
+                      templatesHref={V2_LOCKBOX_MESSAGES_HREF}
+                    />
+                  </BusinessRentalGate>
+                );
+
+              case 'tax-and-fees':
+                return (
+                  <FeesSettingsV2
+                    form={rentalForm}
+                    setForm={setRentalForm}
+                    saved={rentalSettings as any}
+                    read={v2RentalRead}
+                    canEdit={canEditSettings('fees')}
+                    currencyCode={tenant?.currency_code || 'USD'}
+                    onSave={(values) => updateRentalSettings(values as any)}
+                    registerSave={registerV2SectionSave}
+                  />
+                );
+
+              case 'security-deposit':
+                return (
+                  <DepositSettingsV2
+                    form={rentalForm}
+                    setForm={setRentalForm}
+                    saved={rentalSettings as any}
+                    read={v2RentalRead}
+                    holds={v2HoldsRead}
+                    liveHoldCount={liveHoldCount}
+                    canEdit={canEditSettings('preauth')}
+                    currencyCode={tenant?.currency_code || 'USD'}
+                    paymentProvider={tenant?.payment_provider}
+                    connectHref={SETTINGS_TAB_BOARD_ROUTE}
+                    onRequestCharge={() => setShowChargeConfirm(true)}
+                    onSave={(values) => updateRentalSettings(values as any)}
+                    registerSave={registerV2SectionSave}
+                  />
+                );
+
+              case 'booking-site':
+                return (
+                  <div className="space-y-6">
+                    {!tenant ? (
+                      <SettingsSectionSkeleton variant="form" rows={4} label="Loading booking site options" />
+                    ) : (
+                    <SettingsPanel>
+                      <SettingsRow
+                        label="Ask about gig driving"
+                        description="Customers who drive for Uber, Lyft or DoorDash can say so and upload proof."
+                      >
+                        <Switch
+                          checked={gigDriverEnabled}
+                          onCheckedChange={handleToggleGigDriver}
+                          disabled={savingGigDriver || !canEditGeneral}
+                          aria-label="Toggle Gig Driver booking option"
+                        />
+                      </SettingsRow>
+                      <SettingsRow
+                        label="Show the average daily price"
+                        description="Vehicle cards show the price per day for the chosen dates, instead of the base rate."
+                      >
+                        <Switch
+                          checked={avgDailyEnabled}
+                          onCheckedChange={(next) => savePricingFlag('show_effective_daily_rate', next, avgDailyEnabled, persistedAvgDaily, setPendingAvgDaily, setSavingAvgDaily, next ? 'Showing effective average daily price' : 'Showing base rate on vehicle cards')}
+                          disabled={savingAvgDaily || !canEditGeneral}
+                          aria-label="Toggle effective daily price on vehicle cards"
+                        />
+                      </SettingsRow>
+                      <SettingsRow
+                        label="Hide the price breakdown at checkout"
+                        description="Checkout shows only the rental total, tax and grand total."
+                      >
+                        <Switch
+                          checked={hideBreakdownEnabled}
+                          onCheckedChange={(next) => savePricingFlag('hide_checkout_price_breakdown', next, hideBreakdownEnabled, persistedHideBreakdown, setPendingHideBreakdown, setSavingHideBreakdown, next ? 'Checkout price breakdown hidden' : 'Checkout price breakdown shown')}
+                          disabled={savingHideBreakdown || !canEditGeneral}
+                          aria-label="Toggle checkout price breakdown"
+                        />
+                      </SettingsRow>
+                      <SettingsRow
+                        label="Hide plate and VIN numbers"
+                        description="Kept off your booking site, invoices and customer emails. Your staff still see them here."
+                        note={
+                          hideRegEnabled ? (
+                            <p className={warnText}>
+                              Photos are not changed. Open each vehicle and use Trax to hide the number plate on its photos.
+                            </p>
+                          ) : undefined
+                        }
+                      >
+                        <Switch
+                          checked={hideRegEnabled}
+                          onCheckedChange={(next) =>
+                            savePricingFlag(
+                              'hide_vehicle_registration',
+                              next,
+                              hideRegEnabled,
+                              persistedHideReg,
+                              setPendingHideReg,
+                              setSavingHideReg,
+                              next ? 'Registration numbers hidden from customers' : 'Registration numbers visible to customers',
+                            )
+                          }
+                          disabled={savingHideReg || !canEditGeneral}
+                          aria-label="Toggle vehicle registration visibility"
+                        />
+                      </SettingsRow>
+                    </SettingsPanel>
+                    )}
+
+                    {!v2BrandingReady ? (
+                      v2BrandingFailed ? (
+                        <SettingsLoadError
+                          thing="your header and footer colours"
+                          error={v2BrandingState?.error}
+                          onRetry={() => queryClient.refetchQueries({ queryKey: ['tenant-branding', tenant?.id] })}
+                          retrying={v2BrandingState?.fetchStatus === 'fetching'}
+                        />
+                      ) : (
+                        <SettingsSectionSkeleton variant="form" rows={2} header label="Loading header and footer colours" />
+                      )
+                    ) : (
+                    <SettingsPanel
+                      title="Header and footer colour"
+                      description="The top bar and footer of your booking site, and the sidebar of your customers' account area."
+                      footer={
+                        canEditGeneral ? (
+                          <>
+                            <SectionSaveRegistration
+                              registerSave={registerV2SectionSave}
+                              sectionKey="booking-site-colours"
+                              isDirty={headerFooterDirty}
+                              save={saveHeaderFooter}
+                              discard={discardHeaderFooter}
+                            />
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-muted-foreground"
+                              onClick={() => setBrandingForm(prev => ({ ...prev, light_header_footer_color: '', dark_header_footer_color: '' }))}
+                            >
+                              Use default
+                            </Button>
+                          </>
+                        ) : undefined
+                      }
+                    >
+                      <SettingsReadOnlyFieldset readOnly={!canEditGeneral}>
+                      <div className="grid gap-6 px-5 py-4 md:grid-cols-2">
+                        <ColorPicker
+                          label="Light mode"
+                          value={brandingForm.light_header_footer_color || '#1A2B25'}
+                          onChange={(color) => setBrandingForm(prev => ({ ...prev, light_header_footer_color: color }))}
+                          description="When a visitor's site is in light mode."
+                        />
+                        <ColorPicker
+                          label="Dark mode"
+                          value={brandingForm.dark_header_footer_color || '#1A2B25'}
+                          onChange={(color) => setBrandingForm(prev => ({ ...prev, dark_header_footer_color: color }))}
+                          description="When a visitor's site is in dark mode — what most visitors see."
+                        />
+                      </div>
+                      </SettingsReadOnlyFieldset>
+                    </SettingsPanel>
+                    )}
+                  </div>
+                );
+
+              case 'optional-modules':
+                return !tenant ? (
+                  <BusinessV2.SettingsPanelSkeleton rows={1} descriptionLines={2} label="Loading optional modules" />
+                ) : (
+                  <SettingsPanel>
+                    {isV2("turo", tenantSlug) && (
+                      <SettingsRow
+                        label="Turo Sync"
+                        description="See your Turo trips here and import them as bookings. Needs the Drive247 Chrome extension and your Turo host account signed in."
+                      >
+                        <Switch
+                          checked={turoSyncEnabled}
+                          onCheckedChange={handleToggleTuroSync}
+                          disabled={savingTuroSync || !canEditSettings('general')}
+                          aria-label="Toggle Turo Sync feature"
+                        />
+                      </SettingsRow>
+                    )}
+                    {!hideVehicleOwnersToggle && (
+                      <SettingsRow
+                        label="Vehicle owners and payouts"
+                        description="Track who owns each car and pay them their share."
+                      >
+                        <Switch
+                          checked={vehicleOwnersEnabled}
+                          onCheckedChange={handleToggleVehicleOwners}
+                          disabled={savingVehicleOwners || !canEditSettings('general')}
+                          aria-label="Toggle Vehicle Owners feature"
+                        />
+                      </SettingsRow>
+                    )}
+                    {!isAreaHidden('fleet-health', tenantSlug) && (
+                      <SettingsRow
+                        label="Fleet health"
+                        description="Checks your cars every night for services and documents that are due soon or overdue."
+                        note={
+                          v2FleetHealthFailed ? (
+                            <SettingsDependencyNotice
+                              tone="warning"
+                              title="Couldn't load this setting"
+                              body="The switch stays locked until it loads, so it can't be flipped by mistake."
+                              action={{
+                                label: 'Try again',
+                                onClick: () => void queryClient.refetchQueries({ queryKey: ['rental-settings', tenant?.id] }),
+                              }}
+                            />
+                          ) : undefined
+                        }
+                      >
+                        <Switch
+                          checked={fleetHealthEnabled}
+                          onCheckedChange={handleToggleFleetHealth}
+                          aria-busy={!v2FleetHealthReady && !v2FleetHealthFailed}
+                          disabled={savingFleetHealth || !canEditSettings('general') || !v2FleetHealthReady}
+                          aria-label="Toggle Fleet Health feature"
+                        />
+                      </SettingsRow>
+                    )}
+                  </SettingsPanel>
+                );
+
+              default:
+                return null;
+            }
+          };
+
           return (
             <div className="space-y-10">
-              {!tenant ? (
-                <SettingsSectionSkeleton variant="form" rows={4} label="Loading booking site options" />
-              ) : (
-              <SettingsPanel>
-                <SettingsRow
-                  label="Ask about gig driving"
-                  description="Customers who drive for Uber, Lyft or DoorDash can say so and upload proof."
-                >
-                  <Switch
-                    checked={gigDriverEnabled}
-                    onCheckedChange={handleToggleGigDriver}
-                    disabled={savingGigDriver || !canEditPage}
-                    aria-label="Toggle Gig Driver booking option"
-                  />
-                </SettingsRow>
-                <SettingsRow
-                  label="Show the average daily price"
-                  description="Vehicle cards show the price per day for the chosen dates, instead of the base rate."
-                >
-                  <Switch
-                    checked={avgDailyEnabled}
-                    onCheckedChange={(next) => savePricingFlag('show_effective_daily_rate', next, avgDailyEnabled, persistedAvgDaily, setPendingAvgDaily, setSavingAvgDaily, next ? 'Showing effective average daily price' : 'Showing base rate on vehicle cards')}
-                    disabled={savingAvgDaily || !canEditPage}
-                    aria-label="Toggle effective daily price on vehicle cards"
-                  />
-                </SettingsRow>
-                <SettingsRow
-                  label="Hide the price breakdown at checkout"
-                  description="Checkout shows only the rental total, tax and grand total."
-                >
-                  <Switch
-                    checked={hideBreakdownEnabled}
-                    onCheckedChange={(next) => savePricingFlag('hide_checkout_price_breakdown', next, hideBreakdownEnabled, persistedHideBreakdown, setPendingHideBreakdown, setSavingHideBreakdown, next ? 'Checkout price breakdown hidden' : 'Checkout price breakdown shown')}
-                    disabled={savingHideBreakdown || !canEditPage}
-                    aria-label="Toggle checkout price breakdown"
-                  />
-                </SettingsRow>
-                <SettingsRow
-                  label="Hide plate and VIN numbers"
-                  description="Kept off your booking site, invoices and customer emails. Your staff still see them here."
-                  note={
-                    hideRegEnabled ? (
-                      <p className={warnText}>
-                        Photos are not changed. Open each vehicle and use Trax to hide the number plate on its photos.
-                      </p>
-                    ) : undefined
-                  }
-                >
-                  <Switch
-                    checked={hideRegEnabled}
-                    onCheckedChange={(next) =>
-                      savePricingFlag(
-                        'hide_vehicle_registration',
-                        next,
-                        hideRegEnabled,
-                        persistedHideReg,
-                        setPendingHideReg,
-                        setSavingHideReg,
-                        next ? 'Registration numbers hidden from customers' : 'Registration numbers visible to customers',
-                      )
-                    }
-                    disabled={savingHideReg || !canEditPage}
-                    aria-label="Toggle vehicle registration visibility"
-                  />
-                </SettingsRow>
-              </SettingsPanel>
-              )}
-
-              {!v2BrandingReady ? (
-                v2BrandingFailed ? (
-                  <SettingsLoadError
-                    thing="your header and footer colours"
-                    error={v2BrandingState?.error}
-                    onRetry={() => queryClient.refetchQueries({ queryKey: ['tenant-branding', tenant?.id] })}
-                    retrying={v2BrandingState?.fetchStatus === 'fetching'}
-                  />
-                ) : (
-                  <SettingsSectionSkeleton variant="form" rows={2} header label="Loading header and footer colours" />
-                )
-              ) : (
-              <SettingsPanel
-                title="Header and footer colour"
-                description="The top bar and footer of your booking site, and the sidebar of your customers' account area."
-                footer={
-                  canEditPage ? (
-                    <>
-                      <SectionSaveRegistration
-                        registerSave={registerV2SectionSave}
-                        sectionKey="booking-site-colours"
-                        isDirty={headerFooterDirty}
-                        save={saveHeaderFooter}
-                        discard={discardHeaderFooter}
-                      />
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-muted-foreground"
-                        onClick={() => setBrandingForm(prev => ({ ...prev, light_header_footer_color: '', dark_header_footer_color: '' }))}
-                      >
-                        Use default
-                      </Button>
-                    </>
-                  ) : undefined
-                }
-              >
-                <SettingsReadOnlyFieldset readOnly={!canEditPage}>
-                <div className="grid gap-6 px-5 py-4 md:grid-cols-2">
-                  <ColorPicker
-                    label="Light mode"
-                    value={brandingForm.light_header_footer_color || '#1A2B25'}
-                    onChange={(color) => setBrandingForm(prev => ({ ...prev, light_header_footer_color: color }))}
-                    description="When a visitor's site is in light mode."
-                  />
-                  <ColorPicker
-                    label="Dark mode"
-                    value={brandingForm.dark_header_footer_color || '#1A2B25'}
-                    onChange={(color) => setBrandingForm(prev => ({ ...prev, dark_header_footer_color: color }))}
-                    description="When a visitor's site is in dark mode — what most visitors see."
-                  />
-                </div>
-                </SettingsReadOnlyFieldset>
-              </SettingsPanel>
-              )}
+              {v2GeneralSections
+                .filter((section) => section.anchor !== 'optional-modules' || v2ShowOptionalModules)
+                .map((section) => (
+                  <SettingsSection
+                    key={section.anchor}
+                    anchor={section.anchor}
+                    title={section.title}
+                    description={section.description}
+                    // A partly editable page: the page shows no "View only", so
+                    // a section this user may only look at says it here.
+                    action={canEditPage && !canEditSettings(section.permTab) ? <SettingsReadOnlyNotice /> : undefined}
+                  >
+                    {sectionBody(section.anchor)}
+                  </SettingsSection>
+                ))}
             </div>
           );
         }
+
+        case 'locations':
+          return <LocationSettings onDirtyChangeV2={setLocationsDirty} registerSave={registerV2SectionSave} />;
 
         case 'pricing':
           return (
@@ -3009,39 +3142,6 @@ const Settings = () => {
                 },
                 read: v2RentalRead,
               }}
-            />
-          );
-
-        case 'fees':
-          return (
-            <FeesSettingsV2
-              form={rentalForm}
-              setForm={setRentalForm}
-              saved={rentalSettings as any}
-              read={v2RentalRead}
-              canEdit={canEditPage}
-              currencyCode={tenant?.currency_code || 'USD'}
-              onSave={(values) => updateRentalSettings(values as any)}
-              registerSave={registerV2SectionSave}
-            />
-          );
-
-        case 'preauth':
-          return (
-            <DepositSettingsV2
-              form={rentalForm}
-              setForm={setRentalForm}
-              saved={rentalSettings as any}
-              read={v2RentalRead}
-              holds={v2HoldsRead}
-              liveHoldCount={liveHoldCount}
-              canEdit={canEditPage}
-              currencyCode={tenant?.currency_code || 'USD'}
-              paymentProvider={tenant?.payment_provider}
-              connectHref={SETTINGS_TAB_BOARD_ROUTE}
-              onRequestCharge={() => setShowChargeConfirm(true)}
-              onSave={(values) => updateRentalSettings(values as any)}
-              registerSave={registerV2SectionSave}
             />
           );
 
@@ -3294,11 +3394,9 @@ const Settings = () => {
           );
 
         case 'templates': {
-          const hours = rentalForm.return_reminder_hours;
-          const when =
-            hours >= 24
-              ? `${Math.floor(hours / 24)} day${Math.floor(hours / 24) !== 1 ? 's' : ''}${hours % 24 > 0 ? ` ${hours % 24}h` : ''}`
-              : `${hours} hours`;
+          // The return reminder and the template links follow the Customer
+          // messages permission; the lockbox message follows Key handover's.
+          const canEditTemplates = canEditSettings('templates');
           return (
             <div className="space-y-10">
               <BusinessRentalGate thing="your return reminder" rows={1}>
@@ -3306,7 +3404,7 @@ const Settings = () => {
                   form={rentalForm}
                   setForm={setRentalForm}
                   saved={rentalSettings}
-                  canEdit={canEditPage}
+                  canEdit={canEditTemplates}
                   onSave={makeBusinessSave(updateRentalSettings, refetchTenant)}
                   registerSave={registerV2SectionSave}
                   smsReady={!!tenant?.integration_twilio_sms}
@@ -3334,7 +3432,7 @@ const Settings = () => {
                         router.push('/settings/email-templates');
                       }}
                     >
-                      {canEditPage ? 'Edit emails' : 'View emails'}
+                      {canEditTemplates ? 'Edit emails' : 'View emails'}
                     </a>
                   </Button>
                 </SettingsRow>
@@ -3351,11 +3449,29 @@ const Settings = () => {
                         router.push('/settings/agreement-templates');
                       }}
                     >
-                      {canEditPage ? 'Edit agreement' : 'View agreement'}
+                      {canEditTemplates ? 'Edit agreement' : 'View agreement'}
                     </a>
                   </Button>
                 </SettingsRow>
               </SettingsPanel>
+
+              {/* The lockbox code email, moved here from Key handover (whose
+                  Templates button links to this id). Email only: the code is
+                  never texted, so the text-message template is not shown. */}
+              {v2ShowLockboxMessages && (
+                <div id={settingsSectionId('lockbox-messages')} className="scroll-mt-24">
+                  <LockboxTemplatesSectionV2
+                    defaults={{ instructions: DEFAULT_LOCKBOX_INSTRUCTIONS, email: DEFAULT_LOCKBOX_EMAIL, sms: DEFAULT_LOCKBOX_SMS }}
+                    variables={LOCKBOX_VARIABLES}
+                    registerSave={registerV2SectionSave}
+                    channels={['email']}
+                    keyHandoverHref="/settings?tab=lockbox"
+                    // The page says "View only" when nothing here is editable;
+                    // when only the rest is, this section says it itself.
+                    readOnlyNotice={canEditTemplates}
+                  />
+                </div>
+              )}
             </div>
           );
         }
@@ -3382,6 +3498,7 @@ const Settings = () => {
           <SettingsIndexV2
             canView={canViewSettings}
             tenantSlug={tenantSlug}
+            isHeadAdmin={isHeadAdmin}
             notice={
               v2TabNoticeCopy ? (
                 <SettingsDependencyNotice
@@ -3398,15 +3515,7 @@ const Settings = () => {
           // 50 + 26 + 16 = 92, the sidebar switch's row, as on the index.
           <div className="w-full max-w-[1160px] space-y-8 pb-16 md:pt-[26px]">
             <SettingsPageHeader title={pageMeta.title} description={pageMeta.description} />
-            {v2PageData.kind === 'loading' && v2Page === 'general' ? (
-              // Shaped like the loaded page: the regional panel, then Optional modules.
-              <div className="space-y-10">
-                <BusinessV2.SettingsPanelSkeleton rows={2} label="Loading regional settings" />
-                {(isV2("turo", tenantSlug) || !hideVehicleOwnersToggle || !isAreaHidden('fleet-health', tenantSlug)) && (
-                  <BusinessV2.SettingsPanelSkeleton title rows={1} descriptionLines={2} label="Loading optional modules" />
-                )}
-              </div>
-            ) : v2PageData.kind === 'loading' ? (
+            {v2PageData.kind === 'loading' ? (
               <SettingsSectionSkeleton variant="form" rows={4} label={`Loading ${pageMeta.title}`} />
             ) : v2PageData.kind === 'error' ? (
               <SettingsLoadError
@@ -3420,8 +3529,9 @@ const Settings = () => {
                 {!canEditPage && <SettingsReadOnlyNotice />}
                 {/* A native disabled fieldset: keyboard-safe, unlike the old
                     pointer-events wrapper, and values stay selectable.
-                    Team emails, Push, General, Locations, Booking site and the
-                    Business-rules pages gate every control themselves, so they
+                    Team emails, Push, General (each section under its own
+                    permission), Locations, Custom pricing and Customer messages
+                    gate every control themselves, so they
                     sit outside it: a disabled fieldset would also disable the
                     reading actions a viewer needs there (Try again on a failed
                     read, the reminder category tabs, searching a long location

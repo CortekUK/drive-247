@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
+import type { CSSProperties } from "react";
+import { cache } from "react";
 import { headers } from "next/headers";
 import { Manrope } from "next/font/google";
 import { createClient } from "@supabase/supabase-js";
 import { Providers } from "./providers";
+import { v2BrandVars } from "@/lib/appearance/color";
 import "@/global.css";
 // Scoped v2 design tokens. Inert unless <body> carries `v2-theme`, which is
 // decided per-tenant below — so importing it changes nothing for v1 tenants.
@@ -46,18 +49,34 @@ const defaultMetadata: Metadata = {
   icons: { icon: PLATFORM_FAVICONS, apple: "/icons/apple-touch-icon.png" },
 };
 
-export async function generateMetadata(): Promise<Metadata> {
-  try {
-    const headersList = await headers();
-    const tenantSlug = headersList.get("x-tenant-slug");
+type PortalTenantRow = {
+  app_name: string | null;
+  company_name: string | null;
+  meta_title: string | null;
+  meta_description: string | null;
+  favicon_url: string | null;
+  og_image_url: string | null;
+  primary_color?: string | null;
+  light_primary_color?: string | null;
+};
 
-    if (!tenantSlug) return defaultMetadata;
-
+/**
+ * The one server-side read of the tenant row, shared by `generateMetadata` and
+ * the layout below. React `cache` memoises it for the request, so a v2-theme
+ * tenant, which needs its brand colour on <body> as well, still makes a single
+ * round trip. `withBrand` is only ever true for a v2-theme tenant: every other
+ * tenant's query names exactly the columns it always did.
+ *
+ * Null when Supabase is not configured. Throws only if the client itself does;
+ * each caller keeps its own fallback.
+ */
+const readPortalTenant = cache(
+  async (tenantSlug: string, withBrand: boolean): Promise<PortalTenantRow | null> => {
     if (
       !process.env.NEXT_PUBLIC_SUPABASE_URL ||
       !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
     ) {
-      return defaultMetadata;
+      return null;
     }
 
     const supabase = createClient(
@@ -65,13 +84,29 @@ export async function generateMetadata(): Promise<Metadata> {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
     );
 
-    const { data: tenant } = await supabase
+    const columns =
+      "app_name, company_name, meta_title, meta_description, favicon_url, og_image_url" +
+      (withBrand ? ", primary_color, light_primary_color" : "");
+
+    const { data } = await supabase
       .from("tenants")
-      .select(
-        "app_name, company_name, meta_title, meta_description, favicon_url, og_image_url"
-      )
+      .select(columns)
       .eq("slug", tenantSlug)
       .single();
+
+    // A select built from a runtime string is untyped to supabase-js.
+    return (data as unknown as PortalTenantRow | null) ?? null;
+  }
+);
+
+export async function generateMetadata(): Promise<Metadata> {
+  try {
+    const headersList = await headers();
+    const tenantSlug = headersList.get("x-tenant-slug");
+
+    if (!tenantSlug) return defaultMetadata;
+
+    const tenant = await readPortalTenant(tenantSlug, isV2("theme", tenantSlug));
 
     if (!tenant) return defaultMetadata;
 
@@ -171,6 +206,23 @@ export default async function RootLayout({
   // The font variable rides with the theme gate, so v1 tenants are untouched.
   const fontClass = v2Flags.theme ? manrope.variable : undefined;
 
+  // The tenant's brand colour on the first byte, for the v2 theme only. The
+  // stylesheet derives every brand-coloured token from these vars on <body>;
+  // use-dynamic-theme writes the same vars after hydration and on every
+  // change, so without this the page would paint indigo and then switch.
+  // Fails open: any error, or no colour, leaves the stylesheet's defaults.
+  // v1 tenants skip it entirely — no query, no style attribute.
+  let brandStyle: CSSProperties | undefined;
+  if (v2Flags.theme && tenantSlug) {
+    try {
+      const tenant = await readPortalTenant(tenantSlug, true);
+      const vars = v2BrandVars(tenant?.light_primary_color || tenant?.primary_color);
+      brandStyle = vars ? (vars as CSSProperties) : undefined;
+    } catch {
+      brandStyle = undefined;
+    }
+  }
+
   return (
     <html lang="en" suppressHydrationWarning className={fontClass}>
       <head>
@@ -181,9 +233,14 @@ export default async function RootLayout({
           href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
           rel="stylesheet"
         />
-        <script dangerouslySetInnerHTML={{ __html: brandingScript }} />
+        {/* v1 only. The cached CSS is v1's tokens on :root, which the v2
+            theme overrides on <body> anyway; v2 gets its colour from the
+            brand vars on <body> below instead. */}
+        {v2Flags.theme ? null : (
+          <script dangerouslySetInnerHTML={{ __html: brandingScript }} />
+        )}
       </head>
-      <body suppressHydrationWarning className={themeClass}>
+      <body suppressHydrationWarning className={themeClass} style={brandStyle}>
         <V2Provider flags={v2Flags}>
           <Providers>{children}</Providers>
         </V2Provider>

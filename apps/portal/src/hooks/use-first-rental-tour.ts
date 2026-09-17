@@ -14,6 +14,10 @@ import { useRentalCreationGate } from '@/hooks/use-rental-creation-gate';
 import { arrivalHoldMs } from '@/lib/first-run-arrival';
 import { toast } from '@/hooks/use-toast';
 import {
+  getSystemAnnouncementPriority,
+  useSystemAnnouncementPriority,
+} from '@/lib/announcements/system-priority';
+import {
   AUTOSTART_DELAY_MS,
   REPLAY_TOUR_EVENT,
   buildTour,
@@ -26,8 +30,11 @@ import {
   resolveStep,
   routePathname,
   routeSearch,
+  safeStorage,
   shouldAutostartTour,
   stepIsOnRoute,
+  tourProgressKey,
+  tourSeenKey,
   writeTourProgress,
   MAX_RESUME_PROMPTS,
   type ResolvedStep,
@@ -98,6 +105,23 @@ import {
  * same happens when the operator clicks the very thing being pointed at on a
  * step that opens a dialog (Add Vehicle, Add Customer): they are doing the
  * real thing, and a coach mark floating over the dialog would be in the way.
+ *
+ * SYSTEM ANNOUNCEMENTS GO FIRST
+ * ----------------------------
+ * A system announcement dialog outranks everything here that opens BY ITSELF
+ * (lib/announcements/system-priority.ts). While one is due or open:
+ *   - autostart, the silent resume after a reload, and the resume prompt do not
+ *     start;
+ *   - a run that STARTED BY ITSELF (autostart or silent resume) and that the
+ *     operator has not touched yet (no Next, no Back) steps aside: the "seen"
+ *     flag and the saved progress go back to exactly what they were before it
+ *     launched, and it launches again once the dialog is closed;
+ *   - the resume prompt steps aside without counting as one of its
+ *     `MAX_RESUME_PROMPTS` offers, and comes back after the close.
+ * Nothing is recorded as skipped, dismissed or paused for yielding. A run the
+ * operator started (the menu, a tab's tour button, Resume, Start over) or has
+ * pressed Next/Back in is NOT interrupted: its card carries no
+ * `data-yields-to-system`, so the system dialog waits for the tour to end.
  */
 
 /** How long to wait for a step's anchor before skipping the step. */
@@ -151,6 +175,44 @@ export interface FirstRentalTourState {
   dismissPrompt: () => void;
   /** Is this user/tenant eligible at all? Drives the menu item's visibility. */
   isEligible: boolean;
+  /**
+   * The run on screen started by itself and the operator has not touched it, so
+   * it steps aside for a system announcement dialog. Rendered as
+   * `data-yields-to-system` on the card and the transit pill (the resume prompt
+   * always yields).
+   */
+  yieldsToSystem: boolean;
+}
+
+/**
+ * A run that launched by itself, with the storage it overwrote, so stepping aside
+ * for a system announcement can put everything back exactly as it was.
+ */
+interface AutoRun {
+  kind: 'autostart' | 'resume';
+  seenRaw: string | null;
+  progressRaw: string | null;
+}
+
+function readRaw(key: string): string | null {
+  const storage = safeStorage();
+  if (!storage) return null;
+  try {
+    return storage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function restoreRaw(key: string, raw: string | null): void {
+  const storage = safeStorage();
+  if (!storage) return;
+  try {
+    if (raw === null) storage.removeItem(key);
+    else storage.setItem(key, raw);
+  } catch {
+    // Blocked storage: nothing was written in the first place.
+  }
 }
 
 export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
@@ -174,6 +236,18 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
   const [steps, setSteps] = useState<readonly TourStep[]>([]);
   const [index, setIndex] = useState(0);
   const [current, setCurrent] = useState<ResolvedStep | null>(null);
+
+  // A system announcement dialog is due or on screen: it goes first.
+  const systemBusy = useSystemAnnouncementPriority() !== 'idle';
+  /** Set while the run on screen launched by itself and is still untouched. */
+  const [autoRun, setAutoRunState] = useState<AutoRun | null>(null);
+  const autoRunRef = useRef<AutoRun | null>(null);
+  const setAutoRun = useCallback((next: AutoRun | null) => {
+    autoRunRef.current = next;
+    setAutoRunState(next);
+  }, []);
+  /** The resume prompt stepped aside for a system dialog; bring it back without counting it again. */
+  const promptYieldedRef = useRef(false);
 
   const isCanary = isLeanTenant(tenant?.slug);
   const appUserId = appUser?.id ?? null;
@@ -251,11 +325,12 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
     navRef.current = null;
     timedOutRouteRef.current = null;
     activeTabTourRef.current = null;
+    setAutoRun(null);
     setCurrent(null);
     setSteps([]);
     setIndex(0);
     setPhase('idle');
-  }, []);
+  }, [setAutoRun]);
 
   /** Make step `i` of `list` current. Persists first, then transits. */
   const goTo = useCallback(
@@ -317,7 +392,8 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
     clearAll();
   }, [appUserId, clearAll]);
 
-  const next = useCallback(() => {
+  /** One step forward, or finish from the last. Says nothing about who asked. */
+  const advance = useCallback(() => {
     const i = indexRef.current;
     if (i >= stepsRef.current.length - 1) {
       finish();
@@ -326,9 +402,16 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
     goTo(i + 1);
   }, [finish, goTo]);
 
+  const next = useCallback(() => {
+    // The operator is driving now; a system dialog waits for the tour to end.
+    setAutoRun(null);
+    advance();
+  }, [advance, setAutoRun]);
+
   const back = useCallback(() => {
+    setAutoRun(null);
     goTo(Math.max(0, indexRef.current - 1));
-  }, [goTo]);
+  }, [goTo, setAutoRun]);
 
   /**
    * The anchor never mounted (or left). Move on — or, if this was the last
@@ -337,8 +420,9 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
   const skipForward = useCallback(() => {
     const step = stepsRef.current[indexRef.current];
     if (step?.route) timedOutRouteRef.current = routePathname(step.route);
-    next();
-  }, [next]);
+    // Not the operator's doing, so an untouched run stays untouched.
+    advance();
+  }, [advance]);
 
   /** The card noticed its anchor detached. Try again, then skip. */
   const anchorLost = useCallback(() => {
@@ -352,7 +436,13 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
    * two anchored steps — a walkthrough of an intro and a finale is not one.
    */
   const launch = useCallback(
-    (opts: { markSeen: boolean; fromIndex?: number; tour?: TabTour | null }): boolean => {
+    (opts: {
+      markSeen: boolean;
+      fromIndex?: number;
+      tour?: TabTour | null;
+      /** Launched by the page itself rather than by the operator. */
+      auto?: AutoRun['kind'];
+    }): boolean => {
       if (typeof document === 'undefined') return false;
       const tabTour = opts.tour ?? null;
       // `sampleIds` is read from the DOM, so it is resolved HERE — once, at
@@ -365,6 +455,16 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
         : ctxRef.current;
       const built = buildTour(ctx, tabTour ? tabTour.steps : undefined);
       if (!isTourWorthRunning(built)) return false;
+      // Before anything below writes: what to put back if this run has to step
+      // aside, untouched, for a system announcement dialog.
+      const auto: AutoRun | null =
+        opts.auto && !tabTour
+          ? {
+              kind: opts.auto,
+              seenRaw: readRaw(tourSeenKey(appUserId)),
+              progressRaw: readRaw(tourProgressKey(appUserId)),
+            }
+          : null;
       // UP FRONT, before any state flips — so a re-render, a second effect pass
       // or another tab cannot fire this twice.
       if (opts.markSeen && !tabTour) markTourSeen(appUserId);
@@ -383,9 +483,10 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
         : null;
       setSteps(built);
       goTo(start, built);
+      setAutoRun(auto);
       return true;
     },
-    [appUserId, goTo],
+    [appUserId, goTo, setAutoRun],
   );
 
   // --- Resume-prompt actions ----------------------------------------------
@@ -513,6 +614,10 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
   useEffect(() => {
     if (autostartDone.current || phase !== 'idle') return;
     if (!gatesSettled) return;
+    // A system announcement dialog goes first; this effect re-runs when it is closed.
+    // Read the store too: the host publishes in a layout effect of the SAME commit this
+    // effect belongs to, after this render took its snapshot.
+    if (systemBusy || getSystemAnnouncementPriority() !== 'idle') return;
     // An interrupted run is the resume effect's business, not autostart's.
     if (readTourProgress(appUserId)) return;
 
@@ -540,12 +645,14 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
     const wait = AUTOSTART_DELAY_MS + arrivalHoldMs();
     const timer = setTimeout(() => {
       if (autostartDone.current || phaseRef.current !== 'idle') return;
-      if (launch({ markSeen: true })) autostartDone.current = true;
+      if (getSystemAnnouncementPriority() !== 'idle') return;
+      if (launch({ markSeen: true, auto: 'autostart' })) autostartDone.current = true;
     }, wait);
     return () => clearTimeout(timer);
   }, [
     phase,
     gatesSettled,
+    systemBusy,
     isCanary,
     hasV2Chrome,
     pathname,
@@ -563,12 +670,19 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
   // most, and never on any other page.
   const promptedOnThisVisit = useRef(false);
   useEffect(() => {
-    if (pathname !== '/') promptedOnThisVisit.current = false;
+    if (pathname !== '/') {
+      promptedOnThisVisit.current = false;
+      promptYieldedRef.current = false;
+    }
   }, [pathname]);
 
   useEffect(() => {
     if (phase !== 'idle') return;
     if (!isEligible || suppressed || wizardPending || !gatesSettled) return;
+    // A system announcement dialog goes first; this effect re-runs when it is closed.
+    // The store as well as the snapshot, as in autostart above: never offer (and count)
+    // a prompt that would only step aside in the next render.
+    if (systemBusy || getSystemAnnouncementPriority() !== 'idle') return;
     const progress = readTourProgress(appUserId);
     if (!progress) return;
 
@@ -579,10 +693,16 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
     }
     const decision = decideResume(progress, pathname, built);
     if (decision.kind === 'resume') {
-      launch({ markSeen: false, fromIndex: decision.index });
+      launch({ markSeen: false, fromIndex: decision.index, auto: 'resume' });
       return;
     }
     if (decision.kind === 'prompt') {
+      if (promptYieldedRef.current) {
+        // It already counted when it first came up, then stepped aside.
+        promptYieldedRef.current = false;
+        setPhase('prompt');
+        return;
+      }
       if (promptedOnThisVisit.current) return;
       if (progress.prompts >= MAX_RESUME_PROMPTS) {
         // Asked enough. Silence is their answer.
@@ -597,7 +717,7 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
       });
       setPhase('prompt');
     }
-  }, [phase, isEligible, suppressed, wizardPending, gatesSettled, appUserId, pathname, launch]);
+  }, [phase, isEligible, suppressed, wizardPending, gatesSettled, systemBusy, appUserId, pathname, launch]);
 
   // --- Replay, from the user menu ----------------------------------------
   useEffect(() => {
@@ -645,6 +765,27 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
     return () => window.removeEventListener(RUN_TAB_TOUR_EVENT, onRunTab);
   }, [isEligible, launch, appUserId]);
 
+  // A system announcement dialog became due while something of ours that
+  // opened BY ITSELF is on screen and untouched: step aside, recording nothing.
+  // The resume prompt goes idle without spending one of its offers; an untouched
+  // autostart or silent resume puts "seen" and the saved progress back exactly as
+  // they were, so the effects above launch it again once the dialog is closed. A
+  // run the operator is driving is left alone: the dialog waits for it to end.
+  useEffect(() => {
+    if (!systemBusy || phase === 'idle') return;
+    if (phase === 'prompt') {
+      promptYieldedRef.current = true;
+      setPhase('idle');
+      return;
+    }
+    const auto = autoRunRef.current;
+    if (!auto) return;
+    restoreRaw(tourSeenKey(appUserId), auto.seenRaw);
+    restoreRaw(tourProgressKey(appUserId), auto.progressRaw);
+    if (auto.kind === 'autostart') autostartDone.current = false;
+    clearAll();
+  }, [systemBusy, phase, appUserId, clearAll]);
+
   // The paywall can come up mid-tour (a webhook lands, the gate latches). The
   // tour must get out of its way rather than sit on top of a modal the operator
   // cannot dismiss. Pausing keeps their place for when the gate clears.
@@ -676,6 +817,7 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
     startOver,
     dismissPrompt,
     isEligible,
+    yieldsToSystem: phase === 'prompt' || (phase !== 'idle' && autoRun !== null),
   };
 }
 

@@ -1,12 +1,11 @@
 /**
  * v2 Settings, Business rules pages (`components/settings-v2/business-rules-pages.tsx`):
  * the load gate, validation instead of silent clamps, per-section save state,
- * view-only, and the Twilio / WhatsApp dependency notices.
+ * view-only, the email-only Key handover, and the v2 controls.
  *
  * HARNESS: `react-dom/client` + `act` (the repo lacks `@testing-library/dom`),
  * the same approach as `settings-section-states.test.tsx`. The rental-settings
- * hook, permissions and the lockbox messages editor are mocked, so nothing here
- * touches Supabase.
+ * hook and permissions are mocked, so nothing here touches Supabase.
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
@@ -23,21 +22,6 @@ vi.mock("@/hooks/use-rental-settings", () => ({
 
 vi.mock("@/hooks/use-manager-permissions", () => ({
   useManagerPermissions: () => ({ canEditSettings: () => true, canViewSettings: () => true }),
-}));
-
-vi.mock("@/components/settings/lockbox-templates-section", () => ({
-  AVAILABLE_VARIABLES: [],
-  DEFAULT_LOCKBOX_INSTRUCTIONS: "",
-  DEFAULT_LOCKBOX_EMAIL: { subject: "", body: "" },
-  DEFAULT_LOCKBOX_SMS: { body: "" },
-}));
-
-vi.mock("@/components/settings-v2/lockbox-templates-v2", () => ({
-  LockboxTemplatesSectionV2: (props: { readOnlyNotice?: boolean }) => (
-    <div data-testid="lockbox-messages" data-read-only-notice={String(props.readOnlyNotice)}>
-      lockbox messages
-    </div>
-  ),
 }));
 
 vi.mock("next/link", () => ({
@@ -338,6 +322,8 @@ describe("DurationPageV2", () => {
   });
 });
 
+const TEMPLATES_HREF = "/settings?tab=templates#settings-lockbox-messages";
+
 describe("LockboxPageV2", () => {
   const base = {
     lockbox_enabled: true,
@@ -346,7 +332,7 @@ describe("LockboxPageV2", () => {
     lockbox_send_offset_minutes: 45,
   };
 
-  const mount = (savedRow: Record<string, any>, smsReady: boolean, onSave: any = vi.fn()) =>
+  const mount = (savedRow: Record<string, any>, onSave: any = vi.fn(), canEdit = true) =>
     render(
       <Harness
         page="lockbox"
@@ -356,53 +342,68 @@ describe("LockboxPageV2", () => {
             form={form}
             setForm={setForm}
             saved={savedRow}
-            canEdit
+            canEdit={canEdit}
             onSave={onSave}
-            smsReady={smsReady}
-            integrationsHref="/integrations?open=Twilio%20Messages"
             vehiclesHref="/vehicles"
+            templatesHref={TEMPLATES_HREF}
           />
         )}
       />,
     );
 
-  it("warns when codes are set to go by text but Twilio isn't connected", () => {
-    mount({ ...base, lockbox_notification_methods: ["sms"] }, false);
-    expect(text()).toContain("Text messages aren't set up");
-    const link = container.querySelector<HTMLAnchorElement>('a[href="/integrations?open=Twilio%20Messages"]');
-    expect(link?.textContent).toContain("Connect Twilio");
-  });
-
-  it("says WhatsApp is no longer sent", () => {
-    mount({ ...base, lockbox_notification_methods: ["whatsapp"] }, true);
-    expect(text()).toContain("WhatsApp codes aren't sent any more");
-    expect(text()).toContain("Customers get their code by email instead.");
+  it("sends the code by email only: no text message or WhatsApp choice, and no Twilio notice", () => {
+    mount({ ...base, lockbox_notification_methods: ["sms"] });
+    const method = container.querySelector("[data-lockbox-method]");
+    expect(method?.getAttribute("data-lockbox-method")).toBe("email");
+    expect(method?.textContent).toBe("Email");
+    expect(container.querySelector('[role="radio"]')).toBeNull();
+    expect(container.querySelector('[role="radiogroup"]')).toBeNull();
+    expect(text()).not.toContain("Text message");
+    expect(text()).not.toContain("WhatsApp");
+    expect(text()).not.toContain("Twilio");
   });
 
   it("refuses a code length of 0", () => {
-    mount(base, true);
+    mount(base);
     typeInto(input("#v2_lockbox_code_length"), "0");
     expect(text()).toContain("Enter 1–20 digits, or leave it blank for any length.");
     expect(button("Save").disabled).toBe(true);
   });
 
-  it("when off, says where codes are set and still shows the messages section", () => {
-    mount({ ...base, lockbox_enabled: false }, true);
+  it("when off, says where codes are set and where the email is edited, with no messages editor on the page", () => {
+    mount({ ...base, lockbox_enabled: false });
     expect(container.querySelector('a[href="/vehicles"]')?.textContent).toBe("vehicle page");
-    expect(container.querySelector('[data-testid="lockbox-messages"]')).not.toBeNull();
+    expect(container.querySelector(`a[href="${TEMPLATES_HREF}"]`)?.textContent).toBe("Customer messages");
+    expect(container.querySelector('[data-settings-section="lockbox-messages"]')).toBeNull();
+    // Only the switch row: code length, method, timing and Templates wait for it.
+    expect(container.querySelector("#v2_lockbox_code_length")).toBeNull();
+    expect(container.querySelector("[data-lockbox-method]")).toBeNull();
   });
 
-  it("tracks a delivery-method change as unsaved and saves it", async () => {
-    const onSave = vi.fn().mockResolvedValue(undefined);
-    mount({ ...base, lockbox_notification_methods: ["sms"] }, true, onSave);
+  it("Templates opens the lockbox message on Customer messages, as a link a view-only user can still follow", () => {
+    mount(base, vi.fn(), false);
+    const templates = container.querySelector<HTMLAnchorElement>(`a[href="${TEMPLATES_HREF}"]`);
+    expect(templates?.textContent).toBe("Templates");
+    expect(templates?.closest("fieldset")?.disabled).toBe(true);
+    // A disabled fieldset disables buttons, never links.
+    expect(templates?.matches(":disabled")).toBe(false);
+  });
+
+  it("a text-message method saved before is not an unsaved edit on its own", () => {
+    mount({ ...base, lockbox_notification_methods: ["sms"] });
     expect(button("Save").disabled).toBe(true);
-    const email = container.querySelector<HTMLButtonElement>('button[role="radio"][value="email"]')!;
-    act(() => email.click());
+    expect(text()).not.toContain("Unsaved changes");
+  });
+
+  it("saving writes email, replacing a text-message method saved before", async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    mount({ ...base, lockbox_notification_methods: ["sms"] }, onSave);
+    typeInto(input("#v2_lockbox_code_length"), "8");
     expect(text()).toContain("Unsaved changes");
     await act(async () => button("Save").click());
     expect(onSave).toHaveBeenCalledWith({
       lockbox_enabled: true,
-      lockbox_code_length: 6,
+      lockbox_code_length: 8,
       lockbox_notification_methods: ["email"],
       lockbox_send_offset_minutes: 45,
     });
@@ -632,9 +633,8 @@ describe("LockboxPageV2 switch", () => {
             saved={off}
             canEdit
             onSave={vi.fn()}
-            smsReady
-            integrationsHref="/integrations?open=Twilio%20Messages"
             vehiclesHref="/vehicles"
+            templatesHref={TEMPLATES_HREF}
           />
         )}
       />,
@@ -773,9 +773,9 @@ describe("business pages with extreme stored values", () => {
   });
 });
 
-describe("Key handover: method radio and messages notice", () => {
-  const savedRow = { lockbox_enabled: true, lockbox_code_length: 6, lockbox_notification_methods: ["sms"], lockbox_send_offset_minutes: 45 };
-  const mountLockbox = () =>
+describe("Key handover: links", () => {
+  it("inline links lighten in dark mode", () => {
+    const savedRow = { lockbox_enabled: false, lockbox_code_length: 6, lockbox_notification_methods: ["email"], lockbox_send_offset_minutes: 45 };
     render(
       <Harness
         page="lockbox"
@@ -787,49 +787,14 @@ describe("Key handover: method radio and messages notice", () => {
             saved={savedRow}
             canEdit
             onSave={vi.fn()}
-            smsReady
-            integrationsHref="/integrations?open=Twilio%20Messages"
             vehiclesHref="/vehicles"
+            templatesHref={TEMPLATES_HREF}
           />
         )}
       />,
     );
-
-  it("marks the checked method with primary, not the v1 accent that is near-white under the v2 theme", () => {
-    mountLockbox();
-    const sms = container.querySelector("#v2-lockbox-method-sms")!;
-    expect(sms.getAttribute("data-state")).toBe("checked");
-    expect(sms.className).toContain("data-[state=checked]:border-primary");
-    expect(sms.className).not.toContain("data-[state=checked]:border-accent");
-    expect(sms.className).toContain("[&_svg]:fill-primary");
-    expect(sms.className).toContain("dark:[&_svg]:fill-indigo-300");
-  });
-
-  it("inline links lighten in dark mode", () => {
-    render(
-      <Harness
-        page="lockbox"
-        saved={{ ...savedRow, lockbox_enabled: false }}
-        render={({ form, setForm }) => (
-          <LockboxPageV2
-            form={form}
-            setForm={setForm}
-            saved={{ ...savedRow, lockbox_enabled: false }}
-            canEdit
-            onSave={vi.fn()}
-            smsReady
-            integrationsHref="/integrations?open=Twilio%20Messages"
-            vehiclesHref="/vehicles"
-          />
-        )}
-      />,
-    );
-    expect(container.querySelector('a[href="/vehicles"]')?.className).toContain("dark:text-indigo-300");
-  });
-
-  it("tells the messages section not to repeat the page's View only notice", () => {
-    mountLockbox();
-    expect(container.querySelector('[data-testid="lockbox-messages"]')?.getAttribute("data-read-only-notice")).toBe("false");
+    expect(container.querySelector('a[href="/vehicles"]')?.className).toContain("dark:text-[hsl(var(--v2-link,var(--primary)))]");
+    expect(container.querySelector(`a[href="${TEMPLATES_HREF}"]`)?.className).toContain("dark:text-[hsl(var(--v2-link,var(--primary)))]");
   });
 });
 
@@ -930,9 +895,8 @@ describe("inside the page's one save bar (SettingsPageSaveProvider)", () => {
               saved={saved}
               canEdit
               onSave={vi.fn()}
-              smsReady
-              integrationsHref="/integrations"
               vehiclesHref="/vehicles"
+              templatesHref={TEMPLATES_HREF}
             />
           )}
         />
@@ -1012,6 +976,58 @@ describe("row spacing", () => {
   });
 });
 
+describe("v2 controls (ui-v2 Select, Input and Switch)", () => {
+  it("Driver requirements: the ID document is the v2 dropdown, the age box and the waiver switch are v2", () => {
+    const saved = { minimum_rental_age: 21, verification_document_type: "passport" };
+    render(
+      <Harness
+        page="requirements"
+        saved={saved}
+        render={({ form, setForm }) => (
+          <RequirementsPageV2
+            form={form}
+            setForm={setForm}
+            saved={saved}
+            canEdit
+            onSave={vi.fn()}
+            idWaiver={{ enabled: false, canChange: true, saving: false, onToggle: () => undefined }}
+          />
+        )}
+      />,
+    );
+    expect(container.querySelector("#v2_verification_document_type")?.getAttribute("data-slot")).toBe("select-trigger");
+    expect(input("#v2_minimum_rental_age").getAttribute("data-slot")).toBe("input");
+    expect(container.querySelector('[aria-label="Allow rentals without ID verification"]')?.getAttribute("data-slot")).toBe("switch");
+  });
+
+  it("Booking rules: the advance notice unit is the v2 dropdown", () => {
+    const saved = { booking_lead_time_hours: 24, booking_lead_time_unit: "hours", min_rental_days: 0, min_rental_hours: 4, max_rental_days: 90, buffer_time_minutes: 0 };
+    render(
+      <Harness
+        page="duration"
+        saved={saved}
+        render={({ form, setForm }) => <DurationPageV2 form={form} setForm={setForm} saved={saved} canEdit onSave={vi.fn()} />}
+      />,
+    );
+    expect(container.querySelector('[aria-label="Advance notice unit"]')?.getAttribute("data-slot")).toBe("select-trigger");
+  });
+
+  it("Key handover: Send it automatically is the v2 dropdown, and the switch is v2", () => {
+    const saved = { lockbox_enabled: true, lockbox_code_length: 6, lockbox_notification_methods: ["email"], lockbox_send_offset_minutes: 45 };
+    render(
+      <Harness
+        page="lockbox"
+        saved={saved}
+        render={({ form, setForm }) => (
+          <LockboxPageV2 form={form} setForm={setForm} saved={saved} canEdit onSave={vi.fn()} vehiclesHref="/vehicles" templatesHref={TEMPLATES_HREF} />
+        )}
+      />,
+    );
+    expect(container.querySelector("#v2_lockbox_send_offset")?.getAttribute("data-slot")).toBe("select-trigger");
+    expect(container.querySelector('[aria-label="Enable lockbox handover"]')?.getAttribute("data-slot")).toBe("switch");
+  });
+});
+
 describe("settings page wiring for the Business-rules pages (v2 branch)", () => {
   // Read as text: the page is too large to mount here. Behaviour of the helper is
   // covered in settings-business-rules-logic.test.ts.
@@ -1032,9 +1048,9 @@ describe("settings page wiring for the Business-rules pages (v2 branch)", () => 
 
   it("has no 'Unsaved changes' chip row under the header: one save bar at the end of the page says it", () => {
     expect(source).not.toContain("V2_PAGES_WITH_OWN_SAVE_STATUS");
-    expect(source).toContain(
-      "const V2_PAGES_WITH_SAVE_BAR = new Set(['general', 'booking-site', 'requirements', 'duration', 'lockbox', 'templates', 'pricing', 'fees', 'preauth']);",
-    );
+    // The Business-rules pages, Booking site, Tax and fees and Security deposit
+    // are sections of General, so they save through General's bar.
+    expect(source).toContain("const V2_PAGES_WITH_SAVE_BAR = new Set(['general', 'templates', 'pricing', 'locations']);");
     expect(source).toContain("<SettingsPageSaveProvider enabled={v2PageHasSaveBar}>");
     expect(source).toContain("{canEditPage && v2PageHasSaveBar && (\n                  <SettingsStickySaveBar");
   });

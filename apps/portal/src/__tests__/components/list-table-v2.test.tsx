@@ -102,15 +102,19 @@ describe('ListHead and ListCell', () => {
     expect(classes).not.toContain('text-center');
   });
 
-  it('never renders a sort control, even when a call site still passes sort', () => {
-    const onSort = vi.fn();
-    const th = head({ children: 'Name', sort: { direction: 'asc', onSort } });
+  it('never renders a sort control', () => {
+    const th = head({ children: 'Name' });
     expect(th.querySelector('button')).toBeNull();
     expect(th.querySelector('svg')).toBeNull();
     expect(th.hasAttribute('aria-sort')).toBe(false);
     expect(th.textContent).toBe('Name');
-    fireEvent.click(th);
-    expect(onSort).not.toHaveBeenCalled();
+  });
+
+  it('no longer takes the deprecated sort prop or exports its direction type', () => {
+    const kitSource = readFileSync(resolve(process.cwd(), 'src/components/shared/list-table-v2.tsx'), 'utf8');
+    expect(kitSource).not.toContain('ListSortDirection');
+    expect(kitSource).not.toMatch(/\bsort\??:/);
+    expect(kitSource).not.toContain('_ignoredSort');
   });
 
   it('centres a cell', () => {

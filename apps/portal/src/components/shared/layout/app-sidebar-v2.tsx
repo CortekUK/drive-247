@@ -753,14 +753,14 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
             {collapsed ? (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Link href="/rentals" className="flex items-center justify-center w-full h-8 rounded-md hover:bg-primary/10 hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-indigo-300 transition-colors">
+                  <Link href="/rentals" className="flex items-center justify-center w-full h-8 rounded-full hover:bg-primary/10 hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-[hsl(var(--v2-link,var(--primary)))] transition-colors">
                     <ArrowLeft className="h-4 w-4 shrink-0" />
                   </Link>
                 </TooltipTrigger>
                 <TooltipContent side="right">Back to rentals</TooltipContent>
               </Tooltip>
             ) : (
-              <Link href="/rentals" className="flex items-center gap-2 h-8 px-1 rounded-md hover:bg-primary/10 transition-colors text-muted-foreground hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-indigo-300">
+              <Link href="/rentals" className="flex items-center gap-2 h-8 px-1 rounded-xl hover:bg-primary/10 transition-colors text-muted-foreground hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-[hsl(var(--v2-link,var(--primary)))]">
                 <ArrowLeft className="h-4 w-4 shrink-0" />
                 <span className="text-[13px]">All rentals</span>
               </Link>
@@ -891,14 +891,14 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
             {collapsed ? (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Link href="/vehicles" className="flex items-center justify-center w-full h-8 rounded-md hover:bg-primary/10 hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-indigo-300 transition-colors">
+                  <Link href="/vehicles" className="flex items-center justify-center w-full h-8 rounded-full hover:bg-primary/10 hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-[hsl(var(--v2-link,var(--primary)))] transition-colors">
                     <ArrowLeft className="h-4 w-4 shrink-0" />
                   </Link>
                 </TooltipTrigger>
                 <TooltipContent side="right">Back to vehicles</TooltipContent>
               </Tooltip>
             ) : (
-              <Link href="/vehicles" className="flex items-center gap-2 h-8 px-1 rounded-md hover:bg-primary/10 transition-colors text-muted-foreground hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-indigo-300">
+              <Link href="/vehicles" className="flex items-center gap-2 h-8 px-1 rounded-xl hover:bg-primary/10 transition-colors text-muted-foreground hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-[hsl(var(--v2-link,var(--primary)))]">
                 <ArrowLeft className="h-4 w-4 shrink-0" />
                 <span className="text-[13px]">All vehicles</span>
               </Link>
@@ -1028,14 +1028,14 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
             {collapsed ? (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Link href="/customers" className="flex items-center justify-center w-full h-8 rounded-md hover:bg-primary/10 hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-indigo-300 transition-colors">
+                  <Link href="/customers" className="flex items-center justify-center w-full h-8 rounded-full hover:bg-primary/10 hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-[hsl(var(--v2-link,var(--primary)))] transition-colors">
                     <ArrowLeft className="h-4 w-4 shrink-0" />
                   </Link>
                 </TooltipTrigger>
                 <TooltipContent side="right">Back to customers</TooltipContent>
               </Tooltip>
             ) : (
-              <Link href="/customers" className="flex items-center gap-2 h-8 px-1 rounded-md hover:bg-primary/10 transition-colors text-muted-foreground hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-indigo-300">
+              <Link href="/customers" className="flex items-center gap-2 h-8 px-1 rounded-xl hover:bg-primary/10 transition-colors text-muted-foreground hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-[hsl(var(--v2-link,var(--primary)))]">
                 <ArrowLeft className="h-4 w-4 shrink-0" />
                 <span className="text-[13px]">All customers</span>
               </Link>
@@ -1158,11 +1158,11 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
             without the `cms` grant — v1 hides "Website Content" from them too. */}
         {canSeeCms && !collapsed && (
           <div className="px-1.5 pb-1 pt-0.5">
-            <div className="relative grid grid-cols-2 rounded-lg p-1">
+            <div className="relative grid grid-cols-2 rounded-full p-1">
               {/* Sliding active pill */}
               <span
                 aria-hidden
-                className="pointer-events-none absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-md bg-background shadow-sm ring-1 ring-primary/20 transition-transform duration-300 ease-out"
+                className="pointer-events-none absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-full bg-background shadow-sm ring-1 ring-primary/20 transition-transform duration-300 ease-out"
                 style={{ transform: view === "cms" ? "translateX(100%)" : "translateX(0)" }}
               />
               {([
@@ -1172,17 +1172,17 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                 <button
                   key={tab.key}
                   onClick={() => switchView(tab.key)}
-                  className={`relative z-10 flex items-center justify-between gap-1.5 cursor-pointer rounded-md px-2.5 py-1 text-[12px] font-medium transition-colors ${
+                  className={`relative z-10 flex items-center justify-between gap-1.5 cursor-pointer rounded-full px-2.5 py-1 text-[12px] font-medium transition-colors ${
                     view === tab.key
-                      ? "text-primary dark:text-indigo-300"
+                      ? "text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]"
                       : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
                   <span>{tab.label}</span>
                   <kbd
-                    className={`rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold transition-colors ${
+                    className={`rounded-full px-1.5 py-0.5 font-mono text-[10px] font-semibold transition-colors ${
                       view === tab.key
-                        ? "bg-primary/15 text-primary dark:text-indigo-300"
+                        ? "bg-primary/15 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]"
                         : "bg-foreground/10 text-foreground/70"
                     }`}
                   >
@@ -1310,9 +1310,9 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                             key={section.id}
                             type="button"
                             onClick={() => outlinePick?.(section.id)}
-                            className={`flex w-full cursor-pointer items-center gap-2 rounded-md px-2.5 py-1 text-left text-[12px] leading-tight transition-colors ${
+                            className={`flex w-full cursor-pointer items-center gap-2 rounded-xl px-2.5 py-1 text-left text-[12px] leading-tight transition-colors ${
                               outlineActiveId === section.id
-                                ? "font-medium text-primary dark:text-indigo-300"
+                                ? "font-medium text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]"
                                 : "text-sidebar-foreground/55 hover:text-foreground"
                             }`}
                           >
@@ -1606,7 +1606,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                 {(groups.length > 0 || moreItems.length > 0) && (
                   <SidebarGroup className="p-1.5 pt-1 pb-2">
                     {!collapsed && (
-                      <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 px-2.5 pb-1">
+                      <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground px-2.5 pb-1">
                         More
                       </p>
                     )}

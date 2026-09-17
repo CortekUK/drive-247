@@ -60,11 +60,11 @@ export function HeaderIconButton(props: AsButton | AsLink) {
     // Purple at rest, the tour icon's look (team lead, Sep 16 2026): tinted
     // outline, faint purple ground, purple glyph; a shade deeper on hover/open.
     // Dark: dark --primary is ~1.9:1 as a glyph on the dark header and
-    // primary/15 is a 1.02:1 hover step, so the glyph and ring go indigo-300
-    // and hover/open use the v2 hover tint.
-    "rounded-full border-primary/30 bg-primary/5 text-primary [&_svg]:!size-3.5 dark:bg-primary/10 dark:border-indigo-300/30 dark:text-indigo-300",
-    "hover:border-primary/50 hover:bg-primary/10 hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:border-indigo-300/50 dark:hover:text-indigo-300",
-    "aria-expanded:border-primary/50 aria-expanded:bg-primary/10 aria-expanded:text-primary dark:aria-expanded:border-indigo-300/50 dark:aria-expanded:bg-[hsl(var(--v2-hover,var(--muted)))] dark:aria-expanded:text-indigo-300",
+    // primary/15 is a 1.02:1 hover step, so the glyph and ring read --v2-link
+    // (the light brand text, indigo by default) and hover/open use the v2 tint.
+    "rounded-full border-primary/30 bg-primary/5 text-primary [&_svg]:!size-3.5 dark:bg-primary/10 dark:border-[hsl(var(--v2-link,var(--primary))_/_0.3)] dark:text-[hsl(var(--v2-link,var(--primary)))]",
+    "hover:border-primary/50 hover:bg-primary/10 hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:border-[hsl(var(--v2-link,var(--primary))_/_0.5)] dark:hover:text-[hsl(var(--v2-link,var(--primary)))]",
+    "aria-expanded:border-primary/50 aria-expanded:bg-primary/10 aria-expanded:text-primary dark:aria-expanded:border-[hsl(var(--v2-link,var(--primary))_/_0.5)] dark:aria-expanded:bg-[hsl(var(--v2-hover,var(--muted)))] dark:aria-expanded:text-[hsl(var(--v2-link,var(--primary)))]",
     className,
   );
   const trigger =

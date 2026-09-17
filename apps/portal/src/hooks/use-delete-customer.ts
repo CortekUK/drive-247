@@ -30,8 +30,12 @@ export interface DeleteCustomerOptions {
  *      Deleting the customer cascades to `customer_users`, so after step 2
  *      there is nothing left to read it from.
  *   2. Delete the customer. An error here stops everything: the toast says why
- *      and nothing else runs. Rentals, payments and ledger rows reference the
- *      customer without a cascade, so a customer with history is refused here.
+ *      and nothing else runs. Do NOT assume history blocks the delete: the
+ *      2025 baseline schema left rentals, payments, fines and ledger rows
+ *      without a cascade, but migration 20260103200000 re-added all four
+ *      `*_customer_id_fkey` constraints as ON DELETE CASCADE, so a customer
+ *      with history can take it with them. Only a reference still without a
+ *      cascade (e.g. a Bonzah policy) makes the database refuse.
  *   3. Clean up the sign-in, only if there was one: the edge function deletes
  *      the auth user when no other tenant links it and otherwise revokes its
  *      sessions. A failure is logged and ignored, since the customer is already

@@ -22,7 +22,31 @@
 
 .v2-theme {
 
-  /* Light Mode: Indigo primary on neutral greys */
+  /* The tenant's brand colour, as three HSL parameters. These defaults are the
+     v2 indigo (#442DD7). use-dynamic-theme.ts, and the root layout on first
+     paint, write the tenant's own values over them as inline style on <body>,
+     so every brand-coloured token below follows the saved colour (and the
+     Appearance try-on preview) while neutral tokens stay put.
+
+     Each brand token keeps the lightness it always had and takes only hue and
+     saturation from the brand, written as an offset from the indigo, so with
+     these defaults every token computes to exactly its old value. `--primary`
+     is the one exception: it IS the brand colour, so it takes the brand's own
+     lightness too (51% by default, which is the old value). A deep brand like
+     graphite (17%) paints graphite buttons, not a mid-tone of the same hue.
+     A near-black, near-white or grey brand never gets here: the hook writes
+     nothing for those (see `isUsableV2Brand`), so these defaults stand.
+
+     Optional, written by the hook only when needed (unset means the fallback):
+       --brand-link-l   a deeper lightness for link text when the brand colour
+                        is too pale to read on white
+       --brand-fg       near-black button text on a pale brand (light mode)
+       --brand-fg-dark  the same for the dark-mode primary */
+  --brand-h: 248;
+  --brand-s: 68%;
+  --brand-l: 51%;
+
+  /* Light Mode: brand primary on neutral greys */
   --background: 0 0% 100%;
   --foreground: 0 0% 3.9%;
 
@@ -32,10 +56,10 @@
   --popover: 0 0% 100%;
   --popover-foreground: 0 0% 3.9%;
 
-  --primary: 248 68% 51%;
-  --primary-foreground: 226 100% 97%;
-  --primary-hover: 248 68% 45%;
-  --primary-light: 248 68% 95%;
+  --primary: var(--brand-h) var(--brand-s) var(--brand-l);
+  --primary-foreground: var(--brand-fg, 226 100% 97%);
+  --primary-hover: var(--brand-h) var(--brand-s) calc(var(--brand-l) - 6%);
+  --primary-light: var(--brand-h) var(--brand-s) 95%;
 
   --secondary: 240 4% 96%;
   --secondary-foreground: 240 6% 10%;
@@ -51,7 +75,7 @@
      `--accent-foreground` stays near-black on purpose: the ui-v2 menus paint
      destructive items with it. `--muted` stays grey: it is also a resting fill
      (skeletons, tab tracks, progress, avatars). */
-  --accent: 248 68% 95%;
+  --accent: var(--brand-h) var(--brand-s) 95%;
   --accent-foreground: 0 0% 9%;
 
   /* The same tint for primitives that ALSO render for v1 tenants (ui-v2
@@ -59,12 +83,21 @@
      `.v2-theme` this is undefined, so the fallback is exactly the old colour.
      `--v2-outline-fill` does the same for the outline button's resting fill,
      which the lead asked to be not white. */
-  --v2-hover: 248 68% 95%;
+  --v2-hover: var(--brand-h) var(--brand-s) 95%;
   --v2-outline-fill: transparent;
   /* Table rows: half the control tint in light (primary/5 over white), so a
      muted cell label keeps its contrast while hovered. Dark uses the full
      tint, since a half step disappears on the dark card. */
-  --v2-row-hover: 248 68% 97.5%;
+  --v2-row-hover: var(--brand-h) var(--brand-s) 97.5%;
+  /* Brand-coloured text: links, and the ui-v2 Button `link` variant. In light
+     it is --primary, unless the brand is too pale to read on white, in which
+     case the hook writes a deeper --brand-link-l. Outside `.v2-theme` it is
+     undefined and every reader falls back to --primary. */
+  --v2-link: var(--brand-h) var(--brand-s) var(--brand-link-l, var(--brand-l));
+  /* The page wash (bg-app-gradient): the brand at the old primary lightness,
+     so a very dark or very pale brand still tints the page instead of greying
+     or bleaching it. */
+  --v2-wash: var(--brand-h) var(--brand-s) 51%;
   /* Muted text laid on one of those purple tints. --muted-foreground (45%)
      measures 4.34:1 on the row hover, 4.00 on --v2-hover and 4.22 on the top
      bar's field; 40% clears 4.5 on all of them (5.03 / 4.84 / 5.08). */
@@ -86,27 +119,29 @@
   --input: 0 0% 90%;
   --ring: 0 0% 63%;
 
-  --chart-1: 230 100% 82%;
-  --chart-2: 241 100% 69%;
-  --chart-3: 247 92% 60%;
-  --chart-4: 248 68% 51%;
-  --chart-5: 246 61% 42%;
+  /* A lightness ramp in the brand hue. The hue and saturation offsets are the
+     old indigo ramp's own (230/100, 241/100, 247/92, 248/68, 246/61). */
+  --chart-1: calc(var(--brand-h) - 18) calc(var(--brand-s) + 32%) 82%;
+  --chart-2: calc(var(--brand-h) - 7) calc(var(--brand-s) + 32%) 69%;
+  --chart-3: calc(var(--brand-h) - 1) calc(var(--brand-s) + 24%) 60%;
+  --chart-4: var(--brand-h) var(--brand-s) 51%;
+  --chart-5: calc(var(--brand-h) - 2) calc(var(--brand-s) - 7%) 42%;
 
   --radius: 0.625rem;
 
-  /* Sidebar - Light Mode (tinted with the indigo canvas hue so it belongs to
-     the app gradient instead of reading as a standalone white slab) */
-  --sidebar-background: 248 44% 98%;
+  /* Sidebar - Light Mode (tinted with the brand hue so it belongs to the app
+     gradient instead of reading as a standalone white slab) */
+  --sidebar-background: var(--brand-h) calc(var(--brand-s) - 24%) 98%;
   --sidebar-foreground: 0 0% 3.9%;
-  --sidebar-primary: 247 92% 60%;
+  --sidebar-primary: calc(var(--brand-h) - 1) calc(var(--brand-s) + 24%) 60%;
   --sidebar-primary-foreground: 226 100% 97%;
-  --sidebar-accent: 248 75% 94%;
-  --sidebar-accent-foreground: 248 60% 45%;
-  --sidebar-border: 248 25% 92%;
-  --sidebar-ring: 248 40% 70%;
+  --sidebar-accent: var(--brand-h) calc(var(--brand-s) + 7%) 94%;
+  --sidebar-accent-foreground: var(--brand-h) calc(var(--brand-s) - 8%) 45%;
+  --sidebar-border: var(--brand-h) calc(var(--brand-s) - 43%) 92%;
+  --sidebar-ring: var(--brand-h) calc(var(--brand-s) - 28%) 70%;
 
   /* Gradients - Light Mode */
-  --gradient-primary: linear-gradient(135deg, hsl(248 68% 51%), hsl(248 68% 61%));
+  --gradient-primary: linear-gradient(135deg, hsl(var(--brand-h) var(--brand-s) var(--brand-l)), hsl(var(--brand-h) var(--brand-s) calc(var(--brand-l) + 10%)));
   --gradient-success: linear-gradient(135deg, hsl(142 76% 36%), hsl(142 76% 44%));
   --gradient-warning: linear-gradient(135deg, hsl(41 92% 48%), hsl(41 92% 58%));
   --gradient-subtle: linear-gradient(135deg, hsl(159 15% 92%), hsl(159 15% 88%));
@@ -114,7 +149,7 @@
   /* Shadows - Light Mode (mapped to shadow-card / shadow-hover via @theme) */
   --ds-shadow-sm: 0 1px 2px 0 hsl(159 21% 20% / 0.08);
   --ds-shadow-card: 0 4px 6px -1px hsl(159 21% 20% / 0.1), 0 2px 4px -1px hsl(159 21% 20% / 0.06);
-  --ds-shadow-hover: 0 10px 15px -3px hsl(248 68% 51% / 0.15), 0 4px 6px -2px hsl(248 68% 51% / 0.1);
+  --ds-shadow-hover: 0 10px 15px -3px hsl(var(--brand-h) var(--brand-s) 51% / 0.15), 0 4px 6px -2px hsl(var(--brand-h) var(--brand-s) 51% / 0.1);
 
   /* Transitions */
   --transition-all: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
@@ -136,10 +171,13 @@
   --popover: 0 0% 9.1%;
   --popover-foreground: 0 0% 98%;
 
-  --primary: 246 61% 42%;
-  --primary-foreground: 226 100% 97%;
-  --primary-hover: 246 61% 50%;
-  --primary-light: 246 61% 22%;
+  /* Dark keeps its own lightness steps whatever the brand's lightness is (a
+     brand-lightness primary would vanish on the dark page); only hue and
+     saturation follow the brand, as offsets from the indigo defaults. */
+  --primary: calc(var(--brand-h) - 2) calc(var(--brand-s) - 7%) 42%;
+  --primary-foreground: var(--brand-fg-dark, 226 100% 97%);
+  --primary-hover: calc(var(--brand-h) - 2) calc(var(--brand-s) - 7%) 50%;
+  --primary-light: calc(var(--brand-h) - 2) calc(var(--brand-s) - 7%) 22%;
 
   --secondary: 240 4% 16%;
   --secondary-foreground: 0 0% 98%;
@@ -148,17 +186,19 @@
   --muted-foreground: 0 0% 63%;
 
   /* The dark purple tint: the old 15% lightness step (so text contrast is
-     unchanged), in the indigo hue. See the light block for why both exist. */
-  --accent: 246 35% 17%;
+     unchanged), in the brand hue. See the light block for why both exist. */
+  --accent: calc(var(--brand-h) - 2) calc(var(--brand-s) - 33%) 17%;
   --accent-foreground: 0 0% 98%;
-  --v2-hover: 246 35% 17%;
-  --v2-row-hover: 246 35% 17%;
+  --v2-hover: calc(var(--brand-h) - 2) calc(var(--brand-s) - 33%) 17%;
+  --v2-row-hover: calc(var(--brand-h) - 2) calc(var(--brand-s) - 33%) 17%;
   /* Dark muted text already clears 4.5 on the dark tints (6.31 on 17%). */
   --v2-muted-on-tint: var(--muted-foreground);
-  /* The ui-v2 Button `link` variant's text (indigo-300). Dark only: dark
-     --primary is 1.97:1 as text on the dark page. Undefined in light v2 and
-     outside `.v2-theme`, so there the variant falls back to --primary. */
-  --v2-link: 230 94% 82%;
+  /* Brand-coloured text in dark: the ui-v2 Button `link` variant and every
+     `dark:text-[hsl(var(--v2-link,…))]` (indigo-300 by default). Dark
+     --primary is 1.97:1 as text on the dark page; 82% lightness reads on it
+     in any hue. Outside `.v2-theme` it is undefined and readers fall back. */
+  --v2-link: calc(var(--brand-h) - 18) calc(var(--brand-s) + 26%) 82%;
+  --v2-wash: calc(var(--brand-h) - 2) calc(var(--brand-s) - 7%) 42%;
 
   --success: 142 76% 52%;
   --success-foreground: 159 21% 8%;
@@ -184,30 +224,30 @@
   --input: 0 0% 20%;
   --ring: 0 0% 45%;
 
-  --chart-1: 230 100% 82%;
-  --chart-2: 241 100% 69%;
-  --chart-3: 247 92% 60%;
-  --chart-4: 248 68% 51%;
-  --chart-5: 246 61% 42%;
+  --chart-1: calc(var(--brand-h) - 18) calc(var(--brand-s) + 32%) 82%;
+  --chart-2: calc(var(--brand-h) - 7) calc(var(--brand-s) + 32%) 69%;
+  --chart-3: calc(var(--brand-h) - 1) calc(var(--brand-s) + 24%) 60%;
+  --chart-4: var(--brand-h) var(--brand-s) 51%;
+  --chart-5: calc(var(--brand-h) - 2) calc(var(--brand-s) - 7%) 42%;
 
-  /* Sidebar - Dark Mode (subtle indigo tint to match the dark app gradient) */
-  --sidebar-background: 248 14% 10%;
+  /* Sidebar - Dark Mode (subtle brand tint to match the dark app gradient) */
+  --sidebar-background: var(--brand-h) calc(var(--brand-s) - 54%) 10%;
   --sidebar-foreground: 0 0% 98%;
-  --sidebar-primary: 241 100% 69%;
+  --sidebar-primary: calc(var(--brand-h) - 7) calc(var(--brand-s) + 32%) 69%;
   --sidebar-primary-foreground: 226 100% 97%;
-  --sidebar-accent: 248 18% 17%;
+  --sidebar-accent: var(--brand-h) calc(var(--brand-s) - 50%) 17%;
   --sidebar-accent-foreground: 0 0% 98%;
-  --sidebar-border: 248 30% 100% / 10%;
-  --sidebar-ring: 248 20% 45%;
+  --sidebar-border: var(--brand-h) calc(var(--brand-s) - 38%) 100% / 10%;
+  --sidebar-ring: var(--brand-h) calc(var(--brand-s) - 48%) 45%;
 
-  --gradient-primary: linear-gradient(135deg, hsl(246 61% 42%), hsl(246 61% 52%));
+  --gradient-primary: linear-gradient(135deg, hsl(calc(var(--brand-h) - 2) calc(var(--brand-s) - 7%) 42%), hsl(calc(var(--brand-h) - 2) calc(var(--brand-s) - 7%) 52%));
   --gradient-success: linear-gradient(135deg, hsl(142 76% 52%), hsl(142 76% 60%));
   --gradient-warning: linear-gradient(135deg, hsl(41 92% 65%), hsl(41 92% 75%));
   --gradient-subtle: linear-gradient(135deg, hsl(159 15% 20%), hsl(159 15% 25%));
 
   --ds-shadow-sm: 0 1px 2px 0 hsl(159 21% 4% / 0.5);
   --ds-shadow-card: 0 4px 6px -1px hsl(159 21% 4% / 0.5), 0 2px 4px -1px hsl(159 21% 4% / 0.4);
-  --ds-shadow-hover: 0 10px 15px -3px hsl(246 61% 42% / 0.3), 0 4px 6px -2px hsl(246 61% 42% / 0.2);
+  --ds-shadow-hover: 0 10px 15px -3px hsl(calc(var(--brand-h) - 2) calc(var(--brand-s) - 7%) 42% / 0.3), 0 4px 6px -2px hsl(calc(var(--brand-h) - 2) calc(var(--brand-s) - 7%) 42% / 0.2);
 
   --glow-gold-subtle: 0 0 25px -5px hsl(var(--primary) / 0.35), 0 0 50px -10px hsl(var(--primary) / 0.2);
   --glow-gold-intense: 0 0 35px -5px hsl(var(--primary) / 0.55), 0 0 70px -10px hsl(var(--primary) / 0.3);
@@ -224,22 +264,28 @@
  * and the row's "..." button showed no pill at all (measured 1.000:1). In a
  * light selected row the button's pill equalled the selected fill the same way.
  *
- * Only the custom property is re-pointed, never a background, so a call site's
- * own `hover:bg-transparent` or `hover:bg-primary/10` still decides. The
- * `:where()` keeps each rule at zero specificity: it beats inheritance from
+ * Only the custom property is re-pointed, never a background. In light mode
+ * that is enough for a call site's own `hover:bg-transparent` or
+ * `hover:bg-primary/10` to decide. In dark it is not: tailwind-merge drops the
+ * ui-v2 Button's `hover:bg-…` for the call site's but keeps its
+ * `dark:hover:bg-…`, which out-ranks a plain `hover:` class, so a call site
+ * that wants its own hover in dark as well needs the `dark:hover:` twin too.
+ * The `:where()` keeps each rule at zero specificity: it beats inheritance from
  * <body> but loses to a utility that sets its own `[--v2-hover:…]` (the
  * forced-dark Select and submenu islands). The dark descendant rule sits after
  * the light one because a dark selected row matches both.
  * Selectors name only `.v2-theme`, `.dark` and attributes — never a utility.
+ * Lightness steps are fixed; hue and saturation follow the brand, like the
+ * tokens above (defaults: 248 68% 91%, 246 38% 23%, 246 38% 29%).
  * ------------------------------------------------------------------------- */
 :where(.v2-theme [data-slot="table-row"][data-state="selected"]) * {
-  --v2-hover: 248 68% 91%;
+  --v2-hover: var(--brand-h) var(--brand-s) 91%;
 }
 :where(.dark .v2-theme [data-slot="table-row"][data-state="selected"]) {
-  --v2-hover: 246 38% 23%;
+  --v2-hover: calc(var(--brand-h) - 2) calc(var(--brand-s) - 30%) 23%;
 }
 :where(.dark .v2-theme [data-slot="table-row"]) * {
-  --v2-hover: 246 38% 29%;
+  --v2-hover: calc(var(--brand-h) - 2) calc(var(--brand-s) - 30%) 29%;
 }
 /* Muted cell text measures 4.34:1 on a hovered light body row and 4.00:1 on
    a selected one, so while a body row is tinted its muted text reads
@@ -783,21 +829,56 @@ body.v2-theme {
   opacity: 0.95;
 }
 
-/* Soft ambient page background — faint indigo glow, adapts to light/dark */
-.v2-theme .bg-app-gradient {
+/* Soft ambient page background — faint brand glow, adapts to light/dark.
+ *
+ * Painted by a viewport-fixed layer behind the element's content, not as the
+ * element's own background. On the dashboard the element is the sidebar
+ * wrapper, which scrolls with the page, so a background painted on it scrolled
+ * away and left flat white behind the fixed, see-through sidebar and top bar.
+ * `background-attachment: fixed` is not used: it repaints on every scroll
+ * frame and is ignored on iOS.
+ *
+ * The layer's `z-index: -1` puts it behind the element's content and in front
+ * of the ground under it. Where that happens depends on the element:
+ *   - The dashboard wrapper (`data-slot="sidebar-wrapper"`) is deliberately NOT
+ *     made a stacking context. It holds `fixed` layers that must keep competing
+ *     with <body>-level ones (the first-run wizard at z-70 against the Trax
+ *     panel, the system banner and the arrival veil), and `isolation` would
+ *     trap them under all of those. Left alone, the layer paints in the root
+ *     context: over the canvas, which carries <body>'s colour because <html>
+ *     has no background, and under every box on the page. tailwind-merge drops
+ *     the wrapper's own `bg-background`, so nothing in between hides it.
+ *   - Everywhere else (the Trax panel and the arrival veil, both already
+ *     stacking contexts, and the playground frames) the element isolates, so
+ *     the wash lands on the element's own ground rather than under it.
+ * No `position: relative`: the Trax panel carries this class on a `fixed`
+ * element, and this rule would out-rank its `fixed` utility. Inside that panel
+ * `position: fixed` resolves against the panel itself (it has a transform), so
+ * the wash still fills just the panel. Nothing between <body> and the dashboard
+ * wrapper sets a transform or filter, so there it is the viewport. */
+.v2-theme .bg-app-gradient:not([data-slot="sidebar-wrapper"]) {
+  isolation: isolate;
+}
+.v2-theme .bg-app-gradient::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
   /* Every layer must be brand-derived. The top-left wash was a literal
      `hsl(247 92% 60%)`, so a tenant on green got a purple corner — the one
      gradient stop in the shell that ignored their colour. `--chart-3` is
      that exact value by default and follows the brand once themed, so this
      looks identical on the stock palette and correct on every other.
+     `--v2-wash` is --primary's old value in each mode, in the brand hue.
      Written as `hsl(var(--chart-3) / …)` rather than `@apply bg-chart-3`:
      chart-1..5 are not colour keys in this project's tailwind.config.ts, so
      the utility does not exist and `@apply` would be a build error. */
   background-image:
-    radial-gradient(70rem 50rem at 105% -10%, hsl(var(--primary) / 0.20), transparent 55%),
+    radial-gradient(70rem 50rem at 105% -10%, hsl(var(--v2-wash) / 0.20), transparent 55%),
     radial-gradient(60rem 48rem at -8% -6%, hsl(var(--chart-3) / 0.16), transparent 52%),
-    radial-gradient(55rem 45rem at 50% 115%, hsl(var(--primary) / 0.12), transparent 55%),
-    linear-gradient(180deg, hsl(var(--primary) / 0.07) 0%, transparent 45%);
+    radial-gradient(55rem 45rem at 50% 115%, hsl(var(--v2-wash) / 0.12), transparent 55%),
+    linear-gradient(180deg, hsl(var(--v2-wash) / 0.07) 0%, transparent 45%);
   background-repeat: no-repeat;
 }
 
@@ -1172,7 +1253,9 @@ html[data-trax-panel] {
  *   3. the label sits right before it;
  *   4. settings rows: the label heads a text column that sits right before
  *      the control, or right after it (skipped when that column also holds a
- *      text field, whose label must keep the arrow).
+ *      text field, whose label must keep the arrow);
+ *   5. SettingsRow: the label's column sits right before a column whose first
+ *      child is the control (same text-field exception).
  * Every shape except the wrap needs `for`, without which a click toggles
  * nothing. */
 .v2-theme label:has(:is([role="checkbox"], [role="radio"], [role="switch"], input[type="checkbox"], input[type="radio"]):not(:disabled, [data-disabled=""])),
@@ -1180,6 +1263,7 @@ html[data-trax-panel] {
 .v2-theme :is([role="checkbox"], [role="radio"], [role="switch"]):not(:disabled, [data-disabled=""]) + input[aria-hidden="true"] + label[for],
 .v2-theme label[for]:has(+ :is([role="checkbox"], [role="radio"], [role="switch"]):not(:disabled, [data-disabled=""])),
 .v2-theme :is(div, span):has(+ :is([role="switch"], [role="checkbox"], [role="radio"]):not(:disabled, [data-disabled=""])) > label[for]:not(:has(~ :is(input:not([type="checkbox"], [type="radio"]), textarea, select, [role="combobox"]))),
+.v2-theme div:has(+ div > :is([role="switch"], [role="checkbox"], [role="radio"]):first-child:not(:disabled, [data-disabled=""])) > label[for]:not(:has(~ :is(input:not([type="checkbox"], [type="radio"]), textarea, select, [role="combobox"]))),
 .v2-theme :is([role="checkbox"], [role="radio"], [role="switch"]):not(:disabled, [data-disabled=""]) + :is(div, span) > label[for],
 .v2-theme :is([role="checkbox"], [role="radio"], [role="switch"]):not(:disabled, [data-disabled=""]) + input[aria-hidden="true"] + :is(div, span) > label[for] {
   cursor: pointer;

@@ -341,7 +341,7 @@ const CATEGORY_ICONS: Record<string, LucideIcon> = {
 };
 
 const SEVERITY_TONE: Record<string, string> = {
-  info: "bg-primary/10 text-primary dark:text-indigo-300",
+  info: "bg-primary/10 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]",
   warning: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
   critical: "bg-destructive/10 text-destructive",
 };
@@ -568,7 +568,7 @@ export function ReminderRulesConfigV2() {
                 onClick={() => setPicked(category)}
                 className={cn(
                   "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-sm font-medium transition-colors",
-                  selected ? "bg-primary/10 text-primary dark:text-indigo-300" : "text-muted-foreground hover:bg-primary/10 hover:text-foreground dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]",
+                  selected ? "bg-primary/10 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" : "text-muted-foreground hover:bg-primary/10 hover:text-foreground dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]",
                 )}
               >
                 <Icon className="size-4" aria-hidden="true" />

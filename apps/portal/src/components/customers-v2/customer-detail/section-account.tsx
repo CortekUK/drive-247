@@ -334,7 +334,7 @@ export function SectionAccount({ c, set, onJump, canEdit }: SectionProps) {
         <div data-tour="customer-delete">
           <DangerSection
             title="Delete customer"
-            description="Removes this record, and their sign-in if nothing else uses it, for good. Someone with rentals or payments on file cannot be deleted; set them to Inactive instead."
+            description="Removes this customer for good, and their sign-in if nothing else uses it. Their rentals, payments and fines can go with them, so to keep that history set them to Inactive instead."
           >
             <Button variant="destructive" disabled={isDeleting} onClick={() => setConfirmDelete(true)}>
               <Trash2 className="size-4" />

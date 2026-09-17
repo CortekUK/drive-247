@@ -14,6 +14,12 @@ import {
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import {
+  DropdownMenu as DropdownMenuV2,
+  DropdownMenuContent as DropdownMenuContentV2,
+  DropdownMenuItem as DropdownMenuItemV2,
+  DropdownMenuTrigger as DropdownMenuTriggerV2,
+} from "@/components/ui-v2/dropdown-menu";
+import {
   CreditCard,
   Plus,
   MoreHorizontal,
@@ -711,8 +717,11 @@ const PaymentsList = () => {
                               )}
                             </>
                           )}
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
+                          {/* The ui-v2 menu, as on the other v2 lists: `w-auto`
+                              lets a label keep one line in the trigger-wide
+                              content, and its items already space the icon. */}
+                          <DropdownMenuV2>
+                            <DropdownMenuTriggerV2 asChild>
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -722,21 +731,21 @@ const PaymentsList = () => {
                               >
                                 <MoreHorizontal className="h-4 w-4" />
                               </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => handleViewLedger(payment)}>
-                                <FileText className="h-4 w-4 mr-2" />
+                            </DropdownMenuTriggerV2>
+                            <DropdownMenuContentV2 align="end" className="w-auto">
+                              <DropdownMenuItemV2 onClick={() => handleViewLedger(payment)}>
+                                <FileText className="h-4 w-4" />
                                 View Ledger
-                              </DropdownMenuItem>
+                              </DropdownMenuItemV2>
                               {/* Remove a duplicate/stale UNPAID pay-link — safe, never touches the rental */}
                               {canEdit('payments') && isVoidableLink(payment) && (
-                                <DropdownMenuItem
+                                <DropdownMenuItemV2
                                   onClick={() => setVoidTarget({ id: payment.id, customerName: payment.customers?.name || 'the customer', amount: payment.amount })}
                                   className="text-red-600 focus:text-red-600"
                                 >
-                                  <Link2Off className="h-4 w-4 mr-2" />
+                                  <Link2Off className="h-4 w-4" />
                                   Remove payment link
-                                </DropdownMenuItem>
+                                </DropdownMenuItemV2>
                               )}
                               {/* Same Reverse gate as v1: never for an unpaid pay-link, which must be
                                   removed via "Remove payment link" so its Stripe session expires. */}
@@ -748,16 +757,16 @@ const PaymentsList = () => {
                                payment.refund_status !== 'completed' &&
                                payment.refund_status !== 'processing' &&
                                payment.verification_status !== 'rejected' && (
-                                <DropdownMenuItem
+                                <DropdownMenuItemV2
                                   onClick={() => handleOpenReverseDialog(payment)}
                                   className="text-orange-600 focus:text-orange-600"
                                 >
-                                  <Undo2 className="h-4 w-4 mr-2" />
+                                  <Undo2 className="h-4 w-4" />
                                   Reverse Payment
-                                </DropdownMenuItem>
+                                </DropdownMenuItemV2>
                               )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                            </DropdownMenuContentV2>
+                          </DropdownMenuV2>
                         </div>
                       </ListCell>
                     </ListRow>

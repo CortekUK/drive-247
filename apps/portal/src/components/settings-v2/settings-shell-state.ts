@@ -8,11 +8,13 @@
  * Order of decisions for a `?tab=` deep link, first match wins:
  *   1. no `?tab=`                         -> the index, no notice
  *   2. a v2 page, manager grants loading  -> wait (skeleton, never the index)
- *   3. a v2 page the user may view        -> the page
+ *   3. a v2 page the user may view        -> the page (a General section's
+ *                                            old tab: General, scrolled to it)
  *   4. a v2 page the user may NOT view    -> index + "You don't have access"
  *   5. a tab with a home elsewhere        -> none (the page's redirect runs)
  *   6. a hidden tab the board owns        -> none (hand-off to /integrations)
  *   7. a known tab this workspace hides   -> index + "isn't available"
+ *      (including V2_HIDDEN_SETTINGS_PAGES and the global blacklist)
  *   8. anything else                      -> index + "doesn't exist"
  */
 
@@ -34,7 +36,120 @@ export const SETTINGS_TAB_LABELS: Record<string, string> = {
   branding: "Branding",
   blacklist: "Global blacklist",
   subscription: "Subscription",
+  promos: "Promo codes",
+  extras: "Extras",
+  installments: "Installments",
+  payg: "Pay as you go",
+  "auto-extend": "Auto-extension",
 };
+
+/* -------------------------------------------------------------------------- */
+/* Which page a `?tab=` opens                                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * v2 settings pages taken out of Settings for now (front end only). They keep
+ * their page and render case in `settings/page.tsx`, so bringing one back is
+ * deleting it from this set; until then the index does not list them and a
+ * `?tab=` link to one lands on the index with "isn't part of your workspace".
+ */
+export const V2_HIDDEN_SETTINGS_PAGES: ReadonlySet<string> = new Set([
+  "promos",
+  "extras",
+  "installments",
+  "payg",
+  "auto-extend",
+]);
+
+export interface V2GeneralSection {
+  /** The element id is `settings-<anchor>` (see `settingsSectionId`). */
+  anchor: string;
+  title: string;
+  description: string;
+  /** The settings tab whose manager permission this section follows. */
+  permTab: string;
+  /** The old `?tab=` value this section answers to, if it had its own page. */
+  tab: string | null;
+}
+
+/**
+ * The General page, top to bottom. Six small pages became sections of it; each
+ * keeps its old `?tab=` value (setup guide and bookmark links), which opens
+ * General and scrolls to that section, and each keeps its own permission.
+ */
+export const V2_GENERAL_SECTIONS: readonly V2GeneralSection[] = [
+  { anchor: "regional", title: "Regional", description: "The currency and distance unit used across prices, invoices and mileage.", permTab: "general", tab: "general" },
+  { anchor: "driver-requirements", title: "Driver requirements", description: "Who can rent from you, and the ID they must verify.", permTab: "requirements", tab: "requirements" },
+  { anchor: "booking-rules", title: "Booking rules", description: "How far ahead customers book, how long a rental can be, and the gap between rentals.", permTab: "duration", tab: "duration" },
+  { anchor: "key-handover", title: "Key handover", description: "Leave the keys in a lockbox and email the code to the customer.", permTab: "lockbox", tab: "lockbox" },
+  { anchor: "tax-and-fees", title: "Tax and fees", description: "Charges added on top of the rental price.", permTab: "fees", tab: "fees" },
+  { anchor: "security-deposit", title: "Security deposit", description: "A refundable amount taken on online bookings.", permTab: "preauth", tab: "preauth" },
+  { anchor: "booking-site", title: "Booking site", description: "What customers see when they book on your website.", permTab: "general", tab: "booking-site" },
+  { anchor: "optional-modules", title: "Optional modules", description: "Each one adds a page to your sidebar and saves as soon as you flip it. Switching one off hides the page and deletes nothing.", permTab: "general", tab: null },
+];
+
+/** The DOM id of a settings section, the target of a deep link or `#hash`. */
+export const settingsSectionId = (anchor: string) => `settings-${anchor}`;
+
+/** Every permission a General section follows, once each: General opens when ANY of them is viewable. */
+export const V2_GENERAL_PERM_TABS: readonly string[] = Array.from(new Set(V2_GENERAL_SECTIONS.map((s) => s.permTab)));
+
+export interface V2SettingsRoute {
+  /** The v2 page to render, or null for the index. Not permission-checked. */
+  page: string | null;
+  /** The section to scroll to once the page has loaded (never for `?tab=general`, which is the top). */
+  anchor: string | null;
+  /** The permission(s) the route needs: one tab, or any of several (General itself). */
+  permTab: string | readonly string[] | null;
+}
+
+const NO_ROUTE: V2SettingsRoute = { page: null, anchor: null, permTab: null };
+const hasOwn = (record: object, key: string) => Object.prototype.hasOwnProperty.call(record, key);
+
+/**
+ * Which v2 page a `?tab=` value opens. A tab that is now a section of General
+ * opens General at that section and needs that section's permission; plain
+ * `?tab=general` needs any General section's. Hidden pages and unknown values
+ * open the index (the notice says why).
+ */
+export function resolveV2SettingsRoute(
+  tabParam: string | null,
+  pages: Record<string, { permTab: string }>,
+): V2SettingsRoute {
+  const tab = tabParam?.trim() ?? "";
+  if (!tab) return NO_ROUTE;
+  if (tab === "general") return { page: "general", anchor: null, permTab: V2_GENERAL_PERM_TABS };
+  const section = V2_GENERAL_SECTIONS.find((s) => s.tab === tab);
+  if (section) return { page: "general", anchor: section.anchor, permTab: section.permTab };
+  if (V2_HIDDEN_SETTINGS_PAGES.has(tab) || !hasOwn(pages, tab)) return NO_ROUTE;
+  return { page: tab, anchor: null, permTab: pages[tab].permTab };
+}
+
+/** A route's permission, one tab or any of several. */
+export function canViewAny(permTab: string | readonly string[], canView: (tab: string) => boolean): boolean {
+  return typeof permTab === "string" ? canView(permTab) : permTab.some(canView);
+}
+
+/**
+ * The pages map `resolveSettingsTabNotice` reads: every page that is not
+ * hidden, General with its any-of permission, and each General section under
+ * its old tab, so `?tab=fees` without access still says "You don't have
+ * access to Tax and fees".
+ */
+export function v2NoticePages(
+  pages: Record<string, { title: string; permTab: string }>,
+): Record<string, { title: string; permTab: string | readonly string[] }> {
+  const out: Record<string, { title: string; permTab: string | readonly string[] }> = {};
+  for (const [tab, page] of Object.entries(pages)) {
+    if (V2_HIDDEN_SETTINGS_PAGES.has(tab)) continue;
+    out[tab] = { title: page.title, permTab: page.permTab };
+  }
+  if (out.general) out.general = { ...out.general, permTab: V2_GENERAL_PERM_TABS };
+  for (const section of V2_GENERAL_SECTIONS) {
+    if (section.tab && section.tab !== "general") out[section.tab] = { title: section.title, permTab: section.permTab };
+  }
+  return out;
+}
 
 export function resolveSettingsTabNotice({
   tabParam,
@@ -47,7 +162,8 @@ export function resolveSettingsTabNotice({
   permissionsLoading,
 }: {
   tabParam: string | null;
-  pages: Record<string, { title: string; permTab: string }>;
+  /** `permTab` may list several tabs: the page is viewable when any of them is. */
+  pages: Record<string, { title: string; permTab: string | readonly string[] }>;
   redirects: Record<string, string>;
   allTabs: readonly string[];
   canView: (tab: string) => boolean;
@@ -58,9 +174,9 @@ export function resolveSettingsTabNotice({
   const tab = tabParam?.trim() ?? "";
   if (!tab) return { kind: "none" };
 
-  const page = Object.prototype.hasOwnProperty.call(pages, tab) ? pages[tab] : undefined;
+  const page = hasOwn(pages, tab) ? pages[tab] : undefined;
   if (page) {
-    if (canView(page.permTab)) return { kind: "none" };
+    if (canViewAny(page.permTab, canView)) return { kind: "none" };
     if (permissionsLoading) return { kind: "wait" };
     return { kind: "no-access", label: page.title };
   }
@@ -100,23 +216,27 @@ export function settingsTabNoticeCopy(notice: SettingsTabNotice): { title: strin
 /* Data a page reads before it may render its form                             */
 /* -------------------------------------------------------------------------- */
 
-/** v2 pages whose controls are filled from the org settings edge function. */
-export const V2_PAGES_READING_ORG_SETTINGS: ReadonlySet<string> = new Set(["general", "reminders"]);
+/**
+ * v2 pages whose controls are filled from the org settings edge function.
+ *
+ * General is not listed: it reads the org settings, the rental settings and
+ * the branding, and each of its sections gates itself (the regional panel, the
+ * rental sections' `BusinessRentalGate` / `ReadGate`), so a failed org read no
+ * longer hides Driver requirements, Tax and fees and the rest.
+ */
+export const V2_PAGES_READING_ORG_SETTINGS: ReadonlySet<string> = new Set(["reminders"]);
 
 /**
  * v2 pages whose controls are filled from the tenants row (`useRentalSettings`)
  * and wait for it at page level.
  *
- * Pricing rules, Tax and fees and Security deposit also read that row but are
- * not listed: each section gates itself on the cached read (`ReadGate` in
- * pricing-money-parts), so a first load shows skeletons shaped like those
- * sections, and a failed rental read no longer hides Weekend and Holiday
- * pricing, which have reads of their own.
+ * Custom pricing and General also read that row but are not listed: each
+ * section gates itself on the cached read (`ReadGate` in pricing-money-parts,
+ * `BusinessRentalGate` in business-rules-pages), so a first load shows
+ * skeletons shaped like those sections, and a failed rental read no longer
+ * hides the sections that have reads of their own.
  */
 export const V2_PAGES_READING_RENTAL_SETTINGS: ReadonlySet<string> = new Set([
-  "requirements",
-  "duration",
-  "lockbox",
   "payg",
   "auto-extend",
   "templates",
@@ -275,10 +395,8 @@ const HANDOFFS: { words: string[]; handoff: SettingsSearchHandoff }[] = [
     words: ["subscription", "billing", "invoice", "plan", "pay drive247"],
     handoff: { label: "Your Drive247 subscription", where: "Billing", href: "/subscription" },
   },
-  {
-    words: ["user", "users", "team", "staff", "password", "role", "permission", "manager", "invite"],
-    handoff: { label: "Team members and roles", where: "Users", href: "/users" },
-  },
+  // Team members, roles and passwords are the index's own Team entry now (head
+  // admins only), so they are found by the search, not handed off.
 ];
 
 /**

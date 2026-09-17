@@ -26,7 +26,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@/components/ui-v2/dropdown-menu";
 import {
   LIST_CLASSES,
   LIST_ROW_ACTION,
@@ -213,17 +213,17 @@ export function InsurancePolicyListV2<T extends InsurancePolicyListRowV2>({
                         <MoreHorizontal className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
+                    <DropdownMenuContent align="end" className="w-auto">
                       <DropdownMenuItem onClick={() => onView(policy)}>
-                        <Eye className="h-4 w-4 mr-2" />
+                        <Eye className="h-4 w-4" />
                         View Details
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => onEdit(policy)}>
-                        <Edit className="h-4 w-4 mr-2" />
+                        <Edit className="h-4 w-4" />
                         Edit Policy
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => onUpload(policy)}>
-                        <Upload className="h-4 w-4 mr-2" />
+                        <Upload className="h-4 w-4" />
                         Upload Document
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
@@ -231,7 +231,7 @@ export function InsurancePolicyListV2<T extends InsurancePolicyListRowV2>({
                         onClick={() => onDeactivate(policy.id)}
                         disabled={policy.status === "Inactive"}
                       >
-                        <Ban className="h-4 w-4 mr-2" />
+                        <Ban className="h-4 w-4" />
                         Deactivate
                       </DropdownMenuItem>
                     </DropdownMenuContent>

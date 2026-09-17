@@ -974,8 +974,12 @@ describe("settings page wiring (source)", () => {
   const v2End = page.indexOf("\n  return (", page.indexOf("<LeaveDialogV2", v2Start));
   const v2 = page.slice(v2Start, v2End);
 
-  it("Pricing rules, Tax and fees and Security deposit sit outside the page's read-only fieldset", () => {
-    expect(page).toMatch(/const V2_PAGES_GATING_OWN_CONTROLS = new Set\(\[[^\]]*'pricing', 'fees', 'preauth'[^\]]*\]\);/);
+  it("Custom pricing and General (which holds Tax and fees and Security deposit) sit outside the page's read-only fieldset", () => {
+    expect(page).toMatch(/const V2_PAGES_GATING_OWN_CONTROLS = new Set\(\[[^\]]*'general'[^\]]*\]\);/);
+    expect(page).toMatch(/const V2_PAGES_GATING_OWN_CONTROLS = new Set\(\[[^\]]*'pricing'[^\]]*\]\);/);
+    // Each money section takes its own permission, not the page's.
+    expect(v2).toContain("canEdit={canEditSettings('fees')}");
+    expect(v2).toContain("canEdit={canEditSettings('preauth')}");
   });
 
   it("Installments, Pay as you go, Auto-extension, Promo codes and Extras sit outside it too, so a viewer can retry, copy and show more", () => {
@@ -987,7 +991,8 @@ describe("settings page wiring (source)", () => {
     const bar = page.match(/const V2_PAGES_WITH_SAVE_BAR = new Set\(\[([^\]]*)\]\);/);
     expect(bar).not.toBeNull();
     expect(bar![1]).not.toContain("'installments'");
-    expect(bar![1]).toContain("'pricing', 'fees', 'preauth'");
+    // Tax and fees and Security deposit save through General's bar now.
+    expect(bar![1]).toContain("'general', 'templates', 'pricing'");
     // v1 still mounts it bare.
     expect(page.slice(v2End)).toContain("<InstallmentSettings />");
   });

@@ -15,10 +15,9 @@
  */
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Loader2, MapPinned, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { Loader2, Search } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import { Input } from "@/components/ui-v2/input";
-import { Switch } from "@/components/ui-v2/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui-v2/select";
 import { Skeleton } from "@/components/ui-v2/skeleton";
 import {
@@ -31,21 +30,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui-v2/alert-dialog";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui-v2/tooltip";
 import { SettingsPanel, SettingsRow, useSettingsPageSave } from "@/components/settings-v2/settings-kit";
 import type { RegisterSectionSave } from "@/components/settings-v2/pricing-money-parts";
 import {
-  SettingsEmptyState,
   SettingsLoadError,
   SettingsNoMatch,
   SettingsSaveState,
   SettingsSectionSkeleton,
   TabularValue,
-  TruncatedText,
   describeSaveError,
   formatSettingsMoney,
   formatSettingsNumber,
-  settingsControlProps,
   useSettingsSaveStatus,
 } from "@/components/settings-v2/section-states";
 import type { LocationSettings, PickupLocation } from "@/hooks/use-pickup-locations";
@@ -503,7 +498,10 @@ export interface LocationFormState {
   fixedPickupAddress: string;
   fixedReturnAddress: string;
   sameReturnAddress: boolean;
+  /** The pickup (delivery) area's radius. */
   areaRadius: number | null;
+  /** The return (collection) area's own radius. v1 wrote `areaRadius` to both. */
+  returnAreaRadius: number | null;
   areaDeliveryFee: number | null;
   areaCenterLat: number | null;
   areaCenterLon: number | null;
@@ -528,6 +526,7 @@ export function locationFormFromSettings(
     fixedReturnAddress: s.fixed_return_address || "",
     sameReturnAddress: !s.fixed_return_address || s.fixed_return_address === s.fixed_pickup_address,
     areaRadius: s.pickup_area_radius_km != null ? kmToDisplay(s.pickup_area_radius_km) : 100,
+    returnAreaRadius: s.return_area_radius_km != null ? kmToDisplay(s.return_area_radius_km) : 100,
     areaDeliveryFee: s.area_delivery_fee ?? 0,
     areaCenterLat: s.area_center_lat,
     areaCenterLon: s.area_center_lon,
@@ -550,7 +549,10 @@ export function isLocationFormDirty(current: LocationFormState, saved: LocationF
 
 export interface AreaFieldErrors {
   center?: string;
+  /** The pickup area's radius (checked while pickup area delivery is on). */
   radius?: string;
+  /** The return area's radius (checked while return area collection is on). */
+  returnRadius?: string;
   fee?: string;
   /** The price bands as a whole: none left, or two at the same distance. */
   bands?: string;
@@ -560,24 +562,34 @@ export interface AreaFieldErrors {
 }
 
 /**
- * Inline errors for the Area Settings fields. Empty when area delivery is off.
- * The price-band checks are v1's save-time checks (which only ever toasted),
- * shown beside the band instead.
+ * Inline errors for the area fields. Empty when area delivery is off. Each
+ * side's radius is checked only while that side's area option is on (a hidden
+ * field never blocks a save). The price-band checks are v1's save-time checks
+ * (which only ever toasted), shown beside the band instead.
  */
 export function areaFieldErrors(f: LocationFormState, unitLabel: string): AreaFieldErrors {
   const out: AreaFieldErrors = {};
   if (!(f.pickupAreaEnabled || f.returnAreaEnabled)) return out;
   if (!f.areaCenterLat || !f.areaCenterLon) out.center = "Pick a center point from the address suggestions.";
-  if (f.areaRadius == null || !Number.isFinite(f.areaRadius)) {
-    out.radius = `Enter a radius of at least 1 ${unitLabel}.`;
-  } else if (f.areaRadius < 1) {
-    out.radius = `Radius must be at least 1 ${unitLabel}.`;
+  const radiusError = (radius: number | null) =>
+    radius == null || !Number.isFinite(radius)
+      ? `Enter a radius of at least 1 ${unitLabel}.`
+      : radius < 1
+        ? `Radius must be at least 1 ${unitLabel}.`
+        : undefined;
+  if (f.pickupAreaEnabled) {
+    const radius = radiusError(f.areaRadius);
+    if (radius) out.radius = radius;
+  }
+  if (f.returnAreaEnabled) {
+    const radius = radiusError(f.returnAreaRadius);
+    if (radius) out.returnRadius = radius;
   }
   if (!f.deliveryTiersEnabled && f.areaDeliveryFee != null && f.areaDeliveryFee < 0) {
     out.fee = "Fee can't be negative.";
   }
   if (f.deliveryTiersEnabled) {
-    if (f.tiers.length === 0) out.bands = "Add at least one price band, or turn off tiered pricing.";
+    if (f.tiers.length === 0) out.bands = "Add at least one price band, or choose One fee.";
     const rows: Record<number, string> = {};
     f.tiers.forEach((t, i) => {
       if (t.up_to !== null && (!Number.isFinite(t.up_to) || t.up_to <= 0)) {
@@ -619,56 +631,65 @@ export function centerCoordinateLabel(lat: number | null, lon: number | null): s
   return `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
 }
 
+export interface LocationSaveContext {
+  unitLabel: string;
+  /** Active locations on each side, or `null` while the list is loading or failed. */
+  pickupActiveLocations: number | null;
+  returnActiveLocations: number | null;
+}
+
+/** Why an option can't be saved, keyed by the row that shows it. */
+export interface LocationOptionIssues {
+  pickupOptions?: string;
+  returnOptions?: string;
+  pickupAddress?: string;
+  returnAddress?: string;
+  pickupList?: string;
+  returnList?: string;
+}
+
+/** The option checks `validateLocationSettingsV2` runs before the area checks. */
+export function locationOptionIssues(f: LocationFormState, ctx: LocationSaveContext): LocationOptionIssues {
+  const out: LocationOptionIssues = {};
+  if (!f.pickupFixedEnabled && !f.pickupMultipleEnabled && !f.pickupAreaEnabled) out.pickupOptions = "Turn on at least one pickup option.";
+  if (!f.returnFixedEnabled && !f.returnMultipleEnabled && !f.returnAreaEnabled) out.returnOptions = "Turn on at least one return option.";
+  if (f.pickupFixedEnabled && !f.fixedPickupAddress.trim()) out.pickupAddress = "Enter your pickup address.";
+  if (f.returnFixedEnabled && !f.sameReturnAddress && !f.fixedReturnAddress.trim()) out.returnAddress = "Enter your return address.";
+  if (f.pickupMultipleEnabled && ctx.pickupActiveLocations === 0) {
+    out.pickupList = "Delivery locations is on but none are active. Add or switch on a location, or turn it off.";
+  }
+  if (f.returnMultipleEnabled && ctx.returnActiveLocations === 0) {
+    out.returnList = "Collection locations is on but none are active. Add or switch on a location, or turn it off.";
+  }
+  return out;
+}
+
 /**
  * The first reason the form can't be saved, or null. Mirrors the v1 checks and
  * adds the ones v1 let through: a delivery/collection list with nothing active,
  * a zero/negative/blank radius (v1 silently saved 100) and a negative fee.
  * Active-location counts are `null` while the list is loading or failed.
  */
-export function validateLocationSettingsV2(
-  f: LocationFormState,
-  ctx: { unitLabel: string; pickupActiveLocations: number | null; returnActiveLocations: number | null },
-): string | null {
-  if (!f.pickupFixedEnabled && !f.pickupMultipleEnabled && !f.pickupAreaEnabled) return "Turn on at least one pickup option.";
-  if (!f.returnFixedEnabled && !f.returnMultipleEnabled && !f.returnAreaEnabled) return "Turn on at least one return option.";
-  if (f.pickupFixedEnabled && !f.fixedPickupAddress.trim()) return "Enter your pickup address.";
-  if (f.returnFixedEnabled && !f.sameReturnAddress && !f.fixedReturnAddress.trim()) return "Enter your return address.";
-  if (f.pickupMultipleEnabled && ctx.pickupActiveLocations === 0) {
-    return "Delivery locations is on but none are active. Add or switch on a location, or turn it off.";
-  }
-  if (f.returnMultipleEnabled && ctx.returnActiveLocations === 0) {
-    return "Collection locations is on but none are active. Add or switch on a location, or turn it off.";
-  }
+export function validateLocationSettingsV2(f: LocationFormState, ctx: LocationSaveContext): string | null {
+  const options = locationOptionIssues(f, ctx);
+  const option =
+    options.pickupOptions ??
+    options.returnOptions ??
+    options.pickupAddress ??
+    options.returnAddress ??
+    options.pickupList ??
+    options.returnList;
+  if (option) return option;
   const area = areaFieldErrors(f, ctx.unitLabel);
   const firstBand = area.bandRows ? Number(Object.keys(area.bandRows)[0]) : null;
   const bandRow =
     firstBand !== null && area.bandRows
       ? `Price band "${bandLabel(f.tiers[firstBand], ctx.unitLabel)}": ${area.bandRows[firstBand]}`
       : undefined;
-  return area.center ?? area.radius ?? area.fee ?? area.bands ?? bandRow ?? area.maxDistance ?? null;
+  return (
+    area.center ?? area.radius ?? area.returnRadius ?? area.fee ?? area.bands ?? bandRow ?? area.maxDistance ?? null
+  );
 }
-
-/**
- * v1 markup inside the v2 Locations page tints icons and dialog glyphs with
- * `text-primary`. The v2 dark primary is a deep indigo that nearly disappears
- * on a dark card, so text-primary reads as a lighter indigo in dark mode there.
- */
-export const LOCATIONS_V2_CLASS = "dark:[&_.text-primary]:text-indigo-300";
-
-/** Phone layout and contrast for the Area Settings card, applied from a wrapper. */
-export const AREA_SETTINGS_V2_CLASS = [
-  // Price bands: the distance takes its own line, then fee and delete.
-  "max-sm:[&_.space-y-3>div.gap-2]:flex-wrap",
-  "max-sm:[&_.space-y-3>div.gap-2>.flex-1]:basis-full",
-  "max-sm:[&_.space-y-3>div.gap-2>.w-32]:flex-1",
-  // Maximum delivery distance: the explanation above a full-width input.
-  "max-sm:[&_.space-y-3>div.border-t]:flex-col",
-  "max-sm:[&_.space-y-3>div.border-t]:items-stretch",
-  "max-sm:[&_.space-y-3>div.border-t>.w-32]:w-full",
-  // amber-500 text is too faint on a light card.
-  "[&_.text-amber-500]:text-amber-700",
-  "dark:[&_.text-amber-500]:text-amber-400",
-].join(" ");
 
 /* -------------------------------------------------------------------------- */
 /* Locations: delivery / collection list                                       */
@@ -752,46 +773,21 @@ export interface LocationsListV2Props {
   onRetry: () => unknown;
   retrying?: boolean;
   onAdd: () => void;
-  onEdit: (location: PickupLocation) => void;
-  onConfirmDelete: (id: string, name: string) => void;
-  onToggleActive: (location: PickupLocation) => void;
-  isUpdating: boolean;
+  /** Opens the location's dialog, which holds its fields, on/off and delete. */
+  onOpen: (location: PickupLocation) => void;
   currencyCode: string;
   readOnly: boolean;
-  /** The row whose delete is in flight: it shows "Deleting…" and can't be acted on. */
-  pendingDeleteId?: string | null;
 }
 
-function IconAction({
-  label,
-  onClick,
-  destructive,
-  children,
-}: {
-  label: string;
-  onClick: () => void;
-  destructive?: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          aria-label={label}
-          onClick={onClick}
-          className={destructive ? "text-destructive hover:text-destructive" : undefined}
-        >
-          {children}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
-    </Tooltip>
-  );
-}
+/** The v2 hover pair: a light primary tint, never a grey or white fill. */
+const LOCATION_ROW_HOVER = "hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]";
 
+/**
+ * One side's delivery or collection locations. Each location is ONE row: its
+ * name, address, fee, and a muted "Off" when customers can't pick it. There is
+ * no switch or icon button in a row; pressing it opens the location's dialog.
+ * A viewer sees the same rows without the press.
+ */
 export function LocationsListV2({
   side,
   locations,
@@ -800,13 +796,9 @@ export function LocationsListV2({
   onRetry,
   retrying,
   onAdd,
-  onEdit,
-  onConfirmDelete,
-  onToggleActive,
-  isUpdating,
+  onOpen,
   currencyCode,
   readOnly,
-  pendingDeleteId = null,
 }: LocationsListV2Props) {
   const [query, setQuery] = useState("");
   const noun = side === "pickup" ? "delivery" : "collection";
@@ -825,20 +817,24 @@ export function LocationsListV2({
       />
     );
   }
+
+  const addButton = readOnly ? null : (
+    <Button type="button" variant="outline" size="sm" onClick={onAdd}>
+      Add location
+    </Button>
+  );
+
   if (locations.length === 0) {
     return (
-      <SettingsEmptyState
-        variant="compact"
-        icon={MapPinned}
-        headline={`No ${noun} locations yet`}
-        body={
-          side === "pickup"
-            ? "Places customers can choose for delivery at checkout, like an airport terminal or a hotel. Until you add one, they see an empty list."
-            : "Places customers can choose for returning the car, like an airport terminal or a hotel. Until you add one, they see an empty list."
-        }
-        primaryAction={readOnly ? undefined : { label: "Add your first location", icon: Plus, onClick: onAdd }}
-        footnote={readOnly ? undefined : "A location saves as soon as you add it."}
-      />
+      <div className="space-y-3" data-settings-state="empty">
+        <p className="text-[13px] leading-snug text-muted-foreground">
+          No {noun} locations yet.{" "}
+          {side === "pickup"
+            ? "Add places customers can choose for delivery, like an airport terminal or a hotel."
+            : "Add places customers can choose for returning the car, like an airport terminal or a hotel."}
+        </p>
+        {addButton}
+      </div>
     );
   }
 
@@ -847,113 +843,82 @@ export function LocationsListV2({
   const visible = showSearch ? filterLocations(locations, query) : locations;
 
   return (
-    <TooltipProvider delayDuration={300}>
-      <div className="space-y-3" data-settings-state="content">
-        {!!error && (
-          <SettingsLoadError variant="inline" thing={`${noun} locations`} error={error} onRetry={onRetry} retrying={retrying} />
-        )}
+    <div className="space-y-3" data-settings-state="content">
+      {!!error && (
+        <SettingsLoadError variant="inline" thing={`${noun} locations`} error={error} onRetry={onRetry} retrying={retrying} />
+      )}
 
+      {showSearch && (
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-xs text-muted-foreground tabular-nums">
-            {formatSettingsNumber(locations.length)} {locations.length === 1 ? "location" : "locations"} ·{" "}
-            {formatSettingsNumber(activeCount)} active
+            {formatSettingsNumber(locations.length)} locations · {formatSettingsNumber(activeCount)} active
           </p>
-          {showSearch && (
-            <div className="relative w-full sm:w-56">
-              <Search
-                className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
-                aria-hidden="true"
-              />
-              <Input
-                type="search"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder={`Search ${noun} locations`}
-                aria-label={`Search ${noun} locations`}
-                className="h-8 pl-8 text-sm"
-              />
-            </div>
-          )}
+          <div className="relative w-full sm:w-56">
+            <Search
+              className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <Input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={`Search ${noun} locations`}
+              aria-label={`Search ${noun} locations`}
+              className="h-8 rounded-xl pl-8 text-sm"
+            />
+          </div>
         </div>
+      )}
 
-        {visible.length === 0 ? (
-          <SettingsNoMatch size="compact" query={query} noun={`${noun} locations`} onClear={() => setQuery("")} />
-        ) : (
-          <ul
-            aria-label={`${side === "pickup" ? "Delivery" : "Collection"} locations`}
-            className="max-h-[22rem] space-y-2 overflow-y-auto overscroll-contain pr-1"
-          >
-            {visible.map((location) => {
-              const fee = Number(location.delivery_fee);
-              const free = !Number.isFinite(fee) || fee === 0;
-              const deleting = pendingDeleteId === location.id;
-              return (
-                <li
-                  key={location.id}
-                  aria-busy={deleting || undefined}
-                  className={cn(
-                    "flex items-center gap-3 rounded-2xl bg-muted/50 px-3 py-2.5",
-                    (!location.is_active || deleting) && "opacity-60",
-                  )}
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <TruncatedText text={location.name} className="text-sm font-medium text-foreground" />
-                      {free ? (
-                        <span className="shrink-0 text-xs font-medium text-emerald-700 dark:text-emerald-400">Free</span>
-                      ) : (
-                        <TabularValue negative={fee < 0} className="shrink-0 text-xs font-medium">
-                          {formatSettingsMoney(fee, currencyCode)}
-                        </TabularValue>
-                      )}
-                    </div>
-                    <TruncatedText text={location.address} className="text-xs text-muted-foreground" />
-                    {location.description && (
-                      <TruncatedText text={location.description} className="text-xs text-muted-foreground/80" />
+      {visible.length === 0 ? (
+        <SettingsNoMatch size="compact" query={query} noun={`${noun} locations`} onClear={() => setQuery("")} />
+      ) : (
+        <ul
+          aria-label={`${side === "pickup" ? "Delivery" : "Collection"} locations`}
+          className="-mx-3 max-h-[22rem] space-y-0.5 overflow-y-auto overscroll-contain"
+        >
+          {visible.map((location) => {
+            const fee = Number(location.delivery_fee);
+            const content = (
+              <>
+                <span className="min-w-0 flex-1">
+                  <span title={location.name} className="block truncate text-sm font-medium text-foreground">
+                    {location.name}
+                  </span>
+                  <span title={location.address} className="block truncate text-xs text-muted-foreground">
+                    {location.address}
+                  </span>
+                </span>
+                <TabularValue negative={fee < 0} className="shrink-0 text-sm">
+                  {!Number.isFinite(fee) || fee === 0 ? "No fee" : formatSettingsMoney(fee, currencyCode)}
+                </TabularValue>
+                {!location.is_active && <span className="w-7 shrink-0 text-right text-xs text-muted-foreground">Off</span>}
+              </>
+            );
+            return (
+              <li key={location.id}>
+                {readOnly ? (
+                  <div className="flex min-w-0 items-center gap-3 rounded-xl px-3 py-2.5">{content}</div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => onOpen(location)}
+                    className={cn(
+                      // Inset ring: the scrolling list would clip one drawn outside the row.
+                      "flex w-full min-w-0 items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors outline-none focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-ring/30",
+                      LOCATION_ROW_HOVER,
                     )}
-                  </div>
-                  {deleting ? (
-                    <span role="status" className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
-                      <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
-                      Deleting…
-                    </span>
-                  ) : (
-                  <div className="flex shrink-0 items-center gap-1">
-                    <Switch
-                      checked={location.is_active}
-                      onCheckedChange={() => onToggleActive(location)}
-                      aria-label={`${location.is_active ? "Switch off" : "Switch on"} ${location.name}`}
-                      {...settingsControlProps(!readOnly, isUpdating)}
-                    />
-                    {!readOnly && (
-                      <>
-                        <IconAction label={`Edit ${location.name}`} onClick={() => onEdit(location)}>
-                          <Pencil />
-                        </IconAction>
-                        <IconAction
-                          label={`Delete ${location.name}`}
-                          destructive
-                          onClick={() => onConfirmDelete(location.id, location.name)}
-                        >
-                          <Trash2 />
-                        </IconAction>
-                      </>
-                    )}
-                  </div>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        )}
+                  >
+                    {content}
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
 
-        {!readOnly && (
-          <Button type="button" variant="outline" size="sm" onClick={onAdd} className="w-full">
-            <Plus data-icon="inline-start" />
-            Add location
-          </Button>
-        )}
-      </div>
-    </TooltipProvider>
+      {addButton}
+    </div>
   );
 }

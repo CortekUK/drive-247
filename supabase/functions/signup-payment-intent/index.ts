@@ -181,6 +181,25 @@ Deno.serve(async (req) => {
           // to itself is always false and would silently keep charging the old
           // amount after a plan switch.
           const planChanged = plan.id !== meta.planId;
+          // The price of the SAME plan can change too: a super admin edits it
+          // on the Signup Plans page (Stripe Prices are immutable, so that makes
+          // a new Price). Comparing plan ids alone kept handing back the old
+          // incomplete subscription, so the card form confirmed the OLD amount
+          // while the dialog printed the new one (Sep 17 2026: Starter moved
+          // from $99 to $1, and the 3DS screen still asked for USD 99.00).
+          // Stale when the subscription's price is not the plan's current
+          // Price, or its amount differs from what the plan now costs.
+          const item = existing.items?.data?.[0];
+          const existingPriceId: string | null = item?.price?.id ?? null;
+          const existingAmount: number | null =
+            typeof item?.price?.unit_amount === "number"
+              ? item.price.unit_amount * (typeof item?.quantity === "number" ? item.quantity : 1)
+              : null;
+          const priceChanged =
+            (!!plan.stripePriceId && !!existingPriceId && existingPriceId !== plan.stripePriceId) ||
+            (existingAmount !== null && existingAmount !== plan.amountCents) ||
+            (!plan.stripePriceId && !!item?.price?.lookup_key && item.price.lookup_key !== plan.lookupKey);
+          const stale = planChanged || priceChanged;
 
           if (PAID_STATUSES.has(existing.status)) {
             // Already paid. Never charge again, never offer a card form.
@@ -204,7 +223,7 @@ Deno.serve(async (req) => {
             });
           }
 
-          if (existing.status === "incomplete" && !planChanged) {
+          if (existing.status === "incomplete" && !stale) {
             const secret = clientSecretOf(existing);
             if (secret) {
               await writeSignupMeta(supabase, user.id, {
@@ -227,14 +246,19 @@ Deno.serve(async (req) => {
             console.warn(`${LOG} subscription ${existing.id} is incomplete with no client secret`);
           }
 
-          // Plan changed before paying: cancel the stale incomplete
+          // Plan or its price changed before paying: cancel the stale incomplete
           // subscription FIRST. Two live subscriptions for one tenant would
           // collide with the partial unique index on tenant_subscriptions and
           // strand one of them permanently.
-          if (existing.status === "incomplete" && planChanged) {
+          if (existing.status === "incomplete" && stale) {
             try {
               await stripe.subscriptions.cancel(existing.id);
-              console.log(`${LOG} cancelled incomplete ${existing.id} — plan changed to ${plan.id}`);
+              console.log(
+                `${LOG} cancelled incomplete ${existing.id} — ` +
+                  (planChanged
+                    ? `plan changed to ${plan.id}`
+                    : `price changed (${existingPriceId ?? "?"} ${existingAmount ?? "?"} -> ${plan.stripePriceId ?? plan.lookupKey} ${plan.amountCents})`),
+              );
             } catch (e) {
               console.warn(`${LOG} could not cancel ${existing.id} (non-fatal):`, e);
             }

@@ -28,7 +28,6 @@ import {
   rentalEditsCoveredBySections,
   rentalFormDiffers,
   leadTimeHours,
-  lockboxMethodStatus,
   normalizeLoadedLead,
   numberBoxWidth,
   reminderHoursRangeNote,
@@ -39,6 +38,7 @@ import {
   validateCodeLength,
   validateDriverAge,
   validateDuration,
+  V2_SECTION_FORM_KEYS,
 } from "@/components/settings-v2/business-rules-logic";
 
 const AGE_MSG = "Enter an age between 16 and 99, or leave it blank to use the booking site's default of 21.";
@@ -192,30 +192,6 @@ describe("lockbox", () => {
     expect(validateCodeLength(21)).toBe(CODE_MSG);
     expect(validateCodeLength(-5)).toBe(CODE_MSG);
     expect(validateCodeLength(4.5)).toBe(CODE_MSG);
-  });
-
-  it("method status: email is always fine", () => {
-    expect(lockboxMethodStatus(["email"], { smsReady: false })).toEqual({ method: "email", extraSaved: [], warning: null });
-    expect(lockboxMethodStatus(null, { smsReady: false }).method).toBe("email");
-  });
-
-  it("method status: text without Twilio is a real risk", () => {
-    expect(lockboxMethodStatus(["sms"], { smsReady: true }).warning).toBeNull();
-    const status = lockboxMethodStatus(["sms"], { smsReady: false });
-    expect(status.warning?.title).toBe("Text messages aren't set up");
-    expect(status.warning?.needsTwilio).toBe(true);
-  });
-
-  it("method status: WhatsApp is retired and falls back to email", () => {
-    const status = lockboxMethodStatus(["whatsapp"], { smsReady: true });
-    expect(status.warning?.title).toBe("WhatsApp codes aren't sent any more");
-    expect(status.warning?.needsTwilio).toBe(false);
-    expect(lockboxMethodStatus(["pigeon"], { smsReady: true }).warning?.title).toBe('We can\'t send codes by "pigeon"');
-  });
-
-  it("method status: lists the other methods of a legacy array once", () => {
-    // slice(1) = [sms, sms, email] -> unique [sms, email] -> without the shown method -> [sms]
-    expect(lockboxMethodStatus(["email", "sms", "sms", "email"], { smsReady: true }).extraSaved).toEqual(["sms"]);
   });
 
   it("describes send offsets", () => {
@@ -430,9 +406,46 @@ describe("keepUnsavedBusinessEdits", () => {
     });
   });
 
-  it("never holds on to a field outside the business pages (v1 behaviour for pricing and fees)", () => {
-    const out = keepUnsavedBusinessEdits({ tax_percentage: 9, min_rental_days: 0 }, { tax_percentage: 5, min_rental_days: 0 }, { tax_percentage: 7, min_rental_days: 2 });
-    expect(out).toEqual({ tax_percentage: 7, min_rental_days: 2 });
+  it("keeps an unsaved fee, deposit or monthly rate when an instant switch on General refreshes the row", () => {
+    // Operator typed a 9% tax, a 250 deposit and a 31-day monthly tier (unsaved),
+    // then flipped a switch that saves at once and re-read the row.
+    const lastSynced = { tax_percentage: 5, global_deposit_amount: 100, monthly_tier_days: 30, installments_enabled: false };
+    const current = { tax_percentage: 9, global_deposit_amount: 250, monthly_tier_days: 31, installments_enabled: false };
+    const next = { tax_percentage: 5, global_deposit_amount: 100, monthly_tier_days: 30, installments_enabled: true };
+    expect(keepUnsavedBusinessEdits(current, lastSynced, next)).toEqual({
+      tax_percentage: 9, // edited, kept
+      global_deposit_amount: 250, // edited, kept
+      monthly_tier_days: 31, // edited, kept
+      installments_enabled: true, // untouched, fresh value
+    });
+  });
+
+  it("never holds on to a field no v2 section saves", () => {
+    const out = keepUnsavedBusinessEdits(
+      { pay_as_you_go_enabled: true, min_rental_days: 0 },
+      { pay_as_you_go_enabled: false, min_rental_days: 0 },
+      { pay_as_you_go_enabled: false, min_rental_days: 2 },
+    );
+    expect(out).toEqual({ pay_as_you_go_enabled: false, min_rental_days: 2 });
+  });
+
+  it("keeps exactly the Business-rules fields plus the fees, deposit and monthly rate fields", () => {
+    expect([...V2_SECTION_FORM_KEYS].sort()).toEqual(
+      [
+        ...BUSINESS_FORM_KEYS,
+        "tax_enabled",
+        "tax_percentage",
+        "service_fee_enabled",
+        "service_fee_type",
+        "service_fee_value",
+        "service_fee_amount",
+        "security_deposit_enabled",
+        "deposit_charge_enabled",
+        "deposit_mode",
+        "global_deposit_amount",
+        "monthly_tier_days",
+      ].sort(),
+    );
   });
 
   it("after the edited section saves, the kept value is the saved value", () => {

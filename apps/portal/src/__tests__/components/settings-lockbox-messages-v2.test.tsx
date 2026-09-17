@@ -1,7 +1,9 @@
 /**
- * v2 Settings › Key handover › Lockbox messages
+ * v2 Settings › Customer messages › Lockbox messages
  * (`components/settings-v2/lockbox-templates-v2.tsx`): every state of the
- * editor that carries the lockbox code to the customer.
+ * editor that carries the lockbox code to the customer. The settings page
+ * mounts it email only (`channels={["email"]}`); the default (email and text
+ * message) is still covered for any other caller.
  *
  * HARNESS: `react-dom/client` + `act`, like the other settings state tests.
  * Tenant, rental settings, templates, permissions and toast are mocked, so
@@ -344,5 +346,81 @@ describe("LockboxTemplatesSectionV2 inside the page's one save bar", () => {
     });
     expect(state.templates.saveTemplate.mutateAsync).toHaveBeenCalledTimes(1);
     expect(state.templates.saveTemplate.mutateAsync).toHaveBeenCalledWith({ channel: "sms", body: "Your car is ready" });
+  });
+});
+
+describe("LockboxTemplatesSectionV2 email only (the v2 Customer messages page)", () => {
+  function mountEmailOnly(props: Record<string, unknown> = {}, inBar = false) {
+    const section = (
+      <LockboxTemplatesSectionV2
+        defaults={DEFAULTS}
+        variables={[{ key: "{{lockbox_code}}", desc: "The code" }]}
+        channels={["email"]}
+        keyHandoverHref="/settings?tab=lockbox"
+        {...props}
+      />
+    );
+    act(() => root.render(inBar ? <SettingsPageSaveProvider>{section}</SettingsPageSaveProvider> : section));
+  }
+  const emailBody = () => container.querySelector<HTMLTextAreaElement>("#v2-lockbox-email-body")!;
+
+  it("shows the instructions and the email, and no text-message block, count or Twilio note", () => {
+    mountEmailOnly();
+    expect(container.querySelector("#v2-lockbox-instructions")).not.toBeNull();
+    expect(emailBody()).not.toBeNull();
+    expect(sms()).toBeNull();
+    expect(text()).not.toContain("Text message");
+    expect(text()).not.toContain("/ 160");
+    expect(text()).not.toContain("Twilio");
+    expect(text()).toContain("The email customers receive with their lockbox code.");
+    expect(text()).toContain("Included in every lockbox email.");
+    expect(text()).not.toContain("and text message");
+  });
+
+  it("when lockbox handover is off, points at Key handover in General", () => {
+    state.rental = { ...state.rental, settings: { lockbox_enabled: false } };
+    mountEmailOnly();
+    expect(text()).toContain(
+      "Turn on lockbox handover in General, under Key handover, and save. Then you can edit the email that sends the code.",
+    );
+    expect(container.querySelector('a[href="/settings?tab=lockbox"]')?.textContent).toBe("Open Key handover");
+  });
+
+  it("the page's Save changes writes the email only", async () => {
+    const registerSave = vi.fn();
+    mountEmailOnly({ registerSave }, true);
+    setTextarea(emailBody(), "Your code is {{lockbox_code}}");
+    const save = registerSave.mock.calls.filter(([k]) => k === "lockbox-messages").at(-1)?.[1];
+    await act(async () => {
+      await save();
+    });
+    expect(state.templates.saveTemplate.mutateAsync).toHaveBeenCalledTimes(1);
+    expect(state.templates.saveTemplate.mutateAsync).toHaveBeenCalledWith({
+      channel: "email",
+      subject: "Your Vehicle Keys - Lockbox Code",
+      body: "Your code is {{lockbox_code}}",
+    });
+  });
+
+  it("Reset all resets the email and the instructions, never the hidden text message", async () => {
+    const { toast } = await import("@/hooks/use-toast");
+    const order: string[] = [];
+    state.templates.saveTemplate.mutateAsync = vi.fn(async ({ channel }: { channel: string }) => void order.push(channel));
+    state.rental.updateSettings = vi.fn(async () => void order.push("instructions"));
+    mountEmailOnly();
+    const trigger = container.querySelector<HTMLButtonElement>('button[aria-label="Reset all messages to default"]')!;
+    await act(async () => trigger.click());
+    expect(document.body.textContent).toContain(
+      "The default instructions and the email (subject and message) go back to the default wording.",
+    );
+    const confirm = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find((b) => b.textContent?.trim() === "Reset all")!;
+    await act(async () => {
+      confirm.click();
+    });
+    expect(order).toEqual(["email", "instructions"]);
+    expect(vi.mocked(toast).mock.calls.at(-1)?.[0]).toMatchObject({
+      title: "Lockbox messages reset",
+      description: "The instructions and email use the default wording again.",
+    });
   });
 });

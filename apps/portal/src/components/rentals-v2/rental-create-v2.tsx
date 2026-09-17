@@ -3452,7 +3452,7 @@ export const RentalCreateV2 = () => {
                               type="button"
                               variant="outline"
                               size="sm"
-                              className="flex-1 border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700"
+                              className="flex-1 border-primary/30 text-primary hover:bg-primary/10 hover:text-primary dark:border-[hsl(var(--v2-link,var(--primary))_/_0.3)] dark:text-[hsl(var(--v2-link,var(--primary)))] dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-[hsl(var(--v2-link,var(--primary)))]"
                               disabled={cancelingVerification || creatingVerification}
                               onClick={() => {
                                 setPendingVerificationAction("restart");
@@ -3968,7 +3968,7 @@ export const RentalCreateV2 = () => {
                       }}
                       className="space-y-2"
                     >
-                      <label className={cn("flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors", !isPayAsYouGo ? "border-primary bg-primary/5" : "hover:border-primary/40 hover:bg-primary/5 dark:hover:border-indigo-300/40 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]")}>
+                      <label className={cn("flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors", !isPayAsYouGo ? "border-primary bg-primary/5" : "hover:border-primary/40 hover:bg-primary/5 dark:hover:border-[hsl(var(--v2-link,var(--primary))_/_0.4)] dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]")}>
                         <RadioGroupItem value="regular" />
                         <div>
                           <span className="text-sm font-medium">Regular</span>
@@ -3976,7 +3976,7 @@ export const RentalCreateV2 = () => {
                         </div>
                       </label>
                       {(rentalSettings as any)?.pay_as_you_go_enabled && (
-                        <label className={cn("flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors", isPayAsYouGo ? "border-primary bg-primary/5" : "hover:border-primary/40 hover:bg-primary/5 dark:hover:border-indigo-300/40 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]")}>
+                        <label className={cn("flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors", isPayAsYouGo ? "border-primary bg-primary/5" : "hover:border-primary/40 hover:bg-primary/5 dark:hover:border-[hsl(var(--v2-link,var(--primary))_/_0.4)] dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]")}>
                           <RadioGroupItem value="payg" />
                           <div>
                             <span className="text-sm font-medium">Pay As You Go</span>
@@ -3985,7 +3985,7 @@ export const RentalCreateV2 = () => {
                         </label>
                       )}
                       {(rentalSettings as any)?.auto_extend_enabled && (
-                        <label className={cn("flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors", isAutoExtend ? "border-primary bg-primary/5" : "hover:border-primary/40 hover:bg-primary/5 dark:hover:border-indigo-300/40 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]")}>
+                        <label className={cn("flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors", isAutoExtend ? "border-primary bg-primary/5" : "hover:border-primary/40 hover:bg-primary/5 dark:hover:border-[hsl(var(--v2-link,var(--primary))_/_0.4)] dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]")}>
                           <RadioGroupItem value="auto_extend" />
                           <div>
                             <span className="text-sm font-medium">Auto-Extend</span>
@@ -5175,7 +5175,7 @@ export const RentalCreateV2 = () => {
                               key={plan.type}
                               className={cn(
                                 "flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors",
-                                installmentPlanType === plan.type ? "border-primary bg-primary/5" : "hover:border-primary/40 hover:bg-primary/5 dark:hover:border-indigo-300/40 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]"
+                                installmentPlanType === plan.type ? "border-primary bg-primary/5" : "hover:border-primary/40 hover:bg-primary/5 dark:hover:border-[hsl(var(--v2-link,var(--primary))_/_0.4)] dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]"
                               )}
                             >
                               <RadioGroupItem value={plan.type} id={`plan-${plan.type}`} />
@@ -5590,11 +5590,11 @@ export const RentalCreateV2 = () => {
                     <div className="border-t pt-4">
                       <Label className="text-sm font-medium mb-3 block">Key Handover Method</Label>
                       <RadioGroup value={deliveryMethod} onValueChange={(val) => setDeliveryMethod(val as 'in_person' | 'lockbox')} className="flex gap-4">
-                        <label className={cn("flex items-center gap-2.5 rounded-lg border p-3 flex-1 cursor-pointer transition-colors", deliveryMethod === 'in_person' ? "border-primary bg-primary/5" : "hover:border-primary/40 hover:bg-primary/5 dark:hover:border-indigo-300/40 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]")}>
+                        <label className={cn("flex items-center gap-2.5 rounded-lg border p-3 flex-1 cursor-pointer transition-colors", deliveryMethod === 'in_person' ? "border-primary bg-primary/5" : "hover:border-primary/40 hover:bg-primary/5 dark:hover:border-[hsl(var(--v2-link,var(--primary))_/_0.4)] dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]")}>
                           <RadioGroupItem value="in_person" id="handover-in-person" />
                           <div><span className="text-sm font-medium">In Person</span><p className="text-xs text-muted-foreground">Hand keys directly to customer</p></div>
                         </label>
-                        <label className={cn("flex items-center gap-2.5 rounded-lg border p-3 flex-1 cursor-pointer transition-colors", deliveryMethod === 'lockbox' ? "border-primary bg-primary/5" : "hover:border-primary/40 hover:bg-primary/5 dark:hover:border-indigo-300/40 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]")}>
+                        <label className={cn("flex items-center gap-2.5 rounded-lg border p-3 flex-1 cursor-pointer transition-colors", deliveryMethod === 'lockbox' ? "border-primary bg-primary/5" : "hover:border-primary/40 hover:bg-primary/5 dark:hover:border-[hsl(var(--v2-link,var(--primary))_/_0.4)] dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]")}>
                           <RadioGroupItem value="lockbox" id="handover-lockbox" />
                           <div className="flex items-center gap-1.5"><Lock className="h-3.5 w-3.5 text-muted-foreground" /><div><span className="text-sm font-medium">Lockbox</span><p className="text-xs text-muted-foreground">Keys placed in secure lockbox</p></div></div>
                         </label>

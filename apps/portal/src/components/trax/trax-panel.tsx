@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { usePathname } from "next/navigation";
-import { useGuardedRouter } from "@/lib/leave-guard";
+import { usePathname, useRouter } from "next/navigation";
+import { runThroughLeaveGuard } from "@/lib/leave-guard";
 import { History, LifeBuoy, Maximize2, Minimize2, SquarePen, X } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui-v2/tooltip";
@@ -125,8 +125,7 @@ export function TraxPanel() {
   const workspace = useTraxSupportOptional();
   const support = workspace?.support ?? null;
   const pathname = usePathname();
-  // Asks a v2 page with unsaved edits before opening Support.
-  const router = useGuardedRouter();
+  const router = useRouter();
   const onFullPage = isTraxPath(pathname);
   const open = !!trax?.sheetOpen && !onFullPage;
 
@@ -236,9 +235,15 @@ export function TraxPanel() {
 
   const { closeSheet } = trax;
   const view = workspace?.view ?? "conversation";
+  // Asks a v2 page with unsaved edits before opening Support, and closes the
+  // panel only once leaving is agreed: staying keeps Trax open where it was.
+  // With no guard installed this is a plain push and close.
   const openSupport = (target: { ticketId?: string; issueId?: string }) => {
-    router.push(supportHref(target));
-    closeSheet();
+    const href = supportHref(target);
+    runThroughLeaveGuard(href, () => {
+      router.push(href);
+      closeSheet();
+    });
   };
   const viewLabel =
     view === "history"

@@ -28,6 +28,12 @@ import AddFineDialog from "@/components/fines/add-fine-dialog";
 import { MoreHorizontal } from "lucide-react";
 import { Button as ButtonV2 } from "@/components/ui-v2/button";
 import { Checkbox as CheckboxV2 } from "@/components/ui-v2/checkbox";
+import {
+  DropdownMenu as DropdownMenuV2,
+  DropdownMenuContent as DropdownMenuContentV2,
+  DropdownMenuItem as DropdownMenuItemV2,
+  DropdownMenuTrigger as DropdownMenuTriggerV2,
+} from "@/components/ui-v2/dropdown-menu";
 import { parseLocalDate } from "@/lib/date-utils";
 import {
   LIST_CLASSES,
@@ -477,8 +483,8 @@ const FinesList = () => {
 
   // v2: the rentals list's table (components/shared/list-table-v2). No pager:
   // rows arrive as the table scrolls. No View column: the row opens the fine at
-  // the same /fines/:id the v1 eye button pushes. The actions menu is the v1
-  // menu, with the same items, permission gates and handlers.
+  // the same /fines/:id the v1 eye button pushes. The actions menu is the ui-v2
+  // menu, with the v1 menu's items, permission gates and handlers.
   const renderFinesTableV2 = () => {
     const allShownSelected =
       fineRows.visible.length > 0 && fineRows.visible.every((fine) => selectedFines.includes(fine.id));
@@ -659,8 +665,11 @@ const FinesList = () => {
                       this cell) stop here. */}
                   <ListCell className="px-1 text-right" onClick={(e) => e.stopPropagation()}>
                     {(canCharge || canWaive) && (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
+                      // The ui-v2 menu, as on the other v2 lists: `w-auto`
+                      // lets a label keep one line in the trigger-wide content,
+                      // and its items already space the icon.
+                      <DropdownMenuV2>
+                        <DropdownMenuTriggerV2 asChild>
                           <ButtonV2
                             variant="ghost"
                             size="icon-sm"
@@ -673,27 +682,27 @@ const FinesList = () => {
                           >
                             <MoreHorizontal className="h-4 w-4" />
                           </ButtonV2>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
+                        </DropdownMenuTriggerV2>
+                        <DropdownMenuContentV2 align="end" className="w-auto">
                           {canEdit('fines') && canCharge && (
-                            <DropdownMenuItem
+                            <DropdownMenuItemV2
                               onClick={() => openPaymentDialog(fine)}
                             >
-                              <DollarSign className="h-4 w-4 mr-2" />
+                              <DollarSign className="h-4 w-4" />
                               Record Payment
-                            </DropdownMenuItem>
+                            </DropdownMenuItemV2>
                           )}
                           {canEdit('fines') && canWaive && (
-                            <DropdownMenuItem
+                            <DropdownMenuItemV2
                               onClick={() => waiveFineAction.mutate(fine.id)}
                               disabled={waiveFineAction.isPending}
                             >
-                              <Ban className="h-4 w-4 mr-2" />
+                              <Ban className="h-4 w-4" />
                               Waive Fine
-                            </DropdownMenuItem>
+                            </DropdownMenuItemV2>
                           )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                        </DropdownMenuContentV2>
+                      </DropdownMenuV2>
                     )}
                   </ListCell>
                 </ListRow>

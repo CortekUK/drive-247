@@ -136,3 +136,99 @@ describe("SettingsIndexV2 look", () => {
     }
   });
 });
+
+describe("SettingsIndexV2 structure", () => {
+  const sectionTitles = () => Array.from(container.querySelectorAll("section h2")).map((h) => h.textContent);
+  const entries = () =>
+    Array.from(container.querySelectorAll("section a")).map((a) => [a.querySelector("span")?.textContent, a.getAttribute("href")]);
+
+  it("head admin: Business (General, Branding, Locations, Team), Pricing (Custom pricing), Notifications", () => {
+    render(<SettingsIndexV2 canView={() => true} tenantSlug="northwind" isHeadAdmin />);
+    expect(sectionTitles()).toEqual(["Business", "Pricing", "Notifications"]);
+    expect(entries()).toEqual([
+      ["General", "/settings?tab=general"],
+      ["Branding", "/settings/appearance"],
+      ["Locations", "/settings?tab=locations"],
+      ["Team", "/users"],
+      ["Custom pricing", "/settings?tab=pricing"],
+      ["Team emails", "/settings?tab=reminders"],
+      ["Push notifications", "/settings?tab=push"],
+      ["Customer messages", "/settings?tab=templates"],
+    ]);
+  });
+
+  it("Team is for head admins only", () => {
+    render(<SettingsIndexV2 canView={() => true} tenantSlug="northwind" />);
+    expect(entries().map(([title]) => title)).not.toContain("Team");
+    render(<SettingsIndexV2 canView={() => true} tenantSlug="northwind" isHeadAdmin={false} />);
+    expect(container.querySelector('a[href="/users"]')).toBeNull();
+  });
+
+  it("no merged page, hidden page or global blacklist has an entry of its own", () => {
+    render(<SettingsIndexV2 canView={() => true} tenantSlug="northwind" isHeadAdmin />);
+    const titles = entries().map(([title]) => title);
+    for (const gone of [
+      "Driver requirements",
+      "Booking rules",
+      "Key handover",
+      "Booking site",
+      "Tax and fees",
+      "Security deposit",
+      "Promo codes",
+      "Extras",
+      "Installments",
+      "Pay as you go",
+      "Auto-extension",
+      "Global blacklist",
+      "Pricing rules",
+    ]) {
+      expect(titles).not.toContain(gone);
+    }
+    expect(sectionTitles()).not.toContain("Bookings");
+    expect(container.querySelector('a[href="/settings/blacklist"]')).toBeNull();
+  });
+
+  it("General is listed for a manager who may see only one of its sections", () => {
+    // Only the settings.rental grant behind Tax and fees: General (its fees
+    // section) and nothing else.
+    render(<SettingsIndexV2 canView={(tab) => tab === "fees"} tenantSlug="northwind" isHeadAdmin={false} />);
+    expect(entries()).toEqual([["General", "/settings?tab=general"]]);
+    expect(container.querySelector('[data-settings-state="empty"]')).toBeNull();
+  });
+
+  it("finds General by the words of the sections it now holds", () => {
+    render(<SettingsIndexV2 canView={() => true} tenantSlug="northwind" isHeadAdmin />);
+    type("deposit");
+    expect(entries().map(([title]) => title)).toEqual(["General"]);
+    type("buffer");
+    expect(entries().map(([title]) => title)).toEqual(["General"]);
+    type("lockbox");
+    expect(entries().map(([title]) => title)).toEqual(["General", "Customer messages"]);
+  });
+
+  it("a head admin finds Team by 'password'; anyone else gets no match and no hand-off", () => {
+    render(<SettingsIndexV2 canView={() => true} tenantSlug="northwind" isHeadAdmin />);
+    type("password");
+    expect(entries().map(([title]) => title)).toEqual(["Team"]);
+    act(() => root.unmount());
+    root = createRoot(container);
+    render(<SettingsIndexV2 canView={() => true} tenantSlug="northwind" />);
+    type("password");
+    expect(container.querySelector('[data-settings-state="no-match"]')).not.toBeNull();
+    expect(container.querySelector('[data-settings-state="dependency"]')).toBeNull();
+  });
+
+  it("every description is 95–120 characters and wraps in a 320px column", async () => {
+    const { SETTINGS_INDEX_SECTIONS } = await import("@/components/settings-v2/settings-index");
+    for (const section of SETTINGS_INDEX_SECTIONS) {
+      for (const item of section.items) {
+        expect(item.description.length, item.title).toBeGreaterThanOrEqual(95);
+        expect(item.description.length, item.title).toBeLessThanOrEqual(120);
+      }
+    }
+    render(<SettingsIndexV2 canView={() => true} tenantSlug="northwind" isHeadAdmin />);
+    for (const a of Array.from(container.querySelectorAll("section a"))) {
+      expect(a.querySelectorAll("span")[1].className).toContain("max-w-[320px]");
+    }
+  });
+});

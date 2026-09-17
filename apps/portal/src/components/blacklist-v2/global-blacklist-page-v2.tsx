@@ -1,8 +1,10 @@
 "use client";
 
 /**
- * v2 (northwind): the whole `/settings/blacklist` page. The route returns this
- * inside its `useV2('chrome')` branch, so the other tenants keep the v1 page.
+ * v2 (northwind): the whole `/settings/blacklist` page. NOT MOUNTED for now:
+ * the global blacklist is out of Settings, and the route's `useV2('chrome')`
+ * branch sends v2 to /settings instead. Kept so bringing it back is one line in
+ * that route (render this instead of redirecting). Other tenants keep the v1 page.
  *
  * Every state has something to show (see `resolveBlacklistView`):
  *   loading      -> table skeleton, stat tiles pulse
@@ -118,7 +120,7 @@ export function GlobalBlacklistPageV2<T extends GlobalBlacklistEntryRowV2>({
       />
 
       <div role="note" className="flex items-start gap-3 rounded-2xl bg-muted/60 px-4 py-3 text-sm">
-        <ShieldAlert className="mt-0.5 size-4 shrink-0 text-primary dark:text-indigo-300" aria-hidden="true" />
+        <ShieldAlert className="mt-0.5 size-4 shrink-0 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" aria-hidden="true" />
         <p className="min-w-0">
           <span className="font-medium text-foreground">Platform-wide protection.</span>{" "}
           <span className="text-muted-foreground">

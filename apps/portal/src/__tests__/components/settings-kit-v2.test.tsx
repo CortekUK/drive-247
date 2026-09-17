@@ -3,8 +3,8 @@
  * a bold page title over semibold section titles with no line under them,
  * left-aligned rows, and ONE sticky save bar per page that the sections defer to.
  */
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // section-states reads permissions; keep the auth store and Supabase out of it.
 vi.mock("@/hooks/use-manager-permissions", () => ({
@@ -17,12 +17,15 @@ import {
   SettingsPageHeader,
   SettingsPageHeaderSkeleton,
   SettingsPageSaveProvider,
+  SCROLL_TO_SECTION_MAX_FRAMES,
   SettingsPanel,
   SettingsRow,
+  SettingsSection,
   SettingsStickySaveBar,
   UnitGroup,
   UnitGroups,
   Unit,
+  useScrollToSection,
 } from "@/components/settings-v2/settings-kit";
 import { SectionSaveBar } from "@/components/settings-v2/business-section-save";
 import { SaveFooter, SectionHeader } from "@/components/settings-v2/pricing-money-parts";
@@ -211,5 +214,124 @@ describe("sections inside a page save bar", () => {
       "Couldn't save. We couldn't reach the server. Your changes are still here.",
     ]);
     expect(screen.queryAllByRole("button")).toHaveLength(0);
+  });
+});
+
+describe("sections of a longer page (General)", () => {
+  it("a section carries its deep-link id, a semibold title it is labelled by, and room under the sticky top bar", () => {
+    const { container } = render(
+      <SettingsSection anchor="tax-and-fees" title="Tax and fees" description="Charges added on top of the rental price." action={<span>View only</span>}>
+        <p>BODY</p>
+      </SettingsSection>,
+    );
+    const section = container.querySelector("section")!;
+    expect(section.id).toBe("settings-tax-and-fees");
+    expect(section.getAttribute("aria-labelledby")).toBe("settings-tax-and-fees-title");
+    expect(classes(section)).toEqual(expect.arrayContaining(["scroll-mt-24", "space-y-3"]));
+    const h2 = section.querySelector("h2")!;
+    expect(h2.id).toBe("settings-tax-and-fees-title");
+    expect(h2.textContent).toBe("Tax and fees");
+    expect(h2.getAttribute("class")).toBe(SETTINGS_SECTION_TITLE);
+    expect(section.textContent).toContain("Charges added on top of the rental price.");
+    expect(section.textContent).toContain("View only");
+    expect(section.textContent).toContain("BODY");
+  });
+});
+
+describe("useScrollToSection", () => {
+  let frames: FrameRequestCallback[] = [];
+  let scrolled: Element[] = [];
+  const originalRaf = window.requestAnimationFrame;
+  const originalCancel = window.cancelAnimationFrame;
+  const originalScroll = Element.prototype.scrollIntoView;
+
+  beforeEach(() => {
+    frames = [];
+    scrolled = [];
+    window.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+      frames.push(cb);
+      return frames.length;
+    }) as typeof window.requestAnimationFrame;
+    window.cancelAnimationFrame = (() => undefined) as typeof window.cancelAnimationFrame;
+    Element.prototype.scrollIntoView = function (this: Element, arg?: boolean | ScrollIntoViewOptions) {
+      expect(arg).toEqual({ block: "start" });
+      scrolled.push(this);
+    };
+  });
+
+  afterEach(() => {
+    window.requestAnimationFrame = originalRaf;
+    window.cancelAnimationFrame = originalCancel;
+    Element.prototype.scrollIntoView = originalScroll;
+  });
+
+  /** Runs every frame queued so far (and none queued while running). */
+  const flushFrames = () => {
+    const queued = frames;
+    frames = [];
+    act(() => queued.forEach((cb) => cb(0)));
+  };
+
+  function Harness({ target, ready, mounted = true }: { target: string | null; ready: boolean; mounted?: boolean }) {
+    useScrollToSection(target, ready);
+    return mounted ? <section id="settings-tax-and-fees">Tax and fees</section> : null;
+  }
+
+  it("waits until the page is ready, then scrolls the section to the top once", () => {
+    const { rerender, container } = render(<Harness target="settings-tax-and-fees" ready={false} />);
+    flushFrames();
+    expect(scrolled).toHaveLength(0);
+
+    rerender(<Harness target="settings-tax-and-fees" ready />);
+    flushFrames();
+    expect(scrolled).toEqual([container.querySelector("#settings-tax-and-fees")]);
+
+    // A later render for the same link (say the rental row refetched) does not
+    // scroll again, so an operator who scrolled back up stays there.
+    rerender(<Harness target="settings-tax-and-fees" ready={false} />);
+    rerender(<Harness target="settings-tax-and-fees" ready />);
+    flushFrames();
+    expect(scrolled).toHaveLength(1);
+  });
+
+  it("finds a section that mounts a couple of frames late", () => {
+    const { rerender } = render(<Harness target="settings-tax-and-fees" ready mounted={false} />);
+    flushFrames(); // frame 1: not there yet
+    flushFrames(); // frame 2: still not there
+    expect(scrolled).toHaveLength(0);
+    rerender(<Harness target="settings-tax-and-fees" ready mounted />);
+    flushFrames(); // frame 3: found
+    expect(scrolled).toHaveLength(1);
+  });
+
+  it("gives up after SCROLL_TO_SECTION_MAX_FRAMES frames when the section never appears", () => {
+    render(<Harness target="settings-security-deposit" ready />);
+    let requested = 0;
+    while (frames.length > 0) {
+      requested += frames.length;
+      flushFrames();
+    }
+    // One frame asked for by the effect, then one after each of the first 29
+    // misses: 1 + 29 = 30 attempts in all.
+    expect(SCROLL_TO_SECTION_MAX_FRAMES).toBe(30);
+    expect(requested).toBe(30);
+    expect(scrolled).toHaveLength(0);
+  });
+
+  it("no target does nothing; a new deep link after it scrolls again", () => {
+    const { rerender } = render(<Harness target={null} ready />);
+    flushFrames();
+    expect(frames).toHaveLength(0);
+    expect(scrolled).toHaveLength(0);
+
+    rerender(<Harness target="settings-tax-and-fees" ready />);
+    flushFrames();
+    expect(scrolled).toHaveLength(1);
+
+    // Back to the index (no target), then the same link again: a fresh scroll.
+    rerender(<Harness target={null} ready />);
+    rerender(<Harness target="settings-tax-and-fees" ready />);
+    flushFrames();
+    expect(scrolled).toHaveLength(2);
   });
 });

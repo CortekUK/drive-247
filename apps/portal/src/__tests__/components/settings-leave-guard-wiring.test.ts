@@ -37,11 +37,46 @@ describe("settings page (v2): the leave guard", () => {
     expect(page).toContain("isDirty: v2PageHasEdits,");
   });
 
+  it("Locations saves through the page: save and discard registered under \"locations\", clean reported on save, reset and close", () => {
+    const locations = read("components/settings-v2/locations-v2.tsx");
+    expect(locations).toContain(
+      '  useRegisterLeaveSave(\n    pageSave && !readOnly && data.hasSettingsData ? registerSave : undefined,\n    "locations",\n    isDirty,\n    save,\n    discard,\n  );',
+    );
+    // Closing the page reports clean (its edits go with it).
+    expect(locations).toContain("useEffect(() => () => latestDirtyChange.current?.(false), []);");
+    // Save and Reset: the dirty flag is derived from the form against what is
+    // saved, so it reports false once either lands.
+    const settings = read("components/settings/location-settings.tsx");
+    expect(settings).toContain("if (v2) onDirtyChangeV2?.(v2Dirty);");
+    expect(v2).toContain("return <LocationSettings onDirtyChangeV2={setLocationsDirty} registerSave={registerV2SectionSave} />;");
+  });
+
+  it("clears Locations' unsaved flag once another page opens (v2 only, before the v1 early returns)", () => {
+    // A backup: Locations reports clean on save, reset and close itself. This
+    // keeps a Don't save out of it from leaving the index warning and General's
+    // save bar dirty if that report is ever missed.
+    const effect = "useEffect(() => {\n    if (v2Chrome && v2Page !== 'locations') setLocationsDirty(false);\n  }, [v2Chrome, v2Page]);";
+    const at = page.indexOf(effect);
+    expect(at).toBeGreaterThan(-1);
+    expect(page.indexOf("if (!v2Chrome && error && !settings) {")).toBeGreaterThan(at);
+  });
+
   it("saves a registered General panel and the booking-site colours once, through their own saves", () => {
     expect(page).toContain("if (generalFormDirty && !(v2Chrome && v2SectionSaves.current['general-regional'])) {");
     expect(page).toContain("if (brandingFormDirty && !(v2Chrome && v2SectionSaves.current['booking-site-colours'])) {");
     expect(v2).toContain('sectionKey="booking-site-colours"');
-    expect(v2).toContain("registerSave={registerV2SectionSave}\n              />");
+    // The regional panel (now General's first section) hands the page its save.
+    const regional = v2.slice(v2.indexOf("<BusinessV2.BusinessRegionalPanel"), v2.indexOf("case 'driver-requirements':"));
+    expect(regional).toMatch(/registerSave=\{registerV2SectionSave\}\s*\/>/);
+  });
+
+  it("settles every section's save before reporting, then re-reads the rental row once when several saved", () => {
+    const save = page.slice(page.indexOf("const saveAllDirtyForms = useCallback("), page.indexOf("const {\n    isDialogOpen: unsavedDialogOpen,"));
+    expect(save).toContain("const results = await Promise.allSettled(saves);");
+    expect(save).toContain("if (v2Saves.length > 1) void refetchRentalSettings();");
+    expect(save).toContain("if (failed) throw failed.reason;");
+    // v1 keeps Promise.all, reached only when v2Chrome is false.
+    expect(save).toMatch(/if \(v2Chrome\) \{[\s\S]*return true;\n      \}\n      await Promise\.all\(saves\);/);
   });
 
   it("the v2 branch has no breadcrumb, no index back-callback and no chip row", () => {
@@ -68,12 +103,38 @@ describe("the guarded router in the v2 chrome", () => {
     const search = read("components/shared/layout/global-search.tsx");
     expect(search).toContain("const router = useGuardedRouter();");
     expect(search).not.toContain('import { useRouter } from "next/navigation";');
+    // The panel's Open Support asks before leaving, and closes only once
+    // leaving is agreed (trax-panel-leave-guard.test.tsx covers the behaviour).
     const trax = read("components/trax/trax-panel.tsx");
-    expect(trax).toContain("const router = useGuardedRouter();");
+    expect(trax).toContain(
+      "    const href = supportHref(target);\n    runThroughLeaveGuard(href, () => {\n      router.push(href);\n      closeSheet();\n    });",
+    );
+    expect(trax.match(/router\.push\(/g)).toHaveLength(1);
     const sidebar = read("components/shared/layout/app-sidebar-v2.tsx");
     expect(sidebar).toContain(
       "runThroughLeaveGuard(target, () => {\n        setActiveView(next);\n        router.push(target);\n      });",
     );
+  });
+
+  it("the sidebar search scene's Enter push asks before leaving", () => {
+    const scene = read("components/shared/layout/sidebar-search-scene.tsx");
+    expect(scene).toContain('import { useGuardedRouter } from "@/lib/leave-guard";');
+    expect(scene).toContain("const router = useGuardedRouter();");
+    expect(scene).not.toContain("useRouter");
+    expect(scene).toContain("router.push(topHit.url);");
+  });
+
+  it("Trax's minimise and leave-full-page exits ask before leaving, and only then touch the panel", () => {
+    const provider = read("components/trax/trax-provider.tsx");
+    expect(provider).toContain('import { runThroughLeaveGuard } from "@/lib/leave-guard";');
+    expect(provider).toContain(
+      '  const minimiseToPanel = useCallback(() => {\n    const target = returnPath || "/";\n    runThroughLeaveGuard(target, () => {\n      setSheetOpen(true);\n      router.push(target);\n    });\n  }, [router, returnPath]);',
+    );
+    expect(provider).toContain(
+      '  const leaveFullPage = useCallback(() => {\n    const target = returnPath || "/";\n    runThroughLeaveGuard(target, () => {\n      setSheetOpen(false);\n      router.push(target);\n    });\n  }, [router, returnPath]);',
+    );
+    // Every push in the provider is one of those two, inside the guard.
+    expect(provider.match(/router\.push\(/g)).toHaveLength(2);
   });
 });
 

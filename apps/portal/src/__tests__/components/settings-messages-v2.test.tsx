@@ -886,6 +886,23 @@ describe("PushNotificationSettings (v2 gate)", () => {
     expect(buttonByText("Send notification").disabled).toBe(true);
     expect(text()).toContain("This browser can't receive push notifications.");
   });
+
+  it("v2: 'Send to' is the v2 dropdown (rounded, 36px); v1 keeps its own", () => {
+    resetPush();
+    render(<PushNotificationSettings />);
+    const v2Trigger = container.querySelector("#push-target")!;
+    expect(v2Trigger.getAttribute("data-slot")).toBe("select-trigger");
+    expect(v2Trigger.className).toContain("rounded-3xl");
+    expect(v2Trigger.textContent).toContain("Just my devices");
+
+    h.v2.on = false;
+    resetPush();
+    render(<PushNotificationSettings />);
+    const v1Trigger = container.querySelector("#push-target")!;
+    expect(v1Trigger.getAttribute("data-slot")).toBeNull();
+    expect(v1Trigger.className).not.toContain("rounded-3xl");
+    expect(v1Trigger.textContent).toContain("Just my devices");
+  });
 });
 
 /* -------------------------------------------------------------------------- */

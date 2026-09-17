@@ -6,6 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { LIMITS, type AnnouncementDraft, type AnnouncementSlide, type DraftErrors } from '@/lib/announcements/contract';
+import { NO_MISSING_IMAGES, missingImageNote, type MissingImages } from '@/lib/announcements/row-actions';
 import { cn } from '@/lib/utils';
 import { FormField, FormSection, HIDDEN_SCROLLBAR, QUIET_BUTTON } from './form-field';
 import {
@@ -29,6 +30,7 @@ export function FeatureFields({
   onUploaded,
   onBusyChange,
   onPreview,
+  missingImages = NO_MISSING_IMAGES,
 }: {
   draft: AnnouncementDraft;
   /** One stable client key per slide, same order as draft.slides. */
@@ -41,6 +43,8 @@ export function FeatureFields({
   onBusyChange: (busy: boolean) => void;
   /** Point the live preview at what is being edited. */
   onPreview: (view: FeaturePreviewView, slide: number) => void;
+  /** A duplicate's images whose copy failed and that are still empty: each gets its note under its own field. */
+  missingImages?: MissingImages;
 }) {
   const slides = draft.slides;
 
@@ -115,6 +119,7 @@ export function FeatureFields({
             onUploaded={onUploaded}
             onBusyChange={onBusyChange}
             error={errors.image_url}
+            notice={missingImages.card ? missingImageNote({ kind: 'card' }) : null}
           />
         </FormField>
       </FormSection>
@@ -229,6 +234,7 @@ export function FeatureFields({
                   onUploaded={onUploaded}
                   onBusyChange={onBusyChange}
                   error={e?.image_url}
+                  notice={missingImages.slideKeys.indexOf(key) !== -1 ? missingImageNote({ kind: 'slide', index }) : null}
                 />
               </FormField>
             </div>

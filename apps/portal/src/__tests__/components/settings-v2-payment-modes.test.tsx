@@ -246,4 +246,12 @@ describe("AutoExtendSettingsV2", () => {
     expect(inputs()).toHaveLength(0);
     expect(text()).toContain("Off for new rentals");
   });
+
+  it("'How to take payment' is the v2 dropdown", () => {
+    rs.current = api({}, { auto_extend_enabled: true });
+    render(<AutoExtendSettingsV2 canEdit />);
+    const trigger = container.querySelector('[aria-label="How to take payment"]')!;
+    expect(trigger.getAttribute("data-slot")).toBe("select-trigger");
+    expect(trigger.className).toContain("rounded-3xl");
+  });
 });

@@ -1,8 +1,12 @@
 "use client";
 
 /**
- * v2 Settings › Key handover › Lockbox messages. v2 ONLY: the v1
+ * v2 Settings › Customer messages › Lockbox messages. v2 ONLY: the v1
  * `LockboxTemplatesSection` hands off here behind `useV2('chrome')`.
+ *
+ * `channels` picks the message blocks. The v2 Customer messages page passes
+ * `["email"]`: the code goes by email only, so the text-message block, its
+ * save and its reset are left out (the stored SMS template is not touched).
  *
  * These messages carry the code to the box holding the car keys, so the
  * states matter more than usual. v1 saved an empty subject, an empty body, or
@@ -64,6 +68,8 @@ import { renderLockboxSmsExample } from "./business-rules-logic";
 import { useRegisterLeaveSave } from "./business-section-save";
 import type { RegisterSectionSave } from "./pricing-money-parts";
 import { SETTINGS_SECTION_TITLE, useSettingsPageSave } from "./settings-kit";
+
+export type LockboxChannel = "email" | "sms";
 
 export interface LockboxDefaults {
   instructions: string;
@@ -149,6 +155,8 @@ export function LockboxTemplatesSectionV2({
   registerSave,
   integrationsHref = "/integrations?open=Twilio%20Messages",
   readOnlyNotice = true,
+  channels = ["email", "sms"],
+  keyHandoverHref,
 }: {
   defaults: LockboxDefaults;
   variables: { key: string; desc: string }[];
@@ -157,7 +165,12 @@ export function LockboxTemplatesSectionV2({
   integrationsHref?: string;
   /** False when the page above already shows the "View only" notice. */
   readOnlyNotice?: boolean;
+  /** Which message blocks to show and save. */
+  channels?: readonly LockboxChannel[];
+  /** Where lockbox handover is switched on, when that is another page. */
+  keyHandoverHref?: string;
 }) {
+  const withSms = channels.includes("sms");
   const { tenant } = useTenant();
   const {
     settings: rentalSettings,
@@ -199,7 +212,8 @@ export function LockboxTemplatesSectionV2({
   const instructionsDirty = instructions !== null && storedInstructions !== null && instructions !== storedInstructions;
   const emailDirty =
     email !== null && storedEmail !== null && (email.subject !== storedEmail.subject || email.body !== storedEmail.body);
-  const smsDirty = sms !== null && storedSms !== null && sms !== storedSms;
+  // Hidden channel: never dirty, never saved.
+  const smsDirty = withSms && sms !== null && storedSms !== null && sms !== storedSms;
   useWarnOnUnsavedChanges(canEdit && (instructionsDirty || emailDirty || smsDirty));
   // Filled in below, once the drafts exist; only ever called while something is dirty.
   const saveDirtyForLeave = useRef<() => Promise<void>>(async () => undefined);
@@ -211,7 +225,7 @@ export function LockboxTemplatesSectionV2({
     () => {
       if (storedInstructions !== null) setInstructions(storedInstructions);
       if (storedEmail) setEmail({ subject: storedEmail.subject, body: storedEmail.body });
-      if (storedSms !== null) setSms(storedSms);
+      if (withSms && storedSms !== null) setSms(storedSms);
       setEmailArmed(false);
       setSmsArmed(false);
     },
@@ -224,7 +238,9 @@ export function LockboxTemplatesSectionV2({
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="min-w-0 space-y-1">
         <h2 className={SETTINGS_SECTION_TITLE}>Lockbox messages</h2>
-        <p className="text-sm text-muted-foreground">What customers receive with their lockbox code.</p>
+        <p className="text-sm text-muted-foreground">
+          {withSms ? "What customers receive with their lockbox code." : "The email customers receive with their lockbox code."}
+        </p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         {!canEdit && readOnlyNotice && <SettingsReadOnlyNotice />}
@@ -255,10 +271,16 @@ export function LockboxTemplatesSectionV2({
     );
   }
   if (!rentalSettings?.lockbox_enabled) {
+    const messages = withSms ? "the email and text message that send the code" : "the email that sends the code";
     return wrap(
       <SettingsDependencyNotice
         title="Lockbox handover is off"
-        body="Turn on lockbox handover above and save. Then you can edit the email and text message that send the code."
+        body={
+          keyHandoverHref
+            ? `Turn on lockbox handover in General, under Key handover, and save. Then you can edit ${messages}.`
+            : `Turn on lockbox handover above and save. Then you can edit ${messages}.`
+        }
+        action={keyHandoverHref ? { label: "Open Key handover", href: keyHandoverHref } : undefined}
       />,
     );
   }
@@ -270,15 +292,15 @@ export function LockboxTemplatesSectionV2({
       <SettingsLoadError thing="lockbox message templates" error={templatesError} onRetry={() => refetchTemplates()} retrying={isFetching} />,
     );
   }
-  if (instructions === null || email === null || sms === null) {
+  if (instructions === null || email === null || (withSms && sms === null)) {
     return wrap(<SettingsSectionSkeleton variant="form" rows={3} label="Loading lockbox messages" />);
   }
 
   const emailIssues = lockboxTemplateIssues({ channel: "email", subject: email.subject, body: email.body });
-  const smsIssues = lockboxTemplateIssues({ channel: "sms", body: sms });
+  const smsIssues = lockboxTemplateIssues({ channel: "sms", body: sms ?? "" });
   // Counted as it will be sent: every {{variable}} filled with a typical value
   // (the tenant's real code length and default instructions where it has them).
-  const smsLength = renderLockboxSmsExample(sms, {
+  const smsLength = renderLockboxSmsExample(sms ?? "", {
     codeLength: rentalSettings?.lockbox_code_length,
     defaultInstructions: instructions.trim() ? instructions : defaults.instructions,
   }).length;
@@ -323,7 +345,7 @@ export function LockboxTemplatesSectionV2({
     }
     void smsSave.run(async () => {
       try {
-        await saveTemplate.mutateAsync({ channel: "sms", body: sms });
+        await saveTemplate.mutateAsync({ channel: "sms", body: sms ?? "" });
         setSmsArmed(false);
         toast({ title: "Lockbox text message saved" });
       } catch (err) {
@@ -365,7 +387,7 @@ export function LockboxTemplatesSectionV2({
         const refusal = missingCodeRefusal("text message", smsArmed, () => setSmsArmed(true));
         if (refusal) throw refusal;
       }
-      if (!(await smsSave.run(() => saveTemplate.mutateAsync({ channel: "sms", body: sms })))) {
+      if (!(await smsSave.run(() => saveTemplate.mutateAsync({ channel: "sms", body: sms ?? "" })))) {
         throw new Error("Couldn't save the lockbox text message.");
       }
       setSmsArmed(false);
@@ -379,16 +401,23 @@ export function LockboxTemplatesSectionV2({
       await saveTemplate.mutateAsync({ channel: "email", subject: defaults.email.subject, body: defaults.email.body });
       setEmail({ ...defaults.email });
       done.push("email");
-      await saveTemplate.mutateAsync({ channel: "sms", body: defaults.sms.body });
-      setSms(defaults.sms.body);
-      done.push("text message");
+      if (withSms) {
+        await saveTemplate.mutateAsync({ channel: "sms", body: defaults.sms.body });
+        setSms(defaults.sms.body);
+        done.push("text message");
+      }
       // Last on purpose: the rental-settings hook shows its own generic "Settings
       // Updated" (or "Error") toast, which the toast below replaces in the same
       // tick instead of flashing it over the open dialog mid-reset.
       await updateSettings({ lockbox_default_instructions: defaults.instructions });
       setInstructions(defaults.instructions);
       done.push("instructions");
-      toast({ title: "Lockbox messages reset", description: "The instructions, email and text message use the default wording again." });
+      toast({
+        title: "Lockbox messages reset",
+        description: withSms
+          ? "The instructions, email and text message use the default wording again."
+          : "The instructions and email use the default wording again.",
+      });
       setResetOpen(false);
     } catch (err) {
       toast({
@@ -433,7 +462,7 @@ export function LockboxTemplatesSectionV2({
       <SettingsReadOnlyFieldset readOnly={!canEdit} className="space-y-4">
         <Block
           title="Default instructions"
-          description="Included in every lockbox email and text message."
+          description={withSms ? "Included in every lockbox email and text message." : "Included in every lockbox email."}
           aside={canEdit ? blockStatus(instructionsSave.status(instructionsDirty), instructionsSave.error, saveInstructions) : undefined}
         >
           <label htmlFor="v2-lockbox-instructions" className="sr-only">
@@ -511,74 +540,76 @@ export function LockboxTemplatesSectionV2({
           )}
         </Block>
 
-        <Block
-          title="Text message"
-          aside={
-            <div className="flex flex-wrap items-center gap-2">
-              {canEdit && blockStatus(smsSave.status(smsDirty), smsSave.error, saveSms)}
-              <span
-                className={cn(
-                  "rounded-full px-2 py-0.5 text-xs tabular-nums",
-                  smsLength > SMS_SINGLE_LIMIT ? "bg-amber-500/15 text-amber-700 dark:text-amber-400" : "bg-muted text-muted-foreground",
-                )}
+        {withSms && sms !== null && (
+          <Block
+            title="Text message"
+            aside={
+              <div className="flex flex-wrap items-center gap-2">
+                {canEdit && blockStatus(smsSave.status(smsDirty), smsSave.error, saveSms)}
+                <span
+                  className={cn(
+                    "rounded-full px-2 py-0.5 text-xs tabular-nums",
+                    smsLength > SMS_SINGLE_LIMIT ? "bg-amber-500/15 text-amber-700 dark:text-amber-400" : "bg-muted text-muted-foreground",
+                  )}
+                >
+                  <span className="sr-only">About </span>
+                  <span aria-hidden="true">~</span>
+                  {smsLength} / {SMS_SINGLE_LIMIT}
+                  {segments > 1 ? ` · ${segments} texts` : ""}
+                </span>
+              </div>
+            }
+          >
+            <label htmlFor="v2-lockbox-sms" className="sr-only">
+              Text message
+            </label>
+            <Textarea
+              id="v2-lockbox-sms"
+              value={sms}
+              onChange={(e) => {
+                setSms(e.target.value);
+                setSmsArmed(false);
+              }}
+              rows={3}
+              className={cn("font-mono text-sm", FIELD)}
+              placeholder="SMS message with {{variable}} placeholders..."
+              aria-invalid={!!smsIssues.bodyError || undefined}
+            />
+            {smsIssues.bodyError && <p className="text-xs text-destructive">{smsIssues.bodyError}</p>}
+            {smsIssues.missingCode && missingCodeCopy(smsArmed)}
+            {!smsReady && (
+              <p className="text-xs text-amber-700 dark:text-amber-400">
+                Text messages aren&apos;t set up, so this message isn&apos;t sent yet.{" "}
+                <Link href={integrationsHref} className="pointer-events-auto font-medium underline underline-offset-4">
+                  Connect Twilio
+                </Link>
+              </p>
+            )}
+            {segments > 1 ? (
+              <p className="text-xs text-amber-700 dark:text-amber-400">
+                Likely sent as {segments} texts: with the details filled in it comes to about {smsLength} characters, and one
+                text holds {SMS_SINGLE_LIMIT}.
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Counted with example details filled in (name, plate, code). Over {SMS_SINGLE_LIMIT} characters it goes out as
+                more than one text.
+              </p>
+            )}
+            {!pageSave && (
+              <Button
+                type="button"
+                size="sm"
+                variant={smsArmed ? "destructive" : "default"}
+                onClick={saveSms}
+                disabled={!smsDirty || smsSave.saving || !!smsIssues.bodyError}
               >
-                <span className="sr-only">About </span>
-                <span aria-hidden="true">~</span>
-                {smsLength} / {SMS_SINGLE_LIMIT}
-                {segments > 1 ? ` · ${segments} texts` : ""}
-              </span>
-            </div>
-          }
-        >
-          <label htmlFor="v2-lockbox-sms" className="sr-only">
-            Text message
-          </label>
-          <Textarea
-            id="v2-lockbox-sms"
-            value={sms}
-            onChange={(e) => {
-              setSms(e.target.value);
-              setSmsArmed(false);
-            }}
-            rows={3}
-            className={cn("font-mono text-sm", FIELD)}
-            placeholder="SMS message with {{variable}} placeholders..."
-            aria-invalid={!!smsIssues.bodyError || undefined}
-          />
-          {smsIssues.bodyError && <p className="text-xs text-destructive">{smsIssues.bodyError}</p>}
-          {smsIssues.missingCode && missingCodeCopy(smsArmed)}
-          {!smsReady && (
-            <p className="text-xs text-amber-700 dark:text-amber-400">
-              Text messages aren&apos;t set up, so this message isn&apos;t sent yet.{" "}
-              <Link href={integrationsHref} className="pointer-events-auto font-medium underline underline-offset-4">
-                Connect Twilio
-              </Link>
-            </p>
-          )}
-          {segments > 1 ? (
-            <p className="text-xs text-amber-700 dark:text-amber-400">
-              Likely sent as {segments} texts: with the details filled in it comes to about {smsLength} characters, and one
-              text holds {SMS_SINGLE_LIMIT}.
-            </p>
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              Counted with example details filled in (name, plate, code). Over {SMS_SINGLE_LIMIT} characters it goes out as
-              more than one text.
-            </p>
-          )}
-          {!pageSave && (
-            <Button
-              type="button"
-              size="sm"
-              variant={smsArmed ? "destructive" : "default"}
-              onClick={saveSms}
-              disabled={!smsDirty || smsSave.saving || !!smsIssues.bodyError}
-            >
-              {smsSave.saving ? <Loader2 className="animate-spin" data-icon="inline-start" /> : <Save data-icon="inline-start" />}
-              {smsArmed ? "Save without the code" : "Save text message"}
-            </Button>
-          )}
-        </Block>
+                {smsSave.saving ? <Loader2 className="animate-spin" data-icon="inline-start" /> : <Save data-icon="inline-start" />}
+                {smsArmed ? "Save without the code" : "Save text message"}
+              </Button>
+            )}
+          </Block>
+        )}
       </SettingsReadOnlyFieldset>
 
       <AlertDialog open={resetOpen} onOpenChange={(open) => !resetting && setResetOpen(open)}>
@@ -586,7 +617,9 @@ export function LockboxTemplatesSectionV2({
           <AlertDialogHeader>
             <AlertDialogTitle>Reset all lockbox messages?</AlertDialogTitle>
             <AlertDialogDescription>
-              The default instructions, the email (subject and message) and the text message all go back to the default wording.
+              {withSms
+                ? "The default instructions, the email (subject and message) and the text message all go back to the default wording."
+                : "The default instructions and the email (subject and message) go back to the default wording."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

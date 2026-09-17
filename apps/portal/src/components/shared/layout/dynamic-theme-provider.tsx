@@ -6,10 +6,13 @@ import { useTenantBranding } from '@/hooks/use-tenant-branding';
 import { useTenant } from '@/contexts/TenantContext';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TenantNotFound } from '@/components/shared/layout/tenant-not-found';
+import { useV2 } from '@/lib/v2-context';
 
 export function DynamicThemeProvider({ children }: { children: React.ReactNode }) {
-  // This hook applies dynamic theme colors from org settings
-  useDynamicTheme();
+  // This hook applies dynamic theme colors from org settings. On the v2 theme
+  // it writes the brand parameters to <body> instead of v1's tokens to <html>,
+  // which the `.v2-theme` class would override.
+  useDynamicTheme({ v2Theme: useV2('theme') });
   const { isLoading: brandingLoading, branding } = useTenantBranding();
   const {
     loading: tenantLoading,

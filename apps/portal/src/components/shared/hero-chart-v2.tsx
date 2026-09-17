@@ -140,6 +140,9 @@ const PICKER =
 // picker's `rounded-md`, so the inset ring is drawn round too.
 const RANGE_PICKER = cn(PICKER, "-my-0.5 -ml-1.5 rounded-full py-0.5 pl-1.5 focus-visible:ring-inset");
 
+/** The metric picker: the same pill and inset ring, at the row's left edge. */
+const METRIC_PICKER = cn(PICKER, "-my-0.5 -ml-1.5 self-start rounded-full py-0.5 pl-1.5 focus-visible:ring-inset");
+
 /** "All time" needs a first day: a flow metric has its events, a stock metric must say. */
 function supportsAllTime(metric: HeroMetric): boolean {
   if (metric.kind === "flow") return true;
@@ -265,7 +268,7 @@ export function HeroChart({
         <div className="flex items-center justify-between gap-4">
           {metrics.length > 1 ? (
             <DropdownMenu>
-              <DropdownMenuTrigger className={cn(PICKER, "self-start")} aria-label={`Metric: ${metric.label}`}>
+              <DropdownMenuTrigger className={METRIC_PICKER} aria-label={`Metric: ${metric.label}`}>
                 {headlineLabel}
                 <ChevronDown className="size-3.5 text-muted-foreground" />
               </DropdownMenuTrigger>

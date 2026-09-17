@@ -331,10 +331,10 @@ describe("gate call sites", () => {
     expect(() => read("components/settings/bonzah-onboarding/index.tsx")).not.toThrow();
   });
 
-  it("lists Blacklist under Bookings on the v2 index, and no integration at all", () => {
+  it("lists no global blacklist (out of Settings for now) and no integration at all on the v2 index", () => {
     const src = settingsIndex();
-    const bookings = src.match(/title: "Bookings",[\s\S]*?title: "Pricing and payments"/)?.[0] ?? "";
-    expect(bookings).toContain('href: "/settings/blacklist"');
+    expect(src).not.toContain('href: "/settings/blacklist"');
+    expect(src).not.toContain('tab: "blacklist"');
     expect(src).not.toMatch(/title: "Integrations",/);
     // Every tab an Integrations card owns — and Subscription, which is the
     // sidebar's Billing page — has no entry on the index.

@@ -19,6 +19,8 @@ import {
   compareAdminRows,
   isAnnouncementImageUrl,
   normalizeAdminAnnouncementRow,
+  normalizeAdminAnnouncementStats,
+  validateSaveArgs,
   type AdminAnnouncementRow,
   type AdminAnnouncementStats,
   type AnnouncementKind,
@@ -28,7 +30,19 @@ import {
   type SegmentKey,
   type SegmentMatchTenant,
 } from './contract';
+import { countActiveTenants } from './all-tenants-confirm';
 import { IMAGE_ERRORS, checkImageFile, newAnnouncementImagePath } from './image-upload';
+import {
+  buildDuplicateSeed,
+  canShowAgain,
+  duplicateImagePaths,
+  imageCopyJobs,
+  showAgainSaveArgs,
+  statsCountSuperAdmins,
+  type DuplicateSeed,
+  type ImageCopyJob,
+  type ImageCopyResult,
+} from './row-actions';
 import {
   PICKER_TENANT_COLUMNS,
   buildBillingIndex,
@@ -96,6 +110,23 @@ function sessionExpired<T>(): Result<T> {
   return { ok: false, message: SESSION_EXPIRED_MESSAGE, code: 'SESSION_EXPIRED' };
 }
 
+/**
+ * SESSION_EXPIRED_MESSAGE talks about the editor ("press Save here again. Your edits are kept."). A
+ * write made anywhere else says what to do again in its own place instead.
+ */
+function withSessionMessage<T>(res: Result<T>, message: string): Result<T> {
+  return !res.ok && res.code === 'SESSION_EXPIRED' ? { ...res, message } : res;
+}
+
+/** The Active switch in the list. */
+export function activeSessionExpiredMessage(isActive: boolean): string {
+  return 'Your sign-in has expired. Sign in again (a new tab is fine), then switch it ' + (isActive ? 'on' : 'off') + ' again.';
+}
+export const DELETE_SESSION_EXPIRED_MESSAGE =
+  'Your sign-in has expired. Sign in again (a new tab is fine), then press Delete again.';
+export const REORDER_SESSION_EXPIRED_MESSAGE =
+  'Your sign-in has expired. Sign in again (a new tab is fine), then drag it into place again.';
+
 function thrown<T>(e: unknown, fallback: string): Result<T> {
   return { ok: false, message: e instanceof Error && e.message ? e.message : fallback, code: null };
 }
@@ -116,17 +147,17 @@ export interface AnnouncementsData {
   targetsById: Record<string, string[]>;
   /** null when the stats RPC failed: rows still render, with "Reach unavailable". */
   statsById: Record<string, AdminAnnouncementStats> | null;
+  /**
+   * false when the database still has the OLDER nine-column stats function: the counts are
+   * then staff only (the contract falls back to them) and the tooltip says so.
+   */
+  statsCountSuperAdmins: boolean;
 }
 
 export type LoadAnnouncementsResult =
   | { status: 'ready'; data: AnnouncementsData }
   | { status: 'not-installed' }
   | { status: 'error'; message: string };
-
-function toCount(value: unknown): number {
-  const n = typeof value === 'number' ? value : Number(value);
-  return isFinite(n) ? n : 0;
-}
 
 export async function loadAnnouncementsData(): Promise<LoadAnnouncementsResult> {
   try {
@@ -157,27 +188,20 @@ export async function loadAnnouncementsData(): Promise<LoadAnnouncementsResult> 
     }
 
     let statsById: Record<string, AdminAnnouncementStats> | null = null;
+    let superAdminsCounted = true;
     if (statsRes.error) {
       console.warn('[announcements] reach stats unavailable:', statsRes.error.message);
     } else {
       statsById = {};
-      for (const s of (statsRes.data as Array<Record<string, unknown>> | null) ?? []) {
-        if (typeof s.announcement_id !== 'string') continue;
-        statsById[s.announcement_id] = {
-          announcement_id: s.announcement_id,
-          audience_tenants: toCount(s.audience_tenants),
-          reachable_tenants: toCount(s.reachable_tenants),
-          shown_users: toCount(s.shown_users),
-          shown_tenants: toCount(s.shown_tenants),
-          card_opened_users: toCount(s.card_opened_users),
-          dismissed_users: toCount(s.dismissed_users),
-          dont_show_again_users: toCount(s.dont_show_again_users),
-          cta_users: toCount(s.cta_users),
-        };
+      const raws = (statsRes.data as unknown[] | null) ?? [];
+      superAdminsCounted = statsCountSuperAdmins(raws);
+      for (const raw of raws) {
+        const stats = normalizeAdminAnnouncementStats(raw);
+        if (stats) statsById[stats.announcement_id] = stats;
       }
     }
 
-    return { status: 'ready', data: { rows, targetsById, statsById } };
+    return { status: 'ready', data: { rows, targetsById, statsById, statsCountSuperAdmins: superAdminsCounted } };
   } catch (e) {
     return { status: 'error', message: e instanceof Error && e.message ? e.message : 'Could not load announcements.' };
   }
@@ -197,6 +221,10 @@ export async function saveAnnouncement(args: SaveAnnouncementArgs): Promise<Resu
 }
 
 export async function reorderAnnouncements(kind: AnnouncementKind, ids: string[]): Promise<Result<null>> {
+  return withSessionMessage(await reorderAnnouncementsInner(kind, ids), REORDER_SESSION_EXPIRED_MESSAGE);
+}
+
+async function reorderAnnouncementsInner(kind: AnnouncementKind, ids: string[]): Promise<Result<null>> {
   try {
     if (!(await ensureSession())) return sessionExpired();
     const { error } = await supabase.rpc(ANNOUNCEMENT_RPC.reorder, { p_kind: kind, p_ids: ids });
@@ -209,6 +237,10 @@ export async function reorderAnnouncements(kind: AnnouncementKind, ids: string[]
 
 /** Zero rows back means RLS refused or the row is gone: both are failures, not silent successes. */
 export async function setAnnouncementActive(id: string, isActive: boolean): Promise<Result<null>> {
+  return withSessionMessage(await setAnnouncementActiveInner(id, isActive), activeSessionExpiredMessage(isActive));
+}
+
+async function setAnnouncementActiveInner(id: string, isActive: boolean): Promise<Result<null>> {
   try {
     if (!(await ensureSession())) return sessionExpired();
     const { data, error } = await supabase
@@ -228,6 +260,10 @@ export async function setAnnouncementActive(id: string, isActive: boolean): Prom
 }
 
 export async function deleteAnnouncement(id: string): Promise<Result<null>> {
+  return withSessionMessage(await deleteAnnouncementInner(id), DELETE_SESSION_EXPIRED_MESSAGE);
+}
+
+async function deleteAnnouncementInner(id: string): Promise<Result<null>> {
   try {
     if (!(await ensureSession())) return sessionExpired();
     const { data, error } = await supabase.from(ANNOUNCEMENT_TABLES.content).delete().eq('id', id).select('id');
@@ -239,6 +275,56 @@ export async function deleteAnnouncement(id: string): Promise<Result<null>> {
     return { ok: true, data: null };
   } catch (e) {
     return thrown(e, 'Could not delete the announcement.');
+  }
+}
+
+// ─── Show again ──────────────────────────────────────────────────────────────
+
+/**
+ * Re-show one SOFT announcement to everyone who closed it: the save RPC with
+ * p_reshow and the row's current content, targets and settings unchanged, which
+ * bumps its revision. The row and its tenants are read fresh first, so an edit
+ * made in another tab since this page loaded is kept, not overwritten.
+ */
+export const SHOW_AGAIN_SESSION_EXPIRED_MESSAGE =
+  'Your sign-in has expired. Sign in again (a new tab is fine), then press Show again here.';
+
+export async function showAnnouncementAgain(id: string): Promise<Result<string>> {
+  return withSessionMessage(await showAnnouncementAgainInner(id), SHOW_AGAIN_SESSION_EXPIRED_MESSAGE);
+}
+
+async function showAnnouncementAgainInner(id: string): Promise<Result<string>> {
+  const fallback = 'Could not show it again.';
+  try {
+    if (!(await ensureSession())) return sessionExpired();
+    const [rowRes, targetsRes] = await Promise.all([
+      supabase.from(ANNOUNCEMENT_TABLES.content).select('*').eq('id', id),
+      supabase.from(ANNOUNCEMENT_TABLES.targets).select('tenant_id').eq('announcement_id', id),
+    ]);
+    if (rowRes.error) return fail(rowRes.error, fallback);
+    if (targetsRes.error) return fail(targetsRes.error, fallback);
+    const raw = ((rowRes.data as unknown[] | null) ?? [])[0];
+    if (raw === undefined) {
+      return { ok: false, message: 'This announcement no longer exists. Reload the page.', code: null };
+    }
+    const row = normalizeAdminAnnouncementRow(raw);
+    if (!row) return { ok: false, message: 'This announcement could not be read. Open Edit and save it first.', code: null };
+    if (!canShowAgain(row)) {
+      return { ok: false, message: 'Hard announcements already show every time. Reload the page.', code: null };
+    }
+    if (!row.is_active) {
+      return { ok: false, message: 'It was switched off in the meantime. Reload the page, turn it on, then try again.', code: null };
+    }
+    const tenantIds = ((targetsRes.data as Array<{ tenant_id: string }> | null) ?? []).map((t) => t.tenant_id);
+    const args = showAgainSaveArgs(row, tenantIds);
+    if (!validateSaveArgs(args).valid) {
+      return { ok: false, message: 'Something in this announcement needs fixing first. Open Edit, fix it and save.', code: null };
+    }
+    const { data, error } = await supabase.rpc(ANNOUNCEMENT_RPC.save, args);
+    if (error) return fail(error, fallback);
+    return { ok: true, data: typeof data === 'string' ? data : id };
+  } catch (e) {
+    return thrown(e, fallback);
   }
 }
 
@@ -295,6 +381,89 @@ export async function uploadAnnouncementImage(slot: ImageSlot, file: File): Prom
   }
 }
 
+/** A copy that takes longer than this is treated as failed; if it lands later, its object is removed. */
+export const IMAGE_COPY_TIMEOUT_MS = 20_000;
+
+export const DUPLICATE_SESSION_EXPIRED_MESSAGE =
+  'Your sign-in has expired. Sign in again (a new tab is fine), then press Duplicate again.';
+
+/**
+ * Copy one announcement image to a new object of its own (storage copy: needs
+ * the bucket's SELECT and INSERT policies, both super admin). Resolves to the
+ * copy's public URL, never to the source's.
+ */
+export async function copyAnnouncementImage(job: ImageCopyJob): Promise<Result<string>> {
+  const paths = duplicateImagePaths(job.sourceUrl, job.slot, crypto.randomUUID());
+  if (!paths) return { ok: false, message: IMAGE_ERRORS.address, code: null };
+  const bucket = supabase.storage.from(ANNOUNCEMENT_BUCKET);
+  let settled = false;
+  let timedOut = false;
+  const copy = (async (): Promise<Result<string>> => {
+    try {
+      const { error } = await bucket.copy(paths.from, paths.to);
+      if (error) return fail(error, 'Image copy failed.');
+      const url = bucket.getPublicUrl(paths.to).data?.publicUrl;
+      if (!isAnnouncementImageUrl(url) || url === job.sourceUrl) {
+        await bucket.remove([paths.to]).catch(() => undefined);
+        return { ok: false, message: IMAGE_ERRORS.address, code: null };
+      }
+      return { ok: true, data: url };
+    } catch (e) {
+      return thrown(e, 'Image copy failed.');
+    } finally {
+      settled = true;
+    }
+  })();
+  // A copy that finishes after the timeout would be an object nobody references: delete it.
+  void copy.then((res) => {
+    if (timedOut && res.ok) void removeAnnouncementImages([res.data]);
+  });
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<Result<string>>((resolve) => {
+    timer = setTimeout(() => {
+      if (settled) return;
+      timedOut = true;
+      resolve({ ok: false, message: 'Image copy timed out.', code: null });
+    }, IMAGE_COPY_TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([copy, timeout]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
+/**
+ * Everything the editor needs to open a duplicate of `row` in CREATE mode:
+ * its images copied to objects the duplicate owns (card and every slide), and
+ * the prefilled draft. Nothing is written to the announcement tables. A failed
+ * copy leaves that image empty with a note; a signed-out browser stops here.
+ */
+export async function prepareDuplicate(
+  row: AdminAnnouncementRow,
+  tenantIds: readonly string[],
+): Promise<Result<DuplicateSeed>> {
+  try {
+    const jobs = imageCopyJobs(row);
+    if (jobs.length > 0 && !(await ensureSession())) {
+      return { ok: false, message: DUPLICATE_SESSION_EXPIRED_MESSAGE, code: 'SESSION_EXPIRED' };
+    }
+    const results: ImageCopyResult[] = await Promise.all(
+      jobs.map(async (job) => {
+        const res = await copyAnnouncementImage(job).catch((e: unknown) => thrown<string>(e, 'Image copy failed.'));
+        if (!res.ok) console.warn('[announcements] image copy failed:', res.message);
+        return { job, url: res.ok ? res.data : null };
+      }),
+    );
+    if (jobs.length > 0 && results.every((r) => r.url === null) && !(await ensureSession())) {
+      return { ok: false, message: DUPLICATE_SESSION_EXPIRED_MESSAGE, code: 'SESSION_EXPIRED' };
+    }
+    return { ok: true, data: buildDuplicateSeed(row, tenantIds, results) };
+  } catch (e) {
+    return thrown(e, 'Could not prepare the duplicate.');
+  }
+}
+
 // ─── Targeting ───────────────────────────────────────────────────────────────
 
 export async function loadSegmentTenants(key: SegmentKey): Promise<Result<SegmentMatchTenant[]>> {
@@ -317,6 +486,29 @@ export async function loadPickerTenants(): Promise<Result<PickerTenant[]>> {
     return { ok: true, data: (data as PickerTenant[] | null) ?? [] };
   } catch (e) {
     return thrown(e, 'Could not load tenants.');
+  }
+}
+
+/**
+ * How many ACTIVE tenants an All tenants announcement reaches, for its confirmation when the
+ * page has no stats to read it from: the picker's own tenant read, counted like the stats
+ * function counts reachable tenants (status 'active').
+ *
+ * Gives up after TENANT_COUNT_TIMEOUT_MS: a read that never answers must not leave Save spinning or
+ * the list's switch and Show again waiting for good. The question then opens without N.
+ */
+export const TENANT_COUNT_TIMEOUT_MS = 5_000;
+
+export async function loadActiveTenantCount(timeoutMs: number = TENANT_COUNT_TIMEOUT_MS): Promise<Result<number>> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<Result<PickerTenant[]>>((resolve) => {
+    timer = setTimeout(() => resolve({ ok: false, message: 'Reading the tenant count timed out.', code: 'TIMEOUT' }), timeoutMs);
+  });
+  try {
+    const res = await Promise.race([loadPickerTenants(), timeout]);
+    return res.ok ? { ok: true, data: countActiveTenants(res.data) } : res;
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
   }
 }
 

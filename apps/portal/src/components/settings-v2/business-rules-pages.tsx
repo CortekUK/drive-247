@@ -1,13 +1,14 @@
 "use client";
 
 /**
- * v2 Settings (northwind only): the Business-rules pages, with every state.
+ * v2 Settings (northwind only): the Business-rules sections, with every state.
  *
- *   Driver requirements  -> RequirementsPageV2
- *   Booking rules        -> DurationPageV2
- *   Key handover         -> LockboxPageV2 (the lockbox messages editor below it is
- *                           LockboxTemplatesSectionV2, built with the Templates states)
- *   Customer messages    -> ReturnReminderPanelV2 (the return reminder panel)
+ *   General › Driver requirements  -> RequirementsPageV2
+ *   General › Booking rules        -> DurationPageV2
+ *   General › Key handover         -> LockboxPageV2 (the code goes by email; its
+ *                                     Templates button opens the lockbox message
+ *                                     on Customer messages, LockboxTemplatesSectionV2)
+ *   Customer messages              -> ReturnReminderPanelV2 (the return reminder panel)
  *
  * Mounted only from the `if (v2Chrome)` branch of settings/page.tsx, so the
  * other 56 tenants never render any of this. The form state still lives in the
@@ -21,8 +22,8 @@
  *   2. read error  BusinessRentalGate: SettingsLoadError + Try again, never the
  *                  form. Stale data + a failed refresh keeps the form with a
  *                  one-line notice above it.
- *   3. dependency  Twilio not connected, WhatsApp no longer sent, lockbox off,
- *                  each with what happens and where to fix it.
+ *   3. dependency  lockbox off (where codes are set and the message is
+ *                  edited); the return reminder's Twilio note.
  *   4. empty       blank age = no minimum; lockbox off = what it is for.
  *   5. content     native fieldset-disabled when view-only (keyboard too);
  *                  per-section save status; inline validation instead of the
@@ -38,16 +39,12 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui-v2/button";
+import { Input } from "@/components/ui-v2/input";
+import { Switch } from "@/components/ui-v2/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui-v2/select";
 import { SettingsPanel, SettingsRow, Unit, UnitGroup, UnitGroups, useSettingsPageSave } from "@/components/settings-v2/settings-kit";
-import {
-  SettingsDependencyNotice,
-  SettingsReadOnlyFieldset,
-  SettingsSectionBoundary,
-} from "@/components/settings-v2/section-states";
+import { SettingsReadOnlyFieldset, SettingsSectionBoundary } from "@/components/settings-v2/section-states";
 import {
   SectionSaveBar,
   useDiscardOnUnmount,
@@ -55,13 +52,6 @@ import {
   useSectionSave,
 } from "@/components/settings-v2/business-section-save";
 import type { RegisterSectionSave } from "@/components/settings-v2/pricing-money-parts";
-import {
-  AVAILABLE_VARIABLES,
-  DEFAULT_LOCKBOX_EMAIL,
-  DEFAULT_LOCKBOX_INSTRUCTIONS,
-  DEFAULT_LOCKBOX_SMS,
-} from "@/components/settings/lockbox-templates-section";
-import { LockboxTemplatesSectionV2 } from "@/components/settings-v2/lockbox-templates-v2";
 import { useRentalSettings } from "@/hooks/use-rental-settings";
 import {
   businessPageDirty,
@@ -74,7 +64,6 @@ import {
   documentTypeOptions,
   hasErrors,
   leadTimeHours,
-  lockboxMethodStatus,
   normalizeLoadedLead,
   numberBoxWidth,
   reminderHoursRangeNote,
@@ -135,13 +124,10 @@ const leaveSave = (invalid: string | null, run: () => Promise<boolean>, what: st
 
 const digitsOnly = (value: string) => value.replace(/[^0-9]/g, "");
 // Dark v2 --primary is a deep indigo (about 1.8:1 on the card), so links lighten in dark mode.
-const inlineLink = "font-medium text-primary underline-offset-4 hover:underline dark:text-indigo-300";
-// The v1 radio marks the checked item with --accent, a near-white grey under .v2-theme,
-// so the chosen method looked unselected. Primary in light, a light indigo in dark.
-const methodRadio =
-  "data-[state=checked]:border-primary [&_svg]:fill-primary [&_svg]:text-primary dark:data-[state=checked]:border-indigo-300 dark:[&_svg]:fill-indigo-300 dark:[&_svg]:text-indigo-300";
+const inlineLink = "font-medium text-primary underline-offset-4 hover:underline dark:text-[hsl(var(--v2-link,var(--primary)))]";
 const warnText = "text-amber-600 dark:text-amber-400";
-const METHOD_NAMES: Record<string, string> = { email: "Email", sms: "Text message", whatsapp: "WhatsApp" };
+/** How the lockbox code is sent. Email only: no text message or WhatsApp option. */
+const LOCKBOX_METHODS = ["email"] as const;
 
 function FieldError({ id, children }: { id?: string; children?: ReactNode }) {
   if (!children) return null;
@@ -547,28 +533,33 @@ export function LockboxPageV2({
   canEdit,
   onSave,
   registerSave,
-  smsReady,
-  integrationsHref,
   vehiclesHref,
-}: PageProps & { smsReady: boolean; integrationsHref: string; vehiclesHref: string }) {
+  templatesHref,
+}: PageProps & {
+  vehiclesHref: string;
+  /** The lockbox message on Customer messages (`/settings?tab=templates#settings-lockbox-messages`). */
+  templatesHref: string;
+}) {
   const isDirty = businessPageDirty("lockbox", form, saved);
   const save = useSectionSave(isDirty);
   const pageSave = useSettingsPageSave();
   const enabled = !!form.lockbox_enabled;
   const codeError = enabled ? validateCodeLength(form.lockbox_code_length) : null;
-  const methodStatus = lockboxMethodStatus(form.lockbox_notification_methods, { smsReady });
   const offsetOptions = sendOffsetOptions(form.lockbox_send_offset_minutes);
   const offsetValue =
     form.lockbox_send_offset_minutes === null || form.lockbox_send_offset_minutes === undefined
       ? "manual"
       : String(form.lockbox_send_offset_minutes);
 
+  // The code always goes by email: `notify-lockbox-code` sends email whenever
+  // it is asked for, so saving writes exactly that. A method saved before
+  // (text message, WhatsApp) is replaced the next time this section saves.
   const submit = () =>
     save.run(() =>
       onSave({
         lockbox_enabled: enabled,
         lockbox_code_length: form.lockbox_code_length ?? null,
-        lockbox_notification_methods: form.lockbox_notification_methods,
+        lockbox_notification_methods: [...LOCKBOX_METHODS],
         lockbox_send_offset_minutes: form.lockbox_send_offset_minutes ?? null,
       }),
     );
@@ -593,73 +584,50 @@ export function LockboxPageV2({
             <Link href={vehiclesHref} className={inlineLink}>
               vehicle page
             </Link>
-            , and edit the message customers get below.
+            , and edit the email customers get in{" "}
+            <Link href={templatesHref} className={inlineLink}>
+              Customer messages
+            </Link>
+            .
           </p>
         )}
       </div>
     ) : undefined;
 
-  const methodNote = methodStatus.warning ? (
-    <SettingsDependencyNotice
-      tone="warning"
-      title={methodStatus.warning.title}
-      body={methodStatus.warning.body}
-      action={methodStatus.warning.needsTwilio ? { label: "Connect Twilio", href: integrationsHref } : undefined}
-    />
-  ) : !smsReady || methodStatus.extraSaved.length > 0 ? (
-    <div className="space-y-1 text-muted-foreground">
-      {!smsReady && (
-        <p>
-          Text messages need Twilio.{" "}
-          <Link href={integrationsHref} className={inlineLink}>
-            Connect it in Integrations
-          </Link>
-          .
-        </p>
-      )}
-      {methodStatus.extraSaved.length > 0 && (
-        <p>
-          Also saved: {methodStatus.extraSaved.map((m) => METHOD_NAMES[m] ?? m).join(", ")}. Saving keeps only the
-          method selected here.
-        </p>
-      )}
-    </div>
-  ) : undefined;
-
   return (
-    <div className="space-y-10">
-      <SettingsReadOnlyFieldset readOnly={!canEdit}>
-        <SettingsPanel
-          footer={
-            canEdit ? (
-              <SectionSaveBar save={save} isDirty={isDirty} invalid={!!codeError} onSave={submit} onDiscard={discard} />
-            ) : undefined
-          }
+    <SettingsReadOnlyFieldset readOnly={!canEdit}>
+      <SettingsPanel
+        footer={
+          canEdit ? (
+            <SectionSaveBar save={save} isDirty={isDirty} invalid={!!codeError} onSave={submit} onDiscard={discard} />
+          ) : undefined
+        }
+      >
+        <SettingsRow
+          label="Lockbox handover"
+          description="On delivery rentals, staff can leave the keys in a lockbox and the code is sent to the customer."
+          note={enableNote}
         >
-          <SettingsRow
-            label="Lockbox handover"
-            description="On delivery rentals, staff can leave the keys in a lockbox and the code is sent to the customer."
-            note={enableNote}
-          >
-            <Switch
-              checked={enabled}
-              onCheckedChange={(checked) => setForm((prev) => ({ ...prev, lockbox_enabled: checked }))}
-              aria-label="Enable lockbox handover"
-            />
-          </SettingsRow>
+          <Switch
+            checked={enabled}
+            onCheckedChange={(checked) => setForm((prev) => ({ ...prev, lockbox_enabled: checked }))}
+            aria-label="Enable lockbox handover"
+          />
+        </SettingsRow>
 
-          {enabled && (
-            <>
-              <SettingsRow
-                label="Code length"
-                description={
-                  form.lockbox_code_length && !codeError
-                    ? `The Generate button on a vehicle makes a random ${form.lockbox_code_length}-digit code.`
-                    : "Leave empty to let staff type any code. Generate makes a 4-digit one."
-                }
-                htmlFor="v2_lockbox_code_length"
-                note={codeError ? <FieldError id="v2_lockbox_code_length_error">{codeError}</FieldError> : undefined}
-              >
+        {enabled && (
+          <>
+            <SettingsRow
+              label="Code length"
+              description={
+                form.lockbox_code_length && !codeError
+                  ? `The Generate button on a vehicle makes a random ${form.lockbox_code_length}-digit code.`
+                  : "Leave empty to let staff type any code. Generate makes a 4-digit one."
+              }
+              htmlFor="v2_lockbox_code_length"
+              note={codeError ? <FieldError id="v2_lockbox_code_length_error">{codeError}</FieldError> : undefined}
+            >
+              <UnitGroup>
                 <Input
                   id="v2_lockbox_code_length"
                   type="text"
@@ -676,66 +644,45 @@ export function LockboxPageV2({
                   aria-describedby={codeError ? "v2_lockbox_code_length_error" : undefined}
                 />
                 <Unit>digits</Unit>
-              </SettingsRow>
+              </UnitGroup>
+            </SettingsRow>
 
-              <SettingsRow label="Send the code by" note={methodNote}>
-                <RadioGroup
-                  value={methodStatus.method}
-                  onValueChange={(value) => setForm((prev) => ({ ...prev, lockbox_notification_methods: [value] }))}
-                  className="flex flex-wrap gap-5"
-                  aria-label="Send the code by"
-                >
-                  <label className="flex cursor-pointer items-center gap-2 text-sm">
-                    <RadioGroupItem value="email" id="v2-lockbox-method-email" className={methodRadio} />
-                    Email
-                  </label>
-                  <label
-                    className={cn("flex items-center gap-2 text-sm", smsReady ? "cursor-pointer" : "cursor-not-allowed opacity-60")}
-                  >
-                    <RadioGroupItem value="sms" id="v2-lockbox-method-sms" disabled={!smsReady} className={methodRadio} />
-                    Text message
-                  </label>
-                  {methodStatus.method === "whatsapp" && (
-                    <label className="flex cursor-not-allowed items-center gap-2 text-sm opacity-60">
-                      <RadioGroupItem value="whatsapp" id="v2-lockbox-method-whatsapp" disabled className={methodRadio} />
-                      WhatsApp
-                    </label>
-                  )}
-                </RadioGroup>
-              </SettingsRow>
+            <SettingsRow label="Send the code by" description="Customers get their lockbox code in an email.">
+              <span data-lockbox-method="email" className="text-sm font-medium text-foreground">
+                Email
+              </span>
+            </SettingsRow>
 
-              <SettingsRow label="Send it automatically" description="After you approve the rental." htmlFor="v2_lockbox_send_offset">
-                <Select
-                  value={offsetValue}
-                  onValueChange={(value) =>
-                    setForm((prev) => ({ ...prev, lockbox_send_offset_minutes: value === "manual" ? null : parseInt(value, 10) }))
-                  }
-                >
-                  <SelectTrigger id="v2_lockbox_send_offset" className="w-56">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {offsetOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </SettingsRow>
-            </>
-          )}
-        </SettingsPanel>
-      </SettingsReadOnlyFieldset>
+            <SettingsRow label="Send it automatically" description="After you approve the rental." htmlFor="v2_lockbox_send_offset">
+              <Select
+                value={offsetValue}
+                onValueChange={(value) =>
+                  setForm((prev) => ({ ...prev, lockbox_send_offset_minutes: value === "manual" ? null : parseInt(value, 10) }))
+                }
+              >
+                <SelectTrigger id="v2_lockbox_send_offset" className="w-56">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {offsetOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </SettingsRow>
 
-      <LockboxTemplatesSectionV2
-        defaults={{ instructions: DEFAULT_LOCKBOX_INSTRUCTIONS, email: DEFAULT_LOCKBOX_EMAIL, sms: DEFAULT_LOCKBOX_SMS }}
-        variables={AVAILABLE_VARIABLES}
-        registerSave={registerSave}
-        integrationsHref={integrationsHref}
-        readOnlyNotice={false}
-      />
-    </div>
+            <SettingsRow label="Lockbox message" description="The email that carries the code, and the instructions in it.">
+              {/* A link, not a button: a view-only user's disabled fieldset never disables an <a>. */}
+              <Button asChild variant="outline" size="sm">
+                <Link href={templatesHref}>Templates</Link>
+              </Button>
+            </SettingsRow>
+          </>
+        )}
+      </SettingsPanel>
+    </SettingsReadOnlyFieldset>
   );
 }
 

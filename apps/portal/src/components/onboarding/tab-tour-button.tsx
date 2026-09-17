@@ -176,7 +176,7 @@ export function TabTourButton({ tour, className }: TabTourButtonProps) {
             // (HeaderIconButton): purple at rest, deeper on hover. Dark mode
             // uses the same indigo-300 glyph and v2 hover tint it does.
             'border-primary/30 bg-primary/5 text-primary hover:border-primary/50 hover:bg-primary/10 dark:bg-primary/10',
-            'dark:border-indigo-300/30 dark:text-indigo-300 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:border-indigo-300/50 dark:hover:text-indigo-300',
+            'dark:border-[hsl(var(--v2-link,var(--primary))_/_0.3)] dark:text-[hsl(var(--v2-link,var(--primary)))] dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:border-[hsl(var(--v2-link,var(--primary))_/_0.5)] dark:hover:text-[hsl(var(--v2-link,var(--primary)))]',
             className,
           )}
         >

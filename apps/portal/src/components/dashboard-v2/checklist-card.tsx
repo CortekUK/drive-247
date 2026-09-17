@@ -244,9 +244,9 @@ function VideoDialog({
             button, which is absolutely positioned in this corner. */}
         <DialogHeader className="shrink-0 flex-row items-center gap-3 border-b pb-3 pl-5 pr-14 pt-4">
           <DialogTitle className="flex min-w-0 flex-1 items-center gap-2 text-base leading-snug">
-            {/* `dark:text-indigo-300`: the dark theme's `--primary` is a deep
-                indigo that measures 1.78:1 on the dark dialog. */}
-            <Play className="h-4 w-4 shrink-0 fill-current text-primary dark:text-indigo-300" />
+            {/* Dark reads --v2-link: the dark theme's `--primary` is a deep
+                shade that measures 1.78:1 on the dark dialog. */}
+            <Play className="h-4 w-4 shrink-0 fill-current text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" />
             {/* Wraps below `sm` rather than truncating: a phone-width header
                 carries the length and the Sample pill too, and "Bonzah ins…"
                 hides the one word that says which video this is. */}
@@ -273,14 +273,14 @@ function VideoDialog({
               settings screen. Closes the video and opens the reader (or the
               external guide). */}
           {/* Icon only below `sm`, where the words would squeeze the title;
-              `aria-label` names it either way. `dark:text-indigo-300` for the
+              `aria-label` names it either way. --v2-link in dark for the
               same contrast reason as the Play icon above. */}
           {playing && read && ReadIcon && (
             <button
               type="button"
               onClick={() => onRead(playing, read)}
               aria-label={read.label}
-              className="inline-flex h-8 min-w-8 shrink-0 items-center justify-center gap-1.5 rounded-full px-2 text-xs font-medium text-primary transition-colors hover:bg-primary/10 dark:text-indigo-300 dark:hover:bg-indigo-300/10 sm:h-auto sm:min-w-0 sm:px-2.5 sm:py-1"
+              className="inline-flex h-8 min-w-8 shrink-0 items-center justify-center gap-1.5 rounded-full px-2 text-xs font-medium text-primary transition-colors hover:bg-primary/10 dark:text-[hsl(var(--v2-link,var(--primary)))] dark:hover:bg-[hsl(var(--v2-link,var(--primary))_/_0.1)] sm:h-auto sm:min-w-0 sm:px-2.5 sm:py-1"
             >
               <ReadIcon className="size-3.5" aria-hidden="true" />
               <span className="hidden sm:inline">Read the guide</span>

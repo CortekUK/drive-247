@@ -26,6 +26,7 @@ import {
   isInPortalPath,
   isOnCtaRoute,
   matchesSegment,
+  normalizeAdminAnnouncementStats,
   normalizePortalAnnouncementRow,
   resolveInPortalCta,
   validateAnnouncementDraft,
@@ -386,6 +387,78 @@ const rawFeature = (over: Record<string, unknown> = {}) => ({
   display: null,
   tone: null,
   ...over,
+});
+
+describe('normalizeAdminAnnouncementStats', () => {
+  // One admin_portal_announcement_stats row as PostgREST returns it: the original nine columns
+  // (super admins excluded), then the eight appended in round 4 (super admins included / their part).
+  const statsRow = {
+    announcement_id: UUID,
+    audience_tenants: 4,
+    reachable_tenants: 2,
+    shown_users: 3,
+    shown_tenants: 2,
+    card_opened_users: 2,
+    dismissed_users: 3,
+    dont_show_again_users: 1,
+    cta_users: 1,
+    shown_all_users: 5,
+    shown_all_tenants: 3,
+    shown_super_admin_users: 2,
+    card_opened_all_users: 3,
+    dismissed_all_users: 4,
+    cta_all_users: 2,
+    cta_super_admin_users: 1,
+    dont_show_again_all_users: 2,
+  };
+
+  it('passes a full row through with every column, in RETURNS TABLE order', () => {
+    const out = normalizeAdminAnnouncementStats(statsRow);
+    expect(out).toEqual(statsRow);
+    expect(Object.keys(out!)).toEqual(Object.keys(statsRow));
+  });
+
+  it('reads the RPC as it was before the columns were appended: everyone = the staff counts, super-admin parts 0', () => {
+    const legacy = {
+      announcement_id: UUID, audience_tenants: 12, reachable_tenants: 10, shown_users: 41, shown_tenants: 9,
+      card_opened_users: 18, dismissed_users: 30, dont_show_again_users: 4, cta_users: 7,
+    };
+    expect(normalizeAdminAnnouncementStats(legacy)).toEqual({
+      ...legacy,
+      shown_all_users: 41,
+      shown_all_tenants: 9,
+      shown_super_admin_users: 0,
+      card_opened_all_users: 18,
+      dismissed_all_users: 30,
+      cta_all_users: 7,
+      cta_super_admin_users: 0,
+      dont_show_again_all_users: 4,
+    });
+  });
+
+  it('a row seen only by super admins keeps its real counts (the production "Seen by 0 users" case)', () => {
+    const out = normalizeAdminAnnouncementStats({
+      ...statsRow, shown_users: 0, shown_tenants: 0, card_opened_users: 0, dismissed_users: 0, dont_show_again_users: 0, cta_users: 0,
+      shown_all_users: 1, shown_all_tenants: 1, shown_super_admin_users: 1, card_opened_all_users: 0, dismissed_all_users: 1,
+      cta_all_users: 0, cta_super_admin_users: 0, dont_show_again_all_users: 0,
+    });
+    expect([out!.shown_users, out!.shown_all_users, out!.shown_super_admin_users, out!.dismissed_all_users]).toEqual([0, 1, 1, 1]);
+  });
+
+  it('coerces numeric strings, and turns missing, negative, fractional or non-numeric counts into safe integers', () => {
+    const out = normalizeAdminAnnouncementStats({
+      ...statsRow, audience_tenants: '7', reachable_tenants: -3, shown_users: 'many', shown_tenants: null, card_opened_users: 2.9,
+      dismissed_users: Infinity, cta_all_users: undefined, shown_all_users: '',
+    });
+    expect([out!.audience_tenants, out!.reachable_tenants, out!.shown_users, out!.shown_tenants, out!.card_opened_users,
+      out!.dismissed_users, out!.cta_all_users, out!.shown_all_users]).toEqual([7, 0, 0, 0, 2, 0, 0, 0]);
+  });
+
+  it('drops rows without an announcement id', () => {
+    for (const raw of [null, undefined, 'x', 42, [], {}, { ...statsRow, announcement_id: '' }, { ...statsRow, announcement_id: 7 }]) {
+      expect(normalizeAdminAnnouncementStats(raw)).toBeNull();
+    }
+  });
 });
 
 describe('normalizePortalAnnouncementRow', () => {
