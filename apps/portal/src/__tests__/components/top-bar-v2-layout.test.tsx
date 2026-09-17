@@ -53,7 +53,8 @@ vi.mock('@/hooks/use-credit-wallet', () => ({
 vi.mock('@/components/trax/trax-provider', () => ({
   useTraxOptional: () => ({ sheetOpen: false, openSheet: () => {}, closeSheet: () => {} }),
 }));
-vi.mock('@/components/shared/layout/page-search-slot', () => ({ usePageSearchSlot: () => null }));
+const pageSlot = vi.hoisted(() => ({ current: null as unknown }));
+vi.mock('@/components/shared/layout/page-search-slot', () => ({ usePageSearchSlot: () => pageSlot.current }));
 
 import { TopBarV2 } from '@/components/shared/layout/top-bar-v2';
 
@@ -112,6 +113,35 @@ describe('v2 top bar layout', () => {
       'utf8',
     );
     expect(src).not.toMatch(/hover:bg-muted/);
+  });
+});
+
+describe('v2 top bar page field: filter badge', () => {
+  it('keeps the active-filter count inside the field, which clips its overflow', () => {
+    // The badge used to hang outside the filter button (-right-1.5 -top-1.5),
+    // and the field's overflow-hidden cut it in half.
+    pageSlot.current = {
+      placeholder: 'Search rentals',
+      value: '',
+      onChange: () => {},
+      filters: { open: false, onOpenChange: () => {}, activeCount: 3 },
+    };
+    try {
+      render(<TopBarV2 />);
+      const button = screen.getByRole('button', { name: 'Show filters' });
+      const badge = [...button.querySelectorAll('span')].find((el) => el.textContent === '3')!;
+      expect(badge).toBeDefined();
+      const field = button.parentElement!;
+      expect(field.className).toContain('overflow-hidden');
+      expect(field.contains(badge)).toBe(true);
+
+      const cls = badge.className.split(/\s+/);
+      expect(cls).toEqual(expect.arrayContaining(['absolute', 'right-0', 'top-0', 'size-3.5', 'rounded-full']));
+      // No negative offset may push it past the button's own box.
+      expect(cls.filter((c) => /^-(right|top|left|bottom|inset)-/.test(c))).toEqual([]);
+    } finally {
+      pageSlot.current = null;
+    }
   });
 });
 

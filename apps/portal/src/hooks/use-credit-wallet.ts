@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { isLeanTenant } from "@/lib/lean-areas";
+import { useIsLean } from "@/lib/lean-context";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { toast } from "sonner";
@@ -64,6 +64,10 @@ export interface CreditCost {
 
 export function useCreditWallet() {
   const { tenant } = useTenant();
+  // Read here and CLOSED OVER by the checkout mutation's `returnUrl`
+  // builder below: that runs on click, inside a mutationFn, which is not a
+  // position a hook can be called from.
+  const isCanary = useIsLean();
   const queryClient = useQueryClient();
 
   // Fetch wallet
@@ -154,7 +158,7 @@ export function useCreditWallet() {
       // else needs the change — and this is a live money path, so the other 36
       // keep the URL they have always been sent to.
       const returnUrl = (status: "success" | "cancelled") => {
-        if (!isLeanTenant(tenant?.slug)) {
+        if (!isCanary) {
           return `${window.location.origin}/credits?status=${status}`;
         }
         const url = new URL(window.location.href);

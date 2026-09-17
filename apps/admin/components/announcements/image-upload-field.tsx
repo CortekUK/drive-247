@@ -32,6 +32,7 @@ export function ImageUploadField({
   onUploaded,
   onBusyChange,
   error,
+  notice,
   label,
 }: {
   id: string;
@@ -42,6 +43,8 @@ export function ImageUploadField({
   onUploaded: (url: string) => void;
   onBusyChange: (busy: boolean) => void;
   error?: string;
+  /** A standing note about this image (a duplicate's copy that failed), shown right under the control. */
+  notice?: string | null;
   label: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -110,6 +113,7 @@ export function ImageUploadField({
   };
 
   const shownError = localError ?? error;
+  const noticeId = notice ? id + '-notice' : undefined;
   const thumbClass = slot === 'card' ? 'aspect-square w-28' : 'aspect-video w-44';
 
   return (
@@ -148,6 +152,7 @@ export function ImageUploadField({
               className={QUIET_BUTTON}
               disabled={busy}
               aria-label={'Replace ' + label}
+              aria-describedby={noticeId}
               onClick={() => inputRef.current?.click()}
             >
               <RefreshCw />
@@ -182,7 +187,7 @@ export function ImageUploadField({
           type="button"
           disabled={busy}
           aria-label={'Upload ' + label}
-          aria-describedby={id + '-guidance'}
+          aria-describedby={noticeId ? noticeId + ' ' + id + '-guidance' : id + '-guidance'}
           onClick={() => inputRef.current?.click()}
           onDragOver={(e) => {
             e.preventDefault();
@@ -193,6 +198,7 @@ export function ImageUploadField({
           className={cn(
             'flex w-full cursor-pointer flex-col items-center justify-center gap-1.5 rounded-2xl border border-dashed px-4 py-6 text-center transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/30 disabled:cursor-wait',
             dragOver ? 'border-primary bg-primary/10' : 'border-border bg-input/30 hover:border-primary/50 hover:bg-primary/5',
+            notice && !shownError && !dragOver && 'border-amber-500/60',
             shownError && 'border-destructive/60',
           )}
         >
@@ -204,6 +210,11 @@ export function ImageUploadField({
           <span className="text-sm font-medium text-foreground">{busy ? 'Uploading…' : 'Click or drop an image'}</span>
           <span className="text-xs text-muted-foreground">PNG, JPG or WebP, up to 2 MB</span>
         </button>
+      )}
+      {notice && (
+        <p id={noticeId} className="text-xs font-medium leading-5 text-amber-700 dark:text-amber-300">
+          {notice}
+        </p>
       )}
       <div id={id + '-guidance'} className="space-y-1 text-xs leading-5 text-muted-foreground">
         <p className="font-medium text-foreground/80">{imageGuidanceSummary(slot)}</p>

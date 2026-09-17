@@ -144,7 +144,7 @@ export function QuickDock() {
             <button
               onClick={() => setTucked(true)}
               aria-label="Collapse"
-              className="flex w-0 shrink-0 cursor-pointer items-center justify-center overflow-hidden text-muted-foreground opacity-0 transition-all duration-200 ease-out hover:bg-accent hover:text-foreground group-hover:w-7 group-hover:opacity-100"
+              className="flex w-0 shrink-0 cursor-pointer items-center justify-center overflow-hidden text-muted-foreground opacity-0 transition-all duration-200 ease-out hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] hover:text-foreground group-hover:w-7 group-hover:opacity-100"
             >
               <ChevronRight className="h-4 w-4 shrink-0" />
             </button>

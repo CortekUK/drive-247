@@ -48,6 +48,16 @@ import { SIGNUP_ERROR_COPY } from "@/components/onboarding/onboarding-types";
 const stripeJsCache = new Map<string, Promise<Stripe | null>>();
 
 /**
+ * Loaded into Stripe's iframe so the card form uses the site font (Inter).
+ * Module-level on purpose: `fonts` is set once when <Elements> mounts, and a new
+ * array identity on a theme toggle would trip react-stripe-js's
+ * "unsupported prop change" warning.
+ */
+const STRIPE_ELEMENT_FONTS = [
+  { cssSrc: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" },
+];
+
+/**
  * How long to wait for Stripe.js before declaring it unavailable.
  *
  * THIS IS THE DIFFERENCE BETWEEN A FAILURE MESSAGE AND AN ETERNAL SKELETON.
@@ -186,20 +196,57 @@ export function PaymentStep({
    * makes react-stripe-js re-issue `elements.update()` continuously, which
    * visibly flickers the card field.
    */
-  const appearance = React.useMemo<StripeElementsOptions["appearance"]>(
-    () => ({
-      theme: resolvedTheme === "dark" ? "night" : "stripe",
+  const appearance = React.useMemo<StripeElementsOptions["appearance"]>(() => {
+    const dark = resolvedTheme === "dark";
+    // The Payment Element renders in Stripe's iframe, where `fontFamily:
+    // "inherit"` has no page to inherit from: the labels fell back to the
+    // browser serif (Sep 17 2026 screenshot). Name the site's font and load it
+    // into the iframe through `fonts` below, and use the site's indigo (the
+    // plan cards' `bg-indigo-600` / dark `bg-indigo-500`) for focus and accents.
+    const brand = dark ? "#6366f1" : "#4f46e5";
+    return {
+      theme: dark ? "night" : "stripe",
       variables: {
-        colorPrimary: "#6366f1",
-        borderRadius: "8px",
-        fontFamily: "inherit",
+        colorPrimary: brand,
+        colorText: dark ? "#fafafa" : "#18181b",
+        colorTextSecondary: dark ? "#a1a1aa" : "#52525b",
+        colorTextPlaceholder: dark ? "#71717a" : "#a1a1aa",
+        colorDanger: dark ? "#f87171" : "#dc2626",
+        colorBackground: dark ? "#18181b" : "#ffffff",
+        fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif",
+        fontSizeBase: "14px",
+        fontWeightNormal: "400",
+        fontWeightMedium: "500",
+        borderRadius: "10px",
+        spacingUnit: "4px",
       },
-    }),
-    [resolvedTheme],
-  );
+      rules: {
+        ".Label": { fontWeight: "500", marginBottom: "6px" },
+        ".Input": {
+          border: `1px solid ${dark ? "#3f3f46" : "#e4e4e7"}`,
+          boxShadow: "none",
+          padding: "11px 12px",
+        },
+        ".Input:focus": {
+          border: `1px solid ${brand}`,
+          boxShadow: `0 0 0 3px ${dark ? "rgba(99,102,241,0.30)" : "rgba(79,70,229,0.15)"}`,
+        },
+        ".Input--invalid": { border: `1px solid ${dark ? "#f87171" : "#dc2626"}`, boxShadow: "none" },
+        ".Tab": { border: `1px solid ${dark ? "#3f3f46" : "#e4e4e7"}`, boxShadow: "none" },
+        ".Tab--selected": { border: `1px solid ${brand}`, color: brand },
+      },
+    };
+  }, [resolvedTheme]);
 
   const elementsOptions = React.useMemo<StripeElementsOptions | null>(
-    () => (clientSecret ? { clientSecret, appearance } : null),
+    () =>
+      clientSecret
+        ? {
+            clientSecret,
+            appearance,
+            fonts: STRIPE_ELEMENT_FONTS,
+          }
+        : null,
     [clientSecret, appearance],
   );
 

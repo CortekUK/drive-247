@@ -1,8 +1,9 @@
 "use client";
 
 /**
- * v2 Settings (northwind): the Pricing rules page. When the monthly rate starts,
- * weekend pricing, and holiday pricing, each with every state an operator can
+ * v2 Settings (northwind): the Custom pricing page (`?tab=pricing`, formerly
+ * "Pricing rules"; the tab key and the manager permission are unchanged). When
+ * the monthly rate starts, weekend pricing, and holiday pricing, each with every state an operator can
  * meet: first load, a failed read, nothing configured, view-only access,
  * unsaved / saving / failed saves, and extreme data (long names, past holidays,
  * huge percentages, 100+ holidays).
@@ -50,7 +51,7 @@ import {
   ListTableHeader,
   useProgressiveRows,
 } from "@/components/shared/list-table-v2";
-import { SettingsField, SettingsPanel, SettingsRow, Unit } from "@/components/settings-v2/settings-kit";
+import { SettingsField, SettingsPanel, SettingsRow, Unit, useSettingsPageSave } from "@/components/settings-v2/settings-kit";
 import {
   SettingsDependencyNotice,
   SettingsEmptyState,
@@ -124,7 +125,7 @@ export interface PricingRulesV2Props {
 
 export function PricingRulesV2({ canEdit, registerSave, onDirtyChange, monthlyTier }: PricingRulesV2Props) {
   return (
-    <div className="pointer-events-auto space-y-8">
+    <div className="pointer-events-auto space-y-10">
       {monthlyTier && <MonthlyTierSection {...monthlyTier} canEdit={canEdit} registerSave={registerSave} />}
       <WeekendPricingSection canEdit={canEdit} registerSave={registerSave} onDirtyChange={onDirtyChange} />
       <HolidayPricingSection canEdit={canEdit} />
@@ -147,62 +148,72 @@ function MonthlyTierSection({
 }: MonthlyTierProps & { canEdit: boolean; registerSave?: RegisterSectionSave }) {
   const saved = savedValue ?? 30;
   const dirty = read.hasData && Number(value) !== Number(saved);
+  const pageSave = useSettingsPageSave();
   const save = useSectionSave({
     sectionKey: "pricing-monthly-tier",
     isDirty: dirty,
     registerSave,
     signature: String(value),
     run: onSave,
+    discard: () => onChange(Number(saved)),
   });
   const options = [30, 31].includes(Number(value)) ? [30, 31] : [30, 31, Number(value)];
 
   return (
-    <ReadGate read={read} thing="monthly pricing" rows={1}>
-      <SettingsReadOnlyFieldset readOnly={!canEdit}>
-        <SettingsPanel>
-          <SettingsRow
-            label="Monthly rate starts at"
-            description="Rentals this long or longer use the monthly rate. Also used for mileage allowance and extensions."
-            note={
-              canEdit && save.status !== "idle" ? (
-                <SettingsSaveState
-                  status={save.status}
-                  error={save.error}
-                  onRetry={save.retry}
-                  onDiscard={() => onChange(Number(saved))}
-                />
-              ) : undefined
-            }
-          >
-            <Select value={String(value)} onValueChange={(next) => onChange(parseInt(next))}>
-              <SelectTrigger className="w-28" aria-label="Monthly rate starts at">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {options.map((days) => (
-                  <SelectItem key={days} value={String(days)}>
-                    {days} days
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {canEdit && (
-              <Button
-                type="button"
-                size="sm"
-                variant={dirty ? "default" : "outline"}
-                disabled={!dirty || save.saving}
-                aria-busy={save.saving || undefined}
-                onClick={save.trigger}
-              >
-                {save.saving && <Loader2 className="animate-spin" data-icon="inline-start" />}
-                Save
-              </Button>
-            )}
-          </SettingsRow>
-        </SettingsPanel>
-      </SettingsReadOnlyFieldset>
-    </ReadGate>
+    <section aria-labelledby="v2-monthly-rate" className="space-y-3">
+      <SectionHeader
+        id="v2-monthly-rate"
+        title="Monthly rate"
+        description="When a rental is long enough to be priced at your monthly rate instead of the daily or weekly one."
+      />
+      <ReadGate read={read} thing="monthly pricing" rows={1}>
+        <SettingsReadOnlyFieldset readOnly={!canEdit}>
+          <SettingsPanel>
+            <SettingsRow
+              label="Monthly rate starts at"
+              description="Rentals this long or longer use the monthly rate. Also used for mileage allowance and extensions."
+              note={
+                // Inside the page's save bar only a failed save is said here.
+                canEdit && (pageSave ? save.status === "error" : save.status !== "idle") ? (
+                  <SettingsSaveState
+                    status={save.status}
+                    error={save.error}
+                    onRetry={pageSave ? undefined : save.retry}
+                    onDiscard={pageSave ? undefined : () => onChange(Number(saved))}
+                  />
+                ) : undefined
+              }
+            >
+              <Select value={String(value)} onValueChange={(next) => onChange(parseInt(next))}>
+                <SelectTrigger className="w-28" aria-label="Monthly rate starts at">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {options.map((days) => (
+                    <SelectItem key={days} value={String(days)}>
+                      {days} days
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {canEdit && !pageSave && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={dirty ? "default" : "outline"}
+                  disabled={!dirty || save.saving}
+                  aria-busy={save.saving || undefined}
+                  onClick={save.trigger}
+                >
+                  {save.saving && <Loader2 className="animate-spin" data-icon="inline-start" />}
+                  Save
+                </Button>
+              )}
+            </SettingsRow>
+          </SettingsPanel>
+        </SettingsReadOnlyFieldset>
+      </ReadGate>
+    </section>
   );
 }
 
@@ -255,6 +266,12 @@ function WeekendPricingSection({
   const percentNote = percentIssue ?? weekendOffNote(percent);
   const daysNote = weekendDaysIssue(percent, days);
 
+  const discard = () => {
+    setPercent(settings.weekend_surcharge_percent || "");
+    setDays(settings.weekend_days || [6, 0]);
+    setStack(settings.stack_surcharges ?? false);
+  };
+
   const save = useSectionSave({
     sectionKey: "pricing-weekend",
     isDirty: dirty,
@@ -268,13 +285,8 @@ function WeekendPricingSection({
         stack_surcharges: stack,
       });
     },
+    discard,
   });
-
-  const discard = () => {
-    setPercent(settings.weekend_surcharge_percent || "");
-    setDays(settings.weekend_days || [6, 0]);
-    setStack(settings.stack_surcharges ?? false);
-  };
 
   const toggleDay = (day: number) =>
     setDays((prev) =>
@@ -510,7 +522,8 @@ function HolidayPricingSection({ canEdit }: { canEdit: boolean }) {
                   return (
                     <ListRow key={holiday.id}>
                       <ListCell>
-                        <div className="flex min-w-0 items-center gap-2">
+                        {/* Centred like every other v2 cell: a flex row ignores the cell's text-center. */}
+                        <div className="flex min-w-0 items-center justify-center gap-2">
                           <TruncatedText
                             text={holiday.name}
                             className={cn(LIST_CLASSES.identifier, "min-w-0", past && "text-muted-foreground")}

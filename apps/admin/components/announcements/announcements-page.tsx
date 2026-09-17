@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { AlertTriangle, Database, Megaphone, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -8,21 +8,31 @@ import { toast } from '@/components/ui/sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   deleteAnnouncement,
+  loadActiveTenantCount,
   loadAnnouncementsData,
+  prepareDuplicate,
   referencedImageUrls,
   removeAnnouncementImages,
   reorderAnnouncements,
   setAnnouncementActive,
+  showAnnouncementAgain,
   applyKindOrder,
   type AnnouncementsData,
 } from '@/lib/announcements/api';
 import { compareAdminRows, type AdminAnnouncementRow, type AnnouncementKind } from '@/lib/announcements/contract';
+import {
+  activeTenantCountFromStats,
+  allTenantsConfirmCopy,
+  needsAllTenantsConfirm,
+  showAgainConfirmCopy,
+  type ConfirmCopy,
+} from '@/lib/announcements/all-tenants-confirm';
+import { type DuplicateSeed, type RowPending } from '@/lib/announcements/row-actions';
 import { AnnouncementEditorDialog } from './announcement-editor-dialog';
 import { AnnouncementList, ListSkeleton } from './announcement-list';
 import { ConfirmDialog } from './confirm-dialog';
 import { DeleteAnnouncementDialog } from './delete-announcement-dialog';
 import { QUIET_BUTTON } from './form-field';
-import { blocksEveryTenant } from './form-logic';
 
 type PageState =
   | { status: 'loading' }
@@ -54,10 +64,37 @@ export function AnnouncementsPage() {
   const tab: TabValue = searchParams.get('tab') === 'system' ? 'system' : 'features';
 
   const [state, setState] = useState<PageState>({ status: 'loading' });
-  const [editor, setEditor] = useState<{ key: number; kind: AnnouncementKind; row: AdminAnnouncementRow | null } | null>(null);
+  const [editor, setEditor] = useState<{
+    key: number;
+    kind: AnnouncementKind;
+    row: AdminAnnouncementRow | null;
+    /** Set when the editor opens a duplicate (create mode, prefilled, images already copied). */
+    duplicate: DuplicateSeed | null;
+  } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AdminAnnouncementRow | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [confirmActivate, setConfirmActivate] = useState<AdminAnnouncementRow | null>(null);
+  /** Switching on a system announcement for All tenants, waiting for the admin's yes. */
+  const [confirmActivate, setConfirmActivate] = useState<{ row: AdminAnnouncementRow; copy: ConfirmCopy } | null>(null);
+  const [confirmShowAgain, setConfirmShowAgain] = useState<{
+    row: AdminAnnouncementRow;
+    copy: { title: string; description: string; confirmLabel: string };
+  } | null>(null);
+  /** Keep each confirmation's text while it animates closed. */
+  const lastActivateCopy = useRef<ConfirmCopy>(allTenantsConfirmCopy({ blocking: 'soft', display: 'banner' }, 'activate', null));
+  const lastShowAgainCopy = useRef(showAgainConfirmCopy({ title: '', kind: 'feature', audience: 'selected', is_active: false }, null));
+  /** The title of the row whose confirmation is waiting for the active-tenant count: one at a time. */
+  const askingConfirm = useRef<string | null>(null);
+  /** That row, shown as busy (switch disabled) until its question opens. */
+  const [askingRowId, setAskingRowId] = useState<string | null>(null);
+  const tenantCountLoad = useRef<Promise<number | null> | null>(null);
+  /** Inline Active writes in flight per row (a counter: the switch can be flipped again before the first write lands). */
+  const [activeWrites, setActiveWrites] = useState<Record<string, number>>({});
+  const [showingAgain, setShowingAgain] = useState<Record<string, true>>({});
+  /** The row whose duplicate is being prepared; one at a time. */
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
+  const mounted = useRef(true);
+  /** Any dialog of this page is open (editor or a confirmation). */
+  const modalOpen = useRef(false);
   const seq = useRef(0);
   const editorKey = useRef(0);
   const newButtonRef = useRef<HTMLButtonElement>(null);
@@ -79,11 +116,79 @@ export function AnnouncementsPage() {
   }, []);
 
   useEffect(() => {
+    mounted.current = true;
     void load('initial');
     return () => {
+      mounted.current = false;
       seq.current += 1;
     };
   }, [load]);
+
+  useEffect(() => {
+    modalOpen.current = editor !== null || deleteTarget !== null || confirmActivate !== null || confirmShowAgain !== null;
+  }, [editor, deleteTarget, confirmActivate, confirmShowAgain]);
+
+  /** The active-tenant count read from the stats on screen (null: none to read it from). */
+  const statsTenantCount = useMemo(
+    () => (state.status === 'ready' ? activeTenantCountFromStats(state.data.rows, state.data.statsById) : null),
+    [state],
+  );
+
+  /**
+   * N in "(N active tenants)": the stats' reachable count of any All tenants row when the page
+   * has one (the old and the new stats function both return it), otherwise the picker's tenant
+   * read counted the same way. null when neither is available: the question is asked without N.
+   */
+  const resolveAllTenantsCount = useCallback((): Promise<number | null> => {
+    if (statsTenantCount !== null) return Promise.resolve(statsTenantCount);
+    if (!tenantCountLoad.current) {
+      const load = loadActiveTenantCount()
+        .then((res) => {
+          if (!res.ok) console.warn('[announcements] active tenant count unavailable:', res.message);
+          return res.ok ? res.data : null;
+        })
+        .catch(() => null)
+        .finally(() => {
+          if (tenantCountLoad.current === load) tenantCountLoad.current = null;
+        });
+      tenantCountLoad.current = load;
+    }
+    return tenantCountLoad.current;
+  }, [statsTenantCount]);
+
+  /**
+   * Open a confirmation that needs the tenant count, unless another dialog opened while it loaded.
+   * The count always settles (the fallback read gives up after a few seconds), so the latch is always
+   * released. A click this cannot ask about is never dropped silently: `dropped` says what to do.
+   */
+  const askWithTenantCount = (row: AdminAnnouncementRow, dropped: string, open: (count: number | null) => void) => {
+    if (askingConfirm.current !== null) {
+      toast.info('Still reading the tenant count for “' + askingConfirm.current + '”. Try again in a moment.');
+      return;
+    }
+    askingConfirm.current = row.title;
+    setAskingRowId(row.id);
+    void resolveAllTenantsCount()
+      .catch(() => null)
+      .then((count) => {
+        askingConfirm.current = null;
+        if (!mounted.current) return;
+        setAskingRowId(null);
+        if (modalOpen.current) {
+          toast.info(dropped);
+          return;
+        }
+        open(count);
+      });
+  };
+
+  const pendingById = useMemo(() => {
+    const out: Record<string, RowPending | undefined> = {};
+    if (askingRowId) out[askingRowId] = 'asking';
+    for (const id of Object.keys(activeWrites)) if (activeWrites[id] > 0) out[id] = 'active';
+    for (const id of Object.keys(showingAgain)) out[id] = 'show-again';
+    return out;
+  }, [askingRowId, activeWrites, showingAgain]);
 
   /** Apply an optimistic change and invalidate any read already in flight. */
   const updateRows = (fn: (rows: AdminAnnouncementRow[]) => AdminAnnouncementRow[]) => {
@@ -121,20 +226,49 @@ export function AnnouncementsPage() {
   };
 
   const toggleActive = (row: AdminAnnouncementRow, next: boolean) => {
-    // Switching on a hard blocker for All tenants blocks every portal: ask first,
-    // exactly as saving one from the editor does. The switch stays off until confirmed.
-    if (blocksEveryTenant({ ...row, is_active: next })) {
+    // Switching on a system announcement for All tenants (dialog or banner, soft or hard) puts it
+    // on every tenant's portal: ask first, exactly as saving one from the editor does. The switch
+    // stays off until confirmed. Switching off, and features, never ask.
+    if (needsAllTenantsConfirm({ ...row, is_active: next })) {
       rememberOpener();
-      setConfirmActivate(row);
+      const dropped = 'Turning on “' + row.title + '” was cancelled because another dialog was open. Switch it on again.';
+      askWithTenantCount(row, dropped, (count) => {
+        const copy = allTenantsConfirmCopy(row, 'activate', count);
+        lastActivateCopy.current = copy;
+        setConfirmActivate({ row, copy });
+      });
       return;
     }
     void writeActive(row, next);
   };
 
+  /** Show again re-saves the row: for an active system announcement for All tenants its confirmation says so. */
+  const askShowAgain = (row: AdminAnnouncementRow) => {
+    rememberOpener();
+    const open = (count: number | null) => {
+      const copy = showAgainConfirmCopy(row, count);
+      lastShowAgainCopy.current = copy;
+      setConfirmShowAgain({ row, copy });
+    };
+    const dropped = 'Show again for “' + row.title + '” was cancelled because another dialog was open. Press Show again to try once more.';
+    if (needsAllTenantsConfirm(row)) askWithTenantCount(row, dropped, open);
+    else open(null);
+  };
+
   const writeActive = async (row: AdminAnnouncementRow, next: boolean) => {
     const previous = row.is_active;
+    const countWrite = (delta: 1 | -1) =>
+      setActiveWrites((w) => {
+        const n = (w[row.id] ?? 0) + delta;
+        const out = { ...w };
+        if (n > 0) out[row.id] = n;
+        else delete out[row.id];
+        return out;
+      });
     updateRows((rows) => rows.map((r) => (r.id === row.id ? { ...r, is_active: next } : r)));
+    countWrite(1);
     const res = await setAnnouncementActive(row.id, next);
+    if (mounted.current) countWrite(-1);
     if (!res.ok) {
       updateRows((rows) => rows.map((r) => (r.id === row.id ? { ...r, is_active: previous } : r)));
       toast.error('Could not change Active: ' + res.message);
@@ -154,7 +288,8 @@ export function AnnouncementsPage() {
           .map((r) => (r.kind === kind && before.has(r.id) ? { ...r, sort_order: before.get(r.id) as number } : r))
           .sort(compareAdminRows),
       );
-      toast.error('Could not save the new order');
+      // An expired sign-in says what to do; anything else keeps the short toast.
+      toast.error(res.code === 'SESSION_EXPIRED' ? 'Could not save the new order: ' + res.message : 'Could not save the new order');
       console.warn('[announcements] reorder failed:', res.message);
     }
     void load('silent');
@@ -183,7 +318,59 @@ export function AnnouncementsPage() {
   const openEditor = (kind: AnnouncementKind, row: AdminAnnouncementRow | null) => {
     rememberOpener();
     editorKey.current += 1;
-    setEditor({ key: editorKey.current, kind, row });
+    setEditor({ key: editorKey.current, kind, row, duplicate: null });
+  };
+
+  /**
+   * Show again: the save RPC with p_reshow and the row's current content (read
+   * fresh by the api), which bumps the revision so earlier dismissals no longer count.
+   */
+  const runShowAgain = async (row: AdminAnnouncementRow) => {
+    if (showingAgain[row.id]) return;
+    setShowingAgain((m) => ({ ...m, [row.id]: true }));
+    const res = await showAnnouncementAgain(row.id);
+    if (!mounted.current) return;
+    setShowingAgain((m) => {
+      const out = { ...m };
+      delete out[row.id];
+      return out;
+    });
+    if (!res.ok) {
+      toast.error('Could not show it again: ' + res.message);
+      return;
+    }
+    toast.success('“' + row.title + '” will show again to everyone who closed it');
+    void load('silent');
+  };
+
+  /**
+   * Duplicate: copy the row's images to objects of its own, then open the editor
+   * in create mode, prefilled and inactive. Nothing is saved until Save; Cancel
+   * deletes the copies (they are the editor's uploads).
+   */
+  const duplicate = async (row: AdminAnnouncementRow) => {
+    if (duplicatingId !== null || state.status !== 'ready') return;
+    rememberOpener();
+    setDuplicatingId(row.id);
+    const res = await prepareDuplicate(row, state.data.targetsById[row.id] ?? []);
+    if (!mounted.current) {
+      if (res.ok) void removeAnnouncementImages(res.data.uploads);
+      return;
+    }
+    setDuplicatingId(null);
+    if (!res.ok) {
+      toast.error('Could not duplicate: ' + res.message);
+      return;
+    }
+    if (modalOpen.current) {
+      // Another dialog opened while the images were copying: never stack the editor on it. Drop this
+      // duplicate with its copies (nothing was saved) and say so.
+      void removeAnnouncementImages(res.data.uploads);
+      toast.info('Duplicate of “' + row.title + '” not opened because another dialog was open. Press Duplicate again.');
+      return;
+    }
+    editorKey.current += 1;
+    setEditor({ key: editorKey.current, kind: row.kind, row: null, duplicate: res.data });
   };
 
   const rows = state.status === 'ready' ? state.data.rows : [];
@@ -242,13 +429,18 @@ export function AnnouncementsPage() {
           rows={ofKind}
           targetsById={state.data.targetsById}
           statsById={state.data.statsById}
+          statsCountSuperAdmins={state.data.statsCountSuperAdmins}
           onReorder={(k, ids) => void reorder(k, ids)}
+          pendingById={pendingById}
+          duplicatingId={duplicatingId}
           onToggleActive={toggleActive}
           onEdit={(row) => openEditor(row.kind, row)}
           onDelete={(row) => {
             rememberOpener();
             setDeleteTarget(row);
           }}
+          onShowAgain={askShowAgain}
+          onDuplicate={(row) => void duplicate(row)}
         />
       </div>
     );
@@ -296,8 +488,10 @@ export function AnnouncementsPage() {
           key={editor.key}
           kind={editor.kind}
           row={editor.row}
+          duplicate={editor.duplicate}
           tenantIds={editor.row ? (state.data.targetsById[editor.row.id] ?? []) : []}
           otherActiveFeatures={otherActiveFeatures}
+          resolveAllTenantsCount={resolveAllTenantsCount}
           onCloseAutoFocus={restoreFocus}
           onClose={() => setEditor(null)}
           onSaved={() => {
@@ -317,17 +511,26 @@ export function AnnouncementsPage() {
       />
 
       <ConfirmDialog
+        open={confirmShowAgain !== null}
+        {...(confirmShowAgain?.copy ?? lastShowAgainCopy.current)}
+        returnFocusRef={opener}
+        onCancel={() => setConfirmShowAgain(null)}
+        onConfirm={() => {
+          const pending = confirmShowAgain;
+          setConfirmShowAgain(null);
+          if (pending) void runShowAgain(pending.row);
+        }}
+      />
+
+      <ConfirmDialog
         open={confirmActivate !== null}
-        title="Block every tenant?"
-        description="This blocks every tenant's portal until you deactivate it. Continue?"
-        confirmLabel="Turn on and block"
-        destructive
+        {...(confirmActivate?.copy ?? lastActivateCopy.current)}
         returnFocusRef={opener}
         onCancel={() => setConfirmActivate(null)}
         onConfirm={() => {
-          const row = confirmActivate;
+          const pending = confirmActivate;
           setConfirmActivate(null);
-          if (row) void writeActive(row, true);
+          if (pending) void writeActive(pending.row, true);
         }}
       />
     </div>

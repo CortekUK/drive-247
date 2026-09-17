@@ -33,7 +33,7 @@ import {
 import { VehicleStatus, VehiclePLData } from "@/lib/vehicle-utils";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
-import { isAreaHidden, isLeanTenant } from "@/lib/lean-areas";
+import { useIsAreaHidden, useIsLean } from "@/lib/lean-context";
 import { VehiclesTeachingEmptyState } from "@/components/empty-states/lean-empty-states";
 import { useForcedEmptyState } from "@/hooks/use-forced-empty-state";
 import {
@@ -255,7 +255,7 @@ export default function VehiclesListEnhanced() {
   // column also renders a live `/vehicle-owners/{id}` link, which would walk
   // straight into the area the routes above now 404 for the canary. Hidden for
   // the canary only; the query, the filter logic and vehicles.owner_id stay.
-  const ownersHidden = isAreaHidden("owners", tenantSlug);
+  const ownersHidden = useIsAreaHidden("owners");
   const { canEdit } = useManagerPermissions();
   const { data: vehicleOwnersList = [] } = useVehicleOwners({ includeInactive: false });
   const { locations: pickupLocationsList } = usePickupLocations();
@@ -287,7 +287,7 @@ export default function VehiclesListEnhanced() {
   // flag rather than gating each of the four render sites separately, so the
   // column header, the badge cell, the derived state map and the deep-link
   // filter below can never disagree about whether INSHUR is on.
-  const inshurHidden = isAreaHidden("inshur", tenantSlug);
+  const inshurHidden = useIsAreaHidden("inshur");
   const inshurEnabled = inshurConfig.enabled && !inshurHidden;
   const { byVehicleId: inshurEligibilityByVehicle } = useInshurEligibilityMap(inshurEnabled);
   const { recheck: recheckInshur, pendingVehicleId: inshurPendingVehicleId, failedVehicleIds: inshurFailedVehicleIds } = useInshurRecheck();
@@ -652,7 +652,7 @@ export default function VehiclesListEnhanced() {
   // `devForceEmpty` is the /dev preview switch (lib/dev-overrides.ts): inert
   // outside development, and INSIDE the slug gate so it reaches nobody else.
   const devForceEmpty = useForcedEmptyState("vehicles");
-  const teachEmptyFleet = isLeanTenant(tenantSlug) && (vehicles.length === 0 || devForceEmpty);
+  const teachEmptyFleet = useIsLean() && (vehicles.length === 0 || devForceEmpty);
 
   /**
    * v2 chrome (northwind only; fails closed to v1): the search field and the

@@ -2,20 +2,30 @@
  * Which announcement gets the dialog slot and the banner slot (lib/announcements/queue.ts).
  *
  * Every expectation below is written by hand from the rules in the spec (§1
- * priority, §3.3 rules 1-6), never computed from the function under test:
+ * priority, §3.3 as changed Sep 17 2026), never computed from the function under test:
  *
- *   code-driven gates win  >  system HARD (drag order)  >  system SOFT (drag order)
- *   >  feature (drag order, dashboard only, v2 only)
+ *   code-driven gates win  >  SYSTEM dialogs, ONE pager: hard (drag order) then soft
+ *   (drag order)  >  feature (drag order, dashboard only, v2 only)
  *
- * with three twists that are easy to get wrong and are each pinned on their own:
+ * with twists that are easy to get wrong and are each pinned on their own:
  *   - a hard blocker exempt on this route still suppresses soft and feature dialogs;
  *   - a hard blocker is exempt on its own CTA page and below it, and "/" matches only "/";
- *   - once a soft dialog opened in this moment, no second soft dialog opens.
+ *   - system dialogs are no longer one per moment (the pager replaced chaining), but a
+ *     FEATURE dialog still waits for the next moment once a soft dialog opened;
+ *   - the banner bar holds every due banner, hard first, then soft.
  */
 
 import { describe, it, expect } from 'vitest';
 
-import { pickAnnouncementDialog, pickSystemBanner, type DialogQueueInput } from '@/lib/announcements/queue';
+import {
+  hasHardSystemDialog,
+  pickAnnouncementDialog,
+  pickAnnouncementDialogs,
+  pickSystemBanner,
+  pickSystemBanners,
+  pickSystemDialogs,
+  type DialogQueueInput,
+} from '@/lib/announcements/queue';
 import type { PortalAnnouncement } from '@/lib/announcements/contract';
 
 let seq = 0;
@@ -139,9 +149,13 @@ describe('pickAnnouncementDialog', () => {
     });
   });
 
-  describe('rule 3: one soft dialog per moment', () => {
-    it('no soft system or feature dialog once one opened in this moment', () => {
-      expect(pickId(input({ system: [softA], features: [featA], softMomentAvailable: false }))).toBeNull();
+  describe('rule 3: the moment limits FEATURES only', () => {
+    it('a soft system dialog opens even after one opened in this moment (the pager replaced chaining)', () => {
+      expect(pickId(input({ system: [softA], features: [featA], softMomentAvailable: false }))).toBe('system-soft:softA');
+    });
+
+    it('no feature dialog once a soft dialog opened in this moment', () => {
+      expect(pickId(input({ features: [featA], softMomentAvailable: false }))).toBeNull();
     });
   });
 
@@ -192,6 +206,80 @@ describe('pickAnnouncementDialog', () => {
   });
 });
 
+describe('pickSystemDialogs (the system pager\'s pages)', () => {
+  const ids = (list: PortalAnnouncement[]) => list.map((a) => a.id);
+  const pages = (over: Partial<DialogQueueInput>) => ids(pickSystemDialogs(input(over)));
+
+  it('every hard dialog first, then every due soft one, each in the order given', () => {
+    const s1 = sys({ id: 's1' });
+    const h1 = sys({ id: 'h1', blocking: 'hard' });
+    const s2 = sys({ id: 's2' });
+    const h2 = sys({ id: 'h2', blocking: 'hard' });
+    expect(pages({ system: [s1, h1, s2, h2] })).toEqual(['h1', 'h2', 's1', 's2']);
+    expect(pages({ system: [s2, s1] })).toEqual(['s2', 's1']);
+  });
+
+  it('the user\'s case: two soft dialogs due are two pages, a third not due is not one', () => {
+    const d1 = sys({ id: 'd1', is_due: false });
+    const d2 = sys({ id: 'd2' });
+    const d3 = sys({ id: 'd3' });
+    expect(pages({ system: [d1, d2, d3] })).toEqual(['d2', 'd3']);
+  });
+
+  it('a hard dialog ignores frequency; banners and features are never pages', () => {
+    const hardNotDue = sys({ id: 'h', blocking: 'hard', is_due: false });
+    const banner = sys({ id: 'banner', display: 'banner' });
+    const feature = feat({ id: 'f' });
+    expect(pages({ system: [banner, hardNotDue, feature] })).toEqual(['h']);
+  });
+
+  it('hard dialogs exempt on this route are left out; when every hard one is exempt, NO pages at all', () => {
+    const toVehicles = sys({ id: 'toVehicles', blocking: 'hard', cta_label: 'Open', cta_url: '/vehicles' });
+    const hardB = sys({ id: 'hardB', blocking: 'hard' });
+    const soft = sys({ id: 'soft' });
+    expect(pages({ system: [toVehicles, hardB, soft], pathname: '/vehicles' })).toEqual(['hardB', 'soft']);
+    expect(pages({ system: [toVehicles, soft], pathname: '/vehicles' })).toEqual([]);
+    expect(pages({ system: [hardB, soft], isSubscriptionPage: true, pathname: '/settings' })).toEqual([]);
+    // Soft ones on their own show on the paywall's reachable pages too.
+    expect(pages({ system: [soft], isSubscriptionPage: true, pathname: '/settings' })).toEqual(['soft']);
+  });
+
+  it('is not limited by the moment, and a repeated id is one page', () => {
+    const a = sys({ id: 'a' });
+    expect(pages({ system: [a, sys({ id: 'b' }), { ...a }], softMomentAvailable: false })).toEqual(['a', 'b']);
+  });
+
+  it('hasHardSystemDialog: any hard DIALOG, exempt here or not; a hard banner is not one', () => {
+    expect(hasHardSystemDialog([sys({ id: 'x', blocking: 'hard', cta_url: '/vehicles' })])).toBe(true);
+    expect(hasHardSystemDialog([sys({ id: 'b', blocking: 'hard', display: 'banner' }), sys({ id: 's' })])).toBe(false);
+  });
+});
+
+describe('pickAnnouncementDialogs (the slot)', () => {
+  it('blocked: nothing', () => {
+    expect(pickAnnouncementDialogs(input({ blocked: true, system: [sys({ id: 's' })] }))).toBeNull();
+  });
+
+  it('system dialogs due: ONE pick holding every page, and never a feature with them', () => {
+    const pick = pickAnnouncementDialogs(
+      input({ system: [sys({ id: 's1' }), sys({ id: 'h', blocking: 'hard' }), sys({ id: 's2' })], features: [feat({ id: 'f' })] }),
+    );
+    expect(pick?.variant).toBe('system');
+    expect(pick && pick.variant === 'system' ? pick.items.map((a) => a.id) : null).toEqual(['h', 's1', 's2']);
+  });
+
+  it('no system dialog: the first due feature on the dashboard, alone', () => {
+    const pick = pickAnnouncementDialogs(input({ features: [feat({ id: 'f1' }), feat({ id: 'f2' })] }));
+    expect(pick).toEqual({ variant: 'feature', announcement: expect.objectContaining({ id: 'f1' }) });
+  });
+
+  it('pickAnnouncementDialog is its first page', () => {
+    const rows = [sys({ id: 's1' }), sys({ id: 'h', blocking: 'hard' })];
+    expect(pickId(input({ system: rows }))).toBe('system-hard:h');
+    expect(pickId(input({ system: [sys({ id: 's1' }), sys({ id: 's2' })] }))).toBe('system-soft:s1');
+  });
+});
+
 describe('pickSystemBanner', () => {
   it('nothing without banner rows', () => {
     expect(pickSystemBanner([])).toBeNull();
@@ -219,5 +307,75 @@ describe('pickSystemBanner', () => {
     const feature = feat({ id: 'feature', display: 'banner' as never });
     const banner = sys({ id: 'banner', display: 'banner' });
     expect(pickSystemBanner([dialog, feature, banner])?.id).toBe('banner');
+  });
+});
+
+describe('pickSystemBanners (the rotating bar)', () => {
+  const ids = (list: PortalAnnouncement[]) => list.map((a) => a.id);
+  const soft = (id: string, over: Partial<PortalAnnouncement> = {}) => sys({ id, display: 'banner', ...over });
+  const hard = (id: string, over: Partial<PortalAnnouncement> = {}) => sys({ id, display: 'banner', blocking: 'hard', ...over });
+
+  it('nothing without banner rows', () => {
+    expect(pickSystemBanners([])).toEqual([]);
+    expect(pickSystemBanners([sys({ display: 'dialog' }), sys({ display: 'dialog', blocking: 'hard' })])).toEqual([]);
+  });
+
+  it('every due soft banner, in the order given; the ones not due wait', () => {
+    expect(ids(pickSystemBanners([soft('a'), soft('old', { is_due: false }), soft('b'), soft('c')]))).toEqual(['a', 'b', 'c']);
+    expect(ids(pickSystemBanners([soft('c'), soft('a')]))).toEqual(['c', 'a']);
+    expect(pickSystemBanners([soft('old', { is_due: false })])).toEqual([]);
+  });
+
+  it('one due banner is a list of one (the bar shows no slider controls for it)', () => {
+    expect(ids(pickSystemBanners([soft('only'), soft('old', { is_due: false })]))).toEqual(['only']);
+  });
+
+  it('a hard banner does NOT hide the soft ones: every hard one first, then every due soft one', () => {
+    expect(ids(pickSystemBanners([hard('h1'), soft('s1'), soft('s2')]))).toEqual(['h1', 's1', 's2']);
+    expect(ids(pickSystemBanners([hard('h1'), hard('h2'), soft('s1')]))).toEqual(['h1', 'h2', 's1']);
+  });
+
+  it('hard first does not depend on the server putting hard first; each group keeps the order given', () => {
+    expect(ids(pickSystemBanners([soft('s1'), hard('h1'), soft('s2'), hard('h2')]))).toEqual(['h1', 'h2', 's1', 's2']);
+  });
+
+  it('a hard banner ignores frequency: it is in the list even when marked not due; a soft one is not', () => {
+    expect(ids(pickSystemBanners([hard('h1', { is_due: false }), soft('s1'), soft('s0', { is_due: false })]))).toEqual([
+      'h1',
+      's1',
+    ]);
+  });
+
+  it('the user\'s case: "maintenanec" and "ban 2", both soft and due, are both in the bar', () => {
+    const rows = [soft('maintenanec'), sys({ id: 'd1', is_due: false }), soft('ban 2')];
+    expect(ids(pickSystemBanners(rows))).toEqual(['maintenanec', 'ban 2']);
+  });
+
+  it('ignores dialogs (hard ones too) and features', () => {
+    const hardDialog = sys({ id: 'hardDialog', blocking: 'hard' });
+    const feature = feat({ id: 'feature', display: 'banner' as never });
+    expect(ids(pickSystemBanners([hardDialog, feature, soft('s1'), soft('s2')]))).toEqual(['s1', 's2']);
+  });
+
+  it('a repeated id is one slide, in its first place', () => {
+    expect(ids(pickSystemBanners([soft('a'), soft('b'), soft('a', { title: 'again' })]))).toEqual(['a', 'b']);
+  });
+
+  it('never mutates or re-orders the input', () => {
+    const rows = [soft('b'), hard('h'), soft('a')];
+    const before = rows.map((r) => ({ ...r }));
+    pickSystemBanners(rows);
+    expect(rows).toEqual(before);
+  });
+
+  it('agrees with pickSystemBanner on its first row for lists in server order (hard first)', () => {
+    const lists = [
+      [hard('h1'), hard('h2'), soft('s1')],
+      [soft('old', { is_due: false }), soft('s1'), soft('s2')],
+      [hard('h1', { is_due: false }), soft('s1')],
+      [sys({ id: 'd' }), soft('s1')],
+      [soft('old', { is_due: false })],
+    ];
+    for (const list of lists) expect(pickSystemBanners(list)[0] ?? null).toBe(pickSystemBanner(list));
   });
 });

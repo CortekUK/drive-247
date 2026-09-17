@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
 import { useAuth } from '@/stores/auth-store';
-import { isLeanTenant } from '@/lib/lean-areas';
+import { useIsLean } from '@/lib/lean-context';
 
 /**
  * The operator's own notes and timed reminders — the third card of the v2
@@ -171,7 +171,7 @@ export function useTenantNotes() {
    *
    * Fails CLOSED — an unresolved tenant reads nothing and gets an empty card.
    */
-  const isCanary = isLeanTenant(tenant?.slug);
+  const isCanary = useIsLean();
   const tenantId = tenant?.id;
   const enabled = isCanary && !!tenantId;
 

@@ -53,6 +53,7 @@ import {
   describeSaveError,
 } from "./section-states";
 import { isValidEmail, parseLeadDays, recipientProblem, ruleSummary, severityLabel } from "./message-rules";
+import { SETTINGS_SECTION_TITLE } from "./settings-kit";
 
 /* -------------------------------------------------------------------------- */
 /* Email notifications                                                         */
@@ -91,7 +92,7 @@ function SectionHeading({ title, description, aside }: { title: string; descript
   return (
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="min-w-0 space-y-1">
-        <h2 className="font-heading text-base font-semibold tracking-tight text-foreground">{title}</h2>
+        <h2 className={SETTINGS_SECTION_TITLE}>{title}</h2>
         <p className="text-sm text-muted-foreground">{description}</p>
       </div>
       {aside && <div className="flex shrink-0 flex-wrap items-center gap-2">{aside}</div>}
@@ -340,7 +341,7 @@ const CATEGORY_ICONS: Record<string, LucideIcon> = {
 };
 
 const SEVERITY_TONE: Record<string, string> = {
-  info: "bg-primary/10 text-primary dark:text-indigo-300",
+  info: "bg-primary/10 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]",
   warning: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
   critical: "bg-destructive/10 text-destructive",
 };
@@ -567,7 +568,7 @@ export function ReminderRulesConfigV2() {
                 onClick={() => setPicked(category)}
                 className={cn(
                   "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-sm font-medium transition-colors",
-                  selected ? "bg-primary/10 text-primary dark:text-indigo-300" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                  selected ? "bg-primary/10 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" : "text-muted-foreground hover:bg-primary/10 hover:text-foreground dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]",
                 )}
               >
                 <Icon className="size-4" aria-hidden="true" />

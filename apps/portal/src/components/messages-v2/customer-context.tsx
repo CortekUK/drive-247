@@ -180,7 +180,7 @@ export function CustomerContext({ channel }: { channel: ChatChannel }) {
           ) : (
             <Link
               href={`/rentals/${current.id}`}
-              className="block rounded-2xl bg-muted/40 px-3.5 py-3 transition-colors hover:bg-accent/60"
+              className="block rounded-2xl bg-muted/40 px-3.5 py-3 transition-colors hover:bg-[hsl(var(--v2-hover,var(--accent)_/_0.6))]"
             >
               <div className="flex items-start justify-between gap-2">
                 <span className="inline-flex items-center gap-1.5 text-[13px] font-medium">
@@ -215,7 +215,7 @@ export function CustomerContext({ channel }: { channel: ChatChannel }) {
                   <Link
                     key={r.id}
                     href={`/rentals/${r.id}`}
-                    className="flex items-center justify-between gap-2 rounded-xl px-2.5 py-1.5 transition-colors hover:bg-accent/60"
+                    className="flex items-center justify-between gap-2 rounded-xl px-2.5 py-1.5 transition-colors hover:bg-[hsl(var(--v2-hover,var(--accent)_/_0.6))]"
                   >
                     <span className="truncate text-[12px]">
                       {r.vehicle?.make} {r.vehicle?.model}

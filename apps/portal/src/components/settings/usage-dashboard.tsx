@@ -146,7 +146,14 @@ function InvoiceHistoryTable({
             const docs = billingDocumentsOf(inv);
             const docStatus = billingStatusOf(inv);
             return (
-              <tr key={inv.id} className="border-b transition-colors last:border-0 hover:bg-muted/40">
+              <tr
+                key={inv.id}
+                className={
+                  v2Chrome
+                    ? "border-b transition-colors last:border-0 hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]"
+                    : "border-b transition-colors last:border-0 hover:bg-muted/40"
+                }
+              >
                 <td className="whitespace-nowrap py-3 px-3 text-sm text-muted-foreground">
                   {formatDate(inv.period_start)} – {formatDate(inv.period_end)}
                 </td>

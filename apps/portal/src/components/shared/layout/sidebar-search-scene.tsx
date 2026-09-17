@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useGuardedRouter } from "@/lib/leave-guard";
 import { useQuery } from "@tanstack/react-query";
 // The source worktree drew these in `@phosphor-icons/react`, which is not a
 // dependency here and is not being added for a canary. Remaps:
@@ -148,7 +148,9 @@ interface Props {
  */
 export function SidebarSearchScene({ query, onQueryChange, onClose }: Props) {
   const { tenant } = useTenant();
-  const router = useRouter();
+  // `push` asks a v2 page with unsaved edits first; with no guard installed it
+  // is the plain router.push.
+  const router = useGuardedRouter();
   const [debounced, setDebounced] = useState(query);
   const inputRef = useRef<HTMLInputElement>(null);
 

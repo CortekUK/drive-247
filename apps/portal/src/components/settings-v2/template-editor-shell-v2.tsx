@@ -202,7 +202,7 @@ export function TemplateEditorShellV2({
           <div className="flex min-w-0 flex-[1_1_12rem] items-center gap-2 sm:gap-3">
             <IconActionButton action={{ label: backLabel, icon: ArrowLeft, onClick: onBack }} />
             <div className="min-w-0 flex-1">
-              <h1 className="flex flex-wrap items-center gap-2 font-heading text-lg font-semibold tracking-tight text-foreground sm:text-xl">
+              <h1 className="flex flex-wrap items-center gap-2 font-heading text-lg font-bold tracking-tight text-foreground sm:text-xl">
                 <span className="min-w-0 [overflow-wrap:anywhere]">{title}</span>
                 {badges}
               </h1>
@@ -238,7 +238,7 @@ export function EditorChip({ tone = "muted", children }: { tone?: "muted" | "pri
     <span
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium",
-        tone === "primary" && "bg-primary/10 text-primary dark:text-indigo-300",
+        tone === "primary" && "bg-primary/10 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]",
         tone === "amber" && "bg-amber-500/15 text-amber-700 dark:text-amber-400",
         tone === "muted" && "bg-muted text-muted-foreground",
       )}

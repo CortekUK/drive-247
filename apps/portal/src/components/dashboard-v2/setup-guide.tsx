@@ -15,7 +15,7 @@ import {
   ExplainerShelfButton,
 } from "@/components/explainers/explainer";
 import { listReadyExplainers } from "@/lib/explainers";
-import { isLeanTenant } from "@/lib/lean-areas";
+import { useIsLean } from "@/lib/lean-context";
 
 type PanelState = "expanded" | "minimized" | "closed";
 
@@ -88,7 +88,7 @@ function PanelButton({
       type="button"
       onClick={onClick}
       aria-label={label}
-      className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      className="flex size-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] hover:text-foreground"
     >
       {children}
     </button>
@@ -111,7 +111,7 @@ function Group({
       <button
         type="button"
         onClick={onToggle}
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/60"
+        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]"
       >
         <span
           className={`text-sm font-medium ${
@@ -147,7 +147,7 @@ function Group({
               <button
                 type="button"
                 onClick={() => onNavigate(item.href)}
-                className="flex min-w-0 flex-1 items-start gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-background"
+                className="flex min-w-0 flex-1 items-start gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]"
               >
                 {item.isComplete ? (
                   <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full bg-primary">
@@ -253,8 +253,9 @@ export function SetupGuide() {
   // is dropped along with the button it would otherwise wrap around nothing.
   // Same placeholder rule the chips use, so the shelf button cannot appear
   // while every row is empty, or vanish while the rows all offer a video.
+  const allowPlaceholder = useIsLean();
   const hasGuides =
-    listReadyExplainers({ allowPlaceholder: isLeanTenant(tenantSlug) }).length > 0;
+    listReadyExplainers({ allowPlaceholder }).length > 0;
 
   // Land the operator on the group they are actually working on, the way
   // Stripe opens "Test Connect" for you. Only ever seeds the initial value —
@@ -284,7 +285,7 @@ export function SetupGuide() {
       onClick={() =>
         setState(panelState === "expanded" ? "closed" : "expanded")
       }
-      className="flex h-9 items-center gap-2.5 rounded-full border border-border/60 bg-card pl-4 pr-3 text-sm font-medium text-foreground transition-colors hover:bg-accent/40"
+      className="flex h-9 items-center gap-2.5 rounded-full border border-border bg-card pl-4 pr-3 text-sm font-medium text-foreground transition-colors hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]"
     >
       Setup guide
       <ProgressRing progress={progressPercent} />

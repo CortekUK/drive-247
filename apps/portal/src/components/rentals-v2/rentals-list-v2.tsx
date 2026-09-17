@@ -61,7 +61,7 @@ import { ConnectStripeRequiredDialog } from "@/components/rentals/connect-stripe
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { RentalsTeachingEmptyState } from "@/components/empty-states/lean-empty-states";
 import { useForcedEmptyState } from "@/hooks/use-forced-empty-state";
-import { isLeanTenant } from "@/lib/lean-areas";
+import { useIsLean } from "@/lib/lean-context";
 import { TabTourButton } from "@/components/onboarding/tab-tour-button";
 import { HEADER_ACTIONS_V2, HEADER_PRIMARY_V2, HeaderIconButton } from "@/components/shared/header-icon-button-v2";
 import { useViewportFillCap } from "@/components/shared/list-table-v2";
@@ -201,7 +201,7 @@ export function RentalsListV2() {
   // Inert outside development, and — although only northwind reaches this
   // list — kept INSIDE the slug gate like every other consumer.
   const devForceEmpty = useForcedEmptyState("rentals");
-  const devForceEmptyRentals = isLeanTenant(tenant?.slug) && devForceEmpty;
+  const devForceEmptyRentals = useIsLean() && devForceEmpty;
   // Lean tenants only; a constant false for everyone else.
   const { blocked: rentalCreationBlocked } = useRentalCreationGate();
   const [showConnectStripeDialog, setShowConnectStripeDialog] = useState(false);

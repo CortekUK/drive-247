@@ -132,7 +132,7 @@ export function AttachMenu({
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
-                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-accent/60"
+                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-[hsl(var(--v2-hover,var(--accent)_/_0.6))]"
               >
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
                   <Upload className="h-4 w-4" />
@@ -148,7 +148,7 @@ export function AttachMenu({
               <button
                 type="button"
                 onClick={() => setView("booking")}
-                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-accent/60"
+                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-[hsl(var(--v2-hover,var(--accent)_/_0.6))]"
               >
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
                   <Car className="h-4 w-4" />
@@ -211,7 +211,7 @@ export function AttachMenu({
                           });
                           close();
                         }}
-                        className="flex w-full items-start gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-accent/60"
+                        className="flex w-full items-start gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-[hsl(var(--v2-hover,var(--accent)_/_0.6))]"
                       >
                         <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
                           <Car className="h-4 w-4" />

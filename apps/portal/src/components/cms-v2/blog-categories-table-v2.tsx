@@ -21,7 +21,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@/components/ui-v2/dropdown-menu";
 import {
   LIST_ROW_ACTION,
   LIST_CLASSES,
@@ -111,16 +111,16 @@ export function BlogCategoriesTableV2({
                         <MoreHorizontal className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
+                    <DropdownMenuContent align="end" className="w-auto">
                       <DropdownMenuItem onClick={() => onEdit(cat)}>
-                        <Edit className="h-4 w-4 mr-2" />
+                        <Edit className="h-4 w-4" />
                         Edit
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={() => onDelete(cat)}
                         className="text-destructive focus:text-destructive"
                       >
-                        <Trash2 className="h-4 w-4 mr-2" />
+                        <Trash2 className="h-4 w-4" />
                         Delete
                       </DropdownMenuItem>
                     </DropdownMenuContent>

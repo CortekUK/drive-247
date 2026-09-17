@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/dialog";
 import { GenerateAgreementDialog } from "@/components/agreements/generate-agreement-dialog";
 import { useRouter } from "next/navigation";
-import { isLeanTenant } from "@/lib/lean-areas";
+import { useIsLean } from "@/lib/lean-context";
 import { AgreementsTeachingEmptyState } from "@/components/empty-states/lean-empty-states";
 import { useForcedEmptyState } from "@/hooks/use-forced-empty-state";
 import { useV2 } from "@/lib/v2-context";
@@ -204,7 +204,7 @@ export default function AgreementsList() {
   // `devForceEmpty` is the /dev preview switch (lib/dev-overrides.ts): inert
   // outside development, and INSIDE the slug gate so it reaches nobody else.
   const devForceEmpty = useForcedEmptyState("agreements");
-  const teachEmptyAgreements = isLeanTenant(tenantSlug) && (allAgreements.length === 0 || devForceEmpty);
+  const teachEmptyAgreements = useIsLean() && (allAgreements.length === 0 || devForceEmpty);
 
   const filteredAgreements = allAgreements.filter((doc) => {
     const matchesSearch = doc.document_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -218,6 +218,28 @@ export default function AgreementsList() {
   const startIndex = (currentPage - 1) * pageSize;
   const endIndex = Math.min(startIndex + pageSize, totalDocuments);
   const paginatedDocuments = filteredAgreements.slice(startIndex, endIndex);
+
+  /**
+   * v2 lists every agreement newest added first, across all three sources.
+   * `allAgreements` is rental agreements, then extensions, then uploaded signed
+   * documents, each newest first on its own, so an extension signed today sits
+   * below a rental agreement from last year. Only the v2 table gets this order;
+   * v1's table, pager and "download all" keep theirs. `Date.parse`, not string
+   * order, as the three tables' timestamps need not share a format. A missing
+   * or unreadable date sorts last, and `sort` is stable, so ties keep the
+   * concatenated order.
+   */
+  const createdAtMs = (value: string | null | undefined) => {
+    const ms = value ? Date.parse(value) : NaN;
+    return Number.isNaN(ms) ? -Infinity : ms;
+  };
+  const agreementsNewestFirst = v2Chrome
+    ? [...filteredAgreements].sort((a, b) => {
+        const aMs = createdAtMs(a.created_at);
+        const bMs = createdAtMs(b.created_at);
+        return aMs === bMs ? 0 : bMs > aMs ? 1 : -1;
+      })
+    : filteredAgreements;
 
   const handleSearchChange = (value: string) => {
     setSearchQuery(value);
@@ -801,7 +823,7 @@ export default function AgreementsList() {
           // pager, rows arrive as it scrolls. Rows open nothing, as in v1; every
           // action calls the same handler with the same busy state.
           <AgreementsTableV2
-            rows={filteredAgreements}
+            rows={agreementsNewestFirst}
             resetKey={`${tenant?.id ?? ""}|${searchQuery}`}
             justSignedIds={justSignedIds}
             signingDocId={signingDocId}

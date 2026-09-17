@@ -10,7 +10,7 @@ import { MessagesPreview } from '@/components/dev/messages-preview';
 import { BillingPreview } from '@/components/dev/billing-preview';
 import { useTenant } from '@/contexts/TenantContext';
 import { supabase } from '@/integrations/supabase/client';
-import { isLeanTenant } from '@/lib/lean-areas';
+import { useIsLean } from '@/lib/lean-context';
 import {
   clearChecklistState,
   clearTourSeenFlags,
@@ -96,6 +96,8 @@ type Status = { tone: 'ok' | 'error'; text: string };
 
 export function DevPageBody() {
   const { tenant, loading: tenantLoading } = useTenant();
+  /** GATE 4, read up here with the other hooks — see the line below. */
+  const isCanary = useIsLean();
 
   // GATE 3 — the hostname. `null` until the effect has run.
   const [onLocalhost, setOnLocalhost] = useState<boolean | null>(null);
@@ -115,7 +117,7 @@ export function DevPageBody() {
   // GATE 4 — the tenant. A lookup that finished with no row (a bogus host, or
   // a host that merely spells the canary somewhere it does not exist) is a
   // refusal, not a wait.
-  if (!tenant || !isLeanTenant(tenant.slug)) notFound();
+  if (!tenant || !isCanary) notFound();
   // GATE 3, decided.
   if (!onLocalhost) notFound();
 

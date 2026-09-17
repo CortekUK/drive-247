@@ -197,6 +197,41 @@ describe("InstallmentSettings v2 states", () => {
   });
 });
 
+/** The five plan pills when both plans are on: weekly 1× 2×, monthly 1× 2× 4×. */
+const pillButtons = () =>
+  Array.from(container.querySelectorAll<HTMLButtonElement>("button")).filter((b) => /^\d×/.test(b.textContent ?? ""));
+const bothPlansOn = { installment_config: { ...savedConfig, weekly_enabled: true, monthly_enabled: true } };
+
+describe("InstallmentSettings plan pills", () => {
+  it("v2: every pill is rounded-full, and an unselected pill hovers with the purple pair", () => {
+    rs.current = api({}, bothPlansOn);
+    render();
+    const pills = pillButtons();
+    expect(pills.map((b) => b.textContent)).toEqual(["1×", "2× (twice weekly)", "1×", "2×", "4×"]);
+    for (const pill of pills) {
+      expect(pill.classList.contains("rounded-full")).toBe(true);
+      expect(pill.classList.contains("rounded-md")).toBe(false);
+    }
+    // Saved per-unit is 1 for both plans, so pills 1 and 3 are selected.
+    for (const i of [1, 3, 4]) {
+      expect(pills[i].classList.contains("hover:bg-primary/10")).toBe(true);
+      expect(pills[i].classList.contains("dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]")).toBe(true);
+      expect(pills[i].classList.contains("hover:bg-muted/40")).toBe(false);
+    }
+  });
+
+  it("v1: the pills keep v1's exact class lists", () => {
+    flags.v2 = false;
+    rs.current = api({}, bothPlansOn);
+    render();
+    const pills = pillButtons();
+    expect(pills).toHaveLength(5);
+    const selected = "px-3 py-1.5 rounded-md text-sm font-medium border transition-colors bg-primary/15 border-indigo-500/50 text-indigo-700 dark:text-indigo-300";
+    const unselected = "px-3 py-1.5 rounded-md text-sm font-medium border transition-colors bg-card border-border text-muted-foreground hover:bg-muted/40";
+    expect(pills.map((b) => b.className)).toEqual([selected, unselected, selected, unselected, unselected]);
+  });
+});
+
 describe("InstallmentSettings v1 is unchanged", () => {
   it("renders the v1 form over defaults with none of the v2 states", () => {
     flags.v2 = false;

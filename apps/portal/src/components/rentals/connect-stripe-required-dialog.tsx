@@ -13,7 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useTenant } from "@/contexts/TenantContext";
-import { isLeanTenant } from "@/lib/lean-areas";
+import { useIsLean } from "@/lib/lean-context";
 import { STRIPE_CONNECT_SETTINGS_PATH } from "@/lib/stripe-connect-status";
 
 interface ConnectStripeRequiredDialogProps {
@@ -72,7 +72,7 @@ export function ConnectStripeRequiredDialog({
 }: ConnectStripeRequiredDialogProps) {
   const router = useRouter();
   const { tenantSlug } = useTenant();
-  const closable = isLeanTenant(tenantSlug);
+  const closable = useIsLean();
 
   /**
    * One funnel for all three dismissal gestures — the "×", Escape and

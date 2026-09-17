@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
 import { useAuth } from '@/stores/auth-store';
-import { isLeanTenant } from '@/lib/lean-areas';
+import { useIsLean } from '@/lib/lean-context';
 import {
   FIRST_RUN_QUESTION_SET_VERSION,
   type FirstRunAnswers,
@@ -63,7 +63,7 @@ export function useFirstRunWizard() {
   const { appUser } = useAuth();
   const queryClient = useQueryClient();
 
-  const isCanary = isLeanTenant(tenant?.slug);
+  const isCanary = useIsLean();
   const enabled = isCanary && !!tenant?.id;
 
   const query = useQuery({

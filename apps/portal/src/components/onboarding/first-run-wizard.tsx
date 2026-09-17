@@ -14,6 +14,11 @@ import {
 } from '@/lib/first-run-questions';
 import { armArrival, celebrateArrival, disarmArrival } from '@/lib/first-run-arrival';
 import { useFirstRunWizard } from '@/hooks/use-first-run-wizard';
+import {
+  getSystemAnnouncementPriority,
+  useYieldToSystemAnnouncements,
+  whenSystemAnnouncementsIdle,
+} from '@/lib/announcements/system-priority';
 
 /**
  * First-run onboarding wizard — full screen, canary only, shown exactly once.
@@ -89,6 +94,17 @@ import { useFirstRunWizard } from '@/hooks/use-first-run-wizard';
  * owns the screen, exactly as `FeedbackForcePrompt` and `WelcomePackPrompt` do.
  * Two non-dismissible full-screen surfaces stacked on each other leave the
  * operator unable to act on either.
+ *
+ * SYSTEM ANNOUNCEMENTS GO FIRST (lib/announcements/system-priority.ts). While a
+ * system announcement dialog is due or open, this screen does not come up; if it
+ * is already up and the operator has not touched it yet (no pointer down, no key
+ * inside it), it steps aside, keeping its place and recording nothing, and comes
+ * back once the dialog is closed. Until that first touch the root carries
+ * `data-yields-to-system`, so the announcement host does not wait for it; once
+ * the operator is answering, it stays and the dialog waits for it to finish. If
+ * a system dialog is due at the moment they finish, the wizard simply goes (no
+ * veil: it would fade over the dialog) and the confetti waits for the dialog to
+ * close.
  */
 
 /** How long the outgoing question takes to flow away, in ms. */
@@ -109,6 +125,8 @@ const OPTION_ROW_CLASS = 'flex items-center gap-3.5 py-2 pl-1 pr-4 text-left';
 export function FirstRunWizard({ suppressed = false }: { suppressed?: boolean }) {
   const { shouldShow, save } = useFirstRunWizard();
   const reduced = !!useReducedMotion();
+  // Yielding hides the screen without unmounting it, so answers and step survive.
+  const { show, engaged, engage } = useYieldToSystemAnnouncements(shouldShow && !suppressed);
 
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<FirstRunAnswers>({});
@@ -157,13 +175,13 @@ export function FirstRunWizard({ suppressed = false }: { suppressed?: boolean })
   // an option nobody has picked. Focus lands on the dialog instead, which is
   // silent and leaves the first Tab where it should be.
   useEffect(() => {
-    if (!shouldShow || suppressed) return;
+    if (!show) return;
     const input = stageRef.current?.querySelector<HTMLElement>('input[type="text"]');
     (input ?? rootRef.current)?.focus();
-  }, [step, shouldShow, suppressed]);
+  }, [step, show]);
 
   // Hooks above this line, always. `shouldShow` flips as the query resolves.
-  if (!shouldShow || suppressed || total === 0 || !question) return null;
+  if (!show || total === 0 || !question) return null;
 
   const isLast = step === total - 1;
   const headingId = `${baseId}-prompt`;
@@ -254,14 +272,17 @@ export function FirstRunWizard({ suppressed = false }: { suppressed?: boolean })
       await save.mutateAsync({ answers, skipped });
       // No local "done" state: the row now exists, the query is invalidated,
       // `shouldShow` goes false and this unmounts. One source of truth. The
-      // veil below outlives that unmount and carries the arrival.
-      dissolveIntoDashboard(reduced);
+      // veil below outlives that unmount and carries the arrival — unless a
+      // system announcement dialog is due, which goes first: then there is no
+      // veil (it would fade over the dialog).
+      if (getSystemAnnouncementPriority() === 'idle') dissolveIntoDashboard(reduced);
       // …and the celebration rides on top of it: a scatter of confetti,
       // detached from React for the same reason the veil is, latched to fire
       // exactly once, nothing at all under `prefers-reduced-motion`, and over
       // before the walkthrough's first card comes up. No sound — see the note
-      // at the top of `lib/first-run-arrival.ts`.
-      celebrateArrival(reduced);
+      // at the top of `lib/first-run-arrival.ts`. Right now, or once a due
+      // system announcement dialog has been closed.
+      whenSystemAnnouncementsIdle(() => celebrateArrival(reduced));
     } catch {
       // The celebration was promised before the write and the write did not
       // land, so take the promise back — otherwise the walkthrough waits out a
@@ -319,9 +340,12 @@ export function FirstRunWizard({ suppressed = false }: { suppressed?: boolean })
     <div
       ref={rootRef}
       data-first-run-wizard=""
+      data-yields-to-system={engaged ? undefined : ''}
       role="dialog"
       aria-modal="true"
       aria-label="Set up your account"
+      onPointerDownCapture={engage}
+      onKeyDownCapture={engage}
       onKeyDown={onRootKeyDown}
       tabIndex={-1}
       /* Not fully opaque any more. The dashboard stays mounted underneath, and

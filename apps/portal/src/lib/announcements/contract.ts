@@ -189,19 +189,35 @@ export interface AdminAnnouncementRow extends AnnouncementRowBase {
   updated_at: string;
 }
 
+/**
+ * One row of admin_portal_announcement_stats. Keys in RETURNS TABLE order. User counts are
+ * distinct app_users with that event recorded (any revision).
+ */
 export interface AdminAnnouncementStats {
   announcement_id: string;
   /** Tenants the audience matches right now, any status. */
   audience_tenants: number;
   /** Of those, tenants with status = 'active' (the only ones whose portal can load). */
   reachable_tenants: number;
-  /** All counts below exclude super admins (impersonation / support sessions). */
+  /** Tenant staff only: these six exclude super admins (impersonation / support sessions). */
   shown_users: number;
   shown_tenants: number;
   card_opened_users: number;
   dismissed_users: number;
   dont_show_again_users: number;
   cta_users: number;
+  /** Appended Sep 2026. Everyone, super admins included: what the admin list shows. */
+  shown_all_users: number;
+  shown_all_tenants: number;
+  /** The super-admin part of shown_all_users (shown_all_users = shown_users + this). */
+  shown_super_admin_users: number;
+  card_opened_all_users: number;
+  dismissed_all_users: number;
+  /** "Button clicks" in the admin list. */
+  cta_all_users: number;
+  /** The super-admin part of cta_all_users. */
+  cta_super_admin_users: number;
+  dont_show_again_all_users: number;
 }
 
 export interface SegmentMatchTenant {
@@ -783,6 +799,42 @@ export function normalizeAdminAnnouncementRow(raw: unknown): AdminAnnouncementRo
     updated_by: asNullableString(r.updated_by),
     created_at: typeof r.created_at === 'string' ? r.created_at : '',
     updated_at: typeof r.updated_at === 'string' ? r.updated_at : '',
+  };
+}
+
+function asCount(value: unknown): number {
+  const n = typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' ? Number(value) : NaN;
+  return isFinite(n) && n > 0 ? Math.floor(n) : 0;
+}
+
+/**
+ * One admin_portal_announcement_stats row, or null without an announcement_id. Counts that are
+ * missing, negative or not numbers become 0. A row from the RPC as it was BEFORE the super-admin
+ * columns were appended (the SQL not re-applied yet) has no *_all_* keys: those fall back to the
+ * staff-only columns and the super-admin parts to 0, so the list never under-reports what it did.
+ */
+export function normalizeAdminAnnouncementStats(raw: unknown): AdminAnnouncementStats | null {
+  const r = asRecord(raw);
+  if (!r || typeof r.announcement_id !== 'string' || !r.announcement_id) return null;
+  const either = (appended: string, original: string) => asCount(appended in r ? r[appended] : r[original]);
+  return {
+    announcement_id: r.announcement_id,
+    audience_tenants: asCount(r.audience_tenants),
+    reachable_tenants: asCount(r.reachable_tenants),
+    shown_users: asCount(r.shown_users),
+    shown_tenants: asCount(r.shown_tenants),
+    card_opened_users: asCount(r.card_opened_users),
+    dismissed_users: asCount(r.dismissed_users),
+    dont_show_again_users: asCount(r.dont_show_again_users),
+    cta_users: asCount(r.cta_users),
+    shown_all_users: either('shown_all_users', 'shown_users'),
+    shown_all_tenants: either('shown_all_tenants', 'shown_tenants'),
+    shown_super_admin_users: asCount(r.shown_super_admin_users),
+    card_opened_all_users: either('card_opened_all_users', 'card_opened_users'),
+    dismissed_all_users: either('dismissed_all_users', 'dismissed_users'),
+    cta_all_users: either('cta_all_users', 'cta_users'),
+    cta_super_admin_users: asCount(r.cta_super_admin_users),
+    dont_show_again_all_users: either('dont_show_again_all_users', 'dont_show_again_users'),
   };
 }
 

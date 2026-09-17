@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
-import { isAreaHidden } from "@/lib/lean-areas";
+import { useIsAreaHidden } from "@/lib/lean-context";
 import { toast } from "@/hooks/use-toast";
 
 export type CmdLicenseStatus = "Pending" | "Valid" | "Invalid" | "Expired" | null;
@@ -78,7 +78,7 @@ export function useCmdVerification(customerId: string | undefined) {
   // AI-only view. Fails OPEN on an unresolved slug — see isAreaHidden — so
   // every other tenant keeps today's behaviour while the slug is still null on
   // first paint.
-  const cmdHidden = isAreaHidden("cmd", tenantSlug);
+  const cmdHidden = useIsAreaHidden("cmd");
   return useQuery({
     queryKey: queryKey.byCustomer(tenant?.id, customerId),
     queryFn: async (): Promise<CmdVerificationRow | null> => {
@@ -115,7 +115,7 @@ export function useCmdVerification(customerId: string | undefined) {
  */
 export function useCmdResults(applicantVerificationId: string | null | undefined) {
   const { tenantSlug } = useTenant();
-  const cmdHidden = isAreaHidden("cmd", tenantSlug);
+  const cmdHidden = useIsAreaHidden("cmd");
   return useQuery({
     queryKey: queryKey.results(applicantVerificationId),
     queryFn: async (): Promise<CmdLiveResults | null> => {

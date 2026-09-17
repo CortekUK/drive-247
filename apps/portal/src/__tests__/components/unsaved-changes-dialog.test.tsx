@@ -65,11 +65,13 @@ describe("v2 Settings Save & Leave", () => {
     expect(body).toMatch(/\.update\(patch as never\)\.eq\('id', tenant\?\.id as string\)\.select\('id'\)/);
   });
 
-  it("keeps the failure for the dialog, and both v2 dialogs show it", () => {
+  it("keeps the failure for the dialog, and the one v2 leave dialog shows it", () => {
     expect(body).toMatch(/if \(v2Chrome\) \{\s*\/\/[^\n]*\n[^\n]*\n\s*setV2LeaveSaveError\(err\);/);
     const shown = page.match(
       /error=\{v2LeaveSaveError \? <SettingsSaveState status="error" error=\{v2LeaveSaveError\} \/> : null\}/g,
     );
-    expect(shown).toHaveLength(2);
+    expect(shown).toHaveLength(1);
+    const dialog = page.slice(page.indexOf("<LeaveDialogV2"));
+    expect(dialog.slice(0, dialog.indexOf("/>\n"))).toContain("error={v2LeaveSaveError ?");
   });
 });

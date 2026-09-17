@@ -28,7 +28,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@/components/ui-v2/dropdown-menu";
 import {
   LIST_CLASSES,
   LIST_ROW_ACTION,
@@ -188,7 +188,14 @@ export function PlatesTableV2<T extends PlateRowV2>({
                 <ListRow key={row}>
                   {SKELETON_BARS.map((bar, cell) => (
                     <ListCell key={cell}>
-                      <div className={cn("h-3 animate-pulse rounded-full bg-muted", bar)} />
+                      {/* Centred like the cells they stand in for; the last is the actions column, which stays right. */}
+                      <div
+                        className={cn(
+                          "h-3 animate-pulse rounded-full bg-muted",
+                          cell === SKELETON_BARS.length - 1 ? "ml-auto" : "mx-auto",
+                          bar,
+                        )}
+                      />
                     </ListCell>
                   ))}
                 </ListRow>
@@ -208,7 +215,7 @@ export function PlatesTableV2<T extends PlateRowV2>({
                         type="button"
                         onClick={() => onCopyPlateNumber(plate.plate_number)}
                         title="Click to copy"
-                        className="group flex max-w-full items-center gap-1.5 text-left"
+                        className="group mx-auto flex max-w-full items-center justify-center gap-1.5 text-center"
                       >
                         <span className={LIST_CLASSES.identifier}>{plate.plate_number}</span>
                         <Copy className="size-3 shrink-0 text-muted-foreground group-hover:text-foreground" />
@@ -221,7 +228,7 @@ export function PlatesTableV2<T extends PlateRowV2>({
                         <button
                           type="button"
                           onClick={() => onOpenVehicle(plate)}
-                          className="flex max-w-full items-center gap-1.5 text-left hover:underline"
+                          className="mx-auto flex max-w-full items-center justify-center gap-1.5 text-center hover:underline"
                           title={makeModel ? `${plate.vehicles.reg} • ${makeModel}` : plate.vehicles.reg}
                         >
                           <span className={cn(LIST_CLASSES.text, "shrink-0 tabular-nums")}>{plate.vehicles.reg}</span>
@@ -264,7 +271,7 @@ export function PlatesTableV2<T extends PlateRowV2>({
                           type="button"
                           onClick={() => onOpenDocument(plate)}
                           title={documentTitle(plate)}
-                          className={`${LIST_CLASSES.text} flex max-w-full items-center gap-1.5 text-left hover:underline`}
+                          className={`${LIST_CLASSES.text} mx-auto flex max-w-full items-center justify-center gap-1.5 text-center hover:underline`}
                         >
                           <FileText className="size-3.5 shrink-0 text-muted-foreground" />
                           <span className="min-w-0 truncate">{plate.document_name || "View"}</span>
@@ -287,30 +294,30 @@ export function PlatesTableV2<T extends PlateRowV2>({
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
+                        <DropdownMenuContent align="end" className="w-auto">
                           <DropdownMenuItem onClick={() => onEdit(plate)}>
-                            <Edit className="h-4 w-4 mr-2" />
+                            <Edit className="h-4 w-4" />
                             Edit
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => onViewHistory(plate)}>
-                            <History className="h-4 w-4 mr-2" />
+                            <History className="h-4 w-4" />
                             View History
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           {!plate.vehicle_id ? (
                             <DropdownMenuItem onClick={() => onAssign(plate)}>
-                              <Car className="h-4 w-4 mr-2" />
+                              <Car className="h-4 w-4" />
                               Assign
                             </DropdownMenuItem>
                           ) : (
                             <DropdownMenuItem onClick={() => onUnassign(plate)}>
-                              <UserX className="h-4 w-4 mr-2" />
+                              <UserX className="h-4 w-4" />
                               Unassign
                             </DropdownMenuItem>
                           )}
                           {plate.status !== "expired" && (
                             <DropdownMenuItem onClick={() => onMarkExpired(plate)}>
-                              <Clock className="h-4 w-4 mr-2" />
+                              <Clock className="h-4 w-4" />
                               Mark Expired
                             </DropdownMenuItem>
                           )}
@@ -320,7 +327,7 @@ export function PlatesTableV2<T extends PlateRowV2>({
                             className="text-destructive"
                             disabled={!!plate.vehicle_id}
                           >
-                            <Trash2 className="h-4 w-4 mr-2" />
+                            <Trash2 className="h-4 w-4" />
                             Delete
                           </DropdownMenuItem>
                         </DropdownMenuContent>

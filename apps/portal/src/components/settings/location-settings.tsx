@@ -59,34 +59,15 @@ import {
 } from '@/lib/format-utils';
 import type { DistanceUnit } from '@/lib/format-utils';
 import { useV2 } from '@/lib/v2-context';
-import { Button as ButtonV2 } from '@/components/ui-v2/button';
+import { useSettingsAccess } from '@/components/settings-v2/section-states';
 import {
-  SettingsDependencyNotice,
-  SettingsLoadError,
-  SettingsReadOnlyFieldset,
-  SettingsSaveState,
-  SettingsSectionSkeleton,
-  useSettingsAccess,
-  useSettingsSaveStatus,
-} from '@/components/settings-v2/section-states';
-import {
-  AREA_SETTINGS_V2_CLASS,
-  LOCATIONS_V2_CLASS,
-  bandLabel,
   centerCoordinateLabel,
-  LOCATION_NAME_MAX,
-  LOCATION_TEXT_MAX,
-  LocationsListV2,
-  ScopeIf,
-  areaFieldErrors,
-  buildLocationPayload,
   isLocationFormDirty,
   locationFormFromSettings,
-  validateLocationDraft,
-  validateLocationSettingsV2,
-  type LocationDraftErrors,
   type LocationFormState,
 } from '@/components/settings-v2/business-settings-states';
+import { LocationsV2 } from '@/components/settings-v2/locations-v2';
+import type { RegisterSectionSave } from '@/components/settings-v2/pricing-money-parts';
 
 interface LocationFormData {
   name: string;
@@ -110,9 +91,11 @@ interface LocationSettingsProps {
   onDirtyChange?: (dirty: boolean) => void;
   /** v2 (northwind): derived dirty state. The v2 page passes this instead of onDirtyChange. */
   onDirtyChangeV2?: (dirty: boolean) => void;
+  /** v2 (northwind): the settings page's save bar and leave dialog save Locations through this. */
+  registerSave?: RegisterSectionSave;
 }
 
-export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSettingsProps = {}) {
+export function LocationSettings({ onDirtyChange, onDirtyChangeV2, registerSave }: LocationSettingsProps = {}) {
   const {
     locationSettings,
     isLoadingSettings,
@@ -120,7 +103,6 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
     settingsError,
     refetchSettings,
     isFetchingSettings,
-    settingsUpdateError,
     locationsError,
     refetchLocations,
     isFetchingLocations,
@@ -146,13 +128,12 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
   const v2 = useV2('chrome');
   const { readOnly: v2ReadOnly } = useSettingsAccess('locations');
   const readOnly = v2 && v2ReadOnly;
-  const [v2SaveMessage, setV2SaveMessage] = useState<string | null>(null);
-  const [locationDraftErrors, setLocationDraftErrors] = useState<LocationDraftErrors>({});
   const [v2SyncedSettings, setV2SyncedSettings] = useState<typeof locationSettings | null>(null);
-  // v2: the location whose delete is in flight, and whether the center address
-  // was typed rather than picked (typing alone never moves the center point).
-  const [v2DeletingId, setV2DeletingId] = useState<string | null>(null);
+  // v2: whether the center address was typed rather than picked (typing alone
+  // never moves the center point).
   const [v2CenterTyped, setV2CenterTyped] = useState(false);
+  // v2: the return area's own radius (v1 shows one radius and saves it to both).
+  const [returnAreaRadius, setReturnAreaRadius] = useState<number | null>(100);
 
   // PICKUP options
   const [pickupFixedEnabled, setPickupFixedEnabled] = useState(true);
@@ -224,6 +205,7 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
         locationSettings.fixed_return_address === locationSettings.fixed_pickup_address
       );
       setAreaRadius(locationSettings.pickup_area_radius_km != null ? kmToDisplayUnit(locationSettings.pickup_area_radius_km, distanceUnit) : 100);
+      setReturnAreaRadius(locationSettings.return_area_radius_km != null ? kmToDisplayUnit(locationSettings.return_area_radius_km, distanceUnit) : 100);
       setAreaDeliveryFee(locationSettings.area_delivery_fee ?? 0);
       setDeliveryTiersEnabled(locationSettings.delivery_tiers_enabled ?? false);
       setTiers(
@@ -262,7 +244,7 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
     pickupFixedEnabled, pickupMultipleEnabled, pickupAreaEnabled,
     returnFixedEnabled, returnMultipleEnabled, returnAreaEnabled,
     fixedPickupAddress, fixedReturnAddress, sameReturnAddress,
-    areaRadius, areaDeliveryFee, areaCenterLat, areaCenterLon,
+    areaRadius, returnAreaRadius, areaDeliveryFee, areaCenterLat, areaCenterLon,
     deliveryTiersEnabled, tiers, maxDeliveryDistance,
   };
   const v2Dirty =
@@ -273,16 +255,39 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
   useEffect(() => {
     if (v2) onDirtyChangeV2?.(v2Dirty);
   }, [v2, v2Dirty, onDirtyChangeV2]);
-  const v2AreaErrors = v2 ? areaFieldErrors(v2Form, distanceUnitLabel) : {};
-  const v2SaveStatus = useSettingsSaveStatus({
-    isDirty: v2Dirty,
-    isPending: isUpdatingSettings,
-    error: v2SaveMessage ?? settingsUpdateError,
-  });
-  const v2FormKey = v2 ? JSON.stringify(v2Form) : '';
-  useEffect(() => {
-    setV2SaveMessage(null);
-  }, [v2FormKey]);
+
+  // v2: the page edits the same local state through one setter per field, and
+  // Reset / "Don't save" put every field back to what is saved.
+  const v2Setters: { [K in keyof LocationFormState]: (value: LocationFormState[K]) => void } = {
+    pickupFixedEnabled: setPickupFixedEnabled,
+    pickupMultipleEnabled: setPickupMultipleEnabled,
+    pickupAreaEnabled: setPickupAreaEnabled,
+    returnFixedEnabled: setReturnFixedEnabled,
+    returnMultipleEnabled: setReturnMultipleEnabled,
+    returnAreaEnabled: setReturnAreaEnabled,
+    fixedPickupAddress: setFixedPickupAddress,
+    fixedReturnAddress: setFixedReturnAddress,
+    sameReturnAddress: setSameReturnAddress,
+    areaRadius: setAreaRadius,
+    returnAreaRadius: setReturnAreaRadius,
+    areaDeliveryFee: setAreaDeliveryFee,
+    areaCenterLat: setAreaCenterLat,
+    areaCenterLon: setAreaCenterLon,
+    deliveryTiersEnabled: setDeliveryTiersEnabled,
+    tiers: setTiers,
+    maxDeliveryDistance: setMaxDeliveryDistance,
+  };
+  const patchV2Form = (patch: Partial<LocationFormState>) => {
+    (Object.keys(patch) as (keyof LocationFormState)[]).forEach((key) => {
+      (v2Setters[key] as (value: unknown) => void)(patch[key]);
+    });
+  };
+  const discardV2Edits = () => {
+    const saved = locationFormFromSettings(locationSettings, (km) => kmToDisplayUnit(km, distanceUnit));
+    patchV2Form(saved);
+    setAreaCenterAddress(centerCoordinateLabel(saved.areaCenterLat, saved.areaCenterLon) ?? '');
+    setV2CenterTyped(false);
+  };
 
   const pickupLocations = locations.filter(loc => loc.is_pickup_enabled);
   const returnLocations = locations.filter(loc => loc.is_return_enabled);
@@ -493,7 +498,6 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
   };
 
   const handleOpenAddDialog = (mode: 'pickup' | 'return') => {
-    if (v2) setLocationDraftErrors({});
     setEditingLocation(null);
     setDialogMode(mode);
     setFormData({
@@ -505,7 +509,6 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
   };
 
   const handleOpenEditDialog = (location: PickupLocation, mode: 'pickup' | 'return') => {
-    if (v2) setLocationDraftErrors({});
     setEditingLocation(location);
     setDialogMode(mode);
     setFormData({
@@ -519,28 +522,7 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
     setIsDialogOpen(true);
   };
 
-  // v2: inline field errors, fees rounded to cents, and an EDIT that keeps the
-  // location's pickup/return flags (v1 forced them to the dialog's side, which
-  // silently dropped a dual-purpose location from the other list).
-  const saveLocationV2 = async () => {
-    const errors = validateLocationDraft(formData);
-    setLocationDraftErrors(errors);
-    if (Object.keys(errors).length > 0) return;
-    const payload = buildLocationPayload(formData, { editing: !!editingLocation, mode: dialogMode });
-    try {
-      if (editingLocation) {
-        await updateLocation({ id: editingLocation.id, ...payload });
-      } else {
-        await createLocation(payload);
-      }
-      setIsDialogOpen(false);
-      setFormData(EMPTY_FORM);
-      setEditingLocation(null);
-    } catch (error) {}
-  };
-
   const handleSaveLocation = async () => {
-    if (v2) return saveLocationV2();
     if (!formData.name.trim() || !formData.address.trim()) {
       toast({ title: 'Error', description: 'Enter both name and address.', variant: 'destructive' });
       return;
@@ -570,20 +552,7 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
     } catch (error) {}
   };
 
-  // v2: the row says "Deleting…" until the refreshed list no longer has it.
-  const deleteLocationV2 = async (id: string) => {
-    setV2DeletingId(id);
-    try {
-      await deleteLocation(id);
-      await refetchLocations();
-    } catch (error) {
-    } finally {
-      setV2DeletingId(null);
-    }
-  };
-
   const handleDeleteLocation = async (id: string) => {
-    if (v2) return deleteLocationV2(id);
     try { await deleteLocation(id); } catch (error) {}
   };
 
@@ -591,38 +560,51 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
     try { await updateLocation({ id: location.id, is_active: !location.is_active }); } catch (error) {}
   };
 
-  // v2: check what v1 doesn't (a missing active location, the radius and fee)
-  // and say why inline, beside Save, before the v1 save runs its own checks.
-  const handleSaveSettingsV2 = async () => {
-    const listUnknown = isLoadingLocations || !!locationsError;
-    const message = validateLocationSettingsV2(v2Form, {
-      unitLabel: distanceUnitLabel,
-      pickupActiveLocations: listUnknown ? null : pickupLocations.filter((l) => l.is_active).length,
-      returnActiveLocations: listUnknown ? null : returnLocations.filter((l) => l.is_active).length,
-    });
-    setV2SaveMessage(message);
-    if (message) return;
-    await handleSaveSettings();
-  };
-
-  // v2: never render the placeholder defaults as the tenant's setup. A failed
-  // read offers a retry instead of a form whose Save would overwrite it.
-  if (v2 && !hasSettingsData && settingsError) {
+  // v2 (northwind): its own page, on the same state and handlers. It never
+  // renders the placeholder defaults (a skeleton, or a retry on a failed read),
+  // and saves through the settings page's save bar. Every other tenant
+  // continues below, unchanged.
+  if (v2) {
     return (
-      <SettingsLoadError
-        thing="your pickup and return settings"
-        error={settingsError}
-        onRetry={refetchSettings}
-        retrying={isFetchingSettings}
+      <LocationsV2
+        data={{
+          locationSettings,
+          hasSettingsData,
+          settingsError,
+          refetchSettings,
+          isFetchingSettings,
+          updateSettings,
+          locations,
+          isLoadingLocations,
+          locationsError,
+          refetchLocations,
+          isFetchingLocations,
+          createLocation,
+          updateLocation,
+          deleteLocation,
+          isCreating,
+          isUpdating,
+        }}
+        form={v2Form}
+        onFormChange={patchV2Form}
+        onOptionChange={{
+          pickupFixed: handlePickupFixedChange,
+          pickupMultiple: handlePickupMultipleChange,
+          pickupArea: handlePickupAreaChange,
+          returnFixed: handleReturnFixedChange,
+          returnMultiple: handleReturnMultipleChange,
+          returnArea: handleReturnAreaChange,
+        }}
+        bands={{ add: addBand, remove: removeBand, update: updateBand, toggleOpen: toggleOpenBand }}
+        center={{ address: areaCenterAddress, typed: v2CenterTyped, onChange: handleCenterAddressChange }}
+        isDirty={v2Dirty}
+        onDiscard={discardV2Edits}
+        readOnly={readOnly}
+        currencyCode={currencyCode}
+        distanceUnit={distanceUnit}
+        onDirtyChange={onDirtyChangeV2}
+        registerSave={registerSave}
       />
-    );
-  }
-  if (v2 && !hasSettingsData) {
-    return (
-      <div className="grid gap-6 xl:grid-cols-2">
-        <SettingsSectionSkeleton variant="form" rows={3} header label="Loading pickup options" />
-        <SettingsSectionSkeleton variant="form" rows={3} header label="Loading return options" />
-      </div>
     );
   }
 
@@ -634,27 +616,8 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
     );
   }
 
-  // v2 read-only: each group of controls sits in its own disabled fieldset. The
-  // lists (search, Try again) and the refresh error stay outside, so a viewer
-  // can still read, search and retry; the lists disable their own switches.
-  const roFieldset = (children: React.ReactNode) => (
-    <SettingsReadOnlyFieldset readOnly={readOnly}>{children}</SettingsReadOnlyFieldset>
-  );
-  const v2CenterCoords = centerCoordinateLabel(areaCenterLat, areaCenterLon);
-  const v2CenterIsCoordsOnly = v2 && !!v2CenterCoords && areaCenterAddress === v2CenterCoords;
-
   return (
-    <ScopeIf on={v2} wrap={(children) => <div className={LOCATIONS_V2_CLASS}>{children}</div>}>
     <div className="space-y-6">
-      {v2 && settingsError && hasSettingsData && (
-        <SettingsLoadError
-          variant="inline"
-          thing="your pickup and return settings"
-          error={settingsError}
-          onRetry={refetchSettings}
-          retrying={isFetchingSettings}
-        />
-      )}
       {/* Two Column Layout for Pickup & Return */}
       <div className="grid xl:grid-cols-2 gap-6">
         {/* PICKUP OPTIONS CARD */}
@@ -672,7 +635,6 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
           </div>
           <CardContent className="p-0 flex-1 flex flex-col">
             {/* Fixed Address */}
-            <ScopeIf on={v2} wrap={roFieldset}>
             <div className={cn(
               "p-5 border-b transition-colors xl:min-h-[180px]",
               pickupFixedEnabled && "bg-muted/20"
@@ -719,22 +681,15 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
                     className="text-sm"
                     v2States={v2}
                   />
-                  {v2 && !fixedPickupAddress.trim() && (
-                    <p className="mt-1.5 text-xs text-muted-foreground">
-                      Customers see no pickup address until you add one here.
-                    </p>
-                  )}
                 </div>
               )}
             </div>
-            </ScopeIf>
 
             {/* Predefined Locations */}
             <div className={cn(
               "p-5 border-b transition-colors flex-1",
               pickupMultipleEnabled && "bg-muted/20"
             )}>
-              <ScopeIf on={v2} wrap={roFieldset}>
               <div className="flex items-start justify-between gap-3 sm:gap-4">
                 <div className="flex gap-3 min-w-0">
                   <div className={cn(
@@ -768,36 +723,8 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
                   onCheckedChange={handlePickupMultipleChange}
                 />
               </div>
-              </ScopeIf>
               {pickupMultipleEnabled && (
                 <div className="mt-4 pl-3 sm:pl-[52px]">
-                  {v2 ? (
-                    <div className="space-y-3">
-                      {!isLoadingLocations && !locationsError && pickupLocations.length > 0 && !pickupLocations.some((l) => l.is_active) && (
-                        <SettingsDependencyNotice
-                          tone="warning"
-                          title="No active delivery locations"
-                          body="Customers will see an empty list. Switch a location on, or turn this option off."
-                        />
-                      )}
-                      <LocationsListV2
-                        side="pickup"
-                        locations={pickupLocations}
-                        isLoading={isLoadingLocations}
-                        error={locationsError}
-                        onRetry={refetchLocations}
-                        retrying={isFetchingLocations}
-                        onAdd={() => handleOpenAddDialog('pickup')}
-                        onEdit={(loc) => handleOpenEditDialog(loc, 'pickup')}
-                        onConfirmDelete={(id, name) => { setDeleteLocationId(id); setDeleteLocationName(name); }}
-                        onToggleActive={handleToggleActive}
-                        isUpdating={isUpdating}
-                        currencyCode={currencyCode}
-                        readOnly={readOnly}
-                        pendingDeleteId={v2DeletingId}
-                      />
-                    </div>
-                  ) : (
                   <LocationsGrid
                     locations={pickupLocations}
                     onAdd={() => handleOpenAddDialog('pickup')}
@@ -808,13 +735,11 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
                     isUpdating={isUpdating}
                     currencyCode={currencyCode}
                   />
-                  )}
                 </div>
               )}
             </div>
 
             {/* Area Delivery */}
-            <ScopeIf on={v2} wrap={roFieldset}>
             <div className={cn(
               "p-5 transition-colors xl:min-h-[88px]",
               pickupAreaEnabled && "bg-muted/20"
@@ -853,7 +778,6 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
                 />
               </div>
             </div>
-            </ScopeIf>
           </CardContent>
         </Card>
 
@@ -872,7 +796,6 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
           </div>
           <CardContent className="p-0 flex-1 flex flex-col">
             {/* Fixed Address */}
-            <ScopeIf on={v2} wrap={roFieldset}>
             <div className={cn(
               "p-5 border-b transition-colors xl:min-h-[180px]",
               returnFixedEnabled && "bg-muted/20"
@@ -931,14 +854,12 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
                 </div>
               )}
             </div>
-            </ScopeIf>
 
             {/* Predefined Locations */}
             <div className={cn(
               "p-5 border-b transition-colors flex-1",
               returnMultipleEnabled && "bg-muted/20"
             )}>
-              <ScopeIf on={v2} wrap={roFieldset}>
               <div className="flex items-start justify-between gap-3 sm:gap-4">
                 <div className="flex gap-3 min-w-0">
                   <div className={cn(
@@ -972,36 +893,8 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
                   onCheckedChange={handleReturnMultipleChange}
                 />
               </div>
-              </ScopeIf>
               {returnMultipleEnabled && (
                 <div className="mt-4 pl-3 sm:pl-[52px]">
-                  {v2 ? (
-                    <div className="space-y-3">
-                      {!isLoadingLocations && !locationsError && returnLocations.length > 0 && !returnLocations.some((l) => l.is_active) && (
-                        <SettingsDependencyNotice
-                          tone="warning"
-                          title="No active collection locations"
-                          body="Customers will see an empty list. Switch a location on, or turn this option off."
-                        />
-                      )}
-                      <LocationsListV2
-                        side="return"
-                        locations={returnLocations}
-                        isLoading={isLoadingLocations}
-                        error={locationsError}
-                        onRetry={refetchLocations}
-                        retrying={isFetchingLocations}
-                        onAdd={() => handleOpenAddDialog('return')}
-                        onEdit={(loc) => handleOpenEditDialog(loc, 'return')}
-                        onConfirmDelete={(id, name) => { setDeleteLocationId(id); setDeleteLocationName(name); }}
-                        onToggleActive={handleToggleActive}
-                        isUpdating={isUpdating}
-                        currencyCode={currencyCode}
-                        readOnly={readOnly}
-                        pendingDeleteId={v2DeletingId}
-                      />
-                    </div>
-                  ) : (
                   <LocationsGrid
                     locations={returnLocations}
                     onAdd={() => handleOpenAddDialog('return')}
@@ -1012,13 +905,11 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
                     isUpdating={isUpdating}
                     currencyCode={currencyCode}
                   />
-                  )}
                 </div>
               )}
             </div>
 
             {/* Area Collection */}
-            <ScopeIf on={v2} wrap={roFieldset}>
             <div className={cn(
               "p-5 transition-colors xl:min-h-[88px]",
               returnAreaEnabled && "bg-muted/20"
@@ -1057,21 +948,12 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
                 />
               </div>
             </div>
-            </ScopeIf>
           </CardContent>
         </Card>
       </div>
 
       {/* AREA SETTINGS */}
       {(pickupAreaEnabled || returnAreaEnabled) && (
-        <ScopeIf
-          on={v2}
-          wrap={(children) => (
-            <SettingsReadOnlyFieldset readOnly={readOnly} className={AREA_SETTINGS_V2_CLASS}>
-              {children}
-            </SettingsReadOnlyFieldset>
-          )}
-        >
         <Card>
           <div className="bg-muted/30 border-b px-6 py-4">
             <div className="flex items-center gap-3">
@@ -1089,33 +971,16 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
               <div className="md:col-span-2 space-y-2">
                 <Label className="text-sm font-medium">Service Center Point</Label>
                 <LocationAutocomplete
-                  value={v2CenterIsCoordsOnly ? '' : areaCenterAddress}
+                  value={areaCenterAddress}
                   onChange={handleCenterAddressChange}
-                  placeholder={v2 && v2CenterCoords ? (readOnly ? 'Saved as a map point (below)' : 'Search an address to move it') : 'Search for center location...'}
+                  placeholder="Search for center location..."
                   v2States={v2}
                 />
-                {!v2 && (
-                <>
                 {areaCenterLat && areaCenterLon && (
                   <p className="text-xs text-muted-foreground">
                     Coordinates: {areaCenterLat.toFixed(4)}, {areaCenterLon.toFixed(4)}
                   </p>
                 )}
-                </>
-                )}
-                {v2 && (v2AreaErrors.center ? (
-                  <p role="alert" className="text-xs text-destructive">{v2AreaErrors.center}</p>
-                ) : v2CenterTyped ? (
-                  <p className="text-xs text-amber-700 dark:text-amber-400">
-                    Pick an address from the suggestions to move your center point. Until you do, it stays at{' '}
-                    <span className="tabular-nums">{v2CenterCoords}</span>.
-                  </p>
-                ) : (
-                  <p className="text-xs text-muted-foreground">
-                    {v2CenterIsCoordsOnly ? 'Your saved center point is at ' : 'Distances are measured from this address, at '}
-                    <span className="tabular-nums">{v2CenterCoords}</span>.
-                  </p>
-                ))}
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -1143,9 +1008,6 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
                     />
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">{distanceUnitLabel}</span>
                   </div>
-                  {v2AreaErrors.radius && (
-                    <p role="alert" className="text-xs text-destructive">{v2AreaErrors.radius}</p>
-                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -1171,9 +1033,6 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
                         placeholder="0"
                       />
                     </div>
-                  )}
-                  {v2AreaErrors.fee && (
-                    <p role="alert" className="text-xs text-destructive">{v2AreaErrors.fee}</p>
                   )}
                 </div>
               </div>
@@ -1240,17 +1099,6 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
                     </div>
                   ))}
 
-                  {v2 && (v2AreaErrors.bands || v2AreaErrors.bandRows) && (
-                    <ul role="alert" className="space-y-1 text-xs text-destructive">
-                      {v2AreaErrors.bands && <li>{v2AreaErrors.bands}</li>}
-                      {Object.entries(v2AreaErrors.bandRows ?? {}).map(([i, message]) => (
-                        <li key={i} className="[overflow-wrap:anywhere]">
-                          <span className="font-medium">{bandLabel(tiers[Number(i)], distanceUnitLabel)}:</span> {message}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-
                   <div className="flex items-center justify-between pt-1">
                     <Button type="button" variant="outline" size="sm" onClick={addBand}>
                       <Plus className="mr-1.5 h-3.5 w-3.5" /> Add band
@@ -1285,9 +1133,6 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
                       <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">{distanceUnitLabel}</span>
                     </div>
                   </div>
-                  {v2 && v2AreaErrors.maxDistance && (
-                    <p role="alert" className="text-xs text-destructive">{v2AreaErrors.maxDistance}</p>
-                  )}
 
                   {!hasOpenBand && maxDeliveryDistance == null && (
                     <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2">
@@ -1310,7 +1155,6 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
               </div>
             )}
 
-            {!(v2 && (v2AreaErrors.radius || v2AreaErrors.fee)) && (
             <div className="mt-4 p-3 rounded-lg bg-muted/50 border">
               <p className="text-sm text-muted-foreground">
                 Customers can enter any address {deliveryTiersEnabled ? 'measured from' : 'within '}
@@ -1321,34 +1165,11 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
                   : <>A fee of <strong className="text-foreground">{formatCurrency(areaDeliveryFee ?? 0, currencyCode)}</strong> will apply per delivery/collection.</>}
               </p>
             </div>
-            )}
           </CardContent>
         </Card>
-        </ScopeIf>
       )}
 
       {/* SAVE BUTTON */}
-      {v2 ? (
-        !readOnly && (
-          <div className="flex flex-wrap items-center justify-end gap-3">
-            <SettingsSaveState
-              status={v2SaveStatus}
-              error={v2SaveMessage ?? settingsUpdateError}
-              onRetry={v2SaveStatus === 'error' && !v2SaveMessage ? handleSaveSettingsV2 : undefined}
-              className="mr-auto"
-            />
-            <ButtonV2
-              type="button"
-              onClick={handleSaveSettingsV2}
-              disabled={!v2Dirty || isUpdatingSettings}
-              className="min-w-[140px]"
-            >
-              {isUpdatingSettings ? <Loader2 className="animate-spin" data-icon="inline-start" /> : <Save data-icon="inline-start" />}
-              {isUpdatingSettings ? 'Saving…' : 'Save changes'}
-            </ButtonV2>
-          </div>
-        )
-      ) : (
       <div className="flex justify-end">
         <Button
           onClick={handleSaveSettings}
@@ -1366,7 +1187,6 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
           )}
         </Button>
       </div>
-      )}
 
       {/* ADD/EDIT DIALOG */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -1394,11 +1214,7 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
                 value={formData.name}
                 onChange={(e) => setFormData(p => ({ ...p, name: e.target.value }))}
                 placeholder="e.g., Heathrow Airport Terminal 5"
-                maxLength={v2 ? LOCATION_NAME_MAX : undefined}
               />
-              {v2 && locationDraftErrors.name && (
-                <p role="alert" className="text-xs text-destructive">{locationDraftErrors.name}</p>
-              )}
             </div>
 
             <div className="space-y-2">
@@ -1409,9 +1225,6 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
                 placeholder="Search for address..."
                 v2States={v2}
               />
-              {v2 && locationDraftErrors.address && (
-                <p role="alert" className="text-xs text-destructive">{locationDraftErrors.address}</p>
-              )}
             </div>
 
             <div className="space-y-2">
@@ -1422,11 +1235,7 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
                 value={formData.description}
                 onChange={(e) => setFormData(p => ({ ...p, description: e.target.value }))}
                 placeholder="e.g., Meet at arrivals hall, bay 3"
-                maxLength={v2 ? LOCATION_TEXT_MAX : undefined}
               />
-              {v2 && locationDraftErrors.description && (
-                <p role="alert" className="text-xs text-destructive">{locationDraftErrors.description}</p>
-              )}
             </div>
 
             <div className="space-y-2">
@@ -1446,11 +1255,6 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
                   placeholder="0"
                 />
               </div>
-              {v2 && (locationDraftErrors.fee ? (
-                <p role="alert" className="text-xs text-destructive">{locationDraftErrors.fee}</p>
-              ) : (
-                <p className="text-xs text-muted-foreground">Leave blank or 0 to make it free for customers.</p>
-              ))}
             </div>
           </div>
 
@@ -1488,7 +1292,6 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2 }: LocationSet
         </AlertDialogContent>
       </AlertDialog>
     </div>
-    </ScopeIf>
   );
 }
 

@@ -12,8 +12,8 @@
  * The whole row opens the policy drawer, as the v1 row does, and the customer
  * name is still a link to the customer. The ⋯ menu is v1's: the same four items
  * and separator, Deactivate disabled on an inactive policy, and the page's own
- * handlers. Sorting is the page's own; the header now shows which column and
- * direction are active.
+ * handlers. The order is the page's: newest added first. Headings do not sort,
+ * like every v2 list.
  */
 
 import Link from "next/link";
@@ -26,7 +26,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@/components/ui-v2/dropdown-menu";
 import {
   LIST_CLASSES,
   LIST_ROW_ACTION,
@@ -48,17 +48,6 @@ import {
   type InsuranceStatusLevel,
 } from "@/lib/insurance-utils";
 import { cn } from "@/lib/utils";
-
-/** The page's sort fields. */
-export type InsurancePolicySortFieldV2 =
-  | "customer"
-  | "vehicle"
-  | "policy_number"
-  | "provider"
-  | "start_date"
-  | "expiry_date"
-  | "status"
-  | "docs_count";
 
 /** The fields this table reads. `InsurancePolicy` from use-insurance-data satisfies it. */
 export interface InsurancePolicyListRowV2 {
@@ -93,22 +82,16 @@ const Blank = () => <span className="text-muted-foreground">—</span>;
 export function InsurancePolicyListV2<T extends InsurancePolicyListRowV2>({
   policies,
   resetKey,
-  sortField,
-  sortDirection,
-  onSort,
   isUrgent,
   onView,
   onEdit,
   onUpload,
   onDeactivate,
 }: {
-  /** Every filtered policy in the page's sort order, already in memory. */
+  /** Every filtered policy, newest added first, already in memory. */
   policies: T[];
-  /** Changes with the result set (tenant, filters, sort) and never on a refetch. */
+  /** Changes with the result set (tenant, filters) and never on a refetch. */
   resetKey: string;
-  sortField: InsurancePolicySortFieldV2;
-  sortDirection: "asc" | "desc";
-  onSort: (field: InsurancePolicySortFieldV2) => void;
   /** The page's own 0-7 day check, which drives v1's rail and Urgent badge. */
   isUrgent: (expiryDate: string) => boolean;
   onView: (policy: T) => void;
@@ -117,10 +100,6 @@ export function InsurancePolicyListV2<T extends InsurancePolicyListRowV2>({
   onDeactivate: (policyId: string) => void;
 }) {
   const policyRows = useProgressiveRows(policies, resetKey);
-  const sortBy = (field: InsurancePolicySortFieldV2) => ({
-    direction: sortField === field ? sortDirection : null,
-    onSort: () => onSort(field),
-  });
 
   return (
     <>
@@ -129,17 +108,16 @@ export function InsurancePolicyListV2<T extends InsurancePolicyListRowV2>({
           {/* Widths, measured in Manrope on a 944px card. Policy number, Start,
               Expiry and Status hold their longest values in full:
               "POL-2026-00012345" (17 characters), "May 28, 2026", "Expires in
-              30 days". Every sortable header stays inside its own cell's padding
-              (Docs leans into the empty Actions header). Customer, Vehicle and
-              Provider truncate, each with its full value in a title. */}
-          <ListHead className="w-[11%]" sort={sortBy("customer")}>Customer</ListHead>
-          <ListHead className="w-[11.5%]" sort={sortBy("vehicle")}>Vehicle</ListHead>
-          <ListHead className="w-[17%]" sort={sortBy("policy_number")}>Policy number</ListHead>
-          <ListHead className="w-[10%]" sort={sortBy("provider")}>Provider</ListHead>
-          <ListHead className="w-[12%]" sort={sortBy("start_date")}>Start</ListHead>
-          <ListHead className="w-[12%]" sort={sortBy("expiry_date")}>Expiry</ListHead>
-          <ListHead className="w-[15%]" sort={sortBy("status")}>Status</ListHead>
-          <ListHead className="w-[7.5%]" sort={sortBy("docs_count")}>Docs</ListHead>
+              30 days". Customer, Vehicle and Provider truncate, each with its
+              full value in a title. */}
+          <ListHead className="w-[11%]">Customer</ListHead>
+          <ListHead className="w-[11.5%]">Vehicle</ListHead>
+          <ListHead className="w-[17%]">Policy number</ListHead>
+          <ListHead className="w-[10%]">Provider</ListHead>
+          <ListHead className="w-[12%]">Start</ListHead>
+          <ListHead className="w-[12%]">Expiry</ListHead>
+          <ListHead className="w-[15%]">Status</ListHead>
+          <ListHead className="w-[7.5%]">Docs</ListHead>
           <ListHead className="w-[4%] text-right">
             <span className="sr-only">Actions</span>
           </ListHead>
@@ -203,7 +181,7 @@ export function InsurancePolicyListV2<T extends InsurancePolicyListRowV2>({
                     as Fines does with "N days overdue". A chip beside the date
                     needed a column wide enough to squeeze everything else. */}
                 <ListCell className="tabular-nums">
-                  <div className="flex flex-col gap-0.5">
+                  <div className="flex flex-col items-center gap-0.5">
                     <span className={LIST_CLASSES.text}>
                       {format(parseLocalDate(policy.expiry_date), "MMM d, yyyy")}
                     </span>
@@ -235,17 +213,17 @@ export function InsurancePolicyListV2<T extends InsurancePolicyListRowV2>({
                         <MoreHorizontal className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
+                    <DropdownMenuContent align="end" className="w-auto">
                       <DropdownMenuItem onClick={() => onView(policy)}>
-                        <Eye className="h-4 w-4 mr-2" />
+                        <Eye className="h-4 w-4" />
                         View Details
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => onEdit(policy)}>
-                        <Edit className="h-4 w-4 mr-2" />
+                        <Edit className="h-4 w-4" />
                         Edit Policy
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => onUpload(policy)}>
-                        <Upload className="h-4 w-4 mr-2" />
+                        <Upload className="h-4 w-4" />
                         Upload Document
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
@@ -253,7 +231,7 @@ export function InsurancePolicyListV2<T extends InsurancePolicyListRowV2>({
                         onClick={() => onDeactivate(policy.id)}
                         disabled={policy.status === "Inactive"}
                       >
-                        <Ban className="h-4 w-4 mr-2" />
+                        <Ban className="h-4 w-4" />
                         Deactivate
                       </DropdownMenuItem>
                     </DropdownMenuContent>

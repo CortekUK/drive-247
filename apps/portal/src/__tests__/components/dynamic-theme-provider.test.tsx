@@ -17,6 +17,7 @@ import { render, screen } from '@testing-library/react';
 
 const mockUseTenant = vi.fn();
 const mockUseTenantBranding = vi.fn();
+const mockUseDynamicTheme = vi.fn();
 
 vi.mock('@/contexts/TenantContext', () => ({
   useTenant: () => mockUseTenant(),
@@ -25,10 +26,11 @@ vi.mock('@/hooks/use-tenant-branding', () => ({
   useTenantBranding: () => mockUseTenantBranding(),
 }));
 vi.mock('@/hooks/use-dynamic-theme', () => ({
-  useDynamicTheme: () => undefined,
+  useDynamicTheme: (options: unknown) => mockUseDynamicTheme(options),
 }));
 
 import { DynamicThemeProvider } from '@/components/shared/layout/dynamic-theme-provider';
+import { V2Provider } from '@/lib/v2-context';
 
 const CHILD = 'the-portal-content';
 
@@ -150,5 +152,45 @@ describe('DynamicThemeProvider — normal operation is unchanged', () => {
 
     expect(await screen.findByText(CHILD)).toBeInTheDocument();
     expect(screen.queryByText(/couldn.t find a portal/i)).toBeNull();
+  });
+});
+
+describe('DynamicThemeProvider — which theme path the hook takes', () => {
+  const RESOLVED = {
+    loading: false,
+    tenant: { id: '1334709f', slug: 'northwind', company_name: 'Northwind' },
+    error: null,
+    tenantSlug: 'northwind',
+  };
+
+  it('asks for the v2 path when the server resolved the v2 theme', () => {
+    // On v2 the brand colour must land on <body>, where `.v2-theme` lives;
+    // v1's tokens on <html> are overridden by that class and never show.
+    mockUseTenant.mockReturnValue(RESOLVED);
+    mockUseTenantBranding.mockReturnValue(BRANDING_LOADED);
+
+    render(
+      <V2Provider flags={{ theme: true }}>
+        <DynamicThemeProvider><div>{CHILD}</div></DynamicThemeProvider>
+      </V2Provider>
+    );
+
+    expect(mockUseDynamicTheme).toHaveBeenCalledWith({ v2Theme: true });
+  });
+
+  it('keeps every other tenant on the v1 path', () => {
+    mockUseTenant.mockReturnValue(RESOLVED);
+    mockUseTenantBranding.mockReturnValue(BRANDING_LOADED);
+
+    // A tenant widened for the chrome but not the theme, and no provider at all.
+    render(
+      <V2Provider flags={{ chrome: true }}>
+        <DynamicThemeProvider><div>{CHILD}</div></DynamicThemeProvider>
+      </V2Provider>
+    );
+    render(<DynamicThemeProvider><div>{CHILD}</div></DynamicThemeProvider>);
+
+    expect(mockUseDynamicTheme).toHaveBeenCalledWith({ v2Theme: false });
+    expect(mockUseDynamicTheme).not.toHaveBeenCalledWith({ v2Theme: true });
   });
 });

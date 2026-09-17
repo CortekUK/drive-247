@@ -8,7 +8,7 @@ import {
 } from "@/hooks/use-tenant-subscription";
 import { useSubscriptionPlans } from "@/hooks/use-subscription-plans";
 import { useTenant } from "@/contexts/TenantContext";
-import { isLeanTenant } from "@/lib/lean-areas";
+import { useIsLean } from "@/lib/lean-context";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PricingCard } from "@/components/subscription/pricing-card";
 import { CreditsPanel } from "@/components/billing/credits-panel";
@@ -130,6 +130,9 @@ export default function SubscriptionPage() {
     isFetching: plansFetching,
   } = useSubscriptionPlans();
   const { tenant } = useTenant();
+  // Hoisted: both uses below are JSX branches, which a hook cannot be
+  // called from.
+  const leanTenant = useIsLean();
 
   const [subscribingPlanId, setSubscribingPlanId] = useState<string | null>(null);
   const [viewingInvoice, setViewingInvoice] = useState<TenantSubscriptionInvoice | null>(null);
@@ -639,7 +642,7 @@ export default function SubscriptionPage() {
                 canary it also holds Credits. The other 36 still get a page that
                 is only the subscription, so renaming it for them would be a
                 visible change to a shared screen for no reason. */}
-            {isLeanTenant(tenant?.slug) ? "Billing" : "Subscription"}
+            {leanTenant ? "Billing" : "Subscription"}
           </h1>
             {/* Non-negotiable marker. A fabricated invoice that reads as real is
                 worse than an empty page, so the label sits next to the title,
@@ -681,7 +684,7 @@ export default function SubscriptionPage() {
           tenants are not part of this work. They render exactly the layout they
           rendered yesterday. The bodies below are shared, so the two layouts
           cannot drift apart. */}
-      {isLeanTenant(tenant?.slug) ? (
+      {leanTenant ? (
         <div className="space-y-8">
           <section className="mt-6">
           {/* `items-start`: without it the grid stretches both children to the

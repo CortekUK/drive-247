@@ -66,7 +66,7 @@ import { useEffect, useState } from 'react';
 import { useTenant } from '@/contexts/TenantContext';
 import { useAuth } from '@/stores/auth-store';
 import { useV2 } from '@/lib/v2-context';
-import { isLeanTenant } from '@/lib/lean-areas';
+import { useIsLean } from '@/lib/lean-context';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui-v2/tooltip';
 import {
@@ -91,6 +91,7 @@ export function TabTourButton({ tour, className }: TabTourButtonProps) {
   const { tenant } = useTenant();
   const { appUser } = useAuth();
   const hasV2Chrome = useV2('chrome');
+  const isCanary = useIsLean();
 
   /**
    * Which tour is available right now — the short empty-tab one, or the full
@@ -148,7 +149,7 @@ export function TabTourButton({ tour, className }: TabTourButtonProps) {
   // Two of the three pages this renders on are shared v1 list pages that all 57
   // tenants load, so this gate is the only thing keeping the button off their
   // screens. It fails CLOSED — an unresolved tenant renders nothing.
-  if (!isLeanTenant(tenant?.slug) || !hasV2Chrome) return null;
+  if (!isCanary || !hasV2Chrome) return null;
 
   // The label says which tour this is. Someone who took the short version on an
   // empty tab and comes back after adding their first record is not being
@@ -176,7 +177,7 @@ export function TabTourButton({ tour, className }: TabTourButtonProps) {
             // (HeaderIconButton): purple at rest, deeper on hover. Dark mode
             // uses the same indigo-300 glyph and v2 hover tint it does.
             'border-primary/30 bg-primary/5 text-primary hover:border-primary/50 hover:bg-primary/10 dark:bg-primary/10',
-            'dark:border-indigo-300/30 dark:text-indigo-300 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:border-indigo-300/50 dark:hover:text-indigo-300',
+            'dark:border-[hsl(var(--v2-link,var(--primary))_/_0.3)] dark:text-[hsl(var(--v2-link,var(--primary)))] dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:border-[hsl(var(--v2-link,var(--primary))_/_0.5)] dark:hover:text-[hsl(var(--v2-link,var(--primary)))]',
             className,
           )}
         >

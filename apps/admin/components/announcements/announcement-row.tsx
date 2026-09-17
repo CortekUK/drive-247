@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, type ReactNode } from 'react';
-import { Pencil, Trash2 } from 'lucide-react';
+import { Copy, Loader2, Pencil, RotateCcw, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -16,13 +16,15 @@ import {
   type AdminAnnouncementRow,
   type AdminAnnouncementStats,
 } from '@/lib/announcements/contract';
+import { frequencyNote } from '@/lib/announcements/all-tenants-confirm';
+import { canShowAgain, reachSummary, showAgainBlockedReason, type RowPending } from '@/lib/announcements/row-actions';
 import { cn } from '@/lib/utils';
 import { QUIET_BUTTON } from './form-field';
 import { ToneIcon } from './tone-icon';
 
-function plural(n: number, one: string, many: string): string {
-  return n + ' ' + (n === 1 ? one : many);
-}
+/** The row's small icon actions (with QUIET_BUTTON): one size, muted ink, and a visibly unavailable state. */
+const ICON_ACTION =
+  'h-9 w-9 text-muted-foreground hover:text-foreground aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:hover:bg-transparent aria-disabled:hover:text-muted-foreground dark:aria-disabled:hover:bg-transparent';
 
 /**
  * One announcement in the admin list. One line at `xl`; from `md` the title and
@@ -34,22 +36,35 @@ export function AnnouncementRow({
   selectedTenantCount,
   stats,
   statsAvailable,
+  statsCountSuperAdmins = true,
   handle,
   dragging,
+  pending,
+  duplicatingId,
   onToggleActive,
   onEdit,
   onDelete,
+  onShowAgain,
+  onDuplicate,
 }: {
   row: AdminAnnouncementRow;
   selectedTenantCount: number;
   /** undefined when stats loaded but this row has none yet (counts are zero). */
   stats: AdminAnnouncementStats | undefined;
   statsAvailable: boolean;
+  /** false: the stats are staff only (older stats function). */
+  statsCountSuperAdmins?: boolean;
   handle: ReactNode;
   dragging?: boolean;
+  /** A write for this row that is still in flight. */
+  pending?: RowPending | null;
+  /** The row whose duplicate is being prepared (images copying), if any: one at a time. */
+  duplicatingId?: string | null;
   onToggleActive: (row: AdminAnnouncementRow, next: boolean) => void;
   onEdit: (row: AdminAnnouncementRow) => void;
   onDelete: (row: AdminAnnouncementRow) => void;
+  onShowAgain: (row: AdminAnnouncementRow) => void;
+  onDuplicate: (row: AdminAnnouncementRow) => void;
 }) {
   const isFeature = row.kind === 'feature';
   const second = (isFeature ? row.summary : row.body)?.replace(/\s*\n+\s*/g, ' ') ?? '';
@@ -104,17 +119,28 @@ export function AnnouncementRow({
             {frequencyLabel(row.repeat_after_days, row.blocking)}
           </Badge>
         </div>
-        <ReachLine row={row} stats={stats} available={statsAvailable} />
+        <ReachLine row={row} stats={stats} available={statsAvailable} superAdminsCounted={statsCountSuperAdmins} />
       </div>
 
       <div className="order-3 ml-auto flex shrink-0 items-center gap-1 md:order-2 xl:order-none">
         <Switch
           checked={row.is_active}
           onCheckedChange={(next) => onToggleActive(row, next)}
+          disabled={pending === 'show-again' || pending === 'asking'}
+          aria-busy={pending === 'asking' ? true : undefined}
           aria-label="Active"
           title={row.is_active ? 'Active' : 'Inactive'}
           className="mr-2"
         />
+        {canShowAgain(row) ? (
+          <ShowAgainButton row={row} pending={pending} onShowAgain={onShowAgain} />
+        ) : (
+          // Hard items always show, so there is nothing to show again; keep the actions aligned. The slot
+          // still spins while the row's All tenants question waits for the tenant count.
+          <span aria-hidden className="inline-flex h-9 w-9 shrink-0 items-center justify-center">
+            {pending === 'asking' && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+          </span>
+        )}
         <Button
           type="button"
           variant="ghost"
@@ -126,6 +152,7 @@ export function AnnouncementRow({
           <Pencil />
           Edit
         </Button>
+        <DuplicateButton row={row} duplicatingId={duplicatingId ?? null} onDuplicate={onDuplicate} />
         <Button
           type="button"
           variant="ghost"
@@ -138,6 +165,80 @@ export function AnnouncementRow({
         </Button>
       </div>
     </div>
+  );
+}
+
+/**
+ * aria-disabled rather than disabled: the button stays focusable and hoverable,
+ * so its tooltip can say why it is unavailable.
+ */
+function ShowAgainButton({
+  row,
+  pending,
+  onShowAgain,
+}: {
+  row: AdminAnnouncementRow;
+  pending: RowPending | null | undefined;
+  onShowAgain: (row: AdminAnnouncementRow) => void;
+}) {
+  const blocked = showAgainBlockedReason(row, pending);
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className={cn(QUIET_BUTTON, ICON_ACTION)}
+          aria-label={'Show ' + row.title + ' again to everyone who closed it'}
+          aria-disabled={blocked ? true : undefined}
+          onClick={() => {
+            if (!blocked) onShowAgain(row);
+          }}
+        >
+          {pending === 'show-again' || pending === 'asking' ? <Loader2 className="animate-spin" /> : <RotateCcw />}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="max-w-[260px] text-xs">
+        {blocked ?? 'Show again to everyone who closed it'}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+function DuplicateButton({
+  row,
+  duplicatingId,
+  onDuplicate,
+}: {
+  row: AdminAnnouncementRow;
+  duplicatingId: string | null;
+  onDuplicate: (row: AdminAnnouncementRow) => void;
+}) {
+  const mine = duplicatingId === row.id;
+  const blocked = mine ? 'Copying images…' : duplicatingId !== null ? 'Another duplicate is being prepared.' : null;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className={cn(QUIET_BUTTON, ICON_ACTION)}
+          aria-label={'Duplicate ' + row.title}
+          aria-disabled={blocked ? true : undefined}
+          aria-busy={mine || undefined}
+          onClick={() => {
+            if (!blocked) onDuplicate(row);
+          }}
+        >
+          {mine ? <Loader2 className="animate-spin" /> : <Copy />}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="max-w-[260px] text-xs">
+        {blocked ?? 'Duplicate'}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -178,39 +279,56 @@ function ReachLine({
   row,
   stats,
   available,
+  superAdminsCounted,
 }: {
   row: AdminAnnouncementRow;
   stats: AdminAnnouncementStats | undefined;
   available: boolean;
+  superAdminsCounted: boolean;
 }) {
-  if (!available) return <p className="text-xs text-muted-foreground">Reach unavailable</p>;
-  const s = stats;
-  const shownUsers = s?.shown_users ?? 0;
-  const shownTenants = s?.shown_tenants ?? 0;
-  const ctaUsers = s?.cta_users ?? 0;
+  const reach = available ? reachSummary(row, stats, superAdminsCounted) : null;
+  const note = frequencyNote(row);
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <button
           type="button"
-          className="w-fit max-w-full cursor-help truncate text-left text-xs text-muted-foreground underline decoration-dotted underline-offset-4 hover:text-foreground"
+          className="w-fit max-w-full cursor-help text-left text-xs leading-5 text-muted-foreground underline decoration-dotted underline-offset-4 [overflow-wrap:anywhere] hover:text-foreground"
         >
-          Seen by {plural(shownUsers, 'user', 'users')} in {plural(shownTenants, 'tenant', 'tenants')} ·{' '}
-          {plural(ctaUsers, 'button click', 'button clicks')}
+          {reach ? reach.headline : 'Reach unavailable'}
+          {reach?.superAdminNote && (
+            <>
+              {' '}
+              <span className="whitespace-nowrap">{reach.superAdminNote}</span>
+            </>
+          )}
         </button>
       </TooltipTrigger>
       <TooltipContent side="bottom" align="start" className="max-w-xs space-y-0.5 text-xs">
-        <p>Closed by {plural(s?.dismissed_users ?? 0, 'user', 'users')}</p>
-        {row.kind === 'feature' && (
-          <>
-            <p>&ldquo;Don&apos;t show again&rdquo;: {plural(s?.dont_show_again_users ?? 0, 'user', 'users')}</p>
-            <p>Card opened by {plural(s?.card_opened_users ?? 0, 'user', 'users')}</p>
-          </>
+        {reach ? (
+          reach.details.map((line, i) => (
+            <p key={i} className={cn(i === reach.details.length - 1 && reach.endsWithFootnote && 'pt-1 text-muted-foreground')}>
+              {line}
+            </p>
+          ))
+        ) : (
+          <p>The view and click counts could not be loaded.</p>
         )}
-        <p>
-          Audience: {plural(s?.audience_tenants ?? 0, 'tenant', 'tenants')} ({s?.reachable_tenants ?? 0} reachable)
+        {/* Every row says what its frequency means; for "Once" that is why people who closed it no longer see it. */}
+        <p data-frequency-note className="!mt-1.5 border-t border-border pt-1.5 leading-5">
+          {note.lead}
+          {note.showAgain && (
+            <>
+              {' '}
+              {note.showAgain.before}
+              <span className="inline-flex items-baseline gap-1 whitespace-nowrap font-semibold">
+                <RotateCcw className="h-3 w-3 shrink-0 self-center" aria-hidden />
+                Show again
+              </span>
+              {note.showAgain.after}
+            </>
+          )}
         </p>
-        <p className="text-muted-foreground">Super admins are not counted.</p>
       </TooltipContent>
     </Tooltip>
   );

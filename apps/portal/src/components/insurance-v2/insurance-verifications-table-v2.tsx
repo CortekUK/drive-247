@@ -151,7 +151,7 @@ export function InsuranceVerificationsTableV2({
                     <Button
                       size="xs"
                       variant="ghost"
-                      className="-my-1.5 -ml-2.5 text-muted-foreground"
+                      className="-my-1.5 text-muted-foreground"
                       onClick={() => onAttach(v.id)}
                     >
                       <Link2 className="h-3.5 w-3.5" />

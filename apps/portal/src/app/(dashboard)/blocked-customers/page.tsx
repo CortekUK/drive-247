@@ -757,7 +757,11 @@ const BlockedCustomers = () => {
                           .map((customer) => (
                             <div
                               key={customer.id}
-                              className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
+                              className={
+                                v2Chrome
+                                  ? "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-2 text-sm hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] hover:text-accent-foreground"
+                                  : "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
+                              }
                               onMouseDown={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();

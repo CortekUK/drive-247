@@ -1,4 +1,4 @@
-import { LIMITS, emptySlide, type AnnouncementSlide, type Audience, type Blocking, type AnnouncementKind } from '@/lib/announcements/contract';
+import { LIMITS, emptySlide, type AnnouncementSlide } from '@/lib/announcements/contract';
 
 // ─── Slides with stable client keys ──────────────────────────────────────────
 //
@@ -56,14 +56,10 @@ export function appendSlide(state: KeyedSlides, key: string): KeyedSlides {
 }
 
 // ─── Confirmations ───────────────────────────────────────────────────────────
-
-/**
- * An active hard system announcement for All tenants blocks every tenant's
- * portal, so saving one or switching one on asks first (spec §3.7).
- */
-export function blocksEveryTenant(row: { kind: AnnouncementKind; blocking: Blocking; audience: Audience; is_active: boolean }): boolean {
-  return row.kind === 'system' && row.blocking === 'hard' && row.audience === 'all' && row.is_active;
-}
+//
+// The "every tenant" question (saving or switching on an active system
+// announcement for All tenants, soft or hard) lives in
+// lib/announcements/all-tenants-confirm.ts.
 
 // ─── Radio groups (roving tab stop + arrow keys) ─────────────────────────────
 

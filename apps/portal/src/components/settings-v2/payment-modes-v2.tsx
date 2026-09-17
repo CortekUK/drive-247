@@ -30,7 +30,7 @@
 import { useState, type ReactNode } from "react";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui-v2/select";
 import { SettingsPanel, SettingsRow } from "@/components/settings-v2/settings-kit";
 import {
   formatSettingsNumber,

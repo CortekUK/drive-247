@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { isLeanTenant } from '@/lib/lean-areas';
+import { readTenantOnV2ById } from '@/lib/portal-tenant';
 
 const BOLDSIGN_BASE_URL = process.env.BOLDSIGN_BASE_URL || 'https://api.boldsign.com';
 
@@ -67,7 +68,13 @@ export async function GET(request: NextRequest) {
                 .eq('id', agreement.tenant_id)
                 .single();
             // Lean tenants are always live; everyone else keeps the column.
-            if (isLeanTenant(tenant?.slug)) {
+            // `portal_experience` is read in a query of its OWN rather than added
+            // to the select above: if that column is not yet readable, Postgres
+            // refuses the WHOLE row, `boldsign_mode` comes back undefined, and
+            // every tenant on `live` would silently fall back to the sandbox key
+            // and 404 its own signed document.
+            const onV2 = await readTenantOnV2ById(supabase, agreement.tenant_id);
+            if (isLeanTenant(tenant?.slug, onV2)) {
                 boldsignMode = 'live';
             } else if (tenant?.boldsign_mode) {
                 boldsignMode = tenant.boldsign_mode as 'test' | 'live';

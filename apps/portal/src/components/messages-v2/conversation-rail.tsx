@@ -67,7 +67,7 @@ function Row({
       href={`/messages/${channel.id}`}
       aria-current={selected ? "true" : undefined}
       className={`relative flex items-center gap-3 px-3 py-2.5 transition-colors ${
-        selected ? "bg-primary/[0.07]" : "hover:bg-accent/50"
+        selected ? "bg-primary/[0.07]" : "hover:bg-[hsl(var(--v2-hover,var(--accent)_/_0.5))]"
       }`}
     >
       {/* The selected marker is an edge, not a fill: a filled row would compete

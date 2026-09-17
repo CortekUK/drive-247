@@ -289,7 +289,9 @@ export function TraxComposer({
                   className={cn(
                     "flex size-8 items-center justify-center rounded-full text-muted-foreground transition-colors",
                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                    canAttach ? "hover:bg-muted hover:text-foreground" : "cursor-not-allowed opacity-50",
+                    // --v2-hover is the purple tint inside .v2-theme and undefined outside it,
+                    // where this falls back to exactly the old muted hover.
+                    canAttach ? "hover:bg-[hsl(var(--v2-hover,var(--muted)))] hover:text-foreground" : "cursor-not-allowed opacity-50",
                   )}
                 >
                   <Plus className="size-[18px]" aria-hidden />

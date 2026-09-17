@@ -235,37 +235,46 @@ function spaceBelow(el: HTMLElement): number {
  * wrong for all of them. The box's top is taken in document coordinates, so the
  * cap does not move as the page scrolls, and it never depends on the box's own
  * height, so applying it cannot feed back into the next measurement. It is
- * re-measured when the window resizes, when crossing `md`, and when any
- * ancestor changes size (content above growing, rows arriving). Never below
- * LIST_FILL_MIN_HEIGHT, so a short window still shows a usable list and the
- * page scrolls instead.
+ * re-measured when the window resizes and when any ancestor changes size
+ * (content above growing, rows arriving). Never below LIST_FILL_MIN_HEIGHT, so
+ * a short window still shows a usable list and the page scrolls instead.
+ *
+ * Nothing is measured or observed below `md`: the width is watched on its own,
+ * and the measuring effect only arms once it is wide.
  *
  * `enabled` must turn true in the render that mounts the element `ref` points
  * at: the measurement runs in a layout effect keyed on it, so a box that mounts
  * later with `enabled` already true is never measured.
  */
 export function useViewportFillCap(ref: RefObject<HTMLElement | null>, enabled: boolean): number | undefined {
+  const [wide, setWide] = useState(false);
   const [cap, setCap] = useState<number | undefined>(undefined);
 
   useLayoutEffect(() => {
+    if (!enabled || typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      setWide(false);
+      return;
+    }
+    const media = window.matchMedia(FILL_VIEWPORT_MEDIA);
+    const sync = () => setWide(media.matches);
+    sync();
+    media.addEventListener?.("change", sync);
+    return () => media.removeEventListener?.("change", sync);
+  }, [enabled]);
+
+  useLayoutEffect(() => {
     const el = ref.current;
-    if (!enabled || !el || typeof window === "undefined") {
+    if (!enabled || !wide || !el) {
       setCap(undefined);
       return;
     }
-    const media = typeof window.matchMedia === "function" ? window.matchMedia(FILL_VIEWPORT_MEDIA) : null;
     const measure = () => {
-      if (!media?.matches) {
-        setCap(undefined);
-        return;
-      }
       const top = el.getBoundingClientRect().top + window.scrollY;
       setCap(Math.max(LIST_FILL_MIN_HEIGHT, Math.floor(window.innerHeight - top - spaceBelow(el))));
     };
     measure();
 
     window.addEventListener("resize", measure);
-    media?.addEventListener?.("change", measure);
     let observer: ResizeObserver | undefined;
     if (typeof ResizeObserver !== "undefined") {
       observer = new ResizeObserver(() => measure());
@@ -275,10 +284,9 @@ export function useViewportFillCap(ref: RefObject<HTMLElement | null>, enabled: 
     }
     return () => {
       window.removeEventListener("resize", measure);
-      media?.removeEventListener?.("change", measure);
       observer?.disconnect();
     };
-  }, [ref, enabled]);
+  }, [ref, enabled, wide]);
 
   return cap;
 }
@@ -308,8 +316,8 @@ export function ListTable({
   /**
    * From `md` up, cap the body at the room left in the window under the table
    * (see `useViewportFillCap`) instead of 520px, and keep a scroll that reaches
-   * the last row from moving the page. For a page whose list is the screen:
-   * rentals, vehicles, customers.
+   * the last row from moving the page. For a page whose list is the screen
+   * (vehicles, customers; rentals does the same in its own copy).
    */
   fillViewport?: boolean;
   children: ReactNode;
@@ -357,27 +365,20 @@ export function ListTableHeader({ children }: { children: ReactNode }) {
   );
 }
 
-/** @deprecated v2 lists do not sort. Kept only so `ListHead`'s old `sort` prop still type-checks. */
-export type ListSortDirection = "asc" | "desc" | null;
-
 /**
  * A column name. Pass `className` for its width (`w-[20%]`), or `text-right`
  * for a trailing actions column.
  *
  * Plain text, never a sort control: every v2 list shows its rows newest added
- * first and the operator cannot re-order them (team lead, Sep 2026). `sort` is
- * still accepted so a call site not yet cleaned up keeps compiling, and it is
- * ignored: no button, no arrow, no `aria-sort`.
+ * first and the operator cannot re-order them (team lead, Sep 2026). No button,
+ * no arrow, no `aria-sort`.
  */
 export function ListHead({
   className,
   children,
-  sort: _ignoredSort,
   ...props
 }: Omit<ComponentProps<"th">, "children"> & {
   children?: ReactNode;
-  /** @deprecated Ignored. v2 lists do not sort; remove it from the call site. */
-  sort?: { direction: ListSortDirection; onSort: () => void };
 }) {
   return (
     <TableHead className={cn(LIST_CLASSES.head, className)} {...props}>

@@ -14,6 +14,13 @@
  * Migration-free by design: a theme is a bundle of hex values written into
  * branding columns that already exist on `tenants`, and the active preset is
  * derived by matching those colours back against the preset list.
+ *
+ * TWO RENDERS. Every tenant but the v2 canary gets `AppearanceSettings` below,
+ * exactly as before. Northwind (v2) gets "Branding": the same hooks gate on the
+ * real branding row and the manager's permissions, then mount
+ * `AppearanceFormV2` keyed on the tenant, which seeds its form once from that
+ * row. Portal name, Brand colour and Logos in that order, the kit's page
+ * header, sticky save bar and leave dialog, and five named brand colours.
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -42,6 +49,7 @@ import { FaviconUpload } from '@/components/settings/favicon-upload';
 import { BrandSwatches } from '@/components/settings/appearance/brand-swatches';
 import { BrandColorField } from '@/components/settings/appearance/brand-color-field';
 import { LogoStudio } from '@/components/settings/appearance/logo-studio';
+import { LogosV2 } from '@/components/settings/appearance/logos-v2';
 
 import { useTenantBranding, type TenantBranding } from '@/hooks/use-tenant-branding';
 import { useTenant } from '@/contexts/TenantContext';
@@ -49,23 +57,32 @@ import { useV2 } from '@/lib/v2-context';
 import { useManagerPermissions } from '@/hooks/use-manager-permissions';
 import { useThemePreview } from '@/hooks/use-theme-preview';
 import { toast } from '@/hooks/use-toast';
-import { useUnsavedChangesWarning } from '@/hooks/use-unsaved-changes-warning';
-import { UnsavedChangesDialog } from '@/components/shared/unsaved-changes-dialog';
+import { useLeaveGuardV2 } from '@/hooks/use-leave-guard-v2';
 import {
   DEFAULT_PRESET_ID,
   getPreset,
+  V2_BRAND_PRESETS,
+  V2_DEFAULT_BRAND_COLOR,
   type ThemePalette,
 } from '@/lib/appearance/presets';
-import { shade } from '@/lib/appearance/color';
+import { hexToHsl, isUsableV2Brand, sameColor, shade } from '@/lib/appearance/color';
 import {
   describeSaveError,
   SettingsLoadError,
   SettingsReadOnlyFieldset,
+  SettingsReadOnlyNotice,
   SettingsSaveState,
-  useSettingsSaveStatus,
-  useWarnOnUnsavedChanges,
 } from '@/components/settings-v2/section-states';
-import { ScopeIf, isHexColor6, useImageLoadFailed } from '@/components/settings-v2/business-settings-states';
+import {
+  SettingsPageHeader,
+  SettingsPageSaveProvider,
+  SettingsPanel,
+  SettingsSection,
+  SettingsStickySaveBar,
+} from '@/components/settings-v2/settings-kit';
+import { settingsSectionId } from '@/components/settings-v2/settings-shell-state';
+import { LeaveDialogV2 } from '@/components/settings-v2/leave-dialog-v2';
+import { isHexColor6 } from '@/components/settings-v2/business-settings-states';
 
 /** The shape this screen edits — a palette plus the identity fields. */
 interface AppearanceForm extends ThemePalette {
@@ -99,12 +116,17 @@ function paletteFromBrandColor(hex: string): ThemePalette {
   };
 }
 
-/** Server branding → the shape this screen edits, with defaults filled in. */
+/**
+ * Server branding → the shape this screen edits, with defaults filled in.
+ * `fallbackColor` is the brand colour when none is stored: Drive Gold for v1,
+ * Indigo for v2.
+ */
 function formFromBranding(
   branding: TenantBranding,
-  companyName?: string | null
+  companyName?: string | null,
+  fallbackColor = '#C6A256'
 ): AppearanceForm {
-  const base = paletteFromBrandColor(branding.primary_color || '#C6A256');
+  const base = paletteFromBrandColor(branding.primary_color || fallbackColor);
   return {
     primary_color: branding.primary_color || base.primary_color,
     secondary_color: branding.secondary_color || base.secondary_color,
@@ -137,13 +159,12 @@ export function AppearanceSettings() {
   const { tenant } = useTenant();
   const { branding, updateBranding, isUpdating } = useTenantBranding();
   const { canEditSettings, isLoading: permissionsLoading } = useManagerPermissions();
-  // v2 chrome (northwind only; fails closed to v1). Used only to put this page's
-  // header on the sidebar switch's row at md; every other tenant renders the
-  // classes it did before. Above the early returns, as every hook must be.
+  // v2 chrome (northwind only; fails closed to v1): the v2 page below, after
+  // every hook, as hooks must be.
   const v2Chrome = useV2('chrome');
-  // v2 states (northwind): wait for the real branding row before hydrating. The
-  // placeholder is tenant-context defaults, and a snapshot of it would let Save
-  // null the live logo and favicon. A failed read offers a retry instead.
+  // v2 states (northwind): wait for the real branding row before mounting the
+  // form. The placeholder is tenant-context defaults, and a snapshot of it would
+  // let Save null the live logo and favicon. A failed read offers a retry instead.
   const {
     hasBrandingData,
     error: brandingError,
@@ -175,27 +196,23 @@ export function AppearanceSettings() {
    * form from values the tenant had not saved.
    */
   const savedRef = useRef<AppearanceForm | null>(null);
-  // v2: the tenant the form was hydrated for. On mount both effects below run
-  // in order, so the "tenant switched" reset used to undo the first hydration
-  // (loaded back to false, savedRef back to null) and, with the branding
-  // already cached, nothing re-ran it: the page sat on its skeleton.
-  const v2HydratedTenant = useRef<string | null>(null);
 
   // Hydrate once per tenant. Deliberately NOT keyed on `branding`, which now
-  // mutates during preview.
+  // mutates during preview. v1 only: v2's form seeds itself from `initial`.
   useEffect(() => {
+    if (v2Chrome) return;
     if (loaded || !branding) return;
-    if (v2Chrome && !hasBrandingData) return;
     const next = formFromBranding(branding, tenant?.company_name);
     savedRef.current = next;
     setForm(next);
     setLoaded(true);
-    v2HydratedTenant.current = tenant?.id ?? null;
   }, [branding, loaded, tenant?.company_name]);
 
-  // Re-hydrate when the tenant is switched underneath us.
+  // Re-hydrate when the tenant is switched underneath us. v1 only: on v2 a new
+  // tenant remounts the keyed form instead. (Both effects running in one flush
+  // on mount is what left v2 on its skeleton when branding was already cached.)
   useEffect(() => {
-    if (v2Chrome && v2HydratedTenant.current !== null && v2HydratedTenant.current === (tenant?.id ?? null)) return;
+    if (v2Chrome) return;
     setLoaded(false);
     savedRef.current = null;
   }, [tenant?.id]);
@@ -216,26 +233,37 @@ export function AppearanceSettings() {
     );
   }, [form, loaded]);
 
-  // v2: the browser's leave prompt while a try-on is unsaved (unmounting restores
-  // the saved theme, so leaving would silently drop it), a note when the stored
-  // favicon file is gone, and a half-typed hex that must not be saved.
-  useWarnOnUnsavedChanges(v2Chrome && dirty && !readOnly);
-  const faviconFailed = useImageLoadFailed(v2Chrome ? form.favicon_url : null);
-  const v2HexInvalid = v2Chrome && !isHexColor6(form.light_primary_color);
-
-  // v2: a failed save stays on screen beside Save until the next edit (the
-  // toast disappears), and a second click while a save is in flight is ignored.
-  const [v2SaveError, setV2SaveError] = useState<unknown>(null);
-  const v2SaveInFlight = useRef(false);
-  useEffect(() => {
-    if (v2Chrome) setV2SaveError(null);
-  }, [form]);
-  // Inert for v1 (never dirty, never pending), so it adds no renders or timers there.
-  const v2SaveStatus = useSettingsSaveStatus({
-    isDirty: v2Chrome && dirty,
-    isPending: v2Chrome && isUpdating,
-    error: v2SaveError,
-  });
+  // v2 (northwind): Branding. Nothing below this point runs for it.
+  if (v2Chrome) {
+    // Wait for the real branding row and a manager's permissions (or a view-only
+    // manager sees enabled controls for a moment before they lock), then mount
+    // the form once per tenant.
+    if (!tenant?.id || !hasBrandingData || permissionsLoading) {
+      if (brandingError && !hasBrandingData) {
+        return (
+          <div className={V2_PAGE_CLASS}>
+            <SettingsPageHeader title={V2_PAGE_TITLE} description={<V2PageDescription />} />
+            <SettingsLoadError
+              thing="your branding"
+              error={brandingError}
+              onRetry={refetchBranding}
+              retrying={isFetchingBranding}
+            />
+          </div>
+        );
+      }
+      return <AppearanceSkeletonV2 />;
+    }
+    return (
+      <AppearanceFormV2
+        key={tenant.id}
+        tenantId={tenant.id}
+        companyName={tenant.company_name}
+        initial={formFromBranding(branding, tenant.company_name, V2_DEFAULT_BRAND_COLOR)}
+        readOnly={readOnly}
+      />
+    );
+  }
 
   /**
    * Apply a palette to the form *and* to the running portal, so the tenant sees
@@ -247,11 +275,6 @@ export function AppearanceSettings() {
   };
 
   const applyCustomColor = (hex: string) => {
-    if (v2Chrome && !isHexColor6(hex)) {
-      // Still being typed: keep it in the field, never preview or derive a palette from it.
-      setForm((prev) => ({ ...prev, light_primary_color: hex }));
-      return;
-    }
     applyPalette(paletteFromBrandColor(hex));
   };
 
@@ -267,19 +290,6 @@ export function AppearanceSettings() {
   };
 
   const handleSave = async () => {
-    if (v2Chrome && !isHexColor6(form.light_primary_color)) {
-      toast({
-        title: 'Finish the brand colour first',
-        description: 'Enter a 6-digit hex code such as #C6A256, or pick a swatch.',
-        variant: 'destructive',
-      });
-      return false;
-    }
-    if (v2Chrome) {
-      if (v2SaveInFlight.current) return false;
-      v2SaveInFlight.current = true;
-      setV2SaveError(null);
-    }
     try {
       await updateBranding({
         primary_color: form.primary_color,
@@ -298,7 +308,6 @@ export function AppearanceSettings() {
         dark_logo_url: form.dark_logo_url,
         favicon_url: form.favicon_url,
       });
-      v2SaveInFlight.current = false;
       // The previewed palette is server truth now — advance both baselines, or
       // Save stays enabled and a later Discard resurrects the old colours.
       savedRef.current = { ...form };
@@ -309,148 +318,18 @@ export function AppearanceSettings() {
       });
       return true;
     } catch (error) {
-      v2SaveInFlight.current = false;
-      if (v2Chrome) setV2SaveError(error ?? new Error('Save failed'));
       toast({
         title: "Couldn't save appearance",
-        description: v2Chrome ? describeSaveError(error) : error instanceof Error ? error.message : 'Please try again.',
+        description: error instanceof Error ? error.message : 'Please try again.',
         variant: 'destructive',
       });
       return false;
     }
   };
 
-  // v2: leaving mid try-on (Back, the sidebar, the browser's back button) asks
-  // first. Unmounting restores the saved theme, so leaving used to drop the
-  // try-on without a word. "Save & Leave" saves and stays put if that fails.
-  const v2Leave = useUnsavedChangesWarning({
-    hasChanges: v2Chrome && dirty && !readOnly,
-    onSave: async () => (await handleSave()) === true,
-  });
-
-  if (v2Chrome && !loaded && brandingError && !hasBrandingData) {
+  if (!loaded) {
     return (
-      <div className="space-y-6 pb-16 md:pt-7">
-        <div className="space-y-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="-ml-2 h-7 gap-1.5 text-muted-foreground"
-            onClick={() => router.push('/settings')}
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            Settings
-          </Button>
-          <h1 className="font-heading text-2xl font-medium tracking-tight">Appearance</h1>
-        </div>
-        <SettingsLoadError
-          thing="your branding"
-          error={brandingError}
-          onRetry={refetchBranding}
-          retrying={isFetchingBranding}
-        />
-      </div>
-    );
-  }
-
-  // v2: also wait for a manager's permissions, or a view-only manager sees
-  // enabled controls for a moment before they lock.
-  if (!loaded || (v2Chrome && permissionsLoading)) {
-    if (v2Chrome) {
-      // Shaped like the page, line box for line box, so nothing moves when it
-      // loads: the header (28px Back, 32px title, a description of two lines, or
-      // three on a phone) with its two actions, which wrap below it at the same
-      // widths the loaded ones do, then a separator before each of the two
-      // sections. The sr-only label goes last: as the first child it made the
-      // header a later sibling, so space-y-8 pushed it 32px down (Back at y=110,
-      // not the loaded button's 78), and the sections landed 49-97px short.
-      const line = (width: string) => (
-        <div className="flex h-5 items-center">
-          <Skeleton className={`h-3.5 ${width} rounded-full`} />
-        </div>
-      );
-      const upload = (
-        <div className="space-y-3">
-          <Skeleton className="h-3.5 w-16 rounded-full" />
-          <Skeleton className="h-3 w-2/3 rounded-full" />
-          <Skeleton className="h-[166px] w-full rounded-2xl" />
-        </div>
-      );
-      return (
-        <div role="status" aria-busy="true" className="space-y-8 pb-16 md:pt-7">
-          <div aria-hidden="true" className="flex flex-wrap items-start justify-between gap-4">
-            <div className="w-[42rem] max-w-full space-y-1">
-              <Skeleton className="h-7 w-[104px] rounded-full" />
-              <div className="flex h-8 items-center">
-                <Skeleton className="h-6 w-40 rounded-full" />
-              </div>
-              <div>
-                {line('w-full')}
-                {line('w-2/3')}
-                <div className="sm:hidden">{line('w-1/2')}</div>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <Skeleton className="h-8 w-[88px] rounded-full" />
-              <Skeleton className="h-8 w-[138px] rounded-full" />
-            </div>
-          </div>
-          <Separator />
-          <div aria-hidden="true" className="grid gap-8 lg:grid-cols-[304px_minmax(0,1fr)]">
-            <div>
-              <div className="flex h-6 items-center">
-                <Skeleton className="h-4 w-28 rounded-full" />
-              </div>
-              {line('w-full')}
-              {line('w-3/4')}
-            </div>
-            <div className="max-w-xl space-y-6">
-              <div className="space-y-2.5">
-                <div className="flex flex-wrap items-center gap-2.5">
-                  {Array.from({ length: 13 }).map((_, i) => (
-                    <Skeleton key={i} className="size-9 rounded-full" />
-                  ))}
-                </div>
-                <div>
-                  <div className="flex h-4 items-center">
-                    <Skeleton className="h-3 w-3/4 rounded-full" />
-                  </div>
-                  <div className="flex h-4 items-center sm:hidden">
-                    <Skeleton className="h-3 w-1/3 rounded-full" />
-                  </div>
-                </div>
-              </div>
-              <Skeleton className="h-[39px] w-full rounded-2xl" />
-            </div>
-          </div>
-          <Separator />
-          <div aria-hidden="true" className="grid gap-8 lg:grid-cols-[304px_minmax(0,1fr)]">
-            <div>
-              <div className="flex h-6 items-center">
-                <Skeleton className="h-4 w-28 rounded-full" />
-              </div>
-              {line('w-4/5')}
-              <div className="sm:hidden">{line('w-1/3')}</div>
-            </div>
-            <div className="max-w-xl space-y-6">
-              <div className="space-y-2">
-                <Skeleton className="h-3.5 w-24 rounded-full" />
-                <Skeleton className="h-9 w-full rounded-3xl" />
-                <Skeleton className="h-4 w-1/2 rounded-full" />
-              </div>
-              {upload}
-              {upload}
-            </div>
-          </div>
-          <span className="sr-only">Loading appearance</span>
-        </div>
-      );
-    }
-    // v2 (switch row alignment): the same 28px top as the loaded header below, so
-    // the skeleton starts where the Back button will (y=78 at md) rather than at
-    // y=54, under the 64px top bar.
-    return (
-      <div className={`space-y-6 p-1${v2Chrome ? ' md:pt-7' : ''}`}>
+      <div className="space-y-6 p-1">
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-4 w-96" />
         <Skeleton className="h-64 w-full" />
@@ -458,11 +337,8 @@ export function AppearanceSettings() {
     );
   }
 
-  // v2 (switch row alignment): at md <main> starts at y=50. The header's first
-  // line is the 28px Back button, so 28px of top padding centres it at
-  // 50 + 28 + 14 = 92, the sidebar switch's row. It sat at y=50, under the top bar.
   return (
-    <div className={`space-y-8 pb-16${v2Chrome ? ' md:pt-7' : ''}`}>
+    <div className="space-y-8 pb-16">
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-1">
@@ -476,21 +352,10 @@ export function AppearanceSettings() {
             Settings
           </Button>
           <h1 className="text-2xl font-medium tracking-tight">Appearance</h1>
-          {v2Chrome ? (
-            <p className="max-w-2xl text-sm text-muted-foreground">
-              Choose how your portal looks for you and your team. Your customers&apos;
-              booking site is styled separately in{' '}
-              <Link href="/cms/site-settings" className="font-medium text-primary underline-offset-4 hover:underline dark:text-indigo-300">
-                Website → Site settings
-              </Link>
-              .
-            </p>
-          ) : (
           <p className="max-w-2xl text-sm text-muted-foreground">
             Choose how your portal looks for you and your team. Your customers&apos;
             booking site is styled separately under CMS.
           </p>
-          )}
         </div>
 
         <div className="flex items-center gap-2">
@@ -522,7 +387,7 @@ export function AppearanceSettings() {
           <Button
             size="sm"
             onClick={handleSave}
-            disabled={readOnly || isUpdating || !dirty || v2HexInvalid}
+            disabled={readOnly || isUpdating || !dirty}
             className="gap-1.5"
           >
             {isUpdating ? (
@@ -534,11 +399,6 @@ export function AppearanceSettings() {
           </Button>
         </div>
       </div>
-
-      {/* Shown here only when the sticky bar (which carries the same error) is not. */}
-      {v2Chrome && v2SaveStatus === 'error' && !(dirty && !readOnly) && (
-        <SettingsSaveState status="error" error={v2SaveError} onRetry={handleSave} />
-      )}
 
       {readOnly && (
         <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2.5 text-xs text-amber-700 dark:text-amber-400">
@@ -568,11 +428,6 @@ export function AppearanceSettings() {
             onChange={applyCustomColor}
             disabled={readOnly}
           />
-          {v2HexInvalid && (
-            <p role="alert" className="text-xs text-destructive">
-              That isn&apos;t a full colour code yet. Use # and 6 characters, like #C6A256.
-            </p>
-          )}
         </div>
       </section>
 
@@ -593,12 +448,6 @@ export function AppearanceSettings() {
             <Input
               id="app_name"
               value={form.app_name}
-              maxLength={v2Chrome ? 60 : undefined}
-              // v2 dark: --input carries its own alpha there, so bg-input/50 is invalid
-              // and the field had no fill; the name floated with no box around it.
-              className={v2Chrome ? 'dark:bg-muted' : undefined}
-              // v2: a long name scrolls inside the box; hovering shows it whole.
-              title={v2Chrome && form.app_name ? form.app_name : undefined}
               disabled={readOnly}
               placeholder={tenant?.company_name || 'Your company'}
               onChange={(e) => setForm((p) => ({ ...p, app_name: e.target.value }))}
@@ -608,17 +457,6 @@ export function AppearanceSettings() {
             </p>
           </div>
 
-          <ScopeIf
-            on={v2Chrome}
-            wrap={(children) => (
-              <SettingsReadOnlyFieldset
-                readOnly={readOnly}
-                className={readOnly ? 'pointer-events-none space-y-6' : 'space-y-6'}
-              >
-                {children}
-              </SettingsReadOnlyFieldset>
-            )}
-          >
           <LogoStudio
             logoUrl={form.logo_url}
             darkLogoUrl={form.dark_logo_url}
@@ -627,44 +465,23 @@ export function AppearanceSettings() {
             lightSidebar={form.light_secondary_color}
             darkSidebar={form.dark_secondary_color}
             disabled={readOnly}
-            deferStorageDelete={v2Chrome}
+            deferStorageDelete={false}
           />
 
           <div className="space-y-2">
-            {/* v2: FaviconUpload already renders the "Favicon" label and its help line. */}
-            {!v2Chrome && (
             <Label>Favicon</Label>
-            )}
             <FaviconUpload
               currentFaviconUrl={form.favicon_url || undefined}
               onFaviconChange={(url) => setForm((p) => ({ ...p, favicon_url: url }))}
-              deferStorageDelete={v2Chrome}
-              v2States={v2Chrome}
+              deferStorageDelete={false}
+              v2States={false}
             />
-            {!v2Chrome && (
             <p className="text-xs text-muted-foreground">
               The small icon on your browser tab.
             </p>
-            )}
-            {faviconFailed && (
-              <p role="alert" className="text-xs text-destructive">
-                We couldn&apos;t load your favicon file. Upload it again to replace it.
-              </p>
-            )}
           </div>
-          </ScopeIf>
         </div>
       </section>
-
-      {v2Chrome && (
-        <UnsavedChangesDialog
-          open={v2Leave.isDialogOpen}
-          onCancel={v2Leave.cancelLeave}
-          onDiscard={v2Leave.confirmLeave}
-          onSave={v2HexInvalid ? undefined : v2Leave.saveAndLeave}
-          isSaving={v2Leave.isSaving}
-        />
-      )}
 
       {/* Sticky save affordance so a tenant deep in the page never loses changes.
           Its right edge stops at `--trax-offset` — the width the open Trax panel
@@ -672,11 +489,6 @@ export function AppearanceSettings() {
           and Discard stay beside the panel instead of under it. */}
       {dirty && !readOnly && (
         <div className="fixed bottom-0 left-0 right-[var(--trax-offset,0px)] z-40 border-t bg-background/95 px-4 py-3 backdrop-blur transition-[right] duration-200 ease-linear motion-reduce:transition-none supports-[backdrop-filter]:bg-background/80">
-          {v2Chrome && v2SaveStatus === 'error' && (
-            <div className="mx-auto mb-2 max-w-5xl">
-              <SettingsSaveState status="error" error={v2SaveError} onRetry={handleSave} />
-            </div>
-          )}
           <div className="mx-auto flex max-w-5xl items-center justify-between gap-4">
             <span className="text-sm text-muted-foreground">
               You&apos;re trying this out — nobody else sees it until you save.
@@ -690,7 +502,7 @@ export function AppearanceSettings() {
               >
                 Discard
               </Button>
-              <Button size="sm" onClick={handleSave} disabled={isUpdating || v2HexInvalid} className="gap-1.5">
+              <Button size="sm" onClick={handleSave} disabled={isUpdating} className="gap-1.5">
                 {isUpdating ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 ) : (
@@ -702,6 +514,428 @@ export function AppearanceSettings() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* v2 (northwind): Branding                                                    */
+/* -------------------------------------------------------------------------- */
+
+/** The Settings index card that opens this page is called Branding, so the page is too. */
+const V2_PAGE_TITLE = 'Branding';
+// md:pt-[26px]: no breadcrumb or Back button, so the header starts with the 32px
+// title, centred on the sidebar switch's row (50 + 26 + 16 = 92), as on every
+// other v2 settings page.
+const V2_PAGE_CLASS = 'w-full max-w-[1160px] space-y-8 pb-16 md:pt-[26px]';
+
+function V2PageDescription() {
+  return (
+    <>
+      Your portal name, brand colour and logos. Your customers&apos; booking site keeps its own
+      colours in{' '}
+      <Link href="/cms/site-settings" className="font-medium text-primary underline-offset-4 hover:underline dark:text-[hsl(var(--v2-link,var(--primary)))]">
+        Website → Site settings
+      </Link>
+      .
+    </>
+  );
+}
+
+/**
+ * A genuine change: the colours a person perceives, the name and the two logos.
+ * `dark_logo_url` is not here: v2 has no control for it, and Save leaves it to
+ * the logo sync in `useTenantBranding`.
+ */
+function appearanceFormDiffers(form: AppearanceForm, saved: AppearanceForm): boolean {
+  return (
+    form.primary_color !== saved.primary_color ||
+    form.light_primary_color !== saved.light_primary_color ||
+    form.dark_primary_color !== saved.dark_primary_color ||
+    form.secondary_color !== saved.secondary_color ||
+    form.accent_color !== saved.accent_color ||
+    form.app_name !== saved.app_name ||
+    form.logo_url !== saved.logo_url ||
+    form.favicon_url !== saved.favicon_url
+  );
+}
+
+/**
+ * The v2 page. Mounted only once the real branding row and the permissions are
+ * in, and keyed on the tenant, so its form is seeded exactly once from
+ * `initial` and a tenant switch starts a fresh one. No hydrate or reset effect:
+ * the pair of them is what left the page on its skeleton until a refresh.
+ */
+function AppearanceFormV2({
+  tenantId,
+  companyName,
+  initial,
+  readOnly,
+}: {
+  tenantId: string;
+  companyName?: string | null;
+  initial: AppearanceForm;
+  readOnly: boolean;
+}) {
+  const { updateBranding, isUpdating } = useTenantBranding();
+  // Try-on: the whole portal repaints with the chosen colour before it is saved,
+  // and goes back to the saved one on Reset, "Don't save" or leaving.
+  const { preview: previewTheme, restore: restoreTheme, commit: commitTheme } = useThemePreview();
+
+  const [form, setForm] = useState<AppearanceForm>(() => initial);
+  /** What is saved. A ref, so a try-on repainting the branding cache never moves it. */
+  const savedRef = useRef<AppearanceForm>(initial);
+  // Re-renders once a save lands, so `dirty` is recomputed against the new baseline.
+  const [, setSavedVersion] = useState(0);
+
+  // Why the last save failed: beside Save (and in the leave dialog) until the
+  // next edit, Reset, or the leave dialog closing. The toast disappears.
+  const [saveError, setSaveError] = useState<unknown>(null);
+  const saveInFlight = useRef(false);
+  const [logosBusy, setLogosBusy] = useState(false);
+  // Reset remounts the logo cards, dropping a pending "Fit into a square" or an inline error.
+  const [logosVersion, setLogosVersion] = useState(0);
+
+  const dirty = !readOnly && appearanceFormDiffers(form, savedRef.current);
+  const hexInvalid = !isHexColor6(form.light_primary_color);
+  /**
+   * A finished colour the v2 theme cannot carry: near-black, near-white or grey
+   * (`isUsableV2Brand`). It saves like any other, but the portal keeps the
+   * default Indigo, so say so rather than leave the tenant tapping a colour
+   * that changes nothing. None of the five presets land here.
+   */
+  const brandHsl = hexInvalid ? null : hexToHsl(form.light_primary_color);
+  const brandUnusable = !!brandHsl && !isUsableV2Brand(brandHsl);
+  const isDefaultColor =
+    sameColor(form.light_primary_color, V2_DEFAULT_BRAND_COLOR) && sameColor(form.primary_color, V2_DEFAULT_BRAND_COLOR);
+
+  useEffect(() => {
+    setSaveError(null);
+  }, [form]);
+
+  /** Put a palette in the form and on the running portal at once. */
+  const applyPalette = (palette: ThemePalette) => {
+    setForm((prev) => ({ ...prev, ...palette }));
+    previewTheme(palette);
+  };
+
+  const applyBrandColor = (hex: string) => {
+    if (!isHexColor6(hex)) {
+      // Still being typed: keep it in the field, never preview or derive a palette from it.
+      setForm((prev) => ({ ...prev, light_primary_color: hex }));
+      return;
+    }
+    applyPalette(paletteFromBrandColor(hex));
+  };
+
+  const restoreDefaultColor = () => applyPalette(paletteFromBrandColor(V2_DEFAULT_BRAND_COLOR));
+
+  /** Reset and "Don't save": back to what is saved. Never to the defaults. */
+  const discardChanges = () => {
+    restoreTheme();
+    setForm(savedRef.current);
+    setSaveError(null);
+    setLogosVersion((v) => v + 1);
+  };
+
+  const handleSave = async (): Promise<boolean> => {
+    if (readOnly) return false;
+    if (!isHexColor6(form.light_primary_color)) {
+      toast({
+        title: 'Finish the brand colour first',
+        description: `Enter a 6-character colour code such as ${V2_DEFAULT_BRAND_COLOR}, or pick a colour.`,
+        variant: 'destructive',
+      });
+      return false;
+    }
+    if (logosBusy) {
+      toast({
+        title: 'Your logo is still uploading',
+        description: 'Wait for it to finish, then save your changes.',
+      });
+      return false;
+    }
+    if (saveInFlight.current) return false;
+    saveInFlight.current = true;
+    setSaveError(null);
+    const values = form;
+    try {
+      await updateBranding({
+        primary_color: values.primary_color,
+        secondary_color: values.secondary_color,
+        accent_color: values.accent_color,
+        light_primary_color: values.light_primary_color,
+        light_secondary_color: values.light_secondary_color,
+        light_accent_color: values.light_accent_color,
+        light_background_color: values.light_background_color,
+        dark_primary_color: values.dark_primary_color,
+        dark_secondary_color: values.dark_secondary_color,
+        dark_accent_color: values.dark_accent_color,
+        dark_background_color: values.dark_background_color,
+        app_name: values.app_name.trim() || null,
+        // Deliberately no dark_logo_url or auth_logo_url: left out, the update
+        // keeps any that were following the old logo in step with the new one
+        // (and a deliberately different dark-mode logo untouched).
+        logo_url: values.logo_url,
+        favicon_url: values.favicon_url,
+      });
+      // The previewed palette is server truth now: advance both baselines, or
+      // Save stays enabled and a later Reset brings the old colours back.
+      savedRef.current = { ...values };
+      setSavedVersion((v) => v + 1);
+      commitTheme();
+      toast({
+        title: 'Branding saved',
+        description: 'Your portal has been updated for everyone on your team.',
+      });
+      return true;
+    } catch (error) {
+      setSaveError(error ?? new Error('Save failed'));
+      toast({
+        title: "Couldn't save branding",
+        description: describeSaveError(error),
+        variant: 'destructive',
+      });
+      return false;
+    } finally {
+      saveInFlight.current = false;
+    }
+  };
+
+  // Every way out with unsaved edits (links, the guarded router, Back and
+  // Forward, reload) asks "Save" or "Don't save" first.
+  const leave = useLeaveGuardV2({
+    enabled: !readOnly,
+    isDirty: dirty,
+    canSave: !hexInvalid && !logosBusy,
+    onSave: handleSave,
+    onDiscard: discardChanges,
+  });
+
+  const leaveWasOpen = useRef(false);
+  useEffect(() => {
+    if (leaveWasOpen.current && !leave.open) setSaveError(null);
+    leaveWasOpen.current = leave.open;
+  }, [leave.open]);
+
+  const portalNameTitleId = `${settingsSectionId('portal-name')}-title`;
+
+  return (
+    <div className={V2_PAGE_CLASS}>
+      <SettingsPageHeader title={V2_PAGE_TITLE} description={<V2PageDescription />} />
+      {readOnly && <SettingsReadOnlyNotice />}
+
+      <SettingsPageSaveProvider>
+        <SettingsReadOnlyFieldset readOnly={readOnly}>
+          <div className="space-y-10">
+            <SettingsSection
+              anchor="portal-name"
+              title="Portal name"
+              description="Appears in the browser tab and beside your logo. Up to 60 characters."
+            >
+              <SettingsPanel>
+                <div className="px-5 py-4">
+                  <Input
+                    id="app_name"
+                    aria-labelledby={portalNameTitleId}
+                    value={form.app_name}
+                    maxLength={60}
+                    // --input carries its own alpha in v2 dark, so the field's
+                    // bg-input/50 is invalid there and the box had no fill.
+                    className="max-w-md dark:bg-muted"
+                    // A long name scrolls inside the box; hovering shows it whole.
+                    title={form.app_name || undefined}
+                    placeholder={companyName || 'Your company'}
+                    onChange={(e) => setForm((p) => ({ ...p, app_name: e.target.value }))}
+                  />
+                </div>
+              </SettingsPanel>
+            </SettingsSection>
+
+            <SettingsSection
+              anchor="brand-colour"
+              title="Brand colour"
+              description="Pick a colour and your portal updates around you straight away. Nothing is saved until you press Save changes."
+              action={
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button type="button" variant="ghost" size="sm" disabled={readOnly || isDefaultColor}>
+                      <RotateCcw data-icon="inline-start" />
+                      Restore default colour
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Restore the default colour?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This sets your brand colour back to Indigo. Your portal name and logos
+                        stay as they are, and nothing is saved until you press Save changes.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={restoreDefaultColor}>Restore Indigo</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              }
+            >
+              <SettingsPanel>
+                <div className="space-y-4 px-5 py-4">
+                  <BrandSwatches value={form.light_primary_color} onChange={applyBrandColor} disabled={readOnly} />
+                  <BrandColorField value={form.light_primary_color} onChange={applyBrandColor} disabled={readOnly} />
+                  {hexInvalid && (
+                    <p role="alert" className="text-[13px] text-destructive">
+                      That isn&apos;t a full colour code yet. Use # and 6 characters, like {V2_DEFAULT_BRAND_COLOR}.
+                    </p>
+                  )}
+                  {brandUnusable && (
+                    <p role="status" className="text-[13px] text-muted-foreground">
+                      This colour is too close to black, white or grey to colour the portal, so the
+                      portal keeps the default Indigo.
+                    </p>
+                  )}
+                </div>
+              </SettingsPanel>
+            </SettingsSection>
+
+            <LogosV2
+              key={logosVersion}
+              tenantId={tenantId}
+              portalName={form.app_name.trim() || companyName || 'Your portal'}
+              faviconUrl={form.favicon_url}
+              logoUrl={form.logo_url}
+              onFaviconChange={(url) => setForm((p) => ({ ...p, favicon_url: url }))}
+              onLogoChange={(url) => setForm((p) => ({ ...p, logo_url: url }))}
+              disabled={readOnly}
+              onBusyChange={setLogosBusy}
+            />
+          </div>
+        </SettingsReadOnlyFieldset>
+      </SettingsPageSaveProvider>
+
+      {/* Last child: at the end of a short page, floating above the bottom of
+          the window on a long one. */}
+      {!readOnly && (
+        <SettingsStickySaveBar
+          dirty={dirty}
+          saving={isUpdating || leave.saving}
+          error={leave.open ? null : saveError}
+          onSave={() => void handleSave()}
+          onReset={discardChanges}
+        />
+      )}
+
+      <LeaveDialogV2
+        open={leave.open}
+        canSave={leave.canSave}
+        saving={leave.saving}
+        onSave={() => void leave.save()}
+        onDiscard={leave.discard}
+        onCancel={leave.cancel}
+        error={saveError ? <SettingsSaveState status="error" error={saveError} /> : null}
+      />
+    </div>
+  );
+}
+
+/**
+ * The v2 page before its data is in, section for section in the loaded order
+ * (Portal name, Brand colour, Logos) and at the loaded sizes, so nothing jumps
+ * when it arrives. The loading label goes last: first, it would push the header
+ * down by one `space-y-8` gap.
+ */
+function AppearanceSkeletonV2() {
+  const sectionHeading = (titleWidth: string, descriptionWidth: string, action = false) => (
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+      <div className="min-w-0 flex-1">
+        <div className="flex h-6 items-center">
+          <Skeleton className={`h-4 ${titleWidth} rounded-full`} />
+        </div>
+        <div className="mt-0.5 flex h-5 items-center">
+          <Skeleton className={`h-3.5 ${descriptionWidth} max-w-full rounded-full`} />
+        </div>
+      </div>
+      {action && <Skeleton className="h-8 w-44 shrink-0 rounded-full" />}
+    </div>
+  );
+  // The small logo's two previews stack on a phone; the large logo's stay side by side.
+  const logoCard = (previewHeight: string, previewGrid: string) => (
+    <div className="flex flex-col gap-4 rounded-xl border bg-card p-5">
+      <div>
+        <div className="flex h-5 items-center">
+          <Skeleton className="h-3.5 w-24 rounded-full" />
+        </div>
+        <div className="mt-0.5 flex h-5 items-center">
+          <Skeleton className="h-3 w-4/5 rounded-full" />
+        </div>
+      </div>
+      <div className={`grid gap-3 ${previewGrid}`}>
+        {[0, 1].map((i) => (
+          <div key={i} className="space-y-1.5">
+            <Skeleton className={`${previewHeight} w-full rounded-xl`} />
+            <div className="flex h-[16.5px] items-center">
+              <Skeleton className="h-2.5 w-16 rounded-full" />
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="flex h-4 items-center">
+        <Skeleton className="h-3 w-3/4 rounded-full" />
+      </div>
+      <Skeleton className="h-8 w-24 rounded-full" />
+    </div>
+  );
+
+  return (
+    <div role="status" aria-busy="true" className={V2_PAGE_CLASS}>
+      {/* SettingsPageHeader's boxes: the 32px title, then a description that
+          runs to two lines inside its max-w-2xl. */}
+      <div aria-hidden="true" className="space-y-1.5">
+        <div className="flex h-8 items-center">
+          <Skeleton className="h-6 w-36 rounded-full" />
+        </div>
+        <div className="max-w-2xl">
+          <div className="flex h-5 items-center">
+            <Skeleton className="h-3.5 w-full rounded-full" />
+          </div>
+          <div className="flex h-5 items-center">
+            <Skeleton className="h-3.5 w-1/3 rounded-full" />
+          </div>
+        </div>
+      </div>
+      <div aria-hidden="true" className="space-y-10">
+        <div className="space-y-3">
+          {sectionHeading('w-28', 'w-96')}
+          <div className="rounded-xl border bg-card px-5 py-4">
+            <Skeleton className="h-9 w-full max-w-md rounded-3xl" />
+          </div>
+        </div>
+        <div className="space-y-3">
+          {sectionHeading('w-28', 'w-[36rem]', true)}
+          <div className="rounded-xl border bg-card px-5 py-4">
+            <div className="flex flex-wrap items-start gap-2">
+              {V2_BRAND_PRESETS.map((preset) => (
+                <div key={preset.id} className="flex w-16 flex-col items-center gap-1.5 py-1.5">
+                  <Skeleton className="size-9 rounded-full" />
+                  <div className="flex h-4 items-center">
+                    <Skeleton className="h-3 w-10 rounded-full" />
+                  </div>
+                </div>
+              ))}
+              <Skeleton className="mt-1.5 h-9 w-24 rounded-full" />
+            </div>
+          </div>
+        </div>
+        <div className="space-y-3">
+          {sectionHeading('w-16', 'w-[34rem]')}
+          <div className="grid gap-4 lg:grid-cols-2">
+            {logoCard('h-14', 'sm:grid-cols-2')}
+            {logoCard('h-24', 'grid-cols-2')}
+          </div>
+        </div>
+      </div>
+      <span className="sr-only">Loading branding</span>
     </div>
   );
 }

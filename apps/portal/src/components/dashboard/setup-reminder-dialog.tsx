@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, ImageIcon, Loader2, ShieldCheck, Upload } from "lucide-react";
+import { useYieldToSystemAnnouncements } from "@/lib/announcements/system-priority";
 
 /**
  * Logo upload limits. The `company-logos` bucket has NO server-side MIME or
@@ -80,6 +81,13 @@ interface ReminderFlags {
  * the portal until Bonzah / logo / Stripe Connect are actually done. "Don't
  * show me again" dismisses it permanently (localStorage). Both keys are
  * per-tenant, so switching tenants re-evaluates from that tenant's own state.
+ *
+ * It opens by itself, so a SYSTEM announcement dialog goes first
+ * (lib/announcements/system-priority.ts): while one is due or open this stays
+ * closed, and if it is already open and untouched it closes WITHOUT snoozing
+ * (`onOpenChange` never runs for a close the operator did not make) and comes
+ * back once the announcement is closed. Once the operator has clicked or typed
+ * inside it, it stays, and the announcement waits for it.
  */
 export function SetupReminderDialog() {
   const router = useRouter();
@@ -300,7 +308,7 @@ export function SetupReminderDialog() {
     });
   }
 
-  const open =
+  const wantsOpen =
     // Paywall interlock — never render alongside SubscriptionGateDialog.
     isResolved &&
     isSubscribed &&
@@ -318,6 +326,7 @@ export function SetupReminderDialog() {
     flags.tenantId === tenantId &&
     !flags.permanentlyDismissed &&
     flags.dueBySnooze;
+  const { show: open, engage } = useYieldToSystemAnnouncements(wantsOpen);
 
   // sessionStorage, so it silences the reminder for THIS portal session only —
   // next time the tenant opens the portal it shows again, until the tasks are
@@ -354,7 +363,11 @@ export function SetupReminderDialog() {
           centers via translate and locks body scroll, so the overflow clips BOTH
           ends — taking the close button and "Don't show me again" with it and
           leaving the tenant unable to dismiss the dialog at all. */}
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
+      <DialogContent
+        className="max-h-[85vh] overflow-y-auto sm:max-w-xl"
+        onPointerDownCapture={engage}
+        onKeyDownCapture={engage}
+      >
         <DialogHeader>
           <div className="mb-1 flex h-11 w-11 items-center justify-center rounded-full bg-primary/10">
             <ShieldCheck className="h-5 w-5 text-primary" />

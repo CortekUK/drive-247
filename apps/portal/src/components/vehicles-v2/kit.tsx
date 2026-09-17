@@ -664,7 +664,7 @@ export function IconButton({
       disabled={disabled}
       className={cn(
         "shrink-0",
-        tone === "primary" && "text-primary hover:bg-primary-light hover:text-primary dark:text-indigo-300 dark:hover:text-indigo-300",
+        tone === "primary" && "text-primary hover:bg-primary-light hover:text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] dark:hover:text-[hsl(var(--v2-link,var(--primary)))]",
         tone === "destructive" && "text-destructive hover:bg-destructive/10 hover:text-destructive",
         tone === "muted" && "text-muted-foreground hover:text-foreground",
       )}

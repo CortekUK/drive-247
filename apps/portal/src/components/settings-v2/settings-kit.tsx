@@ -29,13 +29,21 @@
  * HEADINGS
  *   SETTINGS_PAGE_TITLE     the page's h1, bold
  *   SETTINGS_SECTION_TITLE  a section's h2, semibold, never a line under it
+ *
+ * SECTIONS AND DEEP LINKS
+ *   <SettingsSection anchor="tax-and-fees" title=… description=…>
+ *     a titled part of a longer page, with the id `settings-tax-and-fees`
+ *   useScrollToSection(id, ready)
+ *     scrolls that section to the top once the page's data is in, for a
+ *     `?tab=fees` link or a `#settings-…` hash
  */
 
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, type ReactNode } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import { Skeleton } from "@/components/ui-v2/skeleton";
 import { SettingsSaveState } from "@/components/settings-v2/section-states";
+import { settingsSectionId } from "@/components/settings-v2/settings-shell-state";
 import { cn } from "@/lib/utils";
 
 /** The page title: always heavier than any section title under it. */
@@ -146,6 +154,87 @@ export function SettingsStickySaveBar({
       </div>
     </div>
   );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Sections of a longer page                                                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * One titled part of a page that holds several (General). The id is
+ * `settings-<anchor>`, the target of a deep link; `scroll-mt-24` keeps its
+ * title clear of the 64px sticky top bar when it is scrolled to. `action` sits
+ * beside the title (a section's own "View only" on a partly editable page).
+ */
+export function SettingsSection({
+  anchor,
+  title,
+  description,
+  action,
+  children,
+  className,
+}: {
+  anchor: string;
+  title: string;
+  description?: ReactNode;
+  action?: ReactNode;
+  children: ReactNode;
+  className?: string;
+}) {
+  const id = settingsSectionId(anchor);
+  return (
+    <section
+      id={id}
+      aria-labelledby={`${id}-title`}
+      data-settings-section={anchor}
+      className={cn("scroll-mt-24 space-y-3", className)}
+    >
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <h2 id={`${id}-title`} className={SETTINGS_SECTION_TITLE}>
+            {title}
+          </h2>
+          {description && <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>}
+        </div>
+        {action && <div className="shrink-0">{action}</div>}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+/**
+ * Scroll the element with `targetId` to the top of the window once `ready`
+ * (the page's data is in, so the skeletons above it have given way and it will
+ * not be pushed down after the jump). Once per target: scrolling back up is
+ * not undone, and a new target (another deep link) scrolls again. A section
+ * that mounts a few frames late is still found (up to ~half a second).
+ */
+export const SCROLL_TO_SECTION_MAX_FRAMES = 30;
+
+export function useScrollToSection(targetId: string | null, ready: boolean) {
+  const scrolledTo = useRef<string | null>(null);
+  useEffect(() => {
+    if (!targetId) {
+      scrolledTo.current = null;
+      return;
+    }
+    if (!ready || scrolledTo.current === targetId) return;
+    let frames = 0;
+    let frame = 0;
+    const attempt = () => {
+      const target = document.getElementById(targetId);
+      if (target) {
+        scrolledTo.current = targetId;
+        target.scrollIntoView?.({ block: "start" });
+        return;
+      }
+      frames += 1;
+      if (frames < SCROLL_TO_SECTION_MAX_FRAMES) frame = window.requestAnimationFrame(attempt);
+    };
+    frame = window.requestAnimationFrame(attempt);
+    return () => window.cancelAnimationFrame(frame);
+  }, [targetId, ready]);
 }
 
 /* -------------------------------------------------------------------------- */

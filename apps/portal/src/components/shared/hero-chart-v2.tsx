@@ -136,7 +136,12 @@ const PICKER =
  * negative margin, so the text sits exactly where it did and the ring clears
  * it. On the right the ring falls in the chevron's own blank margin.
  */
-const RANGE_PICKER = `${PICKER} -my-0.5 -ml-1.5 py-0.5 pl-1.5 focus-visible:ring-inset`;
+// A pill, like every other v2 control: `cn` lets `rounded-full` replace the
+// picker's `rounded-md`, so the inset ring is drawn round too.
+const RANGE_PICKER = cn(PICKER, "-my-0.5 -ml-1.5 rounded-full py-0.5 pl-1.5 focus-visible:ring-inset");
+
+/** The metric picker: the same pill and inset ring, at the row's left edge. */
+const METRIC_PICKER = cn(PICKER, "-my-0.5 -ml-1.5 self-start rounded-full py-0.5 pl-1.5 focus-visible:ring-inset");
 
 /** "All time" needs a first day: a flow metric has its events, a stock metric must say. */
 function supportsAllTime(metric: HeroMetric): boolean {
@@ -263,7 +268,7 @@ export function HeroChart({
         <div className="flex items-center justify-between gap-4">
           {metrics.length > 1 ? (
             <DropdownMenu>
-              <DropdownMenuTrigger className={cn(PICKER, "self-start")} aria-label={`Metric: ${metric.label}`}>
+              <DropdownMenuTrigger className={METRIC_PICKER} aria-label={`Metric: ${metric.label}`}>
                 {headlineLabel}
                 <ChevronDown className="size-3.5 text-muted-foreground" />
               </DropdownMenuTrigger>
@@ -529,7 +534,7 @@ function HeroTooltip({
   const point = active ? payload?.[0]?.payload : undefined;
   if (!point) return null;
   return (
-    <div className="min-w-[200px] rounded-lg border bg-background px-3 py-2 text-xs shadow-md">
+    <div className="min-w-[200px] rounded-xl border bg-background px-3 py-2 text-xs shadow-md">
       <div className="mb-1.5 flex items-baseline justify-between gap-3">
         <span className="font-medium text-foreground">{point.currentLabel}</span>
         {averaged && <span className="text-[11px] text-muted-foreground">Daily average</span>}

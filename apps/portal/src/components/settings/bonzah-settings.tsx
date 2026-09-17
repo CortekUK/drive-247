@@ -13,7 +13,7 @@ import { Switch } from '@/components/ui/switch';
 import { Shield, CheckCircle2, AlertCircle, ExternalLink, Loader2, TestTube2, Zap, Unplug, Lock, Wallet, RefreshCw, Bell, ShieldAlert, ArrowRight } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useTenant } from '@/contexts/TenantContext';
-import { isTestModeUiHidden } from '@/lib/lean-areas';
+import { useIsTestModeUiHidden } from '@/lib/lean-context';
 import { providerPresentation } from "@/lib/payment-provider";
 import { useBonzahBalance } from '@/hooks/use-bonzah-balance';
 import { useBonzahAlertConfig } from '@/hooks/use-bonzah-alert-config';
@@ -53,7 +53,7 @@ export function BonzahSettings() {
   // Lean tenants have no test modes — the API Mode card and the shared-test-account
   // notice are concepts they do not have. UI only: bonzah_mode is untouched, and
   // whether insurance may be SOLD is still decided by isBonzahSellable().
-  const hideTestModeUi = isTestModeUiHidden(tenantSlug);
+  const hideTestModeUi = useIsTestModeUiHidden();
   const pay = providerPresentation(tenantContext?.payment_provider);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');

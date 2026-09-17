@@ -12,6 +12,13 @@
  * it explains, and the page keeps Save disabled until it is fixed.
  */
 
+import {
+  depositDirtyState,
+  isFeesDirty,
+  type DepositFormFields,
+  type FeesFormFields,
+} from "@/components/settings-v2/pricing-money-logic";
+
 type Rec = Record<string, any>;
 
 const numberFormat = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 });
@@ -200,52 +207,6 @@ export function validateCodeLength(value: number | "" | null | undefined): strin
   return null;
 }
 
-export interface LockboxMethodStatus {
-  /** The method the radio shows (the first saved one; email when none). */
-  method: string;
-  /** Other methods still in a legacy multi-method array. */
-  extraSaved: string[];
-  /** Set when the chosen method cannot deliver the code as the operator expects. */
-  warning: { title: string; body: string; needsTwilio: boolean } | null;
-}
-
-/**
- * What actually happens to a code, given the saved method and whether Twilio
- * SMS is connected. `notify-lockbox-code` no longer sends WhatsApp and falls
- * back to email when no requested channel can run; an SMS leg with a phone
- * number but no Twilio simply fails, so that one is a real risk.
- */
-export function lockboxMethodStatus(
-  methods: string[] | null | undefined,
-  { smsReady }: { smsReady: boolean },
-): LockboxMethodStatus {
-  const list = Array.isArray(methods) ? methods.filter((m) => typeof m === "string" && m) : [];
-  const method = list[0] || "email";
-  const extraSaved = Array.from(new Set(list.slice(1))).filter((m) => m !== method);
-
-  let warning: LockboxMethodStatus["warning"] = null;
-  if (method === "whatsapp") {
-    warning = {
-      title: "WhatsApp codes aren't sent any more",
-      body: "Customers get their code by email instead. Choose Email or Text message and save.",
-      needsTwilio: false,
-    };
-  } else if (method === "sms" && !smsReady) {
-    warning = {
-      title: "Text messages aren't set up",
-      body: "Codes can't be texted until Twilio is connected, so a customer could miss theirs. Connect Twilio, or choose Email and save.",
-      needsTwilio: true,
-    };
-  } else if (method !== "email" && method !== "sms") {
-    warning = {
-      title: `We can't send codes by "${method}"`,
-      body: "Choose Email or Text message and save.",
-      needsTwilio: false,
-    };
-  }
-  return { method, extraSaved, warning };
-}
-
 /**
  * How long the lockbox text message is likely to be once it is sent.
  *
@@ -378,16 +339,19 @@ const sameValue = (a: unknown, b: unknown) => a === b || JSON.stringify(a) === J
  * The page re-fills its whole `rentalForm` from the tenant row whenever that
  * row changes, and any rental save changes it. On Key handover, saving the
  * lockbox instructions therefore wiped an unsaved "turn lockbox on" in the
- * panel above it. This keeps a Business-rules field the operator has edited
- * (it no longer matches what was last filled in) and takes the fresh value
- * for everything else, so a save of one section never discards another's
- * edits. Fields outside BUSINESS_FORM_KEYS always take the fresh value, as
- * before. `lastSynced` is null on the first fill, which takes `next` whole.
+ * panel above it, and on General (which holds Tax and fees and Security
+ * deposit beside switches that save the moment they flip) an ID-waiver or
+ * Fleet health switch wiped an unsaved fee. This keeps a field a v2 section
+ * saves (`V2_SECTION_FORM_KEYS`) when the operator has edited it (it no longer
+ * matches what was last filled in) and takes the fresh value for everything
+ * else, so a save of one section never discards another's edits. Every other
+ * field always takes the fresh value, as before. `lastSynced` is null on the
+ * first fill, which takes `next` whole.
  */
 export function keepUnsavedBusinessEdits<T extends Rec>(current: T | null | undefined, lastSynced: Rec | null | undefined, next: T): T {
   if (!current || !lastSynced) return next;
   const kept: Rec = {};
-  for (const key of BUSINESS_FORM_KEYS) {
+  for (const key of V2_SECTION_FORM_KEYS) {
     if (!(key in current)) continue;
     if (!sameValue(current[key], lastSynced[key])) kept[key] = current[key];
   }
@@ -515,6 +479,66 @@ export function businessEditsCoveredBySections(
   return (Object.keys(BUSINESS_SECTION_KEYS) as BusinessPage[]).every(
     (page) => !businessPageDirty(page, form, saved) || registered.includes(BUSINESS_SECTION_KEYS[page]),
   );
+}
+
+/**
+ * The `rentalForm` fields each v2 money section saves, keyed by the name it
+ * registers its save under (Tax and fees, Security deposit, the monthly rate).
+ */
+export const MONEY_SECTION_FORM_KEYS = {
+  fees: ["tax_enabled", "tax_percentage", "service_fee_enabled", "service_fee_type", "service_fee_value", "service_fee_amount"],
+  preauth: ["security_deposit_enabled", "deposit_charge_enabled", "deposit_mode", "global_deposit_amount"],
+  "pricing-monthly-tier": ["monthly_tier_days"],
+} as const;
+
+/** Every `rentalForm` field a v2 settings section saves: the Business-rules pages, fees, deposit and the monthly rate. */
+export const V2_SECTION_FORM_KEYS: readonly string[] = [
+  ...BUSINESS_FORM_KEYS,
+  ...MONEY_SECTION_FORM_KEYS.fees,
+  ...MONEY_SECTION_FORM_KEYS.preauth,
+  ...MONEY_SECTION_FORM_KEYS["pricing-monthly-tier"],
+];
+
+/** Does any field of the page's rental form differ from what the page last filled in? */
+export function rentalFormDiffers(form: Rec | null | undefined, lastSynced: Rec | null | undefined): boolean {
+  if (!form || !lastSynced) return false;
+  for (const key of new Set([...Object.keys(form), ...Object.keys(lastSynced)])) {
+    if (!sameValue(form[key], lastSynced[key])) return true;
+  }
+  return false;
+}
+
+/**
+ * v2: can the page's Save (its save bar, or "Save" in the leave dialog) really
+ * save every unsaved edit in its shared rental form? Like
+ * `businessEditsCoveredBySections`, but Tax and fees, Security deposit and the
+ * monthly rate count too, once each has registered its save:
+ *   1. no field outside every section differs from what the page filled in;
+ *   2. every Business-rules page with unsaved edits has registered;
+ *   3. fees, deposit and monthly rate, when GENUINELY dirty (the sections' own
+ *      number-aware checks: a typed "10" over a saved 10 is not an edit), have
+ *      registered under "fees", "preauth" and "pricing-monthly-tier".
+ */
+export function rentalEditsCoveredBySections(
+  form: Rec | null | undefined,
+  lastSynced: Rec | null | undefined,
+  saved: Rec | null | undefined,
+  registered: readonly string[],
+): boolean {
+  if (!form || !lastSynced || !saved) return false;
+  const owned = new Set<string>([...BUSINESS_FORM_KEYS, ...Object.values(MONEY_SECTION_FORM_KEYS).flat()]);
+  for (const key of new Set([...Object.keys(form), ...Object.keys(lastSynced)])) {
+    if (!owned.has(key) && !sameValue(form[key], lastSynced[key])) return false;
+  }
+  const businessCovered = (Object.keys(BUSINESS_SECTION_KEYS) as BusinessPage[]).every(
+    (page) => !businessPageDirty(page, form, saved) || registered.includes(BUSINESS_SECTION_KEYS[page]),
+  );
+  if (!businessCovered) return false;
+  if (isFeesDirty(form as FeesFormFields, saved) && !registered.includes("fees")) return false;
+  if (depositDirtyState(form as DepositFormFields, saved).dirty && !registered.includes("preauth")) return false;
+  const monthlyDirty = Number(form.monthly_tier_days) !== Number(saved.monthly_tier_days ?? 30);
+  if (monthlyDirty && !registered.includes("pricing-monthly-tier")) return false;
+  return true;
 }
 
 /**

@@ -21,6 +21,15 @@
 -- It is written to be re-runnable, but a re-run does NOT alter the CHECK
 -- constraints of the existing tables: change those with an explicit ALTER.
 --
+-- CHANGED SINCE THAT APPLY (Sep 17 2026, round 4): admin_portal_announcement_stats
+-- gained APPENDED columns that include super admins (see the function). Its
+-- RETURNS TABLE changed, so it is DROPped and re-CREATEd, and the grants in
+-- section 5 must run in the same transaction. Either re-run this whole file, or
+-- run just that function block plus its two section-5 grant lines inside one
+-- BEGIN/COMMIT (the suite applies both ways over the previous file, T19). Until
+-- then the admin reads the old nine columns and falls back to the staff-only
+-- counts (normalizeAdminAnnouncementStats).
+--
 -- Shipping the code first is safe. Until this runs, `get_portal_announcements`
 -- does not exist, the portal treats that like any read error and renders NOTHING
 -- (no card, no banner, no dialog), and the admin page says "Announcements are not
@@ -714,22 +723,48 @@ END $$;
 -- Reach per announcement (active or not), for the admin list.
 --   audience_tenants   tenants the audience matches right now, any status
 --   reachable_tenants  of those, status 'active' (the only portals that load)
---   *_users            distinct app_users with that timestamp set
--- Super admins are EXCLUDED from every user/tenant count: support sessions share
--- one Global Master Admin row and would inflate adoption. Their state is still
--- stored so support is not re-shown every item on every load.
+--   *_users            distinct app_users with that timestamp set (any revision)
+--
+-- WHO IS COUNTED. The first six user/tenant columns (shown_users ... cta_users)
+-- EXCLUDE super admins: support sessions share one Global Master Admin row and
+-- would inflate adoption. Their state is still stored so support is not re-shown
+-- every item on every load.
+-- The columns after them were APPENDED on Sep 17 2026: until then every view in
+-- production was a super admin's, so the admin list read "Seen by 0 users" for
+-- items people had plainly seen. The list now shows everyone and says how many
+-- of them were super admins:
+--   *_all_*            everyone, super admins included
+--   *_super_admin_*    the super-admin part of the matching *_all_* column
+-- For every user column, *_all_users = <old column> + <super-admin part>
+-- (is_super_admin IS TRUE vs IS NOT TRUE splits app_users exactly; suite T13).
+-- shown_all_tenants counts distinct tenants anyone saw it in, so a super admin
+-- who looked at it in a tenant no staff member has opened adds that tenant.
+--
+-- The columns are in RETURNS TABLE order = AdminAnnouncementStats in the
+-- contract; the admin reads them by name. A RETURNS TABLE change cannot be made
+-- with CREATE OR REPLACE, hence DROP + CREATE; DROP also removes the grants, so
+-- section 5's REVOKE FROM PUBLIC, anon / GRANT EXECUTE TO authenticated,
+-- service_role must run in the same transaction (this file does both).
 DROP FUNCTION IF EXISTS public.admin_portal_announcement_stats();
 CREATE FUNCTION public.admin_portal_announcement_stats()
 RETURNS TABLE (
-  announcement_id       uuid,
-  audience_tenants      integer,
-  reachable_tenants     integer,
-  shown_users           integer,
-  shown_tenants         integer,
-  card_opened_users     integer,
-  dismissed_users       integer,
-  dont_show_again_users integer,
-  cta_users             integer
+  announcement_id           uuid,
+  audience_tenants          integer,
+  reachable_tenants         integer,
+  shown_users               integer,
+  shown_tenants             integer,
+  card_opened_users         integer,
+  dismissed_users           integer,
+  dont_show_again_users     integer,
+  cta_users                 integer,
+  shown_all_users           integer,
+  shown_all_tenants         integer,
+  shown_super_admin_users   integer,
+  card_opened_all_users     integer,
+  dismissed_all_users       integer,
+  cta_all_users             integer,
+  cta_super_admin_users     integer,
+  dont_show_again_all_users integer
 )
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = '' AS $$
 BEGIN
@@ -750,20 +785,39 @@ BEGIN
     coalesce(u.n_card_opened, 0),
     coalesce(u.n_dismissed, 0),
     coalesce(u.n_dont_show_again, 0),
-    coalesce(u.n_cta, 0)
+    coalesce(u.n_cta, 0),
+    coalesce(u.n_shown_all, 0),
+    coalesce(u.n_shown_tenants_all, 0),
+    coalesce(u.n_shown_super, 0),
+    coalesce(u.n_card_opened_all, 0),
+    coalesce(u.n_dismissed_all, 0),
+    coalesce(u.n_cta_all, 0),
+    coalesce(u.n_cta_super, 0),
+    coalesce(u.n_dont_show_again_all, 0)
   FROM public.portal_announcements a
   LEFT JOIN LATERAL (
     SELECT
-      (count(DISTINCT s.app_user_id) FILTER (WHERE s.first_shown_at IS NOT NULL))::integer     AS n_shown,
-      (count(DISTINCT s.tenant_id)   FILTER (WHERE s.first_shown_at IS NOT NULL))::integer     AS n_shown_tenants,
-      (count(DISTINCT s.app_user_id) FILTER (WHERE s.card_opened_at IS NOT NULL))::integer     AS n_card_opened,
-      (count(DISTINCT s.app_user_id) FILTER (WHERE s.dismissed_at IS NOT NULL))::integer       AS n_dismissed,
-      (count(DISTINCT s.app_user_id) FILTER (WHERE s.dont_show_again_at IS NOT NULL))::integer AS n_dont_show_again,
-      (count(DISTINCT s.app_user_id) FILTER (WHERE s.cta_clicked_at IS NOT NULL))::integer     AS n_cta
+      -- Staff only (the original columns).
+      (count(DISTINCT s.app_user_id) FILTER (WHERE s.first_shown_at IS NOT NULL     AND NOT u2.is_super))::integer AS n_shown,
+      (count(DISTINCT s.tenant_id)   FILTER (WHERE s.first_shown_at IS NOT NULL     AND NOT u2.is_super))::integer AS n_shown_tenants,
+      (count(DISTINCT s.app_user_id) FILTER (WHERE s.card_opened_at IS NOT NULL     AND NOT u2.is_super))::integer AS n_card_opened,
+      (count(DISTINCT s.app_user_id) FILTER (WHERE s.dismissed_at IS NOT NULL       AND NOT u2.is_super))::integer AS n_dismissed,
+      (count(DISTINCT s.app_user_id) FILTER (WHERE s.dont_show_again_at IS NOT NULL AND NOT u2.is_super))::integer AS n_dont_show_again,
+      (count(DISTINCT s.app_user_id) FILTER (WHERE s.cta_clicked_at IS NOT NULL     AND NOT u2.is_super))::integer AS n_cta,
+      -- Everyone.
+      (count(DISTINCT s.app_user_id) FILTER (WHERE s.first_shown_at IS NOT NULL))::integer     AS n_shown_all,
+      (count(DISTINCT s.tenant_id)   FILTER (WHERE s.first_shown_at IS NOT NULL))::integer     AS n_shown_tenants_all,
+      (count(DISTINCT s.app_user_id) FILTER (WHERE s.card_opened_at IS NOT NULL))::integer     AS n_card_opened_all,
+      (count(DISTINCT s.app_user_id) FILTER (WHERE s.dismissed_at IS NOT NULL))::integer       AS n_dismissed_all,
+      (count(DISTINCT s.app_user_id) FILTER (WHERE s.dont_show_again_at IS NOT NULL))::integer AS n_dont_show_again_all,
+      (count(DISTINCT s.app_user_id) FILTER (WHERE s.cta_clicked_at IS NOT NULL))::integer     AS n_cta_all,
+      -- Super admins only.
+      (count(DISTINCT s.app_user_id) FILTER (WHERE s.first_shown_at IS NOT NULL AND u2.is_super))::integer AS n_shown_super,
+      (count(DISTINCT s.app_user_id) FILTER (WHERE s.cta_clicked_at IS NOT NULL AND u2.is_super))::integer AS n_cta_super
     FROM public.portal_announcement_user_state s
     JOIN public.app_users au ON au.id = s.app_user_id
+    CROSS JOIN LATERAL (SELECT au.is_super_admin IS TRUE AS is_super) u2
     WHERE s.announcement_id = a.id
-      AND au.is_super_admin IS NOT TRUE
   ) u ON true
   ORDER BY (a.kind = 'system') DESC, (a.blocking = 'hard') DESC, a.sort_order, a.created_at, a.id;
 END $$;

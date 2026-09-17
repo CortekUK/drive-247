@@ -291,7 +291,7 @@ export const UserMenuV2 = ({ variant = 'icon' }: { variant?: 'icon' | 'row' } = 
               <button className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2 py-2.5 text-left outline-none cursor-pointer">
                 <Avatar className="h-8 w-8 rounded-full overflow-hidden shrink-0">
                   <AvatarImage src={appUser.avatar_url || undefined} alt={appUser.name || 'User'} className="object-cover" />
-                  <AvatarFallback className="bg-primary/10 text-primary text-xs font-medium">
+                  <AvatarFallback className="bg-primary/10 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] text-xs font-medium">
                     {userInitials}
                   </AvatarFallback>
                 </Avatar>
@@ -314,7 +314,7 @@ export const UserMenuV2 = ({ variant = 'icon' }: { variant?: 'icon' | 'row' } = 
               }
               aria-label="Customise sidebar"
               title="Customise sidebar"
-              className="shrink-0 rounded-lg p-1.5 text-muted-foreground outline-none transition-colors cursor-pointer hover:bg-primary/10 hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-indigo-300"
+              className="shrink-0 rounded-lg p-1.5 text-muted-foreground outline-none transition-colors cursor-pointer hover:bg-primary/10 hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-[hsl(var(--v2-link,var(--primary)))]"
             >
               <SlidersHorizontal className="h-4 w-4" />
             </button>
@@ -329,17 +329,17 @@ export const UserMenuV2 = ({ variant = 'icon' }: { variant?: 'icon' | 'row' } = 
               onPointerDown={(e) => e.stopPropagation()}
               onClick={() => setMenuOpen((open) => !open)}
               aria-label="Open account menu"
-              className="shrink-0 rounded-lg p-1.5 text-muted-foreground outline-none transition-colors cursor-pointer hover:bg-primary/10 hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-indigo-300"
+              className="shrink-0 rounded-lg p-1.5 text-muted-foreground outline-none transition-colors cursor-pointer hover:bg-primary/10 hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-[hsl(var(--v2-link,var(--primary)))]"
             >
               <ChevronsUpDown className="h-4 w-4" />
             </button>
           </div>
         ) : (
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="relative hover:bg-accent transition-colors cursor-pointer">
+            <Button variant="ghost" size="icon" className="relative hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] transition-colors cursor-pointer">
               <Avatar className="h-8 w-8 rounded-full overflow-hidden">
                 <AvatarImage src={appUser.avatar_url || undefined} alt={appUser.name || 'User'} className="object-cover" />
-                <AvatarFallback className="bg-primary/10 text-primary text-xs font-medium">
+                <AvatarFallback className="bg-primary/10 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] text-xs font-medium">
                   {userInitials}
                 </AvatarFallback>
               </Avatar>
@@ -355,7 +355,7 @@ export const UserMenuV2 = ({ variant = 'icon' }: { variant?: 'icon' | 'row' } = 
             <div className="flex items-center gap-2.5">
               <Avatar className="h-9 w-9 ring-2 ring-border/50 rounded-full overflow-hidden">
                 <AvatarImage src={appUser.avatar_url || undefined} alt={appUser.name || 'User'} className="object-cover" />
-                <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
+                <AvatarFallback className="bg-primary/10 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] text-xs font-semibold">
                   {userInitials}
                 </AvatarFallback>
               </Avatar>
@@ -533,7 +533,7 @@ export const UserMenuV2 = ({ variant = 'icon' }: { variant?: 'icon' | 'row' } = 
             <div className="flex items-center gap-4">
               <Avatar className="h-16 w-16 ring-2 ring-border/50 rounded-full overflow-hidden">
                 <AvatarImage src={appUser.avatar_url || undefined} alt={appUser.name || 'User'} className="object-cover" />
-                <AvatarFallback className="bg-primary/10 text-primary text-base font-semibold">{userInitials}</AvatarFallback>
+                <AvatarFallback className="bg-primary/10 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] text-base font-semibold">{userInitials}</AvatarFallback>
               </Avatar>
               <Button
                 variant="outline"

@@ -80,7 +80,7 @@ function ItemRow({ item, onClick }: { item: Item; onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="group flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left transition-colors hover:bg-white/15"
+      className="group flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left transition-colors hover:bg-[hsl(var(--v2-hover,var(--muted))_/_0.2)] dark:hover:bg-[hsl(var(--v2-hover,var(--muted))_/_0.5)]"
     >
       <span
         className={cn(

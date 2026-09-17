@@ -68,12 +68,19 @@ export const STRIPE_CONNECT_SETTINGS_PATH = '/settings?tab=payments';
  *     null on first paint and on any query error; treating "unknown" as "not
  *     connected" would flash the block dialog at an operator who is fully set
  *     up, or strand them entirely if the query fails.
+ *
+ * `lean` is the RESOLVED answer — the canary slug list OR the tenant's own
+ * `portal_experience = 'v2'` column, which `useRentalCreationGate` reads out of
+ * context and passes in. It defaults to the slug-only answer so this module
+ * stays a pure function anything can call, and so a caller that has not been
+ * given the flag answers exactly what it answered before the column existed.
  */
 export function isRentalCreationBlocked(
   tenant: StripeConnectTenant | null | undefined,
   tenantSlug: string | null | undefined,
+  lean: boolean = isLeanTenant(tenantSlug),
 ): boolean {
-  if (!isLeanTenant(tenantSlug)) return false;
+  if (!lean) return false;
   if (!tenant) return false;
   return !isStripeConnectUsable(tenant);
 }

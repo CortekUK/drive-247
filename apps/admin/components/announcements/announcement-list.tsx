@@ -18,6 +18,7 @@ import { GripVertical } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { reorderAfterDrop, sectionOf, type ListSection } from '@/lib/announcements/api';
 import type { AdminAnnouncementRow, AdminAnnouncementStats, AnnouncementKind } from '@/lib/announcements/contract';
+import type { RowPending } from '@/lib/announcements/row-actions';
 import { cn } from '@/lib/utils';
 import { AnnouncementRow } from './announcement-row';
 
@@ -25,6 +26,10 @@ interface RowActions {
   onToggleActive: (row: AdminAnnouncementRow, next: boolean) => void;
   onEdit: (row: AdminAnnouncementRow) => void;
   onDelete: (row: AdminAnnouncementRow) => void;
+  onShowAgain: (row: AdminAnnouncementRow) => void;
+  onDuplicate: (row: AdminAnnouncementRow) => void;
+  /** The row whose duplicate is being prepared (images copying), if any. */
+  duplicatingId: string | null;
 }
 
 /** Sortable ids carry their section, so a drag can be scoped to it: "hard:<uuid>". */
@@ -42,6 +47,8 @@ export function AnnouncementList({
   rows,
   targetsById,
   statsById,
+  statsCountSuperAdmins,
+  pendingById,
   onReorder,
   ...actions
 }: RowActions & {
@@ -50,6 +57,10 @@ export function AnnouncementList({
   rows: AdminAnnouncementRow[];
   targetsById: Record<string, string[]>;
   statsById: Record<string, AdminAnnouncementStats> | null;
+  /** false: the stats are staff only (older stats function), and the rows say so. */
+  statsCountSuperAdmins: boolean;
+  /** Writes still in flight, by announcement id. */
+  pendingById: Readonly<Record<string, RowPending | undefined>>;
   onReorder: (kind: AnnouncementKind, ids: string[]) => void;
 }) {
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -136,6 +147,8 @@ export function AnnouncementList({
                       selectedTenantCount={targetsById[row.id]?.length ?? 0}
                       stats={statsById?.[row.id]}
                       statsAvailable={statsById !== null}
+                      statsCountSuperAdmins={statsCountSuperAdmins}
+                      pending={pendingById[row.id] ?? null}
                       anyDragging={activeId !== null}
                       {...actions}
                     />
@@ -155,6 +168,8 @@ function SortableAnnouncementRow({
   selectedTenantCount,
   stats,
   statsAvailable,
+  statsCountSuperAdmins,
+  pending,
   anyDragging,
   ...actions
 }: RowActions & {
@@ -162,6 +177,8 @@ function SortableAnnouncementRow({
   selectedTenantCount: number;
   stats: AdminAnnouncementStats | undefined;
   statsAvailable: boolean;
+  statsCountSuperAdmins: boolean;
+  pending: RowPending | null;
   anyDragging: boolean;
 }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
@@ -180,6 +197,8 @@ function SortableAnnouncementRow({
         selectedTenantCount={selectedTenantCount}
         stats={stats}
         statsAvailable={statsAvailable}
+        statsCountSuperAdmins={statsCountSuperAdmins}
+        pending={pending}
         dragging={isDragging}
         handle={
           <button

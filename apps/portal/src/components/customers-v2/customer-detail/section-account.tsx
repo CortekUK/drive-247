@@ -1,7 +1,8 @@
 "use client";
 
 /* ─────────────────────────────────────────────────────────────────────────────
- * Account — status, rejection, and the two blocks with different blast radii.
+ * Account — status, rejection, the two blocks with different blast radii, and
+ * deleting the customer outright.
  *
  * `customers.is_blocked` stops this customer with THIS operator.
  * `blocked_identities` is keyed on a licence, an ID or an email and reaches
@@ -10,11 +11,23 @@
  * ────────────────────────────────────────────────────────────────────────── */
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { Globe, ShieldOff, Trash2 } from "lucide-react";
 import { useTenant } from "@/contexts/TenantContext";
 import { useCustomerBlockingActions } from "@/hooks/use-customer-blocking";
+import { useDeleteCustomer } from "@/hooks/use-delete-customer";
 import { Button } from "@/components/ui-v2/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui-v2/alert-dialog";
 import {
   DangerSection,
   Field,
@@ -44,6 +57,28 @@ export function SectionAccount({ c, set, onJump, canEdit }: SectionProps) {
   const [globalReason, setGlobalReason] = useState("");
   const { blockCustomer, unblockCustomer, addBlockedIdentity, removeBlockedIdentity, isLoading } =
     useCustomerBlockingActions();
+  const router = useRouter();
+  const { deleteCustomer, isDeleting } = useDeleteCustomer();
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  /**
+   * The same delete the v1 customers list runs (`hooks/use-delete-customer`),
+   * so both screens remove a customer identically. The dialog stays open while
+   * it runs and on a refusal, where the toast says why. On success the list is
+   * refreshed and the operator leaves a record that no longer exists; `replace`
+   * so Back does not return to it.
+   */
+  const runDelete = () =>
+    deleteCustomer(
+      { id: c.id, name: c.identity.name },
+      {
+        onDeleted: () => {
+          setConfirmDelete(false);
+          queryClient.invalidateQueries({ queryKey: ["customers-list"] });
+          router.replace("/customers");
+        },
+      }
+    );
 
   const refreshBlocks = () =>
     queryClient.invalidateQueries({
@@ -290,6 +325,50 @@ export function SectionAccount({ c, set, onJump, canEdit }: SectionProps) {
           .
         </p>
       )}
+
+      {/* ── delete ───────────────────────────────────────────────────────
+          The one act on this screen that cannot be taken back, so it comes
+          last, behind a confirmation. It used to live only in the customers
+          list's row menu, which v2's list no longer has. */}
+      {canEdit && (
+        <div data-tour="customer-delete">
+          <DangerSection
+            title="Delete customer"
+            description="Removes this customer for good, and their sign-in if nothing else uses it. Their rentals, payments and fines can go with them, so to keep that history set them to Inactive instead."
+          >
+            <Button variant="destructive" disabled={isDeleting} onClick={() => setConfirmDelete(true)}>
+              <Trash2 className="size-4" />
+              Delete customer
+            </Button>
+          </DangerSection>
+        </div>
+      )}
+
+      <AlertDialog open={confirmDelete} onOpenChange={(open) => !isDeleting && setConfirmDelete(open)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {c.identity.name || "this customer"}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This cannot be undone. The customer and all their data will be permanently removed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Keep them</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={isDeleting}
+              onClick={(e) => {
+                // Radix closes the dialog on click. Keep it open until the
+                // delete settles: `onDeleted` closes it, a refusal leaves it up.
+                e.preventDefault();
+                void runDelete();
+              }}
+            >
+              {isDeleting ? "Deleting…" : "Delete customer"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Panel>
   );
 }

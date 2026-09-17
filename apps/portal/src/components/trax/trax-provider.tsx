@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { runThroughLeaveGuard } from "@/lib/leave-guard";
 
 /**
  * Where Trax is shown — the floating panel or the /trax page — shared by every surface.
@@ -127,14 +128,23 @@ export function TraxProvider({ children }: { children: ReactNode }) {
   const openSheet = useCallback(() => setSheetOpen(true), []);
   const closeSheet = useCallback(() => setSheetOpen(false), []);
 
+  /* Both exits go through the v2 leave guard, and the panel only changes once
+     leaving is agreed: staying (Escape on the dialog) leaves everything as it
+     was. With no guard installed `proceed` runs at once, exactly as before. */
   const minimiseToPanel = useCallback(() => {
-    setSheetOpen(true);
-    router.push(returnPath || "/");
+    const target = returnPath || "/";
+    runThroughLeaveGuard(target, () => {
+      setSheetOpen(true);
+      router.push(target);
+    });
   }, [router, returnPath]);
 
   const leaveFullPage = useCallback(() => {
-    setSheetOpen(false);
-    router.push(returnPath || "/");
+    const target = returnPath || "/";
+    runThroughLeaveGuard(target, () => {
+      setSheetOpen(false);
+      router.push(target);
+    });
   }, [router, returnPath]);
 
   const toggleSheet = useCallback(() => {

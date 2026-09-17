@@ -94,7 +94,7 @@ import { AddReminderDialog } from "@/components/reminders/add-reminder-dialog";
 import { TeslaLogo } from "@/components/icons/tesla-logo";
 import { useTeslaSuperchargerCharges } from "@/hooks/use-tesla-supercharger-charges";
 import { SuperchargerChargesDialog } from "@/components/rentals/supercharger-charges-dialog";
-import { isAreaHidden } from "@/lib/lean-areas";
+import { useIsAreaHidden } from "@/lib/lean-context";
 import { useV2 } from "@/lib/v2-context";
 import { RentalDetailV2 } from "@/components/rentals-v2/rental-detail/rental-detail-v2";
 
@@ -544,12 +544,12 @@ const RentalDetail = () => {
   // Tesla Fleet is hidden from the lean canary and that tenant alone. Data-driven
   // already — the canary has no Tesla vehicles, so none of this would render for
   // it anyway — but gated explicitly so the predicate is the same everywhere.
-  const teslaHidden = isAreaHidden('tesla', tenantSlug);
+  const teslaHidden = useIsAreaHidden('tesla');
   // INSHUR Period Z is hidden from the lean canary and that tenant alone. This
   // one is NOT data-driven: InshurCoverageBlock deliberately explains its own
   // absence when the integration is off, so without this gate the canary would
   // see an INSHUR card on every rental telling it to go and configure INSHUR.
-  const inshurHidden = isAreaHidden('inshur', tenantSlug);
+  const inshurHidden = useIsAreaHidden('inshur');
   // Renew opens /rentals/new, so it is a rental-creation entry point too.
   // Lean tenants only; a constant false for everyone else.
   const { blocked: rentalCreationBlocked } = useRentalCreationGate();

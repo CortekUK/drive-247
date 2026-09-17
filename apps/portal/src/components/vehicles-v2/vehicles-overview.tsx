@@ -309,7 +309,7 @@ function ChartPlaceholder({
           <button
             type="button"
             onClick={onRetry}
-            className="rounded-md text-sm font-medium text-foreground underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+            className="rounded-full text-sm font-medium text-foreground underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
           >
             Try again
           </button>

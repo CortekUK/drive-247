@@ -69,8 +69,6 @@ import {
 } from "./message-rules";
 import { EditorChip, IconActionButton, TemplateEditorShellV2 } from "./template-editor-shell-v2";
 
-const TEMPLATES_HOME = "/settings?tab=templates";
-
 function listHref(category: TemplateCategory) {
   return `/settings/agreement-templates${category !== "standard" ? `?category=${category}` : ""}`;
 }
@@ -357,7 +355,6 @@ function AgreementCategorySectionV2({ category, canEdit }: { category: TemplateC
 }
 
 export function AgreementTemplatesPageV2() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const { settings: rentalSettings, isLoading: rentalLoading } = useRentalSettings();
   const { canEditSettings } = useManagerPermissions();
@@ -373,24 +370,23 @@ export function AgreementTemplatesPageV2() {
 
   return (
     <TooltipProvider>
-      {/* md:pt-8: the breadcrumb (20px line) centres at 50 + 32 + 10 = 92. */}
-      <div className="w-full max-w-[1160px] space-y-6 pb-16 md:pt-8">
+      {/* md:pt-[26px]: the header's first line is the 32px title, so it centres
+          at 50 + 26 + 16 = 92, the sidebar switch's row (as on the Settings index). */}
+      <div className="w-full max-w-[1160px] space-y-8 pb-16 md:pt-[26px]">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <SettingsPageHeader
-            rootLabel="Customer messages"
-            section="Rental agreement"
             title="Rental agreement"
             description="Choose the agreement customers sign for each kind of rental."
-            onBack={() => router.push(TEMPLATES_HOME)}
           />
           {!canEdit && <SettingsReadOnlyNotice />}
         </div>
 
         {!picked && !waitingForPayg && resolved.notice === "payg-off" && (
+          // No "Open Pay As You Go": that settings page is hidden for now
+          // (V2_HIDDEN_SETTINGS_PAGES), so the link would only land on a notice.
           <SettingsDependencyNotice
             title="Pay As You Go is off"
             body="Its agreement is only used once Pay As You Go is on. Showing the standard agreement instead."
-            action={{ label: "Open Pay As You Go", href: "/settings?tab=payg" }}
           />
         )}
         {!picked && resolved.notice === "unknown" && (
@@ -410,7 +406,7 @@ export function AgreementTemplatesPageV2() {
                 onClick={() => setPicked(category)}
                 className={cn(
                   "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-sm font-medium transition-colors",
-                  selected ? "bg-primary/10 text-primary dark:text-indigo-300" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                  selected ? "bg-primary/10 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" : "text-muted-foreground hover:bg-primary/10 hover:text-foreground dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]",
                 )}
               >
                 <Icon className="size-4" aria-hidden="true" />

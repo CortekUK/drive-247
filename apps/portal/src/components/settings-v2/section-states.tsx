@@ -333,7 +333,7 @@ export function SettingsEmptyState({
       <div className={cn("mx-auto flex flex-col items-center text-center", compact ? "max-w-sm" : "max-w-lg")}>
         <span
           className={cn(
-            "flex items-center justify-center bg-primary/10 text-primary dark:text-indigo-300",
+            "flex items-center justify-center bg-primary/10 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]",
             compact ? "size-9 rounded-xl" : "size-11 rounded-2xl",
           )}
         >
@@ -358,7 +358,7 @@ export function SettingsEmptyState({
             {points.slice(0, 3).map((point) => (
               <li key={point} className="flex items-start gap-2.5">
                 <span className="mt-[3px] flex size-4 shrink-0 items-center justify-center rounded-full bg-primary/10">
-                  <Check className="size-2.5 text-primary dark:text-indigo-300" strokeWidth={3} aria-hidden="true" />
+                  <Check className="size-2.5 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" strokeWidth={3} aria-hidden="true" />
                 </span>
                 <span className="text-sm leading-snug text-foreground/80">{point}</span>
               </li>
@@ -686,7 +686,7 @@ export function SettingsDependencyNotice({
           aria-hidden="true"
           className={cn(
             "mt-0.5 size-4 shrink-0",
-            tone === "warning" ? "text-amber-600 dark:text-amber-400" : "text-primary dark:text-indigo-300",
+            tone === "warning" ? "text-amber-600 dark:text-amber-400" : "text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]",
           )}
         />
         <div className="min-w-0 [overflow-wrap:anywhere]">

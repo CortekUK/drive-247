@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useMemo, useRef, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Info, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -20,11 +20,29 @@ import {
   type DraftErrors,
   type RepeatAfterDays,
 } from '@/lib/announcements/contract';
+import {
+  allTenantsConfirmCopy,
+  allTenantsConfirmKey,
+  needsAllTenantsConfirm,
+  type ConfirmCopy,
+} from '@/lib/announcements/all-tenants-confirm';
+import {
+  DUPLICATE_INACTIVE_NOTE,
+  NO_MISSING_IMAGES,
+  missingImageNote,
+  missingImageTargets,
+  missingImagesFromSeed,
+  missingImagesSaveConfirm,
+  pruneMissingImages,
+  type DuplicateSeed,
+  type ImageTarget,
+  type MissingImages,
+} from '@/lib/announcements/row-actions';
 import { cn } from '@/lib/utils';
 import { ConfirmDialog } from './confirm-dialog';
 import { FeatureFields } from './feature-fields';
 import { FormField, FormSection, QUIET_BUTTON } from './form-field';
-import { blocksEveryTenant, withSlideKeys, type KeyedSlides } from './form-logic';
+import { withSlideKeys, type KeyedSlides } from './form-logic';
 import { AnnouncementPreview, type FeaturePreviewView, type PreviewFocus } from './preview/announcement-preview';
 import { SegmentedControl } from './segmented-control';
 import { SystemFields } from './system-fields';
@@ -57,6 +75,11 @@ function firstInvalidFieldId(kind: AnnouncementKind, errors: DraftErrors): strin
   );
   const hit = order.find(([bad]) => bad);
   return hit ? hit[1] : null;
+}
+
+/** The image control a missing-image target refers to (ids as in FeatureFields). */
+function imageFieldId(target: ImageTarget): string {
+  return target.kind === 'card' ? 'ann-image' : 'ann-slide-' + target.index + '-image';
 }
 
 function focusField(id: string) {
@@ -99,29 +122,43 @@ function visibleErrors(errors: DraftErrors, showAll: boolean): DraftErrors {
  * (stacked behind an Edit | Preview switch below `lg`). Images uploaded here are
  * cleaned up: all of them on cancel, and on save any the saved row no longer
  * references (including images this edit replaced).
+ *
+ * A duplicate opens in CREATE mode (`row` null) from a prefilled draft whose
+ * images are copies made for it; those copies count as this session's uploads,
+ * so Cancel deletes them and Save keeps the ones the new row references. The
+ * original's images are never candidates for cleanup here.
  */
 export function AnnouncementEditorDialog({
   kind,
   row,
+  duplicate,
   tenantIds,
   otherActiveFeatures,
+  resolveAllTenantsCount,
   onClose,
   onSaved,
   onCloseAutoFocus,
 }: {
   kind: AnnouncementKind;
-  /** null = new announcement. */
+  /** null = new announcement (blank, or a duplicate). */
   row: AdminAnnouncementRow | null;
+  /** A duplicate to open in create mode. Ignored when `row` is set. */
+  duplicate?: DuplicateSeed | null;
   /** The row's selected tenants (audience 'selected'). */
   tenantIds: readonly string[];
   otherActiveFeatures: number;
+  /** N for "(N active tenants)" in the All tenants confirmation; null when it cannot be read. */
+  resolveAllTenantsCount: () => Promise<number | null>;
   onClose: () => void;
   onSaved: () => void;
   /** Opened from code (no DialogTrigger), so the page says where focus goes on close. */
   onCloseAutoFocus?: (event: Event) => void;
 }) {
   // Seeded once per mount; the page remounts the editor (new key) for every open.
-  const [initial] = useState<AnnouncementDraft>(() => (row ? rowToDraft(row, tenantIds.slice()) : emptyDraft(kind)));
+  const [initial] = useState<AnnouncementDraft>(() =>
+    row ? rowToDraft(row, tenantIds.slice()) : duplicate ? duplicate.draft : emptyDraft(kind),
+  );
+  const isDuplicate = !row && !!duplicate;
   const initialJson = useRef(JSON.stringify(initial));
   // The draft and its slides' client keys change together, in one state update
   // (see form-logic.ts); the keys are never saved and never make the draft dirty.
@@ -130,15 +167,51 @@ export function AnnouncementEditorDialog({
     slideKeys: withSlideKeys(initial.slides).keys,
   }));
   const draft = form.draft;
+  // A duplicate's images whose copy failed. Each note sits under its own field
+  // (and in the summary at the top) until that field has an image again or its
+  // slide is removed; it then goes for good, even if the new image is removed.
+  const [missingState, setMissingState] = useState<MissingImages>(() =>
+    !row && duplicate ? missingImagesFromSeed(duplicate.missingImages, form.slideKeys) : NO_MISSING_IMAGES,
+  );
+  const missingImages = pruneMissingImages(missingState, draft, form.slideKeys);
+  useEffect(() => {
+    if (missingImages !== missingState) setMissingState(missingImages);
+  }, [missingImages, missingState]);
+  const missingTargets = missingImageTargets(missingImages, form.slideKeys);
+  // The targets stay put while the dialog closes, so its text does not change mid-animation.
+  const [confirmMissing, setConfirmMissing] = useState<{ open: boolean; targets: ImageTarget[] }>({ open: false, targets: [] });
+  const missingFocusRef = useRef<HTMLElement | null>(null);
   const [showAllErrors, setShowAllErrors] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [busyUploads, setBusyUploads] = useState(0);
   const [pane, setPane] = useState<'edit' | 'preview'>('edit');
   const [confirmDiscard, setConfirmDiscard] = useState(false);
-  const [confirmHardAll, setConfirmHardAll] = useState(false);
+  // Saving an ACTIVE SYSTEM announcement for All tenants (any display, soft or hard) asks first.
+  // `key` is what was asked about; the text stays put while the dialog animates closed.
+  const [confirmAll, setConfirmAll] = useState<{ open: boolean; copy: ConfirmCopy; key: string }>(() => ({
+    open: false,
+    copy: allTenantsConfirmCopy({ blocking: 'soft', display: 'dialog' }, 'save', null),
+    key: '',
+  }));
+  /** Reading the tenant count before that question opens: Save waits. */
+  const [checkingReach, setCheckingReach] = useState(false);
+  const checkingReachRef = useRef(false);
+  /**
+   * Bumped by each Save that waits for the count and by each close request. Only the latest Save's
+   * count may open the question: a close asked for meanwhile cancels it (see requestClose).
+   */
+  const reachAsk = useRef(0);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const [previewFocus, setPreviewFocus] = useState<PreviewFocus | null>(null);
-  const uploaded = useRef<string[]>([]);
+  // A duplicate's copied images are this session's uploads from the start.
+  const uploaded = useRef<string[]>(!row && duplicate ? duplicate.uploads.slice() : []);
   const focusSeq = useRef(0);
   const cancelRef = useRef<HTMLButtonElement>(null);
   const saveRef = useRef<HTMLButtonElement>(null);
@@ -184,14 +257,26 @@ export function AnnouncementEditorDialog({
     onClose();
   };
 
+  /** Drop a Save that is still waiting for the tenant count; its question will not open. */
+  const cancelReachAsk = () => {
+    if (!checkingReachRef.current) return;
+    reachAsk.current += 1;
+    checkingReachRef.current = false;
+    setCheckingReach(false);
+  };
+
   const requestClose = () => {
     if (saving) return;
+    // Cancel, Escape and the X win over a Save still waiting for the count. Otherwise its All tenants
+    // question would open on top of "Discard changes?", right where a click meant for Discard lands
+    // on "Save for all tenants". To save after all, press Save again.
+    cancelReachAsk();
     if (dirty) setConfirmDiscard(true);
     else discard();
   };
 
-  const save = async (hardAllConfirmed: boolean) => {
-    if (saving || busyUploads > 0) return;
+  const save = async (confirmed: { allTenantsKey?: string; missingImages?: boolean } = {}) => {
+    if (saving || busyUploads > 0 || checkingReachRef.current) return;
     const result = validateAnnouncementDraft(draft);
     if (!result.valid) {
       setShowAllErrors(true);
@@ -201,8 +286,21 @@ export function AnnouncementEditorDialog({
       return;
     }
     const p = result.args.p_row;
-    if (!hardAllConfirmed && blocksEveryTenant(p)) {
-      setConfirmHardAll(true);
+    // A duplicate never loses an image it could not copy without the admin saying so.
+    if (!confirmed.missingImages && missingTargets.length > 0) {
+      setConfirmMissing({ open: true, targets: missingTargets });
+      return;
+    }
+    // A yes covers only what was asked: a change to kind, audience, active, blocking or display asks again.
+    if (needsAllTenantsConfirm(p) && confirmed.allTenantsKey !== allTenantsConfirmKey(p)) {
+      const ask = ++reachAsk.current;
+      checkingReachRef.current = true;
+      setCheckingReach(true);
+      const count = await resolveAllTenantsCount().catch(() => null);
+      if (!mounted.current || ask !== reachAsk.current) return;
+      checkingReachRef.current = false;
+      setCheckingReach(false);
+      setConfirmAll({ open: true, copy: allTenantsConfirmCopy(p, 'save', count), key: allTenantsConfirmKey(p) });
       return;
     }
     setSaving(true);
@@ -219,7 +317,7 @@ export function AnnouncementEditorDialog({
     void removeAnnouncementImages(candidates.filter((url) => !keep.has(url)));
   };
 
-  const title = (isNew ? 'New ' : 'Edit ') + (isFeature ? 'feature' : 'system') + ' announcement';
+  const title = (isDuplicate ? 'Duplicate ' : isNew ? 'New ' : 'Edit ') + (isFeature ? 'feature' : 'system') + ' announcement';
   const frequencyHelp = hard
     ? 'Hard announcements show every time.'
     : isFeature
@@ -253,6 +351,25 @@ export function AnnouncementEditorDialog({
           <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
             <div className={cn('min-h-0 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden px-5 py-5 sm:px-6', pane === 'preview' && 'hidden lg:block')}>
               <div className="space-y-5">
+                {isDuplicate && duplicate && (
+                  <div
+                    role="note"
+                    className="flex gap-2.5 rounded-2xl border border-indigo-200 bg-indigo-50 px-3 py-2.5 text-xs leading-5 text-indigo-950 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-100"
+                  >
+                    <Info className="mt-0.5 h-4 w-4 shrink-0 text-indigo-600 dark:text-indigo-300" aria-hidden />
+                    <div className="min-w-0 space-y-1">
+                      <p>{DUPLICATE_INACTIVE_NOTE}</p>
+                      {missingTargets.map((target) => {
+                        const note = missingImageNote(target);
+                        return (
+                          <p key={note} className="font-medium text-amber-800 dark:text-amber-200">
+                            {note}
+                          </p>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
                 {isFeature ? (
                   <FeatureFields
                     draft={draft}
@@ -263,6 +380,7 @@ export function AnnouncementEditorDialog({
                     onUploaded={onUploaded}
                     onBusyChange={onBusyChange}
                     onPreview={onPreview}
+                    missingImages={missingImages}
                   />
                 ) : (
                   <SystemFields draft={draft} errors={errors} onChange={patch} />
@@ -396,8 +514,8 @@ export function AnnouncementEditorDialog({
             <Button ref={cancelRef} type="button" variant="outline" className={QUIET_BUTTON} onClick={requestClose} disabled={saving}>
               Cancel
             </Button>
-            <Button ref={saveRef} type="button" onClick={() => void save(false)} disabled={saving || busyUploads > 0}>
-              {saving && <Loader2 className="animate-spin" />}
+            <Button ref={saveRef} type="button" onClick={() => void save()} disabled={saving || checkingReach || busyUploads > 0}>
+              {(saving || checkingReach) && <Loader2 className="animate-spin" />}
               Save
             </Button>
           </div>
@@ -418,16 +536,32 @@ export function AnnouncementEditorDialog({
         }}
       />
       <ConfirmDialog
-        open={confirmHardAll}
-        title="Block every tenant?"
-        description="This blocks every tenant's portal until you deactivate it. Continue?"
-        confirmLabel="Save and block"
-        destructive
+        open={confirmAll.open}
+        {...confirmAll.copy}
         returnFocusRef={saveRef}
-        onCancel={() => setConfirmHardAll(false)}
+        onCancel={() => setConfirmAll((c) => ({ ...c, open: false }))}
         onConfirm={() => {
-          setConfirmHardAll(false);
-          void save(true);
+          const key = confirmAll.key;
+          setConfirmAll((c) => ({ ...c, open: false }));
+          // This question comes after the missing-image one, so that one is already answered (or never asked).
+          void save({ allTenantsKey: key, missingImages: true });
+        }}
+      />
+      <ConfirmDialog
+        open={confirmMissing.open}
+        {...missingImagesSaveConfirm(confirmMissing.targets)}
+        returnFocusRef={missingFocusRef}
+        onCancel={() => {
+          // Back to the first image that still needs uploading.
+          const first = confirmMissing.targets[0];
+          missingFocusRef.current = (first && document.getElementById(imageFieldId(first))) || saveRef.current;
+          setPane('edit');
+          setConfirmMissing((c) => ({ ...c, open: false }));
+        }}
+        onConfirm={() => {
+          missingFocusRef.current = saveRef.current;
+          setConfirmMissing((c) => ({ ...c, open: false }));
+          void save({ missingImages: true });
         }}
       />
     </>
