@@ -7,6 +7,18 @@
 -- a resting state. Roll back one stage at a time, starting with the one just
 -- applied, and re-run the regression list afterwards.
 
+-- ORDER: if stages 3 and 4 were applied, run 05-rollback-stages-3-4.sql first.
+--
+-- Two things are deliberately not undone, because neither is needed to restore
+-- access and both are plain corrections:
+--   * the blanket `allow_all_select` policies are not recreated — with RLS off
+--     again they have no effect;
+--   * `public_can_read_bookable_vehicles` stays scoped to `anon` instead of
+--     {anon, authenticated}. Vehicles keeps RLS (it had it before stage 1), so
+--     recreating the wider policy would re-open cross-account vehicle reads.
+-- If a rollback must restore even those, recreate them by hand from the
+-- inventory in docs/trax/db-isolation-remediation.md.
+
 -- ── Rollback of stage 1 (RLS + policies) ────────────────────────────────────
 begin;
 

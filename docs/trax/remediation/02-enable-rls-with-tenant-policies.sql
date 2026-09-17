@@ -53,6 +53,15 @@ drop policy if exists allow_all_select on public.vehicles;
 drop policy if exists "Allow all operations for all users" on public.vehicles;
 
 -- ── 2. Add only what is missing ─────────────────────────────────────────────
+-- `public_can_read_bookable_vehicles` is granted to {anon, authenticated} and its
+-- USING clause is only `coalesce(status,'') <> all(array['Disposed','Sold'])`.
+-- Permissive policies are OR-ed, so as written it lets a signed-in staff member of
+-- one account read every other account's vehicles — even after RLS is on, and even
+-- for a plain count. Recreate it for anon alone, which is who it is for.
+drop policy if exists public_can_read_bookable_vehicles on public.vehicles;
+create policy public_can_read_bookable_vehicles on public.vehicles for select to anon
+  using (coalesce(status, '') <> all (array['Disposed', 'Sold']));
+
 -- The customer portal reads payments, invoices and ledger rows for the signed-in
 -- customer; rentals already has "Customers can read own rentals".
 drop policy if exists payments_customer_read on public.payments;

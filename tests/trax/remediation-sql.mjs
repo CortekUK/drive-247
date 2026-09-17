@@ -43,7 +43,7 @@ create table public.ledger_entries(id uuid primary key, tenant_id uuid, customer
 create table public.payment_applications(id uuid primary key, tenant_id uuid);
 create table public.payg_accruals(id uuid primary key, tenant_id uuid);
 create table public.rental_extensions(id uuid primary key, tenant_id uuid);
-create table public.vehicles(id uuid primary key, tenant_id uuid, show_on_website boolean, is_disposed boolean);
+create table public.vehicles(id uuid primary key, tenant_id uuid, show_on_website boolean, is_disposed boolean, status text);
 create function public.get_user_tenant_id() returns uuid language sql stable as $$ select null::uuid $$;
 create function public.is_super_admin() returns boolean language sql stable as $$ select false $$;
 `);
