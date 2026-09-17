@@ -75,8 +75,11 @@ import { PromoCodesTableV2 } from '@/components/settings-v2/promo-codes-table-v2
 import { SettingsIndexV2 } from '@/components/settings-v2/settings-index';
 import * as BusinessV2 from '@/components/settings-v2/business-settings-states';
 import { BusinessRentalGate, DurationPageV2, LockboxPageV2, RequirementsPageV2, ReturnReminderPanelV2, makeBusinessSave } from '@/components/settings-v2/business-rules-pages';
-import { businessEditsCoveredBySections, businessPageDirty, keepUnsavedBusinessEdits } from '@/components/settings-v2/business-rules-logic';
-import { SettingsField, SettingsPageHeader, SettingsPageHeaderSkeleton, SettingsPanel, SettingsRow, Unit } from '@/components/settings-v2/settings-kit';
+import { keepUnsavedBusinessEdits, rentalEditsCoveredBySections, rentalFormDiffers } from '@/components/settings-v2/business-rules-logic';
+import { SettingsField, SettingsPageHeader, SettingsPageHeaderSkeleton, SettingsPageSaveProvider, SettingsPanel, SettingsRow, SettingsStickySaveBar, Unit } from '@/components/settings-v2/settings-kit';
+import { SectionSaveRegistration } from '@/components/settings-v2/business-section-save';
+import { LeaveDialogV2 } from '@/components/settings-v2/leave-dialog-v2';
+import { useLeaveGuardV2 } from '@/hooks/use-leave-guard-v2';
 import { AgreementTemplateStatusV2, EmailTemplatesStatusV2 } from '@/components/settings-v2/templates-status-v2';
 import { PricingRulesV2 } from '@/components/settings-v2/pricing-rules-v2';
 import { DepositSettingsV2, FeesSettingsV2 } from '@/components/settings-v2/fees-deposit-v2';
@@ -96,10 +99,11 @@ import {
   describeSaveError,
 } from '@/components/settings-v2/section-states';
 import {
-  canSaveAllDirty,
+  canSaveV2Edits,
   resolveSettingsPageData,
   resolveSettingsTabNotice,
   settingsTabNoticeCopy,
+  v2HasUnsavedEdits,
 } from '@/components/settings-v2/settings-shell-state';
 
 /**
@@ -155,8 +159,6 @@ const MovedToWebsite = ({
  * them to /integrations still runs — and `insurance` is here only because the
  * Bonzah card deep-links to its application wizard.
  */
-const SETTINGS_INDEX = '__settings_index__';
-
 const V2_SETTINGS_PAGES: Record<string, { section: string; title: string; description: string; permTab: string }> = {
   general: { section: 'Business', title: 'General', description: 'Currency, distance units and optional modules.', permTab: 'general' },
   locations: { section: 'Business', title: 'Locations', description: 'Where customers pick up and return cars, and where you deliver.', permTab: 'locations' },
@@ -200,8 +202,15 @@ const V2_SETTINGS_PAGES: Record<string, { section: string; title: string; descri
  */
 const V2_PAGES_GATING_OWN_CONTROLS = new Set(['reminders', 'push', 'general', 'locations', 'booking-site', 'requirements', 'duration', 'lockbox', 'templates', 'pricing', 'fees', 'preauth', 'installments', 'payg', 'auto-extend', 'promos', 'extras']);
 
-/** v2 pages that show "Unsaved changes" beside their own Save; the header chip would repeat it. */
-const V2_PAGES_WITH_OWN_SAVE_STATUS = new Set(['general', 'locations', 'booking-site', 'requirements', 'duration', 'lockbox', 'templates', 'installments']);
+/**
+ * v2 pages whose forms save through ONE sticky bar at the end of the page
+ * (Reset + Save changes). Every form on them registers its save and discard
+ * with the page (`registerV2SectionSave`), and inside the bar's
+ * SettingsPageSaveProvider no panel shows a Save of its own. Holiday pricing
+ * and reminder rules stay per item (dialogs and cards). Locations keeps its own
+ * Save until it registers under "locations"; Installments keeps its own too.
+ */
+const V2_PAGES_WITH_SAVE_BAR = new Set(['general', 'booking-site', 'requirements', 'duration', 'lockbox', 'templates', 'pricing', 'fees', 'preauth']);
 
 const V2_SETTINGS_REDIRECTS: Record<string, string> = {
   branding: '/settings/appearance',
@@ -1235,10 +1244,14 @@ const Settings = () => {
   // "Save & Leave" saves it instead of reporting success over dropped edits, and
   // leaving the page warns. Always empty for every other tenant.
   const v2SectionSaves = React.useRef<Record<string, () => Promise<unknown>>>({});
+  // …and the discard that puts it back (the page's Reset and "Don't save").
+  const v2SectionDiscards = React.useRef<Record<string, () => void>>({});
   const [v2DirtySections, setV2DirtySections] = useState<string[]>([]);
-  const registerV2SectionSave = useCallback<RegisterSectionSave>((key, save) => {
+  const registerV2SectionSave = useCallback<RegisterSectionSave>((key, save, discard) => {
     if (save) v2SectionSaves.current[key] = save;
     else delete v2SectionSaves.current[key];
+    if (save && discard) v2SectionDiscards.current[key] = discard;
+    else delete v2SectionDiscards.current[key];
     setV2DirtySections(prev =>
       prev.includes(key) === !!save ? prev : save ? [...prev, key] : prev.filter(k => k !== key)
     );
@@ -1400,11 +1413,7 @@ const Settings = () => {
 
   const handleTabDiscardAndSwitch = useCallback(() => {
     setShowTabWarning(false);
-    if (pendingTab === SETTINGS_INDEX) {
-      // v2 only: leaving a settings page for the index.
-      router.replace('/settings', { scroll: false });
-      setPendingTab(null);
-    } else if (pendingTab) {
+    if (pendingTab) {
       setActiveTab(pendingTab);
       router.replace(`/settings?tab=${pendingTab}`, { scroll: false });
       setPendingTab(null);
@@ -1426,7 +1435,9 @@ const Settings = () => {
       if (v2Chrome) setV2LeaveSaveError(null);
       const saves: Promise<void>[] = [];
 
-      if (generalFormDirty) {
+      // v2: a registered General panel saves itself below (its save asks before
+      // a currency change), so it is not written twice.
+      if (generalFormDirty && !(v2Chrome && v2SectionSaves.current['general-regional'])) {
         saves.push((async () => {
           setIsSavingGeneral(true);
           try {
@@ -1479,7 +1490,8 @@ const Settings = () => {
         })());
       }
 
-      if (brandingFormDirty) {
+      // v2: the booking-site colours register their own save (below).
+      if (brandingFormDirty && !(v2Chrome && v2SectionSaves.current['booking-site-colours'])) {
         saves.push((async () => {
           setIsSavingBranding(true);
           try {
@@ -1562,13 +1574,96 @@ const Settings = () => {
     saveAndLeave,
     cancelLeave,
     isSaving: isSavingNav,
-  } = useUnsavedChangesWarning({ hasChanges: hasUnsavedChanges, onSave: saveAllDirtyForms });
+  } = useUnsavedChangesWarning({ hasChanges: hasUnsavedChanges && !v2Chrome, onSave: saveAllDirtyForms });
 
-  // v2: a failed leave-save's message belongs to that dialog. Once it closes
+  // v1: a failed leave-save's message belongs to that dialog. Once it closes
   // (Cancel, Escape, Don't Save, or a save that went through) it is gone.
+  // (Always null for v1; v2 clears it with its own guard below.)
   useEffect(() => {
+    if (v2Chrome) return;
     if (!unsavedDialogOpen && !showTabWarning) setV2LeaveSaveError(null);
-  }, [unsavedDialogOpen, showTabWarning]);
+  }, [unsavedDialogOpen, showTabWarning, v2Chrome]);
+
+  // ── v2 (northwind): unsaved edits, the page's one save bar, and the leave guard ──
+  //
+  // "Don't save" and Reset have to drop the edits they warned about. This
+  // component stays mounted between the index and each settings page, so the
+  // forms it owns (General, the booking-site colours, and the rental form behind
+  // Tax and fees, Security deposit, Pricing rules and the Business-rules pages)
+  // kept the discarded values: reopening the page brought them back as unsaved,
+  // and the index went on warning. Put each back to what was loaded. Sections
+  // holding their own state (weekend pricing, lockbox messages) register a
+  // discard of their own.
+  const discardV2PageEdits = () => {
+    if (lastSyncedRentalForm.current) setRentalForm(lastSyncedRentalForm.current);
+    setGeneralForm({
+      currency_code: settings?.currency_code || tenant?.currency_code || 'USD',
+      distance_unit: (settings?.distance_unit as 'km' | 'miles') || (tenant?.distance_unit as 'km' | 'miles') || 'miles',
+      privacy_policy_version: tenant?.privacy_policy_version || '1.0',
+      terms_version: tenant?.terms_version || '1.0',
+    });
+    resetBrandingForm();
+  };
+  const resetV2PageEdits = () => {
+    Object.values(v2SectionDiscards.current).forEach((discard) => discard());
+    discardV2PageEdits();
+    setV2LeaveSaveError(null);
+  };
+
+  // Genuine edits only: what the sections registered (each compares numbers as
+  // numbers), plus any rental-form field no registered section saves.
+  const v2RentalEditsUncovered =
+    v2Chrome &&
+    rentalFormDiffers(rentalForm, lastSyncedRentalForm.current) &&
+    !rentalEditsCoveredBySections(rentalForm, lastSyncedRentalForm.current, rentalSettings, v2DirtySections);
+  const v2PageHasEdits =
+    v2Chrome &&
+    v2HasUnsavedEdits({
+      sections: v2DirtySections,
+      locations: locationsDirty,
+      pricing: pricingDirty,
+      rentalUncovered: v2RentalEditsUncovered,
+    });
+  // Save is offered when every unsaved part has a save the page can run: the
+  // Business-rules pages, Tax and fees, Security deposit, the monthly rate and
+  // weekend pricing all count once registered.
+  const v2CanSaveEdits = canSaveV2Edits({
+    registered: v2DirtySections,
+    locations: locationsDirty,
+    pricing: pricingDirty,
+    rentalUncovered: v2RentalEditsUncovered,
+  });
+
+  const v2LeaveGuard = useLeaveGuardV2({
+    enabled: v2Chrome,
+    isDirty: v2PageHasEdits,
+    canSave: v2CanSaveEdits,
+    onSave: saveAllDirtyForms,
+    onDiscard: resetV2PageEdits,
+  });
+
+  const [v2BarSaving, setV2BarSaving] = useState(false);
+  const saveV2PageEdits = async () => {
+    if (v2BarSaving) return;
+    setV2BarSaving(true);
+    try {
+      await saveAllDirtyForms();
+    } finally {
+      setV2BarSaving(false);
+    }
+  };
+
+  // v2: why the last save failed is said until the leave dialog closes, Reset,
+  // or nothing is unsaved any more.
+  const v2LeaveDialogWasOpen = React.useRef(false);
+  useEffect(() => {
+    if (!v2Chrome) return;
+    if (v2LeaveDialogWasOpen.current && !v2LeaveGuard.open) setV2LeaveSaveError(null);
+    v2LeaveDialogWasOpen.current = v2LeaveGuard.open;
+  }, [v2Chrome, v2LeaveGuard.open]);
+  useEffect(() => {
+    if (v2Chrome && !v2PageHasEdits) setV2LeaveSaveError(null);
+  }, [v2Chrome, v2PageHasEdits]);
 
   // Save & switch tab handler (needs saveAllDirtyForms defined above)
   const [isSavingForTab, setIsSavingForTab] = useState(false);
@@ -1576,11 +1671,7 @@ const Settings = () => {
     setIsSavingForTab(true);
     try {
       const success = await saveAllDirtyForms();
-      if (success && pendingTab === SETTINGS_INDEX) {
-        router.replace('/settings', { scroll: false });
-        setPendingTab(null);
-        setShowTabWarning(false);
-      } else if (success && pendingTab) {
+      if (success && pendingTab) {
         setActiveTab(pendingTab);
         router.replace(`/settings?tab=${pendingTab}`, { scroll: false });
         setPendingTab(null);
@@ -2534,57 +2625,9 @@ const Settings = () => {
       rental: { settings: rentalSettings, error: rentalSettingsError },
     });
 
-    // "Save & Leave" saves General, Branding and the registered v2 sections; see
-    // canSaveAllDirty. Rental-form edits count as saveable only when every one is
-    // a Business-rules field whose page registered its save.
-    const v2RentalEditsCovered =
-      rentalFormDirty &&
-      businessEditsCoveredBySections(rentalForm, lastSyncedRentalForm.current, rentalSettings, v2DirtySections);
-    const v2CanSaveAll = canSaveAllDirty({ rental: rentalFormDirty && !v2RentalEditsCovered, locations: locationsDirty, pricing: pricingDirty });
-
-    const v2PageDirty: Record<string, boolean> = {
-      general: generalFormDirty,
-      'booking-site': brandingFormDirty,
-      locations: locationsDirty,
-      pricing: pricingDirty || rentalFormDirty,
-      requirements: rentalFormDirty,
-      duration: rentalFormDirty || businessPageDirty('duration', rentalForm, rentalSettings),
-      lockbox: rentalFormDirty || businessPageDirty('lockbox', rentalForm, rentalSettings),
-      fees: rentalFormDirty,
-      preauth: rentalFormDirty,
-      templates: rentalFormDirty,
-    };
-    // v2 sections that track their own unsaved edits (deposit switches, weekend pricing).
-    if (v2Page && v2DirtySections.length > 0) v2PageDirty[v2Page] = true;
-
-    // "Don't Save" has to drop the edits it warned about. This component stays
-    // mounted between the index and each settings page, so the forms it owns
-    // (General, the booking-site colours, and the rental form behind Tax and
-    // fees, Security deposit, Pricing rules and the Business-rules pages) kept
-    // the discarded values: reopening the page brought them back as "Unsaved
-    // changes", and the index went on warning. Put each back to what was loaded.
-    // Sections holding their own state (weekend pricing, locations) reset when
-    // they unmount.
-    const discardV2PageEdits = () => {
-      if (lastSyncedRentalForm.current) setRentalForm(lastSyncedRentalForm.current);
-      setGeneralForm({
-        currency_code: settings?.currency_code || tenant?.currency_code || 'USD',
-        distance_unit: (settings?.distance_unit as 'km' | 'miles') || (tenant?.distance_unit as 'km' | 'miles') || 'miles',
-        privacy_policy_version: tenant?.privacy_policy_version || '1.0',
-        terms_version: tenant?.terms_version || '1.0',
-      });
-      resetBrandingForm();
-    };
-
-    // Back to the index, through the same unsaved-changes dialog a tab switch uses.
-    const openSettingsIndex = () => {
-      if (v2Page && v2PageDirty[v2Page]) {
-        setPendingTab(SETTINGS_INDEX);
-        setShowTabWarning(true);
-        return;
-      }
-      router.push('/settings');
-    };
+    // One save bar per page (V2_PAGES_WITH_SAVE_BAR): its sections register
+    // their saves and discards, and show no Save of their own inside it.
+    const v2PageHasSaveBar = !!v2Page && V2_PAGES_WITH_SAVE_BAR.has(v2Page);
 
     const saveRental = async (values: Record<string, unknown>, refetch = false) => {
       try {
@@ -2617,7 +2660,7 @@ const Settings = () => {
           const v2FleetHealthFailed =
             !v2FleetHealthReady && queryClient.getQueryState(['rental-settings', tenant?.id])?.status === 'error';
           return (
-            <div className="space-y-6">
+            <div className="space-y-10">
               <BusinessV2.BusinessRegionalPanel
                 form={generalForm}
                 onFormChange={(patch) => setGeneralForm(prev => ({ ...prev, ...patch }))}
@@ -2649,6 +2692,7 @@ const Settings = () => {
                     terms_version: tenant?.terms_version || '1.0',
                   })
                 }
+                registerSave={registerV2SectionSave}
               />
 
               {(isV2("turo", tenantSlug) || !hideVehicleOwnersToggle || !isAreaHidden('fleet-health', tenantSlug)) && (
@@ -2796,6 +2840,8 @@ const Settings = () => {
             !!tenantBranding &&
             (brandingForm.light_header_footer_color !== (tenantBranding.light_header_footer_color || '') ||
               brandingForm.dark_header_footer_color !== (tenantBranding.dark_header_footer_color || ''));
+          // Saved by the page's save bar: the same payloads, and it rejects on a
+          // failure so the bar says so (the page toasts it).
           const saveHeaderFooter = async () => {
             setIsSavingBranding(true);
             try {
@@ -2806,14 +2852,18 @@ const Settings = () => {
               await updateTenantBranding(colours as any);
               await updateOrgBranding(colours as any);
               logAction({ action: "settings_updated", entityType: "settings", entityId: tenant?.id || "unknown", details: { section: "branding" } });
-            } catch (error: any) {
-              toast({ title: "Error", description: error.message || "Failed to save colours", variant: "destructive" });
             } finally {
               setIsSavingBranding(false);
             }
           };
+          const discardHeaderFooter = () =>
+            setBrandingForm(prev => ({
+              ...prev,
+              light_header_footer_color: tenantBranding?.light_header_footer_color || '',
+              dark_header_footer_color: tenantBranding?.dark_header_footer_color || '',
+            }));
           return (
-            <div className="space-y-6">
+            <div className="space-y-10">
               {!tenant ? (
                 <SettingsSectionSkeleton variant="form" rows={4} label="Loading booking site options" />
               ) : (
@@ -2900,18 +2950,20 @@ const Settings = () => {
                 footer={
                   canEditPage ? (
                     <>
+                      <SectionSaveRegistration
+                        registerSave={registerV2SectionSave}
+                        sectionKey="booking-site-colours"
+                        isDirty={headerFooterDirty}
+                        save={saveHeaderFooter}
+                        discard={discardHeaderFooter}
+                      />
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="mr-auto text-muted-foreground"
+                        className="text-muted-foreground"
                         onClick={() => setBrandingForm(prev => ({ ...prev, light_header_footer_color: '', dark_header_footer_color: '' }))}
                       >
                         Use default
-                      </Button>
-                      <SettingsSaveState status={isSavingBranding ? 'saving' : headerFooterDirty ? 'dirty' : 'idle'} />
-                      <Button size="sm" onClick={saveHeaderFooter} disabled={isSavingBranding || !headerFooterDirty} className="min-w-[88px]">
-                        {isSavingBranding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Save
                       </Button>
                     </>
                   ) : undefined
@@ -3190,7 +3242,7 @@ const Settings = () => {
 
         case 'reminders':
           return (
-            <div className="space-y-6">
+            <div className="space-y-10">
               <div className="settings-v2-body">
                 <EmailNotificationSettings canEdit={canEditSettings('reminders')} />
               </div>
@@ -3248,7 +3300,7 @@ const Settings = () => {
               ? `${Math.floor(hours / 24)} day${Math.floor(hours / 24) !== 1 ? 's' : ''}${hours % 24 > 0 ? ` ${hours % 24}h` : ''}`
               : `${hours} hours`;
           return (
-            <div className="space-y-6">
+            <div className="space-y-10">
               <BusinessRentalGate thing="your return reminder" rows={1}>
                 <ReturnReminderPanelV2
                   form={rentalForm}
@@ -3322,7 +3374,7 @@ const Settings = () => {
           // A deep link waiting on a manager's permissions: shaped like the
           // detail page it resolves to (same wrapper, a header placeholder),
           // so the panel does not jump ~90px down when the tab appears.
-          <div className="w-full max-w-[1160px] space-y-6 pb-16 md:pt-8">
+          <div className="w-full max-w-[1160px] space-y-8 pb-16 md:pt-[26px]">
             <SettingsPageHeaderSkeleton />
             <SettingsSectionSkeleton variant="form" rows={4} label="Loading settings" />
           </div>
@@ -3341,23 +3393,15 @@ const Settings = () => {
             }
           />
         ) : (
-          // md:pt-8: the header's first line is the 20px breadcrumb, so it
-          // centres at 50 + 32 + 10 = 92, the sidebar switch's row.
-          <div className="w-full max-w-[1160px] space-y-6 pb-16 md:pt-8">
-            <SettingsPageHeader
-              section={pageMeta.section}
-              title={pageMeta.title}
-              description={pageMeta.description}
-              rootLabel={v2Page === 'insurance' ? 'Integrations' : undefined}
-              onBack={v2Page === 'insurance' ? () => router.push('/integrations?open=Bonzah') : openSettingsIndex}
-            />
-            {canEditPage && v2Page && v2PageDirty[v2Page] && !V2_PAGES_WITH_OWN_SAVE_STATUS.has(v2Page) && (
-              <SettingsSaveState status={isSavingNav || isSavingForTab ? 'saving' : 'dirty'} />
-            )}
+          // md:pt-[26px]: no breadcrumb any more (Settings in the nav is the way
+          // back), so the header starts with the 32px title, which centres at
+          // 50 + 26 + 16 = 92, the sidebar switch's row, as on the index.
+          <div className="w-full max-w-[1160px] space-y-8 pb-16 md:pt-[26px]">
+            <SettingsPageHeader title={pageMeta.title} description={pageMeta.description} />
             {v2PageData.kind === 'loading' && v2Page === 'general' ? (
               // Shaped like the loaded page: the regional panel, then Optional modules.
-              <div className="space-y-6">
-                <BusinessV2.SettingsPanelSkeleton rows={2} footer={canEditPage} label="Loading regional settings" />
+              <div className="space-y-10">
+                <BusinessV2.SettingsPanelSkeleton rows={2} label="Loading regional settings" />
                 {(isV2("turo", tenantSlug) || !hideVehicleOwnersToggle || !isAreaHidden('fleet-health', tenantSlug)) && (
                   <BusinessV2.SettingsPanelSkeleton title rows={1} descriptionLines={2} label="Loading optional modules" />
                 )}
@@ -3382,9 +3426,22 @@ const Settings = () => {
                     reading actions a viewer needs there (Try again on a failed
                     read, the reminder category tabs, searching a long location
                     list). */}
-                <SettingsReadOnlyFieldset readOnly={!canEditPage && !V2_PAGES_GATING_OWN_CONTROLS.has(v2Page as string)}>
-                  {renderBody(v2Page as string)}
-                </SettingsReadOnlyFieldset>
+                <SettingsPageSaveProvider enabled={v2PageHasSaveBar}>
+                  <SettingsReadOnlyFieldset readOnly={!canEditPage && !V2_PAGES_GATING_OWN_CONTROLS.has(v2Page as string)}>
+                    {renderBody(v2Page as string)}
+                  </SettingsReadOnlyFieldset>
+                </SettingsPageSaveProvider>
+                {/* Last child: at the end of a short page, floating above the
+                    bottom of the window on a long one. */}
+                {canEditPage && v2PageHasSaveBar && (
+                  <SettingsStickySaveBar
+                    dirty={v2PageHasEdits}
+                    saving={v2BarSaving || v2LeaveGuard.saving}
+                    error={v2LeaveGuard.open ? null : v2LeaveSaveError}
+                    onSave={() => void saveV2PageEdits()}
+                    onReset={resetV2PageEdits}
+                  />
+                )}
               </>
             )}
           </div>
@@ -3393,26 +3450,15 @@ const Settings = () => {
         {promoDialogs}
         {depositChargeConfirmDialog}
 
-        <UnsavedChangesDialog
-          open={unsavedDialogOpen}
-          onCancel={cancelLeave}
-          onDiscard={() => {
-            discardV2PageEdits();
-            confirmLeave();
-          }}
-          onSave={v2CanSaveAll ? saveAndLeave : undefined}
-          isSaving={isSavingNav}
-          error={v2LeaveSaveError ? <SettingsSaveState status="error" error={v2LeaveSaveError} /> : null}
-        />
-        <UnsavedChangesDialog
-          open={showTabWarning}
-          onCancel={handleTabCancel}
-          onDiscard={() => {
-            discardV2PageEdits();
-            handleTabDiscardAndSwitch();
-          }}
-          onSave={v2CanSaveAll ? handleTabSaveAndSwitch : undefined}
-          isSaving={isSavingForTab}
+        {/* Every way out of a page with unsaved edits: links (same path with a
+            different ?tab= too), the guarded router, Back and Forward. */}
+        <LeaveDialogV2
+          open={v2LeaveGuard.open}
+          canSave={v2LeaveGuard.canSave}
+          saving={v2LeaveGuard.saving}
+          onSave={() => void v2LeaveGuard.save()}
+          onDiscard={v2LeaveGuard.discard}
+          onCancel={v2LeaveGuard.cancel}
           error={v2LeaveSaveError ? <SettingsSaveState status="error" error={v2LeaveSaveError} /> : null}
         />
       </>

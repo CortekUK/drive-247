@@ -73,7 +73,7 @@ export function WhereYouStand({ className }: { className?: string }) {
               <button
                 type="button"
                 onClick={() => router.push('/vehicles')}
-                className="group -mx-2 space-y-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-white/40"
+                className="group -mx-2 space-y-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-[hsl(var(--v2-hover,var(--muted))_/_0.6)] dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]"
               >
                 <div className="flex items-baseline gap-2">
                   <span className="text-[34px] font-semibold leading-none tabular-nums">
@@ -119,7 +119,7 @@ export function WhereYouStand({ className }: { className?: string }) {
               <button
                 type="button"
                 onClick={() => router.push('/payments')}
-                className="group -mx-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-white/40"
+                className="group -mx-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-[hsl(var(--v2-hover,var(--muted))_/_0.6)] dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]"
               >
                 {/* Two stats rather than one: a lone row left half the card
                     empty, and revenue per vehicle is the number that makes the

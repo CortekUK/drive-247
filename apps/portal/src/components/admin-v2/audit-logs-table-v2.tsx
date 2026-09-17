@@ -121,7 +121,7 @@ export function AuditLogsTableV2({
                   {log.entity_type ? (
                     // A 20px line whether or not there is a chip: the 10px chip in a
                     // 14px line box otherwise makes these rows 1px taller than the rest.
-                    <div className="flex h-5 min-w-0 items-center gap-2">
+                    <div className="flex h-5 min-w-0 items-center justify-center gap-2">
                       <span className="shrink-0 whitespace-nowrap leading-none">
                         <ListMetaChip>{log.entity_type}</ListMetaChip>
                       </span>

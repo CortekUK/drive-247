@@ -24,6 +24,9 @@ import {
   documentTypeOptions,
   hasErrors,
   keepUnsavedBusinessEdits,
+  MONEY_SECTION_FORM_KEYS,
+  rentalEditsCoveredBySections,
+  rentalFormDiffers,
   leadTimeHours,
   lockboxMethodStatus,
   normalizeLoadedLead,
@@ -501,6 +504,106 @@ describe("businessEditsCoveredBySections (v2 Save & Leave)", () => {
   it("is false until the page has filled the form in", () => {
     expect(businessEditsCoveredBySections(synced, null, saved, ["business-requirements"])).toBe(false);
     expect(businessEditsCoveredBySections(synced, synced, null, ["business-requirements"])).toBe(false);
+  });
+});
+
+describe("rentalEditsCoveredBySections (v2 page Save: fees, deposit and monthly rate count too)", () => {
+  // The tenant row as saved, and the form the page filled in from it.
+  const saved = {
+    minimum_rental_age: 21,
+    verification_document_type: "passport",
+    booking_lead_time_hours: 24,
+    min_rental_days: 0,
+    min_rental_hours: 4,
+    max_rental_days: 90,
+    buffer_time_minutes: 0,
+    lockbox_enabled: false,
+    return_reminder_enabled: true,
+    return_reminder_hours: 24,
+    tax_enabled: true,
+    tax_percentage: 5,
+    service_fee_enabled: false,
+    service_fee_type: "fixed_amount",
+    service_fee_value: 0,
+    service_fee_amount: 0,
+    security_deposit_enabled: true,
+    deposit_charge_enabled: false,
+    deposit_mode: "global",
+    global_deposit_amount: 250,
+    monthly_tier_days: 30,
+  };
+  const synced = {
+    ...savedFieldsFor("requirements", saved),
+    ...savedFieldsFor("duration", saved),
+    ...savedFieldsFor("lockbox", saved),
+    ...savedFieldsFor("return-reminder", saved),
+    tax_enabled: true,
+    tax_percentage: 5,
+    service_fee_enabled: false,
+    service_fee_type: "fixed_amount",
+    service_fee_value: 0,
+    service_fee_amount: 0,
+    security_deposit_enabled: true,
+    deposit_charge_enabled: false,
+    deposit_mode: "global",
+    global_deposit_amount: 250,
+    monthly_tier_days: 30,
+    installment_config: { grace_period_days: 3 },
+  };
+
+  it("names the keys each money section saves", () => {
+    expect(MONEY_SECTION_FORM_KEYS).toEqual({
+      fees: ["tax_enabled", "tax_percentage", "service_fee_enabled", "service_fee_type", "service_fee_value", "service_fee_amount"],
+      preauth: ["security_deposit_enabled", "deposit_charge_enabled", "deposit_mode", "global_deposit_amount"],
+      "pricing-monthly-tier": ["monthly_tier_days"],
+    });
+  });
+
+  it("nothing changed: covered with nothing registered", () => {
+    expect(rentalEditsCoveredBySections(synced, synced, saved, [])).toBe(true);
+  });
+
+  it("a fees-only edit is covered once Tax and fees registered, and only then", () => {
+    const form = { ...synced, tax_percentage: 8 };
+    expect(rentalEditsCoveredBySections(form, synced, saved, ["fees"])).toBe(true);
+    expect(rentalEditsCoveredBySections(form, synced, saved, [])).toBe(false);
+    expect(rentalEditsCoveredBySections(form, synced, saved, ["preauth"])).toBe(false);
+  });
+
+  it("typing the saved rate back as text ('5' over 5) is not an edit", () => {
+    const form = { ...synced, tax_percentage: "5" };
+    expect(rentalFormDiffers(form, synced)).toBe(true);
+    expect(rentalEditsCoveredBySections(form, synced, saved, [])).toBe(true);
+  });
+
+  it("a deposit edit needs preauth, a monthly-rate edit needs pricing-monthly-tier", () => {
+    expect(rentalEditsCoveredBySections({ ...synced, global_deposit_amount: 300 }, synced, saved, [])).toBe(false);
+    expect(rentalEditsCoveredBySections({ ...synced, global_deposit_amount: 300 }, synced, saved, ["preauth"])).toBe(true);
+    expect(rentalEditsCoveredBySections({ ...synced, monthly_tier_days: 31 }, synced, saved, ["fees"])).toBe(false);
+    expect(rentalEditsCoveredBySections({ ...synced, monthly_tier_days: 31 }, synced, saved, ["pricing-monthly-tier"])).toBe(true);
+  });
+
+  it("business pages still need their own registration beside a money section", () => {
+    const form = { ...synced, minimum_rental_age: 30, tax_percentage: 8 };
+    expect(rentalEditsCoveredBySections(form, synced, saved, ["fees"])).toBe(false);
+    expect(rentalEditsCoveredBySections(form, synced, saved, ["fees", "business-requirements"])).toBe(true);
+  });
+
+  it("never covers a field no section saves (an installment rule)", () => {
+    const every = ["fees", "preauth", "pricing-monthly-tier", ...Object.values(BUSINESS_SECTION_KEYS)];
+    const form = { ...synced, installment_config: { grace_period_days: 5 } };
+    expect(rentalEditsCoveredBySections(form, synced, saved, every)).toBe(false);
+  });
+
+  it("is false until the page has filled the form in and the row is loaded", () => {
+    expect(rentalEditsCoveredBySections(synced, null, saved, [])).toBe(false);
+    expect(rentalEditsCoveredBySections(synced, synced, null, [])).toBe(false);
+  });
+
+  it("rentalFormDiffers: false for the same values (a new equal array too), true for any change", () => {
+    expect(rentalFormDiffers(synced, { ...synced, lockbox_notification_methods: ["email"] })).toBe(false);
+    expect(rentalFormDiffers({ ...synced, deposit_mode: "per_vehicle" }, synced)).toBe(true);
+    expect(rentalFormDiffers(null, synced)).toBe(false);
   });
 });
 

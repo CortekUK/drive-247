@@ -27,10 +27,13 @@
  *   5. content     native fieldset-disabled when view-only (keyboard too);
  *                  per-section save status; inline validation instead of the
  *                  silent clamps (23 hours, 4,320 minutes, max 90).
- *   6. leaving     each page registers its save with the page while dirty
- *                  (`registerSave`), so leaving for another screen warns and
- *                  "Save & Leave" really saves; "Don't Save" puts the fields
- *                  back when the page closes (useDiscardOnUnmount).
+ *   6. leaving     each page registers its save AND its discard with the page
+ *                  while dirty (`registerSave`), so the page's one save bar
+ *                  saves or resets it, leaving for another screen warns, and
+ *                  "Save" in that dialog really saves; "Don't save" puts the
+ *                  fields back when the page closes (useDiscardOnUnmount).
+ *                  Inside the page's save bar a panel shows no Save of its own,
+ *                  only an inline error when its save failed.
  */
 
 import { useEffect, useState, type ReactNode } from "react";
@@ -39,7 +42,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { SettingsPanel, SettingsRow, Unit } from "@/components/settings-v2/settings-kit";
+import { SettingsPanel, SettingsRow, Unit, UnitGroup, UnitGroups, useSettingsPageSave } from "@/components/settings-v2/settings-kit";
 import {
   SettingsDependencyNotice,
   SettingsReadOnlyFieldset,
@@ -227,7 +230,7 @@ export function RequirementsPageV2({
       }),
     );
   const discard = () => setForm((prev) => ({ ...prev, ...savedFieldsFor("requirements", saved) }));
-  useRegisterLeaveSave(canEdit ? registerSave : undefined, "business-requirements", isDirty, leaveSave(ageError, submit, "your driver requirements"));
+  useRegisterLeaveSave(canEdit ? registerSave : undefined, "business-requirements", isDirty, leaveSave(ageError, submit, "your driver requirements"), discard);
   useDiscardOnUnmount(isDirty, discard);
 
   return (
@@ -296,7 +299,7 @@ export function RequirementsPageV2({
           label="Allow rentals without ID verification"
           description="For when you have checked the ID yourself. Staff must type a reason, which is saved on the rental and in your audit log."
           note={
-            <>
+            <div className="space-y-1">
               {idWaiver.enabled && (
                 <p className={warnText}>
                   Insurance still needs the customer&apos;s date of birth, and agreements will show blank ID fields.
@@ -305,7 +308,7 @@ export function RequirementsPageV2({
               <p className="text-muted-foreground">
                 {idWaiver.canChange ? "Saves as soon as you switch it." : "Only a head admin can change this."}
               </p>
-            </>
+            </div>
           }
         >
           <Switch
@@ -378,7 +381,7 @@ export function DurationPageV2({ form, setForm, saved, canEdit, onSave, register
     setForm((prev) => ({ ...prev, ...savedFieldsFor("duration", saved) }));
   };
   const firstError = errors.lead ?? errors.min ?? errors.max ?? errors.buffer ?? null;
-  useRegisterLeaveSave(canEdit ? registerSave : undefined, "business-duration", isDirty, leaveSave(firstError, submit, "your booking rules"));
+  useRegisterLeaveSave(canEdit ? registerSave : undefined, "business-duration", isDirty, leaveSave(firstError, submit, "your booking rules"), discard);
   useDiscardOnUnmount(isDirty, discard);
 
   return (
@@ -443,30 +446,37 @@ export function DurationPageV2({ form, setForm, saved, canEdit, onSave, register
           description="Bookings shorter than this are not allowed. Hours can be 0–23."
           note={errors.min ? <FieldError>{errors.min}</FieldError> : undefined}
         >
-          <Input
-            type="text"
-            inputMode="numeric"
-            maxLength={4}
-            value={form.min_rental_days || ""}
-            onChange={(e) => setNumber("min_rental_days", e.target.value)}
-            placeholder="0"
-            className={cn(numberBoxWidth(form.min_rental_days, "w-16"), "tabular-nums")}
-            aria-label="Shortest rental days"
-            aria-invalid={errors.min ? true : undefined}
-          />
-          <Unit>days</Unit>
-          <Input
-            type="text"
-            inputMode="numeric"
-            maxLength={2}
-            value={form.min_rental_hours || ""}
-            onChange={(e) => setNumber("min_rental_hours", e.target.value)}
-            placeholder="0"
-            className={cn(numberBoxWidth(form.min_rental_hours, "w-16"), "tabular-nums")}
-            aria-label="Shortest rental hours"
-            aria-invalid={errors.min ? true : undefined}
-          />
-          <Unit>hours</Unit>
+          {/* Each box keeps its own unit: "[2] days  [4] hours", not "[2] days [4] hours". */}
+          <UnitGroups>
+            <UnitGroup>
+              <Input
+                type="text"
+                inputMode="numeric"
+                maxLength={4}
+                value={form.min_rental_days || ""}
+                onChange={(e) => setNumber("min_rental_days", e.target.value)}
+                placeholder="0"
+                className={cn(numberBoxWidth(form.min_rental_days, "w-16"), "tabular-nums")}
+                aria-label="Shortest rental days"
+                aria-invalid={errors.min ? true : undefined}
+              />
+              <Unit>days</Unit>
+            </UnitGroup>
+            <UnitGroup>
+              <Input
+                type="text"
+                inputMode="numeric"
+                maxLength={2}
+                value={form.min_rental_hours || ""}
+                onChange={(e) => setNumber("min_rental_hours", e.target.value)}
+                placeholder="0"
+                className={cn(numberBoxWidth(form.min_rental_hours, "w-16"), "tabular-nums")}
+                aria-label="Shortest rental hours"
+                aria-invalid={errors.min ? true : undefined}
+              />
+              <Unit>hours</Unit>
+            </UnitGroup>
+          </UnitGroups>
         </SettingsRow>
 
         <SettingsRow
@@ -543,6 +553,7 @@ export function LockboxPageV2({
 }: PageProps & { smsReady: boolean; integrationsHref: string; vehiclesHref: string }) {
   const isDirty = businessPageDirty("lockbox", form, saved);
   const save = useSectionSave(isDirty);
+  const pageSave = useSettingsPageSave();
   const enabled = !!form.lockbox_enabled;
   const codeError = enabled ? validateCodeLength(form.lockbox_code_length) : null;
   const methodStatus = lockboxMethodStatus(form.lockbox_notification_methods, { smsReady });
@@ -562,7 +573,7 @@ export function LockboxPageV2({
       }),
     );
   const discard = () => setForm((prev) => ({ ...prev, ...savedFieldsFor("lockbox", saved) }));
-  useRegisterLeaveSave(canEdit ? registerSave : undefined, "business-lockbox", isDirty, leaveSave(codeError, submit, "your key handover settings"));
+  useRegisterLeaveSave(canEdit ? registerSave : undefined, "business-lockbox", isDirty, leaveSave(codeError, submit, "your key handover settings"), discard);
   useDiscardOnUnmount(isDirty, discard);
 
   // The switch is part of the form, not a live toggle like the waiver: say so
@@ -572,7 +583,9 @@ export function LockboxPageV2({
     enableChanged || !enabled ? (
       <div className="space-y-1">
         {enableChanged && (
-          <p className={warnText}>Not applied yet. Press Save to turn lockbox handover {enabled ? "on" : "off"}.</p>
+          <p className={warnText}>
+            Not applied yet. Press {pageSave ? "Save changes" : "Save"} to turn lockbox handover {enabled ? "on" : "off"}.
+          </p>
         )}
         {!enabled && (
           <p className="text-muted-foreground">
@@ -614,7 +627,7 @@ export function LockboxPageV2({
   ) : undefined;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-10">
       <SettingsReadOnlyFieldset readOnly={!canEdit}>
         <SettingsPanel
           footer={
@@ -769,7 +782,7 @@ export function ReturnReminderPanelV2({
     setClampNote(null);
     setForm((prev) => ({ ...prev, ...savedFieldsFor("return-reminder", saved) }));
   };
-  useRegisterLeaveSave(canEdit ? registerSave : undefined, "business-return-reminder", isDirty, leaveSave(null, submit, "your return reminder"));
+  useRegisterLeaveSave(canEdit ? registerSave : undefined, "business-return-reminder", isDirty, leaveSave(null, submit, "your return reminder"), discard);
   useDiscardOnUnmount(isDirty, discard);
 
   return (
@@ -816,33 +829,34 @@ export function ReturnReminderPanelV2({
             ) : undefined
           }
         >
-          {enabled && (
-            <>
-              <Input
-                type="text"
-                inputMode="numeric"
-                maxLength={3}
-                value={draft}
-                onChange={(e) => {
-                  const digits = digitsOnly(e.target.value).slice(0, 3);
-                  setDraft(digits);
-                  setClampNote(null);
-                  const n = parseInt(digits, 10);
-                  if (n >= 1 && n <= 168) setForm((prev) => ({ ...prev, return_reminder_hours: n }));
-                }}
-                onBlur={commitDraft}
-                className="w-20 tabular-nums"
-                aria-label="Hours before return"
-              />
-              <Unit>hours before</Unit>
-            </>
-          )}
-          <Switch
-            checked={enabled}
-            onCheckedChange={(checked) => setForm((prev) => ({ ...prev, return_reminder_enabled: checked }))}
-            aria-label="Send return reminders"
-            className="ml-2"
-          />
+          <UnitGroups>
+            {enabled && (
+              <UnitGroup>
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={3}
+                  value={draft}
+                  onChange={(e) => {
+                    const digits = digitsOnly(e.target.value).slice(0, 3);
+                    setDraft(digits);
+                    setClampNote(null);
+                    const n = parseInt(digits, 10);
+                    if (n >= 1 && n <= 168) setForm((prev) => ({ ...prev, return_reminder_hours: n }));
+                  }}
+                  onBlur={commitDraft}
+                  className="w-20 tabular-nums"
+                  aria-label="Hours before return"
+                />
+                <Unit>hours before</Unit>
+              </UnitGroup>
+            )}
+            <Switch
+              checked={enabled}
+              onCheckedChange={(checked) => setForm((prev) => ({ ...prev, return_reminder_enabled: checked }))}
+              aria-label="Send return reminders"
+            />
+          </UnitGroups>
         </SettingsRow>
       </SettingsPanel>
     </SettingsReadOnlyFieldset>

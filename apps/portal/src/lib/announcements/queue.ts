@@ -7,7 +7,8 @@
  * So "first matching row" IS "highest priority" here, and neither function sorts.
  *
  * Two slots, picked independently:
- *   - the banner slot: at most ONE full-width system banner (pickSystemBanner);
+ *   - the banner slot: ONE full-width bar. When several banners are due it rotates
+ *     through them (pickSystemBanners); pickSystemBanner is its first-row form;
  *   - the dialog slot: at most ONE announcement dialog (pickAnnouncementDialog).
  *
  * The dialog rules, in order (spec §3.3):
@@ -72,9 +73,39 @@ export function pickAnnouncementDialog(i: DialogQueueInput): DialogPick {
   return null;
 }
 
-/** The banner slot: the first banner that is hard (always shown) or still due. */
+/**
+ * The banner slot: the first banner that is hard (always shown) or still due.
+ * For any list in the server's order (hard first) this is `pickSystemBanners(system)[0]`;
+ * the bar itself uses the plural form.
+ */
 export function pickSystemBanner(system: PortalAnnouncement[]): PortalAnnouncement | null {
   return (
     system.find((a) => a.kind === 'system' && a.display === 'banner' && (a.blocking === 'hard' || a.is_due)) ?? null
   );
+}
+
+const isBanner = (a: PortalAnnouncement) => a.kind === 'system' && a.display === 'banner';
+
+/**
+ * The banner slot's rotation: every banner the bar may show, in the order given
+ * (the server's priority order: hard first, then the admin's drag order).
+ *
+ * HARD BANNERS ONLY WHILE ANY APPLIES. If one or more hard banners are present, the
+ * list is exactly those hard banners, due or not (a hard banner ignores frequency),
+ * and every soft banner waits, due or not. A blocker must never be rotated away by
+ * a soft notice. Only when no hard banner applies does the list hold the soft
+ * banners that are due.
+ *
+ * An id that repeats keeps its first place (a row is one slide, never two).
+ */
+export function pickSystemBanners(system: PortalAnnouncement[]): PortalAnnouncement[] {
+  const banners: PortalAnnouncement[] = [];
+  const seen = new Set<string>();
+  for (const a of system) {
+    if (!isBanner(a) || seen.has(a.id)) continue;
+    seen.add(a.id);
+    banners.push(a);
+  }
+  const hard = banners.filter((a) => a.blocking === 'hard');
+  return hard.length > 0 ? hard : banners.filter((a) => a.is_due);
 }

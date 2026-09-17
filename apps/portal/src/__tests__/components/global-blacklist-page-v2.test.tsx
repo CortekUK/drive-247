@@ -175,10 +175,12 @@ describe("GlobalBlacklistPageV2", () => {
     expect(container.querySelector('[data-testid="table"]')).not.toBeNull();
   });
 
-  it("Back goes to the settings index, not the ?tab=blacklist loop", () => {
+  it("has no breadcrumb (Settings in the nav is the way back) and a bold title", () => {
     render();
-    const back = Array.from(container.querySelectorAll("nav button")).find((b) => b.textContent === "Settings")!;
-    act(() => (back as HTMLButtonElement).click());
-    expect(nav.push).toHaveBeenCalledWith("/settings");
+    expect(container.querySelector('nav[aria-label="Breadcrumb"]')).toBeNull();
+    const title = container.querySelector("h1")!;
+    expect(title.textContent).toBe("Global blacklist");
+    expect(title.className).toContain("font-bold");
+    expect(nav.push).not.toHaveBeenCalled();
   });
 });

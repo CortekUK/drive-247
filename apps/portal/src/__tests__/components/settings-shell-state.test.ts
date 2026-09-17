@@ -8,6 +8,7 @@
 import { describe, it, expect } from "vitest";
 import {
   canSaveAllDirty,
+  canSaveV2Edits,
   findSettingsSearchHandoff,
   formatCompanyCount,
   isPositiveCount,
@@ -16,6 +17,7 @@ import {
   resolveSettingsPageData,
   resolveSettingsTabNotice,
   settingsTabNoticeCopy,
+  v2HasUnsavedEdits,
 } from "@/components/settings-v2/settings-shell-state";
 
 describe("resolveSettingsTabNotice", () => {
@@ -165,6 +167,45 @@ describe("canSaveAllDirty", () => {
     expect(canSaveAllDirty({ rental: true, locations: false, pricing: false })).toBe(false);
     expect(canSaveAllDirty({ rental: false, locations: true, pricing: false })).toBe(false);
     expect(canSaveAllDirty({ rental: false, locations: false, pricing: true })).toBe(false);
+  });
+});
+
+describe("v2HasUnsavedEdits", () => {
+  const clean = { sections: [] as string[], locations: false, pricing: false, rentalUncovered: false };
+
+  it("is false with nothing registered and nothing reported", () => {
+    expect(v2HasUnsavedEdits(clean)).toBe(false);
+  });
+
+  it("is true for any registered section, Locations, weekend pricing, or an uncovered rental field", () => {
+    expect(v2HasUnsavedEdits({ ...clean, sections: ["fees"] })).toBe(true);
+    expect(v2HasUnsavedEdits({ ...clean, locations: true })).toBe(true);
+    expect(v2HasUnsavedEdits({ ...clean, pricing: true })).toBe(true);
+    expect(v2HasUnsavedEdits({ ...clean, rentalUncovered: true })).toBe(true);
+  });
+});
+
+describe("canSaveV2Edits", () => {
+  const nothing = { registered: [] as string[], locations: false, pricing: false, rentalUncovered: false };
+
+  it("offers Save for a fees-only edit once Tax and fees registered (the old check hid it)", () => {
+    expect(canSaveV2Edits({ ...nothing, registered: ["fees"] })).toBe(true);
+    // Before: any rental-form edit outside the Business-rules fields counted as unsaveable.
+    expect(canSaveAllDirty({ rental: true, locations: false, pricing: false })).toBe(false);
+  });
+
+  it("counts weekend pricing as saveable only when it registered under pricing-weekend", () => {
+    expect(canSaveV2Edits({ ...nothing, pricing: true, registered: ["pricing-weekend"] })).toBe(true);
+    expect(canSaveV2Edits({ ...nothing, pricing: true, registered: ["fees"] })).toBe(false);
+  });
+
+  it("counts Locations only once it registers under locations", () => {
+    expect(canSaveV2Edits({ ...nothing, locations: true })).toBe(false);
+    expect(canSaveV2Edits({ ...nothing, locations: true, registered: ["locations"] })).toBe(true);
+  });
+
+  it("never offers Save over a rental-form edit no registered section saves", () => {
+    expect(canSaveV2Edits({ ...nothing, rentalUncovered: true, registered: ["fees", "preauth", "pricing-weekend"] })).toBe(false);
   });
 });
 

@@ -361,14 +361,61 @@ describe('v2 dark hovers stay visible and readable', () => {
     'components/ui-v2/badge.tsx',
     'components/ui-v2/date-time-picker.tsx',
     'components/vehicles-v2/kit.tsx',
+    // Team lead review, Sep 17 2026: list tables, dashboard, availability and
+    // the user menu (v2-only), plus the messages and guides markup that v1
+    // shares, which reads --v2-hover with its old token as the fallback.
+    'app/(dashboard)/blocked-customers/page.tsx',
+    'components/admin-v2/audit-logs-table-v2.tsx',
+    'components/admin-v2/users-table-v2.tsx',
+    'components/agreements-v2/agreements-table-v2.tsx',
+    'components/availability-v2/availability-v2.tsx',
+    'components/availability-v2/weekly-hours-card.tsx',
+    'components/blacklist-v2/global-blacklist-table-v2.tsx',
+    'components/cms-v2/blog-categories-table-v2.tsx',
+    'components/cms-v2/blog-posts-table-v2.tsx',
+    'components/credits-v2/credit-transactions-table-v2.tsx',
+    'components/customers-v2/blocked-customers-tables-v2.tsx',
+    'components/dashboard-v2/money-at-risk.tsx',
+    'components/dashboard-v2/needs-you-now.tsx',
+    'components/dashboard-v2/on-the-move-today.tsx',
+    'components/dashboard-v2/setup-guide.tsx',
+    'components/dashboard-v2/where-you-stand.tsx',
+    'components/explainers/explainer.tsx',
+    'components/fleet-v2/pending-bookings-table-v2.tsx',
+    'components/fleet-v2/plates-table-v2.tsx',
+    'components/insurance-v2/insurance-policies-table-v2.tsx',
+    'components/insurance-v2/insurance-verifications-table-v2.tsx',
+    'components/invoices-v2/invoices-table-v2.tsx',
+    'components/invoices-v2/payment-requests-table-v2.tsx',
+    'components/messages-v2/attach-menu.tsx',
+    'components/messages-v2/conversation-rail.tsx',
+    'components/messages-v2/customer-context.tsx',
+    'components/settings-v2/extras-table-v2.tsx',
+    'components/settings-v2/promo-codes-table-v2.tsx',
+    'components/shared/hero-chart-v2.tsx',
+    'components/vehicles-v2/vehicles-overview.tsx',
+    // InstallmentSettings and usage-dashboard are NOT here: their v1 branch
+    // keeps `hover:bg-muted/40` verbatim on purpose. See the shared-markup block below.
   ];
   /** Every string literal (quoted or template) that carries a class list. */
   const classStrings = (src: string) => src.match(/"[^"\n]*"|'[^'\n]*'|`[^`]*`/g) ?? [];
+  /**
+   * A hover equal to its own resting fill is no hover at all: the global
+   * blacklist's expanded details row pins `bg-muted/30 hover:bg-muted/30` so
+   * the ui-v2 row tint does not flash over it. Removed before the grey check.
+   */
+  const withoutPinnedFills = (src: string) => src.replace(/(^|[\s"'`])bg-([\w/.[\]-]+) hover:bg-\2(?=[\s"'`])/g, '$1');
 
   it.each(FILES)('%s: no dark primary/10-15 hover wash (it measures ~1.05:1 on the dark card)', (file) => {
     const src = read(file);
     expect(src).not.toMatch(/dark:(hover:|data-\[state=open\]:)?bg-primary\/1[05]\b/);
-    expect(src).not.toMatch(/(^|[\s"'`])hover:bg-muted(\/\d+)?(?=[\s"'`])/);
+    expect(withoutPinnedFills(src)).not.toMatch(/(^|[\s"'`])hover:bg-muted(\/\d+)?(?=[\s"'`])/);
+  });
+
+  it('the pinned-fill exception only removes a hover that repeats its own resting fill', () => {
+    expect(withoutPinnedFills('"bg-muted/30 hover:bg-muted/30"')).toBe('""');
+    expect(withoutPinnedFills('"bg-card hover:bg-muted/30"')).toMatch(/hover:bg-muted\/30/);
+    expect(withoutPinnedFills('"bg-muted/30 hover:bg-muted/40"')).toMatch(/hover:bg-muted\/40/);
   });
 
   const V2_DARK = /dark:(\[a&\]:)?hover:bg-\[hsl\(var\(--v2-hover,var\(--muted\)\)\)\]/;
@@ -584,5 +631,190 @@ describe('light: muted hints inside rows that tint on hover keep 4.5:1', () => {
     const src = read('components/shared/layout/top-bar-v2.tsx');
     expect(src).toContain(`truncate text-[13px] ${TINT}`);
     expect(src).toContain(`placeholder:${TINT}`);
+  });
+});
+
+describe('Sep 17 review: grey and white hovers on v2-only surfaces are the purple', () => {
+  const PAIR = 'hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]';
+  const count = (src: string, needle: string) => src.split(needle).length - 1;
+  const GREY_OR_WHITE = /(^|[\s"'`])hover:bg-(muted|background|white|accent|secondary)(\/\d+)?(?=[\s"'`])/;
+
+  // Counts are the class lists edited in each file, one by one.
+  it.each([
+    ['components/dashboard-v2/setup-guide.tsx', 4],
+    ['components/dashboard-v2/money-at-risk.tsx', 1],
+    ['components/dashboard-v2/on-the-move-today.tsx', 2],
+    ['components/availability-v2/availability-v2.tsx', 1],
+    ['components/availability-v2/weekly-hours-card.tsx', 1],
+  ] as const)('%s: %i purple hover pair(s), and no grey or white hover left', (file, n) => {
+    const src = read(file);
+    expect(count(src, PAIR)).toBe(n);
+    expect(src).not.toMatch(GREY_OR_WHITE);
+  });
+
+  it("user menu: the avatar trigger's own hover is the pair, not the grey accent", () => {
+    const src = read('components/shared/layout/user-menu-v2.tsx');
+    expect(src).toContain(`<Button variant="ghost" size="icon" className="relative ${PAIR} transition-colors cursor-pointer">`);
+    expect(src).not.toMatch(GREY_OR_WHITE);
+  });
+
+  it('the two washed dashboard cards lighten with the purple token instead of white', () => {
+    // On the saturated brand card a primary/10 hover is primary over primary
+    // and cannot be seen, so these tint with --v2-hover itself: lighter in
+    // light mode (as white/15 and white/40 did), deeper indigo in dark.
+    const needs = read('components/dashboard-v2/needs-you-now.tsx');
+    expect(needs).toContain('hover:bg-[hsl(var(--v2-hover,var(--muted))_/_0.2)] dark:hover:bg-[hsl(var(--v2-hover,var(--muted))_/_0.5)]');
+    expect(needs).not.toMatch(/hover:bg-white/);
+    const stand = read('components/dashboard-v2/where-you-stand.tsx');
+    expect(count(stand, 'hover:bg-[hsl(var(--v2-hover,var(--muted))_/_0.6)] dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]')).toBe(2);
+    expect(stand).not.toMatch(/hover:bg-white/);
+  });
+
+  it('no slash-opacity border token is left in the edited v2-only files (it is an invalid colour in dark v2)', () => {
+    for (const file of ['components/dashboard-v2/setup-guide.tsx', 'components/availability-v2/weekly-hours-card.tsx']) {
+      expect(read(file), file).not.toMatch(/border-(border|input)\/\d+/);
+    }
+  });
+});
+
+describe('Sep 17 review: shared v1+v2 markup keeps v1 byte-for-byte', () => {
+  const PAIR = 'hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]';
+  const count = (src: string, needle: string) => src.split(needle).length - 1;
+
+  it('messages read --v2-hover over the exact old accent alpha', () => {
+    const rail = read('components/messages-v2/conversation-rail.tsx');
+    expect(count(rail, 'hover:bg-[hsl(var(--v2-hover,var(--accent)_/_0.5))]')).toBe(1);
+    expect(rail).not.toContain('hover:bg-accent/50');
+    const context = read('components/messages-v2/customer-context.tsx');
+    expect(count(context, 'hover:bg-[hsl(var(--v2-hover,var(--accent)_/_0.6))]')).toBe(2);
+    expect(context).not.toContain('hover:bg-accent/60');
+    const attach = read('components/messages-v2/attach-menu.tsx');
+    expect(count(attach, 'hover:bg-[hsl(var(--v2-hover,var(--accent)_/_0.6))]')).toBe(3);
+    expect(attach).not.toContain('hover:bg-accent/60');
+  });
+
+  it('the guides shelf reads --v2-hover over the old muted/60', () => {
+    const src = read('components/explainers/explainer.tsx');
+    expect(src).toContain('hover:bg-[hsl(var(--v2-hover,var(--muted)_/_0.6))]');
+    expect(src).not.toContain('hover:bg-muted/60');
+  });
+
+  it('billing invoice rows: v2 gets the pair, v1 keeps its exact class list', () => {
+    const src = read('components/settings/usage-dashboard.tsx');
+    expect(src).toContain(`? "border-b transition-colors last:border-0 ${PAIR}"`);
+    expect(src).toContain(': "border-b transition-colors last:border-0 hover:bg-muted/40"');
+  });
+
+  it('blocked identities customer picker: v2 gets the pair, v1 keeps its exact class list', () => {
+    const src = read('app/(dashboard)/blocked-customers/page.tsx');
+    expect(src).toContain(`? "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-2 text-sm ${PAIR} hover:text-accent-foreground"`);
+    expect(src).toContain(': "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-2 text-sm hover:bg-accent hover:text-accent-foreground"');
+  });
+
+  it('installment pills: v2 is a pill with the pair, v1 keeps rounded-md and muted/40 verbatim', () => {
+    const src = read('components/settings/InstallmentSettings.tsx');
+    expect(src).toContain('? "px-3 py-1.5 rounded-full text-sm font-medium border transition-colors"');
+    expect(src).toContain(': "px-3 py-1.5 rounded-md text-sm font-medium border transition-colors"');
+    expect(src).toContain(`? "bg-card border-border text-muted-foreground ${PAIR}"`);
+    expect(src).toContain(': "bg-card border-border text-muted-foreground hover:bg-muted/40"');
+  });
+});
+
+describe('Sep 17 review: the rounded system for v1 primitives under .v2-theme (styles/v2-theme.css)', () => {
+  const rules = allRules();
+  const rule = (prefix: string) => {
+    const found = rules.filter((r) => r.selector.startsWith(prefix));
+    expect(found, prefix).toHaveLength(1);
+    return found[0];
+  };
+  const JOINED = ['[class*="rounded-l-none"]', '[class*="rounded-r-none"]'];
+
+  it('text inputs take the ui-v2 Input radius, skipping non-text inputs and joined edges', () => {
+    const r = rule('.v2-theme input[class~="rounded-md"][class~="border-input"]');
+    expect(r.body).toBe('border-radius: var(--v2-radius-3xl);');
+    for (const skip of ['[type="checkbox"]', '[type="radio"]', '[type="color"]', '[type="range"]', ...JOINED]) {
+      expect(r.selector).toContain(skip);
+    }
+  });
+
+  it('textareas take the ui-v2 Textarea radius, skipping joined edges', () => {
+    const r = rule('.v2-theme textarea[class~="rounded-md"][class~="border-input"]');
+    expect(r.body).toBe('border-radius: var(--v2-radius-2xl);');
+    for (const skip of JOINED) expect(r.selector).toContain(skip);
+  });
+
+  it("select triggers take the ui-v2 SelectTrigger radius and leave v1's Button to the Button rule", () => {
+    const r = rule('.v2-theme button[role="combobox"][class~="rounded-md"][class~="border-input"]');
+    expect(r.body).toBe('border-radius: var(--v2-radius-3xl);');
+    for (const skip of ['[class~="whitespace-nowrap"]', ...JOINED]) expect(r.selector).toContain(skip);
+  });
+
+  it('menu, listbox and popover content, their items, and a cmdk list inside a popover', () => {
+    expect(rule('.v2-theme :is([role="menu"], [role="listbox"], [role="dialog"])[class~="rounded-md"][class~="bg-popover"]').body).toBe(
+      'border-radius: var(--v2-radius-2xl);',
+    );
+    expect(rule('.v2-theme [role="dialog"][class~="bg-popover"] > [cmdk-root][class~="rounded-md"]').body).toBe('border-radius: inherit;');
+    expect(
+      rule('.v2-theme :is([role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], [role="option"])[class~="rounded-sm"]').body,
+    ).toBe('border-radius: var(--v2-radius-xl);');
+  });
+
+  it('dialogs take the ui-v2 Dialog radius from sm up only, where v1 rounds them at all', () => {
+    expect(stripComments(theme)).toMatch(
+      /@media \(min-width: 640px\) \{\s*\.v2-theme :is\(\[role="dialog"\], \[role="alertdialog"\]\)\[class~="sm:rounded-lg"\] \{\s*border-radius: var\(--v2-radius-4xl\);\s*\}\s*\}/,
+    );
+  });
+
+  it('every radius rule names no class but .v2-theme, and no selector in the file names a rounded-* utility', () => {
+    const radiusRules = rules.filter((r) => /^border-radius:/.test(r.body) && r.selector.startsWith('.v2-theme'));
+    expect(radiusRules.length).toBeGreaterThanOrEqual(9);
+    for (const r of radiusRules) {
+      const classTokens = r.selector.replace(/\[[^\]]*\]/g, '').match(/\.[A-Za-z_\\-][\w\\:/-]*/g) ?? [];
+      expect(classTokens.filter((t) => t !== '.v2-theme'), r.selector).toEqual([]);
+    }
+    for (const r of rules) expect(r.selector.replace(/\[[^\]]*\]/g, ''), r.selector).not.toMatch(/\.(sm\\:)?rounded-/);
+  });
+
+  it('settings v2 card titles (h3) are semibold', () => {
+    expect(decl(tokenBlock('.v2-theme .settings-v2-body h3'), 'font-weight')).toBe('600');
+  });
+});
+
+describe('Sep 17 review: v2 row menus, chart picker and overview link follow the rounded system', () => {
+  const ROW_MENU_FILES = [
+    'components/admin-v2/users-table-v2.tsx',
+    'components/agreements-v2/agreements-table-v2.tsx',
+    'components/cms-v2/blog-categories-table-v2.tsx',
+    'components/cms-v2/blog-posts-table-v2.tsx',
+    'components/customers-v2/blocked-customers-tables-v2.tsx',
+    'components/fleet-v2/plates-table-v2.tsx',
+    'components/insurance-v2/insurance-policies-table-v2.tsx',
+    'components/invoices-v2/invoices-table-v2.tsx',
+    'components/settings-v2/extras-table-v2.tsx',
+    'components/settings-v2/promo-codes-table-v2.tsx',
+  ];
+
+  it.each(ROW_MENU_FILES)('%s: the row menu is the ui-v2 menu, sized to its labels, with no doubled icon gap', (file) => {
+    const src = read(file);
+    expect(src).toContain('} from "@/components/ui-v2/dropdown-menu";');
+    expect(src).not.toContain('@/components/ui/dropdown-menu');
+    // ui-v2 content is trigger-wide (min 12rem); `w-auto` lets a long label keep one line.
+    expect(src).not.toMatch(/<DropdownMenuContent align="end">/);
+    expect(src).toMatch(/<DropdownMenuContent align="end" className="w-auto">/);
+    // ui-v2 items already space the icon (gap-2.5).
+    expect(src).not.toMatch(/\bmr-2\b/);
+  });
+
+  it('hero chart: the period trigger is a pill and the tooltip is rounded-xl', () => {
+    const src = read('components/shared/hero-chart-v2.tsx');
+    expect(src).toContain('const RANGE_PICKER = cn(PICKER, "-my-0.5 -ml-1.5 rounded-full py-0.5 pl-1.5 focus-visible:ring-inset");');
+    expect(src).toContain('<div className="min-w-[200px] rounded-xl border bg-background px-3 py-2 text-xs shadow-md">');
+    expect(cn('inline-flex items-center gap-1 rounded-md text-sm', 'rounded-full')).toBe('inline-flex items-center gap-1 text-sm rounded-full');
+  });
+
+  it("vehicles overview: the chart's Try again link is a pill", () => {
+    const src = read('components/vehicles-v2/vehicles-overview.tsx');
+    expect(src).toContain('className="rounded-full text-sm font-medium text-foreground underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"');
+    expect(src).not.toMatch(/rounded-md text-sm font-medium text-foreground underline-offset-4/);
   });
 });

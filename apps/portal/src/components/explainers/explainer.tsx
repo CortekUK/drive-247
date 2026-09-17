@@ -257,7 +257,7 @@ export function ExplainerShelfButton({ className }: { className?: string }) {
                 <button
                   type="button"
                   onClick={() => setPlaying(explainer)}
-                  className="flex w-full items-start gap-3 px-5 py-3 text-left transition-colors hover:bg-muted/60"
+                  className="flex w-full items-start gap-3 px-5 py-3 text-left transition-colors hover:bg-[hsl(var(--v2-hover,var(--muted)_/_0.6))]"
                 >
                   <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
                     <Play className="size-3 fill-current" />

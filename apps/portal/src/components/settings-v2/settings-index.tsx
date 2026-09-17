@@ -29,6 +29,7 @@ import {
   SettingsNoMatch,
 } from "@/components/settings-v2/section-states";
 import { findSettingsSearchHandoff } from "@/components/settings-v2/settings-shell-state";
+import { SETTINGS_PAGE_TITLE, SETTINGS_SECTION_TITLE } from "@/components/settings-v2/settings-kit";
 import { usePageSearch } from "@/components/shared/layout/page-search-slot";
 import { isSettingsTabHidden } from "@/lib/lean-areas";
 
@@ -256,7 +257,7 @@ export function SettingsIndexV2({
   // sidebar Portal / Website switch's row (md:pt-7 left it 2px low, at 94).
   return (
     <div className="w-full max-w-[1160px] space-y-9 pb-16 md:pt-[26px]" data-tour="settings-index">
-      <h1 className="text-2xl font-medium tracking-tight text-foreground">Settings</h1>
+      <h1 className={SETTINGS_PAGE_TITLE}>Settings</h1>
 
       {notice}
 
@@ -281,10 +282,7 @@ export function SettingsIndexV2({
       ) : (
         sections.map((section) => (
           <section key={section.title} aria-labelledby={`settings-${section.title}`}>
-            <h2
-              id={`settings-${section.title}`}
-              className="text-base font-semibold text-foreground"
-            >
+            <h2 id={`settings-${section.title}`} className={SETTINGS_SECTION_TITLE}>
               {section.title}
             </h2>
             <div className="mt-3 grid gap-x-8 gap-y-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -293,7 +291,7 @@ export function SettingsIndexV2({
                   key={item.href}
                   href={item.href}
                   data-tour={item.tourAnchor}
-                  className="group -mx-3 block rounded-lg px-3 py-2.5 transition-colors hover:bg-muted"
+                  className="group -mx-3 block rounded-xl px-3 py-2.5 transition-colors hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]"
                 >
                   <span className="text-[15px] font-medium text-primary group-hover:underline dark:text-indigo-300">
                     {item.title}

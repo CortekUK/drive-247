@@ -30,7 +30,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@/components/ui-v2/dropdown-menu";
 import {
   LIST_CLASSES,
   LIST_ROW_ACTION,
@@ -203,15 +203,15 @@ export function AgreementsTableV2<T extends AgreementRowV2>({
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
+                        <DropdownMenuContent align="end" className="w-auto">
                           <DropdownMenuItem
                             onClick={() => onDownloadFile(doc.file_url!, doc.file_name || doc.document_name)}
                           >
-                            <Download className="h-4 w-4 mr-2" />
+                            <Download className="h-4 w-4" />
                             Download
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => onOpenFile(doc.file_url!)}>
-                            <ExternalLink className="h-4 w-4 mr-2" />
+                            <ExternalLink className="h-4 w-4" />
                             Open in new tab
                           </DropdownMenuItem>
                         </DropdownMenuContent>
@@ -250,20 +250,20 @@ export function AgreementsTableV2<T extends AgreementRowV2>({
                               )}
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
+                          <DropdownMenuContent align="end" className="w-auto">
                             <DropdownMenuItem onClick={() => onView(doc)} disabled={isViewing}>
                               {isViewing ? (
-                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                <Loader2 className="h-4 w-4 animate-spin" />
                               ) : (
-                                <Eye className="h-4 w-4 mr-2" />
+                                <Eye className="h-4 w-4" />
                               )}
                               View document
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => onDownload(doc)} disabled={isDownloading}>
                               {isDownloading ? (
-                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                <Loader2 className="h-4 w-4 animate-spin" />
                               ) : (
-                                <Download className="h-4 w-4 mr-2" />
+                                <Download className="h-4 w-4" />
                               )}
                               Download document
                             </DropdownMenuItem>
@@ -271,9 +271,9 @@ export function AgreementsTableV2<T extends AgreementRowV2>({
                               <>
                                 <DropdownMenuItem onClick={() => onResend(doc)} disabled={isResending}>
                                   {isResending ? (
-                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    <Loader2 className="h-4 w-4 animate-spin" />
                                   ) : (
-                                    <Send className="h-4 w-4 mr-2" />
+                                    <Send className="h-4 w-4" />
                                   )}
                                   Resend signing notification
                                 </DropdownMenuItem>
@@ -283,9 +283,9 @@ export function AgreementsTableV2<T extends AgreementRowV2>({
                                   className="text-destructive focus:text-destructive"
                                 >
                                   {isVoiding ? (
-                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    <Loader2 className="h-4 w-4 animate-spin" />
                                   ) : (
-                                    <Ban className="h-4 w-4 mr-2" />
+                                    <Ban className="h-4 w-4" />
                                   )}
                                   Void agreement
                                 </DropdownMenuItem>

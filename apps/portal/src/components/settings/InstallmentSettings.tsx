@@ -434,16 +434,23 @@ function SectionRow({ label, sublabel, disabled, children }: { label: string; su
 
 function PillButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   const lockedV2 = useContext(PlanLockV2);
+  // v2 only: a real pill with the purple hover. Every other tenant gets v1's
+  // exact class strings, so nothing they see changes.
+  const v2Chrome = useV2("chrome");
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={lockedV2 || undefined}
       className={cn(
-        "px-3 py-1.5 rounded-md text-sm font-medium border transition-colors",
+        v2Chrome
+          ? "px-3 py-1.5 rounded-full text-sm font-medium border transition-colors"
+          : "px-3 py-1.5 rounded-md text-sm font-medium border transition-colors",
         active
           ? "bg-primary/15 border-indigo-500/50 text-indigo-700 dark:text-indigo-300"
-          : "bg-card border-border text-muted-foreground hover:bg-muted/40",
+          : v2Chrome
+            ? "bg-card border-border text-muted-foreground hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]"
+            : "bg-card border-border text-muted-foreground hover:bg-muted/40",
         lockedV2 && "cursor-not-allowed opacity-50",
       )}
     >

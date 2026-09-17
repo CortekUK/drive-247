@@ -52,6 +52,7 @@ vi.mock("@/hooks/use-pickup-locations", () => ({ usePickupLocations: () => picku
 
 import {
   BusinessRegionalPanel,
+  CURRENCY_NOT_CONFIRMED_MESSAGE,
   LocationsListV2,
   areaFieldErrors,
   buildLocationPayload,
@@ -75,6 +76,7 @@ import { LocationSettings } from "@/components/settings/location-settings";
 import { V2Provider } from "@/lib/v2-context";
 import { kmToDisplayUnit } from "@/lib/format-utils";
 import { describeSaveError } from "@/components/settings-v2/section-states";
+import { SettingsPageSaveProvider } from "@/components/settings-v2/settings-kit";
 
 /* -------------------------------------------------------------------------- */
 /* Harness                                                                     */
@@ -570,6 +572,114 @@ describe("BusinessRegionalPanel", () => {
     expect(Array.from(container.querySelectorAll("button")).some((b) => b.textContent?.trim() === "Save")).toBe(false);
     const trigger = container.querySelector("#v2_currency_code") as HTMLButtonElement;
     expect(trigger.disabled).toBe(true);
+  });
+
+  describe("inside the page's save bar", () => {
+    const lastRegistration = (registerSave: ReturnType<typeof vi.fn>) => {
+      const calls = registerSave.mock.calls.filter((call) => call[0] === "general-regional");
+      return calls[calls.length - 1] as [string, (() => Promise<unknown>) | null, (() => void) | undefined];
+    };
+
+    it("shows no Save and registers nothing while clean", () => {
+      const registerSave = vi.fn();
+      render(
+        <SettingsPageSaveProvider>
+          <BusinessRegionalPanel {...props({ registerSave })} />
+        </SettingsPageSaveProvider>,
+      );
+      expect(container.querySelectorAll("button").length).toBe(2); // the two pickers only
+      expect(Array.from(container.querySelectorAll("button")).some((b) => b.textContent?.trim() === "Save")).toBe(false);
+      expect(lastRegistration(registerSave)).toEqual(["general-regional", null]);
+    });
+
+    it("a distance change registers a save and a discard; the save writes without asking", async () => {
+      const registerSave = vi.fn();
+      const p = props({ form: { ...form, distance_unit: "km" }, isDirty: true, registerSave });
+      render(
+        <SettingsPageSaveProvider>
+          <BusinessRegionalPanel {...p} />
+        </SettingsPageSaveProvider>,
+      );
+      const [, save, discard] = lastRegistration(registerSave);
+      await act(async () => {
+        await save!();
+      });
+      expect(p.onSave).toHaveBeenCalledTimes(1);
+      expect(document.body.textContent).not.toContain("Change currency from");
+      act(() => discard!());
+      expect(p.onDiscard).toHaveBeenCalledTimes(1);
+    });
+
+    it("a currency change still asks first: the page's save waits for 'Change currency'", async () => {
+      const registerSave = vi.fn();
+      const p = props({ form: { ...form, currency_code: "GBP" }, isDirty: true, registerSave });
+      render(
+        <SettingsPageSaveProvider>
+          <BusinessRegionalPanel {...p} />
+        </SettingsPageSaveProvider>,
+      );
+      const [, save] = lastRegistration(registerSave);
+      let settled = false;
+      let pending!: Promise<unknown>;
+      await act(async () => {
+        pending = save!().then(() => (settled = true));
+      });
+      expect(document.body.textContent).toContain("Change currency from USD to GBP?");
+      expect(p.onSave).not.toHaveBeenCalled();
+      expect(settled).toBe(false);
+      await act(async () => buttonByText("Change currency").click());
+      await act(async () => {
+        await pending;
+      });
+      expect(p.onSave).toHaveBeenCalledTimes(1);
+      expect(settled).toBe(true);
+    });
+
+    it("cancelling the currency confirm rejects the page's save, without a toast of its own", async () => {
+      const registerSave = vi.fn();
+      const p = props({ form: { ...form, currency_code: "EUR" }, isDirty: true, registerSave });
+      render(
+        <SettingsPageSaveProvider>
+          <BusinessRegionalPanel {...p} />
+        </SettingsPageSaveProvider>,
+      );
+      const [, save] = lastRegistration(registerSave);
+      let failure: unknown = null;
+      await act(async () => {
+        void save!().catch((error) => (failure = error));
+      });
+      await act(async () => buttonByText("Cancel").click());
+      expect((failure as Error).message).toBe("The currency change wasn't confirmed, so it wasn't saved.");
+      expect(CURRENCY_NOT_CONFIRMED_MESSAGE).toBe("The currency change wasn't confirmed, so it wasn't saved.");
+      expect(isAlreadyToasted(failure)).toBe(true);
+      expect(p.onSave).not.toHaveBeenCalled();
+      expect(toastMock).not.toHaveBeenCalled();
+    });
+
+    it("a failed page save is said inline, with no toast here (the page toasts) and no button", async () => {
+      const registerSave = vi.fn();
+      const p = props({
+        form: { ...form, distance_unit: "km" },
+        isDirty: true,
+        registerSave,
+        onSave: vi.fn(async () => {
+          throw new Error("You don't have permission to change these settings.");
+        }),
+      });
+      render(
+        <SettingsPageSaveProvider>
+          <BusinessRegionalPanel {...p} />
+        </SettingsPageSaveProvider>,
+      );
+      const [, save] = lastRegistration(registerSave);
+      await act(async () => {
+        await save!().catch(() => undefined);
+      });
+      const inline = container.querySelector('[data-settings-state="save-error"]');
+      expect(inline?.textContent).toBe("Couldn't save. You don't have permission to change these settings.");
+      expect(toastMock).not.toHaveBeenCalled();
+      expect(Array.from(container.querySelectorAll("button")).some((b) => /Save|Retry/.test(b.textContent ?? ""))).toBe(false);
+    });
   });
 });
 

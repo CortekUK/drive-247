@@ -41,7 +41,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@/components/ui-v2/dropdown-menu";
 import {
   LIST_CLASSES,
   LIST_ROW_ACTION,
@@ -144,13 +144,13 @@ function PromoRowMenu<T extends PromoCodeRowV2>({ promo, onEdit, onDelete }: Pro
           <MoreHorizontal className="h-4 w-4" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
+      <DropdownMenuContent align="end" className="w-auto">
         <DropdownMenuItem onClick={() => onEdit(promo)}>
-          <FilePenLine className="h-4 w-4 mr-2" />
+          <FilePenLine className="h-4 w-4" />
           Edit
         </DropdownMenuItem>
         <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onDelete(promo)}>
-          <Trash2 className="h-4 w-4 mr-2" />
+          <Trash2 className="h-4 w-4" />
           Delete
         </DropdownMenuItem>
       </DropdownMenuContent>
@@ -264,7 +264,8 @@ export function PromoCodesTableV2<T extends PromoCodeRowV2>({
                 </ListCell>
                 {/* v1's Copy button, now the code itself: one click copies it. */}
                 <ListCell onClick={(e) => e.stopPropagation()}>
-                  <CopyCode code={promo.code} onCopy={onCopy} />
+                  {/* A block <button> is only as wide as its content, so it is centred as a box (mx-auto), as the column is. */}
+                  <CopyCode code={promo.code} onCopy={onCopy} className="mx-auto justify-center text-center" />
                 </ListCell>
                 {/* Never truncated: an ellipsis here hides money. A value too wide
                     for the column wraps inside it instead of overlapping. */}

@@ -57,6 +57,7 @@ import {
   makeBusinessSave,
 } from "@/components/settings-v2/business-rules-pages";
 import { savedFieldsFor, type BusinessPage } from "@/components/settings-v2/business-rules-logic";
+import { SettingsPageSaveProvider } from "@/components/settings-v2/settings-kit";
 
 let container: HTMLDivElement;
 let root: Root;
@@ -832,6 +833,185 @@ describe("Key handover: method radio and messages notice", () => {
   });
 });
 
+describe("inside the page's one save bar (SettingsPageSaveProvider)", () => {
+  /** The last registration under `key` that carried a save. */
+  const registered = (registerSave: ReturnType<typeof vi.fn>, key: string) => {
+    const calls = registerSave.mock.calls.filter((call) => call[0] === key && call[1]);
+    return calls[calls.length - 1] as [string, () => Promise<unknown>, () => void] | undefined;
+  };
+
+  it("Driver requirements shows no Save; it registers a save and a discard the page runs", async () => {
+    const saved = { minimum_rental_age: 21, verification_document_type: "passport" };
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    const registerSave = vi.fn();
+    render(
+      <SettingsPageSaveProvider>
+        <Harness
+          page="requirements"
+          saved={saved}
+          render={({ form, setForm }) => (
+            <RequirementsPageV2
+              form={form}
+              setForm={setForm}
+              saved={saved}
+              canEdit
+              onSave={onSave}
+              registerSave={registerSave}
+              idWaiver={{ enabled: false, canChange: true, saving: false, onToggle: () => undefined }}
+            />
+          )}
+        />
+      </SettingsPageSaveProvider>,
+    );
+    expect(Array.from(container.querySelectorAll("button")).map((b) => b.textContent?.trim())).not.toContain("Save");
+    expect(registered(registerSave, "business-requirements")).toBeUndefined();
+
+    typeInto(input("#v2_minimum_rental_age"), "25");
+    expect(text()).not.toContain("Unsaved changes");
+    const [, save, discard] = registered(registerSave, "business-requirements")!;
+    expect(typeof discard).toBe("function");
+
+    // The page's Save changes: this page's two fields only.
+    await act(async () => {
+      await save();
+    });
+    expect(onSave).toHaveBeenCalledWith({ minimum_rental_age: 25, verification_document_type: "passport" });
+
+    // The page's Reset: back to the saved 21.
+    act(() => discard());
+    expect(input("#v2_minimum_rental_age").value).toBe("21");
+  });
+
+  it("a failed save still says why inline, with no button", async () => {
+    const saved = { minimum_rental_age: 21, verification_document_type: "passport" };
+    const onSave = vi.fn().mockRejectedValue({ code: "42501", message: "permission denied for table tenants" });
+    const registerSave = vi.fn();
+    render(
+      <SettingsPageSaveProvider>
+        <Harness
+          page="requirements"
+          saved={saved}
+          render={({ form, setForm }) => (
+            <RequirementsPageV2
+              form={form}
+              setForm={setForm}
+              saved={saved}
+              canEdit
+              onSave={onSave}
+              registerSave={registerSave}
+              idWaiver={{ enabled: false, canChange: true, saving: false, onToggle: () => undefined }}
+            />
+          )}
+        />
+      </SettingsPageSaveProvider>,
+    );
+    typeInto(input("#v2_minimum_rental_age"), "25");
+    const [, save] = registered(registerSave, "business-requirements")!;
+    await act(async () => {
+      await save().catch(() => undefined);
+    });
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe(
+      "Couldn't save. You don't have permission to change this. Ask an admin.",
+    );
+    expect(Array.from(container.querySelectorAll("button")).some((b) => b.textContent?.includes("Retry"))).toBe(false);
+  });
+
+  it("Key handover's 'not applied yet' note points at Save changes", () => {
+    const saved = { lockbox_enabled: false, lockbox_code_length: null, lockbox_notification_methods: ["email"], lockbox_send_offset_minutes: null };
+    render(
+      <SettingsPageSaveProvider>
+        <Harness
+          page="lockbox"
+          saved={saved}
+          render={({ form, setForm }) => (
+            <LockboxPageV2
+              form={form}
+              setForm={setForm}
+              saved={saved}
+              canEdit
+              onSave={vi.fn()}
+              smsReady
+              integrationsHref="/integrations"
+              vehiclesHref="/vehicles"
+            />
+          )}
+        />
+      </SettingsPageSaveProvider>,
+    );
+    const toggle = container.querySelector<HTMLButtonElement>('button[role="switch"][aria-label="Enable lockbox handover"]')!;
+    act(() => toggle.click());
+    expect(text()).toContain("Not applied yet. Press Save changes to turn lockbox handover on.");
+  });
+});
+
+describe("row spacing", () => {
+  it("Shortest rental keeps each unit beside its own box: [days box] days, then [hours box] hours", () => {
+    const saved = { booking_lead_time_hours: 24, min_rental_days: 1, min_rental_hours: 4, max_rental_days: 90, buffer_time_minutes: 0 };
+    render(
+      <Harness
+        page="duration"
+        saved={saved}
+        render={({ form, setForm }) => <DurationPageV2 form={form} setForm={setForm} saved={saved} canEdit onSave={vi.fn()} />}
+      />,
+    );
+    const days = input('input[aria-label="Shortest rental days"]');
+    const hours = input('input[aria-label="Shortest rental hours"]');
+    expect(days.parentElement!.textContent).toBe("days");
+    expect(hours.parentElement!.textContent).toBe("hours");
+    expect(days.parentElement!.className).toContain("gap-1.5");
+    expect(days.parentElement!.parentElement).toBe(hours.parentElement!.parentElement);
+    expect(days.parentElement!.parentElement!.className).toContain("gap-x-4");
+  });
+
+  it("the return reminder switch carries no extra left margin on top of the row gap", () => {
+    const saved = { return_reminder_enabled: true, return_reminder_hours: 24 };
+    render(
+      <Harness
+        page="return-reminder"
+        saved={saved}
+        render={({ form, setForm }) => (
+          <ReturnReminderPanelV2
+            form={form}
+            setForm={setForm}
+            saved={saved}
+            canEdit
+            onSave={vi.fn()}
+            smsReady
+            emailTemplateHref="/settings/email-templates/rental_reminder"
+            integrationsHref="/integrations"
+          />
+        )}
+      />,
+    );
+    const toggle = container.querySelector<HTMLButtonElement>('button[role="switch"][aria-label="Send return reminders"]')!;
+    expect(toggle.className.split(/\s+/)).not.toContain("ml-2");
+    expect(input('input[aria-label="Hours before return"]').parentElement!.textContent).toBe("hours before");
+  });
+
+  it("the ID waiver's two notes are spaced apart", () => {
+    const saved = { minimum_rental_age: 21, verification_document_type: "passport" };
+    render(
+      <Harness
+        page="requirements"
+        saved={saved}
+        render={({ form, setForm }) => (
+          <RequirementsPageV2
+            form={form}
+            setForm={setForm}
+            saved={saved}
+            canEdit
+            onSave={vi.fn()}
+            idWaiver={{ enabled: true, canChange: true, saving: false, onToggle: () => undefined }}
+          />
+        )}
+      />,
+    );
+    const note = Array.from(container.querySelectorAll("p")).find((p) => p.textContent === "Saves as soon as you switch it.")!;
+    expect(note.parentElement!.className).toBe("space-y-1");
+    expect(note.parentElement!.children).toHaveLength(2);
+  });
+});
+
 describe("settings page wiring for the Business-rules pages (v2 branch)", () => {
   // Read as text: the page is too large to mount here. Behaviour of the helper is
   // covered in settings-business-rules-logic.test.ts.
@@ -840,19 +1020,23 @@ describe("settings page wiring for the Business-rules pages (v2 branch)", () => 
     "utf8",
   ) as string;
 
-  it("offers Save & Leave when every unsaved rental edit belongs to a registered Business-rules page", () => {
+  it("offers Save when every unsaved rental edit belongs to a registered section (Business rules, fees, deposit, monthly rate)", () => {
     expect(source).toContain(
-      "businessEditsCoveredBySections(rentalForm, lastSyncedRentalForm.current, rentalSettings, v2DirtySections)",
+      "!rentalEditsCoveredBySections(rentalForm, lastSyncedRentalForm.current, rentalSettings, v2DirtySections);",
     );
-    expect(source).toContain(
-      "const v2CanSaveAll = canSaveAllDirty({ rental: rentalFormDirty && !v2RentalEditsCovered, locations: locationsDirty, pricing: pricingDirty });",
-    );
+    expect(source).toContain("const v2CanSaveEdits = canSaveV2Edits({");
+    expect(source).toContain("canSave: v2CanSaveEdits,");
+    // The old business-only check is gone from the page.
+    expect(source).not.toContain("canSaveAllDirty(");
   });
 
-  it("does not repeat 'Unsaved changes' above pages whose sections show their own", () => {
+  it("has no 'Unsaved changes' chip row under the header: one save bar at the end of the page says it", () => {
+    expect(source).not.toContain("V2_PAGES_WITH_OWN_SAVE_STATUS");
     expect(source).toContain(
-      "const V2_PAGES_WITH_OWN_SAVE_STATUS = new Set(['general', 'locations', 'booking-site', 'requirements', 'duration', 'lockbox', 'templates', 'installments']);",
+      "const V2_PAGES_WITH_SAVE_BAR = new Set(['general', 'booking-site', 'requirements', 'duration', 'lockbox', 'templates', 'pricing', 'fees', 'preauth']);",
     );
+    expect(source).toContain("<SettingsPageSaveProvider enabled={v2PageHasSaveBar}>");
+    expect(source).toContain("{canEditPage && v2PageHasSaveBar && (\n                  <SettingsStickySaveBar");
   });
 
   it("says why Save & Leave failed in v2, and keeps the v1 wording for everyone else", () => {

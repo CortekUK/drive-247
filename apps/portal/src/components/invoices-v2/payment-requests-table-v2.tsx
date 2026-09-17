@@ -123,7 +123,7 @@ export function PaymentRequestsTableV2({
           <ListHead className="w-[15%]">Sent</ListHead>
           <ListHead className="w-[28%]">Customer</ListHead>
           <ListHead className="w-[25%]">For</ListHead>
-          <ListHead className="w-[14%] text-right">Amount</ListHead>
+          <ListHead className="w-[14%]">Amount</ListHead>
           <ListHead className="w-[18%]">Status</ListHead>
         </ListTableHeader>
         <ListBody>
@@ -148,7 +148,7 @@ export function PaymentRequestsTableV2({
                   {describeLink(r)}
                 </span>
               </ListCell>
-              <ListCell className="text-right tabular-nums">
+              <ListCell className="tabular-nums">
                 <span className={LIST_CLASSES.text}>{formatCurrency(r.amount, currencyCode)}</span>
               </ListCell>
               <ListCell>

@@ -39,7 +39,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@/components/ui-v2/dropdown-menu";
 import {
   LIST_CLASSES,
   LIST_ROW_ACTION,
@@ -132,14 +132,14 @@ function ExtraRowMenu<T extends RentalExtra>({ extra, busy, onEdit, onUpdateStoc
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreHorizontal className="h-4 w-4" />}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
+      <DropdownMenuContent align="end" className="w-auto">
         <DropdownMenuItem onClick={() => onEdit(extra)}>
-          <Pencil className="h-3.5 w-3.5 mr-2" />
+          <Pencil className="h-3.5 w-3.5" />
           Edit
         </DropdownMenuItem>
         {extra.max_quantity !== null && (
           <DropdownMenuItem onClick={() => onUpdateStock(extra)}>
-            <PackagePlus className="h-3.5 w-3.5 mr-2" />
+            <PackagePlus className="h-3.5 w-3.5" />
             Update Stock
           </DropdownMenuItem>
         )}
@@ -147,12 +147,12 @@ function ExtraRowMenu<T extends RentalExtra>({ extra, busy, onEdit, onUpdateStoc
             its own write is in flight, so a double click cannot send two
             opposite writes. */}
         <DropdownMenuItem disabled={busy} onClick={() => void onToggleActive(extra)}>
-          <Power className="h-3.5 w-3.5 mr-2" />
+          <Power className="h-3.5 w-3.5" />
           {busy ? "Updating…" : extra.is_active ? "Deactivate" : "Activate"}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onDelete(extra)}>
-          <Trash2 className="h-3.5 w-3.5 mr-2" />
+          <Trash2 className="h-3.5 w-3.5" />
           Delete
         </DropdownMenuItem>
       </DropdownMenuContent>
@@ -269,7 +269,7 @@ export function ExtrasTableV2<T extends RentalExtra>({
                       the image count on it as in v1, the name, and the low-stock
                       triangle, which never gives way to a long name. */}
                   <ListCell>
-                    <div className="flex min-w-0 items-center gap-2.5">
+                    <div className="flex min-w-0 items-center justify-center gap-2.5">
                       <span className="relative -my-0.5 shrink-0">
                         <Thumbnail extra={extra} className="size-6 rounded" />
                         {imageCount > 1 && (

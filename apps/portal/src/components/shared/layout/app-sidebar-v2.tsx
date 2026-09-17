@@ -3,6 +3,7 @@
 import { Fragment, useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { runThroughLeaveGuard } from "@/lib/leave-guard";
 // The source worktree draws this sidebar in `@phosphor-icons/react`, which is
 // not a dependency here and is not being added for a canary. Every icon below
 // is the closest lucide equivalent; the aliases keep the source's own names so
@@ -319,9 +320,14 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   const switchView = useCallback(
     (next: "admin" | "cms") => {
       if (next === "cms" && !canSeeCms) return;
-      setActiveView(next);
       closeMobileOnNav();
-      router.push(next === "cms" ? "/cms" : "/");
+      // Through the leave guard: a v2 settings page with unsaved edits asks
+      // first, and the rail flips only when the page really changes.
+      const target = next === "cms" ? "/cms" : "/";
+      runThroughLeaveGuard(target, () => {
+        setActiveView(next);
+        router.push(target);
+      });
     },
     [router, closeMobileOnNav, canSeeCms]
   );

@@ -334,7 +334,7 @@ export function AvailabilityV2() {
             // and this is now where the pattern is read and edited.
             data-tour="availability-pattern"
             onClick={() => setHoursOpen(true)}
-            className="flex items-center gap-2 rounded-full bg-muted/50 px-3 py-1.5 text-[13px] transition-colors hover:bg-accent"
+            className="flex items-center gap-2 rounded-full bg-muted/50 px-3 py-1.5 text-[13px] transition-colors hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]"
           >
             <SlidersHorizontal className="size-3.5 text-muted-foreground" />
             <span className="font-medium">Weekly hours</span>

@@ -191,6 +191,49 @@ export function canSaveAllDirty(dirty: {
   return !dirty.rental && !dirty.locations && !dirty.pricing;
 }
 
+/**
+ * v2: does the settings page hold a GENUINE unsaved edit? Driven by what each
+ * section registered (sections register only while their own number-aware
+ * check says dirty), not by the page-wide `rentalFormDirty`, whose strict
+ * comparison counts a typed "10" over a saved 10 as a change.
+ *
+ *   sections         keys registered with the page (`registerV2SectionSave`);
+ *                    the General panel and the booking-site colours are among
+ *                    them, so the page's own General and Branding flags (which
+ *                    read dirty for one render while a tenant loads) are not used
+ *   locations        Locations reports unsaved edits (it saves on its own page)
+ *   pricing          Weekend pricing reports unsaved edits
+ *   rentalUncovered  a rental-form field no registered section saves differs
+ */
+export function v2HasUnsavedEdits(state: {
+  sections: readonly string[];
+  locations: boolean;
+  pricing: boolean;
+  rentalUncovered: boolean;
+}): boolean {
+  return state.sections.length > 0 || state.locations || state.pricing || state.rentalUncovered;
+}
+
+/**
+ * v2: can the page's one Save (its save bar, or "Save" in the leave dialog)
+ * save EVERYTHING unsaved? Saving runs every registered section save plus the
+ * General form, so an edit counts as saveable when its section registered:
+ * weekend pricing under "pricing-weekend", Locations under "locations". A
+ * rental-form edit no registered section covers (`rentalEditsCoveredBySections`)
+ * makes it false, so Save is never offered over an edit it would drop.
+ */
+export function canSaveV2Edits(state: {
+  registered: readonly string[];
+  locations: boolean;
+  pricing: boolean;
+  rentalUncovered: boolean;
+}): boolean {
+  if (state.rentalUncovered) return false;
+  if (state.locations && !state.registered.includes("locations")) return false;
+  if (state.pricing && !state.registered.includes("pricing-weekend")) return false;
+  return true;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Index search: where a setting that is not on the index lives                */
 /* -------------------------------------------------------------------------- */

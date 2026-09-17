@@ -16,7 +16,12 @@
  * hook's placeholder says lockbox is off, which flashed the "off" notice), the
  * text-message count is estimated with the variables filled in, a missing
  * Twilio connection is said out loud, and unsaved messages register with the
- * page so leaving from the sidebar warns and "Save & Leave" saves them.
+ * page so leaving from the sidebar warns and "Save" in that dialog saves them.
+ *
+ * Inside a page save bar (`useSettingsPageSave`) the blocks have no Save
+ * buttons: the page's Save changes saves every dirty block and its Reset puts
+ * them back. A message without {{lockbox_code}} is refused once with a warning,
+ * and saved on the next Save changes, like the block's own "Save without the code".
  */
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -58,6 +63,7 @@ import { IconActionButton } from "./template-editor-shell-v2";
 import { renderLockboxSmsExample } from "./business-rules-logic";
 import { useRegisterLeaveSave } from "./business-section-save";
 import type { RegisterSectionSave } from "./pricing-money-parts";
+import { SETTINGS_SECTION_TITLE, useSettingsPageSave } from "./settings-kit";
 
 export interface LockboxDefaults {
   instructions: string;
@@ -165,6 +171,7 @@ export function LockboxTemplatesSectionV2({
     useLockboxTemplates();
   const { canEditSettings } = useManagerPermissions();
   const canEdit = canEditSettings("lockbox");
+  const pageSave = useSettingsPageSave();
 
   // Real settings only: the placeholder row says lockbox is off. A failed refresh
   // over a loaded row keeps the editor (the page shows the stale-data notice).
@@ -201,6 +208,13 @@ export function LockboxTemplatesSectionV2({
     "lockbox-messages",
     instructionsDirty || emailDirty || smsDirty,
     () => saveDirtyForLeave.current(),
+    () => {
+      if (storedInstructions !== null) setInstructions(storedInstructions);
+      if (storedEmail) setEmail({ subject: storedEmail.subject, body: storedEmail.body });
+      if (storedSms !== null) setSms(storedSms);
+      setEmailArmed(false);
+      setSmsArmed(false);
+    },
   );
 
   const failToast = (what: string, err: unknown) =>
@@ -209,7 +223,7 @@ export function LockboxTemplatesSectionV2({
   const heading = (
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="min-w-0 space-y-1">
-        <h2 className="font-heading text-base font-semibold tracking-tight text-foreground">Lockbox messages</h2>
+        <h2 className={SETTINGS_SECTION_TITLE}>Lockbox messages</h2>
         <p className="text-sm text-muted-foreground">What customers receive with their lockbox code.</p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
@@ -319,25 +333,42 @@ export function LockboxTemplatesSectionV2({
     });
   };
 
-  // "Save & Leave": every dirty block, and a rejection (so the page stays) when
-  // one is invalid, would go out without the code, or fails.
+  // The page's Save (its save bar, or "Save" when leaving): every dirty block,
+  // and a rejection (so the page stays) when one is invalid, would go out
+  // without the code, or fails. In a page save bar there is no block button to
+  // confirm a message without the code, so the first Save arms it (the warning
+  // shows under the message) and the next Save keeps it.
+  const missingCodeRefusal = (what: string, armed: boolean, arm: () => void) => {
+    if (!pageSave) return new Error(`The lockbox ${what} doesn't include {{lockbox_code}}. Save it on the page first.`);
+    if (armed) return null;
+    arm();
+    return new Error(`The lockbox ${what} doesn't include {{lockbox_code}}. Press Save changes again to keep it anyway.`);
+  };
   saveDirtyForLeave.current = async () => {
     if (instructionsDirty && !(await instructionsSave.run(() => updateSettings({ lockbox_default_instructions: instructions })))) {
       throw new Error("Couldn't save the lockbox instructions.");
     }
     if (emailDirty) {
       if (emailIssues.subjectError || emailIssues.bodyError) throw new Error(emailIssues.subjectError ?? emailIssues.bodyError ?? "");
-      if (emailIssues.missingCode) throw new Error("The lockbox email doesn't include {{lockbox_code}}. Save it on the page first.");
+      if (emailIssues.missingCode) {
+        const refusal = missingCodeRefusal("email", emailArmed, () => setEmailArmed(true));
+        if (refusal) throw refusal;
+      }
       if (!(await emailSave.run(() => saveTemplate.mutateAsync({ channel: "email", subject: email.subject, body: email.body })))) {
         throw new Error("Couldn't save the lockbox email.");
       }
+      setEmailArmed(false);
     }
     if (smsDirty) {
       if (smsIssues.bodyError) throw new Error(smsIssues.bodyError);
-      if (smsIssues.missingCode) throw new Error("The lockbox text message doesn't include {{lockbox_code}}. Save it on the page first.");
+      if (smsIssues.missingCode) {
+        const refusal = missingCodeRefusal("text message", smsArmed, () => setSmsArmed(true));
+        if (refusal) throw refusal;
+      }
       if (!(await smsSave.run(() => saveTemplate.mutateAsync({ channel: "sms", body: sms })))) {
         throw new Error("Couldn't save the lockbox text message.");
       }
+      setSmsArmed(false);
     }
   };
 
@@ -370,10 +401,19 @@ export function LockboxTemplatesSectionV2({
     }
   };
 
+  // A block's own status beside its title. In a page save bar the bar says
+  // "Unsaved changes" and "Saving…"; a block says only that its save failed.
+  const blockStatus = (status: SettingsSaveStatus, error: unknown, retry: () => unknown) =>
+    pageSave ? (
+      status === "error" ? <SettingsSaveState status="error" error={error} /> : undefined
+    ) : (
+      <SettingsSaveState status={status} error={error} onRetry={retry} />
+    );
+
   const missingCodeCopy = (armed: boolean) => (
     <p className="text-xs text-amber-700 dark:text-amber-400" role="alert">
       This message doesn&apos;t include <code className="font-mono">{LOCKBOX_CODE_VARIABLE}</code>, so the customer won&apos;t get
-      the code to open the box.{armed ? " Press Save again to keep it anyway." : ""}
+      the code to open the box.{armed ? (pageSave ? " Press Save changes again to keep it anyway." : " Press Save again to keep it anyway.") : ""}
     </p>
   );
 
@@ -394,7 +434,7 @@ export function LockboxTemplatesSectionV2({
         <Block
           title="Default instructions"
           description="Included in every lockbox email and text message."
-          aside={canEdit ? <SettingsSaveState status={instructionsSave.status(instructionsDirty)} error={instructionsSave.error} onRetry={saveInstructions} /> : undefined}
+          aside={canEdit ? blockStatus(instructionsSave.status(instructionsDirty), instructionsSave.error, saveInstructions) : undefined}
         >
           <label htmlFor="v2-lockbox-instructions" className="sr-only">
             Default instructions
@@ -408,15 +448,17 @@ export function LockboxTemplatesSectionV2({
             placeholder="Enter default lockbox instructions..."
           />
           {!instructions.trim() && <p className="text-xs text-muted-foreground">Leave empty to use the default instructions.</p>}
-          <Button type="button" size="sm" onClick={() => void saveInstructions()} disabled={!instructionsDirty || instructionsSave.saving}>
-            {instructionsSave.saving ? <Loader2 className="animate-spin" data-icon="inline-start" /> : <Save data-icon="inline-start" />}
-            Save instructions
-          </Button>
+          {!pageSave && (
+            <Button type="button" size="sm" onClick={() => void saveInstructions()} disabled={!instructionsDirty || instructionsSave.saving}>
+              {instructionsSave.saving ? <Loader2 className="animate-spin" data-icon="inline-start" /> : <Save data-icon="inline-start" />}
+              Save instructions
+            </Button>
+          )}
         </Block>
 
         <Block
           title="Email"
-          aside={canEdit ? <SettingsSaveState status={emailSave.status(emailDirty)} error={emailSave.error} onRetry={saveEmail} /> : undefined}
+          aside={canEdit ? blockStatus(emailSave.status(emailDirty), emailSave.error, saveEmail) : undefined}
         >
           <div className="space-y-1.5">
             <label htmlFor="v2-lockbox-email-subject" className="text-xs text-muted-foreground">
@@ -455,23 +497,25 @@ export function LockboxTemplatesSectionV2({
             {emailIssues.bodyError && <p className="text-xs text-destructive">{emailIssues.bodyError}</p>}
             {emailIssues.missingCode && missingCodeCopy(emailArmed)}
           </div>
-          <Button
-            type="button"
-            size="sm"
-            variant={emailArmed ? "destructive" : "default"}
-            onClick={saveEmail}
-            disabled={!emailDirty || emailSave.saving || !!emailIssues.subjectError || !!emailIssues.bodyError}
-          >
-            {emailSave.saving ? <Loader2 className="animate-spin" data-icon="inline-start" /> : <Save data-icon="inline-start" />}
-            {emailArmed ? "Save without the code" : "Save email"}
-          </Button>
+          {!pageSave && (
+            <Button
+              type="button"
+              size="sm"
+              variant={emailArmed ? "destructive" : "default"}
+              onClick={saveEmail}
+              disabled={!emailDirty || emailSave.saving || !!emailIssues.subjectError || !!emailIssues.bodyError}
+            >
+              {emailSave.saving ? <Loader2 className="animate-spin" data-icon="inline-start" /> : <Save data-icon="inline-start" />}
+              {emailArmed ? "Save without the code" : "Save email"}
+            </Button>
+          )}
         </Block>
 
         <Block
           title="Text message"
           aside={
             <div className="flex flex-wrap items-center gap-2">
-              {canEdit && <SettingsSaveState status={smsSave.status(smsDirty)} error={smsSave.error} onRetry={saveSms} />}
+              {canEdit && blockStatus(smsSave.status(smsDirty), smsSave.error, saveSms)}
               <span
                 className={cn(
                   "rounded-full px-2 py-0.5 text-xs tabular-nums",
@@ -522,16 +566,18 @@ export function LockboxTemplatesSectionV2({
               more than one text.
             </p>
           )}
-          <Button
-            type="button"
-            size="sm"
-            variant={smsArmed ? "destructive" : "default"}
-            onClick={saveSms}
-            disabled={!smsDirty || smsSave.saving || !!smsIssues.bodyError}
-          >
-            {smsSave.saving ? <Loader2 className="animate-spin" data-icon="inline-start" /> : <Save data-icon="inline-start" />}
-            {smsArmed ? "Save without the code" : "Save text message"}
-          </Button>
+          {!pageSave && (
+            <Button
+              type="button"
+              size="sm"
+              variant={smsArmed ? "destructive" : "default"}
+              onClick={saveSms}
+              disabled={!smsDirty || smsSave.saving || !!smsIssues.bodyError}
+            >
+              {smsSave.saving ? <Loader2 className="animate-spin" data-icon="inline-start" /> : <Save data-icon="inline-start" />}
+              {smsArmed ? "Save without the code" : "Save text message"}
+            </Button>
+          )}
         </Block>
       </SettingsReadOnlyFieldset>
 

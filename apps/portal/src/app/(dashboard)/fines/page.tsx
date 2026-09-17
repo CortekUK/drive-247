@@ -490,7 +490,10 @@ const FinesList = () => {
           <ListTableHeader>
             <ListHead className="w-[4%]">
               {canEdit('fines') && (
+                // `mx-auto`: the checkbox is a block-level flex box, which a
+                // centred cell's text-align does not move.
                 <CheckboxV2
+                  className="mx-auto"
                   checked={allShownSelected}
                   onCheckedChange={(checked) =>
                     setSelectedFines(checked === true ? fineRows.visible.map((fine) => fine.id) : [])
@@ -510,21 +513,11 @@ const FinesList = () => {
             <ListHead className="w-[9%]">Vehicle</ListHead>
             <ListHead className="w-[9%]">Customer</ListHead>
             <ListHead className="w-[12.5%]">Issue date</ListHead>
-            {/* Server sort on `due_date`, the date this column shows. */}
-            <ListHead
-              className="w-[13.5%]"
-              sort={{ direction: sortBy === 'due_date' ? sortOrder : null, onSort: () => handleSort('due_date') }}
-            >
-              Due date
-            </ListHead>
+            {/* No sorting on v2: fines stay newest added first (the page's
+                `created_at` desc default, which nothing on v2 can change). */}
+            <ListHead className="w-[13.5%]">Due date</ListHead>
             <ListHead className="w-[16%]">Status</ListHead>
-            {/* Server sort on `amount`, the figure this column shows. */}
-            <ListHead
-              className="w-[11%]"
-              sort={{ direction: sortBy === 'amount' ? sortOrder : null, onSort: () => handleSort('amount') }}
-            >
-              Amount
-            </ListHead>
+            <ListHead className="w-[11%]">Amount</ListHead>
             <ListHead className="w-[4%] text-right">
               <span className="sr-only">Actions</span>
             </ListHead>
@@ -556,6 +549,7 @@ const FinesList = () => {
                   <ListCell onClick={(e) => e.stopPropagation()}>
                     {canEdit('fines') && (
                       <CheckboxV2
+                        className="mx-auto"
                         checked={selectedFines.includes(fine.id)}
                         onCheckedChange={(checked) => handleSelectFine(fine.id, checked as boolean)}
                         aria-label={`Select fine ${reference}`}
@@ -626,10 +620,13 @@ const FinesList = () => {
                     title={fine.isOverdue ? `${dueDate ?? ''} · ${overdueText}` : undefined}
                   >
                     {dueDate ? (
-                      <div className="flex flex-col gap-0.5">
+                      // Centred like every v2 cell. `max-w-full` keeps the
+                      // date truncating: a centred flex item is only as wide as
+                      // its text, so without it a long date would spill out.
+                      <div className="flex flex-col items-center gap-0.5">
                         <span
                           className={cn(
-                            'block truncate',
+                            'block max-w-full truncate',
                             fine.isOverdue ? `font-medium ${LIST_TONES.danger}` : LIST_CLASSES.text,
                           )}
                         >

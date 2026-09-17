@@ -110,3 +110,29 @@ describe("SettingsIndexV2 states", () => {
     expect(container.querySelector('[data-testid="notice"]')?.textContent).toBe("You don't have access to Tax and fees");
   });
 });
+
+describe("SettingsIndexV2 look", () => {
+  it("the Settings title is bold and each section title semibold, with no line under them", () => {
+    render(<SettingsIndexV2 canView={() => true} tenantSlug="northwind" />);
+    const h1 = container.querySelector("h1")!;
+    expect(h1.textContent).toBe("Settings");
+    expect(h1.className.split(" ")).toEqual(expect.arrayContaining(["font-bold", "text-2xl", "font-heading"]));
+    const h2 = container.querySelector("section h2")!;
+    expect(h2.className.split(" ")).toEqual(expect.arrayContaining(["font-semibold", "font-heading"]));
+    expect(h2.className).not.toContain("border-b");
+  });
+
+  it("every entry row hovers light purple (never grey) and is rounded-xl", () => {
+    render(<SettingsIndexV2 canView={() => true} tenantSlug="northwind" />);
+    const rows = Array.from(container.querySelectorAll("section a"));
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      const cls = row.className.split(/\s+/);
+      expect(cls).toContain("rounded-xl");
+      expect(cls).toContain("hover:bg-primary/10");
+      expect(cls).toContain("dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]");
+      expect(cls).not.toContain("hover:bg-muted");
+      expect(cls).not.toContain("rounded-lg");
+    }
+  });
+});

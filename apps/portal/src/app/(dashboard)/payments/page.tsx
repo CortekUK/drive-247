@@ -146,10 +146,16 @@ const PaymentsList = () => {
   // pager: the table grows as it scrolls, like the rentals list.
   const v2Chrome = useV2("chrome");
 
+  // v2 lists newest ADDED first (`created_at` desc) and has no control to
+  // change it, so a backdated payment entered today sits at the top. v1 keeps
+  // its payment-date order and its sortable headers.
+  const listSortBy = v2Chrome ? 'created_at' : sortBy;
+  const listSortOrder: 'asc' | 'desc' = v2Chrome ? 'desc' : sortOrder;
+
   const { data: paymentsData, isLoading } = usePaymentsData({
     filters,
-    sortBy,
-    sortOrder,
+    sortBy: listSortBy,
+    sortOrder: listSortOrder,
     page,
     pageSize
     // v2: page 1 of up to 1,000 rows (PostgREST's per-request maximum), grown
@@ -372,7 +378,7 @@ const PaymentsList = () => {
    */
   const paymentRows = useProgressiveRows(
     payments,
-    `${tenant?.id}|${filters.customerSearch}|${filters.vehicleSearch}|${filters.method}|${filters.verificationStatus}|${filters.dateFrom?.toISOString()}|${filters.dateTo?.toISOString()}|${filters.quickFilter}|${sortBy}|${sortOrder}`,
+    `${tenant?.id}|${filters.customerSearch}|${filters.vehicleSearch}|${filters.method}|${filters.verificationStatus}|${filters.dateFrom?.toISOString()}|${filters.dateTo?.toISOString()}|${filters.quickFilter}|${listSortBy}|${listSortOrder}`,
   );
 
   // v2 only: the Status column as one line of coloured text. The conditions
@@ -545,35 +551,20 @@ const PaymentsList = () => {
                   value that must read whole fits on one line (the "CUSTOMER
                   PAYMENT" chip 116.7px, "Paid Out Of Band" 109.6, "Pending
                   Review" 103.2, the rate "$1,200.00/month × 3" 106.9, the date
-                  80.7, three row buttons 96), and so does every column label
-                  ("CUSTOMER" with its sort mark is 88.7). Nine columns like that
-                  need 994px at the kit's 12px cell padding, more than the card
-                  has, so this table's cells and labels take 8px (`px-2`).
-                  Customer, Vehicle and Rental truncate and keep their full value
-                  in `title`. */}
+                  80.7, three row buttons 96), and so does every column label.
+                  Nine columns like that need 994px at the kit's 12px cell
+                  padding, more than the card has, so this table's cells and
+                  labels take 8px (`px-2`). Customer, Vehicle and Rental truncate
+                  and keep their full value in `title`. Headings do not sort:
+                  rows are newest added first. */}
               <ListTableHeader>
-                <ListHead
-                  className="w-[10.4%] px-2"
-                  sort={{ direction: sortBy === 'payment_date' ? sortOrder : null, onSort: () => handleSort('payment_date') }}
-                >
-                  Date
-                </ListHead>
-                <ListHead
-                  className="w-[11.3%] px-2"
-                  sort={{ direction: sortBy === 'customer' ? sortOrder : null, onSort: () => handleSort('customer') }}
-                >
-                  Customer
-                </ListHead>
+                <ListHead className="w-[10.4%] px-2">Date</ListHead>
+                <ListHead className="w-[11.3%] px-2">Customer</ListHead>
                 <ListHead className="w-[7%] px-2">Vehicle</ListHead>
                 <ListHead className="w-[6.45%] px-2">Rental</ListHead>
                 <ListHead className="w-[14.2%] px-2" data-tour="payments-type-column">Type</ListHead>
                 <ListHead className="w-[13.5%] px-2">Method</ListHead>
-                <ListHead
-                  className="w-[13.2%] px-2"
-                  sort={{ direction: sortBy === 'amount' ? sortOrder : null, onSort: () => handleSort('amount') }}
-                >
-                  Amount
-                </ListHead>
+                <ListHead className="w-[13.2%] px-2">Amount</ListHead>
                 <ListHead className="w-[12.85%] px-2">Status</ListHead>
                 {/* Stays the last column: the tour's actions step stands to its left. */}
                 <ListHead className="w-[11.1%] text-right" data-tour="payments-actions-column">
@@ -602,7 +593,7 @@ const PaymentsList = () => {
                         <button
                           type="button"
                           onClick={() => router.push(`/customers/${payment.customers.id}`)}
-                          className={`${LIST_CLASSES.text} block max-w-full truncate text-left hover:underline`}
+                          className={`${LIST_CLASSES.text} mx-auto block max-w-full truncate text-center hover:underline`}
                           title={payment.customers.name}
                         >
                           {payment.customers.name}
@@ -613,7 +604,7 @@ const PaymentsList = () => {
                           <button
                             type="button"
                             onClick={() => router.push(`/vehicles/${payment.vehicles!.id}`)}
-                            className={`${LIST_CLASSES.text} block max-w-full truncate text-left hover:underline`}
+                            className={`${LIST_CLASSES.text} mx-auto block max-w-full truncate text-center hover:underline`}
                             title={payment.vehicles.make && payment.vehicles.model ? `${payment.vehicles.reg} • ${payment.vehicles.make} ${payment.vehicles.model}` : payment.vehicles.reg}
                           >
                             {payment.vehicles.reg}
@@ -630,7 +621,7 @@ const PaymentsList = () => {
                           <button
                             type="button"
                             onClick={() => router.push(`/rentals/${payment.rentals!.id}`)}
-                            className={`${LIST_CLASSES.text} block max-w-full truncate text-left hover:underline`}
+                            className={`${LIST_CLASSES.text} mx-auto block max-w-full truncate text-center hover:underline`}
                             title={payment.rentals.rental_number || `R-${payment.rentals.id.slice(0, 6)}`}
                           >
                             {payment.rentals.rental_number || `R-${payment.rentals.id.slice(0, 6)}`}
@@ -658,8 +649,8 @@ const PaymentsList = () => {
                           It wraps rather than truncates, so a discount suffix is
                           never cut off. */}
                       <ListCell className="px-2 tabular-nums">
-                        <div className="flex flex-col gap-0.5">
-                          <span className={`block truncate ${LIST_CLASSES.identifier}`} title={amountV2}>{amountV2}</span>
+                        <div className="flex flex-col items-center gap-0.5">
+                          <span className={`block max-w-full truncate ${LIST_CLASSES.identifier}`} title={amountV2}>{amountV2}</span>
                           {rateV2 && (
                             <span data-tour="payments-rate" className="block whitespace-normal break-words text-[11px] font-normal text-muted-foreground tabular-nums">
                               {rateV2}

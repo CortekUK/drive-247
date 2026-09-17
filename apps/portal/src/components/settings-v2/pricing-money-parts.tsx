@@ -150,7 +150,8 @@ export function useSectionSave({
   }, [signature]);
 
   useEffect(() => {
-    registerSave?.(sectionKey, isDirty ? save : null, isDirty ? stableDiscard : undefined);
+    if (isDirty) registerSave?.(sectionKey, save, stableDiscard);
+    else registerSave?.(sectionKey, null);
   }, [registerSave, sectionKey, isDirty, save, stableDiscard]);
 
   useEffect(() => () => registerSave?.(sectionKey, null), [registerSave, sectionKey]);

@@ -336,7 +336,7 @@ export const UserMenuV2 = ({ variant = 'icon' }: { variant?: 'icon' | 'row' } = 
           </div>
         ) : (
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="relative hover:bg-accent transition-colors cursor-pointer">
+            <Button variant="ghost" size="icon" className="relative hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] transition-colors cursor-pointer">
               <Avatar className="h-8 w-8 rounded-full overflow-hidden">
                 <AvatarImage src={appUser.avatar_url || undefined} alt={appUser.name || 'User'} className="object-cover" />
                 <AvatarFallback className="bg-primary/10 text-primary text-xs font-medium">

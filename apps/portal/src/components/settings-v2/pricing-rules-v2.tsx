@@ -50,7 +50,7 @@ import {
   ListTableHeader,
   useProgressiveRows,
 } from "@/components/shared/list-table-v2";
-import { SettingsField, SettingsPanel, SettingsRow, Unit } from "@/components/settings-v2/settings-kit";
+import { SettingsField, SettingsPanel, SettingsRow, Unit, useSettingsPageSave } from "@/components/settings-v2/settings-kit";
 import {
   SettingsDependencyNotice,
   SettingsEmptyState,
@@ -124,7 +124,7 @@ export interface PricingRulesV2Props {
 
 export function PricingRulesV2({ canEdit, registerSave, onDirtyChange, monthlyTier }: PricingRulesV2Props) {
   return (
-    <div className="pointer-events-auto space-y-8">
+    <div className="pointer-events-auto space-y-10">
       {monthlyTier && <MonthlyTierSection {...monthlyTier} canEdit={canEdit} registerSave={registerSave} />}
       <WeekendPricingSection canEdit={canEdit} registerSave={registerSave} onDirtyChange={onDirtyChange} />
       <HolidayPricingSection canEdit={canEdit} />
@@ -147,12 +147,14 @@ function MonthlyTierSection({
 }: MonthlyTierProps & { canEdit: boolean; registerSave?: RegisterSectionSave }) {
   const saved = savedValue ?? 30;
   const dirty = read.hasData && Number(value) !== Number(saved);
+  const pageSave = useSettingsPageSave();
   const save = useSectionSave({
     sectionKey: "pricing-monthly-tier",
     isDirty: dirty,
     registerSave,
     signature: String(value),
     run: onSave,
+    discard: () => onChange(Number(saved)),
   });
   const options = [30, 31].includes(Number(value)) ? [30, 31] : [30, 31, Number(value)];
 
@@ -164,12 +166,13 @@ function MonthlyTierSection({
             label="Monthly rate starts at"
             description="Rentals this long or longer use the monthly rate. Also used for mileage allowance and extensions."
             note={
-              canEdit && save.status !== "idle" ? (
+              // Inside the page's save bar only a failed save is said here.
+              canEdit && (pageSave ? save.status === "error" : save.status !== "idle") ? (
                 <SettingsSaveState
                   status={save.status}
                   error={save.error}
-                  onRetry={save.retry}
-                  onDiscard={() => onChange(Number(saved))}
+                  onRetry={pageSave ? undefined : save.retry}
+                  onDiscard={pageSave ? undefined : () => onChange(Number(saved))}
                 />
               ) : undefined
             }
@@ -186,7 +189,7 @@ function MonthlyTierSection({
                 ))}
               </SelectContent>
             </Select>
-            {canEdit && (
+            {canEdit && !pageSave && (
               <Button
                 type="button"
                 size="sm"
@@ -255,6 +258,12 @@ function WeekendPricingSection({
   const percentNote = percentIssue ?? weekendOffNote(percent);
   const daysNote = weekendDaysIssue(percent, days);
 
+  const discard = () => {
+    setPercent(settings.weekend_surcharge_percent || "");
+    setDays(settings.weekend_days || [6, 0]);
+    setStack(settings.stack_surcharges ?? false);
+  };
+
   const save = useSectionSave({
     sectionKey: "pricing-weekend",
     isDirty: dirty,
@@ -268,13 +277,8 @@ function WeekendPricingSection({
         stack_surcharges: stack,
       });
     },
+    discard,
   });
-
-  const discard = () => {
-    setPercent(settings.weekend_surcharge_percent || "");
-    setDays(settings.weekend_days || [6, 0]);
-    setStack(settings.stack_surcharges ?? false);
-  };
 
   const toggleDay = (day: number) =>
     setDays((prev) =>

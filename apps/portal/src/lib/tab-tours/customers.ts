@@ -296,7 +296,7 @@ const STEPS: readonly TourStep[] = [
     requires: { record: 'customerId' },
     notes: [
       {
-        text: 'Verified and Gig Driver tell you at a glance who has been checked.',
+        text: 'Verification and Gig driver tell you at a glance who has been checked.',
         anchors: ['[data-tour="customers-verified-column"]'],
       },
     ],
@@ -407,6 +407,15 @@ const STEPS: readonly TourStep[] = [
     anchors: ['[data-tour="customer-block"]', railRow('account')],
     side: 'right',
     requires: { record: 'customerId' },
+    notes: [
+      {
+        // Delete moved here from the list's row menu, which v2 no longer has.
+        // Anchored on the section, which only someone who can edit Customers
+        // is shown, so a viewer is never told about a button they lack.
+        text: 'Deleting a customer for good is at the bottom of this page.',
+        anchors: ['[data-tour="customer-delete"]'],
+      },
+    ],
   },
 ];
 

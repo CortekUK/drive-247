@@ -14,7 +14,7 @@
  * location never changes which lists it appears in.
  */
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Loader2, MapPinned, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import { Input } from "@/components/ui-v2/input";
@@ -32,7 +32,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui-v2/alert-dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui-v2/tooltip";
-import { SettingsPanel, SettingsRow } from "@/components/settings-v2/settings-kit";
+import { SettingsPanel, SettingsRow, useSettingsPageSave } from "@/components/settings-v2/settings-kit";
+import type { RegisterSectionSave } from "@/components/settings-v2/pricing-money-parts";
 import {
   SettingsEmptyState,
   SettingsLoadError,
@@ -117,7 +118,7 @@ export function SettingsPanelSkeleton({
 }: {
   rows?: number;
   title?: boolean;
-  /** The Save bar a panel shows to someone who can edit. */
+  /** The Save footer a panel shows to someone who can edit (never inside a page save bar). */
   footer?: boolean;
   /** Help lines under each row label (a long description wraps to two). */
   descriptionLines?: 1 | 2;
@@ -134,7 +135,7 @@ export function SettingsPanelSkeleton({
     >
       <span className="sr-only">{label}</span>
       {title && (
-        <div aria-hidden="true" className="space-y-1.5 border-b px-5 py-3.5">
+        <div aria-hidden="true" className="space-y-1.5 px-5 pt-4 pb-1">
           <Skeleton className="h-4 w-32 rounded-full" />
           <Skeleton className="h-3 w-72 max-w-full rounded-full" />
         </div>
@@ -143,7 +144,7 @@ export function SettingsPanelSkeleton({
         {Array.from({ length: Math.max(1, rows) }).map((_, i) => (
           <div
             key={i}
-            className="flex flex-col gap-3 px-5 py-4 md:flex-row md:items-center md:justify-between md:gap-8"
+            className="flex flex-col gap-3 px-5 py-4 md:grid md:grid-cols-[minmax(0,420px)_minmax(0,1fr)] md:items-center md:gap-x-10"
           >
             <div className="min-w-0 space-y-1.5">
               <Skeleton className="h-3.5 w-24 rounded-full" />
@@ -264,7 +265,16 @@ export interface BusinessRegionalPanelProps {
   /** Persist. Throws on failure (see `saveGeneralSettingsV2`). */
   onSave: () => Promise<void>;
   onDiscard: () => void;
+  /**
+   * The settings page's section registry. Inside a page save bar the panel has
+   * no Save of its own: it registers its save (which still asks before a
+   * currency change) and its discard under `general-regional`.
+   */
+  registerSave?: RegisterSectionSave;
 }
+
+/** Thrown when Save changes was pressed but the currency change was not confirmed. */
+export const CURRENCY_NOT_CONFIRMED_MESSAGE = "The currency change wasn't confirmed, so it wasn't saved.";
 
 export function BusinessRegionalPanel({
   form,
@@ -278,11 +288,15 @@ export function BusinessRegionalPanel({
   retryingLoad,
   onSave,
   onDiscard,
+  registerSave,
 }: BusinessRegionalPanelProps) {
+  const pageSave = useSettingsPageSave();
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<unknown>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const status = useSettingsSaveStatus({ isDirty, isPending: saving, error: saveError });
+  /** A page Save waiting on the currency confirm. */
+  const pendingConfirm = useRef<{ resolve: () => void; reject: (error: unknown) => void } | null>(null);
 
   // Discarding (or a later successful save) clears a stale failure.
   useEffect(() => {
@@ -314,20 +328,74 @@ export function BusinessRegionalPanel({
     else void runSave();
   };
 
+  // The page's Save changes: the same confirm before a currency change, then the
+  // same save. Rejects when it did not save, so the page reports it and stays.
+  // The page toasts a failure itself, so none is shown here.
+  const latestPageSave = useRef<() => Promise<void>>(async () => undefined);
+  latestPageSave.current = async () => {
+    if (currencyChanged) {
+      await new Promise<void>((resolve, reject) => {
+        pendingConfirm.current = { resolve, reject };
+        setConfirmOpen(true);
+      });
+    }
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await onSave();
+    } catch (error) {
+      setSaveError(error);
+      throw error;
+    } finally {
+      setSaving(false);
+    }
+  };
+  const stablePageSave = useCallback(() => latestPageSave.current(), []);
+  const latestDiscard = useRef(onDiscard);
+  latestDiscard.current = onDiscard;
+  const stableDiscard = useCallback(() => latestDiscard.current(), []);
+  const registered = pageSave && canEdit && ready ? registerSave : undefined;
+  useEffect(() => {
+    if (isDirty) registered?.("general-regional", stablePageSave, stableDiscard);
+    else registered?.("general-regional", null);
+  }, [registered, isDirty, stablePageSave, stableDiscard]);
+  useEffect(() => () => registered?.("general-regional", null), [registered]);
+
+  const onConfirmOpenChange = (open: boolean) => {
+    setConfirmOpen(open);
+    if (!open && pendingConfirm.current) {
+      pendingConfirm.current.reject(Object.assign(new Error(CURRENCY_NOT_CONFIRMED_MESSAGE), { alreadyToasted: true }));
+      pendingConfirm.current = null;
+    }
+  };
+
+  const confirmCurrency = () => {
+    if (pendingConfirm.current) {
+      const pending = pendingConfirm.current;
+      pendingConfirm.current = null;
+      setConfirmOpen(false);
+      pending.resolve();
+      return;
+    }
+    void runSave();
+  };
+
   if (!ready && loadError) {
     return (
       <SettingsLoadError thing="your regional settings" error={loadError} onRetry={onRetryLoad} retrying={retryingLoad} />
     );
   }
   if (!ready) {
-    return <SettingsPanelSkeleton rows={2} footer={canEdit} label="Loading regional settings" />;
+    return <SettingsPanelSkeleton rows={2} footer={canEdit && !pageSave} label="Loading regional settings" />;
   }
 
   return (
     <>
       <SettingsPanel
         footer={
-          canEdit ? (
+          canEdit && pageSave ? (
+            status === "error" ? <SettingsSaveState status="error" error={saveError} /> : null
+          ) : canEdit ? (
             <>
               <SettingsSaveState
                 status={status}
@@ -399,7 +467,7 @@ export function BusinessRegionalPanel({
         </SettingsRow>
       </SettingsPanel>
 
-      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+      <AlertDialog open={confirmOpen} onOpenChange={onConfirmOpenChange}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
@@ -412,7 +480,7 @@ export function BusinessRegionalPanel({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => void runSave()}>Change currency</AlertDialogAction>
+            <AlertDialogAction onClick={confirmCurrency}>Change currency</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

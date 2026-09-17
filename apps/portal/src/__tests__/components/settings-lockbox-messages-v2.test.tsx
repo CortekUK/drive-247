@@ -43,6 +43,7 @@ vi.mock("next/link", () => ({
 }));
 
 import { LockboxTemplatesSectionV2 } from "@/components/settings-v2/lockbox-templates-v2";
+import { SettingsPageSaveProvider } from "@/components/settings-v2/settings-kit";
 
 let container: HTMLDivElement;
 let root: Root;
@@ -282,5 +283,66 @@ describe("LockboxTemplatesSectionV2 fix pass", () => {
     const last = vi.mocked(toast).mock.calls.at(-1)?.[0] as { description: string };
     expect(last.description).toBe("Nothing was reset. We couldn't reach the server.");
     expect(state.rental.updateSettings).not.toHaveBeenCalled();
+  });
+});
+
+describe("LockboxTemplatesSectionV2 inside the page's one save bar", () => {
+  function mountInBar(registerSave: ReturnType<typeof vi.fn>) {
+    act(() =>
+      root.render(
+        <SettingsPageSaveProvider>
+          <LockboxTemplatesSectionV2
+            defaults={DEFAULTS}
+            variables={[{ key: "{{lockbox_code}}", desc: "The code" }]}
+            registerSave={registerSave as never}
+          />
+        </SettingsPageSaveProvider>,
+      ),
+    );
+  }
+  const last = (registerSave: ReturnType<typeof vi.fn>) =>
+    registerSave.mock.calls.filter(([k]) => k === "lockbox-messages").at(-1) as
+      | [string, (() => Promise<unknown>) | null, (() => void) | undefined]
+      | undefined;
+  const buttons = () => Array.from(container.querySelectorAll("button")).map((b) => b.textContent?.trim());
+
+  it("shows no per-message Save buttons", () => {
+    mountInBar(vi.fn());
+    expect(buttons()).not.toContain("Save instructions");
+    expect(buttons()).not.toContain("Save email");
+    expect(buttons()).not.toContain("Save text message");
+  });
+
+  it("registers a discard that puts every message back to what is stored", () => {
+    const registerSave = vi.fn();
+    mountInBar(registerSave);
+    setTextarea(sms(), "Code {{lockbox_code}} for {{vehicle_reg}}");
+    expect(text()).not.toContain("Unsaved changes");
+    const [, , discard] = last(registerSave)!;
+    act(() => discard!());
+    expect(sms().value).toBe(DEFAULT_SMS);
+    expect(last(registerSave)![1]).toBeNull();
+  });
+
+  it("a text without the code is refused once with a warning, then saved on the next Save changes", async () => {
+    const registerSave = vi.fn();
+    mountInBar(registerSave);
+    setTextarea(sms(), "Your car is ready");
+
+    let rejection: unknown = null;
+    await act(async () => {
+      await last(registerSave)![1]!().catch((e: unknown) => (rejection = e));
+    });
+    expect((rejection as Error).message).toBe(
+      "The lockbox text message doesn't include {{lockbox_code}}. Press Save changes again to keep it anyway.",
+    );
+    expect(state.templates.saveTemplate.mutateAsync).not.toHaveBeenCalled();
+    expect(text()).toContain("Press Save changes again to keep it anyway.");
+
+    await act(async () => {
+      await last(registerSave)![1]!();
+    });
+    expect(state.templates.saveTemplate.mutateAsync).toHaveBeenCalledTimes(1);
+    expect(state.templates.saveTemplate.mutateAsync).toHaveBeenCalledWith({ channel: "sms", body: "Your car is ready" });
   });
 });

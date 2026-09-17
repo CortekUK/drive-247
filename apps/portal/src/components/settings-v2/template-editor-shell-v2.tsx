@@ -202,7 +202,7 @@ export function TemplateEditorShellV2({
           <div className="flex min-w-0 flex-[1_1_12rem] items-center gap-2 sm:gap-3">
             <IconActionButton action={{ label: backLabel, icon: ArrowLeft, onClick: onBack }} />
             <div className="min-w-0 flex-1">
-              <h1 className="flex flex-wrap items-center gap-2 font-heading text-lg font-semibold tracking-tight text-foreground sm:text-xl">
+              <h1 className="flex flex-wrap items-center gap-2 font-heading text-lg font-bold tracking-tight text-foreground sm:text-xl">
                 <span className="min-w-0 [overflow-wrap:anywhere]">{title}</span>
                 {badges}
               </h1>

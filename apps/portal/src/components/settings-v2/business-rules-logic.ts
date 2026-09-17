@@ -12,6 +12,13 @@
  * it explains, and the page keeps Save disabled until it is fixed.
  */
 
+import {
+  depositDirtyState,
+  isFeesDirty,
+  type DepositFormFields,
+  type FeesFormFields,
+} from "@/components/settings-v2/pricing-money-logic";
+
 type Rec = Record<string, any>;
 
 const numberFormat = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 });
@@ -515,6 +522,58 @@ export function businessEditsCoveredBySections(
   return (Object.keys(BUSINESS_SECTION_KEYS) as BusinessPage[]).every(
     (page) => !businessPageDirty(page, form, saved) || registered.includes(BUSINESS_SECTION_KEYS[page]),
   );
+}
+
+/**
+ * The `rentalForm` fields each v2 money section saves, keyed by the name it
+ * registers its save under (Tax and fees, Security deposit, the monthly rate).
+ */
+export const MONEY_SECTION_FORM_KEYS = {
+  fees: ["tax_enabled", "tax_percentage", "service_fee_enabled", "service_fee_type", "service_fee_value", "service_fee_amount"],
+  preauth: ["security_deposit_enabled", "deposit_charge_enabled", "deposit_mode", "global_deposit_amount"],
+  "pricing-monthly-tier": ["monthly_tier_days"],
+} as const;
+
+/** Does any field of the page's rental form differ from what the page last filled in? */
+export function rentalFormDiffers(form: Rec | null | undefined, lastSynced: Rec | null | undefined): boolean {
+  if (!form || !lastSynced) return false;
+  for (const key of new Set([...Object.keys(form), ...Object.keys(lastSynced)])) {
+    if (!sameValue(form[key], lastSynced[key])) return true;
+  }
+  return false;
+}
+
+/**
+ * v2: can the page's Save (its save bar, or "Save" in the leave dialog) really
+ * save every unsaved edit in its shared rental form? Like
+ * `businessEditsCoveredBySections`, but Tax and fees, Security deposit and the
+ * monthly rate count too, once each has registered its save:
+ *   1. no field outside every section differs from what the page filled in;
+ *   2. every Business-rules page with unsaved edits has registered;
+ *   3. fees, deposit and monthly rate, when GENUINELY dirty (the sections' own
+ *      number-aware checks: a typed "10" over a saved 10 is not an edit), have
+ *      registered under "fees", "preauth" and "pricing-monthly-tier".
+ */
+export function rentalEditsCoveredBySections(
+  form: Rec | null | undefined,
+  lastSynced: Rec | null | undefined,
+  saved: Rec | null | undefined,
+  registered: readonly string[],
+): boolean {
+  if (!form || !lastSynced || !saved) return false;
+  const owned = new Set<string>([...BUSINESS_FORM_KEYS, ...Object.values(MONEY_SECTION_FORM_KEYS).flat()]);
+  for (const key of new Set([...Object.keys(form), ...Object.keys(lastSynced)])) {
+    if (!owned.has(key) && !sameValue(form[key], lastSynced[key])) return false;
+  }
+  const businessCovered = (Object.keys(BUSINESS_SECTION_KEYS) as BusinessPage[]).every(
+    (page) => !businessPageDirty(page, form, saved) || registered.includes(BUSINESS_SECTION_KEYS[page]),
+  );
+  if (!businessCovered) return false;
+  if (isFeesDirty(form as FeesFormFields, saved) && !registered.includes("fees")) return false;
+  if (depositDirtyState(form as DepositFormFields, saved).dirty && !registered.includes("preauth")) return false;
+  const monthlyDirty = Number(form.monthly_tier_days) !== Number(saved.monthly_tier_days ?? 30);
+  if (monthlyDirty && !registered.includes("pricing-monthly-tier")) return false;
+  return true;
 }
 
 /**

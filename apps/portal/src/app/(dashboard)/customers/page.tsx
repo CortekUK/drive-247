@@ -33,14 +33,13 @@ import { useCustomerBlockingActions } from "@/hooks/use-customer-blocking";
 import { useCustomerStatusActions } from "@/hooks/use-customer-status-actions";
 import { toast } from "sonner";
 import { useTenant } from "@/contexts/TenantContext";
-import { useAuditLog } from "@/hooks/use-audit-log";
+import { useDeleteCustomer } from "@/hooks/use-delete-customer";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { isLeanTenant } from "@/lib/lean-areas";
 import { CustomersTeachingEmptyState } from "@/components/empty-states/lean-empty-states";
 import { useForcedEmptyState } from "@/hooks/use-forced-empty-state";
 import {
   LIST_CLASSES,
-  LIST_ROW_ACTION,
   ListBody,
   ListCell,
   ListFooter,
@@ -52,7 +51,6 @@ import {
   ListTableHeader,
   useProgressiveRows,
 } from "@/components/shared/list-table-v2";
-import { formatCurrency } from "@/lib/format-utils";
 import { TabTourButton } from "@/components/onboarding/tab-tour-button";
 import { HEADER_ACTIONS_V2, HEADER_PRIMARY_V2, HeaderIconButton } from "@/components/shared/header-icon-button-v2";
 import { csvDate, csvFilename, downloadCsv } from "@/lib/csv-export";
@@ -144,7 +142,7 @@ const CustomersList = () => {
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const { tenant, tenantSlug } = useTenant();
-  const { logAction } = useAuditLog();
+  const { deleteCustomer } = useDeleteCustomer();
   const { canEdit, canView } = useManagerPermissions();
 
   // State from URL params
@@ -192,13 +190,15 @@ const CustomersList = () => {
     if (debouncedSearchTerm) params.set('search', debouncedSearchTerm);
     if (statusFilter !== 'all') params.set('status', statusFilter);
     if (userTypeFilter !== 'all') params.set('userType', userTypeFilter);
-    if (sortField) params.set('sortBy', sortField);
-    if (sortOrder !== 'asc') params.set('sortOrder', sortOrder);
+    // v2 lists never sort (newest added first, always), so v2 writes no sort
+    // to the URL, and an old `?sortBy=` link drops out of it on arrival.
+    if (sortField && !v2Chrome) params.set('sortBy', sortField);
+    if (sortOrder !== 'asc' && !v2Chrome) params.set('sortOrder', sortOrder);
     if (currentPage !== 1) params.set('page', currentPage.toString());
     if (pageSize !== 25) params.set('pageSize', pageSize.toString());
 
     router.push(`?${params.toString()}`);
-  }, [debouncedSearchTerm, statusFilter, userTypeFilter, sortField, sortOrder, currentPage, pageSize, router]);
+  }, [debouncedSearchTerm, statusFilter, userTypeFilter, sortField, sortOrder, currentPage, pageSize, router, v2Chrome]);
 
   // Fetch customers
   const { data: customers, isLoading, refetch: refetchCustomers } = useQuery({
@@ -424,8 +424,10 @@ const CustomersList = () => {
       return true;
     });
 
-    // Only apply client-side sorting if user has explicitly selected a sort field
-    if (sortField) {
+    // Only apply client-side sorting if user has explicitly selected a sort field.
+    // Never on v2: its list stays in the query's order, newest added first, and
+    // has no control to change it, so a `?sortBy=` in the URL is ignored.
+    if (sortField && !v2Chrome) {
       filtered.sort((a, b) => {
         let aValue, bValue;
 
@@ -456,7 +458,7 @@ const CustomersList = () => {
     }
 
     return filtered;
-  }, [customers, debouncedSearchTerm, statusFilter, userTypeFilter, sortField, sortOrder, customerBalances]);
+  }, [customers, debouncedSearchTerm, statusFilter, userTypeFilter, sortField, sortOrder, customerBalances, v2Chrome]);
 
   // Pagination
   const totalCustomers = filteredAndSortedCustomers.length;
@@ -469,11 +471,12 @@ const CustomersList = () => {
    * v2 (northwind) has no pager: the table grows 25 rows at a time as it is
    * scrolled, like the rentals list. Every row the filters return is already in
    * `filteredAndSortedCustomers`, so this is a bigger slice and no new query.
-   * The fill resets when the result set changes: search, filters or sort.
+   * The fill resets when the result set changes: search or filters. There is
+   * no sort to reset on: v2 keeps the query's order.
    */
   const customerRows = useProgressiveRows(
     filteredAndSortedCustomers,
-    `${debouncedSearchTerm}|${statusFilter}|${userTypeFilter}|${sortField}|${sortOrder}`,
+    `${debouncedSearchTerm}|${statusFilter}|${userTypeFilter}`,
   );
 
   // With no pager on screen, a `?page=` left in the URL (an old bookmark, or a
@@ -571,51 +574,16 @@ const CustomersList = () => {
   const handleDeleteCustomer = async () => {
     if (!selectedCustomer) return;
 
-    try {
-      // Get the auth_user_id BEFORE deleting (cascade will remove customer_users)
-      const { data: customerUser } = await supabase
-        .from('customer_users')
-        .select('auth_user_id')
-        .eq('customer_id', selectedCustomer.id)
-        .maybeSingle();
-
-      const authUserId = customerUser?.auth_user_id;
-
-      // Step 1: Delete the customer (cascade deletes customer_users)
-      const { error } = await supabase
-        .from('customers')
-        .delete()
-        .eq('id', selectedCustomer.id);
-
-      if (error) throw error;
-
-      // Step 2: Clean up auth user — delete if no other tenant links,
-      // otherwise just revoke sessions. Called AFTER customer deletion
-      // so the cascade has already removed customer_users for this tenant.
-      if (authUserId) {
-        await supabase.functions.invoke('revoke-customer-session', {
-          body: { auth_user_id: authUserId, delete_auth_user: true },
-        }).catch(() => {
-          console.warn('Failed to clean up auth user — customer data was deleted successfully');
-        });
-      }
-
-      // Audit log for customer deletion
-      logAction({
-        action: "customer_deleted",
-        entityType: "customer",
-        entityId: selectedCustomer.id,
-        details: { customer_name: selectedCustomer.name }
-      });
-
-      toast.success(`${selectedCustomer.name} has been deleted`);
-      setDeleteDialogOpen(false);
-      setSelectedCustomer(null);
-      refetchCustomers();
-      queryClient.invalidateQueries({ queryKey: ["audit-logs"] });
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to delete customer. They may have associated rentals or payments.');
-    }
+    // The steps (sign-in lookup, delete, sign-in clean-up, audit log) and both
+    // toasts live in the shared hook, which the v2 customer record's Delete
+    // calls too. What stays here is this screen's own follow-up.
+    await deleteCustomer(selectedCustomer, {
+      onDeleted: () => {
+        setDeleteDialogOpen(false);
+        setSelectedCustomer(null);
+        refetchCustomers();
+      },
+    });
   };
 
   const handleRejectClick = (customer: Customer) => {
@@ -1013,41 +981,23 @@ const CustomersList = () => {
         {v2Chrome ? (
           <>
             {/* v2: the rentals list's table (components/shared/list-table-v2).
-                No pager, rows arrive as the table scrolls. No View column: the
-                row opens the customer. The actions menu is the same menu. */}
-            <ListTable rows={customerRows} minWidth="min-w-[880px]">
+                No pager, rows arrive as the table scrolls, and the body fills
+                the window below the overview. Five columns, in the team lead's
+                order (Sep 2026): Name, Email, Type, Verification, Gig driver.
+                No actions column: the row opens the customer, and everything
+                the old menu did (edit, verify, block, approve, delete) is on
+                the record. Phone and Balance are on the record too, and still
+                in the CSV export. Headings do not sort: newest added first. */}
+            <ListTable rows={customerRows} fillViewport>
               <ListTableHeader>
-                <ListHead
-                  className="w-[20%]"
-                  sort={{ direction: sortField === 'name' ? sortOrder : null, onSort: () => handleSort('name') }}
-                >
-                  Name
-                </ListHead>
-                <ListHead
-                  className="w-[10%]"
-                  sort={{ direction: sortField === 'type' ? sortOrder : null, onSort: () => handleSort('type') }}
-                >
-                  Type
-                </ListHead>
-                <ListHead className="w-[10%]" data-tour="customers-verified-column">Verified</ListHead>
-                <ListHead className="w-[9%]">Gig driver</ListHead>
-                {/* Email and phone as two one-line columns rather than one
-                    two-line cell: rows stay the height of a rentals row. */}
-                <ListHead className="w-[22%]">Email</ListHead>
-                <ListHead className="w-[13%]">Phone</ListHead>
-                <ListHead
-                  className="w-[10%]"
-                  sort={{ direction: sortField === 'balance' ? sortOrder : null, onSort: () => handleSort('balance') }}
-                >
-                  Balance
-                </ListHead>
-                <ListHead className="w-[6%] text-right">
-                  <span className="sr-only">Actions</span>
-                </ListHead>
+                <ListHead className="w-[26%]">Name</ListHead>
+                <ListHead className="w-[32%]">Email</ListHead>
+                <ListHead className="w-[14%]">Type</ListHead>
+                <ListHead className="w-[16%]" data-tour="customers-verified-column">Verification</ListHead>
+                <ListHead className="w-[12%]">Gig driver</ListHead>
               </ListTableHeader>
               <ListBody>
                 {customerRows.visible.map((customer) => {
-                  const balanceData = customerBalances[customer.id];
                   const verification = (customer as any).identity_verification_status;
 
                   return (
@@ -1060,7 +1010,7 @@ const CustomersList = () => {
                       onOpen={() => router.push(`/customers/${customer.id}`)}
                     >
                       <ListCell>
-                        <div className="flex min-w-0 items-center gap-1.5">
+                        <div className="flex min-w-0 items-center justify-center gap-1.5">
                           {/* A real button, so the record stays reachable by keyboard. */}
                           <button
                             type="button"
@@ -1068,7 +1018,7 @@ const CustomersList = () => {
                               e.stopPropagation();
                               router.push(`/customers/${customer.id}`);
                             }}
-                            className={`${LIST_CLASSES.identifier} truncate text-left hover:underline`}
+                            className={`${LIST_CLASSES.identifier} truncate text-center hover:underline`}
                           >
                             {customer.name}
                           </button>
@@ -1078,6 +1028,15 @@ const CustomersList = () => {
                             </span>
                           )}
                         </div>
+                      </ListCell>
+                      <ListCell>
+                        {customer.email ? (
+                          <span className={`block truncate ${LIST_CLASSES.text}`} title={customer.email}>
+                            {customer.email}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
                       </ListCell>
                       <ListCell>
                         <ListMetaChip>{customer.user_type || 'Guest'}</ListMetaChip>
@@ -1102,137 +1061,6 @@ const CustomersList = () => {
                         ) : (
                           <ListStatusText tone="muted">No</ListStatusText>
                         )}
-                      </ListCell>
-                      <ListCell>
-                        {customer.email ? (
-                          <span className={`block truncate ${LIST_CLASSES.text}`} title={customer.email}>
-                            {customer.email}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </ListCell>
-                      <ListCell>
-                        {customer.phone ? (
-                          <span className={`block truncate tabular-nums ${LIST_CLASSES.text}`}>{customer.phone}</span>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </ListCell>
-                      {/* The balance in the list's own type and status palette:
-                          red owed, green in credit, muted settled. The chip v1
-                          uses is 12px over a second line. Its charges/payments
-                          breakdown moves to the hover title. */}
-                      <ListCell className="tabular-nums">
-                        {!balanceData || balanceData.status === 'Settled' || balanceData.balance === 0 ? (
-                          <ListStatusText tone="muted">Settled</ListStatusText>
-                        ) : (
-                          <span
-                            title={
-                              balanceData.totalCharges !== undefined && balanceData.totalPayments !== undefined
-                                ? `${balanceData.status === 'In Debt' ? 'Outstanding' : 'In credit'} · Charges ${formatCurrency(balanceData.totalCharges, tenant?.currency_code || 'USD')} · Payments ${formatCurrency(balanceData.totalPayments, tenant?.currency_code || 'USD')}`
-                                : balanceData.status
-                            }
-                          >
-                            <ListStatusText tone={balanceData.status === 'In Debt' ? 'danger' : 'success'}>
-                              {formatCurrency(balanceData.balance, tenant?.currency_code || 'USD')}
-                            </ListStatusText>
-                          </span>
-                        )}
-                      </ListCell>
-                      {/* The menu must not open the record: clicks on the trigger
-                          and on its items (portalled, but still React children
-                          of this cell) stop here. */}
-                      <ListCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className={LIST_ROW_ACTION}
-                              aria-label={`Actions for ${customer.name}`}
-                            >
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            {customer.status === 'Rejected' ? (
-                              <>
-                                <DropdownMenuItem
-                                  onClick={() => handleViewRejectedDetails(customer)}
-                                >
-                                  <Eye className="h-4 w-4 mr-2" />
-                                  View Details
-                                </DropdownMenuItem>
-                                {canEdit('customers') && (
-                                  <DropdownMenuItem onClick={() => handleEditCustomer(customer)}>
-                                    <Edit className="h-4 w-4 mr-2" />
-                                    Edit
-                                  </DropdownMenuItem>
-                                )}
-                                <DropdownMenuSeparator />
-                                {canEdit('customers') && (
-                                  <DropdownMenuItem
-                                    onClick={() => handleApproveCustomer(customer)}
-                                    className="text-green-600 focus:text-green-600"
-                                  >
-                                    <UserCheck className="h-4 w-4 mr-2" />
-                                    Approve Customer
-                                  </DropdownMenuItem>
-                                )}
-                              </>
-                            ) : (
-                              <>
-                                {canEdit('customers') && (
-                                  <DropdownMenuItem onClick={() => handleEditCustomer(customer)}>
-                                    <Edit className="h-4 w-4 mr-2" />
-                                    Edit
-                                  </DropdownMenuItem>
-                                )}
-                                {canEdit('customers') && (
-                                  <DropdownMenuItem
-                                    onClick={() => {
-                                      setVerificationCustomer(customer);
-                                      setVerificationDialogOpen(true);
-                                    }}
-                                  >
-                                    {(customer as any).identity_verification_status === 'verified' ? (
-                                      <>
-                                        <RefreshCw className="h-4 w-4 mr-2" />
-                                        Re-verify
-                                      </>
-                                    ) : (
-                                      <>
-                                        <ShieldCheck className="h-4 w-4 mr-2" />
-                                        Start Verification
-                                      </>
-                                    )}
-                                  </DropdownMenuItem>
-                                )}
-                                <DropdownMenuSeparator />
-                                {canEdit('customers') && (
-                                  <DropdownMenuItem
-                                    onClick={() => handleBlockClick(customer)}
-                                    className="text-orange-600 focus:text-orange-600"
-                                  >
-                                    <Ban className="h-4 w-4 mr-2" />
-                                    Block Customer
-                                  </DropdownMenuItem>
-                                )}
-                              </>
-                            )}
-                            <DropdownMenuSeparator />
-                            {canEdit('customers') && (
-                              <DropdownMenuItem
-                                onClick={() => handleDeleteClick(customer)}
-                                className="text-destructive focus:text-destructive"
-                              >
-                                <Trash2 className="h-4 w-4 mr-2" />
-                                Delete
-                              </DropdownMenuItem>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
                       </ListCell>
                     </ListRow>
                   );

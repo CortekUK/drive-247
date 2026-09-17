@@ -987,6 +987,53 @@ body.v2-theme {
   border-radius: var(--v2-radius-4xl);
 }
 
+/* --- Field, menu and dialog radius (v1 primitives) -----------------------
+ * The rest of the rounded system for the v1 primitives a v2 screen still
+ * mounts (shared settings panels, and every dialog and menu a v2 page opens
+ * from shared code). Each value is the one the ui-v2 twin resolves:
+ *
+ *   Input           `rounded-md border-input`       -> 3xl (ui-v2 Input)
+ *   Textarea        `rounded-md border-input`       -> 2xl (ui-v2 Textarea)
+ *   SelectTrigger   `rounded-md border-input`, role=combobox  -> 3xl
+ *   Menu, listbox and popover content `rounded-md bg-popover` -> 2xl
+ *   Menu, select and cmdk items       `rounded-sm`            -> xl
+ *   Dialog / AlertDialog              `sm:rounded-lg`         -> 4xl
+ *
+ * Same contract as the Button rule above: keyed on the DEFAULT radius class,
+ * so a call site that asked for another radius (twMerge drops `rounded-md`)
+ * keeps it. A field joined to a neighbour (`rounded-l-none`, `rounded-r-none`,
+ * responsive or not) is left alone as well: the rule would otherwise round the
+ * flat edge it deliberately shares. Checkbox, radio, colour and range inputs
+ * are not text fields and are skipped. The combobox rule skips v1's Button
+ * (`whitespace-nowrap`), which the Button rule above already rounds.
+ *
+ * Tooltips and hover cards carry no role and are not matched. A cmdk list
+ * inside a rounded popover inherits the corner, or its square background would
+ * paint over the popover's curved border. */
+.v2-theme input[class~="rounded-md"][class~="border-input"]:not([type="checkbox"], [type="radio"], [type="color"], [type="range"], [class*="rounded-l-none"], [class*="rounded-r-none"]) {
+  border-radius: var(--v2-radius-3xl);
+}
+.v2-theme textarea[class~="rounded-md"][class~="border-input"]:not([class*="rounded-l-none"], [class*="rounded-r-none"]) {
+  border-radius: var(--v2-radius-2xl);
+}
+.v2-theme button[role="combobox"][class~="rounded-md"][class~="border-input"]:not([class~="whitespace-nowrap"], [class*="rounded-l-none"], [class*="rounded-r-none"]) {
+  border-radius: var(--v2-radius-3xl);
+}
+.v2-theme :is([role="menu"], [role="listbox"], [role="dialog"])[class~="rounded-md"][class~="bg-popover"] {
+  border-radius: var(--v2-radius-2xl);
+}
+.v2-theme [role="dialog"][class~="bg-popover"] > [cmdk-root][class~="rounded-md"] {
+  border-radius: inherit;
+}
+.v2-theme :is([role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], [role="option"])[class~="rounded-sm"] {
+  border-radius: var(--v2-radius-xl);
+}
+@media (min-width: 640px) {
+  .v2-theme :is([role="dialog"], [role="alertdialog"])[class~="sm:rounded-lg"] {
+    border-radius: var(--v2-radius-4xl);
+  }
+}
+
 /* --- Trax floating panel: size and offset --------------------------------
  * Trax floats ABOVE the page (components/trax/trax-panel.tsx, portalled to
  * <body>). Opening it does not narrow the page any more, so nothing here
@@ -1044,7 +1091,7 @@ html[data-trax-panel] {
 .v2-theme .settings-v2-body h3 {
   font-size: 1rem;
   line-height: 1.5rem;
-  font-weight: 500;
+  font-weight: 600;
   letter-spacing: normal;
 }
 

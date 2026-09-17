@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
+import { useGuardedRouter } from "@/lib/leave-guard";
 import { History, LifeBuoy, Maximize2, Minimize2, SquarePen, X } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui-v2/tooltip";
@@ -124,7 +125,8 @@ export function TraxPanel() {
   const workspace = useTraxSupportOptional();
   const support = workspace?.support ?? null;
   const pathname = usePathname();
-  const router = useRouter();
+  // Asks a v2 page with unsaved edits before opening Support.
+  const router = useGuardedRouter();
   const onFullPage = isTraxPath(pathname);
   const open = !!trax?.sheetOpen && !onFullPage;
 

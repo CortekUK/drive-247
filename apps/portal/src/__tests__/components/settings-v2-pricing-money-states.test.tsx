@@ -76,6 +76,7 @@ import {
 } from "@/components/settings-v2/pricing-money-logic";
 import { DepositSettingsV2, FeesSettingsV2 } from "@/components/settings-v2/fees-deposit-v2";
 import { PricingRulesV2 } from "@/components/settings-v2/pricing-rules-v2";
+import { SettingsPageSaveProvider } from "@/components/settings-v2/settings-kit";
 
 /* -------------------------------------------------------------------------- */
 /* Harness                                                                     */
@@ -442,7 +443,8 @@ describe("FeesSettingsV2", () => {
     const registerSave = vi.fn();
     render(<FeesSettingsV2 {...(props({ form: { ...form, tax_percentage: 8 }, onSave, registerSave }) as any)} />);
     expect(text()).toContain("Unsaved changes");
-    expect(registerSave).toHaveBeenCalledWith("fees", expect.any(Function));
+    // The save, and the discard the page's Reset runs.
+    expect(registerSave).toHaveBeenCalledWith("fees", expect.any(Function), expect.any(Function));
 
     const save = button("Save");
     expect(save.disabled).toBe(false);
@@ -555,7 +557,7 @@ describe("DepositSettingsV2", () => {
     const registerSave = vi.fn();
     render(<DepositSettingsV2 {...(props({ form: { ...form, deposit_charge_enabled: true }, registerSave }) as any)} />);
     expect(text()).toContain("Not saved yet. Save to start charging the deposit on new bookings.");
-    expect(registerSave).toHaveBeenCalledWith("preauth", expect.any(Function));
+    expect(registerSave).toHaveBeenCalledWith("preauth", expect.any(Function), expect.any(Function));
     expect(button("Save").disabled).toBe(false);
   });
 
@@ -734,6 +736,77 @@ describe("PricingRulesV2", () => {
   });
 });
 
+describe("inside the page's one save bar", () => {
+  const lastWithSave = (registerSave: ReturnType<typeof vi.fn>, key: string) => {
+    const calls = registerSave.mock.calls.filter((call) => call[0] === key && call[1]);
+    return calls[calls.length - 1] as [string, () => Promise<unknown>, () => void];
+  };
+
+  it("Pricing rules: no Save anywhere; the monthly rate and weekend pricing register a save and a discard", async () => {
+    h.reads["weekend-pricing"] = readState();
+    h.reads["tenant-holidays"] = readState();
+    const registerSave = vi.fn();
+    const monthlyTier = { value: 31, savedValue: 30, onChange: vi.fn(), onSave: vi.fn(async () => undefined), read: readState() as any };
+    render(
+      <SettingsPageSaveProvider>
+        <PricingRulesV2 canEdit registerSave={registerSave} monthlyTier={monthlyTier} />
+      </SettingsPageSaveProvider>,
+    );
+    typeInto(document.getElementById("v2-weekend-percent") as HTMLInputElement, "25");
+    expect(findButton("Save")).toBeUndefined();
+    // The bar says "Unsaved changes"; the sections do not repeat it.
+    expect(text()).not.toContain("Unsaved changes");
+
+    const [, monthlySave, monthlyDiscard] = lastWithSave(registerSave, "pricing-monthly-tier");
+    await act(async () => {
+      await monthlySave();
+    });
+    expect(monthlyTier.onSave).toHaveBeenCalledTimes(1);
+    act(() => monthlyDiscard());
+    expect(monthlyTier.onChange).toHaveBeenCalledWith(30);
+
+    const [, weekendSave, weekendDiscard] = lastWithSave(registerSave, "pricing-weekend");
+    await act(async () => {
+      await weekendSave();
+    });
+    // Hand-written: 25% on the saved Sat/Sun, not stacked.
+    expect(h.weekend.updateSettings).toHaveBeenCalledWith({ weekend_surcharge_percent: 25, weekend_days: [6, 0], stack_surcharges: false });
+    act(() => weekendDiscard());
+    expect((document.getElementById("v2-weekend-percent") as HTMLInputElement).value).toBe("10");
+  });
+
+  it("Tax and fees: no Save, and Unit groups keep '%' beside its box with the switch after it", () => {
+    const fees = {
+      form: {
+        tax_enabled: true,
+        tax_percentage: 8,
+        service_fee_enabled: false,
+        service_fee_type: "fixed_amount",
+        service_fee_value: 0,
+        service_fee_amount: 0,
+      },
+      setForm: vi.fn(),
+      saved: { tax_enabled: true, tax_percentage: 7.5, service_fee_enabled: false, service_fee_type: "fixed_amount", service_fee_value: 0, service_fee_amount: 0 },
+      read: readState(),
+      canEdit: true,
+      currencyCode: "USD",
+      onSave: vi.fn(async () => undefined),
+      registerSave: vi.fn(),
+    };
+    render(
+      <SettingsPageSaveProvider>
+        <FeesSettingsV2 {...(fees as any)} />
+      </SettingsPageSaveProvider>,
+    );
+    expect(findButton("Save")).toBeUndefined();
+    const rate = container.querySelector('input[aria-label="Tax rate"]') as HTMLInputElement;
+    expect(rate.parentElement!.textContent).toBe("%");
+    const toggle = container.querySelector('[aria-label="Enable tax"]')!;
+    expect(toggle.parentElement).toBe(rate.parentElement!.parentElement);
+    expect(toggle.className.split(/\s+/)).not.toContain("ml-2");
+  });
+});
+
 /* -------------------------------------------------------------------------- */
 /* Verifier fixes: negative values, delete copy, view-only reads, discard      */
 /* -------------------------------------------------------------------------- */
@@ -897,7 +970,8 @@ describe("view-only reads on Security deposit", () => {
 describe("settings page wiring (source)", () => {
   const page = readFileSync(resolve(__dirname, "../../app/(dashboard)/settings/page.tsx"), "utf8");
   const v2Start = page.indexOf("  if (v2Chrome) {\n    const pageMeta =");
-  const v2End = page.indexOf("\n  return (", page.indexOf("isSaving={isSavingForTab}", v2Start));
+  // The v2 branch ends where the v1 <Tabs> page's return starts.
+  const v2End = page.indexOf("\n  return (", page.indexOf("<LeaveDialogV2", v2Start));
   const v2 = page.slice(v2Start, v2End);
 
   it("Pricing rules, Tax and fees and Security deposit sit outside the page's read-only fieldset", () => {
@@ -908,9 +982,12 @@ describe("settings page wiring (source)", () => {
     expect(page).toMatch(/const V2_PAGES_GATING_OWN_CONTROLS = new Set\(\[[^\]]*'installments', 'payg', 'auto-extend', 'promos', 'extras'[^\]]*\]\);/);
   });
 
-  it("Installments registers unsaved plans with the leave guard, and shows its own 'Unsaved changes'", () => {
+  it("Installments registers unsaved plans with the leave guard, and keeps its own Save (no page save bar)", () => {
     expect(v2).toContain("<InstallmentSettings registerSave={registerV2SectionSave} />");
-    expect(page).toMatch(/const V2_PAGES_WITH_OWN_SAVE_STATUS = new Set\(\[[^\]]*'installments'[^\]]*\]\);/);
+    const bar = page.match(/const V2_PAGES_WITH_SAVE_BAR = new Set\(\[([^\]]*)\]\);/);
+    expect(bar).not.toBeNull();
+    expect(bar![1]).not.toContain("'installments'");
+    expect(bar![1]).toContain("'pricing', 'fees', 'preauth'");
     // v1 still mounts it bare.
     expect(page.slice(v2End)).toContain("<InstallmentSettings />");
   });
@@ -926,17 +1003,22 @@ describe("settings page wiring (source)", () => {
     expect(page).toContain(': () => deletingPromo && deletePromoMutation.mutate(deletingPromo.id)}');
   });
 
-  it("v2 'Don't Save' resets the page's forms before leaving; v1 dialogs are unchanged", () => {
+  it("v2 'Don't save' and Reset reset the page's forms and every registered section; v1 dialogs are unchanged", () => {
     expect(v2Start).toBeGreaterThan(-1);
-    expect(v2).toContain("if (lastSyncedRentalForm.current) setRentalForm(lastSyncedRentalForm.current);");
-    expect(v2).toContain("resetBrandingForm();");
-    expect(v2).toContain("discardV2PageEdits();\n            confirmLeave();");
-    expect(v2).toContain("discardV2PageEdits();\n            handleTabDiscardAndSwitch();");
-    expect(v2).not.toContain("onDiscard={confirmLeave}");
+    const guard = page.slice(page.indexOf("  const discardV2PageEdits = () => {"), v2Start);
+    expect(guard).toContain("if (lastSyncedRentalForm.current) setRentalForm(lastSyncedRentalForm.current);");
+    expect(guard).toContain("resetBrandingForm();");
+    expect(guard).toContain("Object.values(v2SectionDiscards.current).forEach((discard) => discard());");
+    expect(guard).toContain("onDiscard: resetV2PageEdits,");
+    expect(v2).toContain("onReset={resetV2PageEdits}");
+    expect(v2).toContain("onDiscard={v2LeaveGuard.discard}");
+    // v2 renders only the v2 leave dialog.
+    expect(v2).not.toContain("<UnsavedChangesDialog");
     const v1 = page.slice(v2End);
     expect(v1).toContain("onDiscard={confirmLeave}");
     expect(v1).toContain("onDiscard={handleTabDiscardAndSwitch}");
     expect(v1).not.toContain("discardV2PageEdits");
+    expect(v1).not.toContain("LeaveDialogV2");
   });
 
   it("the dark v2 --input token carries no alpha, so bg-input/50 stays a valid colour", () => {

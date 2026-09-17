@@ -16,7 +16,6 @@
  * The search is the top bar's (the v2 search slot), like every other v2 list.
  */
 
-import { useRouter } from "next/navigation";
 import { ShieldAlert, ShieldCheck } from "lucide-react";
 import { Skeleton } from "@/components/ui-v2/skeleton";
 import { usePageSearch } from "@/components/shared/layout/page-search-slot";
@@ -72,7 +71,6 @@ export function GlobalBlacklistPageV2<T extends GlobalBlacklistEntryRowV2>({
   /** For tests: the clock the "last 30 days" tile counts from. */
   now?: number;
 }) {
-  const router = useRouter();
   const rows = blacklist ?? null;
   const filtered = rows ? rows.filter((entry) => matchesBlacklistSearch(entry, searchTerm)) : [];
   const view = resolveBlacklistView({
@@ -111,14 +109,12 @@ export function GlobalBlacklistPageV2<T extends GlobalBlacklistEntryRowV2>({
   return (
     // No mx-auto: like the Settings index and every v2 settings page, the page
     // starts on the top bar's search line instead of centring on wide screens.
-    // md:pt-8: the breadcrumb (20px line) centres at 50 + 32 + 10 = 92, the
-    // sidebar switch's row.
-    <div className="w-full max-w-[1160px] space-y-6 pb-16 md:pt-8" data-blacklist-view={view}>
+    // md:pt-[26px]: the 32px title line centres at 50 + 26 + 16 = 92, the
+    // sidebar switch's row (as on the Settings index).
+    <div className="w-full max-w-[1160px] space-y-6 pb-16 md:pt-[26px]" data-blacklist-view={view}>
       <SettingsPageHeader
-        section="Bookings"
         title="Global blacklist"
         description="Customers blocked by 3 or more rental companies across the platform."
-        onBack={() => router.push("/settings")}
       />
 
       <div role="note" className="flex items-start gap-3 rounded-2xl bg-muted/60 px-4 py-3 text-sm">
