@@ -10,6 +10,7 @@ import {
   canSaveAllDirty,
   findSettingsSearchHandoff,
   formatCompanyCount,
+  isPositiveCount,
   matchesBlacklistSearch,
   resolveBlacklistView,
   resolveSettingsPageData,
@@ -217,6 +218,27 @@ describe("formatCompanyCount", () => {
     expect(formatCompanyCount(1234)).toBe("1,234 companies");
     expect(formatCompanyCount(null)).toBe("—");
     expect(formatCompanyCount(Number.NaN)).toBe("—");
+  });
+
+  it("never prints a count the database cannot hold: negative or fractional is a dash", () => {
+    expect(formatCompanyCount(-3)).toBe("—");
+    expect(formatCompanyCount(-1)).toBe("—");
+    expect(formatCompanyCount(2.5)).toBe("—");
+    expect(formatCompanyCount(Number.POSITIVE_INFINITY)).toBe("—");
+    expect(formatCompanyCount(9999999)).toBe("9,999,999 companies");
+  });
+});
+
+describe("isPositiveCount", () => {
+  it("is true only for whole numbers above zero", () => {
+    expect(isPositiveCount(1)).toBe(true);
+    expect(isPositiveCount(9999999)).toBe(true);
+    expect(isPositiveCount(0)).toBe(false);
+    expect(isPositiveCount(-3)).toBe(false);
+    expect(isPositiveCount(2.5)).toBe(false);
+    expect(isPositiveCount(Number.NaN)).toBe(false);
+    expect(isPositiveCount(null)).toBe(false);
+    expect(isPositiveCount("3")).toBe(false);
   });
 });
 

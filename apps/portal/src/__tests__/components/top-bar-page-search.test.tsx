@@ -162,3 +162,59 @@ describe('top bar page search', () => {
     expect(field('Search B…').value).toBe('');
   });
 });
+
+/**
+ * Phones (below `sm`). jsdom applies no CSS, so these read the classes that
+ * decide what a phone shows: the field is `hidden sm:flex` until opened, and the
+ * icon cluster gives way to it with `max-sm:hidden`.
+ */
+describe('top bar page search on a phone', () => {
+  const fieldBox = (label = LABEL) => field(label).parentElement!;
+  const classes = (el: Element) => el.className.split(/\s+/);
+  const phoneSearch = () => screen.queryByRole('button', { name: 'Search this page' });
+  const closeSearch = () => screen.queryByRole('button', { name: 'Clear and close search' });
+
+  it('without a page field, the phone Search button still opens global search', () => {
+    render(withBar(null));
+    expect(screen.getAllByRole('button', { name: 'Search' }).length).toBe(2);
+    expect(phoneSearch()).toBeNull();
+    expect(closeSearch()).toBeNull();
+  });
+
+  it("opens the page's own field instead of global search, and X clears and closes it", () => {
+    render(withBar(<DelayedPage commitDelay={0} />));
+    expect(classes(fieldBox())).toEqual(expect.arrayContaining(['hidden', 'sm:flex']));
+    expect(screen.queryAllByRole('button', { name: 'Search' })).toHaveLength(0);
+
+    act(() => {
+      fireEvent.click(phoneSearch()!);
+    });
+    expect(classes(fieldBox())).toContain('flex');
+    expect(classes(fieldBox())).not.toContain('hidden');
+    expect(document.activeElement).toBe(field());
+    expect(phoneSearch()).toBeNull();
+
+    type('abc');
+    wait(DEBOUNCE);
+    wait(1); // the page's zero-delay commit
+    expect(committed()).toBe('abc');
+
+    act(() => {
+      fireEvent.click(closeSearch()!);
+    });
+    expect(field().value).toBe('');
+    expect(classes(fieldBox())).toEqual(expect.arrayContaining(['hidden', 'sm:flex']));
+    expect(phoneSearch()).not.toBeNull();
+    wait(DEBOUNCE);
+    wait(1); // the page's zero-delay commit
+    expect(committed()).toBe('');
+  });
+
+  it('stays open while the page holds a term, so a filtered list shows its filter', () => {
+    render(withBar(<FixedPage placeholder={LABEL} value="kedic" onChange={vi.fn()} />));
+    expect(field().value).toBe('kedic');
+    expect(classes(fieldBox())).not.toContain('hidden');
+    expect(closeSearch()).not.toBeNull();
+    expect(phoneSearch()).toBeNull();
+  });
+});
