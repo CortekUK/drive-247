@@ -82,16 +82,34 @@ export function TicketRow({ ticket, selected, disabled, onSelect, subtitle }: {
   /** Admin only: whose account this ticket belongs to. */
   subtitle?: string;
 }) {
+  /* The server's per-ticket count of unread incoming MESSAGES when it sends one;
+     otherwise the older ticket-level flag. The subject's weight follows the same
+     answer, so a row is never bold without a count or counted without being bold. */
+  const count = typeof ticket.unreadMessages === 'number' ? ticket.unreadMessages : null;
+  const unread = count !== null ? count > 0 : !!ticket.unread;
   return (
     <button type="button" disabled={disabled} onClick={onSelect} aria-current={selected ? 'true' : undefined}
       className={`flex w-full flex-col gap-1 rounded-lg px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 ${selected ? 'bg-primary/10' : 'hover:bg-muted/60'}`}>
       <span className="flex items-start gap-2">
-        <span className={`line-clamp-2 min-w-0 flex-1 text-[13px] leading-snug ${ticket.unread ? 'font-semibold' : 'font-medium'}`}>
-          {ticket.summary}{ticket.unread && <span className="sr-only"> · Unread</span>}
+        <span className={`line-clamp-2 min-w-0 flex-1 text-[13px] leading-snug ${unread ? 'font-semibold' : 'font-medium'}`}>
+          {ticket.summary}
+          {count !== null
+            ? count > 0 && <span className="sr-only"> · {count} unread {count === 1 ? 'message' : 'messages'}</span>
+            : unread && <span className="sr-only"> · Unread</span>}
         </span>
         <time dateTime={ticket.updated_at} className="shrink-0 pt-0.5 text-[11px] text-muted-foreground">{listStamp(ticket.updated_at)}</time>
       </span>
-      <span className="truncate text-[11px] text-muted-foreground">{ticket.reference}{subtitle ? ` · ${subtitle}` : ''}</span>
+      <span className="flex min-w-0 items-center gap-2">
+        <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">{ticket.reference}{subtitle ? ` · ${subtitle}` : ''}</span>
+        {/* Unread messages, under the time: a solid accent pill, so it reads on the
+            lavender selected row too and never looks like the tinted status badge. */}
+        {count !== null && count > 0 && (
+          <span data-testid="ticket-unread" aria-hidden
+            className="inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[10.5px] font-semibold leading-none tabular-nums text-primary-foreground">
+            {count > 99 ? '99+' : count}
+          </span>
+        )}
+      </span>
       {ticket.preview && <span className="truncate text-[12px] text-muted-foreground">{ticket.preview}</span>}
       <StatusBadge status={ticket.status} className="mt-0.5 self-start" />
     </button>

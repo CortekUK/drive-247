@@ -45,6 +45,9 @@ export function SupportWorkspace({ inbox, viewer, listInRail = false, listHeader
   const generated = thread?.messages.find((message) => message.source === 'trax_handoff');
   const open = creating || !!id;
   const closeDrawer = React.useCallback(() => setDrawer(false), []);
+  /* The drawer is modal and covers the conversation: nothing under it is being read. */
+  const pauseReading = inbox.setReadPaused;
+  React.useEffect(() => { pauseReading?.(drawer); }, [drawer, pauseReading]);
   /** Show a tab: beside the conversation when it fits, in the drawer when it does not. */
   const showInfo = React.useCallback((next: InfoTab) => {
     setTab(next);

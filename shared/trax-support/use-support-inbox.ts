@@ -23,6 +23,10 @@ import { MessagingError, type MessagingCall } from './client';
 export interface HumanTicket {id:string;reference:string;summary:string;status:'open'|'in_progress'|'closed';tenant_name:string;requester:string;updated_at:string;created_at:string;unread?:boolean;handoff?:Record<string,unknown>;emailStatus?:string;staff_note?:string;
   /** The latest message, one truncated line. Present only where the deployment's list query provides it. */
   preview?:string;
+  /** List only: this viewer's unread INCOMING messages in this ticket, counted by the
+   *  server from stored messages and the viewer's own read state. Absent where the
+   *  deployment does not report it. */
+  unreadMessages?:number;
   /** Detail only. `conversation_id` is null for a ticket opened directly in Support. */
   conversation_id?:string|null;closed_at?:string|null;
   /** Detail only, from stored metadata: a TRAX conversation is behind this ticket,
@@ -96,17 +100,25 @@ export function useSupportInbox({call,admin=false,initialId,compose,scope,upload
   /* Follow new messages only while the reader is already at the bottom: someone
      reading older messages is never yanked away from them. */
   useEffect(()=>{if(thread&&scrollRef.current&&(opened.current!==thread.ticket.id||followBottom.current)){scrollRef.current.scrollTop=scrollRef.current.scrollHeight;opened.current=thread.ticket.id;}},[thread]);
+  /* Reading pauses while something covers the conversation (the Details drawer):
+     a message under it has not been displayed. Resuming re-observes, so what is
+     then on screen is acknowledged. */
+  const [readPaused,setReadPaused]=useState(false);
+  const loadListRef=useRef(loadList);loadListRef.current=loadList;
   /* Acknowledge only what was actually displayed, by the sequence the server
-     returned — never the current server maximum. */
+     returned — never the current server maximum. Fetching a thread, loading the
+     list or opening Support marks nothing. After an acknowledgement the list is
+     reloaded at once, so that ticket's row badge drops without waiting for the
+     next reconciliation; every other row keeps the server's count. */
   useEffect(()=>{
-    if(!thread||!scrollRef.current)return;const ticketId=thread.ticket.id;
+    if(!thread||!scrollRef.current||readPaused)return;const ticketId=thread.ticket.id;
     const observer=new IntersectionObserver(entries=>{if(document.visibilityState==='hidden'||marking.current||selected.current!==ticketId)return;
       const seen=Math.max(0,...entries.filter(e=>e.isIntersecting).map(e=>Number((e.target as HTMLElement).dataset.seq)));
       if(seen<=readThrough.current)return;marking.current=true;
-      void call('read',{id:ticketId,through:seen}).then(()=>{if(selected.current===ticketId)readThrough.current=Math.max(readThrough.current,seen);window.dispatchEvent(new Event('trax-support-read'));}).catch(fail).finally(()=>{marking.current=false;});
+      void call('read',{id:ticketId,through:seen}).then(()=>{if(selected.current===ticketId)readThrough.current=Math.max(readThrough.current,seen);window.dispatchEvent(new Event('trax-support-read'));void loadListRef.current();}).catch(fail).finally(()=>{marking.current=false;});
     },{root:scrollRef.current,threshold:0.5});
     scrollRef.current.querySelectorAll('[data-seq]').forEach(el=>observer.observe(el));return()=>observer.disconnect();
-  },[thread,call,fail]);
+  },[thread,call,fail,readPaused]);
   /* A compose request can arrive AFTER mount: the portal's escalation handoff has
      to wait for the TRAX conversation to load before it knows the issue. Open the
      composer the first time one appears, and never again, so cancelling it stays
@@ -207,7 +219,7 @@ export function useSupportInbox({call,admin=false,initialId,compose,scope,upload
     busy,loading,error,notice,retrying,canSend,canAttach,attachments,scrollRef,
     setSearch,setFilter,setDraft,setSubject,
     choose,clearSelection,beginNew,cancelNew,loadMore,loadOlder,onThreadScroll,send,
-    addAttachments,removeAttachment,setTicketStatus,
+    addAttachments,removeAttachment,setTicketStatus,setReadPaused,
   };
 }
 

@@ -1,5 +1,5 @@
 import {beforeEach,describe,expect,it,vi} from 'vitest';
-import {handleMessaging,ticketSourceReader,unreadMessageReader,statusNoteNonce,STATUS_NOTE_NONCE,type SourceClient} from '../../../../../supabase/functions/trax-support/support/messaging';
+import {handleMessaging,ticketSourceReader,ticketUnreadReader,unreadMessageReader,statusNoteNonce,STATUS_NOTE_NONCE,type SourceClient} from '../../../../../supabase/functions/trax-support/support/messaging';
 import {emailPreview,ticketEmail,processTicketEmails} from '../../../../../supabase/functions/trax-support/support/ticket-email';
 import type {SupportReads} from '../../../../../supabase/functions/trax-support/support/types';
 const tenant='00000000-0000-4000-8000-000000000001',ticket='00000000-0000-4000-8000-000000000002',nonce='00000000-0000-4000-8000-000000000003';
@@ -179,6 +179,86 @@ describe('the sidebar badge: unread MESSAGES from human support',()=>{
     const unread=vi.fn(async()=>9);
     expect(await countRequest(true,unread,4)).toEqual({unread:4});
     expect(unread).not.toHaveBeenCalled();
+  });
+});
+
+describe('per-ticket unread badges, for each viewer',()=>{
+  const requester='user-1',admin='admin-1',otherAdmin='admin-2';
+  function store(tables:Record<string,Record<string,unknown>[]>){
+    const from=(table:string)=>({select:(_columns:string)=>{
+      const filters:[string,string,unknown][]=[];
+      const rows=()=>(tables[table]??[]).filter(row=>filters.every(([op,column,value])=>op==='eq'?String(row[column])===String(value):(value as unknown[]).map(String).includes(String(row[column]))));
+      const query:any={eq:(c:string,v:unknown)=>{filters.push(['eq',c,v]);return query;},in:(c:string,v:unknown[])=>{filters.push(['in',c,v]);return query;},
+        maybeSingle:async()=>({data:rows()[0]??null,error:null}),then:(ok:(v:unknown)=>unknown,no?:(e:unknown)=>unknown)=>Promise.resolve({data:rows(),error:null}).then(ok,no)};
+      return query;}});
+    return {from} as unknown as SourceClient;
+  }
+  const m=(ticket_id:string,seq:number,author_kind:'tenant'|'support',nonce=`00000000-0000-4000-8000-${String(seq).padStart(4,'0')}${ticket_id.padStart(8,'0')}`)=>({ticket_id,seq,author_kind,nonce});
+  const tables=async()=>{
+    const statusNote=await statusNoteNonce('22222222-2222-4222-8222-222222222222');
+    return {
+      trax_support_tickets:[
+        // A: opened from TRAX — its first message is the generated summary under the issue id.
+        {id:'A',tenant_id:tenant,user_id:requester,issue_id:'issue-A',conversation_id:'conv-A',linked:'conv-A',message_seq:6},
+        // B: opened directly in Support — its first message shares the ticket's own id, and is the requester's words.
+        {id:'B',tenant_id:tenant,user_id:requester,issue_id:'issue-B',conversation_id:null,linked:null,message_seq:4},
+        // C: someone else's ticket.
+        {id:'C',tenant_id:tenant,user_id:'user-2',issue_id:'issue-C',conversation_id:null,linked:null,message_seq:1},
+      ],
+      trax_support_messages:[
+        m('A',1,'tenant','issue-A'), m('A',2,'support'), m('A',3,'support'), m('A',4,'support',statusNote), m('A',5,'tenant'), m('A',6,'tenant'),
+        m('B',1,'tenant','issue-B'), m('B',2,'tenant'), m('B',3,'tenant'), m('B',4,'support'),
+        m('C',1,'support'),
+      ],
+      trax_support_reads:[] as Record<string,unknown>[],
+    };
+  };
+
+  it('a requester sees each ticket’s unread support replies — not status notes, not their own, not someone else’s ticket',async()=>{
+    const counts=await ticketUnreadReader(store(await tables()))({userId:requester,tenantId:tenant,admin:false},['A','B','C']);
+    expect(counts).toEqual({A:2,B:1});
+  });
+
+  it('support sees each ticket’s unread tenant messages — not TRAX’s summary, not agents’ replies',async()=>{
+    const counts=await ticketUnreadReader(store(await tables()))({userId:admin,tenantId:null,admin:true},['A','B','C']);
+    // A: 5 and 6 (1 is TRAX's summary). B: 1, 2 and 3 — its first message IS the requester's. C: only a support reply.
+    expect(counts).toEqual({A:2,B:3,C:0});
+  });
+
+  it('reading clears only that viewer’s count on that ticket',async()=>{
+    const data=await tables();
+    data.trax_support_reads=[{ticket_id:'B',user_id:admin,last_seq:4},{ticket_id:'A',user_id:otherAdmin,last_seq:6},{ticket_id:'A',user_id:requester,last_seq:3}];
+    const client=store(data);
+    expect(await ticketUnreadReader(client)({userId:admin,tenantId:null,admin:true},['A','B'])).toEqual({A:2,B:0});
+    expect(await ticketUnreadReader(client)({userId:otherAdmin,tenantId:null,admin:true},['A','B'])).toEqual({A:0,B:3});
+    expect(await ticketUnreadReader(client)({userId:requester,tenantId:tenant,admin:false},['A','B'])).toEqual({A:0,B:1});
+  });
+
+  it('the requester’s sidebar total is the sum of the same per-ticket counts, across every ticket',async()=>{
+    const client=store(await tables());
+    const rows=await ticketUnreadReader(client)({userId:requester,tenantId:tenant,admin:false},['A','B']);
+    expect(await unreadMessageReader(client)(requester,tenant)).toBe(Object.values(rows!).reduce((a,b)=>a+b,0));
+  });
+
+  const listRequest=async(asAdmin:boolean,ticketUnread:Parameters<typeof handleMessaging>[1]['ticketUnread'])=>{
+    if(asAdmin)vi.mocked(reads.staff).mockResolvedValue({id:'staff',auth_user_id:'user',tenant_id:null,role:'admin',is_active:true,is_super_admin:true});
+    db.rpc=vi.fn(async(name:string)=>name==='trax_messaging_request'?{data:{tickets:[{id:'A'},{id:'B'}],nextOffset:null,unread:1},error:null}:{data:null,error:{message:'missing function'}});
+    const response=await handleMessaging(new Request('http://localhost',{method:'POST',headers:{Authorization:'Bearer fixture'},body:JSON.stringify({action:'list',data:{},...(asAdmin?{admin:true}:{tenantId:tenant})})}),{reads,db:database(),enabled:true,ticketUnread});
+    return response.json();
+  };
+  it('adds each row’s count to the authorized list page, for the authenticated viewer',async()=>{
+    const ticketUnread=vi.fn(async()=>({A:2}));
+    const page=await listRequest(false,ticketUnread);
+    expect(page.tickets).toEqual([{id:'A',unreadMessages:2},{id:'B',unreadMessages:0}]);
+    expect(ticketUnread).toHaveBeenCalledWith({userId:'user',tenantId:tenant,admin:false},['A','B']);
+    const adminPage=await listRequest(true,vi.fn(async()=>({B:3})));
+    expect(adminPage.tickets).toEqual([{id:'A',unreadMessages:0},{id:'B',unreadMessages:3}]);
+  });
+  it('leaves rows without a count when counting fails, and never fails the list',async()=>{
+    for(const ticketUnread of [vi.fn(async()=>null),vi.fn(async()=>{throw Error('down');}),undefined]){
+      const page=await listRequest(false,ticketUnread as never);
+      expect(page.tickets).toEqual([{id:'A'},{id:'B'}]);
+    }
   });
 });
 

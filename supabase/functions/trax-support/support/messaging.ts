@@ -17,7 +17,9 @@ export interface MessagingDependencies {reads:SupportReads;db:MessagingDatabase;
   /** Optional: a deployment without it returns the thread unmarked, exactly as before. */
   sources?:(ticketId:string)=>Promise<TicketSources|null>;
   /** Optional: without it a requester's `count` carries no `unreadMessages`, and no badge is shown. */
-  unread?:(userId:string,tenantId:string)=>Promise<number|null>}
+  unread?:(userId:string,tenantId:string)=>Promise<number|null>;
+  /** Optional: without it list rows carry no `unreadMessages`, and no row badge is shown. */
+  ticketUnread?:(viewer:UnreadViewer,ids:string[])=>Promise<Record<string,number>|null>}
 
 /** The support tables, read with the server's own client — only by the readers below,
  *  and only after `trax_messaging_request` has authorized the same caller. */
@@ -73,40 +75,93 @@ export async function statusNoteNonce(callerNonce:string):Promise<string>{
   return `${hex.slice(0,8)}-${hex.slice(8,12)}-85a7-${variant}${hex.slice(17,20)}-${hex.slice(20,32)}`;
 }
 
+/** The ticket columns the unread rules need, read from storage (not the reader's copy). */
+const UNREAD_TICKET_COLUMNS='id,issue_id,message_seq,conversation_id,linked:handoff->>conversationId';
+interface UnreadTicket {id:string;issue_id:string;message_seq:number;conversation_id:string|null;linked:string|null}
+/** Who is reading: a requester (their own tickets) or platform support (the queue). */
+export interface UnreadViewer {userId:string;tenantId:string|null;admin:boolean}
+
 /**
- * How many messages human support has sent this requester that they have not read.
+ * Unread INCOMING messages per ticket, for one viewer. The one rule behind the
+ * tenant's per-ticket badges and sidebar total, and platform support's per-ticket
+ * badges — so a row and a total can never disagree.
  *
- * MESSAGES, not tickets: two unread replies in one ticket are 2. Only support-authored
- * messages count — never the requester's own, TRAX's generated summary (which is
- * stored on the requester's side) or a status change's note (`STATUS_NOTE_NONCE`).
- * "Unread" is the requester's own persisted read-through for that ticket, so another
- * person's reading never clears it, and the number is recomputed from storage on
- * every request rather than incremented: a repeated delivery cannot count twice.
+ * Incoming depends on the viewer:
+ * - a requester: messages human support wrote, except a status change's note
+ *   (`STATUS_NOTE_NONCE`);
+ * - platform support: messages the requester wrote, except TRAX's generated
+ *   summary (nonce = the ticket's TRAX issue id, on a ticket with a TRAX
+ *   conversation — the same stored rule as `ticketSourceReader`). A ticket opened
+ *   directly in Support shares that id with its first message but has no TRAX
+ *   conversation, so the requester's own first words still count.
+ * Never the viewer's own messages, and never another agent's reply as incoming.
+ *
+ * MESSAGES, not tickets: two unread in one ticket are 2. "Unread" is past THIS
+ * viewer's own persisted read-through, so one person reading never clears anyone
+ * else's count, and every number is recomputed from storage — a repeated delivery
+ * cannot count twice. `null` means "could not be counted": no badge, not a guess.
+ */
+async function unreadByTicket(client:SourceClient,viewer:UnreadViewer,tickets:UnreadTicket[]):Promise<Map<string,number>|null>{
+  const counts=new Map<string,number>();
+  if(!tickets.length)return counts;
+  let readsQuery=client.from('trax_support_reads').select('ticket_id,last_seq').eq('user_id',viewer.userId);
+  if(tickets.length<=50)readsQuery=readsQuery.in('ticket_id',tickets.map(t=>t.id));
+  const reads=await readsQuery;
+  if(reads.error||!Array.isArray(reads.data))return null;
+  const through=new Map((reads.data as {ticket_id:string;last_seq:number}[]).map(r=>[r.ticket_id,Number(r.last_seq)||0]));
+  const byId=new Map(tickets.map(t=>[t.id,t]));
+  // Only a ticket holding anything past this viewer's read-through can hold an unread message.
+  const candidates=tickets.filter(t=>Number(t.message_seq)>(through.get(t.id)??0)).map(t=>t.id);
+  for(const id of tickets.map(t=>t.id))counts.set(id,0);
+  const incoming=viewer.admin?'tenant':'support';
+  for(let i=0;i<candidates.length;i+=50){
+    const messages=await client.from('trax_support_messages').select('ticket_id,seq,nonce').eq('author_kind',incoming).in('ticket_id',candidates.slice(i,i+50));
+    if(messages.error||!Array.isArray(messages.data))return null;
+    for(const message of messages.data as {ticket_id:string;seq:number;nonce:string}[]){
+      const ticket=byId.get(message.ticket_id);
+      if(!ticket||Number(message.seq)<=(through.get(ticket.id)??0))continue;
+      if(!viewer.admin&&STATUS_NOTE_NONCE.test(message.nonce))continue;
+      if(viewer.admin&&message.nonce===ticket.issue_id&&(ticket.linked||ticket.conversation_id))continue;
+      counts.set(ticket.id,(counts.get(ticket.id)??0)+1);
+    }
+  }
+  return counts;
+}
+
+/**
+ * The requester's sidebar total: unread support messages across ALL their tickets,
+ * not only the page of the list on screen. Same rule as each row (`unreadByTicket`).
  *
  * The ticket rule is the SQL's own (`tenant_id` and `user_id` of the authenticated
  * requester), and this runs only after `trax_messaging_request('count')` has passed
- * the same guard for the same caller. `null` means "could not be counted", which the
- * portal shows as no badge rather than a guess.
+ * the same guard for the same caller.
  */
 export function unreadMessageReader(client:SourceClient){
   return async(userId:string,tenantId:string):Promise<number|null>=>{
-    const [tickets,reads]=await Promise.all([
-      client.from('trax_support_tickets').select('id,message_seq').eq('tenant_id',tenantId).eq('user_id',userId),
-      client.from('trax_support_reads').select('ticket_id,last_seq').eq('user_id',userId),
-    ]);
-    if(tickets.error||reads.error||!Array.isArray(tickets.data)||!Array.isArray(reads.data))return null;
-    const through=new Map((reads.data as {ticket_id:string;last_seq:number}[]).map(r=>[r.ticket_id,Number(r.last_seq)||0]));
-    // Only tickets holding anything past their read-through can hold an unread reply.
-    const candidates=(tickets.data as {id:string;message_seq:number}[]).filter(t=>Number(t.message_seq)>(through.get(t.id)??0)).map(t=>t.id);
-    let unread=0;
-    for(let i=0;i<candidates.length;i+=50){
-      const messages=await client.from('trax_support_messages').select('ticket_id,seq,nonce').eq('author_kind','support').in('ticket_id',candidates.slice(i,i+50));
-      if(messages.error||!Array.isArray(messages.data))return null;
-      for(const message of messages.data as {ticket_id:string;seq:number;nonce:string}[]){
-        if(Number(message.seq)>(through.get(message.ticket_id)??0)&&!STATUS_NOTE_NONCE.test(message.nonce))unread++;
-      }
+    const tickets=await client.from('trax_support_tickets').select(UNREAD_TICKET_COLUMNS).eq('tenant_id',tenantId).eq('user_id',userId);
+    if(tickets.error||!Array.isArray(tickets.data))return null;
+    const counts=await unreadByTicket(client,{userId,tenantId,admin:false},tickets.data as UnreadTicket[]);
+    return counts?[...counts.values()].reduce((sum,n)=>sum+n,0):null;
+  };
+}
+
+/**
+ * Per-ticket counts for one page of the ticket list. The ids are the page the
+ * authorized `list` request just returned; a requester's are ALSO filtered to their
+ * own tenant and user here, so an id that is not theirs can never be counted.
+ */
+export function ticketUnreadReader(client:SourceClient){
+  return async(viewer:UnreadViewer,ids:string[]):Promise<Record<string,number>|null>=>{
+    if(!ids.length)return {};
+    let query=client.from('trax_support_tickets').select(UNREAD_TICKET_COLUMNS).in('id',ids);
+    if(!viewer.admin){
+      if(!viewer.tenantId)return null;
+      query=query.eq('tenant_id',viewer.tenantId).eq('user_id',viewer.userId);
     }
-    return unread;
+    const tickets=await query;
+    if(tickets.error||!Array.isArray(tickets.data))return null;
+    const counts=await unreadByTicket(client,viewer,tickets.data as UnreadTicket[]);
+    return counts?Object.fromEntries(counts):null;
   };
 }
 
@@ -198,18 +253,24 @@ export async function handleMessaging(req:Request,deps:MessagingDependencies):Pr
       return respond(unreadMessages===null?count:{...count,unreadMessages});
     }
     if(body.action==='list'&&result.data&&typeof result.data==='object'){
-      /* One truncated line of the latest message per row. Its own authorized
-         reader, so the reviewed list query is untouched; a deployment without the
-         function simply answers without previews rather than failing the list. */
-      const page=result.data as {tickets?:{id:string}[]};
+      let page=result.data as {tickets?:{id:string}[]}&Record<string,unknown>;
       const ids=(page.tickets??[]).map(ticket=>ticket.id).filter(id=>typeof id==='string');
       if(ids.length){
+        /* One truncated line of the latest message per row. Its own authorized
+           reader, so the reviewed list query is untouched; a deployment without the
+           function simply answers without previews rather than failing the list. */
         const previews=await deps.db.rpc('trax_support_ticket_previews',{p_user:userId,p_staff:staffId,p_tenant:tenantId,p_admin:body.admin===true,p_ids:ids});
         if(!previews.error&&previews.data&&typeof previews.data==='object'){
           const map=previews.data as Record<string,string>;
-          return respond({...page,tickets:(page.tickets??[]).map(ticket=>({...ticket,...(map[ticket.id]?{preview:map[ticket.id]}:{})}))});
+          page={...page,tickets:(page.tickets??[]).map(ticket=>({...ticket,...(map[ticket.id]?{preview:map[ticket.id]}:{})}))};
         }
+        /* Each row's unread incoming MESSAGES for this viewer (`unreadByTicket`). Only
+           for the tickets this authorized page returned; a failed count leaves the
+           rows without one rather than showing a guess. */
+        const counts=deps.ticketUnread?await deps.ticketUnread({userId,tenantId,admin:body.admin===true},ids).catch(()=>null):null;
+        if(counts)page={...page,tickets:(page.tickets??[]).map(ticket=>({...ticket,unreadMessages:counts[ticket.id]??0}))};
       }
+      return respond(page);
     }
     if(body.action==='detail'&&result.data&&typeof result.data==='object'){
       let detail=result.data as {ticket?:Record<string,unknown>;messages?:{seq:number}[]}&Record<string,unknown>;

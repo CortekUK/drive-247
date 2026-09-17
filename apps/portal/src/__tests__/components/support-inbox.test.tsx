@@ -83,6 +83,35 @@ describe('the Support workspace — tickets, conversation, details', () => {
     expect(inbox.choose).toHaveBeenCalledWith('t2');
   });
 
+  it('shows each ticket\'s unread messages as a pill on the reference line, apart from the status', () => {
+    const inbox = state({ id: 't2', tickets: [
+      ticket({ unread: true, unreadMessages: 2 }),
+      ticket({ id: 't2', reference: 'TRX-2222', summary: 'Invoice email bounced', unread: true, unreadMessages: 1 }),
+      // The ticket-level flag alone (a status note, say) is not an unread message.
+      ticket({ id: 't3', reference: 'TRX-3333', summary: 'Widget price', unread: true, unreadMessages: 0 }),
+    ] as never });
+    render(inbox);
+    const rows = [...document.querySelectorAll('[data-testid="support-ticket-list"] li')];
+    const pill = (row: Element) => row.querySelector('[data-testid="ticket-unread"]');
+    expect(pill(rows[0])?.textContent).toBe('2');
+    expect(pill(rows[0])?.getAttribute('aria-hidden')).toBe('true');
+    expect(rows[0].textContent).toContain('2 unread messages');
+    expect(rows[1].textContent).toContain('1 unread message');
+    // The pill sits with the reference, not the status badge, and uses the accent.
+    expect(pill(rows[0])?.parentElement?.textContent).toContain('TRX-1111');
+    expect(pill(rows[0])?.className).toContain('bg-primary');
+    expect(pill(rows[0])?.className).toContain('text-primary-foreground');
+    expect(rows[0].querySelector('[data-testid="ticket-status"]')?.contains(pill(rows[0]))).toBe(false);
+    // Selected rows keep it.
+    expect(rows[1].querySelector('button')?.getAttribute('aria-current')).toBe('true');
+    expect(pill(rows[1])?.textContent).toBe('1');
+    // Zero: no pill, no "0", no bold subject.
+    expect(pill(rows[2])).toBeNull();
+    expect(rows[2].querySelector('span.line-clamp-2')?.className).toContain('font-medium');
+    expect(rows[2].textContent).not.toMatch(/unread/i);
+    expect(rows[0].querySelector('span.line-clamp-2')?.className).toContain('font-semibold');
+  });
+
   it('asks for the tenant\'s own tickets, and says when a filter matches none', () => {
     render(state({ search: 'refund', filter: 'open' }));
     expect(document.querySelector<HTMLInputElement>('input[aria-label="Search support tickets"]')?.placeholder).toBe('Search your tickets…');

@@ -16,12 +16,13 @@ await db.query("insert into tenants values($1,'active','Northwind · isolated fi
 const actors={one:{id:id(11),auth_user_id:id(21),tenant_id:id(1),role:'admin',is_active:true,is_super_admin:false,name:'Fixture operator'},two:{id:id(12),auth_user_id:id(22),tenant_id:id(2),role:'admin',is_active:true,is_super_admin:false,name:'Second operator'},admin:{id:id(13),auth_user_id:id(23),tenant_id:null,role:'admin',is_active:true,is_super_admin:true,name:'Support reviewer'}};
 actors.unassigned={id:id(14),auth_user_id:id(24),tenant_id:null,role:'admin',is_active:true,is_super_admin:true,name:'Unassigned support fixture'};
 actors.mgr={id:id(15),auth_user_id:id(25),tenant_id:id(1),role:'manager',is_active:true,is_super_admin:false,name:'Fixture manager'};
-for(const actor of Object.values(actors))await db.query('insert into app_users values($1,$2,$3,$4,$5,$6,$7)',Object.values(actor));await db.query('insert into trax_support_agents(staff_id) values($1)',[id(13)]);
+actors.admin2={id:id(16),auth_user_id:id(26),tenant_id:null,role:'admin',is_active:true,is_super_admin:true,name:'Second support reviewer'};
+for(const actor of Object.values(actors))await db.query('insert into app_users values($1,$2,$3,$4,$5,$6,$7)',Object.values(actor));await db.query('insert into trax_support_agents(staff_id) values($1),($2)',[id(13),id(16)]);
 const config=loadConfig(resolve(root,'apps/admin/tailwind.config.ts'));config.content=[resolve(root,'shared/trax-support/**/*.{ts,tsx}'),resolve(root,'apps/admin/components/**/*.{ts,tsx}')];
 const css=(await postcss([tailwind(config)]).process(await readFile(resolve(root,'apps/admin/app/globals.css'),'utf8'),{from:undefined})).css;
 const mocks=`import React from 'react';const actors=${JSON.stringify(actors)};export const actor=actors[new URLSearchParams(location.search).get('actor')??'one'];export const useAuthStore=()=>({user:actor,logout:async()=>{}});export const supabase={auth:{getSession:async()=>({data:{session:{access_token:new URLSearchParams(location.search).get('actor')??'one'}}})}};export const usePathname=()=>'/admin/support';export default function Link({href,children,...props}){return React.createElement('a',{href,...props},children);}`;
 await build({stdin:{contents:`import React from 'react';import {createRoot} from 'react-dom/client';import {SupportInbox} from './shared/trax-support/SupportInbox';import {useMessagingClient,useSupportUnread} from './shared/trax-support/client';import Sidebar from './apps/admin/components/admin/Sidebar';import {AdminSupportWorkspace} from './apps/admin/components/support/AdminSupportWorkspace';import {SidebarProvider} from './apps/admin/components/admin/SidebarContext';import {AdminSupportRail} from './apps/admin/components/support/AdminSupportRail';import {SupportRailProvider} from './shared/trax-support/support-rail';import {actor,supabase} from '@/lib/supabase';const token=async()=>(await supabase.auth.getSession()).data.session.access_token;function Harness(){const call=useMessagingClient({scope:actor.id,token,tenantId:actor.tenant_id,admin:actor.is_super_admin});const unread=useSupportUnread(call);const messages=useSupportUnread(call,!actor.is_super_admin,{field:'unreadMessages',interval:1000});const q=new URLSearchParams(location.search);return <SidebarProvider><SupportRailProvider><div className="flex h-screen bg-background text-foreground">{actor.is_super_admin?(q.has('nav')?<Sidebar/>:<AdminSupportRail/>):(q.has('showSidebar')&&<Sidebar/>)}<main className="flex min-w-0 flex-1 flex-col p-3"><p className="mb-2 text-xs text-muted-foreground">Isolated local test · no live accounts or email · {actor.is_super_admin?'Platform support':'My Tickets '+(unread.count??'')}{!actor.is_super_admin&&<span> · unread messages <span data-testid="unread-messages">{messages.count??'unknown'}</span></span>}</p><div className="flex min-h-0 flex-1 flex-col">{q.has('navOnly')?null:actor.is_super_admin?<AdminSupportWorkspace/>:<SupportInbox call={call} scope={actor.id}/>}</div></main></div></SupportRailProvider></SidebarProvider>}createRoot(document.getElementById('root')).render(<Harness/>);`,loader:'tsx',resolveDir:root},outfile:resolve(temp,'app.js'),bundle:true,format:'esm',define:{'process.env.NODE_ENV':'"development"','process.env.NEXT_PUBLIC_SUPABASE_URL':'"http://offline.invalid"','process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY':'"fixture"'},plugins:[{name:'offline-auth',setup(b){b.onResolve({filter:/.*/},args=>{if(['@/lib/supabase','@/store/authStore','next/navigation','next/link'].includes(args.path))return {path:args.path,namespace:'fixture'};if(args.path==='react'||args.path==='react-dom/client'||args.path.startsWith('react/'))return {path:resolve(root,'node_modules',args.path==='react'?'react/index.js':args.path==='react-dom/client'?'react-dom/client.js':args.path+'.js')};if(args.path.startsWith('@/'))return {path:resolve(root,'apps/admin',args.path.slice(2))+(args.path.includes('components/')?'.tsx':'.ts')};});b.onLoad({filter:/.*/,namespace:'fixture'},()=>({contents:mocks,loader:'jsx',resolveDir:root}));}}],logLevel:'silent'});
-await build({entryPoints:[resolve(root,'supabase/functions/trax-support/support/messaging.ts')],outfile:resolve(temp,'handler.mjs'),bundle:true,platform:'node',format:'esm',logLevel:'silent'});const {handleMessaging,ticketSourceReader,unreadMessageReader,STATUS_NOTE_NONCE}=await import(pathToFileURL(resolve(temp,'handler.mjs')));
+await build({entryPoints:[resolve(root,'supabase/functions/trax-support/support/messaging.ts')],outfile:resolve(temp,'handler.mjs'),bundle:true,platform:'node',format:'esm',logLevel:'silent'});const {handleMessaging,ticketSourceReader,ticketUnreadReader,unreadMessageReader,STATUS_NOTE_NONCE}=await import(pathToFileURL(resolve(temp,'handler.mjs')));
 /* `from(table).select(columns).eq(...)` over PGlite, for ticketSourceReader only:
    "alias:column->>key" becomes "column->>'key' as alias", each eq a bound filter. */
 const sourceClient={from:table=>({select:columns=>{const filters=[];const run=async()=>{try{
@@ -30,10 +31,10 @@ const sourceClient={from:table=>({select:columns=>{const filters=[];const run=as
   return {data:(await db.query(`select ${cols} from public.${table}${where?' where '+where:''}`,filters.map(f=>f[2]==='in'?f[1].map(String):String(f[1])))).rows,error:null};
 }catch(e){return {data:null,error:e};}};
   const query={eq:(c,v)=>{filters.push([c,v,'eq']);return query;},in:(c,v)=>{filters.push([c,v,'in']);return query;},maybeSingle:async()=>{const r=await run();return {data:r.data?.[0]??null,error:r.error};},then:(ok,no)=>run().then(ok,no)};return query;}})};
-const sources=ticketSourceReader(sourceClient),unreadMessages=unreadMessageReader(sourceClient);
+const sources=ticketSourceReader(sourceClient),unreadMessages=unreadMessageReader(sourceClient),ticketUnread=ticketUnreadReader(sourceClient);
 const reads={authenticate:async token=>actors[token]?{id:actors[token].auth_user_id}:null,staff:async user=>Object.values(actors).find(a=>a.auth_user_id===user),tenant:async tenant=>(await db.query('select * from tenants where id=$1',[tenant])).rows[0],permissions:async()=>[],entity:async()=>null};
 const adapter={rpc:async(name,args)=>{try{const values=Object.values(args);return {data:(await db.query(`select public.${name}(${values.map((_,i)=>'$'+(i+1)).join(',')}) v`,values)).rows[0].v,error:null};}catch(e){return {data:null,error:{message:e.message}};}}};
-let failNextSend=false,loseCreateResponse=false,failNextStatus=false;const server=createServer(async(req,res)=>{if(req.url.startsWith('/api/trax-messaging')){const chunks=[];for await(const c of req)chunks.push(c);const body=Buffer.concat(chunks).toString();if(failNextSend&&JSON.parse(body).action==='send'){failNextSend=false;res.writeHead(503,{'Content-Type':'application/json'});res.end(JSON.stringify({error:'Fixture connection interrupted. Your draft is preserved.'}));return;}if(failNextStatus&&JSON.parse(body).action==='status'){failNextStatus=false;res.writeHead(503,{'Content-Type':'application/json'});res.end(JSON.stringify({error:'Fixture status failure.',code:'unavailable'}));return;}const response=await handleMessaging(new Request('http://localhost/api',{method:'POST',headers:{Authorization:req.headers.authorization??''},body}),{reads,db:adapter,enabled:true,sources,unread:unreadMessages});if(loseCreateResponse&&JSON.parse(body).action==='create'){loseCreateResponse=false;res.writeHead(503,{'Content-Type':'application/json'});res.end(JSON.stringify({error:'Fixture lost the creation response.'}));return;}res.writeHead(response.status,{'Content-Type':'application/json'});res.end(await response.text());return;}if(req.url==='/app.js'){res.setHeader('Content-Type','text/javascript');res.end(await readFile(resolve(temp,'app.js')));return;}if(req.url==='/style.css'){res.setHeader('Content-Type','text/css');res.end(css);return;}res.end('<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/style.css"></head><body style="--font-manrope:Arial"><div id="root"></div><script type="module" src="/app.js"></script></body></html>');});await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin=`http://127.0.0.1:${server.address().port}`;
+let failNextSend=false,loseCreateResponse=false,failNextStatus=false;const server=createServer(async(req,res)=>{if(req.url.startsWith('/api/trax-messaging')){const chunks=[];for await(const c of req)chunks.push(c);const body=Buffer.concat(chunks).toString();if(failNextSend&&JSON.parse(body).action==='send'){failNextSend=false;res.writeHead(503,{'Content-Type':'application/json'});res.end(JSON.stringify({error:'Fixture connection interrupted. Your draft is preserved.'}));return;}if(failNextStatus&&JSON.parse(body).action==='status'){failNextStatus=false;res.writeHead(503,{'Content-Type':'application/json'});res.end(JSON.stringify({error:'Fixture status failure.',code:'unavailable'}));return;}const response=await handleMessaging(new Request('http://localhost/api',{method:'POST',headers:{Authorization:req.headers.authorization??''},body}),{reads,db:adapter,enabled:true,sources,unread:unreadMessages,ticketUnread});if(loseCreateResponse&&JSON.parse(body).action==='create'){loseCreateResponse=false;res.writeHead(503,{'Content-Type':'application/json'});res.end(JSON.stringify({error:'Fixture lost the creation response.'}));return;}res.writeHead(response.status,{'Content-Type':'application/json'});res.end(await response.text());return;}if(req.url==='/app.js'){res.setHeader('Content-Type','text/javascript');res.end(await readFile(resolve(temp,'app.js')));return;}if(req.url==='/style.css'){res.setHeader('Content-Type','text/css');res.end(css);return;}res.end('<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/style.css"></head><body style="--font-manrope:Arial"><div id="root"></div><script type="module" src="/app.js"></script></body></html>');});await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin=`http://127.0.0.1:${server.address().port}`;
 const browser=await chromium.launch({headless:true,executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe'});const context=await browser.newContext({viewport:{width:1365,height:900}});await context.route('**/*',route=>route.request().url().startsWith(origin)?route.continue():route.abort());
 const tenant=await context.newPage(),admin=await context.newPage(),two=await context.newPage(),adminNav=await context.newPage();const errors=[];for(const page of [tenant,admin,two,adminNav])page.on('pageerror',e=>errors.push(e.message));
 try{
@@ -278,5 +279,85 @@ try{
   await holdCount(2,'a reply in a background conversation was marked read');
   await two.screenshot({path:resolve(out,'badge-after-reading.png')});
 
-  assert.deepEqual(errors,[]);await writeFile(resolve(out,'browser-results.json'),JSON.stringify({passed:true,liveEmail:false,liveTenants:false,actualSql:true,checks:['Support visible during missing setup','setup recovery opens authorized inbox','unassigned platform admin sees access state without ticket list','ordinary staff cannot see platform Support link','composer has no writes','atomic first send','Support 2 → 1','two-way automatic updates','failed draft retry','resolved ticket reopens','admin status selector persists','tenant sees the status without refreshing','failed status change keeps the stored status','tenant has no status control','refresh restores conversation','offline reconnect catches up without duplicate messages','lost first-send response retries across refresh without duplicate','mobile no clipping','support rail replaces the navigation on Support','TRAX handoff is an event on both sides','TRAX Summary shows the saved exchange on both sides','TRAX event is acknowledged as read','switching tickets moves all three areas','ticket without TRAX says so','record permission failure hides TRAX context without calling it absent','status control in the Details drawer','badge counts support messages: 1, 2, 3','status change is not an unread message','duplicate delivery, refresh events and reload keep the count','support reading does not clear the requester','hidden tab does not mark read','reading one conversation leaves the other ticket counted','reply in the open conversation is read when shown','reply in a background conversation stays unread'],errors},null,2));console.log('Messaging browser checks passed; isolated SQL and auth fixtures, no live email.');
+  // ── Per-ticket unread badges: a tenant and support, signed in at the same time ──
+  const pillOf=(page,subject)=>page.evaluate(subject=>{
+    const row=[...document.querySelectorAll('[data-testid="support-ticket-list"] button')].find(b=>b.textContent.includes(subject));
+    return row?row.querySelector('[data-testid="ticket-unread"]')?.textContent??'none':'no row';
+  },subject);
+  const expectPill=async(page,subject,n,why)=>{
+    const want=n===0?'none':String(n);
+    for(let i=0;i<80;i++){if(await pillOf(page,subject)===want)return;await page.waitForTimeout(250);}
+    assert.fail(`${why}: "${subject}" expected ${want}, saw ${await pillOf(page,subject)}`);
+  };
+  const holdPill=async(page,subject,n,why)=>{await expectPill(page,subject,n,why);await page.waitForTimeout(3000);assert.equal(await pillOf(page,subject),n===0?'none':String(n),why+' (changed with nothing read)');};
+  // Support is on a ticket that is already read, so nothing below is read by accident.
+  await admin.getByRole('button').filter({hasText:'Which rentals are active'}).click();
+  await admin.getByLabel('Support conversation').getByRole('heading',{name:'Which rentals are active'}).waitFor();
+
+  // Two support replies in one ticket: that row says 2, the other row nothing, and the sidebar total agrees.
+  await expectPill(two,'Retry across refresh',2,'two support replies in one ticket');
+  await expectPill(two,'A separate tenant request',0,'a read ticket kept a badge');
+  await expectCount(2,'the sidebar total disagrees with the rows');
+  // The requester's own first message is incoming for support; TRAX's summary never is.
+  await expectPill(admin,'Retry across refresh',1,'support did not see the requester’s first message');
+  const freshTrax=await escalate(actors.one,id(621),id(622),'Fresh TRAX escalation for badges');
+  await admin.getByRole('button').filter({hasText:'Fresh TRAX escalation for badges'}).waitFor({timeout:20000});
+  await holdPill(admin,'Fresh TRAX escalation for badges',0,'TRAX’s generated summary was counted as a tenant message');
+
+  // The tenant sends three messages: support sees 3 on that ticket; the tenant sees none of their own.
+  for(const text of ['One more detail.','And another.','Last one, thanks.']){
+    await two.getByLabel('Reply in this conversation').fill(text);await two.getByRole('button',{name:'Send',exact:true}).click();
+    await two.getByLabel('Message thread').getByText(text,{exact:true}).waitFor();
+  }
+  await expectPill(admin,'A separate tenant request',3,'three tenant messages');
+  await holdPill(two,'A separate tenant request',0,'the tenant’s own messages were counted');
+  // Duplicate refresh events do not add.
+  await admin.evaluate(()=>{for(let i=0;i<5;i++)window.dispatchEvent(new Event('trax-support-read'));window.dispatchEvent(new Event('focus'));});
+  await holdPill(admin,'A separate tenant request',3,'refresh events changed the count');
+  // A message from tenant one, in a ticket support is not looking at.
+  await tenant.getByLabel('Reply in this conversation').fill('Following up on the return.');await tenant.getByRole('button',{name:'Send',exact:true}).click();
+  await expectPill(admin,'Returned vehicle cannot be booked',1,'a tenant message in another ticket');
+  await admin.screenshot({path:resolve(out,'admin-row-badges.png')});
+
+  // Another administrator reading the ticket does not clear this administrator's count.
+  const admin2=await context.newPage();admin2.on('pageerror',e=>errors.push(e.message));
+  await admin2.goto(origin+'/?actor=admin2');
+  await admin2.getByRole('button').filter({hasText:'A separate tenant request'}).click({timeout:20000});
+  await admin2.getByLabel('Message thread').getByText('Last one, thanks.',{exact:true}).waitFor();
+  await expectPill(admin2,'A separate tenant request',0,'the reading administrator kept a badge');
+  await holdPill(admin,'A separate tenant request',3,'one administrator’s reading cleared another’s count');
+  await admin2.close();
+
+  // Support opens the conversation: only its viewed messages clear, the other ticket keeps its count.
+  await admin.getByRole('button').filter({hasText:'A separate tenant request'}).click();
+  await admin.getByLabel('Message thread').getByText('Last one, thanks.',{exact:true}).waitFor();
+  await expectPill(admin,'A separate tenant request',0,'reading the conversation left its badge');
+  await holdPill(admin,'Returned vehicle cannot be booked',1,'reading one ticket cleared another');
+  await holdPill(admin,'Retry across refresh',1,'reading one ticket cleared another');
+
+  // Support replies in the other ticket, and changes its status: nothing counts for support; the tenant, elsewhere, gets 3.
+  await admin.getByRole('button').filter({hasText:'Retry across refresh'}).click();
+  await admin.getByLabel('Message thread').getByText('First message survives a lost response.',{exact:true}).waitFor();
+  await expectPill(admin,'Retry across refresh',0,'support reading the requester’s message left a badge');
+  await admin.getByLabel('Reply to the tenant').fill('Looking into the lost response now.');await admin.getByRole('button',{name:'Send',exact:true}).click();
+  await admin.getByLabel('Message thread').getByText('Looking into the lost response now.',{exact:true}).waitFor();
+  await holdPill(admin,'Retry across refresh',0,'support’s own reply counted for support');
+  await expectPill(two,'Retry across refresh',3,'a reply in a ticket the tenant is not viewing');
+  await admin.getByTestId('ticket-info').getByLabel('Ticket status',{exact:true}).selectOption('in_progress');
+  await admin.getByLabel('Support conversation').locator('header [data-testid="ticket-status"][data-status="in_progress"]').waitFor({timeout:15000});
+  await holdPill(two,'Retry across refresh',3,'a status change counted as a message');
+  await expectCount(3,'the sidebar total disagrees with the rows');
+  await two.screenshot({path:resolve(out,'tenant-row-badges.png')});
+
+  // Still right after a reload on both sides: persisted, not remembered.
+  await two.reload();await admin.reload();
+  await expectPill(two,'Retry across refresh',3,'the tenant’s count after a reload');
+  await expectPill(admin,'Returned vehicle cannot be booked',1,'support’s count after a reload');
+  // The tenant reads it: that row clears, and so does the total.
+  await two.getByRole('button').filter({hasText:'Retry across refresh'}).click();
+  await two.getByLabel('Message thread').getByText('Looking into the lost response now.',{exact:true}).waitFor();
+  await expectPill(two,'Retry across refresh',0,'the tenant’s reading left the badge');
+  await expectCount(0,'the sidebar total after reading everything');
+
+  assert.deepEqual(errors,[]);await writeFile(resolve(out,'browser-results.json'),JSON.stringify({passed:true,liveEmail:false,liveTenants:false,actualSql:true,checks:['Support visible during missing setup','setup recovery opens authorized inbox','unassigned platform admin sees access state without ticket list','ordinary staff cannot see platform Support link','composer has no writes','atomic first send','Support 2 → 1','two-way automatic updates','failed draft retry','resolved ticket reopens','admin status selector persists','tenant sees the status without refreshing','failed status change keeps the stored status','tenant has no status control','refresh restores conversation','offline reconnect catches up without duplicate messages','lost first-send response retries across refresh without duplicate','mobile no clipping','support rail replaces the navigation on Support','TRAX handoff is an event on both sides','TRAX Summary shows the saved exchange on both sides','TRAX event is acknowledged as read','switching tickets moves all three areas','ticket without TRAX says so','record permission failure hides TRAX context without calling it absent','status control in the Details drawer','badge counts support messages: 1, 2, 3','status change is not an unread message','duplicate delivery, refresh events and reload keep the count','support reading does not clear the requester','hidden tab does not mark read','reading one conversation leaves the other ticket counted','reply in the open conversation is read when shown','reply in a background conversation stays unread','tenant row shows 2 for two support replies','admin row shows 3 for three tenant messages','TRAX summary not counted for support','requester first message counted for support','own replies and status changes add nothing','another administrator reading keeps this count','reading one conversation leaves other rows','row counts persist across reload','row counts and sidebar total agree'],errors},null,2));console.log('Messaging browser checks passed; isolated SQL and auth fixtures, no live email.');
 }catch(e){console.log('Browser errors:',errors);await tenant.screenshot({path:resolve(out,'failure.png')});console.log((await tenant.locator('body').innerText()).slice(0,1200));throw e;}finally{await browser.close();server.close();await db.close();}
