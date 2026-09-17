@@ -851,7 +851,7 @@ describe("settings page wiring for the Business-rules pages (v2 branch)", () => 
 
   it("does not repeat 'Unsaved changes' above pages whose sections show their own", () => {
     expect(source).toContain(
-      "const V2_PAGES_WITH_OWN_SAVE_STATUS = new Set(['general', 'locations', 'booking-site', 'requirements', 'duration', 'lockbox', 'templates']);",
+      "const V2_PAGES_WITH_OWN_SAVE_STATUS = new Set(['general', 'locations', 'booking-site', 'requirements', 'duration', 'lockbox', 'templates', 'installments']);",
     );
   });
 

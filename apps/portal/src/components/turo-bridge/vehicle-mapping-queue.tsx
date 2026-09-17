@@ -639,7 +639,7 @@ function MappingDialog({
                       className={`w-full text-left px-3 py-2 flex items-center justify-between gap-3 transition-colors ${
                         isSelected
                           ? "bg-primary/10"
-                          : "hover:bg-muted/50 dark:hover:bg-muted/50"
+                          : "hover:bg-primary/5 dark:hover:bg-primary/10"
                       }`}
                     >
                       <div className="min-w-0">

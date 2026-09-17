@@ -430,7 +430,7 @@ export function ChecklistGuideReader({
             variant="outline"
             onClick={() => go(-1)}
             aria-disabled={isFirst || undefined}
-            className="h-9 rounded-full pl-2.5 pr-4 aria-disabled:cursor-not-allowed aria-disabled:opacity-40 aria-disabled:hover:bg-background dark:aria-disabled:hover:bg-transparent"
+            className="h-9 rounded-full pl-2.5 pr-4 aria-disabled:cursor-not-allowed aria-disabled:opacity-40 aria-disabled:hover:bg-transparent dark:aria-disabled:hover:bg-transparent"
           >
             <ChevronLeft aria-hidden="true" className="size-4" />
             Previous

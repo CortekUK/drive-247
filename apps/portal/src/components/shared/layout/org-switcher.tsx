@@ -151,7 +151,7 @@ export function OrgSwitcher({ collapsed }: { collapsed?: boolean }) {
           <button
             aria-label="Organization menu"
             title={orgName}
-            className="flex w-full cursor-pointer items-center justify-center rounded-lg p-1.5 outline-none transition-colors hover:bg-foreground/5 data-[state=open]:bg-foreground/5"
+            className="flex w-full cursor-pointer items-center justify-center rounded-lg p-1.5 outline-none transition-colors hover:bg-primary/10 data-[state=open]:bg-primary/10 dark:hover:bg-primary/15 dark:data-[state=open]:bg-primary/15"
           >
             {Logo}
           </button>
@@ -168,8 +168,8 @@ export function OrgSwitcher({ collapsed }: { collapsed?: boolean }) {
     // tenant's accent colour, so on a warm brand this went solid orange.
     <div
       className={cn(
-        "flex items-center rounded-lg transition-colors hover:bg-foreground/5",
-        open && "bg-foreground/5"
+        "flex items-center rounded-lg transition-colors hover:bg-primary/10 dark:hover:bg-primary/15",
+        open && "bg-primary/10 dark:bg-primary/15"
       )}
     >
       {/* Logo and name open the menu as well, but as a plain button rather than
@@ -194,7 +194,7 @@ export function OrgSwitcher({ collapsed }: { collapsed?: boolean }) {
           href="/settings"
           aria-label="Settings"
           title="Settings"
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary dark:hover:bg-primary/15"
         >
           <Settings className="h-4 w-4" />
         </Link>
@@ -204,7 +204,7 @@ export function OrgSwitcher({ collapsed }: { collapsed?: boolean }) {
         <DropdownMenuTrigger asChild>
           <button
             aria-label="Switch organization"
-            className="mr-1 flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-foreground/10 hover:text-foreground"
+            className="mr-1 flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-primary/10 hover:text-primary dark:hover:bg-primary/15"
           >
             <ChevronsUpDown className="h-4 w-4" />
           </button>

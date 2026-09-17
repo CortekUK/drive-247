@@ -11,9 +11,14 @@ import {
   isInstallmentDraftDirty,
   isPromoExpired,
   lowStockSentence,
+  isDuplicatePromoCodeError,
   paymentProviderState,
   planMinimumDays,
+  planOnlineMinimumDays,
+  PROMO_CODE_TAKEN_COPY,
+  promoSaveError,
   validatePromoDraft,
+  validatePromoEdit,
   visiblePromoIssues,
 } from "@/lib/settings-money-states";
 
@@ -71,12 +76,39 @@ describe("installment plan draft", () => {
     expect(isInstallmentDraftDirty({ ...defaults, monthly_payments_per_unit: 2 } as never, { monthly_payments_per_unit: 1 })).toBe(true);
   });
 
-  it("shows the saved minimum days, falling back to old keys and then 7 / 30", () => {
+  it("reads the saved minimum days only for the older count-cap shape, falling back to old keys and then 7 / 30", () => {
     expect(planMinimumDays({ minimum_days_weekly: 14 }, "weekly")).toBe(14);
     expect(planMinimumDays({ min_days_for_monthly: 45 }, "monthly")).toBe(45);
     expect(planMinimumDays(null, "weekly")).toBe(7);
     expect(planMinimumDays(null, "monthly")).toBe(30);
     expect(planMinimumDays({ minimum_days_weekly: -1 }, "weekly")).toBe(7);
+  });
+
+  it("uses New Rental's and checkout's fixed 7 / 30 days for the cadence shape this section saves", () => {
+    // rental-create-v2 and InstallmentSelector hard-code these once any cadence key is present.
+    expect(planMinimumDays({ weekly_enabled: false, minimum_days_weekly: 14 }, "weekly")).toBe(7);
+    expect(planMinimumDays({ monthly_payments_per_unit: 2, minimum_days_monthly: 45 }, "monthly")).toBe(30);
+    expect(planMinimumDays({ weekly_enabled: true, minimum_days_weekly: 9999999 }, "weekly")).toBe(7);
+  });
+
+  it("raises the online minimum to checkout's section gate, the smaller of the two saved minimums", () => {
+    const cadence = { weekly_enabled: true, minimum_days_weekly: 14, minimum_days_monthly: 45 };
+    // gate = min(14, 45) = 14: weekly max(7, 14) = 14; monthly max(30, 14) = 30 (45 never applies).
+    expect(planOnlineMinimumDays(cadence, "weekly")).toBe(14);
+    expect(planOnlineMinimumDays(cadence, "monthly")).toBe(30);
+    // gate = min(40, 60) = 40: both plans wait for 40 days online.
+    expect(planOnlineMinimumDays({ weekly_enabled: true, minimum_days_weekly: 40, minimum_days_monthly: 60 }, "weekly")).toBe(40);
+    expect(planOnlineMinimumDays({ weekly_enabled: true, minimum_days_weekly: 40, minimum_days_monthly: 60 }, "monthly")).toBe(40);
+    // gate = min(9999999, 0) = 0: nothing is raised.
+    expect(planOnlineMinimumDays({ weekly_enabled: true, minimum_days_weekly: 9999999, min_days_for_monthly: 0 }, "weekly")).toBe(7);
+    expect(planOnlineMinimumDays({ weekly_enabled: true, minimum_days_weekly: 9999999, min_days_for_monthly: 0 }, "monthly")).toBe(30);
+    // No minimums saved: gate = min(7, 30) = 7.
+    expect(planOnlineMinimumDays({ weekly_enabled: true }, "weekly")).toBe(7);
+    expect(planOnlineMinimumDays({ weekly_enabled: true }, "monthly")).toBe(30);
+    // Older shape: per-plan 14 and 45, gate 14, so 14 and 45.
+    expect(planOnlineMinimumDays({ minimum_days_weekly: 14, minimum_days_monthly: 45 }, "weekly")).toBe(14);
+    expect(planOnlineMinimumDays({ minimum_days_weekly: 14, minimum_days_monthly: 45 }, "monthly")).toBe(45);
+    expect(planOnlineMinimumDays(null, "monthly")).toBe(30);
   });
 });
 
@@ -131,6 +163,72 @@ describe("validatePromoDraft", () => {
       name: "Enter a name",
       value: "A percentage discount can't exceed 100%",
     });
+  });
+});
+
+describe("validatePromoEdit (the Edit dialog)", () => {
+  const today = new Date(2026, 8, 15); // 15 Sep 2026, local
+  const row = {
+    name: "Winter",
+    type: "percentage",
+    value: 15, // numbers, as the saved row holds them
+    max_users: 100,
+    created_at: "2026-09-01",
+    expires_at: new Date(2026, 11, 31),
+  };
+
+  it("passes a valid saved row whose numbers are numbers, not strings", () => {
+    expect(validatePromoEdit(row, { expires_at: "2026-12-31" }, today)).toEqual({});
+  });
+
+  it("refuses a percentage over 100, no uses left and an empty discount", () => {
+    expect(validatePromoEdit({ ...row, value: "150" }, null, today).value).toEqual({
+      kind: "invalid",
+      message: "A percentage discount can't exceed 100%",
+    });
+    expect(validatePromoEdit({ ...row, max_users: 0 }, null, today).max_users?.message).toBe("Enter at least 1");
+    expect(validatePromoEdit({ ...row, value: "" }, null, today).value).toEqual({ kind: "missing", message: "Enter a discount" });
+  });
+
+  it("does not re-judge an expiry left as saved, but refuses a new one in the past", () => {
+    const expired = { ...row, created_at: "2025-06-01", expires_at: new Date(2025, 7, 31) };
+    expect(validatePromoEdit(expired, { expires_at: "2025-08-31" }, today)).toEqual({});
+    expect(validatePromoEdit({ ...row, expires_at: new Date(2026, 8, 14) }, { expires_at: "2026-12-31" }, today).expires_at?.message).toBe(
+      "This code would already be expired",
+    );
+  });
+
+  it("refuses an expiry before the saved start date, and ignores a start date that does not parse", () => {
+    expect(
+      validatePromoEdit({ ...row, created_at: "2026-10-01", expires_at: new Date(2026, 8, 30) }, { expires_at: "2026-12-31" }, today)
+        .expires_at?.message,
+    ).toBe("Expiry must be on or after the start date");
+    expect(validatePromoEdit({ ...row, created_at: "not-a-date" }, { expires_at: "2026-12-31" }, today)).toEqual({});
+  });
+});
+
+describe("promo duplicate-code errors", () => {
+  const codeKey = { code: "23505", message: 'duplicate key value violates unique constraint "promocodes_code_tenant_key"' };
+
+  it("recognises a taken code by its constraint or its key", () => {
+    expect(isDuplicatePromoCodeError(codeKey)).toBe(true);
+    expect(
+      isDuplicatePromoCodeError({ code: "23505", message: 'duplicate key value violates unique constraint "x"', details: "Key (code, tenant_id)=(A1, t) already exists." }),
+    ).toBe(true);
+  });
+
+  it("leaves other duplicates and other errors alone", () => {
+    expect(
+      isDuplicatePromoCodeError({ code: "23505", message: 'duplicate key value violates unique constraint "promocodes_name_key"', details: "Key (name)=(x) already exists." }),
+    ).toBe(false);
+    expect(isDuplicatePromoCodeError({ code: "42501", message: "promocodes_code_tenant_key" })).toBe(false);
+    expect(isDuplicatePromoCodeError(null)).toBe(false);
+  });
+
+  it("swaps in the code copy only for a taken code", () => {
+    expect(promoSaveError(codeKey)).toEqual({ message: PROMO_CODE_TAKEN_COPY });
+    const other = new Error("Failed to fetch");
+    expect(promoSaveError(other)).toBe(other);
   });
 });
 

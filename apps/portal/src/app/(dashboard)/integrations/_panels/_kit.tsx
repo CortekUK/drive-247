@@ -306,7 +306,7 @@ export function CopyValue({ value, className }: { value: string; className?: str
       }}
       className={cn(
         PANEL_TEXT,
-        "group inline-flex max-w-full items-center gap-1.5 rounded-md px-1 py-0.5 font-mono text-[13px] hover:bg-muted",
+        "group inline-flex max-w-full items-center gap-1.5 rounded-md px-1 py-0.5 font-mono text-[13px] hover:bg-primary/10 dark:hover:bg-primary/15",
         className,
       )}
       title="Copy"

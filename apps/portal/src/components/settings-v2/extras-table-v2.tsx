@@ -56,6 +56,7 @@ import {
 import {
   formatSettingsMoney,
   formatSettingsNumber,
+  SETTINGS_PHONE_FACTS,
   SettingsImage,
   TruncatedText,
 } from "@/components/settings-v2/section-states";
@@ -223,23 +224,28 @@ export function ExtrasTableV2<T extends RentalExtra>({
                     <AlertTriangle className="size-3.5 shrink-0 text-red-500 dark:text-red-400" aria-label="Low stock" />
                   )}
                 </div>
-                <p className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
-                  <span className={`tabular-nums [overflow-wrap:anywhere] ${LIST_CLASSES.text}`}>
+                <p className={cn(SETTINGS_PHONE_FACTS.line, "text-sm")}>
+                  <span
+                    className={cn(
+                      "tabular-nums [overflow-wrap:anywhere]",
+                      LIST_CLASSES.text,
+                      extra.pricing_type !== "per_vehicle" && Number(extra.price) < 0 && "text-red-500 dark:text-red-400",
+                    )}
+                  >
                     {extraPriceLabel(extra, currencyCode)}
                   </span>
-                  <span className="text-muted-foreground">·</span>
-                  <StatusText extra={extra} />
+                  <span className={SETTINGS_PHONE_FACTS.afterDot}>
+                    <StatusText extra={extra} />
+                  </span>
                   {extra.max_quantity !== null && (
-                    <>
-                      <span className="text-muted-foreground">·</span>
-                      <span className="tabular-nums">
-                        <StockText extra={extra} lowStock={lowStock} />
-                      </span>
-                    </>
+                    <span className={cn("tabular-nums", SETTINGS_PHONE_FACTS.afterDot)}>
+                      <StockText extra={extra} lowStock={lowStock} />
+                    </span>
                   )}
                 </p>
-                <p className="text-xs text-muted-foreground" title={pricingLabel(extra).title}>
-                  {pricingLabel(extra).text} · {extra.max_quantity !== null ? "Quantity" : "Add-on"}
+                <p className={cn(SETTINGS_PHONE_FACTS.line, "text-xs text-muted-foreground")} title={pricingLabel(extra).title}>
+                  <span className="[overflow-wrap:anywhere]">{pricingLabel(extra).text}</span>
+                  <span className={SETTINGS_PHONE_FACTS.afterDot}>{extra.max_quantity !== null ? "Quantity" : "Add-on"}</span>
                 </p>
               </div>
               {menu(extra)}

@@ -382,7 +382,7 @@ function ChecklistRow({
        ~41px beside 52px ones, and a list that mixes the two looks uneven. It
        sits on the target, not the row, because the row carries the list's
        1px divider and a border-box min-height would count that border too. */
-    <div className="flex items-center gap-2 pr-6 transition-colors hover:bg-[var(--pv-wash)]">
+    <div className="flex items-center gap-2 pr-6 transition-colors hover:bg-[var(--pv-accent-bg)]">
       {video ? (
         <button
           ref={playButtonRef}

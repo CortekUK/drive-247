@@ -901,7 +901,29 @@ describe("settings page wiring (source)", () => {
   const v2 = page.slice(v2Start, v2End);
 
   it("Pricing rules, Tax and fees and Security deposit sit outside the page's read-only fieldset", () => {
-    expect(page).toMatch(/const V2_PAGES_GATING_OWN_CONTROLS = new Set\(\[[^\]]*'pricing', 'fees', 'preauth'\]\);/);
+    expect(page).toMatch(/const V2_PAGES_GATING_OWN_CONTROLS = new Set\(\[[^\]]*'pricing', 'fees', 'preauth'[^\]]*\]\);/);
+  });
+
+  it("Installments, Pay as you go, Auto-extension, Promo codes and Extras sit outside it too, so a viewer can retry, copy and show more", () => {
+    expect(page).toMatch(/const V2_PAGES_GATING_OWN_CONTROLS = new Set\(\[[^\]]*'installments', 'payg', 'auto-extend', 'promos', 'extras'[^\]]*\]\);/);
+  });
+
+  it("Installments registers unsaved plans with the leave guard, and shows its own 'Unsaved changes'", () => {
+    expect(v2).toContain("<InstallmentSettings registerSave={registerV2SectionSave} />");
+    expect(page).toMatch(/const V2_PAGES_WITH_OWN_SAVE_STATUS = new Set\(\[[^\]]*'installments'[^\]]*\]\);/);
+    // v1 still mounts it bare.
+    expect(page.slice(v2End)).toContain("<InstallmentSettings />");
+  });
+
+  it("promo codes: Add waits for the list, the Edit dialog validates, and a taken code gets its own copy", () => {
+    expect(v2).toContain("const promoCheckUnavailableV2 = !promoCodes;");
+    expect(v2).toContain("error={promoSaveError(createPromoMutation.error)}");
+    expect(page).toContain("validatePromoEdit(editingPromo, savedEditingPromoV2)");
+    expect(page).toContain("onClick={v2Chrome ? handleUpdatePromoV2 : handleUpdatePromo}");
+    expect(page).toContain('error={promoSaveError(updatePromoMutation.error)}');
+    // v1's classes survive beside the phone-safe v2 ones.
+    expect(page).toContain('className={v2Chrome ? "flex flex-col gap-4 sm:flex-row" : "flex gap-4"}');
+    expect(page).toContain(': () => deletingPromo && deletePromoMutation.mutate(deletingPromo.id)}');
   });
 
   it("v2 'Don't Save' resets the page's forms before leaving; v1 dialogs are unchanged", () => {

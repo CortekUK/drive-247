@@ -130,8 +130,14 @@ export interface SettingsSectionSkeletonProps {
   /**
    * `table`: a v2 list-table card (header + rows at the kit's 45px row height).
    * `form`: label/field pairs. `cards`: a grid of soft cards.
+   * `rows`: the stacked rows a list shows below `sm` instead of its table, so a
+   * phone does not load a table that is cut off at the card edge and then jump.
+   * `stack`: full-width cards one above the other, at every width (a page of
+   * stacked panels, or options a person picks between).
    */
-  variant?: "table" | "form" | "cards";
+  variant?: "table" | "form" | "cards" | "rows" | "stack";
+  /** `rows` only: a square thumbnail at the start of each row. */
+  thumbnail?: boolean;
   /** Table rows, form pairs, or cards. Match what the section usually shows. */
   rows?: number;
   /** Table columns. */
@@ -152,6 +158,7 @@ export function SettingsSectionSkeleton({
   columns = 4,
   header = false,
   label = "Loading",
+  thumbnail = false,
   className,
 }: SettingsSectionSkeletonProps) {
   const count = Math.max(1, rows);
@@ -205,6 +212,22 @@ export function SettingsSectionSkeleton({
         </Card>
       )}
 
+      {variant === "rows" && (
+        <div aria-hidden="true" className="space-y-2">
+          {Array.from({ length: count }).map((_, r) => (
+            <div key={r} className="flex items-start gap-3 rounded-2xl bg-muted/40 px-4 py-3">
+              {thumbnail && <Skeleton className="size-10 shrink-0 rounded-lg" />}
+              <div className="min-w-0 flex-1 space-y-2 py-0.5">
+                <Skeleton className={cn("h-3.5 rounded-full", BAR_WIDTHS[r % BAR_WIDTHS.length])} />
+                <Skeleton className="h-3 w-1/2 rounded-full" />
+                <Skeleton className="h-3 w-2/3 rounded-full" />
+              </div>
+              <Skeleton className="size-8 shrink-0 rounded-full" />
+            </div>
+          ))}
+        </div>
+      )}
+
       {variant === "form" && (
         <div aria-hidden="true" className="space-y-5 rounded-2xl bg-card p-5 sm:p-6">
           {Array.from({ length: count }).map((_, r) => (
@@ -214,6 +237,21 @@ export function SettingsSectionSkeleton({
                 <Skeleton className="h-3 w-40 max-w-full rounded-full" />
               </div>
               <Skeleton className="h-9 w-full rounded-3xl" />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {variant === "stack" && (
+        <div aria-hidden="true" className="space-y-4">
+          {Array.from({ length: count }).map((_, r) => (
+            <div key={r} className="space-y-3 rounded-2xl bg-card p-5">
+              <div className="flex items-center gap-3">
+                <Skeleton className="size-5 shrink-0 rounded-full" />
+                <Skeleton className={cn("h-4 rounded-full", BAR_WIDTHS[r % BAR_WIDTHS.length], "max-w-xs")} />
+              </div>
+              <Skeleton className="h-3 w-2/3 rounded-full" />
+              <Skeleton className="h-14 w-full rounded-xl" />
             </div>
           ))}
         </div>
@@ -963,6 +1001,23 @@ export function SettingsBlank() {
  * exactly). This only adds the edge cases: null/NaN/Infinity -> "—".
  * Render the result inside `<TabularValue>` so columns align.
  */
+/**
+ * A phone list row's facts ("AED 12.50 · Active · 3 left"): the dot belongs to
+ * the fact AFTER it and sits in the gap to its left, and the line clips its
+ * left edge. When a fact wraps onto a new line its dot is cut off, instead of
+ * dangling at the end of the line above.
+ *
+ *   <p className={SETTINGS_PHONE_FACTS.line}>
+ *     <span>AED 12.50</span>
+ *     <span className={SETTINGS_PHONE_FACTS.afterDot}>Active</span>
+ *   </p>
+ */
+export const SETTINGS_PHONE_FACTS = {
+  line: "flex flex-wrap items-baseline gap-x-3 gap-y-0.5 overflow-hidden",
+  afterDot:
+    "relative before:absolute before:right-full before:w-3 before:text-center before:text-muted-foreground before:content-['·']",
+} as const;
+
 export function formatSettingsMoney(amount: number | string | null | undefined, currencyCode = "USD"): string {
   const n = typeof amount === "string" ? Number(amount) : amount;
   if (n === null || n === undefined || !Number.isFinite(n)) return "—";

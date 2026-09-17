@@ -49,7 +49,7 @@ export function FilterChip({
           ? color
             ? ""
             : "border-primary/40 bg-primary/10 text-primary"
-          : "border-border bg-background text-muted-foreground hover:border-primary/30 hover:text-foreground"
+          : "border-border bg-transparent text-muted-foreground hover:border-primary/30 hover:bg-primary/5 hover:text-foreground"
       )}
     >
       {children}

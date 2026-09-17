@@ -472,7 +472,7 @@ function PageStatus({
                   target="_blank"
                   rel="noreferrer"
                   onClick={() => setMenu(false)}
-                  className="flex w-full items-center gap-2 rounded-2xl px-3 py-2 text-left text-[13px] transition-colors hover:bg-muted/60"
+                  className="flex w-full items-center gap-2 rounded-2xl px-3 py-2 text-left text-[13px] transition-colors hover:bg-primary/10 dark:hover:bg-primary/15"
                 >
                   <ExternalLink className="size-3.5 text-muted-foreground" />
                   View on your website
@@ -484,7 +484,7 @@ function PageStatus({
                   onHistory();
                   setMenu(false);
                 }}
-                className="flex w-full cursor-pointer items-center gap-2 rounded-2xl px-3 py-2 text-left text-[13px] transition-colors hover:bg-muted/60"
+                className="flex w-full cursor-pointer items-center gap-2 rounded-2xl px-3 py-2 text-left text-[13px] transition-colors hover:bg-primary/10 dark:hover:bg-primary/15"
               >
                 <History className="size-3.5 text-muted-foreground" />
                 Earlier versions
@@ -1182,7 +1182,7 @@ function RemoveButton({ label, onClick }: { label: string; onClick: () => void }
       type="button"
       aria-label={label}
       onClick={onClick}
-      className="mt-1 flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted-foreground/60 opacity-0 transition-opacity hover:bg-foreground/5 hover:text-foreground group-hover:opacity-100"
+      className="mt-1 flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted-foreground/60 opacity-0 transition-opacity hover:bg-primary/10 hover:text-foreground dark:hover:bg-primary/15 group-hover:opacity-100"
     >
       <X className="size-3.5" />
     </button>

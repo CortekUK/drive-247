@@ -208,7 +208,7 @@ function ModeRow({
       onClick={onClick}
       className={cn(
         'flex w-full items-start gap-3 rounded-2xl px-2.5 py-2 text-left transition-colors',
-        active ? 'bg-primary/10' : 'hover:bg-muted',
+        active ? 'bg-primary/10' : 'hover:bg-primary/5 dark:hover:bg-primary/10',
       )}
     >
       <span

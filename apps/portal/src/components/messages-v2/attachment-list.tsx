@@ -64,7 +64,7 @@ export function AttachmentList({
             className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition-colors ${
               isOwnMessage
                 ? "bg-primary-foreground/10 hover:bg-primary-foreground/20"
-                : "bg-foreground/5 hover:bg-foreground/10"
+                : "bg-foreground/5 hover:bg-[hsl(var(--v2-hover,var(--foreground)_/_0.1))]"
             }`}
           >
             <Icon className="h-4 w-4 shrink-0 opacity-70" />

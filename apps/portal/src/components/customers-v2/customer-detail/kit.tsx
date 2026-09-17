@@ -278,7 +278,7 @@ export function Toggle({
       className={cn(
         "flex w-full items-center gap-4 rounded-3xl px-5 py-4 text-left ring-1 transition-all",
         disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer",
-        checked ? on : "bg-muted/40 ring-foreground/5 hover:bg-muted/60"
+        checked ? on : "bg-muted/40 ring-foreground/5 hover:bg-primary/10 dark:hover:bg-primary/15"
       )}
     >
       <span className="min-w-0 flex-1">

@@ -362,7 +362,7 @@ describe("settings page (v2): Customer messages entry points", () => {
     // and so do the Business-rules pages (each wraps its controls in its own fieldset).
     // Pricing rules, Tax and fees and Security deposit gate per section too (their Try again on a failed read stays usable).
     expect(source).toContain(
-      "const V2_PAGES_GATING_OWN_CONTROLS = new Set(['reminders', 'push', 'general', 'locations', 'booking-site', 'requirements', 'duration', 'lockbox', 'templates', 'pricing', 'fees', 'preauth']);",
+      "const V2_PAGES_GATING_OWN_CONTROLS = new Set(['reminders', 'push', 'general', 'locations', 'booking-site', 'requirements', 'duration', 'lockbox', 'templates', 'pricing', 'fees', 'preauth', 'installments', 'payg', 'auto-extend', 'promos', 'extras']);",
     );
     const reminders = source.slice(source.indexOf("        case 'reminders':"), source.indexOf("        case 'push':"));
     expect(reminders).toContain("disabled={isUpdating || !canEditPage}");

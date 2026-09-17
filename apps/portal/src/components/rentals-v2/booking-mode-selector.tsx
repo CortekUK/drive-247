@@ -318,7 +318,7 @@ export function BookingModeGrid({ selected, onSelect, available }: BookingModeGr
                 "inline-flex items-center gap-1 rounded-xl px-3 py-2 text-sm font-medium transition-colors",
                 infoPage === 0
                   ? "text-muted-foreground/40 cursor-not-allowed"
-                  : "text-foreground hover:bg-muted"
+                  : "text-foreground hover:bg-primary/10 dark:hover:bg-primary/15"
               )}
             >
               <ChevronLeft className="h-4 w-4" />

@@ -747,14 +747,14 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
             {collapsed ? (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Link href="/rentals" className="flex items-center justify-center w-full h-8 rounded-md hover:bg-muted/50 transition-colors">
+                  <Link href="/rentals" className="flex items-center justify-center w-full h-8 rounded-md hover:bg-primary/10 hover:text-primary transition-colors">
                     <ArrowLeft className="h-4 w-4 shrink-0" />
                   </Link>
                 </TooltipTrigger>
                 <TooltipContent side="right">Back to rentals</TooltipContent>
               </Tooltip>
             ) : (
-              <Link href="/rentals" className="flex items-center gap-2 h-8 px-1 rounded-md hover:bg-muted/50 transition-colors text-muted-foreground hover:text-foreground">
+              <Link href="/rentals" className="flex items-center gap-2 h-8 px-1 rounded-md hover:bg-primary/10 transition-colors text-muted-foreground hover:text-primary">
                 <ArrowLeft className="h-4 w-4 shrink-0" />
                 <span className="text-[13px]">All rentals</span>
               </Link>
@@ -885,14 +885,14 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
             {collapsed ? (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Link href="/vehicles" className="flex items-center justify-center w-full h-8 rounded-md hover:bg-muted/50 transition-colors">
+                  <Link href="/vehicles" className="flex items-center justify-center w-full h-8 rounded-md hover:bg-primary/10 hover:text-primary transition-colors">
                     <ArrowLeft className="h-4 w-4 shrink-0" />
                   </Link>
                 </TooltipTrigger>
                 <TooltipContent side="right">Back to vehicles</TooltipContent>
               </Tooltip>
             ) : (
-              <Link href="/vehicles" className="flex items-center gap-2 h-8 px-1 rounded-md hover:bg-muted/50 transition-colors text-muted-foreground hover:text-foreground">
+              <Link href="/vehicles" className="flex items-center gap-2 h-8 px-1 rounded-md hover:bg-primary/10 transition-colors text-muted-foreground hover:text-primary">
                 <ArrowLeft className="h-4 w-4 shrink-0" />
                 <span className="text-[13px]">All vehicles</span>
               </Link>
@@ -1022,14 +1022,14 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
             {collapsed ? (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Link href="/customers" className="flex items-center justify-center w-full h-8 rounded-md hover:bg-muted/50 transition-colors">
+                  <Link href="/customers" className="flex items-center justify-center w-full h-8 rounded-md hover:bg-primary/10 hover:text-primary transition-colors">
                     <ArrowLeft className="h-4 w-4 shrink-0" />
                   </Link>
                 </TooltipTrigger>
                 <TooltipContent side="right">Back to customers</TooltipContent>
               </Tooltip>
             ) : (
-              <Link href="/customers" className="flex items-center gap-2 h-8 px-1 rounded-md hover:bg-muted/50 transition-colors text-muted-foreground hover:text-foreground">
+              <Link href="/customers" className="flex items-center gap-2 h-8 px-1 rounded-md hover:bg-primary/10 transition-colors text-muted-foreground hover:text-primary">
                 <ArrowLeft className="h-4 w-4 shrink-0" />
                 <span className="text-[13px]">All customers</span>
               </Link>

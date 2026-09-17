@@ -12,10 +12,14 @@
 -- every limit, pattern and predicate below is
 -- apps/{portal/src,admin}/lib/announcements/contract.ts. Change one, change both.
 --
--- NOT APPLIED BY THE CODE THAT ACCOMPANIES IT. Nothing in this file reaches
--- production until it has passed the PGlite suite below and an adversarial
--- review; the lead then applies it deliberately (Management API / MCP), with
--- someone watching, and deletes this note when it lands.
+-- APPLIED TO PRODUCTION on Sep 17 2026 through the Management API, as one
+-- transaction, after the PGlite suite (462 checks) and an adversarial review.
+-- Verified read-only afterwards: 3 tables with RLS, 13 functions, EXECUTE grants
+-- (anon none), 10 policies, the portal-announcement-media bucket. A rolled-back
+-- smoke test saved a targeted announcement as a super admin, the targeted
+-- tenant's staff read it, and another tenant's staff did not.
+-- It is written to be re-runnable, but a re-run does NOT alter the CHECK
+-- constraints of the existing tables: change those with an explicit ALTER.
 --
 -- Shipping the code first is safe. Until this runs, `get_portal_announcements`
 -- does not exist, the portal treats that like any read error and renders NOTHING

@@ -2,6 +2,7 @@
 
 import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { LIMITS, type AnnouncementDraft, type AnnouncementSlide, type DraftErrors } from '@/lib/announcements/contract';
@@ -120,9 +121,14 @@ export function FeatureFields({
 
       <FormSection
         title={'Slides (' + LIMITS.slidesMin + '-' + LIMITS.slidesMax + ')'}
-        description="Opening the card shows these in a large dialog. Newlines in the text are kept."
+        description={
+          'Opening the card shows these in a large dialog. Newlines in the text are kept. A feature always has ' +
+          LIMITS.slidesMin + ' or ' + LIMITS.slidesMax + ' slides, so a slide can be removed only while there are ' +
+          LIMITS.slidesMax + '.'
+        }
       >
         {slides.map((slide, index) => {
+          const atMinimum = slides.length <= LIMITS.slidesMin;
           const e = errors.slideErrors?.[index] ?? null;
           const base = 'ann-slide-' + index;
           const key = slideKeys[index] ?? 'slide-at-' + index;
@@ -155,17 +161,33 @@ export function FeatureFields({
                   >
                     <ArrowDown />
                   </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className={cn('h-8 w-8', QUIET_BUTTON)}
-                    aria-label={'Remove slide ' + (index + 1)}
-                    disabled={slides.length <= LIMITS.slidesMin}
-                    onClick={() => removeSlide(key, index)}
-                  >
-                    <Trash2 />
-                  </Button>
+                  {/* aria-disabled, not disabled: a disabled button gets no hover or
+                      focus, so its tooltip could never say WHY it does nothing
+                      (user, Sep 17 2026: "why am I unable to delete them"). */}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className={cn(
+                          'h-8 w-8',
+                          QUIET_BUTTON,
+                          atMinimum && 'cursor-not-allowed opacity-40 hover:bg-transparent dark:hover:bg-transparent',
+                        )}
+                        aria-label={'Remove slide ' + (index + 1)}
+                        aria-disabled={atMinimum || undefined}
+                        onClick={() => removeSlide(key, index)}
+                      >
+                        <Trash2 />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="max-w-xs text-xs">
+                      {atMinimum
+                        ? 'A feature needs at least ' + LIMITS.slidesMin + ' slides. Add a slide first, then remove this one.'
+                        : 'Remove slide ' + (index + 1)}
+                    </TooltipContent>
+                  </Tooltip>
                 </div>
               </div>
               <FormField

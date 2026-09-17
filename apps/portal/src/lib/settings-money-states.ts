@@ -95,12 +95,47 @@ export function isInstallmentDraftDirty(
   );
 }
 
-/** The saved minimum rental length for a plan, reading the old key names too. */
-export function planMinimumDays(cfg: InstallmentConfigLike | null | undefined, plan: "weekly" | "monthly"): number {
+const PLAN_DEFAULT_MINIMUM_DAYS = { weekly: 7, monthly: 30 } as const;
+
+/** A saved `minimum_days_*` (or old `min_days_for_*`) value, else the plan's default. */
+function savedPlanMinimum(cfg: InstallmentConfigLike | null | undefined, plan: "weekly" | "monthly"): number {
   const current = cfg?.[`minimum_days_${plan}`];
   const legacy = cfg?.[`min_days_for_${plan}`];
   const value = typeof current === "number" ? current : typeof legacy === "number" ? legacy : NaN;
-  return Number.isFinite(value) && value >= 0 ? value : plan === "weekly" ? 7 : 30;
+  return Number.isFinite(value) && value >= 0 ? value : PLAN_DEFAULT_MINIMUM_DAYS[plan];
+}
+
+/**
+ * The cadence shape (weekly/monthly toggles and payments per unit) that this
+ * section writes on every save, as opposed to the older count-cap shape. Same
+ * test as New Rental (rental-create-v2) and checkout (InstallmentSelector).
+ */
+export function isCadenceInstallmentConfig(cfg: InstallmentConfigLike | null | undefined): boolean {
+  return (
+    cfg?.weekly_enabled !== undefined ||
+    cfg?.monthly_enabled !== undefined ||
+    cfg?.weekly_payments_per_unit !== undefined ||
+    cfg?.monthly_payments_per_unit !== undefined
+  );
+}
+
+/**
+ * The shortest rental a plan is offered on, as New Rental and checkout decide
+ * it. For the cadence shape both hard-code 7 and 30 days and ignore the saved
+ * `minimum_days_*`; only the older shape reads them.
+ */
+export function planMinimumDays(cfg: InstallmentConfigLike | null | undefined, plan: "weekly" | "monthly"): number {
+  return isCadenceInstallmentConfig(cfg) ? PLAN_DEFAULT_MINIMUM_DAYS[plan] : savedPlanMinimum(cfg, plan);
+}
+
+/**
+ * The same, for online checkout. The booking site shows its installment options
+ * only when the rental reaches the SMALLER of the two saved minimums, so a saved
+ * minimum above 7 days can push a plan later online than in New Rental.
+ */
+export function planOnlineMinimumDays(cfg: InstallmentConfigLike | null | undefined, plan: "weekly" | "monthly"): number {
+  const sectionGate = Math.min(savedPlanMinimum(cfg, "weekly"), savedPlanMinimum(cfg, "monthly"));
+  return Math.max(planMinimumDays(cfg, plan), sectionGate);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -165,6 +200,38 @@ export function validatePromoDraft(
   return issues;
 }
 
+/**
+ * The Edit dialog's checks: the create form's rules over a saved row. The
+ * dialog cannot change the start date, and an expiry left as it was saved is
+ * not judged again, so renaming a code that has already expired does not first
+ * demand a new date. A NEW expiry in the past is still refused.
+ */
+export function validatePromoEdit(
+  draft: { name?: unknown; type?: unknown; value?: unknown; max_users?: unknown; created_at?: unknown; expires_at?: unknown },
+  saved: { expires_at?: string | null } | null | undefined,
+  today: Date = new Date(),
+): Partial<Record<PromoField, PromoIssue>> {
+  const text = (v: unknown) => (v === null || v === undefined ? "" : String(v));
+  const expires = draft.expires_at instanceof Date && !Number.isNaN(draft.expires_at.getTime()) ? draft.expires_at : null;
+  const created = typeof draft.created_at === "string" ? parseLocalDate(draft.created_at) : null;
+  const issues = validatePromoDraft(
+    {
+      name: text(draft.name),
+      type: text(draft.type),
+      value: text(draft.value),
+      created_at: created && !Number.isNaN(created.getTime()) ? created : null,
+      expires_at: expires,
+      max_users: text(draft.max_users),
+    },
+    today,
+  );
+  if (issues.expires_at && expires && saved?.expires_at) {
+    const savedExpiry = parseLocalDate(saved.expires_at);
+    if (!Number.isNaN(savedExpiry.getTime()) && startOfDay(savedExpiry) === startOfDay(expires)) delete issues.expires_at;
+  }
+  return issues;
+}
+
 /** Issues to show now: `invalid` always, `missing` only after a submit attempt. */
 export function visiblePromoIssues(
   issues: Partial<Record<PromoField, PromoIssue>>,
@@ -175,6 +242,26 @@ export function visiblePromoIssues(
     if (issue.kind === "invalid" || submitted) shown[field] = issue.message;
   }
   return shown;
+}
+
+/**
+ * A promo insert or update refused because another code already uses it.
+ * Postgres names the key in `details` ("Key (code, tenant_id)=(...) already
+ * exists") and the constraint in `message` ("promocodes_code_tenant_key").
+ * The generic duplicate copy talks about a name, which is wrong here.
+ */
+export function isDuplicatePromoCodeError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const { code, message, details } = error as { code?: unknown; message?: unknown; details?: unknown };
+  if (String(code ?? "") !== "23505") return false;
+  return /_code(_|")/i.test(String(message ?? "")) || /\(code\b/i.test(String(details ?? ""));
+}
+
+export const PROMO_CODE_TAKEN_COPY = "That code is already in use. Generate a new one or type a different code.";
+
+/** The error a promo form shows: the code-specific copy for a taken code. */
+export function promoSaveError(error: unknown): unknown {
+  return isDuplicatePromoCodeError(error) ? { message: PROMO_CODE_TAKEN_COPY } : error;
 }
 
 /** A stored `yyyy-MM-dd` expiry before today's local calendar day. */
