@@ -22,8 +22,17 @@ import { MessagingError, type MessagingCall } from './client';
 
 export interface HumanTicket {id:string;reference:string;summary:string;status:'open'|'in_progress'|'closed';tenant_name:string;requester:string;updated_at:string;created_at:string;unread?:boolean;handoff?:Record<string,unknown>;emailStatus?:string;staff_note?:string;
   /** The latest message, one truncated line. Present only where the deployment's list query provides it. */
-  preview?:string}
-export interface SupportMessage {seq:number;author_kind:'tenant'|'support';body:string;created_at:string}
+  preview?:string;
+  /** Detail only. `conversation_id` is null for a ticket opened directly in Support. */
+  conversation_id?:string|null;closed_at?:string|null;
+  /** Detail only, from stored metadata: a TRAX conversation is behind this ticket,
+   *  even where the reader's record permissions hide its context. Absent from a
+   *  deployment that does not report it. */
+  traxLinked?:boolean}
+export interface SupportMessage {seq:number;author_kind:'tenant'|'support';body:string;created_at:string;
+  /** `trax_handoff`: written by TRAX's automatic handoff, not typed by a person.
+   *  Set by the server from stored metadata (messaging.ts, ticketSourceReader). */
+  source?:'trax_handoff'}
 /** A file on a message: metadata plus a short-lived signed read URL from the server. */
 export interface SupportAttachment {id:string;seq:number;name:string;mime:string;size:number;authorKind:'tenant'|'support';url?:string}
 /** One the operator picked but has not sent yet. */
@@ -187,8 +196,14 @@ export function useSupportInbox({call,admin=false,initialId,compose,scope,upload
     }catch(e){fail(e);}finally{sending.current=false;setBusy(false);}
   },[admin,attachments,call,compose,creating,draft,fail,id,loadList,loadThread,nonce,nonceKey,status,subject,uploadAttachment]);
 
+  /* Never another ticket's content: between choosing a ticket and its first
+     response, the previous thread is still in state for one render. Every view —
+     the conversation, Details and TRAX Summary — reads this, so all three change
+     together and show "loading" rather than the last ticket. */
+  const current=thread&&thread.ticket.id===id?thread:null;
+
   return {
-    id,creating,tickets,next,thread,search,filter,draft,subject,status,
+    id,creating,tickets,next,thread:current,search,filter,draft,subject,status,
     busy,loading,error,notice,retrying,canSend,canAttach,attachments,scrollRef,
     setSearch,setFilter,setDraft,setSubject,setStatus,
     choose,clearSelection,beginNew,cancelNew,loadMore,loadOlder,onThreadScroll,send,

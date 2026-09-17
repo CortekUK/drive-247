@@ -15,7 +15,11 @@ begin
   -- Ownership is rechecked per ticket here too: a preview is a message body, and
   -- a tenant may only read their own.
   select coalesce(jsonb_object_agg(x.ticket_id::text,x.body),'{}'::jsonb) into rows from (
-    select distinct on (m.ticket_id) m.ticket_id, left(btrim(m.body),160) as body
+    -- The automatic TRAX handoff's summary is not a person's words: its stored
+    -- nonce is the TRAX issue id on a ticket with a TRAX conversation behind it.
+    select distinct on (m.ticket_id) m.ticket_id,
+      case when m.author_kind='tenant' and m.nonce=t.issue_id and (t.conversation_id is not null or t.handoff ? 'conversationId')
+        then 'TRAX shared its troubleshooting summary.' else left(btrim(m.body),160) end as body
     from public.trax_support_messages m
     join public.trax_support_tickets t on t.id=m.ticket_id
     where m.ticket_id = any(p_ids)

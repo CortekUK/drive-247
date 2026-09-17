@@ -21,7 +21,15 @@
     "refresh restores conversation",
     "offline reconnect catches up without duplicate messages",
     "lost first-send response retries across refresh without duplicate",
-    "mobile no clipping"
+    "mobile no clipping",
+    "support rail replaces the navigation on Support",
+    "TRAX handoff is an event on both sides",
+    "TRAX Summary shows the saved exchange on both sides",
+    "TRAX event is acknowledged as read",
+    "switching tickets moves all three areas",
+    "ticket without TRAX says so",
+    "record permission failure hides TRAX context without calling it absent",
+    "status control in the Details drawer"
   ],
   "errors": []
 }

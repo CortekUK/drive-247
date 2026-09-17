@@ -105,6 +105,7 @@ import { useNavPreferences } from "@/hooks/use-nav-preferences";
 import { applyNavPreferences } from "@/lib/nav-preferences";
 // The Trax conversation rail — the scoped rail this sidebar becomes on /trax.
 import { TraxRail } from "@/components/trax/trax-rail";
+import { SupportRail } from "@/components/support/support-rail";
 // The rental control centre's stage rail. The sidebar becomes it on a rental
 // detail page, the same way it becomes the Settings rail on /settings — see
 // `isRentalDetailPage` below.
@@ -367,6 +368,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   // flag is needed: this component and the Trax provider both exist only under
   // the v2 chrome gate.
   const isTraxPage = pathname === "/trax" || !!pathname?.startsWith("/trax/");
+  const isSupportPage = pathname === "/support" || !!pathname?.startsWith("/support/");
 
   /* ── rental control centre mode ────────────────────────────────────────
    *
@@ -731,6 +733,12 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   // not from the navigation hooks above — which have all already run, so this
   // early return keeps the hook order identical on every route.
   if (isTraxPage) return <TraxRail />;
+
+  // --- Support Mode ---
+  // The ticket list takes the sidebar's slot (support-rail.tsx), so Support is
+  // tickets | conversation | details rather than four columns. Same early-return
+  // position as Trax, for the same hook-order reason.
+  if (isSupportPage) return <SupportRail />;
 
   if (isRentalDetailPage && rentalDetailId) {
     const heroTitle = rentalDetail

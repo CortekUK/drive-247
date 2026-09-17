@@ -8,6 +8,8 @@ import { SidebarProvider } from '@/components/admin/SidebarContext';
 import { Header } from '@/components/admin/Header';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Skeleton } from '@/components/ui/skeleton';
+import { AdminSupportRail } from '@/components/support/AdminSupportRail';
+import { SupportRailProvider } from '../../../../../shared/trax-support/support-rail';
 
 function LoadingScreen() {
   return (
@@ -72,6 +74,11 @@ export default function ProtectedLayout({
     }
   }, [user, loading, pathname, router]);
 
+  /* Support is tickets | conversation | details. Its ticket list takes the
+     navigation's slot on a desktop (AdminSupportRail) instead of a fourth column,
+     and the page bounds its own height so each column scrolls inside itself. */
+  const isSupport = pathname === '/admin/support' || pathname.startsWith('/admin/support/');
+
   if (loading) {
     return <LoadingScreen />;
   }
@@ -83,17 +90,20 @@ export default function ProtectedLayout({
   return (
     <TooltipProvider>
       <SidebarProvider>
+        <SupportRailProvider>
         <div className="flex h-screen bg-background overflow-hidden">
-          <Sidebar />
-          <div className="flex-1 flex flex-col overflow-hidden">
+          {/* On Support a phone keeps the navigation sheet behind the header's menu. */}
+          {isSupport ? <><AdminSupportRail /><Sidebar desktop={false} /></> : <Sidebar />}
+          <div className="flex-1 flex min-w-0 flex-col overflow-hidden">
             <Header />
-            <main className="flex-1 overflow-y-auto">
-              <div className="p-4 sm:p-6">
+            <main className={isSupport ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'flex-1 overflow-y-auto'}>
+              <div className={isSupport ? 'flex min-h-0 flex-1 flex-col p-3 sm:p-4' : 'p-4 sm:p-6'}>
                 {children}
               </div>
             </main>
           </div>
         </div>
+        </SupportRailProvider>
       </SidebarProvider>
     </TooltipProvider>
   );

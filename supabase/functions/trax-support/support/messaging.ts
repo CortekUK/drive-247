@@ -10,7 +10,44 @@ export interface MessagingStorage {
   signUpload(path:string):Promise<{url:string;token:string}>;
   signDownload(path:string,seconds:number):Promise<string|null>;
 }
-export interface MessagingDependencies {reads:SupportReads;db:MessagingDatabase;enabled:boolean;storage?:MessagingStorage}
+/** Where a ticket's content came from, for ONE ticket the caller has just been
+ *  authorized to open. See `ticketSourceReader`. */
+export interface TicketSources {traxLinked:boolean;generated:number[]}
+export interface MessagingDependencies {reads:SupportReads;db:MessagingDatabase;enabled:boolean;storage?:MessagingStorage;
+  /** Optional: a deployment without it returns the thread unmarked, exactly as before. */
+  sources?:(ticketId:string)=>Promise<TicketSources|null>}
+
+/** The two tables, read with the server's own client. Only `ticketSourceReader` uses it. */
+interface SourceQuery extends PromiseLike<{data:unknown;error:unknown}> {eq(column:string,value:unknown):SourceQuery;maybeSingle():PromiseLike<{data:unknown;error:unknown}>}
+export interface SourceClient {from(table:string):{select(columns:string):SourceQuery}}
+/**
+ * Which messages TRAX wrote, and whether a TRAX conversation is behind the ticket.
+ *
+ * STORED METADATA, NEVER TEXT. The automatic handoff (handler.ts, `support_ticket`)
+ * is the only writer that posts a TRAX-linked ticket's first message under the
+ * TRAX issue's own id as its nonce. A tenant's typed escalation uses the
+ * composer's random nonce, and a ticket opened directly in Support has no TRAX
+ * conversation at all (its handoff carries no `conversationId`), so neither is
+ * ever marked — whatever its words say about TRAX.
+ *
+ * It runs only AFTER `trax_messaging_request` has authorized the same ticket for
+ * the same caller, and it returns sequence numbers and a flag, never a body. The
+ * linkage is read from the stored handoff rather than the reader's copy, which the
+ * SQL blanks when record permissions fail: "there is TRAX context you cannot see"
+ * and "there is no TRAX context" are different answers.
+ */
+export function ticketSourceReader(client:SourceClient){
+  return async(ticketId:string):Promise<TicketSources|null>=>{
+    const ticket=await client.from('trax_support_tickets').select('issue_id,conversation_id,linked:handoff->>conversationId').eq('id',ticketId).maybeSingle();
+    const row=ticket.data as {issue_id?:string;conversation_id?:string|null;linked?:string|null}|null;
+    if(ticket.error||!row?.issue_id)return null;
+    const traxLinked=!!row.linked||!!row.conversation_id;
+    if(!traxLinked)return {traxLinked,generated:[]};
+    const messages=await client.from('trax_support_messages').select('seq').eq('ticket_id',ticketId).eq('author_kind','tenant').eq('nonce',row.issue_id);
+    if(messages.error||!Array.isArray(messages.data))return null;
+    return {traxLinked,generated:(messages.data as {seq:number}[]).map(m=>m.seq).filter(Number.isSafeInteger)};
+  };
+}
 const fields:Record<string,string[]>={count:[],list:['search','status','offset'],detail:['id','before'],read:['id','through'],send:['id','nonce','body'],status:['id','nonce','body','status'],create:['nonce','body','subject'],attach:['id','nonce','name','mime','size']};
 /** Screenshots and documents only: no SVG (script), archives or executables. */
 const ATTACHMENT_TYPES=['image/png','image/jpeg','image/webp','image/gif','application/pdf'];
@@ -100,19 +137,33 @@ export async function handleMessaging(req:Request,deps:MessagingDependencies):Pr
         }
       }
     }
-    if(body.action==='detail'&&deps.storage&&result.data&&typeof result.data==='object'){
-      /* The conversation's files, with a short-lived read URL each. The list comes
-         from the database under the same access rule as the thread itself; a URL
-         that cannot be signed is returned without one rather than guessed. */
-      const attachments=await deps.db.rpc('trax_support_attachment_list',{p_user:userId,p_staff:staffId,p_tenant:tenantId,p_admin:body.admin===true,p_ticket:data.id});
-      if(!attachments.error&&Array.isArray(attachments.data)){
-        const files=[] as Record<string,unknown>[];
-        for(const file of attachments.data as {id:string;seq:number;path:string;name:string;mime:string;size:number;author_kind:string}[]){
-          const url=await deps.storage.signDownload(file.path,3600).catch(()=>null);
-          files.push({id:file.id,seq:file.seq,name:file.name,mime:file.mime,size:file.size,authorKind:file.author_kind,...(url?{url}:{})});
+    if(body.action==='detail'&&result.data&&typeof result.data==='object'){
+      let detail=result.data as {ticket?:Record<string,unknown>;messages?:{seq:number}[]}&Record<string,unknown>;
+      /* What TRAX wrote versus what a person wrote, from stored metadata (see
+         `ticketSourceReader`). A failed lookup leaves every message as it was:
+         nothing is hidden on a guess. */
+      if(deps.sources){
+        const sources=await deps.sources(String(data.id)).catch(()=>null);
+        if(sources){
+          detail={...detail,ticket:{...(detail.ticket??{}),traxLinked:sources.traxLinked},
+            messages:(detail.messages??[]).map(message=>sources.generated.includes(message.seq)?{...message,source:'trax_handoff'}:message)};
         }
-        return respond({...(result.data as Record<string,unknown>),attachments:files});
       }
+      if(deps.storage){
+        /* The conversation's files, with a short-lived read URL each. The list comes
+           from the database under the same access rule as the thread itself; a URL
+           that cannot be signed is returned without one rather than guessed. */
+        const attachments=await deps.db.rpc('trax_support_attachment_list',{p_user:userId,p_staff:staffId,p_tenant:tenantId,p_admin:body.admin===true,p_ticket:data.id});
+        if(!attachments.error&&Array.isArray(attachments.data)){
+          const files=[] as Record<string,unknown>[];
+          for(const file of attachments.data as {id:string;seq:number;path:string;name:string;mime:string;size:number;author_kind:string}[]){
+            const url=await deps.storage.signDownload(file.path,3600).catch(()=>null);
+            files.push({id:file.id,seq:file.seq,name:file.name,mime:file.mime,size:file.size,authorKind:file.author_kind,...(url?{url}:{})});
+          }
+          detail={...detail,attachments:files};
+        }
+      }
+      return respond(detail);
     }
     return respond(result.data);
   }catch(error){return error instanceof SupportError?respond({error:error.message,code:error.code},error.status):respond({error:'Support is temporarily unavailable. Your draft has not been discarded.',code:'support_unavailable'},503);}

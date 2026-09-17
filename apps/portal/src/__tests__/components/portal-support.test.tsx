@@ -2,6 +2,7 @@ import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PortalSupport } from '@/components/support/portal-support';
+import { SupportRailProvider, useSupportRail } from '../../../../../shared/trax-support/support-rail';
 
 // Offline: the messaging client, the inbox hook and the TRAX conversation are mocked.
 const mocks = vi.hoisted(() => ({ options: null as any, inbox: null as any, view: null as any, trax: null as any }));
@@ -12,7 +13,8 @@ vi.mock('../../../../../shared/trax-support/use-support-inbox', () => ({
   useSupportInbox: (options: any) => { mocks.options = options; return mocks.inbox; },
 }));
 vi.mock('@/components/support/support-inbox', () => ({
-  SupportInboxView: (p: any) => { mocks.view = p; return createElement('div', { 'data-testid': 'support-inbox' }); },
+  // The list header is the page's to render wherever the view shows the list.
+  SupportInboxView: (p: any) => { mocks.view = p; return createElement('div', { 'data-testid': 'support-inbox' }, p.listInRail ? null : p.listHeader); },
 }));
 vi.mock('@/components/trax/support/trax-support-context', () => ({ useTraxSupportOptional: () => mocks.trax }));
 
@@ -35,7 +37,7 @@ function render(props: Record<string, unknown> = {}) {
   root = createRoot(node);
   act(() => root!.render(createElement(PortalSupport, props as any)));
 }
-const button = (text: string) => [...document.querySelectorAll('button')].find((b) => b.textContent?.includes(text));
+const button = (text: string) => [...document.querySelectorAll('button')].find((b) => b.textContent?.includes(text) || b.getAttribute('aria-label') === text);
 
 beforeEach(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
@@ -82,6 +84,21 @@ describe('the portal Support section', () => {
     render({ composeIssueId: 'i1' });
     expect(document.querySelector('[role="status"]')?.textContent).toContain('no longer in the open conversation');
     expect(mocks.options.compose).toEqual({ summary: '' });
+  });
+
+  it('lends its inbox to the Support rail, and leaves the list and its header to the rail while the rail shows it', () => {
+    const seen: unknown[] = [];
+    function Rail({ listed }: { listed: boolean }) { seen.push(useSupportRail(listed)); return null; }
+    const node = document.createElement('div'); document.body.append(node);
+    root = createRoot(node);
+    act(() => root!.render(createElement(SupportRailProvider, null, createElement(Rail, { listed: true }), createElement(PortalSupport))));
+    expect(seen.at(-1)).toBe(mocks.inbox);
+    expect(mocks.view.listInRail).toBe(true);
+    expect(document.querySelector('h1')).toBeNull();
+    // A collapsed sidebar or a phone: the rail is not showing the list, so the page does.
+    act(() => root!.render(createElement(SupportRailProvider, null, createElement(Rail, { listed: false }), createElement(PortalSupport))));
+    expect(mocks.view.listInRail).toBe(false);
+    expect(document.querySelector('h1')?.textContent).toBe('Support');
   });
 
   it('offers retention only to operators allowed to manage it, in a dialog over the workspace', async () => {
