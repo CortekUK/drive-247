@@ -123,7 +123,7 @@ export function useTraxSupport(enabled = true, surfaceVisible = true): UseChatRe
       const data=await call({type:recheck?'recheck':'message',message:content.trim(),contextScope:scope,conversationId:previous,pageContext:traxPageContext(pathname)},lease.signal);
       if(!lease.current())return;
       if(data.contextScope!==scope){reset('Your access changed. Start a new conversation.');return;}
-      setChat((old)=>({...old,conversationId:data.conversationId,capabilities:data.capabilities,issues:data.issues,activeIssueId:data.activeIssueId,messages:[...old.messages,{id:crypto.randomUUID(),role:'assistant',content:data.response,sources:data.sources,provenance:data.provenance,navigation:data.navigation,evidence:data.evidence,canRecheck:data.canRecheck,timestamp:new Date()}]}));
+      setChat((old)=>({...old,conversationId:data.conversationId,capabilities:data.capabilities,issues:data.issues,activeIssueId:data.activeIssueId,messages:[...old.messages,{id:crypto.randomUUID(),role:'assistant',content:data.response,sources:data.sources,provenance:data.provenance,navigation:data.navigation,evidence:data.evidence,canRecheck:data.canRecheck,ticket:data.ticket&&{id:data.ticket.id,reference:data.ticket.reference},ticketRetry:data.ticketRetry,timestamp:new Date()}]}));
       refreshRecent=!previous&&data.capabilities?.supportStorage===true;
     }catch(error){
       if(!lease.current())return;
@@ -159,7 +159,13 @@ export function useTraxSupport(enabled = true, surfaceVisible = true): UseChatRe
       if(!lease.current())return null;
       if(data.contextScope!==current.scope){reset('Your access changed. Reload this conversation.');return null;}
       setChat(old=>({...old,error:null,conversationId:data.conversationId,issues:data.issues,activeIssueId:data.activeIssueId,capabilities:data.capabilities,
-        messages:type==='new_issue'?[]:data.resumedMessages?(data.resumedMessages.length?data.resumedMessages.map(e=>({id:crypto.randomUUID(),role:e.role,content:e.content,timestamp:new Date(e.at)}))
+        /* A reopened conversation is rebuilt as it was: each answer keeps its
+           sources, provenance line, evidence, verified destinations, Check Again
+           and its ticket. `data.ticket` is the fallback for a conversation stored
+           before transcripts existed — it re-attaches the link to the last answer. */
+        messages:type==='new_issue'?[]:data.resumedMessages?(data.resumedMessages.length?data.resumedMessages.map((e,index,all)=>({id:crypto.randomUUID(),role:e.role,content:e.content,
+          sources:e.sources,provenance:e.provenance,evidence:e.evidence,navigation:e.navigation,canRecheck:e.canRecheck,
+          ticket:e.ticket??(data.ticket&&e.role==='assistant'&&index===all.map(m=>m.role).lastIndexOf('assistant')?{id:data.ticket.id,reference:data.ticket.reference}:undefined),timestamp:new Date(e.at)}))
           :[{id:crypto.randomUUID(),role:'assistant' as const,content:'This earlier conversation is open again. Its previous messages are not stored for display; ask your next question to continue.',timestamp:new Date()}]):old.messages}));
       return data;
     }catch(error){
@@ -172,6 +178,17 @@ export function useTraxSupport(enabled = true, surfaceVisible = true): UseChatRe
     }finally{if(lease.current()){busy.current=false;setLoading(false);}lease.finish();}
   },[enabled,key,call,reset,checkContext]);
 
+  /* The retry behind a failed automatic handoff. The server decides whether a
+     ticket is created or an existing one is reused, and its answer — the real
+     reference, or the honest failure — becomes the next assistant message. */
+  const requestTicket=useCallback(async(issueId?:string)=>{
+    const data=await supportRequest('support_ticket',issueId?{issueId}:{});
+    if(!data)return null;
+    setChat(old=>({...old,messages:[...old.messages,{id:crypto.randomUUID(),role:'assistant' as const,content:data.response,
+      ticket:data.ticket&&{id:data.ticket.id,reference:data.ticket.reference},ticketRetry:data.ticketRetry,timestamp:new Date()}]}));
+    return data;
+  },[supportRequest]);
+
   const clearChat=useCallback(()=>{reset();void checkContext();},[reset,checkContext]);
   const checkAgain=useCallback(()=>sendMessage('Check again',true),[sendMessage]);
   // Kept for existing component contracts. Never calls the legacy write endpoint.
@@ -180,6 +197,6 @@ export function useTraxSupport(enabled = true, surfaceVisible = true): UseChatRe
   const visible=enabled&&chat.key===key&&chat.ready;
   return {messages:visible?chat.messages:[],conversationId:visible?chat.conversationId:null,
     isLoading:loading||(enabled&&!visible&&!chat.error),error:chat.key===key?chat.error:null,
-    sendMessage,confirmAction,rejectAction,clearChat,navigate,checkAgain,capabilities:visible?chat.capabilities:undefined,
+    sendMessage,confirmAction,rejectAction,clearChat,navigate,checkAgain,requestTicket,capabilities:visible?chat.capabilities:undefined,
     supportRequest,contextKey:key+':'+(visible?chat.scope:'')+':'+Boolean(chat.capabilities?.supportAgent)+':'+Boolean(chat.capabilities?.managePolicy),issues:visible?chat.issues:undefined,activeIssueId:visible?chat.activeIssueId:undefined,recentConversations:visible?chat.recentConversations:undefined};
 }

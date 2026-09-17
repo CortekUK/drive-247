@@ -524,9 +524,9 @@ export function AppearanceSettings() {
       </section>
 
       {/* Sticky save affordance so a tenant deep in the page never loses changes.
-          Its right edge stops at `--trax-offset` — the docked Trax panel's width
-          in v2 (styles/v2-theme.css), 0px everywhere else — so Save and Discard
-          stay beside the panel instead of under it. */}
+          Its right edge stops at `--trax-offset` — the width the open Trax panel
+          floats over in v2 (styles/v2-theme.css), 0px everywhere else — so Save
+          and Discard stay beside the panel instead of under it. */}
       {dirty && !readOnly && (
         <div className="fixed bottom-0 left-0 right-[var(--trax-offset,0px)] z-40 border-t bg-background/95 px-4 py-3 backdrop-blur transition-[right] duration-200 ease-linear motion-reduce:transition-none supports-[backdrop-filter]:bg-background/80">
           <div className="mx-auto flex max-w-5xl items-center justify-between gap-4">

@@ -1,12 +1,16 @@
 "use client";
 
-import { Minimize2 } from "lucide-react";
+import type { ReactNode } from "react";
+
+import { History, LifeBuoy, Minimize2, SquarePen } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import { SidebarTrigger } from "@/components/ui-v2/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui-v2/tooltip";
 import { TraxSupportThread } from "@/components/trax/support/TraxSupportThread";
-import { useTraxSupportChat } from "@/components/trax/support/trax-support-context";
+import { useTraxSupportChat, useTraxSupportWorkspace } from "@/components/trax/support/trax-support-context";
 import { useTrax } from "@/components/trax/trax-provider";
+import { supportHref } from "@/lib/support-route";
+import { useRouter } from "next/navigation";
 
 /**
  * Trax, full screen — laid out the way Claude lays out its own.
@@ -38,9 +42,49 @@ import { useTrax } from "@/components/trax/trax-provider";
  * rail lists stored support conversations when support storage is enabled and
  * reopens one through the server, which re-checks access first.
  */
+/** One header control, matching the docked panel's. */
+function PageAction({
+  label,
+  tip,
+  icon,
+  onClick,
+  active = false,
+  disabled = false,
+}: {
+  label: string;
+  tip: string;
+  icon: ReactNode;
+  onClick: () => void;
+  active?: boolean;
+  disabled?: boolean;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label={label}
+          aria-pressed={active}
+          disabled={disabled}
+          onClick={onClick}
+          className={"text-muted-foreground hover:text-foreground " + (active ? "bg-muted text-foreground" : "")}
+        >
+          {icon}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">{tip}</TooltipContent>
+    </Tooltip>
+  );
+}
+
 export default function TraxPage() {
   const { minimiseToPanel } = useTrax();
   const support = useTraxSupportChat();
+  const { view, setView, startNew } = useTraxSupportWorkspace();
+  const router = useRouter();
+  /* Human support is the portal's Support section, not a view in here. */
+  const openSupport = (target: { ticketId?: string; issueId?: string }) => router.push(supportHref(target));
 
   /* The conversation's first question, as its title. Empty for a fresh thread. */
   const title = support.messages.find((m) => m.role === "user")?.content ?? "";
@@ -56,23 +100,29 @@ export default function TraxPage() {
           {title}
         </p>
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={minimiseToPanel}
-              aria-label="Open as side panel"
-              className="ml-auto shrink-0 text-muted-foreground hover:text-foreground"
-            >
-              <Minimize2 />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">Open as side panel · ⌘J</TooltipContent>
-        </Tooltip>
+        {/* The same workspace controls as the docked panel: history, a fresh
+            thread and support tickets all open inside Trax, never on another page. */}
+        <div className="ml-auto flex shrink-0 items-center gap-0.5">
+          <PageAction
+            label="Conversation history"
+            tip="Conversation history"
+            icon={<History />}
+            active={view === "history"}
+            onClick={() => setView(view === "history" ? "conversation" : "history")}
+          />
+          <PageAction
+            label="New conversation"
+            tip="New conversation"
+            icon={<SquarePen />}
+            disabled={support.isLoading || (support.messages.length === 0 && view === "conversation")}
+            onClick={startNew}
+          />
+          <PageAction label="Open Support" tip="Open Support" icon={<LifeBuoy />} onClick={() => openSupport({})} />
+          <PageAction label="Open as side panel" tip="Open as side panel · ⌘J" icon={<Minimize2 />} onClick={minimiseToPanel} />
+        </div>
       </header>
 
-      <TraxSupportThread density="page" autoFocus />
+      <TraxSupportThread density="page" autoFocus onOpenSupport={openSupport} />
     </div>
   );
 }

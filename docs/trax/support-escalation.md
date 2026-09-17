@@ -6,7 +6,7 @@ Review date: 2026-09-15. Knowledge candidate 0.3.1. Source base commit and worki
 
 ## Implemented package
 
-TRAX opens from the V2 top bar **Trax** button (and Ctrl+J) in the docked Trax panel and the `/trax` page (`TraxSupportThread` inside `TraxSupportProvider`), using `SupportWorkspace`, `useTraxSupport`, the development route and the dedicated `trax-support` edge endpoint. Both ends enforce the existing V2 chrome rollout; Northwind is a canary, not a hardcoded authorization exception. No V1 chat, calendar, rental/payment operation or unrelated page is changed by this package.
+TRAX opens from the V2 top bar **Trax** button (and Ctrl+J) as a floating panel over the page, and on the `/trax` page (`TraxSupportThread` inside `TraxSupportProvider`). Both headers switch one workspace between the conversation and the conversation history through `SupportWorkspace`, `useTraxSupport`, the development route and the dedicated `trax-support` edge endpoint. Human support is not a TRAX view: Open Support navigates to the portal's Support section (`/support`, `PortalSupport`), which holds the tickets, their conversations and the retention controls. Both ends enforce the existing V2 chrome rollout; Northwind is a canary, not a hardcoded authorization exception. No V1 chat, calendar, rental/payment operation or unrelated page is changed by this package.
 
 `model.ts:configuredModel` now calls OpenAI Responses with a server-configured model, strict function schemas, structured answers and `store:false`. `orchestrator.ts:modelConversation` accepts one tool call at a time, at most seven tools/eight model turns, with a 65-second request deadline, 18-second provider calls and 8-second database fetch deadlines. Provider errors become an honest fallback. Private provider reasoning is never copied to chat history, tickets or logs. The function-call protocol follows the [OpenAI function-calling documentation](https://developers.openai.com/api/docs/guides/function-calling).
 
@@ -21,7 +21,7 @@ Shared knowledge remains a small compiled catalog with exact section selection, 
 | `get_account_counts` | `kinds: ('vehicles'|'customers'|'rentals')[]`, 1–3 values | Current exact head counts for complete tables, each with verified/restricted/error and total or null; observation time | Each corresponding view grant; explicit authenticated tenant predicate; no full records loaded |
 | `list_account_bookings` | `view: 'active'|'upcoming'|'out_now'`, nullable offset | Exact booking total plus at most 50 rows, next offset, tenant-local date/timezone; unique vehicles only if the full set and relationships are verified | Rentals view; vehicle IDs additionally require vehicle permission and individual tenant validation; no whole-fleet total inferred from a page |
 | `find_available_vehicles` | Nullable start/end dates, customer timezone, pickup-location UUID, offset | At most five freshly diagnosed vehicles; blocked / no blocker in evaluated rules / unknown; exact fleet size but no fabricated whole-fleet available total | Vehicle view plus each reused diagnostic's permissions; same V2 predicates, no subtraction of rentals from cars |
-| `select_support_issue` | Enumerated topic and optional previously resolved record kind/UUID | Current issue and backend score; no caller-provided tenant, user or score | Same authenticated conversation; record must resolve first; 12 issues maximum |
+| `select_support_issue` | Enumerated topic and optional previously resolved record kind/UUID | Current issue id, topic, summary, state and ticket id — never the score, to the model or the tenant | Same authenticated conversation; record must resolve first; 12 issues maximum |
 | `request_support_handoff` | Enumerated reason | Validated policy transition and button availability; **does not create a ticket** | Backend validates the reason against recorded evidence or explicit user intent |
 
 All use strict schemas with unknown keys rejected. Infrastructure failure and missing permissions never become zero. Observation timestamps describe reads, not physical events. Recorded `Active`/`Started` is the shared V2 out-on-hire rule, including overdue open rentals; it is different from date-derived display status. Upcoming lists include Pending/Upcoming/Confirmed records starting on or after the tenant-local date, with pending explicitly not treated as approval. “Free now” is not proof of bookability: the latter needs the actual requested dates and customer timezone. Changes during pagination may make a page partial; partial unique-vehicle totals are null.
@@ -32,7 +32,9 @@ Existing unavailable-car flow is preserved: resolve the page/exact car → obtai
 
 ## Deterministic issue policy
 
-`issues.ts` stores issue ID/topic/record, redacted summary, independent score/state, checks, unknowns, record references, event history, a relevant excerpt and optional ticket ID. The score is support policy, not model confidence.
+Reopening a conversation from history replays it as it was: a stored conversation keeps a bounded transcript (the last 30 turns) of what each answer carried — its sources, the provenance line, evidence, the server-verified navigation destinations, Check Again and a confirmed ticket — so nothing is reduced to a bare text echo. Check Again is replayed only on the last answer and only while its diagnostic is still part of the conversation. Replayed evidence is historical and keeps the observation time it was recorded with; only Check Again runs fresh reads. A stored conversation is loaded by its scope digest, so a permission or role change makes it unavailable rather than replaying evidence the account may no longer read. Conversations without support storage keep no transcript: they live in their own size-limited token for that session only.
+
+`issues.ts` stores issue ID/topic/record, redacted summary, independent score/state, checks, unknowns, record references, event history, a relevant excerpt and optional ticket ID. The score is support policy, not model confidence, and it stays on the server: `issueView` sends the tenant (and the model) only id, topic, summary, state and ticket id, and the stored handoff keeps the escalation reasons without their numbers.
 
 | Event | Default transition |
 |---|---|
@@ -43,7 +45,7 @@ Existing unavailable-car flow is preserved: resolve the page/exact car → obtai
 | New verified progress | Reduce by 25, minimum zero |
 | User confirms resolution | Zero and resolved state |
 
-Repeated events/checks are deduplicated by their keys and results; sending messages alone never increments a score. The model cannot assign scores. `TRAX_ESCALATION_POLICY` can override validated backend thresholds; immediate human handoff and resolution retain their invariants. The UI offers **New issue**, selection, **This is resolved**, and **Request human support**. Explicit human requests skip more model troubleshooting and preserve the current issue's checks. Marking an issue resolved never closes a submitted ticket.
+Repeated events/checks are deduplicated by their keys and results; sending messages alone never increments a score. The model cannot assign scores. `TRAX_ESCALATION_POLICY` can override validated backend thresholds; immediate human handoff and resolution retain their invariants. The conversation itself carries the outcome: the issue selector and the investigation footer (**Investigating this issue**, the support level, its checks counter, **This is resolved** and **Request human support**) are gone from the tenant interface. Explicit human requests skip more model troubleshooting and preserve the current issue's checks. Marking an issue resolved never closes a submitted ticket.
 
 Bounds: 12 issues/conversation, 24 checks/issue, eight findings and eight limitations/check, 32 transition events, 12 record references/unknowns, eight redacted issue turns. These are useful recent context, not a complete audit transcript. Stored JSON is limited to 100 KB; ticket handoffs to 60 KB. The unconfigured session fallback is bounded separately (98 KB plaintext context; 132,000-character token; 145 KB overall request). Non-context request fields remain limited to 16 KiB and messages to 4,000 characters. Capacity errors do not authorize silently dropping unrelated stored records.
 
@@ -53,7 +55,7 @@ No established support-ticket system was found. The review-candidate migration `
 
 `support-store.ts:createTicketStore` is the sole persistent adapter. `handler.ts` exposes fixed **UI request types**, separate from the model's tool registry: resume/select/new/resolve/escalate issue; submit/list/detail/update tickets; retention policy/preview/hold. Tenant/user/scope always come from verified server context. Conversation revisions prevent stale overwrite. Stored history is loaded only for its owner and current scope; permission or knowledge-scope changes fail closed rather than reusing old evidence. The current release does not migrate older conversation scopes automatically.
 
-At 100, **Contact Support** states that it shares a relevant redacted excerpt, checks and authorized references. Clicking rechecks membership, issue ownership, score, related entities and queue configuration. The SQL transaction independently checks membership and related-record grants. A unique issue ID and conflict handling return one persisted ticket across retries. Failure leaves the conversation available and shows no ticket number. The user sees a real TRX reference only after successful storage.
+At the threshold the handler creates or reuses the issue's ticket itself, in the same request as the answer, sharing the relevant redacted excerpt, completed checks and authorized references as a labelled TRAX troubleshooting summary. It rechecks membership, issue ownership, score, related entities and queue configuration first, and the SQL transaction independently checks membership and related-record grants. A unique issue ID and conflict handling return one persisted ticket across retries, refreshes and repeated answers, with no second first-message and no second email job. Failure leaves the conversation available and shows no ticket number, with an explicit retry (`support_ticket`). The user sees a real TRX reference only after successful storage, and the model never supplies one.
 
 The handoff distinguishes user reports from observed checks and their timestamps; it includes unknowns, escalation reasons, conversation/issue IDs, record references and recent redacted excerpts. No credentials, contact details, identity documents, raw processor identifiers or private model reasoning are intentionally retained. Pattern redaction is defense in depth, not a claim that arbitrary text can always be perfectly anonymized. Restricted native fields are never loaded in the first place.
 
@@ -65,7 +67,7 @@ RLS is enabled with no browser policies; browser roles cannot read these tables 
 
 | Stored material | Default policy |
 |---|---|
-| Ordinary conversations, diagnostics and issue scores | 90 days after last conversation activity; automatic context polling does not extend retention |
+| Ordinary conversations, their replay transcript, diagnostics and issue scores | 90 days after last conversation activity; automatic context polling does not extend retention |
 | Open/in-progress tickets | Keep; flag after 90 inactive days by default for support review |
 | Closed tickets | 365 days after latest closure; reopening clears closure time until next closure |
 | Copied redacted handoff | Ticket policy; deleting chat sets its ticket FK to null without deleting the handoff |
@@ -106,7 +108,7 @@ node tests/trax/browser.mjs --operational
 node tests/trax/browser.mjs
 ```
 
-For an interactive fixture browser: `node tests/trax/browser.mjs --support --manual`. Ask about a missing payment, observe the explicit limitation, then click Contact Support; inspect My support requests, Support queue and Retention. This fixture shows a labelled fixture reference and makes no live-provider calls. It is not the signed-in portal or durable production storage.
+For an interactive fixture browser: `node tests/trax/browser.mjs --support --manual`. Ask about a missing payment and watch the answer end with the real fixture ticket reference and Open support ticket; ask again to see the same ticket reused, then use the failure and retry path. Open support ticket leaves TRAX for the Support section; reopen TRAX from Ask AI to see the conversation and its history unchanged. This fixture shows a labelled fixture reference and makes no live-provider calls. It is not the signed-in portal or durable production storage.
 
 `tests/trax/support-storage.mjs` executes the actual migration in isolated PostgreSQL/WASM (PGlite). Install its test-only dependency outside the repo, then run:
 

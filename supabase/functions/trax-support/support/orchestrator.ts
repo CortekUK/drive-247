@@ -115,7 +115,12 @@ export async function modelConversation(message:string,locale:Locale,conversatio
         else if(a.reason==='guidance_missing'&&!sources.size)recordIssueEvent(issue,'guidance_missing','unverified_guidance',env.now,policy);
         else if(a.reason==='diagnostics_exhausted'&&((issue.topic==='payments'&&(!scopes.length||issue.checks.some(c=>['inspect_rental_payment','get_stripe_account_summary','get_rental_payment_evidence','investigate_rental_payment','resolve_payment_dashboard_action'].includes(c.tool)&&['partial','error','restricted'].includes(c.status))))||issue.checks.filter(c=>c.status==='error').length>=2||issue.events.some(e=>e.reason==='guidance_missing')||issue.checks.some(c=>c.findings.some(f=>/records conflict/i.test(f)))))recordIssueEvent(issue,'diagnostics_exhausted','no_permitted_verified_next_step',env.now,policy);
         else throw new SupportError('next_check_required','A verified diagnostic or focused clarification is still available. Do not invent a support conclusion.');
-        result={...issueView(issue),ticketCreated:false,action:issue.score===100?'Contact Support is available; the user must click to submit.':'Continue only meaningful verified checks.'};
+        /* The model never learns the numeric score and never announces a ticket:
+           the handler creates or reuses it after this answer and appends the real
+           reference itself. */
+        result={...issueView(issue),ticketCreated:false,action:issue.score===100
+          ?'The support handoff for this issue is confirmed by the system after your answer. Say plainly that you could not resolve it and that it is going to the support team; do NOT invent a ticket number, reference or link.'
+          :'Continue only meaningful verified checks.'};
       }else if(name==='search_application_knowledge') {
         const a=object(input);onlyKeys(a,['sectionIds']);
         if(!Array.isArray(a.sectionIds)||a.sectionIds.length<1||a.sectionIds.length>3||a.sectionIds.some(id=>typeof id!=='string'||!available.some(g=>g.id===id)))throw new SupportError('invalid_input','Choose up to three accessible reviewed section IDs.');

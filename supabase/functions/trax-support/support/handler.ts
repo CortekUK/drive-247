@@ -7,7 +7,7 @@ import { modelConversation } from './orchestrator.ts';
 import { ModelUnavailable, type SupportModel } from './model.ts';
 import type { CalendarClock, OperationalReads } from './operational-types.ts';
 import type { FleetReads } from './fleet-tools.ts';
-import { newIssue, issueView, recordIssueEvent, redactSupportText, DEFAULT_ESCALATION_POLICY, type EscalationPolicy } from './issues.ts';
+import { newIssue, issueView, recordIssueEvent, redactSupportText, troubleshootingSummary, DEFAULT_ESCALATION_POLICY, type EscalationPolicy } from './issues.ts';
 import { ticketInput, type TicketStore } from './support-store.ts';
 import { financeScopes, type FinanceServices } from './finance-types.ts';
 
@@ -62,7 +62,7 @@ export async function handleSupportRequest(req:Request,deps:Dependencies):Promis
     if(!token)throw new SupportError('unauthorized','Sign in to use TRAX.',401);
     const body=await boundedBody(req);onlyKeys(body,['type','message','tenantId','conversationId','contextScope','pageContext','navigation','locale','issueId','resumeId','ticket','policy','retentionHold']);
     const type=body.type??'message';
-    if(!['message','context','navigate','recheck','resume','select_issue','new_issue','resolve_issue','escalate','submit_ticket','tickets','ticket_detail','update_ticket','retention_policy','retention_preview','retention_hold'].includes(String(type)))throw new SupportError('tool_unavailable','Business actions are not available in this TRAX phase.',403);
+    if(!['message','context','navigate','recheck','resume','select_issue','new_issue','resolve_issue','escalate','submit_ticket','support_ticket','tickets','ticket_detail','update_ticket','retention_policy','retention_preview','retention_hold'].includes(String(type)))throw new SupportError('tool_unavailable','Business actions are not available in this TRAX phase.',403);
     const auth=await authorize(deps.reads,token,body.tenantId);auth.scope=await digest(auth.scope+authorizationRevision);
     if(body.contextScope!=null && body.contextScope!==auth.scope)throw new SupportError('context_changed','Account access changed. Start a new conversation.',409);
     const now=deps.now?.()??Date.now();
@@ -120,6 +120,14 @@ export async function handleSupportRequest(req:Request,deps:Dependencies):Promis
       if(typeof message.message!=='string'||!message.message.trim()||message.message.length>4000||typeof message.subject!=='string'||!message.subject.trim()||message.subject.length>240||typeof message.nonce!=='string'||!UUID.test(message.nonce))throw new SupportError('invalid_input','Enter a subject and message before sending to support.');
       response.ticket=await store.submit(auth,conversation,issue,{body:message.message,nonce:message.nonce,subject:message.subject});
       const saved=await store.load(auth,conversation.id);if(saved){conversation=saved.state;revision=saved.revision;}
+    }else if(type==='support_ticket'){
+      /* The retry behind a failed automatic handoff. It creates nothing by itself:
+         the escalation block below owns creation, so one code path decides when a
+         ticket exists and the SQL still reuses the issue's existing one. */
+      const issue=activeIssue();conversation.activeIssueId=issue.id;
+      if(issue.state==='resolved')throw new SupportError('issue_not_ready','This issue is marked resolved. Ask again to reopen it.');
+      if(issue.score!==100&&!issue.ticketId)throw new SupportError('issue_not_ready','This issue has not reached the support handoff yet.');
+      requireStore();
     }else if(type==='select_issue'||type==='resolve_issue'||type==='escalate'||type==='new_issue'){
       if(type==='new_issue'){conversation.issues??=[];if(conversation.issues.length>=12)throw new SupportError('issue_limit','Start a new conversation for more issues.');const issue=newIssue('other','New support issue');conversation.issues.push(issue);conversation.activeIssueId=issue.id;conversation.turns=[];conversation.diagnostic=undefined;conversation.paymentCheck=undefined;}
       else{const issue=activeIssue();await validateIssueRecords();conversation.activeIssueId=issue.id;
@@ -169,8 +177,8 @@ export async function handleSupportRequest(req:Request,deps:Dependencies):Promis
         sources:guide?[{table:'application_knowledge',id:guide.id,title:guide.title,knowledgeVersion:KNOWLEDGE.version,sourceCommit:KNOWLEDGE.sourceCommit,verifiedAt:KNOWLEDGE.verifiedAt}]:[],navigation:guide?await guideNavigation(guide,env,page):[]};
       conversation.section=guide?.id;conversation.locale=language;
       response.response=`${language==='en'?'Prepared guidance fallback — no AI model answer or live diagnostic was verified.':'Tayyar guidance fallback — AI model ka jawab ya live diagnosis verify nahi hua.'}\n\n${response.response}`;
-      if(isFinanceQuestion(body.message))response.response=language==='en'?'Payment and Stripe investigations are not available in this TRAX environment. No payment record or processor balance was checked, and no charge, refund or repair was attempted. I cannot establish the cause or promise an outcome. If you need help with it, use Contact Support below to send this issue to the Drive247 support team.':'Is TRAX environment mein payment aur Stripe checks available nahi hain. Koi payment record check ya change nahi hua. Wajah ya paison ka result verify nahi kar sakta. Madad chahiye to neeche Contact Support se ye issue Drive247 support team ko bhej dein.';
-      else if(humanRequested){response.response=language==='en'?'You can contact support now. The button below shares this issue’s redacted context and completed checks with the authorized support queue. Nothing has been submitted yet.':'Aap ab support se rabta kar sakte hain. Neeche button is issue ka redacted context aur completed checks authorized support queue ko bhejta hai. Abhi kuch submit nahi hua.';response.sources=[];response.navigation=[];}
+      if(isFinanceQuestion(body.message))response.response=language==='en'?'Payment and Stripe investigations are not available in this TRAX environment. No payment record or processor balance was checked, and no charge, refund or repair was attempted. I cannot establish the cause or promise an outcome, so I am passing this issue to the Drive247 support team.':'Is TRAX environment mein payment aur Stripe checks available nahi hain. Koi payment record check ya change nahi hua. Wajah ya paison ka result verify nahi kar sakta, is liye ye issue Drive247 support team ko bhej raha hoon.';
+      else if(humanRequested){response.response=language==='en'?'I am passing this to the Drive247 support team with this issue’s redacted context and completed checks.':'Ye issue Drive247 support team ko bhej raha hoon, is ke redacted context aur completed checks ke saath.';response.sources=[];response.navigation=[];}
       } else conversation.locale=language;
       if(!modelAnswer&&isFinanceQuestion(body.message)&&financeReady&&response.modelUnavailable){
         response.response=language==='en'?'The AI response could not be completed. Payment checks may have been attempted, but no complete answer was verified. Completed checks are retained with this issue for support. No payment was charged, captured, refunded or repaired.':'AI ka jawab mukammal nahi ho saka. Payment checks ki koshish hui ho sakti hai, lekin mukammal jawab verify nahi hua. Completed checks support ke liye is issue mein hain. Koi payment change nahi hui.';
@@ -178,12 +186,112 @@ export async function handleSupportRequest(req:Request,deps:Dependencies):Promis
       const currentIssue=conversation.issues?.find(i=>i.id===conversation.activeIssueId);
       if(currentIssue&&!modelAnswer){currentIssue.excerpts=[...currentIssue.excerpts.filter(e=>!(e.at===new Date(now).toISOString()&&e.role==='user'&&e.content===redactSupportText(String(body.message)))),{role:'user' as const,content:redactSupportText(String(body.message)),at:new Date(now).toISOString()},{role:'assistant' as const,content:redactSupportText(String(response.response)),at:new Date(now).toISOString()}].slice(-8);}
     }
+    /* ── Automatic support handoff ─────────────────────────────────────────
+       An issue the escalation policy has taken to its threshold gets its ticket
+       HERE, on the server, in the same request as the answer: the requester no
+       longer has to retype the problem into a second composer.
+       Nothing else decides this. The SQL (`trax_support_submit_ticket`) rechecks
+       the stored issue, returns the issue's existing ticket when there is one,
+       appends no second first-message and queues no second email — so a retry, a
+       repeated answer or a refresh cannot produce a duplicate ticket or a
+       duplicate notification. A failure is reported as a failure; the issue and
+       its checks stay in the conversation for the retry. */
+    if(['message','recheck','escalate','support_ticket'].includes(String(type))){
+      const issue=conversation.issues?.find(i=>i.id===conversation.activeIssueId);
+      const submissionReady=storageReady&&supportAccess.deliveryReady;
+      if(issue&&issue.score===100&&issue.state!=='resolved'){
+        const language=conversation.locale==='ur-Latn'?'ur-Latn':'en';
+        const existing=!!issue.ticketId;
+        try{
+          if(!submissionReady)throw new SupportError('support_storage_unavailable','Support ticket delivery is not configured in this environment.',503);
+          for(const record of issue.records)await validateEntity(env,record);
+          conversation.persisted=true;revision=await deps.store!.save(auth,conversation,revision);
+          const ticket=await deps.store!.submit(auth,conversation,issue,{subject:issue.summary||'Support request',body:troubleshootingSummary(issue),nonce:issue.id});
+          const saved=await deps.store!.load(auth,conversation.id);if(saved){conversation=saved.state;revision=saved.revision;}
+          response.ticket=ticket;
+          const confirmation=existing
+            ?(language==='en'?`This issue is already linked to support ticket #${ticket.reference}. Open it to continue with our support team.`
+              :`Ye issue pehle se support ticket #${ticket.reference} se juda hua hai. Support team se baat jari rakhne ke liye use kholein.`)
+            :(language==='en'?`I couldn't resolve this issue with the information available. I've created support ticket #${ticket.reference} for you. Open it to continue with our support team.`
+              :`Mojooda maloomat se main ye issue hal nahi kar saka. Aap ke liye support ticket #${ticket.reference} bana diya hai. Support team se baat karne ke liye use kholein.`);
+          response.response=[String(response.response??'').trim(),confirmation].filter(Boolean).join('\n\n');
+          /* The stored transcript has to carry the confirmation too. The excerpt was
+             recorded from the answer BEFORE this handoff ran (here, or inside the
+             model orchestrator), so reopening the conversation would otherwise
+             replay an answer that never mentions the ticket. Re-find the issue:
+             the reload above replaced `conversation`. */
+          const current=conversation.issues?.find(i=>i.id===issue.id);
+          if(current){
+            const excerpts=current.excerpts??[];const last=excerpts.at(-1);
+            const content=redactSupportText(String(response.response));
+            current.excerpts=last?.role==='assistant'?[...excerpts.slice(0,-1),{...last,content}]
+              :[...excerpts,{role:'assistant' as const,content,at:new Date(now).toISOString()}].slice(-8);
+            stateChanged=true;
+          }
+        }catch(error){
+          /* Never a false success: the text says what failed and what survived. */
+          const reason=error instanceof SupportError?error.message:'Support storage did not confirm the ticket.';
+          /* Retrying only makes sense where submission exists at all: an
+             unconfigured environment gets the plain statement, not a button that
+             would fail again. */
+          response.ticketRetry=submissionReady;
+          const failure=!submissionReady
+            ?(language==='en'
+              ?`I couldn't resolve this issue, and support ticket creation is not configured in this environment, so no ticket was created. Your issue and its completed checks are kept in this conversation.`
+              :`Main ye issue hal nahi kar saka, aur is environment mein support ticket banana configure nahi hai, is liye koi ticket nahi bana. Aap ka issue aur us ke checks isi conversation mein mehfooz hain.`)
+            :language==='en'
+            ?`I couldn't resolve this issue, and creating a support ticket for it did not succeed: ${reason} Nothing about this issue has been lost — try again, or open Support to write to the team yourself.`
+            :`Main ye issue hal nahi kar saka, aur support ticket banana kamyab nahi hua: ${reason} Is issue ka record mehfooz hai — dobara koshish karein ya Support kholein.`;
+          response.response=[String(response.response??'').trim(),failure].filter(Boolean).join('\n\n');
+          if(type==='support_ticket'&&!(error instanceof SupportError))throw error;
+        }
+      }else if(type==='support_ticket')throw new SupportError('issue_not_ready','This issue has not reached the support handoff yet.');
+    }
+    /* Keep the answer as it was shown, with the conversation. A reopened
+       conversation then replays evidence, the provenance line, verified
+       destinations, Check Again and a confirmed ticket — not a bare text echo.
+       Only where support storage is configured: an unstored conversation travels
+       in its own token, which has a hard size limit, and the browser already
+       holds that session's messages. Bounded to the last 30 turns. */
+    if(storageReady&&['message','recheck','support_ticket'].includes(String(type))){
+      const at=new Date(now).toISOString();
+      const ticket=response.ticket as {id?:string;reference?:string}|undefined;
+      conversation.transcript=[...(conversation.transcript??[]),
+        /* A retried handoff is a button, not a typed question: it adds only its answer. */
+        ...(type==='support_ticket'?[]:[{role:'user' as const,content:redactSupportText(type==='recheck'?'Check again':String(body.message??''),4000),at}]),
+        {role:'assistant' as const,content:String(response.response??''),at,
+          sources:response.sources as unknown[],provenance:response.provenance as Record<string,unknown>,
+          evidence:response.evidence as unknown[],navigation:response.navigation as unknown[],
+          canRecheck:response.canRecheck===true,
+          ...(ticket?.id&&ticket.reference?{ticket:{id:ticket.id,reference:ticket.reference}}:{})}
+      ].slice(-30);
+      stateChanged=true;
+    }
+
+    /* A conversation reopened from history gets its ticket back with it, so the
+       confirmed reference and its Open support ticket destination survive a
+       refresh, a New conversation or a later session. The ticket is read with the
+       tenant's own access; a failure leaves no link rather than a wrong one. */
+    if((type==='resume'||type==='select_issue')&&storageReady){
+      const issue=conversation.issues?.find(i=>i.id===conversation.activeIssueId);
+      if(issue?.ticketId){try{response.ticket=await deps.store!.detail(auth,issue.ticketId,false);}catch{/* no link */}}
+    }
     const fresh=await authorize(deps.reads,token,body.tenantId);fresh.scope=await digest(fresh.scope+authorizationRevision);
     if(fresh.scope!==auth.scope)throw new SupportError('context_changed','Account access changed. Start a new conversation.',409);
     if(storageReady&&stateChanged){conversation.persisted=true;revision=await deps.store!.save(auth,conversation,revision);}
     if(storageReady){const latestAccess=await deps.store!.capabilities(fresh);if(JSON.stringify(latestAccess)!==JSON.stringify(supportAccess))throw new SupportError('context_changed','Support permissions changed. Reload this conversation.',409);}
     response.issues=(conversation.issues??[]).map(issueView);response.activeIssueId=conversation.activeIssueId;
-    if(type==='resume'||type==='select_issue')response.resumedMessages=conversation.issues?.find(i=>i.id===conversation.activeIssueId)?.excerpts??[];
+    if(type==='resume'||type==='select_issue'){
+      /* Reopening replays the stored transcript when there is one (everything the
+         answer carried), and falls back to the issue's redacted excerpts for a
+         conversation recorded before transcripts existed. Check Again is offered
+         only on the last answer, and only while the diagnostic it would re-run is
+         still part of this conversation. */
+      const transcript=type==='resume'?conversation.transcript??[]:[];
+      response.resumedMessages=transcript.length
+        ?transcript.map((turn,index)=>({...turn,canRecheck:turn.canRecheck===true&&index===transcript.length-1&&!!(conversation.diagnostic||conversation.paymentCheck)}))
+        :conversation.issues?.find(i=>i.id===conversation.activeIssueId)?.excerpts??[];
+    }
     response.provenance={...(response.provenance as object),conversationStorage:conversation.persisted?'tenant_scoped_support_store':'browser_memory_only'};
     const tokenState=conversation.persisted?{id:conversation.id,expires:now+30*60_000,persisted:true}:conversation;
     return respond({...response,contextScope:auth.scope,conversationId:await conversationToken(deps.signingSecret,auth,tokenState)});

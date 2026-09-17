@@ -182,10 +182,16 @@ export default function DashboardLayout({
      the first. */
   const isTraxWorkspace = pathname === "/trax" || !!pathname?.startsWith("/trax/");
 
-  /* Routes that bound their own height instead of letting the document scroll. */
-  const isBoundedHeight = isMessagesWorkspace || isTraxWorkspace;
+  /* Support is the third one: a ticket list and a conversation that scroll
+     inside themselves, so the reply box stays on screen instead of sitting at
+     the bottom of a long page. Like Trax it keeps the sidebar, and unlike Trax
+     it keeps the top bar — hence a third flag rather than widening either. */
+  const isSupportWorkspace = pathname === "/support" || !!pathname?.startsWith("/support/");
 
-  /* Trax's shared conversation, provided to the top bar, the docked panel and
+  /* Routes that bound their own height instead of letting the document scroll. */
+  const isBoundedHeight = isMessagesWorkspace || isTraxWorkspace || isSupportWorkspace;
+
+  /* Trax's shared conversation, provided to the top bar, the floating panel and
      the full page so all three are the SAME thread. v2 only: for v1 this is a
      Fragment, so the other 56 tenants do not mount a chat hook and fire a
      conversations query for a surface they cannot reach. A context provider
@@ -421,12 +427,12 @@ export default function DashboardLayout({
           same on both trees. `undefined` outside the gate leaves the element's
           class list byte-for-byte what it was for the other 56 tenants. */}
       <Provider
-        /* The docked Trax panel's width is NOT set here any more. It lives in
-           styles/v2-theme.css as `--trax-width` (plus `--trax-offset`), keyed on
-           the `data-trax-panel` attribute TraxPanel puts on <html>. It had to
-           move up to the root: the setup guide portals to <body>, outside this
-           wrapper, and still has to sit clear of the panel. v1 never mounts
-           TraxPanel, so no v1 page gets either variable. */
+        /* The floating Trax panel's size is NOT set here. It lives in
+           styles/v2-theme.css as `--trax-width`/`--trax-height` (plus
+           `--trax-offset`), keyed on the `data-trax-panel` attribute TraxPanel
+           puts on <html>. It has to be at the root: the panel portals to
+           <body>, and so does the setup guide, which keeps clear of it. v1
+           never mounts TraxPanel, so no v1 page gets any of those variables. */
         className={
           [
             v2Theme ? "bg-background bg-app-gradient" : "",
@@ -564,10 +570,11 @@ export default function DashboardLayout({
           </main>
         </Inset>
 
-        {/* Trax, DOCKED: a third child of this flex row. It renders a flow gap
-            that narrows the Inset above by `--trax-width`, and a fixed panel
-            over the room the gap reserves — the Sidebar primitive's own
-            pattern, mirrored on the right. See the header of trax-panel.tsx. */}
+        {/* Trax, FLOATING. Mounted here for its context (the conversation and
+            the panel state both live above this row), but it renders itself
+            through a portal to <body> and is `fixed` there, so it takes no room
+            from this row and never narrows the page. Nothing about the layout
+            changes when it opens. See the header of trax-panel.tsx. */}
         <TraxPanel />
         </SearchSlotWrap>
         </TraxWrap>

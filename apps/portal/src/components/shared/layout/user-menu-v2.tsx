@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useRef, useCallback } from 'react';
+import Link from 'next/link';
+import { SUPPORT_ROUTE } from '@/lib/support-route';
 import { useAuth, useAuthStore } from '@/stores/auth-store';
 import { useTenant } from '@/contexts/TenantContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -412,10 +414,14 @@ export const UserMenuV2 = ({ variant = 'icon' }: { variant?: 'icon' | 'row' } = 
           {/* Support & feedback */}
           <div className="p-1.5">
             <DropdownMenuItem asChild>
-              <a href="mailto:support@drive-247.com" className="cursor-pointer rounded-lg px-2.5 py-1.5 text-[13px]">
+              {/* The portal's own Support section — tickets and replies with the
+                  Drive247 team. TRAX's Support control opens exactly this, so both
+                  entry points show the same authorized records. It replaced a
+                  mailto: an email left no ticket, no history and no unread count. */}
+              <Link href={SUPPORT_ROUTE} className="cursor-pointer rounded-lg px-2.5 py-1.5 text-[13px]">
                 <LifeBuoy className="mr-2.5 h-4 w-4 text-muted-foreground" />
                 <span>Support</span>
-              </a>
+              </Link>
             </DropdownMenuItem>
             {/* The in-app dialog, not a mailto — this is the v1 sidebar's
                 "Send Feedback" button rehomed here, so the feedback still

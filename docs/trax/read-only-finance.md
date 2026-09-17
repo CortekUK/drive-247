@@ -39,7 +39,7 @@ The adapter adds one fixed GET shape (`checkout/sessions/{cs}` then `payment_int
 
 ### Conversation, escalation and configuration
 
-The dialog shows "Checking rental payments… Verifying with Stripe…" while a payment question is running (not per-read streaming). Check again re-runs the server-held rental/payment check. A discrepancy scores 75; `request_support_handoff` can reach 100 after partial or failed payment checks, showing **Communicate with Support**. The explicit ticket handoff now includes structured `paymentReferences` (internal payment ID, Stripe reference, mode, account label, verification result, reason, observation time), without links, amounts or credentials. A dashboard-link request never creates a ticket.
+The dialog shows "Checking rental payments… Verifying with Stripe…" while a payment question is running (not per-read streaming). Check again re-runs the server-held rental/payment check. A discrepancy scores 75; `request_support_handoff` can reach 100 after partial or failed payment checks, and the handler then creates or reuses the issue's ticket automatically and answers with its real reference. The ticket handoff includes structured `paymentReferences` (internal payment ID, Stripe reference, mode, account label, verification result, reason, observation time), without links, amounts or credentials. A dashboard-link request never creates a ticket.
 
 Activation requires `TRAX_FINANCE_READS=enabled` and the deployed `trax-stripe-read` edge function. Who may use payment checks comes from Supabase (staff role and manager tab permissions); there is no separate grant list. Stripe keys are the existing Supabase secrets, read by name at runtime (see the configuration section below).
 
