@@ -39,6 +39,13 @@ export const MODEL_TOOLS:ModelTool[]=[
    * so re-registering this entry is the whole of putting it back. It stays out
    * until a report demonstrably arrives as a file.
    */
+  tool('list_business_records','The RECORDS themselves, not a count: which rentals, which cars, which customers, which payments — with their dates, status and the names of the customer and vehicle attached to each. Use whenever the question is "which ones", "show me", "list", "who", or asks for dates alongside names. Filters, period and fields work exactly as query_business_data describes them; discover_business_data lists which datasets can be listed and what each row shows. Returns one bounded page and says how many matched in total.',{
+    dataset:str,
+    filters:FILTERS,
+    period:PERIOD,
+    sort:{type:['object','null'],additionalProperties:false,required:['by','direction'],properties:{by:str,direction:{type:'string',enum:['asc','desc']}}},
+    limit:LIMIT,
+  }),
   tool('query_customer_balances','Who owes this account money, and how much: outstanding, unapplied credit and the net per customer, highest first. Use for \"who owes the most\", \"which customers are in arrears\" or one customer’s balance. Computed in the backend from the account’s own ledger, pay-as-you-go accruals and captured payments; never a bank or Stripe balance. Requires the finance permission.',{
     limit:nullable,minimumOwed:nullable,customerId:nullable,includeCredit:nullable}),
   tool('discover_business_data','What business data this account and role can actually be asked about: the datasets, their metrics and definitions, the fields that can be filtered or grouped, and which business date a period uses. Descriptions only — no records or figures. Call this before a data question you have not answered before in this conversation.',{dataset:nullable}),

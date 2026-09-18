@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fromZonedTime, formatInTimeZone } from 'date-fns-tz';
 import { calendarClock } from '../../../../../supabase/functions/trax-support/support/calendar-clock';
 import {
-  createBusinessReads, parseSpec, resolvePreset, runBusinessQuery, toMinorUnits, fromMinorUnits,
+  createBusinessReads, parseSpec, parseListSpec, resolvePreset, runBusinessQuery, runBusinessList, toMinorUnits, fromMinorUnits,
   type BusinessContext, type BusinessDatabase,
 } from '../../../../../supabase/functions/trax-support/support/business-query';
 import { BUSINESS_TOOLS } from '../../../../../supabase/functions/trax-support/support/business-tools';
@@ -360,5 +360,50 @@ describe('grouped answers use names, not ids', () => {
     const groups = answerOf(result).groups;
     expect(groups.map((g) => g.label)).toEqual(['v1', 'v2']);
     expect(groups.map((g) => g.value)).toEqual(['2', '1']);
+  });
+});
+
+/*
+ * Listing the records themselves.
+ *
+ * "How many rentals" and "which rentals, for whom, and when" are different
+ * questions, and until now only the first could be answered. These pin the second:
+ * real rows, names rather than ids, this account only, and an honest statement when
+ * more matched than were shown.
+ */
+describe('listing records', () => {
+  const listing = (result: Awaited<ReturnType<typeof runBusinessList>>) => result.data!.listing as {
+    records: Record<string, string | null>[]; columns: { field: string; label: string }[]; matched: number; shown: number;
+  };
+
+  it('returns the rows with dates and resolved names', async () => {
+    const result = await runBusinessList(parseListSpec({ dataset: 'rentals' }), context());
+    const rows = listing(result).records;
+    expect(rows).toHaveLength(3);
+    expect(rows[0]).toMatchObject({ rental_number: 'R-1', status: 'Active', start_date: '2026-08-04', end_date: '2026-08-09', vehicle_id: 'NWD-1 Toyota Yaris' });
+    expect(JSON.stringify(rows)).not.toContain('OTH-9');
+  });
+
+  it('filters to what was asked for — cancelled, active, a date window', async () => {
+    tables.rentals.push({ id: 'r4', tenant_id: tenant, vehicle_id: 'v2', rental_number: 'R-4', status: 'Cancelled', start_date: '2026-08-15', end_date: '2026-08-18', is_pay_as_you_go: false });
+    const cancelled = await runBusinessList(parseListSpec({ dataset: 'rentals', filters: [{ field: 'status', op: 'eq', value: 'Cancelled' }] }), context());
+    expect(listing(cancelled).records.map((r) => r.rental_number)).toEqual(['R-4']);
+  });
+
+  it('never returns another account’s records', async () => {
+    const result = await runBusinessList(parseListSpec({ dataset: 'rentals' }), context());
+    expect(listing(result).records.every((r) => r.rental_number !== 'R-9')).toBe(true);
+  });
+
+  it('says how many matched when it shows fewer', async () => {
+    const result = await runBusinessList(parseListSpec({ dataset: 'rentals', limit: 1 }), context());
+    expect(listing(result).shown).toBe(1);
+    expect(listing(result).matched).toBe(3);
+    expect(result.limitations.join(' ')).toMatch(/3 records match/);
+  });
+
+  it('refuses a dataset that has no reviewed listing, and names the ones that do', () => {
+    expect(() => parseListSpec({ dataset: 'profit_and_loss' })).toThrow(/cannot be listed/);
+    expect(() => parseListSpec({ dataset: 'rentals', limit: 500 })).toThrow(/between 1 and 25/);
   });
 });

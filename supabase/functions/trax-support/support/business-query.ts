@@ -489,3 +489,171 @@ export async function runBusinessQuery(spec: QuerySpec, env: BusinessContext): P
   }
   return result;
 }
+
+/* ── record listing ─────────────────────────────────────────────────────────
+ *
+ * Counts and totals answer "how many" and "how much". They cannot answer "which
+ * ones, and when, and for whom" — the question people actually ask about their
+ * own bookings. This returns the rows themselves, under the same rules as every
+ * other read: the catalog decides which fields a listing may show, the tenant
+ * filter is applied before anything the model asked for, permissions and finance
+ * scopes are checked first, and reference ids come back as names.
+ *
+ * It is deliberately small: one bounded page, no paging cursor, no aggregation.
+ * A listing that would be long says so and asks for a narrower question rather
+ * than quietly showing the first few as if they were all of them.
+ */
+export interface ListSpec {
+  dataset: string;
+  filters: QueryFilter[];
+  period?: QueryPeriod | null;
+  sort?: { by: string; direction: 'asc' | 'desc' } | null;
+  limit?: number | null;
+}
+export const LIST_MAX = 25;
+export const LIST_DEFAULT = 10;
+
+export function parseListSpec(input: unknown): ListSpec {
+  const args = object(input);
+  onlyKeys(args, ['dataset', 'filters', 'period', 'sort', 'limit']);
+  const dataset = datasetFor(args.dataset);
+  if (!dataset.listFields?.length) {
+    const listable = BUSINESS_CATALOG.datasets.filter((d) => d.listFields?.length).map((d) => d.name).join(', ');
+    throw new SupportError('invalid_input', `${dataset.title} cannot be listed record by record. Listable datasets: ${listable}.`);
+  }
+  const spec = parseSpec({ ...args, metric: dataset.metrics[0].name, groupBy: null, sort: null, limit: null });
+  let sort: ListSpec['sort'] = null;
+  if (args.sort != null) {
+    const raw = object(args.sort);
+    onlyKeys(raw, ['by', 'direction']);
+    const field = dataset.fields.find((f) => f.name === raw.by && dataset.listFields!.includes(f.name));
+    if (!field) throw new SupportError('invalid_input', `A listing sorts by one of: ${dataset.listFields!.join(', ')}.`);
+    if (raw.direction !== 'asc' && raw.direction !== 'desc') throw new SupportError('invalid_input', 'Sort direction is asc or desc.');
+    sort = { by: field.name, direction: raw.direction };
+  }
+  const limit = args.limit == null ? LIST_DEFAULT : Number(args.limit);
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > LIST_MAX) {
+    throw new SupportError('invalid_input', `A listing returns between 1 and ${LIST_MAX} records.`);
+  }
+  return { dataset: spec.dataset, filters: spec.filters, period: spec.period, sort, limit };
+}
+
+export async function runBusinessList(spec: ListSpec, env: BusinessContext): Promise<OperationalResult> {
+  const dataset = datasetFor(spec.dataset);
+  authorize(env, dataset);
+  await env.reauthorize?.();
+
+  const observedAt = new Date(env.now).toISOString();
+  const checks = [`${dataset.name}.list`];
+  const limitations: string[] = [];
+
+  let period: QueryAnswer['period'] = null;
+  if (spec.period) {
+    const basis = dataset.dateBases.find((b) => b.name === spec.period!.basis)!;
+    const timezone = await env.timezone(env.auth.tenant.id);
+    if (!timezone) throw new SupportError('timezone_unavailable', 'The account timezone is not configured, so a date period cannot be resolved.', 503);
+    const today = env.clock.today(timezone, env.now);
+    const bounds = spec.period.preset ? resolvePreset(spec.period.preset as Preset, today) : { from: spec.period.from!, to: spec.period.to! };
+    if (bounds.from > bounds.to) throw new SupportError('invalid_input', 'The period starts after it ends.');
+    period = { basis: basis.name, from: bounds.from, to: bounds.to, timezone };
+    checks.push(`period:${basis.name}:${bounds.from}..${bounds.to}`);
+  }
+
+  /* A money column in a listing is money on the screen, so it needs the same grant
+     a money METRIC needs. Without it the column is dropped and the omission is
+     stated, rather than the whole listing being refused. */
+  const financeOk = (env.financeScopes ?? []).length > 0;
+  const fields = dataset.listFields!
+    .map((name) => dataset.fields.find((f) => f.name === name)!)
+    .filter((field) => {
+      if (field.kind === 'money' && !financeOk) { limitations.push(`${field.label} is not shown: it needs the finance permission.`); return false; }
+      return true;
+    });
+
+  const build = (query: BusinessQuery): BusinessQuery => {
+    let next = query.eq(dataset.tenantColumn, env.auth.tenant.id);
+    for (const required of dataset.requiredFilters ?? []) {
+      if (required.op === 'in') next = next.in(required.column, required.value as unknown[]);
+      else if (required.op === 'not_in') for (const value of required.value as unknown[]) next = next.neq(required.column, value);
+      else if (required.op === 'is_null') next = next.is(required.column, null);
+      else if (required.op === 'not_null') next = next.not(required.column, 'is', null);
+      else next = (next[required.op] as (c: string, v: unknown) => BusinessQuery)(required.column, required.value);
+    }
+    for (const filter of spec.filters) {
+      const field = dataset.fields.find((f) => f.name === filter.field)!;
+      if (filter.op === 'is_null') next = next.is(field.column, null);
+      else if (filter.op === 'not_null') next = next.not(field.column, 'is', null);
+      else if (filter.op === 'in') next = next.in(field.column, filter.value as unknown[]);
+      else if (filter.op === 'contains') next = next.ilike(field.column, `%${String(filter.value).replace(/[%_,()]/g, ' ')}%`);
+      else next = (next[filter.op] as (c: string, v: unknown) => BusinessQuery)(field.column, filter.value);
+    }
+    if (period) {
+      const basis = dataset.dateBases.find((b) => b.name === period!.basis)!;
+      next = next.gte(basis.column, period.from);
+      next = basis.kind === 'timestamp' ? next.lt(basis.column, addDays(period.to, 1)) : next.lte(basis.column, period.to);
+    }
+    return next;
+  };
+
+  const columns = [...new Set(['id', dataset.tenantColumn, ...fields.map((f) => f.column)])].join(',');
+  const page = await env.business.page(build, dataset.table, columns, 0, spec.limit!);
+  for (const row of page.rows) {
+    if (String(row[dataset.tenantColumn]) !== env.auth.tenant.id) {
+      throw new SupportError('record_unavailable', 'A row outside this account was returned; the result is not trusted.', 403);
+    }
+  }
+
+  /* Names, not ids — the same lookup a grouped answer uses. */
+  const named = new Map<string, Map<string, string>>();
+  for (const field of fields.filter((f) => f.labels)) {
+    const ids = [...new Set(page.rows.map((r) => String(r[field.column] ?? '')).filter((v) => v && v.length <= 64))].slice(0, LIST_MAX);
+    if (!ids.length) continue;
+    try {
+      const { table, keyColumn, tenantColumn, columns: labelColumns } = field.labels!;
+      const rows = await env.business.labels(table, keyColumn, tenantColumn, env.auth.tenant.id, labelColumns, ids);
+      const map = new Map<string, string>();
+      for (const row of rows) {
+        if (String(row[tenantColumn]) !== env.auth.tenant.id) continue;
+        const text = labelColumns.map((c) => row[c]).filter((v) => v !== null && v !== undefined && String(v).trim()).join(' ').trim();
+        if (text) map.set(String(row[keyColumn]), text);
+      }
+      named.set(field.name, map);
+    } catch { /* A name is a convenience; the record still lists without it. */ }
+  }
+
+  const records = page.rows.map((row) => {
+    const record: Record<string, unknown> = { id: String(row.id ?? '') };
+    for (const field of fields) {
+      const raw = row[field.column];
+      const value = raw === null || raw === undefined ? null : String(raw);
+      record[field.name] = value && named.get(field.name)?.get(value) ? named.get(field.name)!.get(value) : value;
+    }
+    return record;
+  });
+
+  if (page.total > records.length) {
+    limitations.push(`${page.total} records match. These are the first ${records.length}; narrow the question with a filter or a period to see the rest.`);
+  }
+
+  return {
+    status: records.length ? 'verified' : 'verified',
+    observedAt,
+    checks,
+    findings: [],
+    sources: [{ id: `business_list:${dataset.name}`, table: 'business_query', title: `${dataset.title} — records`, observedAt }],
+    navigation: [],
+    limitations,
+    data: {
+      listing: {
+        dataset: dataset.name,
+        title: dataset.title,
+        columns: fields.map((f) => ({ field: f.name, label: f.label })),
+        records,
+        matched: page.total,
+        shown: records.length,
+        period,
+        scope: `This account's ${dataset.title.toLowerCase()} only.`,
+      },
+    },
+  };
+}

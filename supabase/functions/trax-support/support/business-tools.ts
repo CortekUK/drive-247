@@ -1,6 +1,6 @@
 import { object, onlyKeys, SupportError } from './types.ts';
 import type { OperationalResult } from './operational-types.ts';
-import { authorizedDatasets, authorizedMetrics, parseSpec, runBusinessQuery, type BusinessContext } from './business-query.ts';
+import { authorizedDatasets, authorizedMetrics, parseSpec, parseListSpec, runBusinessQuery, runBusinessList, type BusinessContext } from './business-query.ts';
 import { canView } from './auth.ts';
 import { BALANCE_DEFINITION } from './balance-tools.ts';
 import { BUSINESS_CATALOG } from './business-catalog.ts';
@@ -41,6 +41,8 @@ function discoverBusinessData(input: unknown, env: BusinessContext): Operational
         fields: dataset.fields.map((field) => ({ field: field.name, label: field.label, kind: field.kind, values: field.values, groupable: !!field.groupable, meaning: field.meaning })),
         periods: dataset.dateBases.map((basis) => ({ basis: basis.name, meaning: basis.meaning })),
         alwaysApplied: (dataset.requiredFilters ?? []).map((required) => required.because),
+        // What list_business_records will show for this dataset, or nothing if it cannot be listed.
+        listable: dataset.listFields ?? null,
       })),
     },
   };
@@ -51,9 +53,15 @@ async function queryBusinessData(input: unknown, env: BusinessContext): Promise<
   return await runBusinessQuery(spec, env);
 }
 
+/** The records themselves, for "which ones" rather than "how many". */
+async function listBusinessRecords(input: unknown, env: BusinessContext): Promise<OperationalResult> {
+  return await runBusinessList(parseListSpec(input), env);
+}
+
 export const BUSINESS_TOOLS = Object.freeze({
   discover_business_data: discoverBusinessData,
   query_business_data: queryBusinessData,
+  list_business_records: listBusinessRecords,
 });
 
 

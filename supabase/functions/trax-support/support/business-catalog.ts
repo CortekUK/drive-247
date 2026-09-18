@@ -95,6 +95,16 @@ export interface Dataset {
   financeScope?: 'rental_payments' | 'account_balance';
   /** The most rows one synchronous answer will measure before saying "partial". */
   rowCap: number;
+  /**
+   * The fields a RECORD LISTING shows, in order.
+   *
+   * Counts and totals answer "how many" and "how much"; they cannot answer "which
+   * ones, and when, and for whom". A dataset without this cannot be listed at all,
+   * so listing a record is a reviewed decision per dataset rather than a side
+   * effect of a column existing — free text, contact details and identity
+   * documents are not fields here and so can never appear in a row.
+   */
+  listFields?: readonly string[];
   /** Source references for review (file paths, not data). */
   sources: readonly string[];
 }
@@ -116,6 +126,7 @@ export const VEHICLES: Dataset = {
     { name: 'disposed', column: 'is_disposed', kind: 'boolean', label: 'Disposed', groupable: true, filterable: true, meaning: 'Sold or written off: still a record, no longer part of the working fleet.' },
     { name: 'on_website', column: 'show_on_website', kind: 'boolean', label: 'Shown on website', groupable: true, filterable: true },
   ],
+  listFields: ['registration', 'make', 'model', 'status', 'paused', 'disposed'],
   metrics: [
     { name: 'vehicle_count', label: 'Vehicles', kind: 'count', currency: 'none', definition: 'Number of vehicle records matching the filters, counted by the database itself. Includes paused and disposed vehicles unless filtered out.' },
   ],
@@ -131,9 +142,13 @@ export const RENTALS: Dataset = {
   fields: [
     { name: 'status', column: 'status', kind: 'enum', values: RENTAL_STATUSES, label: 'Status', groupable: true, filterable: true, meaning: 'The recorded rental state.' },
     VEHICLE_REF,
+    CUSTOMER_REF,
     { name: 'rental_number', column: 'rental_number', kind: 'text', label: 'Rental number', filterable: true },
     { name: 'pay_as_you_go', column: 'is_pay_as_you_go', kind: 'boolean', label: 'Pay as you go', groupable: true, filterable: true },
+    { name: 'start_date', column: 'start_date', kind: 'date', label: 'Starts', filterable: true },
+    { name: 'end_date', column: 'end_date', kind: 'date', label: 'Ends', filterable: true },
   ],
+  listFields: ['rental_number', 'status', 'start_date', 'end_date', 'vehicle_id', 'customer_id'],
   metrics: [
     { name: 'rental_count', label: 'Rentals', kind: 'count', currency: 'none', definition: 'Number of rental records matching the filters, counted by the database itself. Historical rentals are included unless a period or status filter excludes them.', dateBasis: 'start_date' },
   ],
@@ -155,6 +170,7 @@ export const CUSTOMERS: Dataset = {
     { name: 'blocked', column: 'is_blocked', kind: 'boolean', label: 'Blocked', groupable: true, filterable: true },
     { name: 'identity_verification', column: 'identity_verification_status', kind: 'enum', values: ['unverified', 'pending', 'verified', 'rejected'], label: 'Identity verification', groupable: true, filterable: true },
   ],
+  listFields: ['name', 'status', 'customer_type'],
   metrics: [
     { name: 'customer_count', label: 'Customers', kind: 'count', currency: 'none', definition: 'Number of customer records matching the filters, counted by the database itself. Blocked and inactive customers are included unless filtered out.', dateBasis: 'created_at' },
   ],
@@ -179,6 +195,7 @@ export const PAYMENTS: Dataset = {
     CUSTOMER_REF,
     RENTAL_REF,
   ],
+  listFields: ['payment_date', 'amount', 'status', 'payment_type', 'customer_id', 'rental_id'],
   metrics: [
     { name: 'collected', label: 'Collected', kind: 'sum', column: 'amount', subtractColumn: 'refund_amount', currency: 'per_currency', definition: 'Money the application records as received: payments with a received status, excluding authorizations still awaiting capture, each counted as its amount minus any refund recorded against it (payment-status.ts). Not a Stripe payout, balance or bank figure.', dateBasis: 'payment_date' },
     { name: 'payment_count', label: 'Payments', kind: 'count', currency: 'none', definition: 'Number of received payment records matching the filters.', dateBasis: 'payment_date' },
