@@ -55,20 +55,52 @@ function packedReadKey(env:(key:string)=>string|undefined,platform:string,mode:s
   return typeof value==='string'?value:undefined;
 }
 /**
- * TRAX reads Stripe with a RESTRICTED key or not at all.
+ * Which credential TRAX reads Stripe with, in order of preference.
  *
- * This used to fall back to the platform secret (`STRIPE_LIVE_SECRET_KEY` and
- * friends) when no restricted key was configured. Those exist on the deployed
- * project, so the fallback meant TRAX would quietly authenticate to Stripe with a
- * FULL-ACCESS live key. Nothing here can write — the module contains three GETs
- * and no general request method — but that made least privilege an accident of
- * this file's contents rather than a property of the credential.
+ *   1. `TRAX_STRIPE_READ_{PLATFORM}_{MODE}_KEY` — a restricted `rk_` key.
+ *   2. `TRAX_STRIPE_READ_KEYS` — the same, packed into one secret.
+ *   3. the existing platform secret for that platform and mode — a full-access `sk_`.
  *
- * A key for the other mode, or a publishable key, is never used.
+ * (3) is a deliberate, recorded compromise. A restricted key is the better
+ * credential and stays the documented preference, but this project is at Supabase's
+ * 100-secret cap, no secret can be removed, and the platform keys are already here.
+ *
+ * It means the CREDENTIAL does not enforce read-only, so the CODE must. Read-only is
+ * not "this file happens to contain only GETs" — `get` below refuses any path that
+ * is not one of three exact shapes, before it so much as looks up a key, and the
+ * returned object exposes no other method. A future write path cannot be added by
+ * accident; it would have to defeat that allowlist deliberately.
+ *
+ * A key for the other mode, the other platform, or a publishable key, is never used,
+ * and the restricted slots accept nothing but `rk_`.
  */
 export function stripeReadKey(env:(key:string)=>string|undefined,platform:'uk'|'uae',mode:'test'|'live'):string|null {
   const restricted=env(restrictedName(platform,mode))??packedReadKey(env,platform,mode);
-  return restricted?.startsWith(`rk_${mode}_`)?restricted:null;
+  if(restricted?.startsWith(`rk_${mode}_`))return restricted;
+  const platformSecret=env(PLATFORM_SECRET_NAMES[platform][mode]);
+  return platformSecret?.startsWith(`sk_${mode}_`)?platformSecret:null;
+}
+/** True when the credential in use is restricted at Stripe rather than only here. */
+export function stripeKeyIsRestricted(env:(key:string)=>string|undefined,platform:'uk'|'uae',mode:'test'|'live'):boolean {
+  return stripeReadKey(env,platform,mode)?.startsWith('rk_')===true;
+}
+/**
+ * The only three Stripe endpoints that exist for TRAX. Checked against the fully
+ * built path, so neither a caller nor the model can reach anything else — including
+ * by traversal, by adding a parameter, or by naming a write endpoint.
+ */
+const ENDPOINTS=[
+  /^balance$/,
+  /^payment_intents\/pi_[A-Za-z0-9]+\?expand%5B%5D=latest_charge$/,
+  /^checkout\/sessions\/cs_(?:live|test)_[A-Za-z0-9]+$/,
+] as const;
+/**
+ * Exported so it can be tested as what it is: the boundary that keeps a full-access
+ * key read-only. Testing it through `intent` would prove nothing, because the id
+ * regex there rejects a bad path first — a test that passes for the wrong reason.
+ */
+export function isReadEndpoint(path:string):boolean {
+  return ENDPOINTS.some(shape=>shape.test(path));
 }
 export function hasStripeReadKey(env:(key:string)=>string|undefined):boolean {
   return (['uk','uae'] as const).some(p=>(['live','test'] as const).some(m=>stripeReadKey(env,p,m)!==null));
@@ -78,6 +110,11 @@ export function hasStripeReadKey(env:(key:string)=>string|undefined):boolean {
 export function createReadOnlyStripe(env:(key:string)=>string|undefined,fetcher:typeof fetch=fetch):ReadOnlyStripe {
   async function get(mapping:Pick<StripeMapping,'platform'|'mode'|'accountId'>,path:string,signal:AbortSignal) {
     if(!['uk','uae'].includes(mapping.platform)||!['test','live'].includes(mapping.mode)||!/^acct_[A-Za-z0-9]+$/.test(mapping.accountId))throw failure('stripe_mapping_missing','A verified connected-account mapping is required.');
+    // Before any credential is resolved: this must be one of the three read shapes.
+    // The key may be a full-access platform secret, so this is what makes TRAX
+    // read-only. It is checked here rather than at each call site so there is one
+    // place to defeat, not three to keep in step.
+    if(!isReadEndpoint(path))throw failure('stripe_read_refused','Only TRAX’s three read-only Stripe lookups are permitted.');
     const key=stripeReadKey(env,mapping.platform,mapping.mode);
     if(!key)throw failure('stripe_configuration_required','The Stripe key for this account and mode is not available to TRAX.');
     let response:Response;

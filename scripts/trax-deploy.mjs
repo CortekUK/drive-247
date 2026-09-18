@@ -24,8 +24,8 @@
  * function, and it keeps `verify_jwt` as the live version has it.
  *
  * Reports work after this: docs/trax/pending-migrations/01-trax-report-jobs.sql was
- * applied 2026-09-18 and no flag is needed. Stripe payment checks still need a
- * restricted rk_ key in the project secrets, which is a separate decision.
+ * applied 2026-09-18 and no flag is needed. Stripe payment checks read with the
+ * existing platform secrets; read-only comes from the adapter's endpoint allowlist.
  */
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { resolve, relative, dirname } from 'node:path';
@@ -149,7 +149,7 @@ if (probe.status === 401 || probe.status === 403) {
 }
 
 console.log('\nNot changed by this deploy:');
-console.log('  stripe checks  still off (need a restricted rk_ key in the project secrets)');
+console.log('  stripe keys    unchanged: reads use the existing platform secrets, GET-only');
 console.log('  tenant reach   still V2-gated, so northwind only');
 console.log('  database       untouched: no migration, policy, grant or credential was altered');
 console.log('\nTo roll back, redeploy the previous commit of supabase/functions/trax-support with this script.');
