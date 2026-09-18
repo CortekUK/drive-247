@@ -51,6 +51,53 @@ Isolation is now proven at three levels, and the gap between them is the point.
 
 **What is still exposed:** everything above is a property of the code and of an isolated database. On the **deployed** project, 61 tenant-scoped tables are readable by the public anon key with RLS off, 15 more have RLS on but carry a policy that admits everyone, and 16 views run with owner rights — including the finance exports, which no table policy can reach. The staged fix (`docs/trax/remediation/01`–`05`) is written and tested but **not applied**. Two design decisions it exposes need a call: `customer_notifications` has no customer link column, and the checkout reads the identity block list client-side.
 
+## What TRAX can be asked about now (catalog 0.2.0)
+
+Fifteen datasets plus two composite tools. Every column, enum value and unit was read from the deployed database and is held to it by `docs/trax/generated/schema-snapshot.json` and `trax-catalog-schema.test.ts`.
+
+| Module | Dataset | Answers | Gate |
+|---|---|---|---|
+| Fleet | `vehicles` | counts, make/model/status/website breakdowns | vehicles |
+| Rentals | `rentals` | counts, status/vehicle/PAYG breakdowns, periods | rentals |
+| Customers | `customers` | counts, status/type/verification breakdowns | customers |
+| Payments | `payments` | collected, payment counts, per currency | finance |
+| Sales / P&L | `profit_and_loss` | operating revenue and cost, by category/vehicle | finance |
+| **Invoices** | `invoices` | invoiced total, tax, deposits, counts | finance |
+| **Fines** | `fines` | fine totals and counts by status, type, liability | finance |
+| **Ledger** | `ledger` | charged, refunded, unsettled charges, by category | finance |
+| **Expenses** | `expenses` | spend by category, vehicle, vendor | finance |
+| **Owner payouts** | `owner_payouts` | gross, commission, net owed, paid | finance |
+| **Extensions** | `rental_extensions` | counts and days (open) · value and paid (finance) | rentals / finance |
+| **Deposits** | `deposits` | hold attempts by action and outcome (open) · amounts (finance) | rentals / finance |
+| **Subscription** | `subscription` | what this account pays Drive247 | finance |
+| **Maintenance** | `maintenance` | jobs by status, priority, vehicle | vehicles |
+| **Verifications** | `verifications` | verification counts and outcomes — never document numbers | customers |
+| Balances | `query_customer_balances` | who owes the most, per customer outstanding/credit/net | finance + customers |
+| Reports | `generate_report` | csv, xlsx, pdf of any of the above | as the underlying query |
+
+Two design points worth knowing:
+
+- **Metric-level gating.** A money metric inside an operational dataset needs the finance grant on its own, so a rentals manager can count extensions and deposit attempts without being told what they were worth.
+- **Definitions carry the traps.** Ledger `refunded` says not to add it to `payments.refund_amount` (same money, two sides); `unsettled_charges` says it is a raw ledger total and points at the balance tool; `subscription` says it is what the account *pays* and must never be added to revenue; `deposits` says a row is an attempt, not a deposit.
+
+## Reports
+
+`generate_report` produces a real file — csv, xlsx or pdf — from the **same** measurement the chat answer states. It calls the same query function and formats that one result, so the file and the summary cannot disagree, and it adds no read authority: an unauthorized report is refused before a job or a file exists.
+
+- Writers are dependency-free (`report-format.ts`) and verified by independent parsers: JSZip opens the XLSX, pdf-lib loads the PDF, node's `zlib.crc32` re-computes the ZIP checksums.
+- Storage is a **private** bucket, every object path beginning with the tenant id, and a job row that moves `queued → running → ready|failed`. Downloads are 15-minute signed links; the bucket is never public and is not listable by staff.
+- **Not switched on.** The bucket and job table need `docs/trax/pending-migrations/01-trax-report-jobs.sql`, which is not applied and sits outside `supabase/migrations` while the migration drift is unresolved. Until `TRAX_REPORTS=enabled`, the tool is not offered and TRAX says it cannot produce a file rather than inventing one.
+
+## What it would take to turn all this on
+
+Each is a separate, currently unmet precondition — none of it is live:
+
+1. **Deploy** the `trax-support` edge function. Nothing in this work is deployed; Vercel does not deploy Supabase functions, and no automation does.
+2. **Finance reads:** `databaseFinanceScopes` is in code, but see `finance-authorization-review.md` — it is an explicit permission widening awaiting review.
+3. **Reports:** apply the pending migration, then set `TRAX_REPORTS=enabled`.
+4. **Tenant reach:** TRAX is gated to V2 tenants and `northwind` is the only one, so every other account sees nothing regardless.
+5. **Security containment** is still open and unrelated to any of the above — see `containment-review.md` and `incident-jwt-signing-secret.md`.
+
 ## Verification status
 
 - Unit tests: `apps/portal/src/__tests__/lib/trax-business-query.test.ts` — catalog validation and refusals, permissions including related entities, the finance grant, tenant scoping and foreign-row rejection, exact counts, filters, grouping and ranking, period presets in the tenant timezone, money in minor units net of refunds, the received-payment rule, the corrected revenue/cost rules, period comparison, empty vs zero, and partial results at the row cap.
@@ -65,12 +112,14 @@ Isolation is now proven at three levels, and the gap between them is the point.
 | Isolation remediation scripts (stages 0, 1, 3, 4 and both rollbacks) | **Offline tested** (not applied) | `node tests/trax/remediation-sql.mjs` — 4 passed; `tenant-isolation.mjs` applies all four stages and the rollback |
 | Deployed database exposure (61 tables, 15 blanket policies, 16 owner-rights views) | **Authorized live-read verified** (read-only, catalogue and counts only) | `docs/trax/db-isolation-remediation.md` §1 |
 | TRAX tool wiring (discover/query through the orchestrator) | **Implemented**, offline model-loop suites pass | `node tests/trax/browser.mjs --support`, `node tests/trax/browser.mjs` |
-| Conversation-to-data path (count, money total, balance ranking) | **End-to-end application tested** (offline model) | `npx vitest run src/__tests__/lib/trax-conversation-data.test.ts` — 14 passed: real handler, model loop, tool registry and query layer over a two-tenant database |
+| Conversation-to-data path (count, money total, balance ranking, generated report) | **End-to-end application tested** (offline model) | `trax-conversation-data.test.ts` — 18 passed: real handler, model loop, tool registry, query layer and report writer over a two-tenant database |
+| Money questions reaching the model at all | **Fixed and tested** | finance-worded questions were diverted unless the Stripe feature was configured; routing now also accepts what the database can settle, while provider-evidence questions still go to a person |
 | Customer balances, "who owes the most" | **Offline tested** | `npx vitest run src/__tests__/lib/trax-customer-balances.test.ts` — 17 passed, expectations derived by hand from `use-customer-balance.ts` |
 | Money figures in an answer | **End-to-end application tested** | the orchestrator allows a figure only if the query layer measured it in that request; an invented total is refused and the fallback is served |
 | Rental-level balances, ageing buckets, overdue lists | **Not implemented** | needs `rental_extension_totals` and due-date buckets |
-| Reports (PDF/CSV/XLSX), job states, private storage, download | **Not implemented** | no renderer, no bucket, no job table |
-| Remaining modules (invoices, deposits, refunds, fines, expenses, subscriptions, integration health, provider reads) | **Not implemented** | — |
+| Reports (PDF/CSV/XLSX), job states, private storage, signed download | **Offline tested**, not deployed | `trax-report-format.test.ts` (17, independent parsers) and `trax-reports.test.ts` (16); bucket and job table await the pending migration |
+| Modules: invoices, fines, ledger/refunds, expenses, owner payouts, extensions, deposits, subscription, maintenance, verifications | **Offline tested** | catalog 0.2.0, held to the deployed schema by `trax-catalog-schema.test.ts` (53) |
+| Integration health, provider reads (Bonzah/Square/accounting/Tesla/Twilio) | **Not implemented** | per-provider adapters exist as edge functions; none is exposed to TRAX |
 | Multi-tenant account switch | **Not implemented** | `get_user_tenant_id()` uses `LIMIT 1`; 0 of 89 users have a second membership today (verified 2026-09-18) |
 | Anything in production | **Not deployed** | no deployment or migration was performed in this increment |
 
