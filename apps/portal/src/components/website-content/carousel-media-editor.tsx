@@ -4,7 +4,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Upload, X, Image, Film, Link, Loader2, ChevronUp, ChevronDown, Plus, GripVertical } from 'lucide-react';
+import { Upload, X, Image, Film, Link, Loader2, ChevronUp, ChevronDown, Plus, GripVertical, Settings2, Eye, Smartphone } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { HeroSliderPreview } from './hero-slider-preview';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { CMS_MEDIA } from '@/constants/website-content';
@@ -175,23 +179,90 @@ export function CarouselMediaEditor({
     onMediaChange(newMedia);
   };
 
+  /** Patch one item in place, leaving order and every other item untouched. */
+  const patchItem = (index: number, patch: Partial<CarouselMediaItem>) => {
+    onMediaChange(media.map((m, i) => (i === index ? { ...m, ...patch } : m)));
+  };
+
+  /** Drag-to-reorder state: index of the row being dragged, or null. */
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [mobileBusy, setMobileBusy] = useState<number | null>(null);
+
+  const handleDrop = (target: number) => {
+    if (dragIndex === null || dragIndex === target) return setDragIndex(null);
+    const next = [...media];
+    const [moved] = next.splice(dragIndex, 1);
+    next.splice(target, 0, moved);
+    onMediaChange(next);
+    setDragIndex(null);
+  };
+
+  /** Upload the optional portrait crop served below the tablet breakpoint. */
+  const uploadMobile = async (index: number, file: File | null) => {
+    if (!file) return;
+    if (file.size > CMS_MEDIA.MAX_IMAGE_SIZE_BYTES) {
+      toast.error('Mobile image must be under ' + formatFileSize(CMS_MEDIA.MAX_IMAGE_SIZE_BYTES));
+      return;
+    }
+    setMobileBusy(index);
+    try {
+      const ext = file.name.split('.').pop();
+      const fileName = 'hero-mobile-' + Date.now() + '-' + Math.random().toString(36).slice(2, 9) + '.' + ext;
+      const { error } = await supabase.storage.from(bucket).upload(fileName, file);
+      if (error) throw error;
+      const { data } = supabase.storage.from(bucket).getPublicUrl(fileName);
+      patchItem(index, { mobile_url: data.publicUrl });
+      toast.success('Mobile image added');
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to upload mobile image');
+    } finally {
+      setMobileBusy(null);
+    }
+  };
+
   const imageCount = media.filter(m => m.type === 'image').length;
   const videoCount = media.filter(m => m.type === 'video').length;
 
   return (
     <div className="space-y-4">
-      <div>
-        <Label className="text-base font-semibold">{label}</Label>
-        <p className="text-sm text-muted-foreground">{description}</p>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <Label className="text-base font-semibold">{label}</Label>
+          <p className="text-sm text-muted-foreground">{description}</p>
+        </div>
+        {media.some(m => m.type === 'image') && (
+          <Button type="button" variant="outline" size="sm" onClick={() => setPreviewOpen(true)}>
+            <Eye className="mr-1.5 h-4 w-4" /> Preview slider
+          </Button>
+        )}
       </div>
+
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Hero slider preview</DialogTitle>
+          </DialogHeader>
+          <HeroSliderPreview media={media} />
+        </DialogContent>
+      </Dialog>
 
       {/* Media List */}
       {media.length > 0 && (
         <div className="space-y-2">
           {media.map((item, index) => (
-            <Card key={index} className="p-3">
+            <Card
+              key={index}
+              className={'p-3 transition-opacity ' + (dragIndex === index ? 'opacity-50' : '') + (item.enabled === false ? ' bg-muted/40' : '')}
+              draggable
+              onDragStart={() => setDragIndex(index)}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={() => handleDrop(index)}
+              onDragEnd={() => setDragIndex(null)}
+            >
               <div className="flex items-center gap-3">
-                <div className="flex items-center text-muted-foreground">
+                <div className="flex cursor-grab items-center text-muted-foreground active:cursor-grabbing" title="Drag to reorder">
                   <GripVertical className="h-4 w-4" />
                 </div>
 
@@ -243,6 +314,22 @@ export function CarouselMediaEditor({
                 </div>
 
                 <div className="flex items-center gap-1">
+                  <Switch
+                    checked={item.enabled !== false}
+                    onCheckedChange={(v) => patchItem(index, { enabled: v })}
+                    aria-label={item.enabled === false ? 'Enable this image' : 'Disable this image'}
+                    className="mr-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    aria-label="Image settings"
+                    onClick={() => setOpenIndex(openIndex === index ? null : index)}
+                  >
+                    <Settings2 className="h-4 w-4" />
+                  </Button>
                   <Button
                     type="button"
                     variant="ghost"
@@ -274,6 +361,76 @@ export function CarouselMediaEditor({
                   </Button>
                 </div>
               </div>
+
+              {/* Per-image settings. Everything here is optional: an image with
+                  none of it set still slides, centred, on every breakpoint. */}
+              {openIndex === index && (
+                <div className="mt-3 grid gap-3 border-t pt-3 sm:grid-cols-2">
+                  <div>
+                    <Label className="text-xs">Alt text</Label>
+                    <Input
+                      className="mt-1 h-8 text-sm"
+                      value={item.alt || ''}
+                      placeholder="Describes the image for screen readers"
+                      onChange={(e) => patchItem(index, { alt: e.target.value })}
+                    />
+                  </div>
+
+                  <div>
+                    <Label className="text-xs">Focal position</Label>
+                    <Select
+                      value={item.focal || '50% 50%'}
+                      onValueChange={(v) => patchItem(index, { focal: v })}
+                    >
+                      <SelectTrigger className="mt-1 h-8 text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="50% 50%">Centre</SelectItem>
+                        <SelectItem value="50% 25%">Top</SelectItem>
+                        <SelectItem value="50% 75%">Bottom</SelectItem>
+                        <SelectItem value="25% 50%">Left</SelectItem>
+                        <SelectItem value="75% 50%">Right</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      Keeps the vehicle in frame when the image is cropped.
+                    </p>
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <Label className="text-xs">Mobile version (optional)</Label>
+                    <div className="mt-1 flex items-center gap-2">
+                      {item.mobile_url && (
+                        <img src={item.mobile_url} alt="" className="h-10 w-8 rounded object-cover" />
+                      )}
+                      <Input
+                        type="file"
+                        accept="image/*"
+                        className="h-8 flex-1 text-sm"
+                        disabled={mobileBusy === index}
+                        onChange={(e) => uploadMobile(index, e.target.files?.[0] ?? null)}
+                      />
+                      {mobileBusy === index && <Loader2 className="h-4 w-4 animate-spin" />}
+                      {item.mobile_url && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8"
+                          onClick={() => patchItem(index, { mobile_url: undefined })}
+                        >
+                          Clear
+                        </Button>
+                      )}
+                    </div>
+                    <p className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
+                      <Smartphone className="h-3 w-3" />
+                      Shown on phones instead of the main image. Falls back to it when empty.
+                    </p>
+                  </div>
+                </div>
+              )}
             </Card>
           ))}
         </div>
