@@ -1,0 +1,13 @@
+{
+  "id": "fea03e7c-2d0d-4c55-98c9-ef66ca8cd301",
+  "slug": "trax-support",
+  "name": "trax-support",
+  "status": "ACTIVE",
+  "version": 15,
+  "created_at": 1789504807861,
+  "updated_at": 1789757503530,
+  "verify_jwt": true,
+  "import_map": false,
+  "entrypoint_path": "file:///tmp/user_fn_hviqoaokxvlancmftwuo_fea03e7c-2d0d-4c55-98c9-ef66ca8cd301_15/source/supabase/functions/trax-support/index.ts",
+  "ezbr_sha256": "bb9fbee9d366f65856345e1be4644e36bc14736224805694a7055c036b6401e7"
+}
