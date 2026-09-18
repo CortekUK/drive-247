@@ -138,7 +138,7 @@ const PIECE_COLORS: readonly string[] = [
  * rectangles tumbling together look like a mechanism, and a spread of squares,
  * discs and long streamers looks like paper.
  */
-const PIECE_SHAPES: readonly { w: number; h: number; radius: string }[] = [
+export const PIECE_SHAPES: readonly { w: number; h: number; radius: string }[] = [
   { w: 12, h: 12, radius: '2px' }, // square
   { w: 10, h: 10, radius: '50%' }, // disc
   { w: 7, h: 18, radius: '2px' }, // streamer

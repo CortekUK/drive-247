@@ -30,6 +30,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   ARRIVAL_CONFETTI_MS,
   ARRIVAL_LAYER_ATTR,
+  PIECE_SHAPES,
   arrivalHoldMs,
   celebrateArrival,
   resetArrivalCelebration,
@@ -232,16 +233,46 @@ describe('confetti', () => {
     });
   });
 
-  it('keeps every piece under 8px — the count went up, the size did not', () => {
+  /**
+   * Every piece comes from the shape table, and nothing invents a size.
+   *
+   * This used to assert `<= 8px`, which was the ceiling of the OLD design — a
+   * single-origin burst of small dots. That ceiling was lifted deliberately
+   * (see the note above PIECE_SHAPES): at 12-18px the pieces are legible as
+   * they tumble, which is the point of a burst you are meant to watch, and 8px
+   * specks read as static. The stale assertion only surfaced once the jsdom
+   * storage shim let this suite actually reach its assertions, so it had been
+   * failing silently rather than guarding anything.
+   *
+   * It is now pinned against PIECE_SHAPES itself rather than a hardcoded
+   * number, so re-tuning the table cannot leave the test asserting a rule the
+   * design has abandoned — which is exactly how the 8px version went stale.
+   */
+  it('sizes every piece from the shape table, and mixes the aspect ratios', () => {
     celebrateArrival(false);
     const pieces = Array.from(
       document.querySelectorAll<HTMLElement>(`[${ARRIVAL_LAYER_ATTR}] > span`),
     );
     expect(pieces.length).toBeGreaterThan(0);
+
+    const allowed = new Set(PIECE_SHAPES.map((s) => `${s.w}x${s.h}`));
+    const ceiling = Math.max(...PIECE_SHAPES.flatMap((s) => [s.w, s.h]));
+    const seen = new Set<string>();
+
     for (const piece of pieces) {
-      expect(parseFloat(piece.style.width)).toBeLessThanOrEqual(8);
-      expect(parseFloat(piece.style.height)).toBeLessThanOrEqual(8);
+      const w = parseFloat(piece.style.width);
+      const h = parseFloat(piece.style.height);
+      expect(allowed.has(`${w}x${h}`)).toBe(true);
+      expect(w).toBeLessThanOrEqual(ceiling);
+      expect(h).toBeLessThanOrEqual(ceiling);
+      seen.add(`${w}x${h}`);
     }
+
+    // The MIX is the design point: identical rectangles tumbling together look
+    // like a mechanism, a spread looks like paper. With 150 pieces per cannon
+    // drawn from six shapes, one shape winning every draw is not a real
+    // outcome, so this cannot flake in practice.
+    expect(seen.size).toBeGreaterThan(1);
   });
 
   it('never takes a pointer event, on the layer or on a piece', () => {

@@ -537,6 +537,11 @@ export function JourneyAccountStep({
         <Button
           type="submit"
           size="lg"
+          /* Greyed out until the Terms box is ticked, matching the real dialog
+             (onboarding-dialog.tsx `consentPending`). The journey is what a new
+             operator is SHOWN the signup looks like, so a button that looks
+             pressable here and refuses there would teach the wrong thing. */
+          disabled={!tenant.acceptedTerms}
           className="h-12 w-full bg-indigo-600 text-[15px] text-white shadow-lg shadow-indigo-600/25 transition-all hover:bg-indigo-700 hover:shadow-xl hover:shadow-indigo-600/30 dark:bg-indigo-500 dark:hover:bg-indigo-600"
         >
           Create my account
