@@ -328,8 +328,17 @@ describe("gate call sites", () => {
     // The board's Bonzah panel is the ONLY caller left, and it deep-links here.
     const src = settings();
     expect(src).toMatch(/hideInsuranceNav \? <BonzahOnboardingForm \/> : <BonzahSettings \/>/);
+    // The panel used to deep-link to `/settings?tab=insurance`. It cannot any
+    // more: that tab is hidden from the canary (the four settings-* areas
+    // above), so the link would have led nowhere. The application now runs
+    // inside the dialog instead — that is what "reachable" means here, and the
+    // assertion is the mount, not a href.
     const panel = read("app/(dashboard)/integrations/_panels/bonzah.tsx");
-    expect(panel).toMatch(/ONBOARDING_HREF = "\/settings\?tab=insurance"/);
+    expect(panel).toContain('import BonzahOnboardingV2 from "./bonzah-onboarding-v2"');
+    expect(panel).toMatch(/if \(applying\) \{[\s\S]*?<BonzahOnboardingV2/);
+    expect(panel).not.toContain('"/settings?tab=insurance"');
+    // And the v2 shell is a wrapper, never a fork: v1's wizard still backs it.
+    expect(() => read("app/(dashboard)/integrations/_panels/bonzah-onboarding-v2.tsx")).not.toThrow();
     // The wizard itself must still exist for it to land on.
     expect(() => read("components/settings/bonzah-onboarding/index.tsx")).not.toThrow();
   });

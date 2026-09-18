@@ -15,8 +15,14 @@ const V2_AREAS = {
     turo: [NORTHWIND],
 };
 export const V2_AREA_LIST = Object.keys(V2_AREAS);
-export function isV2(area, tenantSlug) {
+const V2_EXPERIENCE = 'v2';
+export function isV2Experience(portalExperience) {
+    return portalExperience === V2_EXPERIENCE;
+}
+export function isV2(area, tenantSlug, onV2 = false) {
     if (!tenantSlug)
         return false;
+    if (onV2)
+        return true;
     return V2_AREAS[area]?.includes(tenantSlug) ?? false;
 }

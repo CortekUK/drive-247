@@ -175,11 +175,19 @@ const page = () => q('dev-page');
 const notFoundPage = () => q(NOT_FOUND_ID);
 const crash = () => q(CRASH_ID);
 
-function button(label: string): HTMLButtonElement {
-  const found = Array.from(container.querySelectorAll('button')).find((b) =>
-    (b.textContent ?? '').includes(label),
-  );
-  if (!found) throw new Error(`no button labelled "${label}"`);
+/**
+ * The button of one ability, by its action id.
+ *
+ * The page used to carry three buttons whose own text was the whole sentence
+ * ("Start as a first-time operator"). It is now a list of action cards: the
+ * sentence is the card's title and description, and the button beside it just
+ * says "Run". So the ability is identified by the card's `data-dev-action`,
+ * which is `DevSectionSpec.actions[].id` in `components/dev/dev-page.tsx` and
+ * is what the count assertions below already use.
+ */
+function button(action: string): HTMLButtonElement {
+  const found = container.querySelector(`[data-dev-action="${action}"] button`);
+  if (!found) throw new Error(`no Run button for the "${action}" action`);
   return found as HTMLButtonElement;
 }
 
@@ -199,9 +207,10 @@ function expectRefused() {
 }
 
 const NORTHWIND = { id: 'tenant-northwind', slug: 'northwind' };
-const FIRST_TIME = 'Start as a first-time operator';
-const QUICK_TOUR = 'Start the quick tour';
-const LANDING_PAGE = 'Start from the landing page';
+// Action ids, not labels — see `button()` above.
+const FIRST_TIME = 'first-time';
+const QUICK_TOUR = 'quick-tour';
+const LANDING_PAGE = 'landing-page';
 
 beforeEach(() => {
   container = document.createElement('div');
