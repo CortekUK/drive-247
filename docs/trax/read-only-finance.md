@@ -47,8 +47,21 @@ Activation requires a usable Stripe key for the account's platform and mode — 
 
 - Offline: routing, adapter, tools, handler conversation, two-tenant reference isolation, handoff and hook-link validation tests (`trax-payment-investigation.test.ts`, `use-trax-support.test.tsx`), plus `node tests/trax/browser.mjs --finance`.
 - Real model with fixture data: gpt-4.1 completed the English/Roman Urdu conversation (show payments, cannot find in Stripe, which account, link, Check again) through the real handler and tools.
-- Authorized live Stripe reads: **not performed** — `trax-stripe-read` is not deployed, and Northwind (the only V2 tenant) has no Stripe-linked payments.
-- Dashboard links opened with a tenant's Stripe account: **none**.
+- Authorized live Stripe reads: **performed, 2026-09-19.** The first real one in this
+  project. `trax-stripe-read` is deployed (v1, ACTIVE since 2026-09-15), Northwind has
+  its own Stripe TEST account connected (`own_stripe_test_account_id`), and a USD 500.00
+  test payment on rental `R-b8621b` was read back through the deployed bridge with the
+  same route the tools build: `intentStatus: succeeded`, `livemode: false`,
+  requested/received/captured all `USD 500.00`, `refunded: USD 0.00`,
+  `ownership: metadata` (Stripe's own `tenant_id` matched), `platformFlow: false`, and a
+  Stripe-hosted receipt URL.
+
+  Everything before this date was fixture-driven: `tests/trax/browser.mjs --finance`
+  imports `finance-fixtures.mjs`, so the payment conversation was exercised against
+  invented records. Real model, real handler, real tools, no real Stripe.
+- Dashboard links opened with a tenant's Stripe account: **none yet.** The link is now
+  derivable — Standard account, exclusive to this tenant, not a platform flow — but
+  nobody has opened one as the tenant.
 
 The sections below describe the earlier summary/inspection tools, which remain as backend functions; the model now uses the tools above.
 
