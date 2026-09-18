@@ -37,8 +37,10 @@ const db = new PGlite();
 
 await build({ entryPoints: [resolve(root, 'supabase/functions/trax-support/support/business-query.ts')], outfile: resolve(temp, 'query.mjs'), bundle: true, platform: 'node', format: 'esm', logLevel: 'silent' });
 await build({ entryPoints: [resolve(root, 'supabase/functions/trax-support/support/business-tools.ts')], outfile: resolve(temp, 'tools.mjs'), bundle: true, platform: 'node', format: 'esm', logLevel: 'silent' });
+await build({ entryPoints: [resolve(root, 'supabase/functions/trax-support/support/business-catalog.ts')], outfile: resolve(temp, 'catalog.mjs'), bundle: true, platform: 'node', format: 'esm', logLevel: 'silent' });
 const { createBusinessReads, parseSpec, runBusinessQuery } = await import(pathToFileURL(resolve(temp, 'query.mjs')));
 const { BUSINESS_TOOLS } = await import(pathToFileURL(resolve(temp, 'tools.mjs')));
+const { BUSINESS_CATALOG } = await import(pathToFileURL(resolve(temp, 'catalog.mjs')));
 
 /* ── the schema under test: the columns the catalog names, nothing more ─────── */
 const id = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -262,10 +264,32 @@ test('a total past one PostgREST window still counts the whole set', async () =>
 });
 
 test('the catalog a caller is shown matches what they may actually read', async () => {
+  // Stated as a property rather than a list, so adding a module cannot quietly
+  // widen what a caller without the finance grant is offered.
+  const byName = new Map(BUSINESS_CATALOG.datasets.map((d) => [d.name, d]));
   const plain = BUSINESS_TOOLS.discover_business_data({}, acme());
-  assert.deepEqual(plain.data.datasets.map((d) => d.dataset), ['vehicles', 'rentals', 'customers']);
+  assert.ok(plain.data.datasets.length > 0, 'an admin should be offered the operational datasets');
+  for (const shown of plain.data.datasets) {
+    const dataset = byName.get(shown.dataset);
+    assert.ok(dataset, `${shown.dataset} is not in the catalog`);
+    assert.equal(dataset.financeScope, undefined, `${shown.dataset} is a money dataset and must not be offered without finance`);
+    for (const metric of shown.metrics) {
+      const declared = dataset.metrics.find((m) => m.name === metric.metric);
+      assert.equal(declared?.financeScope, undefined, `${shown.dataset}.${metric.metric} is a money metric shown without finance`);
+    }
+  }
+  // Everything the caller is NOT shown must be something they would be refused.
+  const hidden = BUSINESS_CATALOG.datasets.filter((d) => !plain.data.datasets.some((s) => s.dataset === d.name));
+  for (const dataset of hidden) {
+    await assert.rejects(
+      runBusinessQuery(parseSpec({ dataset: dataset.name, metric: dataset.metrics[0].name }), acme()),
+      (error) => ['finance_restricted', 'restricted'].includes(error.code),
+      `${dataset.name} is hidden but not actually refused`);
+  }
+  // With the grant, the money datasets and metrics appear.
   const withFinance = BUSINESS_TOOLS.discover_business_data({}, contextFor(ACME, { financeScopes: ['rental_payments'] }));
   assert.ok(withFinance.data.datasets.some((d) => d.dataset === 'payments'));
+  assert.equal(withFinance.data.datasets.length, BUSINESS_CATALOG.datasets.length);
 });
 
 test.after(async () => {

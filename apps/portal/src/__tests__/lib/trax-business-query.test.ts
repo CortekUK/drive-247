@@ -134,16 +134,31 @@ describe('what the model may ask for', () => {
   });
 
   it('tells the caller only what their role may read', () => {
-    // Without the finance grant an admin sees the operational datasets only.
-    const all = BUSINESS_TOOLS.discover_business_data({}, context()) as unknown as { status: string; data: { datasets: { dataset: string }[] } };
-    expect(all.data.datasets.map((d) => d.dataset)).toEqual(['vehicles', 'rentals', 'customers']);
-    const withFinance = BUSINESS_TOOLS.discover_business_data({}, context({ financeScopes: ['rental_payments'] })) as unknown as { status: string; data: { datasets: { dataset: string }[] } };
+    // Without the finance grant an admin sees the operational datasets only —
+    // every dataset that does not exist to describe money.
+    const all = BUSINESS_TOOLS.discover_business_data({}, context()) as unknown as { status: string; data: { datasets: { dataset: string; metrics: { metric: string }[] }[] } };
+    expect(all.data.datasets.map((d) => d.dataset)).toEqual([
+      'vehicles', 'rentals', 'customers', 'rental_extensions', 'deposits', 'maintenance', 'verifications',
+    ]);
+    // Inside an operational dataset, the money metrics are withheld but the counts are not.
+    const extensions = all.data.datasets.find((d) => d.dataset === 'rental_extensions')!;
+    expect(extensions.metrics.map((m) => m.metric)).toEqual(['extension_count', 'extension_days']);
+    const deposits = all.data.datasets.find((d) => d.dataset === 'deposits')!;
+    expect(deposits.metrics.map((m) => m.metric)).toEqual(['attempt_count']);
+    const withFinance = BUSINESS_TOOLS.discover_business_data({}, context({ financeScopes: ['rental_payments'] })) as unknown as { status: string; data: { datasets: { dataset: string; metrics: { metric: string }[] }[] } };
     expect(withFinance.data.datasets.map((d) => d.dataset)).toEqual(BUSINESS_CATALOG.datasets.map((d) => d.name));
+    const paidExtensions = withFinance.data.datasets.find((d) => d.dataset === 'rental_extensions')!;
+    expect(paidExtensions.metrics.map((m) => m.metric)).toContain('extension_value');
     const manager = context({ auth: auth({ role: 'manager', permissions: [{ tab_key: 'rentals', access_level: 'viewer' }] as never }) });
-    const some = BUSINESS_TOOLS.discover_business_data({}, manager) as unknown as { status: string; data: { datasets: { dataset: string }[] } };
-    // Rentals reach vehicles, so a rentals-only manager cannot use the rentals dataset either.
-    expect(some.data.datasets).toEqual([]);
-    expect(some.status).toBe('restricted');
+    const some = BUSINESS_TOOLS.discover_business_data({}, manager) as unknown as { status: string; data: { datasets: { dataset: string; metrics: { metric: string }[] }[] } };
+    // Rentals reach vehicles, so a rentals-only manager cannot use the rentals dataset
+    // itself. Extensions and deposit attempts are rentals data that link to nothing
+    // else, so they are readable — without their money metrics.
+    expect(some.data.datasets.map((d) => d.dataset)).toEqual(['rental_extensions', 'deposits']);
+    for (const dataset of some.data.datasets) {
+      expect(dataset.metrics.every((m) => /count|days/.test(m.metric))).toBe(true);
+    }
+    expect(some.status).toBe('verified');
   });
 });
 

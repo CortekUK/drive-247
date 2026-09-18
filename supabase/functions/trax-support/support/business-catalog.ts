@@ -26,7 +26,7 @@ import { OPEN_RENTAL_STATUSES, OUT_NOW_STATUSES } from './availability-rules.gen
  * and the source references. Nothing here holds live records or secrets.
  */
 
-export const CATALOG_VERSION = '0.1.0';
+export const CATALOG_VERSION = '0.2.0';
 
 export type FieldKind = 'text' | 'uuid' | 'number' | 'money' | 'date' | 'timestamp' | 'boolean' | 'enum';
 export interface Field {
@@ -51,6 +51,14 @@ export interface Metric {
   currency: 'per_currency' | 'none';
   definition: string;
   dateBasis?: string;
+  /** This metric needs the finance grant even when the dataset does not, so a
+   *  non-finance role can still count rows in an otherwise operational dataset
+   *  (how many extensions) without being told what they were worth. */
+  financeScope?: 'rental_payments' | 'account_balance';
+  /** The column already stores minor units (integer cents), so it must not be
+   *  scaled again. `tenant_subscriptions.amount` and `deposit_hold_links.amount_cents`
+   *  are integers in cents, unlike every `numeric` money column. */
+  minorUnits?: boolean;
 }
 /** A filter the dataset always carries, because the metric is only meaningful with it. */
 export interface RequiredFilter { column: string; op: 'eq' | 'neq' | 'in' | 'not_in' | 'gt' | 'is_null' | 'not_null'; value?: unknown; because: string }
@@ -207,7 +215,12 @@ export const PROFIT_AND_LOSS: Dataset = {
   sources: ['apps/portal/src/app/(dashboard)/insights/_money-model.ts', 'supabase/migrations/20260503090449_add_unlimited_mileage_upgrade.sql:42-50'],
 };
 
+import { MODULE_DATASETS } from './business-catalog-modules.ts';
+
 export const BUSINESS_CATALOG = Object.freeze({
   version: CATALOG_VERSION,
-  datasets: Object.freeze([VEHICLES, RENTALS, CUSTOMERS, PAYMENTS, PROFIT_AND_LOSS]) as readonly Dataset[],
+  datasets: Object.freeze([
+    VEHICLES, RENTALS, CUSTOMERS, PAYMENTS, PROFIT_AND_LOSS,
+    ...MODULE_DATASETS,
+  ]) as readonly Dataset[],
 });

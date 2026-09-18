@@ -117,6 +117,15 @@ export function toMinorUnits(value: unknown): number {
   if (!Number.isSafeInteger(rounded)) throw new SupportError('incomplete_read', 'A stored amount is outside the supported range.', 503);
   return text.startsWith('-') ? -rounded : rounded;
 }
+/** A column that already holds integer minor units (cents). Never rescaled. */
+export function wholeMinorUnits(value: unknown): number {
+  if (value === null || value === undefined) return 0;
+  const text = String(value).trim();
+  if (!/^-?\d+$/.test(text)) throw new SupportError('incomplete_read', 'A stored amount in cents could not be read exactly.', 503);
+  const minor = Number(text);
+  if (!Number.isSafeInteger(minor)) throw new SupportError('incomplete_read', 'A stored amount is outside the supported range.', 503);
+  return minor;
+}
 export const fromMinorUnits = (minor: number) => `${minor < 0 ? '-' : ''}${Math.floor(Math.abs(minor) / MINOR)}.${String(Math.abs(minor) % MINOR).padStart(2, '0')}`;
 
 /* ── periods, in the tenant's own timezone ─────────────────────────────────── */
@@ -185,9 +194,21 @@ const permitted = (auth: SupportContext, scopes: readonly string[] | undefined, 
 export function authorizedDatasets(auth: SupportContext, scopes?: readonly string[]) {
   return BUSINESS_CATALOG.datasets.filter((dataset) => permitted(auth, scopes, dataset));
 }
-function authorize(env: BusinessContext, dataset: Dataset) {
+/** Metrics the caller may use: a money metric inside an operational dataset needs
+ *  the finance grant, so counting extensions never discloses what they were worth. */
+export const metricPermitted = (scopes: readonly string[] | undefined, metric: Metric) =>
+  !metric.financeScope || (scopes ?? []).includes(metric.financeScope);
+
+export function authorizedMetrics(dataset: Dataset, scopes?: readonly string[]) {
+  return dataset.metrics.filter((metric) => metricPermitted(scopes, metric));
+}
+
+function authorize(env: BusinessContext, dataset: Dataset, metric?: Metric) {
   if (dataset.financeScope && !(env.financeScopes ?? []).includes(dataset.financeScope)) {
     throw new SupportError('finance_restricted', `${dataset.title} need the finance permission, which is not enabled for your account.`, 403);
+  }
+  if (metric && !metricPermitted(env.financeScopes, metric)) {
+    throw new SupportError('finance_restricted', `${metric.label} needs the finance permission, which is not enabled for your account. The row count is available without it.`, 403);
   }
   if (!dataset.financeScope && !canView(env.auth, dataset.permission)) throw new SupportError('restricted', `Your role cannot read ${dataset.title.toLowerCase()}.`, 403);
   // A joined entity carries its own permission: reading rentals never grants customers.
@@ -268,7 +289,7 @@ const PAGE = 1000;
 export async function runBusinessQuery(spec: QuerySpec, env: BusinessContext): Promise<OperationalResult> {
   const dataset = datasetFor(spec.dataset);
   const metric = metricFor(dataset, spec.metric);
-  authorize(env, dataset);
+  authorize(env, dataset, metric);
   await env.reauthorize?.();
 
   const observedAt = new Date(env.now).toISOString();
@@ -357,7 +378,11 @@ export async function runBusinessQuery(spec: QuerySpec, env: BusinessContext): P
         const bucket = totals.get(key) ?? { key: groupValue, label: groupValue || (groupField ? `No ${groupField.label.toLowerCase()}` : dataset.title), currency, minor: 0, rows: 0 };
         bucket.rows += 1;
         // Net of what was given back on the same row, never below zero (payment-status.ts).
-        if (metric.kind === 'sum') bucket.minor += Math.max(0, toMinorUnits(row[metric.column!]) - (metric.subtractColumn ? toMinorUnits(row[metric.subtractColumn]) : 0));
+        if (metric.kind === 'sum') {
+          // A column already in minor units is taken as it stands; a decimal one is scaled.
+          const amount = (value: unknown) => (metric.minorUnits ? wholeMinorUnits(value) : toMinorUnits(value));
+          bucket.minor += Math.max(0, amount(row[metric.column!]) - (metric.subtractColumn ? amount(row[metric.subtractColumn]) : 0));
+        }
         totals.set(key, bucket);
       }
       answer.rowsRead += page.rows.length;

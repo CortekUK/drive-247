@@ -1,6 +1,6 @@
 import { object, onlyKeys, SupportError } from './types.ts';
 import type { OperationalResult } from './operational-types.ts';
-import { authorizedDatasets, parseSpec, runBusinessQuery, type BusinessContext } from './business-query.ts';
+import { authorizedDatasets, authorizedMetrics, parseSpec, runBusinessQuery, type BusinessContext } from './business-query.ts';
 import { canView } from './auth.ts';
 import { BALANCE_DEFINITION } from './balance-tools.ts';
 import { BUSINESS_CATALOG } from './business-catalog.ts';
@@ -37,7 +37,7 @@ function discoverBusinessData(input: unknown, env: BusinessContext): Operational
       derived: derivedCapabilities(env),
       datasets: datasets.map((dataset) => ({
         dataset: dataset.name, title: dataset.title, meaning: dataset.meaning,
-        metrics: dataset.metrics.map((metric) => ({ metric: metric.name, label: metric.label, definition: metric.definition, perCurrency: metric.currency === 'per_currency' })),
+        metrics: authorizedMetrics(dataset, env.financeScopes).map((metric) => ({ metric: metric.name, label: metric.label, definition: metric.definition, perCurrency: metric.currency === 'per_currency' })),
         fields: dataset.fields.map((field) => ({ field: field.name, label: field.label, kind: field.kind, values: field.values, groupable: !!field.groupable, meaning: field.meaning })),
         periods: dataset.dateBases.map((basis) => ({ basis: basis.name, meaning: basis.meaning })),
         alwaysApplied: (dataset.requiredFilters ?? []).map((required) => required.because),
