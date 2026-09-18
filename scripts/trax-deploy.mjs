@@ -40,11 +40,19 @@ const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
 const projectArg = args.find((a) => a.startsWith('--project='));
 const REF = projectArg ? projectArg.split('=')[1] : (process.env.SUPABASE_PROJECT_REF ?? 'hviqoaokxvlancmftwuo');
-const TOKEN = process.env.SUPABASE_ACCESS_TOKEN;
+
+// The token comes from the environment, or from a file named with --token-file.
+// Either way it never appears as a command-line argument, so it cannot end up in
+// a shell history, a process list, or a recorded terminal.
+const tokenFileArg = args.find((a) => a.startsWith('--token-file='));
+const TOKEN = tokenFileArg
+  ? fs.readFileSync(tokenFileArg.slice('--token-file='.length), 'utf8').trim()
+  : process.env.SUPABASE_ACCESS_TOKEN;
 
 if (!dryRun && !TOKEN) {
-  console.error('SUPABASE_ACCESS_TOKEN is not set. Export a personal access token with access to the project, then run again.');
-  console.error('The token is a credential: do not paste it into a terminal that is being recorded, and do not commit it.');
+  console.error('No access token. Either export SUPABASE_ACCESS_TOKEN, or pass --token-file=<path> to a file containing one.');
+  console.error('The token is an ACCOUNT-level credential: it reaches every project on the account. Never paste it into a');
+  console.error('chat, a commit, a ticket, or a command line, and revoke it if it has been exposed.');
   process.exit(2);
 }
 
