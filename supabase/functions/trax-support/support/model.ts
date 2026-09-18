@@ -8,6 +8,8 @@ export interface SupportModel { name:string; complete(messages:ModelMessage[],to
 export class ModelUnavailable extends Error { constructor(){super('The AI model is unavailable. No model answer was verified.');} }
 export const ANSWER_SCHEMA={type:'object',additionalProperties:false,required:['answer','sourceIds','navigationIds'],properties:{answer:{type:'string'},sourceIds:{type:'array',items:{type:'string'}},navigationIds:{type:'array',items:{type:'string'}}}};
 export const MODEL_POLICY='minimal-operational-v1';
+/** Characters, not tokens: a ceiling on a runaway payload, far below any model's limit. */
+export const MAX_PROMPT_CHARS=400_000;
 export function responsesInput(messages:ModelMessage[]):Record<string,unknown>[] {
   return messages.flatMap(message=>{
     if(message.responseItems)return message.responseItems;
@@ -21,7 +23,25 @@ export function configuredModel(env:(key:string)=>string|undefined):SupportModel
   // Outbound private context requires an explicit server-side policy approval.
   if(!key || !name || !/^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,99}$/.test(name) || env('TRAX_MODEL_DATA_POLICY')!==MODEL_POLICY)return undefined;
   return {name,async complete(messages,tools,signal){
-    if(JSON.stringify(messages).length>48000)throw new ModelUnavailable();
+    /*
+     * A runaway-payload guard, not a context limit.
+     *
+     * 48,000 characters is roughly 12k tokens — a small fraction of what the
+     * configured models accept, and the assembled prompt (instructions, the guide
+     * and navigation catalogs, retrieved guidance, then the conversation) passed it
+     * in ordinary use. It threw before the request, so nothing counted a model call
+     * and the only symptom was "TRAX is not connected to an AI model", which sent
+     * people looking at credentials that were fine.
+     *
+     * The ceiling is here to stop an unbounded payload, so it is set where that is
+     * what it catches. The size is reported so a future breach is diagnosable
+     * instead of silent; it is a character count, never prompt content.
+     */
+    const size=JSON.stringify(messages).length;
+    if(size>MAX_PROMPT_CHARS){
+      console.warn(JSON.stringify({event:'trax_prompt_too_large',chars:size,limit:MAX_PROMPT_CHARS}));
+      throw new ModelUnavailable();
+    }
     try {
       const response=await fetch('https://api.openai.com/v1/responses',{
         method:'POST',headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json'},

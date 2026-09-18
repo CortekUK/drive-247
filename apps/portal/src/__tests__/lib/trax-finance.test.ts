@@ -175,7 +175,9 @@ describe('model investigation, escalation and conversation boundaries',()=>{
   it('bounds repeated failed payment checks across turns and permits an explicit retry',async()=>{
     // A current-era payment routed to the tenant's exclusive account whose Stripe read fails.
     Object.assign(p,{platform_account:'uae',stripe_checkout_session_id:'cs_test_offline',created_at:'2026-09-10T12:00:00Z'});finance.policy.mappings=[];
-    finance.reads.tenant=vi.fn(async()=>({id:tenant,currency_code:'USD',payment_provider:'stripe',payment_model:'own',stripe_mode:'test' as const,stripe_account_id:null,stripe_onboarding_complete:true,own_stripe_account_id:null,own_stripe_test_account_id:'acct_offline',own_stripe_connected_at:'2026-01-20T00:00:00Z'}));
+    finance.reads.tenant=vi.fn(async()=>({id:tenant,currency_code:'USD',payment_provider:'stripe',payment_model:'own',stripe_mode:'test' as const,stripe_account_id:null,stripe_onboarding_complete:true,own_stripe_account_id:null,own_stripe_test_account_id:'acct_offline',own_stripe_connected_at:'2026-01-20T00:00:00Z',
+      // A test-mode payment is proven by when the TEST account was connected.
+      own_stripe_test_connected_at:'2026-01-20T00:00:00Z'}));
     const evidence=vi.fn(async()=>{throw Error('Offline provider failure');});finance.stripe.evidence=evidence;
     const sequence=()=>scripted(call('get_rental_payment_evidence',{rentalId:rental,offset:null}),answer('The provider check failed. No financial result was verified.'));
     const deps=dependencies(sequence()),body={message:'Investigate this payment',pageContext:{kind:'rental',id:rental}};
