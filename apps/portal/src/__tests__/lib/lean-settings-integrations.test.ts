@@ -259,7 +259,10 @@ describe("gate call sites", () => {
     // The v2 chrome no longer swaps the sidebar for a settings rail — the index
     // page at /settings is the one settings navigation a lean tenant sees, so it
     // must read the same gate the rail did.
-    expect(settingsIndex()).toMatch(/!isSettingsTabHidden\(item\.tab, tenantSlug\)/);
+    // The gate is read once into `leanTenant` (a hook cannot be called from
+    // inside the `useCallback` predicate) and handed to the pure function.
+    expect(settingsIndex()).toMatch(/const leanTenant = useIsLean\(\);/);
+    expect(settingsIndex()).toMatch(/!isSettingsTabHiddenForLean\(item\.tab, leanTenant\)/);
     expect(sidebar()).not.toMatch(/settingsTabGroups/);
   });
 
@@ -267,15 +270,15 @@ describe("gate call sites", () => {
     // Both surfaces must read one function. Two hand-maintained lists is what
     // left E-Signatures clickable in the sidebar while its body was blanked.
     const src = settings();
-    expect(src).toMatch(/!isSettingsTabHidden\(item\.value, tenantSlug\)/);
+    expect(src).toMatch(/!isSettingsTabHiddenForLean\(item\.value, leanTenant\)/);
   });
 
   it("declares a body gate for each newly hidden tab", () => {
     const src = settings();
-    expect(src).toMatch(/const hidePaymentsTab = isAreaHidden\('settings-payments', tenantSlug\);/);
-    expect(src).toMatch(/const hideMessagingTab = isAreaHidden\('settings-messaging', tenantSlug\);/);
-    expect(src).toMatch(/const hideESignTab = isAreaHidden\('settings-esign', tenantSlug\);/);
-    expect(src).toMatch(/const hideInsuranceNav = isAreaHidden\('settings-insurance', tenantSlug\);/);
+    expect(src).toMatch(/const hidePaymentsTab = useIsAreaHidden\('settings-payments'\);/);
+    expect(src).toMatch(/const hideMessagingTab = useIsAreaHidden\('settings-messaging'\);/);
+    expect(src).toMatch(/const hideESignTab = useIsAreaHidden\('settings-esign'\);/);
+    expect(src).toMatch(/const hideInsuranceNav = useIsAreaHidden\('settings-insurance'\);/);
   });
 
   it("guards the TabsContent bodies, not just the triggers", () => {

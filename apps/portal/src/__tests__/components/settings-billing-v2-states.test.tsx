@@ -35,7 +35,15 @@ const h = vi.hoisted(() => ({
   ) as any,
 }));
 
-vi.mock("@/lib/v2-context", () => ({ useV2: () => h.v2.on }));
+vi.mock("@/lib/v2-context", () => ({
+  useV2: () => h.v2.on,
+  // The provider now carries the tenant-level half of the same answer
+  // (`onV2` = tenants.portal_experience, `lean` = that OR the slug list).
+  // All-false here leaves the `LEAN_TENANTS` slug list to decide, which is
+  // what these cases meant before the column existed.
+  usePortalExperience: () => ({ onV2: false, lean: false }),
+  usePortalOnV2: () => false,
+}));
 // Next returns the same URLSearchParams object while the URL is unchanged, so
 // the mock does too (a fresh object per render would re-run the v1 poll effect).
 const paramsCache = new Map<string, URLSearchParams>();
@@ -67,7 +75,10 @@ vi.mock("@/contexts/TenantContext", () => ({ useTenant: () => ({ tenant: h.tenan
 vi.mock("@/hooks/use-manager-permissions", () => ({
   useManagerPermissions: () => ({ canEditSettings: () => h.perms.edit, canViewSettings: () => true }),
 }));
-vi.mock("@/lib/lean-areas", () => ({ isLeanTenant: (slug?: string | null) => slug === "northwind" }));
+// The lean gate is read as a HOOK now (the answer is the slug list OR
+// tenants.portal_experience, resolved on the server), so the double moves to
+// the hook module and keeps the same predicate over this harness's tenant.
+vi.mock("@/lib/lean-context", () => ({ useIsLean: () => h.tenant.value?.slug === "northwind" }));
 vi.mock("@/components/subscription/pricing-card", () => ({
   PricingCard: ({ plan, onSubscribe }: any) => (
     <div data-testid="pricing-card">

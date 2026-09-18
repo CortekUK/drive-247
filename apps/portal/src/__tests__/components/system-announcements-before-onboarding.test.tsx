@@ -58,7 +58,15 @@ const signOut = vi.fn(async () => {});
 vi.mock('@/stores/auth-store', () => ({
   useAuth: () => ({ appUser: { id: USER, is_active: true, role: 'head_admin' }, loading: false, signOut }),
 }));
-vi.mock('@/lib/v2-context', () => ({ useV2: () => true }));
+vi.mock('@/lib/v2-context', () => ({
+  useV2: () => true,
+  // The provider now carries the tenant-level half of the same answer
+  // (`onV2` = tenants.portal_experience, `lean` = that OR the slug list).
+  // All-false here leaves the `LEAN_TENANTS` slug list to decide, which is
+  // what these cases meant before the column existed.
+  usePortalExperience: () => ({ onV2: false, lean: false }),
+  usePortalOnV2: () => false,
+}));
 
 let currentPath = '/';
 const pushed: string[] = [];

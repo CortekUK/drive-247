@@ -327,7 +327,15 @@ describe("the page manifest", () => {
       // The id is pinned to the file. A page reading the wrong id would toggle
       // the wrong page from /dev and never its own.
       expect(src).toContain(`useForcedEmptyState("${id}")`);
-      expect(src).toContain("isLeanTenant(");
+      // …and the lean gate is beside it. The call site is the `useIsLean()`
+      // hook now: a tenant is lean by the slug list OR by its own
+      // `tenants.portal_experience`, and only the hook can see the second.
+      // Every page either calls it inline or hoists it into a const (a hook
+      // cannot be called from a JSX branch), so both spellings count.
+      expect(
+        /useIsLean\(\)|\bleanTenant\b|\bteachEligible\b/.test(src),
+        `${SOURCES[id]} no longer reads the lean gate beside the override`,
+      ).toBe(true);
     });
   }
 

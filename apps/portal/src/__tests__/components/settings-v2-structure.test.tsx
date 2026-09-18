@@ -32,7 +32,15 @@ const h = vi.hoisted(() => ({
   canView: ((_tab: string) => true) as (tab: string) => boolean,
 }));
 
-vi.mock("@/lib/v2-context", () => ({ useV2: () => h.v2 }));
+vi.mock("@/lib/v2-context", () => ({
+  useV2: () => h.v2,
+  // The provider now carries the tenant-level half of the same answer
+  // (`onV2` = tenants.portal_experience, `lean` = that OR the slug list).
+  // All-false here leaves the `LEAN_TENANTS` slug list to decide, which is
+  // what these cases meant before the column existed.
+  usePortalExperience: () => ({ onV2: false, lean: false }),
+  usePortalOnV2: () => false,
+}));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: h.replace, push: vi.fn(), back: vi.fn(), refresh: vi.fn(), prefetch: vi.fn() }),
 }));

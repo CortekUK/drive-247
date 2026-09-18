@@ -76,21 +76,21 @@ describe("Fleet Quotes is gated on every surface", () => {
     // URL or following a bookmark renders the full generator for the canary.
     const src = readPortalSource("app/(dashboard)/quotes/page.tsx");
     expect(src).toMatch(/import \{ notFound \} from "next\/navigation"/);
-    expect(src).toMatch(/isAreaHidden\("quotes", tenantSlug\)/);
-    expect(src).toMatch(/if \(isAreaHidden\("quotes", tenantSlug\)\) notFound\(\);/);
+    expect(src).toMatch(/const quotesHidden = useIsAreaHidden\("quotes"\);/);
+    expect(src).toMatch(/if \(quotesHidden\) notFound\(\);/);
   });
 
   it("the v1 sidebar — what the 35 other tenants render — gates the entry", () => {
     const src = readPortalSource("components/shared/layout/app-sidebar.tsx");
-    expect(src).toMatch(/from "@\/lib\/lean-areas"/);
+    expect(src).toMatch(/from "@\/lib\/lean-context"/);
     expect(src).toMatch(/tenantSlug/);
-    expect(src).toMatch(/isAreaHidden\("quotes", tenantSlug\)/);
+    expect(src).toMatch(/const quotesHidden = useIsAreaHidden\("quotes"\);/);
   });
 
   it("the v2 sidebar — what northwind renders — gates the entry", () => {
     const src = readPortalSource("components/shared/layout/app-sidebar-v2.tsx");
-    expect(src).toMatch(/from "@\/lib\/lean-areas"/);
-    expect(src).toMatch(/isAreaHidden\("quotes", tenantSlug\)/);
+    expect(src).toMatch(/from "@\/lib\/lean-context"/);
+    expect(src).toMatch(/const quotesHidden = useIsAreaHidden\("quotes"\);/);
   });
 
   it("neither sidebar still carries an ungated Fleet Quotes entry", () => {
@@ -102,12 +102,15 @@ describe("Fleet Quotes is gated on every surface", () => {
       "components/shared/layout/app-sidebar-v2.tsx",
     ]) {
       const src = readPortalSource(path);
-      // Every occurrence of the nav entry must sit inside the isAreaHidden
-      // spread — i.e. be preceded by the gate within the same expression.
+      // Every occurrence of the nav entry must sit inside the gated spread —
+      // i.e. be preceded by the hoisted `quotesHidden` within the same
+      // expression. The gate moved from an inline `isAreaHidden(...)` call to a
+      // hook read at the top of the component (a hook cannot be called from
+      // inside an array spread), so the shape pinned here is the const.
       const entries = src.match(/\{ name: "Fleet Quotes", href: "\/quotes"/g) ?? [];
       expect(entries).toHaveLength(1);
       const gated = src.match(
-        /isAreaHidden\("quotes", tenantSlug\)\s*\?\s*\[\]\s*:\s*\[\{ name: "Fleet Quotes", href: "\/quotes"/,
+        /quotesHidden\s*\?\s*\[\]\s*:\s*\[\{ name: "Fleet Quotes", href: "\/quotes"/,
       );
       expect(gated).not.toBeNull();
     }

@@ -43,7 +43,15 @@ const h = vi.hoisted(() => {
 vi.mock("@/hooks/use-manager-permissions", () => ({
   useManagerPermissions: () => ({ canEditSettings: () => h.perms.edit, canViewSettings: () => true }),
 }));
-vi.mock("@/lib/v2-context", () => ({ useV2: () => h.v2.on }));
+vi.mock("@/lib/v2-context", () => ({
+  useV2: () => h.v2.on,
+  // The provider now carries the tenant-level half of the same answer
+  // (`onV2` = tenants.portal_experience, `lean` = that OR the slug list).
+  // All-false here leaves the `LEAN_TENANTS` slug list to decide, which is
+  // what these cases meant before the column existed.
+  usePortalExperience: () => ({ onV2: false, lean: false }),
+  usePortalOnV2: () => false,
+}));
 vi.mock("@/contexts/TenantContext", () => ({ useTenant: () => ({ tenant: h.tenant.value }) }));
 vi.mock("next/link", () => ({
   default: ({ href, children, ...rest }: any) => (

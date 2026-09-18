@@ -84,7 +84,7 @@ describe("Turo Sync — every surface consults the gate", () => {
   // someone turn on a page they cannot open.
   it.each([
     ["the sidebar entry", "components/shared/layout/app-sidebar.tsx", /isV2\(\s*["']turo["']/],
-    ["the settings toggle", "app/(dashboard)/settings/page.tsx", /isV2\(\s*["']turo["']/],
+    ["the settings toggle", "app/(dashboard)/settings/page.tsx", /useV2\(\s*["']turo["']/],
     ["the route guard", "app/(dashboard)/turo-bridge/page.tsx", /useV2\(\s*["']turo["']/],
   ])("%s is gated", (_label, path, pattern) => {
     expect(
@@ -98,8 +98,17 @@ describe("Turo Sync — every surface consults the gate", () => {
 
   it("the sidebar demands the gate AND the tenant flag, not either", () => {
     const src = read("components/shared/layout/app-sidebar.tsx");
+    // The gate is now read once into `turoV2` — `useV2("turo")`, the resolved
+    // answer (slug list OR `tenants.portal_experience`), OR'd with the slug
+    // list directly so it can never answer narrower than it did. What must not
+    // change is how it COMBINES with the operator's own column: an || there
+    // would show the entry to any tenant carrying `turo_bridge_enabled`.
     expect(
-      /isV2\(\s*["']turo["'][^)]*\)\s*&&/.test(src),
+      /const turoV2 = useV2\("turo"\) \|\| isV2\("turo", tenantSlug\);/.test(src),
+      "The sidebar no longer reads the turo gate from the resolved flags.",
+    ).toBe(true);
+    expect(
+      /turoV2 &&\s*\n\s*\(tenant as \{ turo_bridge_enabled\?: boolean \} \| null\)\?\.turo_bridge_enabled === true/.test(src),
       "The sidebar's two turo conditions are no longer combined with &&. An || " +
         "here would show the entry to any tenant carrying the column.",
     ).toBe(true);

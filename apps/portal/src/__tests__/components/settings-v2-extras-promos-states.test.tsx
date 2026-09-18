@@ -34,7 +34,15 @@ vi.mock("next/link", () => ({
 vi.mock("@/hooks/use-toast", () => ({ toast: toastSpy, useToast: () => ({ toast: toastSpy }) }));
 vi.mock("@/hooks/use-rental-extras", () => ({ useRentalExtras: () => ex.current }));
 vi.mock("@/contexts/TenantContext", () => ({ useTenant: () => ({ tenant: { id: "t1", currency_code: "USD" } }) }));
-vi.mock("@/lib/v2-context", () => ({ useV2: () => true }));
+vi.mock("@/lib/v2-context", () => ({
+  useV2: () => true,
+  // The provider now carries the tenant-level half of the same answer
+  // (`onV2` = tenants.portal_experience, `lean` = that OR the slug list).
+  // All-false here leaves the `LEAN_TENANTS` slug list to decide, which is
+  // what these cases meant before the column existed.
+  usePortalExperience: () => ({ onV2: false, lean: false }),
+  usePortalOnV2: () => false,
+}));
 vi.mock("@/integrations/supabase/client", () => {
   const chain: any = {};
   for (const m of ["from", "select", "eq", "neq"]) chain[m] = () => chain;

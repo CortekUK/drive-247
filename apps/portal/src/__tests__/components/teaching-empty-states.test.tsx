@@ -125,6 +125,22 @@ interface CallSite {
   /** The named const holding the gate, lifted and EXECUTED below. */
   gateName: string;
   /**
+   * How the lifted expression asks "is this tenant lean".
+   *
+   * The gates used to call `isLeanTenant(tenantSlug)` inline. The answer is no
+   * longer derivable from the slug alone — it is the slug list OR the tenant's
+   * own `tenants.portal_experience`, resolved once per request on the server —
+   * so the call site is now the `useIsLean()` hook, and where a hook cannot be
+   * called (a JSX branch, a `.filter()` predicate) it is hoisted into a const.
+   *
+   *  'hook'  — the expression calls `useIsLean()`; the injected input is a
+   *            nullary function
+   *  'value' — the expression reads a hoisted boolean const
+   */
+  leanKind: 'hook' | 'value';
+  /** The token the lifted declaration must contain, so a trivial lift fails. */
+  gateToken: string;
+  /**
    * Inputs the lifted expression needs, in order. The LAST is always
    * `devForceEmpty` — the /dev preview override (`lib/dev-overrides.ts`),
    * which every page reads through `useForcedEmptyState(id)` and composes
@@ -154,7 +170,9 @@ const CALL_SITES: CallSite[] = [
     // The RAW query result, never `filteredVehicles` — a filter that matched
     // nothing must keep the existing "no vehicles found" state.
     gateName: "teachEmptyFleet",
-    params: ["isLeanTenant", "tenantSlug", "vehicles", "devForceEmpty"],
+    leanKind: 'hook',
+    gateToken: "useIsLean()",
+    params: ["useIsLean", "vehicles", "devForceEmpty"],
     id: "vehicles",
     branch: "{filteredVehicles.length === 0 || teachEmptyFleet ? (",
     empty: [[]],
@@ -165,7 +183,11 @@ const CALL_SITES: CallSite[] = [
     file: "app/(dashboard)/customers/page.tsx",
     component: "CustomersTeachingEmptyState",
     gateName: "teachEmptyCustomers",
-    params: ["isLeanTenant", "tenantSlug", "customers", "devForceEmpty"],
+    // Hoisted: this page also asks the same question from three JSX branches
+    // (the Blocked-customers entry points), which a hook cannot be called from.
+    leanKind: 'value',
+    gateToken: "leanTenant",
+    params: ["leanTenant", "customers", "devForceEmpty"],
     id: "customers",
     branch: "{paginatedCustomers.length > 0 && !teachEmptyCustomers ? (",
     empty: [[]],
@@ -176,7 +198,9 @@ const CALL_SITES: CallSite[] = [
     file: "app/(dashboard)/agreements/page.tsx",
     component: "AgreementsTeachingEmptyState",
     gateName: "teachEmptyAgreements",
-    params: ["isLeanTenant", "tenantSlug", "allAgreements", "devForceEmpty"],
+    leanKind: 'hook',
+    gateToken: "useIsLean()",
+    params: ["useIsLean", "allAgreements", "devForceEmpty"],
     id: "agreements",
     branch: "{paginatedDocuments.length === 0 || teachEmptyAgreements ? (",
     empty: [[]],
@@ -187,7 +211,9 @@ const CALL_SITES: CallSite[] = [
     file: "app/(dashboard)/insurances/page.tsx",
     component: "InsurancesTeachingEmptyState",
     gateName: "teachEmptyInsurances",
-    params: ["isLeanTenant", "tenantSlug", "allInsurances", "devForceEmpty"],
+    leanKind: 'hook',
+    gateToken: "useIsLean()",
+    params: ["useIsLean", "allInsurances", "devForceEmpty"],
     id: "insurances",
     branch: "{paginatedDocuments.length === 0 || teachEmptyInsurances ? (",
     empty: [[]],
@@ -198,7 +224,9 @@ const CALL_SITES: CallSite[] = [
     file: "app/(dashboard)/invoices/page.tsx",
     component: "InvoicesTeachingEmptyState",
     gateName: "teachEmptyInvoices",
-    params: ["isLeanTenant", "tenantSlug", "invoices", "devForceEmpty"],
+    leanKind: 'hook',
+    gateToken: "useIsLean()",
+    params: ["useIsLean", "invoices", "devForceEmpty"],
     id: "invoices",
     branch: ") : !filteredInvoices || filteredInvoices.length === 0 || teachEmptyInvoices ? (",
     empty: [[]],
@@ -211,6 +239,9 @@ const CALL_SITES: CallSite[] = [
     // Payments opens with a date range already applied, so the page's own
     // `totalCount` is a filtered number. It gets its own lifetime count.
     gateName: "teachEmptyPayments",
+    // Payments composes two consts; `teachEligible` is the hook's result.
+    leanKind: 'value',
+    gateToken: "teachEligible",
     params: ["teachEligible", "lifetimePayments", "devForceEmpty"],
     id: "payments",
     branch: ") : payments && payments.length > 0 && !teachEmptyPayments ? (",
@@ -239,11 +270,16 @@ const liftGate = (site: CallSite) => {
   );
 };
 
-/** Payments composes two consts, so its "is this the canary" input is derived. */
+/**
+ * The single "is this tenant lean" input the lifted expression needs.
+ *
+ * `isLeanTenant(slug)` is still the ANSWER being fed in — the slug list is one
+ * of the two sources and the only one a source-lifted test can drive — but the
+ * shape differs: a `useIsLean()` call site takes a nullary function, a hoisted
+ * const takes the boolean.
+ */
 const eligibility = (site: CallSite, slug: string | null | undefined) =>
-  site.page === "Payments"
-    ? [isLeanTenant(slug)]
-    : [isLeanTenant, slug];
+  site.leanKind === 'hook' ? [() => isLeanTenant(slug)] : [isLeanTenant(slug)];
 
 describe("shared pages gate the teaching state", () => {
   for (const site of CALL_SITES) {
@@ -261,9 +297,7 @@ describe("shared pages gate the teaching state", () => {
       // and 3 below pass while proving nothing at all, which is precisely the
       // shape of a test that guards an outage and does not notice it happening.
       const decl = liftDeclaration(src, site.gateName, { tsx: true });
-      expect(decl, `${site.page} gate`).toContain(
-        site.page === "Payments" ? "teachEligible" : "isLeanTenant(tenantSlug)"
-      );
+      expect(decl, `${site.page} gate`).toContain(site.gateToken);
     });
 
     it(`${site.page}: CASE 1 — teaches the northwind canary when empty`, () => {
@@ -365,7 +399,7 @@ describe("shared pages gate the teaching state", () => {
     const src = readPortalSource("app/(dashboard)/payments/page.tsx");
     expect(src).toContain('queryKey: ["payments-lifetime-count", tenant?.id]');
     expect(src).toMatch(/enabled: teachEligible && !!tenant\?\.id,/);
-    expect(src).toMatch(/const teachEligible = isLeanTenant\(tenantSlug\);/);
+    expect(src).toMatch(/const teachEligible = useIsLean\(\);/);
     // Tenant-scoped: RLS is off on `payments`, so the filter is the isolation.
     expect(src).toMatch(/\.eq\("tenant_id", tenant!\.id\)/);
   });
@@ -448,7 +482,10 @@ describe("the rentals list", () => {
     // routing change can widen it. And with rows present the table has to
     // yield, or the switch toggles a state that never renders.
     expect(src).toContain('const devForceEmpty = useForcedEmptyState("rentals")');
-    expect(src).toContain("const devForceEmptyRentals = isLeanTenant(tenant?.slug) && devForceEmpty;");
+    // The slug half of the gate is now the `useIsLean()` hook — the answer is
+    // the slug list OR `tenants.portal_experience`, and only the hook can see
+    // the second. The composition with the override is what this pins.
+    expect(src).toContain("const devForceEmptyRentals = useIsLean() && devForceEmpty;");
     expect(src).toContain("rentals.length > 0 && !devForceEmptyRentals ? (");
   });
 });

@@ -54,7 +54,15 @@ vi.mock('@/stores/auth-store', () => ({
 }));
 
 // The canary is on the v2 chrome, and the tour only autostarts on `/`.
-vi.mock('@/lib/v2-context', () => ({ useV2: () => true }));
+vi.mock('@/lib/v2-context', () => ({
+  useV2: () => true,
+  // The provider now carries the tenant-level half of the same answer
+  // (`onV2` = tenants.portal_experience, `lean` = that OR the slug list).
+  // All-false here leaves the `LEAN_TENANTS` slug list to decide, which is
+  // what these cases meant before the column existed.
+  usePortalExperience: () => ({ onV2: false, lean: false }),
+  usePortalOnV2: () => false,
+}));
 // The walkthrough navigates itself between its eleven steps, so the hook now
 // pulls `useRouter` as well as `usePathname`. This sequence never leaves the
 // dashboard — it is only ever asserting that the tour STARTS after the wizard —

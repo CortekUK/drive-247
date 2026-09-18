@@ -53,8 +53,21 @@
 -- the intended shape (DEFAULT 'v1', NOT NULL, no NULLs) rather than assuming it.
 -- The one case that deliberately FAILS LOUDLY is a pre-existing column holding a
 -- value outside ('v1','v2') — the ADD CONSTRAINT then raises 23514 and the whole
--- transaction rolls back. Run the third pre-flight query below first and you will
--- see it coming.
+-- transaction rolls back. Run pre-flight query 3a below first and you will see it
+-- coming.
+--
+-- SHAPE, NOT ROWS. Read that convergence narrowly: on a column that already
+-- exists, this file fixes the DEFAULT, the NOT NULL and any NULLs, and it moves
+-- exactly one row — northwind. It does NOT move the rows a wrong default already
+-- stamped. A column hand-applied as DEFAULT 'v2' gave every tenant on the table
+-- 'v2' the moment it was added; this file then quietly converges the default to
+-- 'v1', reports success, and leaves all ~56 of them on the new UI — RISK 2 in the
+-- brief, arriving through the back door. That is deliberate: a blanket
+-- `UPDATE ... SET portal_experience = 'v1' WHERE slug <> 'northwind'` would, on a
+-- re-run once real self-serve v2 tenants exist, demote paying customers. So the
+-- distribution is something you LOOK AT first: pre-flight query 3b prints it, and
+-- anything already on 'v2' that is not northwind must be reconciled by hand
+-- before you apply this file.
 --
 -- ═════════════════════════════════════════════════════════════════════════════
 -- BEFORE YOU APPLY (read-only)
@@ -70,10 +83,23 @@
 --    WHERE conrelid = 'public.tenants'::regclass
 --      AND conname = 'tenants_portal_experience_check';        -- expect: 0 rows
 --
---   -- only meaningful if the column DOES already exist: any value the CHECK
---   -- would reject? A non-empty result means STOP and reconcile by hand.
+--   -- 3a. Only meaningful if the column DOES already exist — skip this one when
+--   -- query 1 returned 0 rows, because it errors 42703 when there is no such
+--   -- column. Any value the CHECK would reject? A non-empty result means STOP
+--   -- and reconcile by hand: section 2 would raise 23514 and roll the whole
+--   -- apply back. NULLs are excluded on purpose — section 1b fixes those.
 --   SELECT portal_experience, count(*) FROM public.tenants
---    GROUP BY 1 ORDER BY 2 DESC;
+--    WHERE portal_experience IS NOT NULL
+--      AND portal_experience NOT IN ('v1','v2')
+--    GROUP BY 1 ORDER BY 2 DESC;                                -- expect: 0 rows
+--
+--   -- 3b. Informational, and the one that catches a wrong hand-applied DEFAULT:
+--   -- who is on what today? Expect all-'v1' (plus northwind and any self-serve
+--   -- tenant already switched). A large 'v2' count means the column was added
+--   -- with DEFAULT 'v2' and every tenant was stamped by it — THIS FILE WILL NOT
+--   -- MOVE THOSE ROWS back (see SHAPE, NOT ROWS above); reconcile by hand first.
+--   SELECT portal_experience, count(*) FROM public.tenants
+--    GROUP BY 1 ORDER BY 2 DESC;                             -- expect: v1 = all
 --
 --   -- the canary exists and is spelled the way the slug lists spell it
 --   SELECT id, slug, status FROM public.tenants WHERE slug = 'northwind';
@@ -213,3 +239,38 @@ COMMIT;
 --
 --   -- PostgREST really can see it (run as anon, e.g. from a browser or curl
 --   -- with the anon key):  GET /rest/v1/tenants?select=slug,portal_experience
+--
+-- ═════════════════════════════════════════════════════════════════════════════
+-- SWITCHING ONE TENANT BY HAND — THE PATH THAT IS NOT SELF-SERVE
+-- ═════════════════════════════════════════════════════════════════════════════
+-- Only ONE code path sets this column: supabase/functions/signup-provision, the
+-- drive-247.com self-serve signup. A tenant a super admin onboards in the admin
+-- app goes through supabase/functions/create-sales-onboarding, which never names
+-- portal_experience and never overrides the brand primary, so it lands on the
+-- DEFAULT 'v1' with whatever palette the brand extractor produced (slate #1E293B
+-- for a blank "business colours" answer). That is the intended behaviour — the
+-- ~56 existing tenants were all created that way and must not move — but it does
+-- mean an ADMIN-onboarded sale is NOT a v2 sale until someone runs this:
+--
+--   -- <slug> gets the v2 portal, painted like northwind. Two columns and the
+--   -- flag: #442DD7 is hsl(248 68% 51%), the v2 stylesheet default, the Indigo
+--   -- preset and what Branding → "Restore default colour" writes. The other
+--   -- palette columns are left alone — v2 reads light_primary_color (falling
+--   -- back to primary_color) and nothing else, while light_header_footer_color
+--   -- and the dark_* columns still paint the operator's BOOKING site.
+--   UPDATE public.tenants
+--      SET portal_experience   = 'v2',
+--          primary_color       = '#442DD7',
+--          light_primary_color = '#442DD7'
+--    WHERE slug = '<slug>';                             -- expect: UPDATE 1
+--
+-- This is also the answer to "what would wings need?" — wings came through
+-- self-serve BEFORE this change, so it holds 'v1' and the slate #1E293B primary.
+-- The three-column UPDATE above with slug = 'wings' is the whole fix. NOT RUN
+-- HERE, and not run by this file: production writes are the lead's.
+--
+-- If admin-onboarded tenants should stop needing the UPDATE, that is a decision
+-- above this file (the brief says admin-created tenants stay 'v1'): it needs a
+-- checkbox on apps/admin's SalesOnboardingDialog and the same two lines in
+-- create-sales-onboarding — the column on its tenant insert, and the primary
+-- pinned on its buildTenantPalette call, exactly as signup-provision does it.

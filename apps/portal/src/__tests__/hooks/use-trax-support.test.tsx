@@ -29,7 +29,15 @@ const mocks=vi.hoisted(()=>({
   tenant:{id:'tenant-a',slug:'northwind'},user:{id:'user-a'},appUser:{id:'staff-a',auth_user_id:'user-a',role:'admin',is_active:true,is_super_admin:false},
   v2:true,permissions:[] as {tab_key:string;access_level:string}[],push:vi.fn(),getSession:vi.fn(),fetch:vi.fn(),
 }));
-vi.mock('@/lib/v2-context',()=>({useV2:()=>mocks.v2}));
+vi.mock('@/lib/v2-context', () => ({
+  useV2:()=>mocks.v2,
+  // The provider now carries the tenant-level half of the same answer
+  // (`onV2` = tenants.portal_experience, `lean` = that OR the slug list).
+  // All-false here leaves the `LEAN_TENANTS` slug list to decide, which is
+  // what these cases meant before the column existed.
+  usePortalExperience: () => ({ onV2: false, lean: false }),
+  usePortalOnV2: () => false,
+}));
 vi.mock('next/navigation',()=>({usePathname:()=>'/rentals',useRouter:()=>({push:mocks.push})}));
 vi.mock('@/contexts/TenantContext',()=>({useTenant:()=>({tenant:mocks.tenant})}));
 vi.mock('@/stores/auth-store',()=>({useAuthStore:()=>({user:mocks.user,appUser:mocks.appUser})}));

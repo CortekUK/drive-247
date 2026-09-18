@@ -46,7 +46,7 @@ describe("test-mode affordances are gated in portal settings", () => {
 
   it.each(surfaces)("%s consults the gate", (path) => {
     const src = readPortalSource(path);
-    expect(src).toMatch(/isTestModeUiHidden\(tenantSlug\)/);
+    expect(src).toMatch(/const hideTestModeUi = useIsTestModeUiHidden\(\);/);
     expect(src).toMatch(/!hideTestModeUi/);
   });
 
@@ -68,7 +68,8 @@ describe("test-mode affordances are gated in portal settings", () => {
 
   it("the BoldSign test/live toggle is hidden too (shipped with the e-sign gate)", () => {
     const src = readPortalSource("app/(dashboard)/settings/page.tsx");
-    expect(src).toMatch(/isLeanTenant\(tenantSlug\)/);
+    expect(src).toMatch(/const leanTenant = useIsLean\(\);/);
+    expect(src).toMatch(/const hideESignModeToggle = leanTenant;/);
     expect(src).toMatch(/!hideESignModeToggle && <ESignSettings \/>/);
   });
 });

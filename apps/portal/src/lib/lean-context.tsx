@@ -73,6 +73,13 @@ export function useIsAreaHidden(area: LeanHiddenArea): boolean {
  * Replaces `isSettingsTabHidden(tab, tenantSlug)`. Whether the tab's BODY still
  * renders is a separate question — see `settingsTabBoardCard`, and note that
  * `insurance` answers true here while remaining renderable.
+ *
+ * NO CALL SITE USES THIS TODAY, and that is not an oversight: all three
+ * navigation surfaces ask the question from inside a `.filter()` predicate, a
+ * `useCallback` or a `useEffect`, so they read `useIsLean()` once at the top and
+ * pass it to `isSettingsTabHiddenForLean`. This is here for the first site that
+ * can call a hook directly, and it is what the hook test asserts against, so
+ * the two spellings cannot drift.
  */
 export function useIsSettingsTabHidden(tabValue: string): boolean {
   return isSettingsTabHiddenForLean(tabValue, useIsLean());
