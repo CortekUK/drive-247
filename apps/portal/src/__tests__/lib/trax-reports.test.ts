@@ -300,37 +300,20 @@ describe('report availability', () => {
 });
 
 /*
- * generate_report and query_business_data take the same query arguments, and the
- * model's schema is strict — so if generate_report declares `period` as a string
- * while the parser expects an object, the model CANNOT call it correctly and no
- * error message can help. That is exactly what shipped: every report with a period
- * failed, and the model reported the export as broken.
+ * The report tool is withdrawn from the model.
+ *
+ * The writers and the store below still work and are still tested — this asserts
+ * only that the model is never OFFERED the tool, because offering it produced
+ * confident promises of files that never arrived. If it is re-registered, these
+ * tests fail and whoever does it has to prove a file actually reaches a user.
  */
-describe('the report tool can actually be called', () => {
-  const schemaOf = (name: string) => {
-    const tool = MODEL_TOOLS.find((t) => t.function.name === name);
-    if (!tool) throw new Error(`${name} is not offered to the model`);
-    return tool.function.parameters.properties as Record<string, unknown>;
-  };
-
-  // The structured arguments must be declared identically, because the same parser
-  // reads them. dataset and metric are deliberately NOT in this list: they are
-  // required for a query but optional here, since report "customer_balances" takes
-  // neither.
-  it.each(['filters', 'period', 'sort', 'limit'])(
-    'declares %s exactly as query_business_data does', (field) => {
-      expect(schemaOf('generate_report')[field]).toEqual(schemaOf('query_business_data')[field]);
-    });
-
-  it('accepts an object period, which the parser requires', () => {
-    const period = schemaOf('generate_report').period as { type: string[] };
-    expect(period.type).toContain('object');
-    // The regression itself: string-or-null made a correct call impossible.
-    expect(period.type).not.toEqual(['string', 'null']);
+describe('reports are not offered to the model', () => {
+  it('registers no report tool', () => {
+    expect(MODEL_TOOLS.map((t) => t.function.name)).not.toContain('generate_report');
   });
 
-  it('constrains format to the three the writers implement', () => {
-    const format = schemaOf('generate_report').format as { enum: (string | null)[] };
-    expect(new Set(format.enum)).toEqual(new Set(['csv', 'xlsx', 'pdf', null]));
+  it('offers no tool that claims to produce a file', () => {
+    const filey = MODEL_TOOLS.filter((t) => /(csv|xlsx|pdf|download|export)/i.test(t.function.description));
+    expect(filey.map((t) => t.function.name)).toEqual([]);
   });
 });

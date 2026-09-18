@@ -43,8 +43,13 @@ export async function POST(request: Request): Promise<Response> {
     // Narrow the SDK at the adapter boundary; recursively comparing its generic
     // query builders exceeds TypeScript's depth limit. No client reaches a tool.
     const requestId=crypto.randomUUID(),started=Date.now();let modelCalls=0,toolCalls=0;
+    // Resolved here rather than inline so the log below can say whether a model was
+    // available at all. "Prepared guidance fallback" looks identical whether the
+    // model is unconfigured, refused by the gate, or failed mid-call, and guessing
+    // between those cost an evening.
+    const model=configuredModel(key=>process.env[key]);
     const response = await handleSupportRequest(request, { reads: createSupportReads(db as unknown as SupportDatabase), signingSecret: secret,
-      model:configuredModel(key=>process.env[key]),operational:createOperationalReads(db as unknown as OperationalDatabase),clock:calendarClock(fromZonedTime,formatInTimeZone),
+      model,operational:createOperationalReads(db as unknown as OperationalDatabase),clock:calendarClock(fromZonedTime,formatInTimeZone),
       fleet:createFleetReads(db as unknown as FleetDatabase),
       business:createBusinessReads(db as unknown as BusinessDatabase),
       reports:configuredReports(db as unknown as ReportDatabase,key=>process.env[key]),
@@ -54,7 +59,7 @@ export async function POST(request: Request): Promise<Response> {
       audit:event=>{if(event.kind==='model')modelCalls++;else toolCalls++;},
     });
     // Dev execution evidence contains counters only, never account or record data.
-    console.info(JSON.stringify({event:'trax_support',requestId,status:response.status,modelCalls,toolCalls,durationMs:Date.now()-started}));
+    console.info(JSON.stringify({event:'trax_support',requestId,status:response.status,modelConfigured:!!model,modelName:model?.name??null,modelCalls,toolCalls,durationMs:Date.now()-started}));
     response.headers.set('X-TRAX-Request-ID',requestId);
     response.headers.set('X-TRAX-Runtime', 'local-development');
     return response;

@@ -25,11 +25,20 @@ export const MODEL_TOOLS:ModelTool[]=[
   tool('get_stripe_account_summary','Fresh available/pending funds for the authorized tenant’s exclusive connected account. Separate currencies. Not a rental balance. Requires an explicit account-finance grant.',{}),
   tool('select_support_issue','Select the current issue before investigation. Reuse a matching issue for follow-ups; unrelated questions must use a separate topic/record. No score can be supplied.',{topic:{type:'string',enum:['vehicle_availability','fleet_counts','bookings','payments','workflow','other']},recordKind:{type:['string','null'],enum:['vehicle','rental','customer',null]},recordId:nullable}),
   tool('request_support_handoff','Ask the backend to assess whether safe options are exhausted or the user explicitly requested a person. This only offers Contact Support. It never creates a ticket.',{reason:{type:'string',enum:['human_requested','guidance_missing','diagnostics_exhausted']}}),
-  tool('generate_report','Produce a real downloadable file of a figure or breakdown for this account: csv, xlsx or pdf. Pass EITHER a dataset and metric exactly as query_business_data takes them, OR report \"customer_balances\". The file is generated from the same measurement the answer states, so they cannot disagree, and the download link is time limited. Use when the user asks for a report, an export, a spreadsheet or a PDF — never claim a file exists unless this tool returned one.',{
-    report:{type:['string','null'],enum:['query','customer_balances',null]},
-    format:{type:['string','null'],enum:['csv','xlsx','pdf',null]},
-    dataset:nullable,metric:nullable,filters:FILTERS,period:PERIOD,groupBy:nullable,sort:SORT,limit:LIMIT,
-    minimumOwed:{type:['number','null']},customerId:nullable,includeCredit:{type:['boolean','null']}}),
+  /*
+   * generate_report is WITHDRAWN from the model's tools.
+   *
+   * The writers, the storage and the job table all work and are still tested, but
+   * end to end the feature never produced a file for a user. What it produced
+   * instead was a sequence of confident offers followed by withdrawals — "I'll
+   * generate that for you", then "that isn't supported" — which is worse than not
+   * offering it, because each round cost the user a question and some trust.
+   *
+   * Withdrawing the tool is not deleting the work: report-tools.ts,
+   * report-format.ts and report-store.ts are untouched and their tests still run,
+   * so re-registering this entry is the whole of putting it back. It stays out
+   * until a report demonstrably arrives as a file.
+   */
   tool('query_customer_balances','Who owes this account money, and how much: outstanding, unapplied credit and the net per customer, highest first. Use for \"who owes the most\", \"which customers are in arrears\" or one customer’s balance. Computed in the backend from the account’s own ledger, pay-as-you-go accruals and captured payments; never a bank or Stripe balance. Requires the finance permission.',{
     limit:nullable,minimumOwed:nullable,customerId:nullable,includeCredit:nullable}),
   tool('discover_business_data','What business data this account and role can actually be asked about: the datasets, their metrics and definitions, the fields that can be filtered or grouped, and which business date a period uses. Descriptions only — no records or figures. Call this before a data question you have not answered before in this conversation.',{dataset:nullable}),
