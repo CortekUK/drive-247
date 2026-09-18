@@ -191,6 +191,17 @@ const CONTROL_V1: ControlSkin = {
  * wash, and defines the corrected inks used here at 5.54:1 and 5.40:1. Those
  * classes are scoped to `.v2-theme`, which is precisely where this map is used.
  *
+ * `body` is `text-foreground/70` and NOT `text-muted-foreground`, which is the
+ * obvious choice and is the one that fails. The tint is transparent, so the row
+ * composites over the page wash rather than over white: measured on the real
+ * stylesheet at 1280px, `text-muted-foreground` lands at 2.87–4.03:1 across the
+ * four severities in light mode — under AA, and worst on the critical row,
+ * whose second sentence is "Real customer payments aren't being collected". v1
+ * renders that sentence at 7.60:1. `text-foreground/70` measures 5.94–7.07:1
+ * light and 6.7–9.0:1 dark, and still reads a step quieter than the title.
+ * Numbers move with the wash: re-measure rather than re-reason if either
+ * changes.
+ *
  * `info` is the brand, not blue: in v2 an informational notice is the tenant's
  * own colour, and `--primary` follows `--brand-h/s/l` off <body>. No hardcoded
  * indigo anywhere — every colour here is a token.
@@ -203,7 +214,7 @@ const TONE_V2: Record<BannerSeverity, Tone> = {
     wrap: "border-destructive/20 bg-destructive/10 dark:bg-destructive/20",
     icon: "panel-ink-danger",
     title: "text-foreground",
-    body: "text-muted-foreground",
+    body: "text-foreground/70",
     btn: "bg-destructive/15 panel-ink-danger hover:bg-destructive/25 dark:bg-destructive/25 dark:hover:bg-destructive/35",
     Icon: AlertOctagon,
   },
@@ -211,7 +222,7 @@ const TONE_V2: Record<BannerSeverity, Tone> = {
     wrap: "border-warning/25 bg-warning/10 dark:bg-warning/20",
     icon: "panel-ink-warn",
     title: "text-foreground",
-    body: "text-muted-foreground",
+    body: "text-foreground/70",
     btn: "bg-warning/20 panel-ink-warn hover:bg-warning/30 dark:bg-warning/25 dark:hover:bg-warning/35",
     Icon: AlertTriangle,
   },
@@ -219,7 +230,7 @@ const TONE_V2: Record<BannerSeverity, Tone> = {
     wrap: "border-primary/20 bg-primary/10 dark:bg-primary/15",
     icon: "text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]",
     title: "text-foreground",
-    body: "text-muted-foreground",
+    body: "text-foreground/70",
     btn: "bg-primary/15 text-primary hover:bg-primary/25 dark:text-[hsl(var(--v2-link,var(--primary)))] dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]",
     Icon: Info,
   },
@@ -227,7 +238,7 @@ const TONE_V2: Record<BannerSeverity, Tone> = {
     wrap: "border-success/25 bg-success/10 dark:bg-success/20",
     icon: "panel-ink-success",
     title: "text-foreground",
-    body: "text-muted-foreground",
+    body: "text-foreground/70",
     btn: "bg-success/20 panel-ink-success hover:bg-success/30 dark:bg-success/25 dark:hover:bg-success/35",
     Icon: CheckCircle2,
   },
@@ -454,10 +465,11 @@ export function BannerStack({
           <div
             className={cn(
               "flex items-center justify-center gap-1 border-b px-4 py-1.5",
-              "text-[11px] font-medium text-muted-foreground",
               /* v2 tints the page ground the way the notice above it does,
-                 rather than laying a grey slab over the wash. */
+                 rather than laying a grey slab over the wash. Slotted where
+                 `bg-muted/30` sat, so v1's class string is unchanged. */
               v2 ? "bg-muted/20" : "bg-muted/30",
+              "text-[11px] font-medium text-muted-foreground",
             )}
           >
             <button
@@ -705,8 +717,7 @@ const DismissButton = forwardRef<HTMLButtonElement, DismissButtonProps>(
         className={cn(
           // 44px touch target on mobile, tightened at desktop where the
           // pointer is precise.
-          "inline-flex h-11 shrink-0 items-center justify-center gap-1.5 sm:h-8",
-          skin.radius,
+          `inline-flex h-11 shrink-0 items-center justify-center gap-1.5 ${skin.radius} sm:h-8`,
           hasVisibleLabel ? "w-11 sm:w-auto sm:px-2" : "w-11 sm:w-8",
           "text-xs font-medium",
           tone.icon,
@@ -742,8 +753,7 @@ function ActionButton({
   ghost?: boolean;
 }): ReactNode {
   const classes = cn(
-    "inline-flex h-9 items-center justify-center gap-1.5 whitespace-nowrap px-3 text-xs font-medium sm:h-8",
-    skin.radius,
+    `inline-flex h-9 items-center justify-center gap-1.5 whitespace-nowrap ${skin.radius} px-3 text-xs font-medium sm:h-8`,
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current focus-visible:ring-offset-1",
     ghost ? cn("bg-transparent", skin.ghostHover, tone.body) : tone.btn,
   );

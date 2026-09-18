@@ -238,6 +238,49 @@ export function getTabKeyForRoute(pathname: string): string | null {
   return null;
 }
 
+/**
+ * Extra grants that also open a route, because that route REPLACED the screen
+ * those grants were written for.
+ *
+ * On v2 the Settings → Payments tab is hidden (`lean-areas.ts`
+ * SETTINGS_TAB_AREAS.payments) and `/integrations` is its only replacement —
+ * it is where Stripe Connect onboarding lives. But the tab's grant is
+ * `settings.payments` and the route's is `settings.integrations`, so a manager
+ * given responsibility for payments and nothing else could reach NEITHER on a
+ * v2 tenant: the tab is gone and the route is refused. They would have no way
+ * to connect Stripe, which for a brand-new tenant means no way to take money.
+ *
+ * Widening the route rather than the grant keeps this to one rule and needs no
+ * backfill: `settings.payments` is an EXISTING grant many managers already
+ * hold, whereas minting a new key would have to be mirrored into the hardcoded
+ * ALLOWED_TAB_KEYS arrays in `update-manager-permissions` and
+ * `admin-create-user` and then backfilled for every current manager.
+ *
+ * This cannot widen v1 access: on v1 `/integrations` is not reachable at all
+ * (its route gate is `serverIsV2('appearance')`), so the only managers this
+ * affects are those on a v2 tenant, where the tab it substitutes for is hidden.
+ */
+export const ROUTE_ALSO_ALLOWED_BY: Record<string, readonly string[]> = {
+  '/integrations': ['settings.payments'],
+};
+
+/**
+ * Every grant that opens `pathname`: the primary mapping first, then any
+ * substitute grants. `canAccessRoute` allows the route when the manager holds
+ * ANY of them. Empty means the route is not permission-mapped at all — see the
+ * FAILS OPEN note on `ROUTE_TO_TAB`.
+ */
+export function getTabKeysForRoute(pathname: string): string[] {
+  const primary = getTabKeyForRoute(pathname);
+  if (!primary) return [];
+
+  const extras = Object.entries(ROUTE_ALSO_ALLOWED_BY)
+    .filter(([route]) => pathname === route || pathname.startsWith(route + '/'))
+    .flatMap(([, keys]) => keys);
+
+  return [primary, ...extras.filter((k) => k !== primary)];
+}
+
 // Dashboard widget → required tab key mapping
 export const WIDGET_TAB_REQUIREMENTS: Record<string, string | null> = {
   ActionItems: 'payments',

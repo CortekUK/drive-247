@@ -116,6 +116,21 @@ function rowClasses(v2: boolean, banner: AppBanner = testMode): string {
   return row!.className;
 }
 
+/**
+ * The description sentence's own class list — the second span in the text
+ * block, which on the test-mode notice is "Real customer payments aren't being
+ * collected …".
+ */
+function bodyClasses(v2: boolean, banner: AppBanner = testMode): string {
+  const stack = <BannerStack banners={[banner]} />;
+  mount(v2 ? <V2Provider flags={{ theme: true }}>{stack}</V2Provider> : stack);
+  const body = Array.from(container.querySelectorAll("span")).find((s) =>
+    s.textContent?.startsWith("Real customer payments"),
+  );
+  expect(body).toBeDefined();
+  return body!.className;
+}
+
 /** The action button's class list. */
 function actionClasses(v2: boolean): string {
   const stack = <BannerStack banners={[testMode]} />;
@@ -130,20 +145,48 @@ function actionClasses(v2: boolean): string {
 /* --------------------------------- tests --------------------------------- */
 
 describe("v1 is byte-identical", () => {
-  it("keeps the exact pastel slab the other ~56 tenants render today", () => {
-    const classes = rowClasses(false);
-    expect(classes).toContain("border-b");
-    expect(classes).toContain("border-red-200");
-    expect(classes).toContain("bg-red-50");
-    expect(classes).toContain("dark:border-red-900/60");
-    expect(classes).toContain("dark:bg-red-950/40");
+  /**
+   * WHOLE strings, not `toContain`. The v2 work threads a `ControlSkin` through
+   * the two button helpers, and the obvious way to do that — lifting the radius
+   * out of the base string onto its own `cn()` argument — moves `rounded-md` to
+   * a different position in the rendered class attribute. Nothing renders
+   * differently, and a `toContain` test sails straight through it, but the rule
+   * for this canary is that v1's class strings do not change, so it is asserted
+   * exactly.
+   *
+   * These three were captured by rendering the component at 36e67f72 (the
+   * commit before this change) and diffing every element's class attribute
+   * against the current build, for all four severities and a three-banner
+   * queue. That comparison was identical; these are the critical row's share
+   * of it, kept here so the guarantee survives the scaffolding.
+   */
+  it("renders the pastel slab the other ~56 tenants see, exactly", () => {
+    expect(rowClasses(false)).toBe(
+      "border-b border-red-200 bg-red-50 dark:border-red-900/60 dark:bg-red-950/40",
+    );
   });
 
-  it("keeps the v1 control shape and hover", () => {
-    const classes = actionClasses(false);
-    expect(classes).toContain("rounded-md");
-    expect(classes).toContain("bg-red-700");
-    expect(classes).toContain("hover:bg-red-800");
+  it("renders the action button exactly, radius in its original position", () => {
+    expect(actionClasses(false)).toBe(
+      "inline-flex h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-3 text-xs font-medium sm:h-8 " +
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current focus-visible:ring-offset-1 " +
+        "bg-red-700 text-white hover:bg-red-800 disabled:opacity-60",
+    );
+  });
+
+  it("renders the dismiss button exactly", () => {
+    mount(
+      <BannerStack
+        banners={[{ ...testMode, dismissal: { fingerprint: "fp-1" } }]}
+      />,
+    );
+    const dismiss = container.querySelector('[aria-label^="Dismiss: "]');
+    expect(dismiss).not.toBeNull();
+    expect(dismiss!.className).toBe(
+      "inline-flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-md sm:h-8 w-11 sm:w-8 " +
+        "text-xs font-medium text-red-700 dark:text-red-400 hover:bg-black/5 dark:hover:bg-white/10 " +
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current focus-visible:ring-offset-1",
+    );
   });
 
   it("is what a component rendered outside any V2Provider gets", () => {
@@ -186,6 +229,33 @@ describe("v2 tints the page ground instead of covering it", () => {
     // Info is the BRAND in v2, not blue: --primary follows --brand-h/s/l.
     expect(tones[2]).toContain("primary");
     expect(tones[3]).toContain("success");
+  });
+
+  it("keeps the description legible on the tint, on every severity", () => {
+    /**
+     * `text-muted-foreground` is the obvious ink for a secondary line and it is
+     * the one that fails here. The tint is TRANSPARENT, so the row composites
+     * over the page wash rather than over white: measured against the real
+     * compiled stylesheet at 1280px, muted-foreground lands at 2.87–4.03:1
+     * across the four severities in light mode — under AA, and worst on the
+     * critical row, whose description is "Real customer payments aren't being
+     * collected." v1 renders that same sentence at 7.60:1.
+     *
+     * `text-foreground/70` measures 5.94–7.07:1 light and 6.7–9.0:1 dark, and
+     * is still a visible step quieter than the `text-foreground` title.
+     */
+    for (const severity of [
+      "critical",
+      "warning",
+      "info",
+      "success",
+    ] as BannerSeverity[]) {
+      const classes = bodyClasses(true, withSeverity(severity));
+      expect(classes).toBe("text-foreground/70");
+      expect(classes).not.toContain("text-muted-foreground");
+    }
+    // v1's red-800 is untouched — the ~56 tenants keep the ink they have.
+    expect(bodyClasses(false)).toBe("text-red-800 dark:text-red-200");
   });
 
   it("still emits a distinct icon per severity", () => {

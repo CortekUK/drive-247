@@ -20,6 +20,7 @@ import {
   SETTINGS_SUB_TAB_KEYS,
   TAB_KEYS,
   getTabKeyForRoute,
+  getTabKeysForRoute,
 } from '@/lib/permissions';
 import { compileExpression, liftDeclaration, readEdgeSource } from '../helpers/edge-source';
 import { permissionsHookSource, editor, type Perm, type Role } from '../helpers/permissions-source';
@@ -30,17 +31,17 @@ const canAccessRouteFor = (role: Role | null, permissions: Perm[] = []) =>
     (
       appUser: unknown,
       permissions: Perm[],
-      getTabKeyForRoute: (p: string) => string | null,
+      getTabKeysForRoute: (p: string) => string[],
     ) => (pathname: string) => boolean
   >(
-    ['appUser', 'permissions', 'getTabKeyForRoute'],
+    ['appUser', 'permissions', 'getTabKeysForRoute'],
     [
       liftDeclaration(permissionsHookSource, 'isManager'),
       liftDeclaration(permissionsHookSource, 'canView'),
       liftDeclaration(permissionsHookSource, 'canAccessRoute'),
     ],
     'canAccessRoute',
-  )(role === null ? {} : { role }, permissions, getTabKeyForRoute);
+  )(role === null ? {} : { role }, permissions, getTabKeysForRoute);
 
 /** Every grant a super admin could possibly hand a manager. */
 const EVERY_GRANT: Perm[] = editor(...TAB_KEYS, ...SETTINGS_SUB_TAB_KEYS);
@@ -93,17 +94,17 @@ describe('canAccessRoute("/dev") — lifted from the shipped hook', () => {
       (
         appUser: unknown,
         permissions: Perm[],
-        getTabKeyForRoute: (p: string) => string | null,
+        getTabKeysForRoute: (p: string) => string[],
       ) => (pathname: string) => boolean
     >(
-      ['appUser', 'permissions', 'getTabKeyForRoute'],
+      ['appUser', 'permissions', 'getTabKeysForRoute'],
       [
         liftDeclaration(permissionsHookSource, 'isManager'),
         liftDeclaration(permissionsHookSource, 'canView'),
         liftDeclaration(permissionsHookSource, 'canAccessRoute'),
       ],
       'canAccessRoute',
-    )({ role: 'manager' }, [], () => null);
+    )({ role: 'manager' }, [], () => []);
     expect(unmapped('/dev')).toBe(true);
   });
 
