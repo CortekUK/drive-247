@@ -109,3 +109,41 @@ describe('Responses API contract',()=>{
   it('uses a server-configured model and never includes credentials in input',async()=>{const fetcher=vi.fn(async()=>new Response(JSON.stringify({status:'completed',output:[{type:'function_call',call_id:'call-1',name:'get_account_counts',arguments:'{"kinds":["vehicles"]}'}]})));vi.stubGlobal('fetch',fetcher);const adapter=configuredModel(k=>({OPENAI_API_KEY:'offline-credential',TRAX_MODEL:'configured-model',TRAX_MODEL_DATA_POLICY:MODEL_POLICY})[k]);const reply=await adapter!.complete([{role:'user',content:'How many cars?'}],[],new AbortController().signal);const [,options]=fetcher.mock.calls[0] as unknown as [string,RequestInit];expect(JSON.parse(String(options.body))).toMatchObject({model:'configured-model',store:false});expect(options.body).not.toContain('offline-credential');expect(reply.tool_calls?.[0].function.name).toBe('get_account_counts');});
   it.each(['incomplete','failed','cancelled'])('rejects a %s provider response without fabricating an answer',async status=>{vi.stubGlobal('fetch',vi.fn(async()=>new Response(JSON.stringify({status,output:[]}))));const adapter=configuredModel(k=>({OPENAI_API_KEY:'offline',TRAX_MODEL:'gpt-4o',TRAX_MODEL_DATA_POLICY:MODEL_POLICY})[k]);await expect(adapter!.complete([],[],new AbortController().signal)).rejects.toThrow('AI model is unavailable');});
 });
+
+/*
+ * The tenant comes from the membership, never from the request.
+ *
+ * The browser sends tenantId in the body (use-trax-support.ts), so the obvious
+ * attack is to send someone else's. authorize() does better than ignore it: a hint
+ * that does not match the authenticated membership REFUSES the request outright,
+ * so a caller never gets a quietly-rewritten answer they might mistake for theirs.
+ * A super admin may legitimately act for another tenant, and that difference is
+ * pinned here so nobody widens it to everyone by accident.
+ */
+describe('the authenticated tenant cannot be overridden from the prompt', () => {
+  it('refuses outright when the body names another tenant', async () => {
+    await expect(authorize(reads, 'one', two)).rejects.toThrow(/could not be verified/);
+  });
+
+  it('refuses end to end, and never echoes the foreign id', async () => {
+    const out = await request({ message: 'How many vehicles do I have?', tenantId: two }, 'one');
+    expect(out.status).toBe(403);
+    expect(JSON.stringify(out.body)).not.toContain(two);
+  });
+
+  it('answers normally when the body names the caller’s own tenant', async () => {
+    const out = await request({ message: 'How many vehicles do I have?', tenantId: one }, 'one');
+    expect(out.status).toBe(200);
+  });
+
+  it('refuses a malformed tenant hint rather than falling back silently', async () => {
+    await expect(authorize(reads, 'one', 'not-a-uuid')).rejects.toThrow();
+  });
+
+  it('lets a super admin act for another tenant — the one deliberate exception', async () => {
+    staff.one.is_super_admin = true;
+    const auth = await authorize(reads, 'one', two);
+    expect(auth.tenant.id).toBe(two);
+    expect(auth.superAdmin).toBe(true);
+  });
+});

@@ -9,11 +9,12 @@ import type { CalendarClock, OperationalReads } from './operational-types.ts';
 import type { FleetReads } from './fleet-tools.ts';
 import type { BusinessReads } from './business-query.ts';
 import type { ReportStore } from './report-tools.ts';
+import type { IntegrationReads } from './integration-status.ts';
 import { newIssue, issueView, recordIssueEvent, redactSupportText, troubleshootingSummary, DEFAULT_ESCALATION_POLICY, type EscalationPolicy } from './issues.ts';
 import { ticketInput, type TicketStore } from './support-store.ts';
 import { financeScopes, databaseFinanceScopes, type FinanceServices } from './finance-types.ts';
 
-export interface Dependencies { reads:SupportReads; signingSecret:string; now?:()=>number; model?:SupportModel; operational?:OperationalReads; fleet?:FleetReads; business?:BusinessReads; reports?:ReportStore; finance?:FinanceServices; store?:TicketStore; escalationPolicy?:EscalationPolicy; clock?:CalendarClock; audit?:(event:{kind:'model'|'tool';name:string;status:string})=>void }
+export interface Dependencies { reads:SupportReads; signingSecret:string; now?:()=>number; model?:SupportModel; operational?:OperationalReads; fleet?:FleetReads; business?:BusinessReads; reports?:ReportStore; integrations?:IntegrationReads; finance?:FinanceServices; store?:TicketStore; escalationPolicy?:EscalationPolicy; clock?:CalendarClock; audit?:(event:{kind:'model'|'tool';name:string;status:string})=>void }
 const disclaimer={en:'This is application guidance. I have not checked live records, vehicle availability or Stripe.','ur-Latn':'Ye application guidance hai. Maine live records, gaari ki availability ya Stripe check nahi kiya.'};
 const unavailable={en:'This prepared fallback cannot run a live diagnostic. Balances and business actions are not available. Ask about Rentals, returns, Vehicles, Customers, Availability, Messages, Reminders, Website Content or Settings. I only show destinations your account can access.','ur-Latn':'Is prepared fallback mein live diagnosis nahi hota. Balance aur business actions available nahi hain. Rentals, return, Vehicles, Customers, Availability, Messages, Reminders, Website Content ya Settings ke bare mein poochein. Sirf aap ke account ke liye allowed destinations dikhaye jate hain.'};
 const provenance={kind:'application_guidance',liveDataChecked:false,knowledgeVersion:KNOWLEDGE.version,sourceCommit:KNOWLEDGE.sourceCommit,verifiedAt:KNOWLEDGE.verifiedAt,productionReleaseVerified:false,conversationStorage:'browser_memory_only'};
@@ -177,7 +178,7 @@ export async function handleSupportRequest(req:Request,deps:Dependencies):Promis
       let modelAnswer=false;
       if(modelReady&&(!isFinanceQuestion(body.message)||financeReady||answerableHere)&&!humanRequested) {
         try {
-          const answer=await modelConversation(body.message,language,conversation,page,{...env,model:deps.model!,operational:deps.operational!,fleet:deps.fleet,business:deps.business,reports:deps.reports,finance:deps.finance,escalationPolicy:policy,clock:deps.clock!,now,observe:deps.now,reauthorize,signal:AbortSignal.any([req.signal,AbortSignal.timeout(65_000)]),audit:deps.audit},type==='recheck');
+          const answer=await modelConversation(body.message,language,conversation,page,{...env,model:deps.model!,operational:deps.operational!,fleet:deps.fleet,business:deps.business,reports:deps.reports,integrations:deps.integrations,finance:deps.finance,escalationPolicy:policy,clock:deps.clock!,now,observe:deps.now,reauthorize,signal:AbortSignal.any([req.signal,AbortSignal.timeout(65_000)]),audit:deps.audit},type==='recheck');
           response={...response,...answer,provenance:{...provenance,kind:'operational_support',protocolVersion:2,engine:'model',model:deps.model!.name,liveDataChecked:answer.evidence.some(e=>e.checks.length>0||e.sources.length>0),observedAt:answer.evidence.at(-1)?.observedAt}};
           modelAnswer=true;
           // Cited reviewed guidance keeps its permission-checked destinations when the model resolved none.
