@@ -247,11 +247,17 @@ export function parseSpec(input: unknown): QuerySpec {
   }
   let period: QueryPeriod | null = null;
   if (args.period != null) {
-    const raw = object(args.period);
+    // A period sent as the bare string "last_month" used to fail the generic object
+    // guard, whose whole message is "Invalid request." — so the caller was told a
+    // report was impossible rather than which shape to send.
+    if (typeof args.period !== 'object' || args.period === null || Array.isArray(args.period)) {
+      throw new SupportError('invalid_input', `A period is an object, for example {"basis":"${dataset.dateBases[0]?.name ?? 'created_at'}","preset":"last_month"}. "${String(args.period)}" is not one. Presets: ${PRESETS.join(', ')}.`);
+    }
+    const raw = args.period as Record<string, unknown>;
     onlyKeys(raw, ['basis', 'from', 'to', 'preset']);
     const basis = dataset.dateBases.find((b) => b.name === raw.basis);
-    if (!basis) throw new SupportError('invalid_input', `${dataset.name} has no "${String(raw.basis)}" date basis.`);
-    if (raw.preset != null && !PRESETS.includes(String(raw.preset) as Preset)) throw new SupportError('invalid_input', 'That period is not supported.');
+    if (!basis) throw new SupportError('invalid_input', `${dataset.name} has no "${String(raw.basis)}" date basis. Use one of: ${dataset.dateBases.map((b) => b.name).join(', ')}.`);
+    if (raw.preset != null && !PRESETS.includes(String(raw.preset) as Preset)) throw new SupportError('invalid_input', `"${String(raw.preset)}" is not a supported period. Use one of: ${PRESETS.join(', ')}.`);
     for (const key of ['from', 'to'] as const) if (raw[key] != null && !DATE.test(String(raw[key]))) throw new SupportError('invalid_input', 'Dates use YYYY-MM-DD.');
     if (raw.preset == null && (raw.from == null || raw.to == null)) throw new SupportError('invalid_input', 'Give a preset, or both a from and a to date.');
     period = { basis: basis.name, from: raw.from as string | null, to: raw.to as string | null, preset: raw.preset as string | null };
