@@ -181,7 +181,11 @@ function fieldFor(dataset: Dataset, name: unknown, use: 'filter' | 'group'): Fie
 }
 function metricFor(dataset: Dataset, name: unknown): Metric {
   const metric = dataset.metrics.find((m) => m.name === name);
-  if (!metric) throw new SupportError('invalid_input', `"${String(name)}" is not a metric of ${dataset.name}.`);
+  // Name the valid metrics. A refusal the caller cannot act on just produces another
+  // guess: asked for a CSV of payments the model tried "null", then "records", and
+  // gave up and told the user to use an export screen. Metric names are catalog
+  // schema, not tenant data, and the finance gate still refuses the read itself.
+  if (!metric) throw new SupportError('invalid_input', `"${String(name)}" is not a metric of ${dataset.name}. Use one of: ${dataset.metrics.map((m) => m.name).join(', ')}.`);
   return metric;
 }
 /** Every dataset the caller's role may actually read, with what it offers. */
