@@ -1,13 +1,19 @@
--- Rollback for stage 0a (function grants).
+-- Rollback for stage 0a-2 (the 146 function grants in 00b).
 --
--- This RESTORES a privilege-escalation path: with these grants, the published
--- anon key can execute SECURITY DEFINER functions, including exec_sql, which runs
--- arbitrary SQL as the owner. It exists so stage 0a can be exercised in isolated
--- testing and reverted there.
+-- It does NOT restore public.exec_sql. Arbitrary SQL execution from the public key
+-- is never an acceptable resting state, so re-opening it is a deliberate,
+-- individually recorded act, not something a rollback file does on your behalf.
+-- If it genuinely must come back, the single statement is in
+-- 00a-contain-exec-sql.sql under "If it breaks something".
 --
--- It is NOT the operational recovery plan. If stage 0a breaks something in
--- production, the recovery is to re-grant the ONE function that broke, named in
--- the incident, not to run this file. See db-isolation-remediation.md §5.
+-- This file RESTORES a privilege-escalation path: with these grants the published
+-- anon key can execute SECURITY DEFINER functions that bypass row-level security
+-- and take a tenant id as an argument. It exists so 00b can be exercised in
+-- isolated testing and reverted there.
+--
+-- It is NOT the operational recovery plan. If 00b breaks something in production,
+-- re-grant the ONE function named in the incident. See db-isolation-remediation.md
+-- §5 and recovery-plan.md.
 
 begin;
 
@@ -58,7 +64,6 @@ grant execute on function public.enqueue_financial_event_for_ledger_entry() to a
 grant execute on function public.ensure_lead_conversation() to public;
 grant execute on function public.ensure_lead_conversation() to anon;
 grant execute on function public.evaluate_tenant_health(p_trigger text, p_force boolean, p_evaluated_at timestamp with time zone) to anon;
-grant execute on function public.exec_sql(query text) to anon;
 grant execute on function public.expire_subscription_link_session() to public;
 grant execute on function public.expire_subscription_link_session() to anon;
 grant execute on function public.finalize_rental_extension(p_extension_id uuid, p_payment_id uuid) to public;

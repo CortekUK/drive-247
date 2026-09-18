@@ -1,6 +1,8 @@
--- Stage 0a — take the privileged RPC surface away from the anonymous key.
+-- Stage 0a-2 — the remaining privileged RPC surface, after exec_sql.
 --
--- NOT APPLIED. Prepared for a separate, immediate approval decision.
+-- NOT APPLIED. A SEPARATE, LARGER decision than 00a-contain-exec-sql.sql.
+-- Approve that one first and on its own; it is one statement and closes arbitrary
+-- SQL execution. This file is the broader sweep and needs the review in §3 below.
 -- Target: Supabase project hviqoaokxvlancmftwuo (the project every app defaults
 -- to). Read-only catalogue verification performed 2026-09-18; no function below
 -- was called, and no row was read or modified to produce this file.
@@ -50,11 +52,9 @@
 
 begin;
 
--- ── Group A: revoke now — 147 functions, no known anonymous caller ──
+-- ── Group A: 146 functions, no known anonymous caller ────────────────
 
--- The one that matters most, first.
-revoke execute on function public.exec_sql(query text) from anon;
-revoke execute on function public.exec_sql(query text) from public;
+-- exec_sql is NOT here: it is contained on its own by 00a-contain-exec-sql.sql.
 
 revoke execute on function public.admin_revoke_user_sessions(p_user_ids text[]) from anon, public;
 revoke execute on function public.app_login(p_username text, p_password text) from anon, public;
@@ -222,13 +222,47 @@ commit;
 -- revoke execute on function public.deduct_credits(p_tenant_id uuid, p_category text, p_description text, p_reference_id uuid, p_reference_type text, p_is_test_mode boolean) from anon;
 -- commit;
 
--- ── Separate decision: drop exec_sql entirely ───────────────────────
--- Revoking from anon closes the public path. The function still exists and still
--- runs arbitrary SQL for the service role, which is a large amount of authority
--- to leave lying around for one simulation tool. Confirm
--- supabase/functions/simulate-payg-timelapse is not used in production, then:
---   drop function if exists public.exec_sql(text);
--- and replace its use in that edge function with the specific statements it needs.
+
+-- ── §3. What this file does not settle, and must be reviewed ─────────────
+--
+-- It removes the ANONYMOUS path only. `authenticated` keeps EXECUTE on these
+-- functions, and for some of them that is also wrong: a signed-in user of any
+-- tenant can currently call, among others,
+--
+--   admin_revoke_user_sessions(text[])  deletes any user's auth sessions
+--   app_login(text,text)                legacy password login, no rate limit
+--   add_credits / deduct_credits        moves platform credit balances
+--   approve_payment / reject_payment    changes payment state
+--   block_customer / unblock_customer   (reachable via a PUBLIC grant, not anon)
+--   dispose_vehicle, cancel_installment_plan, swap_rental_vehicle
+--
+-- Several take a tenant id as an ARGUMENT (18 of the 150), so the caller chooses
+-- the account. Being SECURITY DEFINER, they bypass row-level security entirely.
+-- Revoking from `anon` does not fix that; it narrows who can reach it.
+--
+-- The correct fix per function is one of:
+--   (a) it is called by a signed-in staff path  -> keep the `authenticated` grant
+--       AND verify authorization INSIDE the function: derive the tenant from
+--       public.get_user_tenant_id() instead of trusting a tenant argument, and
+--       check the caller's role, rather than relying on the UI not to call it;
+--   (b) it is only ever called by server code   -> revoke from `authenticated`
+--       too, leaving service_role;
+--   (c) it has no caller at all (app_login)     -> drop it.
+--
+-- Do NOT re-grant the whole set to `authenticated` to keep anything passing.
+-- Inventory query for that review:
+--   select p.proname, pg_get_function_identity_arguments(p.oid) as args,
+--          coalesce(array_to_string(p.proconfig,' '),'NO search_path') as config
+--     from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+--    where n.nspname='public' and p.prosecdef
+--      and has_function_privilege('authenticated', p.oid, 'EXECUTE')
+--    order by p.proname;
+--
+-- Ownership and name resolution: every one of these is owned by `postgres` and
+-- many have NO `search_path` set, so a caller-controlled search_path can change
+-- which objects the body resolves to. Each function kept should get
+-- `SET search_path = ''` (or an explicit schema list) and fully qualified names,
+-- as part of (a) above.
 
 -- ── Verification ─────────────────────────────────────────
 -- Before: 150 rows. After group A: 3 (the two credit functions and nothing else).

@@ -52,7 +52,18 @@ containment/db-privileges    from origin/main
     tests/trax/function-grants.mjs            6 tests
 ```
 
-That branch is self-contained: those three suites need only the SQL files and an in-process Postgres, so a reviewer can run them without the TRAX feature work. It contains no application code, so a pull request from it deploys nothing.
+That branch is self-contained: those three suites need only the SQL files and an in-process Postgres, so a reviewer can run them without the TRAX feature work.
+
+**Correction.** An earlier version of this file said a pull request from that branch "deploys nothing". That was an unsafe assumption and is withdrawn. Vercel creates **preview deployments for pushed branches automatically** unless that is turned off, so pushing this branch may well deploy something. What matters is *which environment and which database* a preview uses: previews commonly inherit the Preview environment's variables, and if those point at the **production** Supabase project — which is likely here, since there is one project and its ref is hard-coded as a fallback in `apps/*/src/integrations/supabase/client.ts` — then a preview is a live client against production data, reachable at a public URL.
+
+Before pushing any branch, check in Vercel, per project:
+
+- Settings → Git → **Production Branch**, and whether **automatic deployments** are enabled for other branches;
+- Settings → Git → **Ignored Build Step**, if one is configured;
+- Settings → Environment Variables → **Preview** scope: which `NEXT_PUBLIC_SUPABASE_URL` and keys it holds, and whether they differ from Production;
+- Deployment Protection, i.e. whether preview URLs are public or require authentication.
+
+The branch containing only SQL and tests changes no application behaviour *if built*, which is a weaker and more honest claim than "deploys nothing". The Vercel connector available in this session is not authorized, so none of the above could be verified from here — it needs someone with dashboard access.
 
 `main` keeps the full history, features and security together, and is the branch to push once the feature work is separately approved. If the reviewer would rather the features went first, `trax/features` can be created at `d0a0668f` the same way.
 

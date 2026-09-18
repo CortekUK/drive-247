@@ -1,24 +1,32 @@
 # Containment for immediate review — Drive247 production database
 
 **For:** the Drive247 administrator responsible for the Supabase project.
-**Decision asked:** approve or decline two small, independent privilege changes — **Stage 0a** and **Stage 0b**. Nothing else in `docs/trax/remediation/` is part of this decision.
+**Decision asked, in priority order:**
+
+1. **[00a — one statement](remediation/00a-contain-exec-sql.sql).** Close arbitrary SQL execution from the published key. Decide this **on its own, now**. It does not depend on, and must not wait for, anything else in this document.
+2. **[00b — 146 statements](remediation/00b-revoke-anon-execute-on-definer-functions.sql)** and **[0b — table privileges](remediation/01-revoke-destructive-anon-grants.sql).** The broader sweep. Needs the review in §7 before it is applied.
+
+Nothing else in `docs/trax/remediation/` is part of this decision.
+
+**Separately and in parallel:** the project's JWT signing secret was disclosed into a session transcript on 2026-09-18 and is **still in use**. It is the single trust root for the `anon` key, the `service_role` key and every user session, so it outranks even 00a in severity. It needs the owner, not a code change. See **[incident-jwt-signing-secret.md](incident-jwt-signing-secret.md)**.
 **Status:** not applied. No statement below has been run against any database. No customer, rental or payment record was created, changed or deleted to produce this evidence.
 
 ---
 
 ## 1. The decision in one page
 
-| | Stage 0a | Stage 0b |
-|---|---|---|
-| File | [`remediation/00-revoke-anon-execute-on-definer-functions.sql`](remediation/00-revoke-anon-execute-on-definer-functions.sql) | [`remediation/01-revoke-destructive-anon-grants.sql`](remediation/01-revoke-destructive-anon-grants.sql) |
-| What it removes | `EXECUTE` on 147 `SECURITY DEFINER` functions, from `anon` and `PUBLIC` | `DELETE` on 7 tables and `TRUNCATE` on 9 tables, from `anon`; `TRUNCATE` from `authenticated` |
-| Statements | 148 `revoke` | 3 `revoke` |
-| Why now | The published key can run arbitrary SQL as the database owner via `public.exec_sql` | The published key can delete or empty financial tables |
-| Known dependency | none found (§4) | none for these tables (§4) |
-| Reversible | yes, per function, in one statement | yes, per table, in one statement |
-| Target | project `hviqoaokxvlancmftwuo`, region `eu-west-2` | same |
+| | **00a** | 00b | 0b |
+|---|---|---|---|
+| File | [`00a-contain-exec-sql.sql`](remediation/00a-contain-exec-sql.sql) | [`00b-revoke-anon-execute-…`](remediation/00b-revoke-anon-execute-on-definer-functions.sql) | [`01-revoke-destructive-anon-grants.sql`](remediation/01-revoke-destructive-anon-grants.sql) |
+| What it removes | `EXECUTE` on **one** function, `public.exec_sql(text)`, from `anon` and `PUBLIC` | `EXECUTE` on 146 other `SECURITY DEFINER` functions, from `anon` and `PUBLIC` | `DELETE` on 7 tables, `TRUNCATE` on 9, from `anon`; `TRUNCATE` from `authenticated` |
+| Statements | **2 `revoke`** | 146 `revoke` | 3 `revoke` |
+| Why | The published key can run **arbitrary SQL as the database owner** | Those functions bypass RLS and several take a tenant id as an argument | The published key can delete or empty financial tables |
+| Known dependency | **none.** One caller, `simulate-payg-timelapse`, uses the service role, which is retained | none found (§4) | none for those 7 tables (§4) |
+| Blocked on further review | **no** | yes — §7 | no |
+| Reversible | yes, one statement | yes, per function | yes, per table |
+| Target | project `hviqoaokxvlancmftwuo`, `eu-west-2`, production | same | same |
 
-**Recommendation: approve 0a immediately, separately from everything else.** It is the only finding in this review where the public key grants control of the database rather than access to data.
+**Recommendation: approve 00a now, by itself.** It is two statements, it has one verified caller that keeps working, `authenticated` never had access, and it is the only item here where the public key confers *control of the database* rather than access to data. Holding it behind the 146-function review buys nothing.
 
 ---
 
@@ -91,7 +99,7 @@ Measured with `has_table_privilege` / `has_function_privilege`, which account fo
 
 Method: every `.rpc(` call and every `.delete()` call in `apps/` and `supabase/` was listed and classified by which client performs it — the browser (`anon`, or `authenticated` after sign-in) or server code (`service_role`).
 
-**Stage 0a**
+**00a and 00b**
 
 - The anonymous booking path calls exactly two RPCs: `generate_first_charge_for_rental` (`apps/booking/src/components/BookingCheckoutStep.tsx:1286`) and `backfill_rental_charges_first_month_only` (`apps/booking/src/app/booking/checkout/page.tsx:839`). Neither is `SECURITY DEFINER`, so neither appears in 0a.
 - Portal and admin RPC calls — `block_customer`, `approve_payment`, `dispose_vehicle`, `cancel_installment_plan`, `swap_rental_vehicle`, `payg_settle_invoice` and the rest — run in a signed-in staff session as `authenticated`. 0a does not touch that grant.
@@ -134,7 +142,7 @@ Stage 1 must not be described as complete tenant isolation. It closes cross-tena
 
 | Suite | Result | What it establishes |
 |---|---|---|
-| `function-grants.mjs` | 6/6 | Stage 0a's 148 statements each resolve to a real function signature; afterwards `anon` and `PUBLIC` can execute none of the 147; the two checkout RPCs still work; `authenticated` and `service_role` keep everything; the rollback restores the exact prior ACLs |
+| `function-grants.mjs` | 8/8 | **00a applied alone closes `exec_sql` for `anon`, `PUBLIC` and `authenticated`, leaves `service_role`, and changes no other function's grants**; 00b's 146 statements each resolve to a real signature; afterwards no anonymous or PUBLIC execution path remains; the two checkout RPCs still work; `authenticated` and `service_role` keep the rest; the rollback restores the 146 and **never** re-opens `exec_sql` |
 | `remediation-sql.mjs` | 4/4 | Stage 0b leaves `DELETE` only on `customers`/`rentals`, removes `TRUNCATE` from both roles everywhere, and touches no read or insert grant |
 | `tenant-isolation.mjs` | 12/12 | stages 0–4 applied to a two-tenant database, asserted as `anon`, staff of each account, a customer, a platform admin and `service_role` |
 
@@ -150,3 +158,19 @@ grant execute on function public.<name>(<args>) to anon;
 `06-rollback-function-revokes.sql` and `99-rollback.sql` exist for isolated testing. They restore the exposure wholesale and are **not** the operational recovery plan — see [`recovery-plan.md`](recovery-plan.md), which also records that point-in-time recovery is **disabled** on this project, so a restore would lose up to a day of bookings.
 
 **Do not** prove the write exposure against production. The evidence above is catalogue metadata and code, and it is sufficient; a demonstration would create or destroy real records. Existing Supabase logs should be preserved for the period covered by the exposure before any retention window passes.
+
+---
+
+## 7. What 00b does not settle (and 00a does not need)
+
+00b removes the **anonymous** path only. `authenticated` keeps `EXECUTE` on those 146 functions, and for some that is also wrong: any signed-in user of any tenant can currently call `admin_revoke_user_sessions(text[])` (deletes any user's sessions), `app_login`, `add_credits`, `approve_payment`, `dispose_vehicle`, `cancel_installment_plan` and others. Being `SECURITY DEFINER`, they bypass row-level security, and 18 of the 150 take a **tenant id as an argument**, so the caller picks the account.
+
+Revoking from `anon` narrows who can reach that; it does not fix it. The per-function resolution is one of:
+
+- **keep the `authenticated` grant and verify authorization inside the function** — derive the tenant from `public.get_user_tenant_id()` instead of trusting a tenant argument, and check the caller's role in the body, rather than relying on the UI not to call it;
+- **revoke from `authenticated` too**, where only server code calls it;
+- **drop it**, where nothing calls it (`app_login` has no caller in this repository).
+
+Do **not** re-grant the set to `authenticated` to keep anything passing. Also in that review: these functions are owned by `postgres` and many have **no `search_path` set**, so a caller-controlled search path can change what the body resolves to; each one kept should get an explicit `SET search_path` and fully qualified names. The inventory query is at the foot of `00b-…sql`.
+
+**None of this blocks 00a.** `exec_sql` has no `authenticated` grant to review, one service-role caller, and a body that cannot be made safe by adding checks — the fix is to delete it once `simulate-payg-timelapse` is parameterised.

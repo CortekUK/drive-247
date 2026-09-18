@@ -97,7 +97,7 @@ describe('TRAX conversations and knowledge boundary',()=>{
 
 describe('TRAX read-only tools and verified navigation',()=>{
   it('has exactly the approved read-only allowlist',()=>{expect(Object.keys(READ_ONLY_TOOLS)).toEqual(['search_application_knowledge','resolve_navigation_target']);});
-  it.each(['create_reminder','execute_sql','http','shell','get_stripe_account_summary','diagnose_vehicle_availability','constructor'])('rejects unavailable tool %s',async(name)=>{const auth=await authorize(reads,'offline-session',tenantA);await expect(runTool(name,{}, {auth,reads})).rejects.toMatchObject({code:'tool_unavailable'});});
+  it.each(['create_reminder','exec_sql','execute_sql','run_sql','pg_sleep','http','shell','get_stripe_account_summary','diagnose_vehicle_availability','constructor','__proto__'])('rejects unavailable tool %s',async(name)=>{const auth=await authorize(reads,'offline-session',tenantA);await expect(runTool(name,{}, {auth,reads})).rejects.toMatchObject({code:'tool_unavailable'});});
   it('rejects the old execute_action path',async()=>{expect((await request({type:'execute_action'})).status).toBe(403);});
   it('revalidates an entity on every navigation request',async()=>{const first=await request({type:'navigate',navigation:{target:'rental',entityId:rental}});expect(first.status).toBe(200);reads.entity=vi.fn(async()=>null);expect((await request({type:'navigate',navigation:{target:'rental',entityId:rental}})).status).toBe(403);});
   it('returns navigation without using the legacy business-action response field',async()=>{
