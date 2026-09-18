@@ -281,7 +281,7 @@
     "supabase/functions/trax-support/support/handler.ts": "3fd77babb6c8f4db940baa5b4654810c72336a3bdb5b9dd68163adf30e2b4ea3",
     "supabase/functions/trax-support/support/issues.ts": "fd1b79ccb68070b10621eb3eead9d5f444c70dc5d6a4cfe69d6058ce9e711d1b",
     "supabase/functions/trax-support/support/messaging.ts": "ec2e0b63020b8a437de3f25b62e8b88c6a9d24bfe5198942ce6b78c7f707dc14",
-    "supabase/functions/trax-support/support/model-tools.ts": "ecef101809603881892331f39f598bcda4ff556d6435d461a62840cab9f1beb0",
+    "supabase/functions/trax-support/support/model-tools.ts": "ed3f39bcc84eb4f9f859856c1ad6d07adb6960ba650c4537de45c544fe7a5092",
     "supabase/functions/trax-support/support/model.ts": "c7b2ce9a12289fd67a86a5289270b66e178b433cb935d5858a3c327ee3599a25",
     "supabase/functions/trax-support/support/operational-reads.ts": "b8cb81ba0fe3ccb65751c1509ae6ac31624e3cba5d651bc42dfb231cd09fc6e7",
     "supabase/functions/trax-support/support/operational-tools.ts": "e44f094a20d5bab6978f4fbbff1c31a44d02231d5b7c30f90aba07a3d075cb30",

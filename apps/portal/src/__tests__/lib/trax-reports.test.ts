@@ -6,6 +6,7 @@ import { createBusinessReads, type BusinessDatabase, type BusinessContext } from
 import { generateReport, parseReportRequest, DOWNLOAD_TTL_SECONDS, type ReportStore, type ReportJob, type JobState } from '../../../../../supabase/functions/trax-support/support/report-tools';
 import type { SupportContext, Permission } from '../../../../../supabase/functions/trax-support/support/types';
 import { configuredReports, type ReportDatabase } from '../../../../../supabase/functions/trax-support/support/report-store';
+import { MODEL_TOOLS } from '../../../../../supabase/functions/trax-support/support/model-tools';
 import { postgrestShim, type Row, type Statement } from '../helpers/postgrest-shim';
 
 /*
@@ -295,5 +296,41 @@ describe('report availability', () => {
     const store = configuredReports(db(), () => undefined)!;
     await expect(store.createJob({ tenantId: tenant, requestedBy: customerA, kind: 'vehicles.vehicle_count', format: 'csv', state: 'queued' }))
       .rejects.toMatchObject({ code: 'report_failed' });
+  });
+});
+
+/*
+ * generate_report and query_business_data take the same query arguments, and the
+ * model's schema is strict — so if generate_report declares `period` as a string
+ * while the parser expects an object, the model CANNOT call it correctly and no
+ * error message can help. That is exactly what shipped: every report with a period
+ * failed, and the model reported the export as broken.
+ */
+describe('the report tool can actually be called', () => {
+  const schemaOf = (name: string) => {
+    const tool = MODEL_TOOLS.find((t) => t.function.name === name);
+    if (!tool) throw new Error(`${name} is not offered to the model`);
+    return tool.function.parameters.properties as Record<string, unknown>;
+  };
+
+  // The structured arguments must be declared identically, because the same parser
+  // reads them. dataset and metric are deliberately NOT in this list: they are
+  // required for a query but optional here, since report "customer_balances" takes
+  // neither.
+  it.each(['filters', 'period', 'sort', 'limit'])(
+    'declares %s exactly as query_business_data does', (field) => {
+      expect(schemaOf('generate_report')[field]).toEqual(schemaOf('query_business_data')[field]);
+    });
+
+  it('accepts an object period, which the parser requires', () => {
+    const period = schemaOf('generate_report').period as { type: string[] };
+    expect(period.type).toContain('object');
+    // The regression itself: string-or-null made a correct call impossible.
+    expect(period.type).not.toEqual(['string', 'null']);
+  });
+
+  it('constrains format to the three the writers implement', () => {
+    const format = schemaOf('generate_report').format as { enum: (string | null)[] };
+    expect(new Set(format.enum)).toEqual(new Set(['csv', 'xlsx', 'pdf', null]));
   });
 });

@@ -1,5 +1,20 @@
 import type { ModelTool } from './model.ts';
 const str={type:'string'},nullable={type:['string','null']};
+/*
+ * The query shapes, declared once.
+ *
+ * generate_report takes the same dataset/metric/filters/period/groupBy/sort/limit
+ * as query_business_data, but declared them all as `nullable` — string-or-null. With
+ * strict schemas the model then CANNOT send an object for `period`, so every report
+ * with a period failed, the parser answered "Invalid request.", and the model told
+ * users the export was broken. Two declarations of one thing drifted; now there is
+ * one declaration and they cannot.
+ */
+const PRESET_VALUES=['today','yesterday','this_week','last_week','this_month','last_month','this_year','last_year','last_7_days','last_30_days','last_90_days',null];
+const FILTERS={type:['array','null'],items:{type:'object',additionalProperties:false,required:['field','op','value'],properties:{field:str,op:{type:'string',enum:['eq','neq','in','gt','gte','lt','lte','is_null','not_null','contains']},value:{type:['string','number','boolean','array','null'],items:str}}}};
+const PERIOD={type:['object','null'],additionalProperties:false,required:['basis','preset','from','to'],properties:{basis:str,preset:{type:['string','null'],enum:PRESET_VALUES},from:nullable,to:nullable}};
+const SORT={type:['object','null'],additionalProperties:false,required:['by','direction'],properties:{by:{type:'string',enum:['metric','group']},direction:{type:'string',enum:['asc','desc']}}};
+const LIMIT={type:['integer','null']};
 function tool(name:string,description:string,properties:Record<string,unknown>):ModelTool {
   return {type:'function',function:{name,description,strict:true,parameters:{type:'object',additionalProperties:false,required:Object.keys(properties),properties}}};
 }
@@ -11,18 +26,21 @@ export const MODEL_TOOLS:ModelTool[]=[
   tool('select_support_issue','Select the current issue before investigation. Reuse a matching issue for follow-ups; unrelated questions must use a separate topic/record. No score can be supplied.',{topic:{type:'string',enum:['vehicle_availability','fleet_counts','bookings','payments','workflow','other']},recordKind:{type:['string','null'],enum:['vehicle','rental','customer',null]},recordId:nullable}),
   tool('request_support_handoff','Ask the backend to assess whether safe options are exhausted or the user explicitly requested a person. This only offers Contact Support. It never creates a ticket.',{reason:{type:'string',enum:['human_requested','guidance_missing','diagnostics_exhausted']}}),
   tool('generate_report','Produce a real downloadable file of a figure or breakdown for this account: csv, xlsx or pdf. Pass EITHER a dataset and metric exactly as query_business_data takes them, OR report \"customer_balances\". The file is generated from the same measurement the answer states, so they cannot disagree, and the download link is time limited. Use when the user asks for a report, an export, a spreadsheet or a PDF — never claim a file exists unless this tool returned one.',{
-    report:nullable,format:nullable,dataset:nullable,metric:nullable,filters:nullable,period:nullable,groupBy:nullable,sort:nullable,limit:nullable,minimumOwed:nullable,customerId:nullable,includeCredit:nullable}),
+    report:{type:['string','null'],enum:['query','customer_balances',null]},
+    format:{type:['string','null'],enum:['csv','xlsx','pdf',null]},
+    dataset:nullable,metric:nullable,filters:FILTERS,period:PERIOD,groupBy:nullable,sort:SORT,limit:LIMIT,
+    minimumOwed:{type:['number','null']},customerId:nullable,includeCredit:{type:['boolean','null']}}),
   tool('query_customer_balances','Who owes this account money, and how much: outstanding, unapplied credit and the net per customer, highest first. Use for \"who owes the most\", \"which customers are in arrears\" or one customer’s balance. Computed in the backend from the account’s own ledger, pay-as-you-go accruals and captured payments; never a bank or Stripe balance. Requires the finance permission.',{
     limit:nullable,minimumOwed:nullable,customerId:nullable,includeCredit:nullable}),
   tool('discover_business_data','What business data this account and role can actually be asked about: the datasets, their metrics and definitions, the fields that can be filtered or grouped, and which business date a period uses. Descriptions only — no records or figures. Call this before a data question you have not answered before in this conversation.',{dataset:nullable}),
   tool('query_business_data','Answer a data question from the tenant\u2019s own records: counts, totals, breakdowns, comparisons and rankings. Choose a dataset, a metric, filters, a period, a grouping and a sort from discover_business_data. Totals are computed in the backend, per currency, over the whole authorized dataset. Never a navigation answer; never SQL.',{
     dataset:str,
     metric:str,
-    filters:{type:['array','null'],items:{type:'object',additionalProperties:false,required:['field','op','value'],properties:{field:str,op:{type:'string',enum:['eq','neq','in','gt','gte','lt','lte','is_null','not_null','contains']},value:{type:['string','number','boolean','array','null'],items:str}}}},
-    period:{type:['object','null'],additionalProperties:false,required:['basis','preset','from','to'],properties:{basis:str,preset:{type:['string','null'],enum:['today','yesterday','this_week','last_week','this_month','last_month','this_year','last_year','last_7_days','last_30_days','last_90_days',null]},from:nullable,to:nullable}},
+    filters:FILTERS,
+    period:PERIOD,
     groupBy:nullable,
-    sort:{type:['object','null'],additionalProperties:false,required:['by','direction'],properties:{by:{type:'string',enum:['metric','group']},direction:{type:'string',enum:['asc','desc']}}},
-    limit:{type:['integer','null']},
+    sort:SORT,
+    limit:LIMIT,
   }),
   tool('get_account_counts','Exact total vehicles, customers and rentals for the authenticated tenant, independently permission checked. Includes historical records; not an availability calculation.',{kinds:{type:'array',items:{type:'string',enum:['vehicles','customers','rentals']}}}),
   tool('list_account_bookings','List active/out-on-hire recorded states or upcoming reservations using the current tenant timezone. Booking totals are separate from unique vehicles. Follow nextOffset when partial; do not infer bookability.',{view:{type:'string',enum:['active','upcoming','out_now']},offset:{type:['integer','null']}}),
