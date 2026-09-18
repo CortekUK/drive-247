@@ -550,6 +550,39 @@ export default function DashboardLayout({
               .join(" ") || undefined
           }
         >
+          {/* The dunning warning FOR A PHONE, and nothing else on the screen
+              carries it there.
+              During grace the only billing surface is the chip in the sidebar
+              footer, and below `md` both sidebars live inside a closed Sheet —
+              so the chip is not off-screen, it is absent, and an operator on a
+              phone was warned about nothing for the whole window before meeting
+              a non-dismissible paywall. `md:hidden` inside the component, so
+              desktop keeps the chip and only the chip.
+
+              FIRST CHILD OF <Inset>, ABOVE THE HEADER ROW, and that position is
+              load-bearing rather than cosmetic. `main` carries
+              `md:[header+&]:pt-0 md:[header+&]:-mt-3.5` (see the long note above
+              <main>), which is an ADJACENT-sibling rule, and adjacency is
+              structural: `display: none` does not exempt an element from it. So
+              mounting this bar between the header and main — where it is
+              invisible at md and up — silently cancelled that alignment for the
+              whole grace window at every desktop width, pushing every page's
+              title row 30px low with no banner on screen to justify it
+              (measured at 1280px: padding-top 16px / margin-top 0 instead of
+              0 / -14px). Above the header row, `header + main` stays intact in
+              every billing state.
+
+              IN FLOW, never `position: fixed`. `SystemAnnouncementBanner` is the
+              fixed bar at the top of the viewport and global.css offsets the
+              chrome by its height; a second fixed bar would have to join that
+              arithmetic. Inside <Inset> rather than above it, so it spans the
+              content column and scrolls with the page instead of covering the
+              sidebar too.
+
+              Route-independent on purpose: on /subscription and /settings, which
+              the hard gate leaves reachable, this bar is a phone user's only
+              route to the hosted invoice. */}
+          <PaymentDueBar />
           {/* v2 only — the Stripe-style chrome row: search, messages,
               notifications. Sits in exactly the slot v1's <header> occupies, as a
               `shrink-0` flex sibling ABOVE the banners and <main>, so the flex
@@ -586,24 +619,6 @@ export default function DashboardLayout({
               </div>
             </header>
           )}
-          {/* The dunning warning FOR A PHONE, and nothing else on the screen
-              carries it there.
-              During grace the only billing surface is the chip in the sidebar
-              footer, and below `md` both sidebars live inside a closed Sheet —
-              so the chip is not off-screen, it is absent, and an operator on a
-              phone was warned about nothing for the whole window before meeting
-              a non-dismissible paywall. `md:hidden` inside the component, so
-              desktop keeps the chip and only the chip.
-              HERE, in flow, deliberately: `SystemAnnouncementBanner` is the
-              fixed bar at the top of the viewport and global.css offsets the
-              chrome by its height, and a second fixed bar would have to join
-              that arithmetic. It renders nothing at all in every other state,
-              which is what keeps main's `md:[header+&]` alignment intact for
-              healthy tenants — the same contract MaintenanceBanner and
-              AppBannerStack already honour. Route-independent on purpose: on
-              /subscription and /settings, which the hard gate leaves reachable,
-              this bar is a phone user's only route to the hosted invoice. */}
-          <PaymentDueBar />
           <MaintenanceBanner />
           {/*
             Deposit-hold alerts, and the mount point every future banner should

@@ -7,6 +7,7 @@ import { useSubscriptionPlans } from "@/hooks/use-subscription-plans";
 import { useTenantSubscription } from "@/hooks/use-tenant-subscription";
 import { useTenant } from "@/contexts/TenantContext";
 import { useAuth } from "@/stores/auth-store";
+import { useV2 } from "@/lib/v2-context";
 import {
   Dialog,
   DialogContent,
@@ -96,10 +97,40 @@ export function SubscriptionGateDialog({
 
   const hasPlans = !!plans && plans.length > 0;
 
+  /* ── the v2 surface, on the v1 primitive ──────────────────────────────────
+   *
+   * This dialog stays on `ui/dialog` and keeps its `z-[100]`, deliberately:
+   * that is the stacking level the gates share, and it is what stops a system
+   * notice or the migration blocker painting over the paywall. `ui-v2/dialog`
+   * sits at `z-50`, so swapping the primitive would put the most important
+   * modal in the product UNDER the others. See the same note in
+   * `system-announcement-dialog.tsx`.
+   *
+   * What was wrong was only the SURFACE: on a v2 tenant the paywall rendered
+   * with v1's hard border, square-ish corners and flat shadow next to v2
+   * dialogs that use `rounded-4xl bg-popover ring-1 ring-foreground/5
+   * shadow-xl`. These are those tokens, and nothing else.
+   *
+   * Gated on the `theme` area, not applied unconditionally: `--v2-radius-4xl`
+   * is defined only inside the `.v2-theme` block, so off-gate `rounded-4xl`
+   * would resolve to Tailwind v4's 2rem fallback — neither design — and the
+   * other 56 tenants' class list stays byte-for-byte what it is today.
+   *
+   * `sm:rounded-4xl` is not redundant: `sm:rounded-lg` lives in the primitive's
+   * base class and lands inside a media query, so it beats a base-layer
+   * `rounded-4xl` from 640px up. The pairs below that collide with a base class
+   * (`bg-popover`, `shadow-xl`, `border-0`) are resolved by tailwind-merge in
+   * the primitive's own `cn`, last writer winning, which is this string.
+   */
+  const v2Theme = useV2("theme");
+  const v2Surface = v2Theme
+    ? " rounded-4xl sm:rounded-4xl border-0 bg-popover text-popover-foreground shadow-xl ring-1 ring-foreground/5 dark:ring-foreground/10"
+    : "";
+
   return (
     <Dialog open={open}>
       <DialogContent
-        className="sm:max-w-md max-h-[90vh] overflow-y-auto [&>button:last-child]:hidden"
+        className={`sm:max-w-md max-h-[90vh] overflow-y-auto [&>button:last-child]:hidden${v2Surface}`}
         /* The application behind this is BLURRED, not merely dimmed. A dimmed
            dashboard still reads as a dashboard you could use if you squinted,
            and this screen's whole job is to say that you cannot. `bg-background/70`

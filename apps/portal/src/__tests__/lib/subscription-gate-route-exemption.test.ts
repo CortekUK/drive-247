@@ -303,15 +303,22 @@ describe('the pay link is reachable on the exempt routes', () => {
     const mount = SRC.indexOf('<PaymentDueBar />');
     expect(mount, 'PaymentDueBar should be mounted in (dashboard)/layout.tsx').toBeGreaterThan(-1);
 
-    // Inside <Inset>, next to the other in-flow banners and above <main> — NOT
-    // `position: fixed`, so it cannot fight SystemAnnouncementBanner's offsets.
+    // Inside <Inset> and above <main> — in flow, NOT `position: fixed`, so it
+    // cannot fight SystemAnnouncementBanner's `--system-banner-h` offsets.
+    //
+    // This used to also assert the bar sat within 400 characters of
+    // <MaintenanceBanner />, which quietly pinned the WRONG position: below the
+    // header row, where the bar's zero-height `md:hidden` anchor cancelled
+    // main's `md:[header+&]` alignment for the whole grace window on desktop.
+    // Its exact slot is now owned by `payment-due-bar-mount.test.ts`, which
+    // states why; this suite keeps only the part it is about — that the bar is
+    // in flow, above main, and reachable on every route.
     const inset = SRC.indexOf('<Inset');
     const main = SRC.indexOf('<main');
     expect(mount).toBeGreaterThan(inset);
     expect(mount).toBeLessThan(main);
-    const banners = SRC.indexOf('<AppBannerStack scope="app" />');
-    expect(Math.abs(SRC.indexOf('<MaintenanceBanner />') - mount)).toBeLessThan(400);
-    expect(banners).toBeGreaterThan(-1);
+    expect(SRC.indexOf('<AppBannerStack scope="app" />')).toBeGreaterThan(-1);
+    expect(SRC.indexOf('<MaintenanceBanner />')).toBeGreaterThan(-1);
 
     // Route-independent: mounted with no `isSubscriptionPage` guard anywhere in
     // the JSX around it, which is what makes it reachable on /subscription.
