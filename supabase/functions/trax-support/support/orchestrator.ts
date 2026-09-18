@@ -12,6 +12,7 @@ import { digest, canView } from './auth.ts';
 import { FINANCE_TOOLS } from './finance-tools.ts';
 import { BUSINESS_TOOLS, businessTopic } from './business-tools.ts';
 import { BALANCE_TOOLS } from './balance-tools.ts';
+import { REPORT_TOOLS, type ReportStore } from './report-tools.ts';
 import type { BusinessReads } from './business-query.ts';
 import { PAYMENT_INVESTIGATION_TOOLS, paymentReferences } from './payment-investigation.ts';
 import { financeScopes, databaseFinanceScopes, type FinanceServices } from './finance-types.ts';
@@ -23,6 +24,7 @@ export interface ModelContext extends OperationalContext {
   observe?:()=>number;
   fleet?:FleetReads;
   business?:BusinessReads;
+  reports?:ReportStore;
   finance?:FinanceServices;
   escalationPolicy?:EscalationPolicy;
 }
@@ -87,7 +89,9 @@ export async function modelConversation(message:string,locale:Locale,conversatio
     .filter(t=>!Object.hasOwn(FINANCE,t.function.name)||(t.function.name==='get_stripe_account_summary'?scopes.includes('account_balance'):scopes.includes('rental_payments')))
     // A balance names customers and states money: offer it only where both hold,
     // so the model is never shown a tool this caller would be refused.
-    .filter(t=>!Object.hasOwn(BALANCE_TOOLS,t.function.name)||(dataScopes.includes('rental_payments')&&canView(env.auth,'customers')));
+    .filter(t=>!Object.hasOwn(BALANCE_TOOLS,t.function.name)||(dataScopes.includes('rental_payments')&&canView(env.auth,'customers')))
+    // A report has nowhere to go without configured storage, so it is not offered.
+    .filter(t=>!Object.hasOwn(REPORT_TOOLS,t.function.name)||!!env.reports);
   const paymentIds=new Set<string>();
   // A record already validated in this conversation stays addressable for follow-ups, but only after a
   // fresh tenant/permission check. Its old results are never reused as evidence.
@@ -168,15 +172,17 @@ export async function modelConversation(message:string,locale:Locale,conversatio
         const resolved=await runTool(name,{target:a.target,...(a.entityId?{entityId:a.entityId}:{})},env);
         if(!('action'in resolved))throw Error();
         const id=navId(resolved.action);actions.set(id,resolved.action);result={navigationId:id,label:resolved.action.label};
-      } else if(Object.hasOwn(BUSINESS_TOOLS,name)||Object.hasOwn(BALANCE_TOOLS,name)) {
+      } else if(Object.hasOwn(BUSINESS_TOOLS,name)||Object.hasOwn(BALANCE_TOOLS,name)||Object.hasOwn(REPORT_TOOLS,name)) {
         const a=object(input);
         if(!env.business)throw new SupportError('business_unavailable','Business data queries are not configured in this environment.',503);
         if(name==='query_business_data')issue=selectIssue(businessTopic(a.dataset));
         if(name==='query_customer_balances')issue=selectIssue('payments');
         const checkKey=await digest(name+JSON.stringify(a));
         if(failures.has(checkKey))throw new SupportError('duplicate_failed_check','This query already failed in this request. Change the question or offer support.');
-        const run=Object.hasOwn(BALANCE_TOOLS,name)?BALANCE_TOOLS[name as keyof typeof BALANCE_TOOLS]:BUSINESS_TOOLS[name as keyof typeof BUSINESS_TOOLS];
-        const r=await run(input,{...env,business:env.business,financeScopes:dataScopes,
+        const run=Object.hasOwn(REPORT_TOOLS,name)?REPORT_TOOLS[name as keyof typeof REPORT_TOOLS]
+          :Object.hasOwn(BALANCE_TOOLS,name)?BALANCE_TOOLS[name as keyof typeof BALANCE_TOOLS]
+          :BUSINESS_TOOLS[name as keyof typeof BUSINESS_TOOLS];
+        const r=await run(input,{...env,business:env.business,reports:env.reports,financeScopes:dataScopes,
           timezone:(tenant:string)=>env.fleet?env.fleet.timezone(tenant):Promise.resolve(null),
           currency:async(tenant:string)=>(await env.finance?.reads.tenant(tenant))?.currency_code??null,
           now:env.observe?.()??env.now});

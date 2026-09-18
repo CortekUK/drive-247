@@ -133,6 +133,12 @@ async function ask(message: string) {
 }
 /** What the model was actually shown — tool results included. */
 const modelSaw = () => JSON.stringify((deps.model!.complete as ReturnType<typeof vi.fn>).mock.calls);
+/** The tools OFFERED on the first call, which is not the same as what a scripted
+ *  model then tried to call. */
+const toolsOffered = (): string[] => {
+  const [, tools] = ((deps.model!.complete as ReturnType<typeof vi.fn>).mock.calls[0] ?? []) as [unknown, { function?: { name?: string } }[]?];
+  return (tools ?? []).map((tool) => tool?.function?.name ?? '').filter(Boolean);
+};
 
 describe('a question about the account’s own data is answered with the data', () => {
   it('counts this account’s vehicles through the whole path', async () => {
@@ -318,5 +324,95 @@ describe('who owes the most, through a conversation', () => {
     expect(out.status).toBe(200);
     expect(modelSaw()).toMatch(/finance permission/i);
     expect(modelSaw()).not.toContain('250.00');
+  });
+});
+
+describe('asking for a report, through a conversation', () => {
+  /** An in-memory stand-in for the private bucket and job table. */
+  function memoryReports() {
+    const jobs = new Map<string, Record<string, unknown>>();
+    const objects = new Map<string, { bytes: Uint8Array; contentType: string }>();
+    let counter = 0;
+    return {
+      jobs, objects,
+      async createJob(job: Record<string, unknown>) { const id = `job-${++counter}`; jobs.set(id, { ...job, id }); return { id }; },
+      async updateJob(id: string, patch: Record<string, unknown>) { jobs.set(id, { ...jobs.get(id)!, ...patch }); },
+      async put(path: string, bytes: Uint8Array, contentType: string) { objects.set(path, { bytes, contentType }); },
+      async signedUrl(path: string, expiresIn: number) { return `https://storage.test/${path}?exp=${expiresIn}`; },
+    };
+  }
+
+  it('generates a real file and answers with what it contains', async () => {
+    const reports = memoryReports();
+    deps.reports = reports as unknown as Dependencies['reports'];
+    deps.model = scripted(
+      call('discover_business_data', {}),
+      call('generate_report', { dataset: 'payments', metric: 'collected', format: 'pdf', period: { basis: 'payment_date', preset: 'last_month' } }),
+      answer('Your sales report for last month is ready to download. It covers GBP 400.00 collected across one payment.', ['business_query:payments:collected']),
+    );
+    const out = await ask('Generate a sales report PDF for last month');
+    expect(out.status).toBe(200);
+    expect(out.body.response).toContain('ready to download');
+    expect(out.body.response).toContain('400.00');
+
+    // A file actually exists, under this account's prefix, and it is a PDF.
+    expect(reports.objects.size).toBe(1);
+    const [path] = [...reports.objects.keys()];
+    expect(path.startsWith(`${tenantA}/`)).toBe(true);
+    expect(reports.objects.get(path)!.contentType).toBe('application/pdf');
+    expect(new TextDecoder().decode(reports.objects.get(path)!.bytes.subarray(0, 5))).toBe('%PDF-');
+    // The job finished, for this account, and the other account is nowhere in it.
+    const [job] = [...reports.jobs.values()];
+    expect(job.state).toBe('ready');
+    expect(job.tenantId).toBe(tenantA);
+    expect(modelSaw()).not.toContain(tenantB);
+    expect(modelSaw()).not.toContain('7777');
+  });
+
+  it('cannot claim a file when reports are not configured', async () => {
+    // deps.reports is left undefined, as in every deployment today.
+    deps.model = scripted(
+      call('generate_report', { dataset: 'payments', metric: 'collected', format: 'pdf' }),
+      answer('I cannot produce a file here, but I can tell you the figure.', []),
+    );
+    const out = await ask('Send me a PDF of last month’s sales');
+    expect(out.status).toBe(200);
+    // The tool is not even offered, and the attempt is refused rather than faked.
+    expect(toolsOffered()).not.toContain('generate_report');
+    expect(modelSaw()).toMatch(/not configured|unavailable/i);
+    expect(out.body.response).not.toMatch(/https?:\/\//);
+  });
+
+  it('produces no file for a role without the finance permission', async () => {
+    deps.reports = memoryReports() as unknown as Dependencies['reports'];
+    staff.role = 'viewer';
+    deps.model = scripted(
+      call('generate_report', { dataset: 'payments', metric: 'collected', format: 'csv' }),
+      answer('That figure is not available for your access level.', []),
+    );
+    const out = await ask('Export our payments to CSV');
+    expect(out.status).toBe(200);
+    // A viewer cannot read money, so the question does not even reach the model:
+    // it is answered from prepared guidance. Either way, no file is produced and
+    // no link is offered.
+    expect((deps.reports as unknown as { objects: Map<string, unknown> }).objects.size).toBe(0);
+    expect(out.body.response).not.toMatch(/https?:\/\//);
+    expect(JSON.stringify(out.body)).not.toContain('downloadUrl');
+  });
+
+  it('lets an authorized admin reach the model for the same money question', async () => {
+    // The question is finance-worded, which used to be diverted away from the
+    // model whenever the Stripe feature was unconfigured — as it is here.
+    deps.reports = memoryReports() as unknown as Dependencies['reports'];
+    staff.role = 'admin';
+    deps.model = scripted(
+      call('generate_report', { dataset: 'payments', metric: 'collected', format: 'csv' }),
+      answer('Your payments export is ready to download.', ['business_query:payments:collected']),
+    );
+    const out = await ask('Export our payments to CSV');
+    expect(out.status).toBe(200);
+    expect(out.body.provenance.engine).toBe('model');
+    expect(out.body.response).toContain('ready to download');
+    expect((deps.reports as unknown as { objects: Map<string, unknown> }).objects.size).toBe(1);
   });
 });
