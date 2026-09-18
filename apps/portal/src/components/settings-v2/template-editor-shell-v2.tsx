@@ -193,11 +193,16 @@ export function TemplateEditorShellV2({
     <TooltipProvider>
       <style>{PREVIEW_CSS}</style>
       <div className="flex h-[calc(100vh-4rem)] flex-col md:h-[calc(100vh-66px)] md:pt-[14px]">
-        <header className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
-          <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+        {/* The title block wants 12rem before the actions may share its line.
+            With a zero basis (plain `flex-1`) the row never wrapped, and at phone
+            width the view-only chip squeezed the title to one letter per line.
+            Save and Reset still fit beside the title on a phone; the longer chip
+            drops under it. */}
+        <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-3 sm:px-6">
+          <div className="flex min-w-0 flex-[1_1_12rem] items-center gap-2 sm:gap-3">
             <IconActionButton action={{ label: backLabel, icon: ArrowLeft, onClick: onBack }} />
-            <div className="min-w-0">
-              <h1 className="flex flex-wrap items-center gap-2 font-heading text-lg font-semibold tracking-tight text-foreground sm:text-xl">
+            <div className="min-w-0 flex-1">
+              <h1 className="flex flex-wrap items-center gap-2 font-heading text-lg font-bold tracking-tight text-foreground sm:text-xl">
                 <span className="min-w-0 [overflow-wrap:anywhere]">{title}</span>
                 {badges}
               </h1>
@@ -205,7 +210,7 @@ export function TemplateEditorShellV2({
             </div>
           </div>
           {state.kind === "ready" && (
-            <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+            <div className="flex min-w-0 max-w-full flex-wrap items-center gap-1.5">
               {actions.map((action) => (
                 <IconActionButton key={action.label} action={action} />
               ))}
@@ -233,7 +238,7 @@ export function EditorChip({ tone = "muted", children }: { tone?: "muted" | "pri
     <span
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium",
-        tone === "primary" && "bg-primary/10 text-primary",
+        tone === "primary" && "bg-primary/10 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]",
         tone === "amber" && "bg-amber-500/15 text-amber-700 dark:text-amber-400",
         tone === "muted" && "bg-muted text-muted-foreground",
       )}

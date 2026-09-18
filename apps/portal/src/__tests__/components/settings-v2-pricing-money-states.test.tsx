@@ -15,6 +15,8 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -56,6 +58,7 @@ import {
   depositChargeGuard,
   depositDirtyState,
   depositPayload,
+  describeHolidayDeleteError,
   feesPayload,
   formatHolidayDates,
   formatPercent,
@@ -73,6 +76,7 @@ import {
 } from "@/components/settings-v2/pricing-money-logic";
 import { DepositSettingsV2, FeesSettingsV2 } from "@/components/settings-v2/fees-deposit-v2";
 import { PricingRulesV2 } from "@/components/settings-v2/pricing-rules-v2";
+import { SettingsPageSaveProvider } from "@/components/settings-v2/settings-kit";
 
 /* -------------------------------------------------------------------------- */
 /* Harness                                                                     */
@@ -439,7 +443,8 @@ describe("FeesSettingsV2", () => {
     const registerSave = vi.fn();
     render(<FeesSettingsV2 {...(props({ form: { ...form, tax_percentage: 8 }, onSave, registerSave }) as any)} />);
     expect(text()).toContain("Unsaved changes");
-    expect(registerSave).toHaveBeenCalledWith("fees", expect.any(Function));
+    // The save, and the discard the page's Reset runs.
+    expect(registerSave).toHaveBeenCalledWith("fees", expect.any(Function), expect.any(Function));
 
     const save = button("Save");
     expect(save.disabled).toBe(false);
@@ -552,7 +557,7 @@ describe("DepositSettingsV2", () => {
     const registerSave = vi.fn();
     render(<DepositSettingsV2 {...(props({ form: { ...form, deposit_charge_enabled: true }, registerSave }) as any)} />);
     expect(text()).toContain("Not saved yet. Save to start charging the deposit on new bookings.");
-    expect(registerSave).toHaveBeenCalledWith("preauth", expect.any(Function));
+    expect(registerSave).toHaveBeenCalledWith("preauth", expect.any(Function), expect.any(Function));
     expect(button("Save").disabled).toBe(false);
   });
 
@@ -728,5 +733,303 @@ describe("PricingRulesV2", () => {
     );
     expect(text()).toContain("Loading monthly pricing");
     expect(container.querySelector('[aria-label="Monthly rate starts at"]')).toBeNull();
+  });
+});
+
+describe("inside the page's one save bar", () => {
+  const lastWithSave = (registerSave: ReturnType<typeof vi.fn>, key: string) => {
+    const calls = registerSave.mock.calls.filter((call) => call[0] === key && call[1]);
+    return calls[calls.length - 1] as [string, () => Promise<unknown>, () => void];
+  };
+
+  it("Pricing rules: no Save anywhere; the monthly rate and weekend pricing register a save and a discard", async () => {
+    h.reads["weekend-pricing"] = readState();
+    h.reads["tenant-holidays"] = readState();
+    const registerSave = vi.fn();
+    const monthlyTier = { value: 31, savedValue: 30, onChange: vi.fn(), onSave: vi.fn(async () => undefined), read: readState() as any };
+    render(
+      <SettingsPageSaveProvider>
+        <PricingRulesV2 canEdit registerSave={registerSave} monthlyTier={monthlyTier} />
+      </SettingsPageSaveProvider>,
+    );
+    typeInto(document.getElementById("v2-weekend-percent") as HTMLInputElement, "25");
+    expect(findButton("Save")).toBeUndefined();
+    // The bar says "Unsaved changes"; the sections do not repeat it.
+    expect(text()).not.toContain("Unsaved changes");
+
+    const [, monthlySave, monthlyDiscard] = lastWithSave(registerSave, "pricing-monthly-tier");
+    await act(async () => {
+      await monthlySave();
+    });
+    expect(monthlyTier.onSave).toHaveBeenCalledTimes(1);
+    act(() => monthlyDiscard());
+    expect(monthlyTier.onChange).toHaveBeenCalledWith(30);
+
+    const [, weekendSave, weekendDiscard] = lastWithSave(registerSave, "pricing-weekend");
+    await act(async () => {
+      await weekendSave();
+    });
+    // Hand-written: 25% on the saved Sat/Sun, not stacked.
+    expect(h.weekend.updateSettings).toHaveBeenCalledWith({ weekend_surcharge_percent: 25, weekend_days: [6, 0], stack_surcharges: false });
+    act(() => weekendDiscard());
+    expect((document.getElementById("v2-weekend-percent") as HTMLInputElement).value).toBe("10");
+  });
+
+  it("Tax and fees: no Save, and Unit groups keep '%' beside its box with the switch after it", () => {
+    const fees = {
+      form: {
+        tax_enabled: true,
+        tax_percentage: 8,
+        service_fee_enabled: false,
+        service_fee_type: "fixed_amount",
+        service_fee_value: 0,
+        service_fee_amount: 0,
+      },
+      setForm: vi.fn(),
+      saved: { tax_enabled: true, tax_percentage: 7.5, service_fee_enabled: false, service_fee_type: "fixed_amount", service_fee_value: 0, service_fee_amount: 0 },
+      read: readState(),
+      canEdit: true,
+      currencyCode: "USD",
+      onSave: vi.fn(async () => undefined),
+      registerSave: vi.fn(),
+    };
+    render(
+      <SettingsPageSaveProvider>
+        <FeesSettingsV2 {...(fees as any)} />
+      </SettingsPageSaveProvider>,
+    );
+    expect(findButton("Save")).toBeUndefined();
+    const rate = container.querySelector('input[aria-label="Tax rate"]') as HTMLInputElement;
+    expect(rate.parentElement!.textContent).toBe("%");
+    const toggle = container.querySelector('[aria-label="Enable tax"]')!;
+    expect(toggle.parentElement).toBe(rate.parentElement!.parentElement);
+    expect(toggle.className.split(/\s+/)).not.toContain("ml-2");
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* Verifier fixes: negative values, delete copy, view-only reads, discard      */
+/* -------------------------------------------------------------------------- */
+
+describe("negative stored values say what the field shows", () => {
+  it("tax -5%: its own line (not 'the rate is 0%'), and it does not hold Save back", () => {
+    const issue = taxIssue({ tax_enabled: true, tax_percentage: -5 });
+    expect(issue?.message).toBe("The rate is -5%. A tax rate can't be negative. Enter 0 or more.");
+    expect(issue?.tone).toBe("danger");
+    expect(issue?.blocksSave).toBeUndefined();
+    // Off still says nothing, whatever is stored.
+    expect(taxIssue({ tax_enabled: false, tax_percentage: -5 })).toBeNull();
+  });
+
+  it("service fee -10: percent, tenant currency, or a bare number (not 'set to 0')", () => {
+    expect(serviceFeeIssue({ service_fee_enabled: true, service_fee_type: "percentage", service_fee_value: -10 })?.message).toBe(
+      "The fee is -10%. A service fee can't be negative. Enter 0 or more.",
+    );
+    expect(
+      serviceFeeIssue({ service_fee_enabled: true, service_fee_type: "fixed_amount", service_fee_value: -10 }, "USD")?.message,
+    ).toBe("The fee is -$10.00. A service fee can't be negative. Enter 0 or more.");
+    expect(serviceFeeIssue({ service_fee_enabled: true, service_fee_type: "fixed_amount", service_fee_value: "-10" })?.message).toBe(
+      "The fee is -10. A service fee can't be negative. Enter 0 or more.",
+    );
+    expect(serviceFeeIssue({ service_fee_enabled: true, service_fee_type: "fixed_amount", service_fee_value: -10 })?.blocksSave).toBeUndefined();
+  });
+
+  it("deposit -250: formatted in the tenant currency (not 'The amount is $0.00')", () => {
+    const form = { security_deposit_enabled: true, deposit_charge_enabled: false, deposit_mode: "global", global_deposit_amount: -250 };
+    expect(depositAmountIssue(form, "USD")?.message).toBe("The amount is -$250.00. A deposit can't be negative. Enter 0 or more.");
+    expect(depositAmountIssue({ ...form, deposit_mode: "per_vehicle" }, "GBP")?.message).toBe(
+      "The amount is -£250.00. A deposit can't be negative. Enter 0 or more.",
+    );
+    expect(depositAmountIssue({ ...form, security_deposit_enabled: false }, "USD")).toBeNull();
+  });
+
+  it("Tax and fees renders the negative lines, with the payload untouched", () => {
+    render(
+      <FeesSettingsV2
+        {...({
+          form: { tax_enabled: true, tax_percentage: -5, service_fee_enabled: true, service_fee_type: "fixed_amount", service_fee_value: -10, service_fee_amount: -10 },
+          setForm: vi.fn(),
+          saved: { tax_enabled: true, tax_percentage: -5, service_fee_enabled: true, service_fee_type: "fixed_amount", service_fee_value: -10, service_fee_amount: -10 },
+          read: readState(),
+          canEdit: true,
+          currencyCode: "GBP",
+          onSave: vi.fn(async () => undefined),
+        } as any)}
+      />,
+    );
+    expect(text()).toContain("The rate is -5%. A tax rate can't be negative.");
+    expect(text()).toContain("The fee is -£10.00. A service fee can't be negative.");
+    expect(text()).not.toContain("the rate is 0%");
+    expect(text()).not.toContain("set to 0");
+  });
+});
+
+describe("describeHolidayDeleteError", () => {
+  it("a foreign-key refusal says the holiday is still referenced", () => {
+    expect(
+      describeHolidayDeleteError({
+        code: "23503",
+        message: 'update or delete on table "tenant_holidays" violates foreign key constraint "x_holiday_id_fkey"',
+      }),
+    ).toBe("Other records still point to this holiday, so it can't be deleted yet. Nothing was removed.");
+  });
+
+  it("any other constraint or trigger refusal never mentions fields", () => {
+    expect(describeHolidayDeleteError({ code: "P0001", message: "delete blocked" })).toBe(
+      "The database refused to delete this holiday. Nothing was removed. Try again.",
+    );
+  });
+
+  it("network and permission failures keep the save copy, minus 'your changes are still here'", () => {
+    expect(describeHolidayDeleteError(new Error("Failed to fetch"))).toBe("We couldn't reach the server. Nothing was removed.");
+    expect(describeHolidayDeleteError(new Error("permission denied for table tenant_holidays"))).toBe(
+      "You don't have permission to change this. Ask an admin.",
+    );
+  });
+
+  it("the delete confirm shows it", async () => {
+    h.reads["weekend-pricing"] = readState();
+    h.reads["tenant-holidays"] = readState();
+    h.holidays.holidays = [
+      { id: "h1", tenant_id: "t1", name: "Christmas", start_date: "2026-12-24", end_date: "2026-12-26", surcharge_percent: 20, excluded_vehicle_ids: [], recurs_annually: true, created_at: "", updated_at: "" },
+    ];
+    h.holidays.deleteHoliday = vi.fn(async () => {
+      throw { code: "23503", message: "violates foreign key constraint" };
+    });
+    render(<PricingRulesV2 canEdit />);
+    act(() => button("Delete Christmas").click());
+    act(() => button("Delete", document.querySelector('[role="alertdialog"]')!).click());
+    await flush();
+    expect(text()).toContain("Couldn't delete.");
+    expect(text()).toContain("Other records still point to this holiday");
+    expect(text()).not.toContain("Check the fields");
+  });
+});
+
+describe("extreme holiday surcharge on a phone", () => {
+  it("wraps inside its cell instead of running under Edit, and is never cut", () => {
+    h.reads["weekend-pricing"] = readState();
+    h.reads["tenant-holidays"] = readState();
+    h.holidays.holidays = [
+      { id: "h1", tenant_id: "t1", name: "Peak", start_date: "2026-12-24", end_date: "2026-12-26", surcharge_percent: 9999999.99, excluded_vehicle_ids: [], recurs_annually: true, created_at: "", updated_at: "" },
+    ];
+    render(<PricingRulesV2 canEdit />);
+    const value = Array.from(container.querySelectorAll("td span")).find((el) => el.textContent === "+9,999,999.99%")!;
+    expect(value).toBeDefined();
+    expect(value.className).toContain("whitespace-normal");
+    expect(value.className).not.toContain("whitespace-nowrap");
+    expect(value.className).not.toContain("truncate");
+    // It may only break after a thousands separator: "+9," "999," "999.99%".
+    expect(value.querySelectorAll("wbr")).toHaveLength(2);
+    expect(value.innerHTML).toBe("+9,<wbr>999,<wbr>999.99%");
+    const head = Array.from(container.querySelectorAll("th")).find((th) => th.textContent === "Surcharge")!;
+    expect(head.className).toContain("w-[8rem]");
+  });
+});
+
+describe("view-only reads on Security deposit", () => {
+  const form = { security_deposit_enabled: true, deposit_charge_enabled: false, deposit_mode: "global", global_deposit_amount: 250 };
+  const props = (over: Record<string, unknown>) => ({
+    form,
+    setForm: vi.fn(),
+    saved: { ...form, own_stripe_account_id: "acct_1" },
+    read: readState(),
+    holds: readState(),
+    liveHoldCount: 0,
+    canEdit: false,
+    currencyCode: "USD",
+    paymentProvider: null,
+    connectHref: "/integrations",
+    onRequestCharge: vi.fn(),
+    onSave: vi.fn(async () => undefined),
+    ...over,
+  });
+
+  it("a failed live-holds check shows no locked-switch line and no dead Try again", () => {
+    render(<DepositSettingsV2 {...(props({ holds: failedState() }) as any)} />);
+    expect(text()).not.toContain("Couldn't check for live deposit holds");
+    expect(findButton("Try again")).toBeUndefined();
+    expect(button("Collect the deposit as a real charge").matches(":disabled")).toBe(true);
+  });
+
+  it("live holds and a pending check say nothing to a viewer either", () => {
+    render(<DepositSettingsV2 {...(props({ liveHoldCount: 3 }) as any)} />);
+    expect(text()).not.toContain("have a live hold");
+    render(<DepositSettingsV2 {...(props({ holds: loadingState() }) as any)} />);
+    expect(text()).not.toContain("Checking for live deposit holds");
+  });
+
+  it("the read-only fieldset dims switches, which a disabled fieldset alone does not", () => {
+    render(<DepositSettingsV2 {...(props({}) as any)} />);
+    const fieldset = container.querySelector("fieldset[data-read-only]")!;
+    expect(fieldset).not.toBeNull();
+    expect(fieldset.className).toContain("[&_[role=switch]:disabled]:opacity-50");
+  });
+});
+
+describe("settings page wiring (source)", () => {
+  const page = readFileSync(resolve(__dirname, "../../app/(dashboard)/settings/page.tsx"), "utf8");
+  const v2Start = page.indexOf("  if (v2Chrome) {\n    const pageMeta =");
+  // The v2 branch ends where the v1 <Tabs> page's return starts.
+  const v2End = page.indexOf("\n  return (", page.indexOf("<LeaveDialogV2", v2Start));
+  const v2 = page.slice(v2Start, v2End);
+
+  it("Custom pricing and General (which holds Tax and fees and Security deposit) sit outside the page's read-only fieldset", () => {
+    expect(page).toMatch(/const V2_PAGES_GATING_OWN_CONTROLS = new Set\(\[[^\]]*'general'[^\]]*\]\);/);
+    expect(page).toMatch(/const V2_PAGES_GATING_OWN_CONTROLS = new Set\(\[[^\]]*'pricing'[^\]]*\]\);/);
+    // Each money section takes its own permission, not the page's.
+    expect(v2).toContain("canEdit={canEditSettings('fees')}");
+    expect(v2).toContain("canEdit={canEditSettings('preauth')}");
+  });
+
+  it("Installments, Pay as you go, Auto-extension, Promo codes and Extras sit outside it too, so a viewer can retry, copy and show more", () => {
+    expect(page).toMatch(/const V2_PAGES_GATING_OWN_CONTROLS = new Set\(\[[^\]]*'installments', 'payg', 'auto-extend', 'promos', 'extras'[^\]]*\]\);/);
+  });
+
+  it("Installments registers unsaved plans with the leave guard, and keeps its own Save (no page save bar)", () => {
+    expect(v2).toContain("<InstallmentSettings registerSave={registerV2SectionSave} />");
+    const bar = page.match(/const V2_PAGES_WITH_SAVE_BAR = new Set\(\[([^\]]*)\]\);/);
+    expect(bar).not.toBeNull();
+    expect(bar![1]).not.toContain("'installments'");
+    // Tax and fees and Security deposit save through General's bar now.
+    expect(bar![1]).toContain("'general', 'templates', 'pricing'");
+    // v1 still mounts it bare.
+    expect(page.slice(v2End)).toContain("<InstallmentSettings />");
+  });
+
+  it("promo codes: Add waits for the list, the Edit dialog validates, and a taken code gets its own copy", () => {
+    expect(v2).toContain("const promoCheckUnavailableV2 = !promoCodes;");
+    expect(v2).toContain("error={promoSaveError(createPromoMutation.error)}");
+    expect(page).toContain("validatePromoEdit(editingPromo, savedEditingPromoV2)");
+    expect(page).toContain("onClick={v2Chrome ? handleUpdatePromoV2 : handleUpdatePromo}");
+    expect(page).toContain('error={promoSaveError(updatePromoMutation.error)}');
+    // v1's classes survive beside the phone-safe v2 ones.
+    expect(page).toContain('className={v2Chrome ? "flex flex-col gap-4 sm:flex-row" : "flex gap-4"}');
+    expect(page).toContain(': () => deletingPromo && deletePromoMutation.mutate(deletingPromo.id)}');
+  });
+
+  it("v2 'Don't save' and Reset reset the page's forms and every registered section; v1 dialogs are unchanged", () => {
+    expect(v2Start).toBeGreaterThan(-1);
+    const guard = page.slice(page.indexOf("  const discardV2PageEdits = () => {"), v2Start);
+    expect(guard).toContain("if (lastSyncedRentalForm.current) setRentalForm(lastSyncedRentalForm.current);");
+    expect(guard).toContain("resetBrandingForm();");
+    expect(guard).toContain("Object.values(v2SectionDiscards.current).forEach((discard) => discard());");
+    expect(guard).toContain("onDiscard: resetV2PageEdits,");
+    expect(v2).toContain("onReset={resetV2PageEdits}");
+    expect(v2).toContain("onDiscard={v2LeaveGuard.discard}");
+    // v2 renders only the v2 leave dialog.
+    expect(v2).not.toContain("<UnsavedChangesDialog");
+    const v1 = page.slice(v2End);
+    expect(v1).toContain("onDiscard={confirmLeave}");
+    expect(v1).toContain("onDiscard={handleTabDiscardAndSwitch}");
+    expect(v1).not.toContain("discardV2PageEdits");
+    expect(v1).not.toContain("LeaveDialogV2");
+  });
+
+  it("the dark v2 --input token carries no alpha, so bg-input/50 stays a valid colour", () => {
+    const css = readFileSync(resolve(__dirname, "../../styles/v2-theme.css"), "utf8");
+    const dark = css.slice(css.indexOf(".dark .v2-theme {"));
+    const input = dark.match(/--input:\s*([^;]+);/)![1];
+    expect(input).not.toContain("/");
   });
 });

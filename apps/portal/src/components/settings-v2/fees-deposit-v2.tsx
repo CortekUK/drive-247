@@ -18,7 +18,7 @@ import { Button } from "@/components/ui-v2/button";
 import { Input } from "@/components/ui-v2/input";
 import { Switch } from "@/components/ui-v2/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui-v2/select";
-import { SettingsPanel, SettingsRow, Unit } from "@/components/settings-v2/settings-kit";
+import { SettingsPanel, SettingsRow, Unit, UnitGroup, UnitGroups } from "@/components/settings-v2/settings-kit";
 import { SettingsDependencyNotice, SettingsReadOnlyFieldset } from "@/components/settings-v2/section-states";
 import {
   IssueLine,
@@ -87,9 +87,13 @@ export interface FeesSettingsV2Props {
 export function FeesSettingsV2({ form, setForm, saved, read, canEdit, currencyCode, onSave, registerSave }: FeesSettingsV2Props) {
   const dirty = read.hasData && isFeesDirty(form, saved);
   const tax = taxIssue(form);
-  const fee = serviceFeeIssue(form);
+  const fee = serviceFeeIssue(form, currencyCode);
   const blocked = hasBlockingIssue([tax, fee]);
   const payload = feesPayload(form);
+
+  const discard = () => {
+    if (saved) setForm((prev) => ({ ...prev, ...savedFeesValues(saved) }));
+  };
 
   const save = useSectionSave({
     sectionKey: "fees",
@@ -100,11 +104,8 @@ export function FeesSettingsV2({ form, setForm, saved, read, canEdit, currencyCo
       if (blocked) throw new Error(BLOCKED_SAVE_MESSAGE);
       await onSave(payload);
     },
+    discard,
   });
-
-  const discard = () => {
-    if (saved) setForm((prev) => ({ ...prev, ...savedFeesValues(saved) }));
-  };
 
   const symbol = getCurrencySymbol(currencyCode);
   const isPercent = form.service_fee_type === "percentage";
@@ -119,44 +120,45 @@ export function FeesSettingsV2({ form, setForm, saved, read, canEdit, currencyCo
             description="Added on top of the rental as its own line on invoices."
             note={tax ? <IssueLine issue={tax} /> : undefined}
           >
-            {form.tax_enabled && (
-              <>
-                <Input
-                  type="text"
-                  inputMode="decimal"
-                  value={form.tax_percentage ?? ""}
-                  onChange={(e) => {
-                    let rawValue = e.target.value.replace(/[^0-9.]/g, "");
-                    const firstDot = rawValue.indexOf(".");
-                    if (firstDot !== -1) {
-                      rawValue = rawValue.slice(0, firstDot + 1) + rawValue.slice(firstDot + 1).replace(/\./g, "");
-                    }
-                    const [whole, decimals] = rawValue.split(".");
-                    if (decimals !== undefined) {
-                      rawValue = `${whole}.${decimals.slice(0, 2)}`;
-                    }
-                    const numValue = parseFloat(rawValue);
-                    if (!isNaN(numValue) && numValue > 100) {
-                      rawValue = "100";
-                    }
-                    setForm((prev) => ({ ...prev, tax_percentage: rawValue }));
-                  }}
-                  onBlur={(e) => {
-                    const value = parseFloat(e.target.value);
-                    setForm((prev) => ({ ...prev, tax_percentage: isNaN(value) ? 0 : Math.max(0, Math.min(100, value)) }));
-                  }}
-                  className="w-20 tabular-nums"
-                  aria-label="Tax rate"
-                />
-                <Unit>%</Unit>
-              </>
-            )}
-            <Switch
-              checked={form.tax_enabled ?? false}
-              onCheckedChange={(checked) => setForm((prev) => ({ ...prev, tax_enabled: checked }))}
-              aria-label="Enable tax"
-              className="ml-2"
-            />
+            <UnitGroups>
+              {form.tax_enabled && (
+                <UnitGroup>
+                  <Input
+                    type="text"
+                    inputMode="decimal"
+                    value={form.tax_percentage ?? ""}
+                    onChange={(e) => {
+                      let rawValue = e.target.value.replace(/[^0-9.]/g, "");
+                      const firstDot = rawValue.indexOf(".");
+                      if (firstDot !== -1) {
+                        rawValue = rawValue.slice(0, firstDot + 1) + rawValue.slice(firstDot + 1).replace(/\./g, "");
+                      }
+                      const [whole, decimals] = rawValue.split(".");
+                      if (decimals !== undefined) {
+                        rawValue = `${whole}.${decimals.slice(0, 2)}`;
+                      }
+                      const numValue = parseFloat(rawValue);
+                      if (!isNaN(numValue) && numValue > 100) {
+                        rawValue = "100";
+                      }
+                      setForm((prev) => ({ ...prev, tax_percentage: rawValue }));
+                    }}
+                    onBlur={(e) => {
+                      const value = parseFloat(e.target.value);
+                      setForm((prev) => ({ ...prev, tax_percentage: isNaN(value) ? 0 : Math.max(0, Math.min(100, value)) }));
+                    }}
+                    className="w-20 tabular-nums"
+                    aria-label="Tax rate"
+                  />
+                  <Unit>%</Unit>
+                </UnitGroup>
+              )}
+              <Switch
+                checked={form.tax_enabled ?? false}
+                onCheckedChange={(checked) => setForm((prev) => ({ ...prev, tax_enabled: checked }))}
+                aria-label="Enable tax"
+              />
+            </UnitGroups>
           </SettingsRow>
 
           <SettingsRow
@@ -173,71 +175,72 @@ export function FeesSettingsV2({ form, setForm, saved, read, canEdit, currencyCo
               ],
             })}
           >
-            {form.service_fee_enabled && (
-              <>
-                <Select
-                  value={form.service_fee_type}
-                  onValueChange={(value) =>
-                    setForm((prev) => ({ ...prev, service_fee_type: value as FeesFormFields["service_fee_type"] }))
-                  }
-                >
-                  <SelectTrigger className="w-36" aria-label="Service fee type">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="percentage">Percentage</SelectItem>
-                    <SelectItem value="fixed_amount">Fixed amount</SelectItem>
-                  </SelectContent>
-                </Select>
-                <div className="relative">
-                  {!isPercent && (
-                    <span
-                      aria-hidden="true"
-                      className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground"
-                    >
-                      {symbol}
-                    </span>
-                  )}
-                  <Input
-                    type="text"
-                    inputMode="decimal"
-                    value={form.service_fee_value ?? ""}
-                    onChange={(e) => {
-                      const rawValue = e.target.value.replace(/[^0-9.]/g, "");
-                      if (rawValue === "" || rawValue === ".") {
-                        setForm((prev) => ({ ...prev, service_fee_value: rawValue, service_fee_amount: rawValue }));
-                      } else {
-                        let value = parseFloat(rawValue) || 0;
-                        if (form.service_fee_type === "percentage" && value > 100) value = 100;
-                        setForm((prev) => ({ ...prev, service_fee_value: Math.max(0, value), service_fee_amount: Math.max(0, value) }));
-                      }
-                    }}
-                    onBlur={(e) => {
-                      const value = parseFloat(e.target.value);
-                      const finalValue = isNaN(value) ? 0 : Math.max(0, value);
-                      setForm((prev) => ({ ...prev, service_fee_value: finalValue, service_fee_amount: finalValue }));
-                    }}
-                    className={cn("w-28 tabular-nums", isPercent ? "pr-7" : prefixPadding(symbol))}
-                    aria-label={isPercent ? "Service fee percentage" : `Service fee amount in ${currencyCode}`}
-                    aria-invalid={fee?.blocksSave || undefined}
-                  />
-                  {isPercent && (
-                    <span
-                      aria-hidden="true"
-                      className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground"
-                    >
-                      %
-                    </span>
-                  )}
-                </div>
-              </>
-            )}
-            <Switch
-              checked={form.service_fee_enabled ?? false}
-              onCheckedChange={(checked) => setForm((prev) => ({ ...prev, service_fee_enabled: checked }))}
-              aria-label="Enable service fee"
-              className="ml-2"
-            />
+            <UnitGroups>
+              {form.service_fee_enabled && (
+                <UnitGroup className="gap-2">
+                  <Select
+                    value={form.service_fee_type}
+                    onValueChange={(value) =>
+                      setForm((prev) => ({ ...prev, service_fee_type: value as FeesFormFields["service_fee_type"] }))
+                    }
+                  >
+                    <SelectTrigger className="w-36" aria-label="Service fee type">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="percentage">Percentage</SelectItem>
+                      <SelectItem value="fixed_amount">Fixed amount</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <div className="relative">
+                    {!isPercent && (
+                      <span
+                        aria-hidden="true"
+                        className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground"
+                      >
+                        {symbol}
+                      </span>
+                    )}
+                    <Input
+                      type="text"
+                      inputMode="decimal"
+                      value={form.service_fee_value ?? ""}
+                      onChange={(e) => {
+                        const rawValue = e.target.value.replace(/[^0-9.]/g, "");
+                        if (rawValue === "" || rawValue === ".") {
+                          setForm((prev) => ({ ...prev, service_fee_value: rawValue, service_fee_amount: rawValue }));
+                        } else {
+                          let value = parseFloat(rawValue) || 0;
+                          if (form.service_fee_type === "percentage" && value > 100) value = 100;
+                          setForm((prev) => ({ ...prev, service_fee_value: Math.max(0, value), service_fee_amount: Math.max(0, value) }));
+                        }
+                      }}
+                      onBlur={(e) => {
+                        const value = parseFloat(e.target.value);
+                        const finalValue = isNaN(value) ? 0 : Math.max(0, value);
+                        setForm((prev) => ({ ...prev, service_fee_value: finalValue, service_fee_amount: finalValue }));
+                      }}
+                      className={cn("w-28 tabular-nums", isPercent ? "pr-7" : prefixPadding(symbol))}
+                      aria-label={isPercent ? "Service fee percentage" : `Service fee amount in ${currencyCode}`}
+                      aria-invalid={fee?.blocksSave || undefined}
+                    />
+                    {isPercent && (
+                      <span
+                        aria-hidden="true"
+                        className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground"
+                      >
+                        %
+                      </span>
+                    )}
+                  </div>
+                </UnitGroup>
+              )}
+              <Switch
+                checked={form.service_fee_enabled ?? false}
+                onCheckedChange={(checked) => setForm((prev) => ({ ...prev, service_fee_enabled: checked }))}
+                aria-label="Enable service fee"
+              />
+            </UnitGroups>
           </SettingsRow>
         </SettingsPanel>
       </SettingsReadOnlyFieldset>
@@ -294,17 +297,18 @@ export function DepositSettingsV2({
   });
   const payload = depositPayload(form);
 
+  const discard = () => {
+    if (saved) setForm((prev) => ({ ...prev, ...savedDepositValues(saved) }));
+  };
+
   const save = useSectionSave({
     sectionKey: "preauth",
     isDirty: dirty,
     registerSave,
     signature: JSON.stringify(payload),
     run: () => onSave(payload),
+    discard,
   });
-
-  const discard = () => {
-    if (saved) setForm((prev) => ({ ...prev, ...savedDepositValues(saved) }));
-  };
 
   const needsConnect = read.hasData && (paymentProvider ?? "stripe") !== "square" && !isStripeConnectUsable(saved);
   const symbol = getCurrencySymbol(currencyCode);
@@ -394,19 +398,22 @@ export function DepositSettingsV2({
                     : "A temporary hold is placed and released. No money moves unless you charge against it."
                 }
                 note={Notes({
+                  // The live-holds lines explain why switching to charges is locked.
+                  // A view-only user can't switch either way, so they are not shown
+                  // (and the check's Try again would sit inside the disabled fieldset).
                   children: [
-                    guard === "blocked" ? (
+                    canEdit && guard === "blocked" ? (
                       <p key="blocked" className="text-destructive">
                         {liveHoldsMessage(liveHoldCount)}
                       </p>
                     ) : null,
-                    guard === "checking" ? (
+                    canEdit && guard === "checking" ? (
                       <p key="checking" className="inline-flex items-center gap-1.5 text-muted-foreground">
                         <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
                         Checking for live deposit holds…
                       </p>
                     ) : null,
-                    guard === "unknown" ? (
+                    canEdit && guard === "unknown" ? (
                       <div key="unknown" role="alert" className="flex flex-wrap items-center gap-x-2 gap-y-1">
                         <span className="text-destructive">
                           Couldn&apos;t check for live deposit holds, so switching to charges is locked for now.

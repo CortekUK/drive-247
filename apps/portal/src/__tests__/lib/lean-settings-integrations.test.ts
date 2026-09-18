@@ -259,7 +259,10 @@ describe("gate call sites", () => {
     // The v2 chrome no longer swaps the sidebar for a settings rail — the index
     // page at /settings is the one settings navigation a lean tenant sees, so it
     // must read the same gate the rail did.
-    expect(settingsIndex()).toMatch(/!isSettingsTabHidden\(item\.tab, tenantSlug\)/);
+    // The gate is read once into `leanTenant` (a hook cannot be called from
+    // inside the `useCallback` predicate) and handed to the pure function.
+    expect(settingsIndex()).toMatch(/const leanTenant = useIsLean\(\);/);
+    expect(settingsIndex()).toMatch(/!isSettingsTabHiddenForLean\(item\.tab, leanTenant\)/);
     expect(sidebar()).not.toMatch(/settingsTabGroups/);
   });
 
@@ -267,15 +270,15 @@ describe("gate call sites", () => {
     // Both surfaces must read one function. Two hand-maintained lists is what
     // left E-Signatures clickable in the sidebar while its body was blanked.
     const src = settings();
-    expect(src).toMatch(/!isSettingsTabHidden\(item\.value, tenantSlug\)/);
+    expect(src).toMatch(/!isSettingsTabHiddenForLean\(item\.value, leanTenant\)/);
   });
 
   it("declares a body gate for each newly hidden tab", () => {
     const src = settings();
-    expect(src).toMatch(/const hidePaymentsTab = isAreaHidden\('settings-payments', tenantSlug\);/);
-    expect(src).toMatch(/const hideMessagingTab = isAreaHidden\('settings-messaging', tenantSlug\);/);
-    expect(src).toMatch(/const hideESignTab = isAreaHidden\('settings-esign', tenantSlug\);/);
-    expect(src).toMatch(/const hideInsuranceNav = isAreaHidden\('settings-insurance', tenantSlug\);/);
+    expect(src).toMatch(/const hidePaymentsTab = useIsAreaHidden\('settings-payments'\);/);
+    expect(src).toMatch(/const hideMessagingTab = useIsAreaHidden\('settings-messaging'\);/);
+    expect(src).toMatch(/const hideESignTab = useIsAreaHidden\('settings-esign'\);/);
+    expect(src).toMatch(/const hideInsuranceNav = useIsAreaHidden\('settings-insurance'\);/);
   });
 
   it("guards the TabsContent bodies, not just the triggers", () => {
@@ -325,16 +328,25 @@ describe("gate call sites", () => {
     // The board's Bonzah panel is the ONLY caller left, and it deep-links here.
     const src = settings();
     expect(src).toMatch(/hideInsuranceNav \? <BonzahOnboardingForm \/> : <BonzahSettings \/>/);
+    // The panel used to deep-link to `/settings?tab=insurance`. It cannot any
+    // more: that tab is hidden from the canary (the four settings-* areas
+    // above), so the link would have led nowhere. The application now runs
+    // inside the dialog instead — that is what "reachable" means here, and the
+    // assertion is the mount, not a href.
     const panel = read("app/(dashboard)/integrations/_panels/bonzah.tsx");
-    expect(panel).toMatch(/ONBOARDING_HREF = "\/settings\?tab=insurance"/);
+    expect(panel).toContain('import BonzahOnboardingV2 from "./bonzah-onboarding-v2"');
+    expect(panel).toMatch(/if \(applying\) \{[\s\S]*?<BonzahOnboardingV2/);
+    expect(panel).not.toContain('"/settings?tab=insurance"');
+    // And the v2 shell is a wrapper, never a fork: v1's wizard still backs it.
+    expect(() => read("app/(dashboard)/integrations/_panels/bonzah-onboarding-v2.tsx")).not.toThrow();
     // The wizard itself must still exist for it to land on.
     expect(() => read("components/settings/bonzah-onboarding/index.tsx")).not.toThrow();
   });
 
-  it("lists Blacklist under Bookings on the v2 index, and no integration at all", () => {
+  it("lists no global blacklist (out of Settings for now) and no integration at all on the v2 index", () => {
     const src = settingsIndex();
-    const bookings = src.match(/title: "Bookings",[\s\S]*?title: "Pricing and payments"/)?.[0] ?? "";
-    expect(bookings).toContain('href: "/settings/blacklist"');
+    expect(src).not.toContain('href: "/settings/blacklist"');
+    expect(src).not.toContain('tab: "blacklist"');
     expect(src).not.toMatch(/title: "Integrations",/);
     // Every tab an Integrations card owns — and Subscription, which is the
     // sidebar's Billing page — has no entry on the index.

@@ -68,12 +68,30 @@ export const STRIPE_CONNECT_SETTINGS_PATH = '/settings?tab=payments';
  *     null on first paint and on any query error; treating "unknown" as "not
  *     connected" would flash the block dialog at an operator who is fully set
  *     up, or strand them entirely if the query fails.
+ *
+ * `onV2` is the tenant's `portal_experience = 'v2'` column, and it is ORed with
+ * the canary slug list HERE rather than by the caller. That is the one house
+ * convention every gate touched by the v2-column work follows —
+ * `isV2(area, slug, onV2)`, `isLeanTenant(slug, onV2)`,
+ * `isAreaHidden(area, slug, onV2)`, `isTestModeUiHidden(slug, onV2)`,
+ * `isSettingsTabHidden(tab, slug, onV2)`, `resolveBoldSignMode(mode, slug, onV2)`,
+ * `applyBillingScenario(real, scenario, slug, onV2)` — and it is a convention
+ * worth keeping because the alternative is a trap. This parameter used to be a
+ * pre-RESOLVED `lean` boolean in the same position: a caller who followed the
+ * house shape and passed `onV2` would hand it `false` for northwind (whose row
+ * is not 'v2' until the SQL lands), the gate would answer "not lean", and the
+ * canary's New Rental flow would silently stop being gated on a usable Connect
+ * account — free to create rentals it cannot charge for.
+ *
+ * Defaults to false, so a caller that has not been given the flag answers
+ * exactly what it answered before the column existed.
  */
 export function isRentalCreationBlocked(
   tenant: StripeConnectTenant | null | undefined,
   tenantSlug: string | null | undefined,
+  onV2: boolean = false,
 ): boolean {
-  if (!isLeanTenant(tenantSlug)) return false;
+  if (!isLeanTenant(tenantSlug, onV2)) return false;
   if (!tenant) return false;
   return !isStripeConnectUsable(tenant);
 }

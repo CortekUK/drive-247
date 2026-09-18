@@ -22,7 +22,31 @@
 
 .v2-theme {
 
-  /* Light Mode: Indigo primary on neutral greys */
+  /* The tenant's brand colour, as three HSL parameters. These defaults are the
+     v2 indigo (#442DD7). use-dynamic-theme.ts, and the root layout on first
+     paint, write the tenant's own values over them as inline style on <body>,
+     so every brand-coloured token below follows the saved colour (and the
+     Appearance try-on preview) while neutral tokens stay put.
+
+     Each brand token keeps the lightness it always had and takes only hue and
+     saturation from the brand, written as an offset from the indigo, so with
+     these defaults every token computes to exactly its old value. `--primary`
+     is the one exception: it IS the brand colour, so it takes the brand's own
+     lightness too (51% by default, which is the old value). A deep brand like
+     graphite (17%) paints graphite buttons, not a mid-tone of the same hue.
+     A near-black, near-white or grey brand never gets here: the hook writes
+     nothing for those (see `isUsableV2Brand`), so these defaults stand.
+
+     Optional, written by the hook only when needed (unset means the fallback):
+       --brand-link-l   a deeper lightness for link text when the brand colour
+                        is too pale to read on white
+       --brand-fg       near-black button text on a pale brand (light mode)
+       --brand-fg-dark  the same for the dark-mode primary */
+  --brand-h: 248;
+  --brand-s: 68%;
+  --brand-l: 51%;
+
+  /* Light Mode: brand primary on neutral greys */
   --background: 0 0% 100%;
   --foreground: 0 0% 3.9%;
 
@@ -32,10 +56,10 @@
   --popover: 0 0% 100%;
   --popover-foreground: 0 0% 3.9%;
 
-  --primary: 248 68% 51%;
-  --primary-foreground: 226 100% 97%;
-  --primary-hover: 248 68% 45%;
-  --primary-light: 248 68% 95%;
+  --primary: var(--brand-h) var(--brand-s) var(--brand-l);
+  --primary-foreground: var(--brand-fg, 226 100% 97%);
+  --primary-hover: var(--brand-h) var(--brand-s) calc(var(--brand-l) - 6%);
+  --primary-light: var(--brand-h) var(--brand-s) 95%;
 
   --secondary: 240 4% 96%;
   --secondary-foreground: 240 6% 10%;
@@ -43,8 +67,41 @@
   --muted: 0 0% 96%;
   --muted-foreground: 0 0% 45%;
 
-  --accent: 0 0% 96%;
+  /* Light purple, not grey (team lead, Sep 16 2026: "our hover is a light
+     purple tint", never white or grey). `--accent` is what every shared
+     primitive highlights with (`hover:bg-accent`, `focus:bg-accent` on menu,
+     select and command items), so this one value turns those purple for v2
+     without touching their markup. It equals `primary/10` laid over white.
+     `--accent-foreground` stays near-black on purpose: the ui-v2 menus paint
+     destructive items with it. `--muted` stays grey: it is also a resting fill
+     (skeletons, tab tracks, progress, avatars). */
+  --accent: var(--brand-h) var(--brand-s) 95%;
   --accent-foreground: 0 0% 9%;
+
+  /* The same tint for primitives that ALSO render for v1 tenants (ui-v2
+     Button). They read `hsl(var(--v2-hover, <their old token>))`; outside
+     `.v2-theme` this is undefined, so the fallback is exactly the old colour.
+     `--v2-outline-fill` does the same for the outline button's resting fill,
+     which the lead asked to be not white. */
+  --v2-hover: var(--brand-h) var(--brand-s) 95%;
+  --v2-outline-fill: transparent;
+  /* Table rows: half the control tint in light (primary/5 over white), so a
+     muted cell label keeps its contrast while hovered. Dark uses the full
+     tint, since a half step disappears on the dark card. */
+  --v2-row-hover: var(--brand-h) var(--brand-s) 97.5%;
+  /* Brand-coloured text: links, and the ui-v2 Button `link` variant. In light
+     it is --primary, unless the brand is too pale to read on white, in which
+     case the hook writes a deeper --brand-link-l. Outside `.v2-theme` it is
+     undefined and every reader falls back to --primary. */
+  --v2-link: var(--brand-h) var(--brand-s) var(--brand-link-l, var(--brand-l));
+  /* The page wash (bg-app-gradient): the brand at the old primary lightness,
+     so a very dark or very pale brand still tints the page instead of greying
+     or bleaching it. */
+  --v2-wash: var(--brand-h) var(--brand-s) 51%;
+  /* Muted text laid on one of those purple tints. --muted-foreground (45%)
+     measures 4.34:1 on the row hover, 4.00 on --v2-hover and 4.22 on the top
+     bar's field; 40% clears 4.5 on all of them (5.03 / 4.84 / 5.08). */
+  --v2-muted-on-tint: 0 0% 40%;
 
   --success: 142 76% 36%;
   --success-foreground: 0 0% 100%;
@@ -62,27 +119,29 @@
   --input: 0 0% 90%;
   --ring: 0 0% 63%;
 
-  --chart-1: 230 100% 82%;
-  --chart-2: 241 100% 69%;
-  --chart-3: 247 92% 60%;
-  --chart-4: 248 68% 51%;
-  --chart-5: 246 61% 42%;
+  /* A lightness ramp in the brand hue. The hue and saturation offsets are the
+     old indigo ramp's own (230/100, 241/100, 247/92, 248/68, 246/61). */
+  --chart-1: calc(var(--brand-h) - 18) calc(var(--brand-s) + 32%) 82%;
+  --chart-2: calc(var(--brand-h) - 7) calc(var(--brand-s) + 32%) 69%;
+  --chart-3: calc(var(--brand-h) - 1) calc(var(--brand-s) + 24%) 60%;
+  --chart-4: var(--brand-h) var(--brand-s) 51%;
+  --chart-5: calc(var(--brand-h) - 2) calc(var(--brand-s) - 7%) 42%;
 
   --radius: 0.625rem;
 
-  /* Sidebar - Light Mode (tinted with the indigo canvas hue so it belongs to
-     the app gradient instead of reading as a standalone white slab) */
-  --sidebar-background: 248 44% 98%;
+  /* Sidebar - Light Mode (tinted with the brand hue so it belongs to the app
+     gradient instead of reading as a standalone white slab) */
+  --sidebar-background: var(--brand-h) calc(var(--brand-s) - 24%) 98%;
   --sidebar-foreground: 0 0% 3.9%;
-  --sidebar-primary: 247 92% 60%;
+  --sidebar-primary: calc(var(--brand-h) - 1) calc(var(--brand-s) + 24%) 60%;
   --sidebar-primary-foreground: 226 100% 97%;
-  --sidebar-accent: 248 75% 94%;
-  --sidebar-accent-foreground: 248 60% 45%;
-  --sidebar-border: 248 25% 92%;
-  --sidebar-ring: 248 40% 70%;
+  --sidebar-accent: var(--brand-h) calc(var(--brand-s) + 7%) 94%;
+  --sidebar-accent-foreground: var(--brand-h) calc(var(--brand-s) - 8%) 45%;
+  --sidebar-border: var(--brand-h) calc(var(--brand-s) - 43%) 92%;
+  --sidebar-ring: var(--brand-h) calc(var(--brand-s) - 28%) 70%;
 
   /* Gradients - Light Mode */
-  --gradient-primary: linear-gradient(135deg, hsl(248 68% 51%), hsl(248 68% 61%));
+  --gradient-primary: linear-gradient(135deg, hsl(var(--brand-h) var(--brand-s) var(--brand-l)), hsl(var(--brand-h) var(--brand-s) calc(var(--brand-l) + 10%)));
   --gradient-success: linear-gradient(135deg, hsl(142 76% 36%), hsl(142 76% 44%));
   --gradient-warning: linear-gradient(135deg, hsl(41 92% 48%), hsl(41 92% 58%));
   --gradient-subtle: linear-gradient(135deg, hsl(159 15% 92%), hsl(159 15% 88%));
@@ -90,7 +149,7 @@
   /* Shadows - Light Mode (mapped to shadow-card / shadow-hover via @theme) */
   --ds-shadow-sm: 0 1px 2px 0 hsl(159 21% 20% / 0.08);
   --ds-shadow-card: 0 4px 6px -1px hsl(159 21% 20% / 0.1), 0 2px 4px -1px hsl(159 21% 20% / 0.06);
-  --ds-shadow-hover: 0 10px 15px -3px hsl(248 68% 51% / 0.15), 0 4px 6px -2px hsl(248 68% 51% / 0.1);
+  --ds-shadow-hover: 0 10px 15px -3px hsl(var(--brand-h) var(--brand-s) 51% / 0.15), 0 4px 6px -2px hsl(var(--brand-h) var(--brand-s) 51% / 0.1);
 
   /* Transitions */
   --transition-all: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
@@ -112,10 +171,13 @@
   --popover: 0 0% 9.1%;
   --popover-foreground: 0 0% 98%;
 
-  --primary: 246 61% 42%;
-  --primary-foreground: 226 100% 97%;
-  --primary-hover: 246 61% 50%;
-  --primary-light: 246 61% 22%;
+  /* Dark keeps its own lightness steps whatever the brand's lightness is (a
+     brand-lightness primary would vanish on the dark page); only hue and
+     saturation follow the brand, as offsets from the indigo defaults. */
+  --primary: calc(var(--brand-h) - 2) calc(var(--brand-s) - 7%) 42%;
+  --primary-foreground: var(--brand-fg-dark, 226 100% 97%);
+  --primary-hover: calc(var(--brand-h) - 2) calc(var(--brand-s) - 7%) 50%;
+  --primary-light: calc(var(--brand-h) - 2) calc(var(--brand-s) - 7%) 22%;
 
   --secondary: 240 4% 16%;
   --secondary-foreground: 0 0% 98%;
@@ -123,8 +185,20 @@
   --muted: 0 0% 15%;
   --muted-foreground: 0 0% 63%;
 
-  --accent: 0 0% 15%;
+  /* The dark purple tint: the old 15% lightness step (so text contrast is
+     unchanged), in the brand hue. See the light block for why both exist. */
+  --accent: calc(var(--brand-h) - 2) calc(var(--brand-s) - 33%) 17%;
   --accent-foreground: 0 0% 98%;
+  --v2-hover: calc(var(--brand-h) - 2) calc(var(--brand-s) - 33%) 17%;
+  --v2-row-hover: calc(var(--brand-h) - 2) calc(var(--brand-s) - 33%) 17%;
+  /* Dark muted text already clears 4.5 on the dark tints (6.31 on 17%). */
+  --v2-muted-on-tint: var(--muted-foreground);
+  /* Brand-coloured text in dark: the ui-v2 Button `link` variant and every
+     `dark:text-[hsl(var(--v2-link,…))]` (indigo-300 by default). Dark
+     --primary is 1.97:1 as text on the dark page; 82% lightness reads on it
+     in any hue. Outside `.v2-theme` it is undefined and readers fall back. */
+  --v2-link: calc(var(--brand-h) - 18) calc(var(--brand-s) + 26%) 82%;
+  --v2-wash: calc(var(--brand-h) - 2) calc(var(--brand-s) - 7%) 42%;
 
   --success: 142 76% 52%;
   --success-foreground: 159 21% 8%;
@@ -139,36 +213,86 @@
   --destructive-light: 0 84% 18%;
 
   --border: 0 0% 100% / 10%;
-  --input: 0 0% 100% / 15%;
+  /* Opaque, unlike --border. The ui-v2 controls use it with an opacity
+     modifier (bg-input/50 on Input, Textarea and Select; bg-input/90 on Switch,
+     Checkbox and RadioGroup; dark:bg-input/30 on Tabs and Button hovers), which
+     Tailwind 3 emits as hsl(var(--input) / 0.5). With an alpha already inside
+     the token that became hsl(0 0% 100% / 15% / 0.5), an invalid colour, so
+     those controls had no fill at all in dark mode. 20% grey is roughly the old
+     15% white laid over the dark page and card surfaces (about 18% and 23%),
+     and stays valid under any modifier. */
+  --input: 0 0% 20%;
   --ring: 0 0% 45%;
 
-  --chart-1: 230 100% 82%;
-  --chart-2: 241 100% 69%;
-  --chart-3: 247 92% 60%;
-  --chart-4: 248 68% 51%;
-  --chart-5: 246 61% 42%;
+  --chart-1: calc(var(--brand-h) - 18) calc(var(--brand-s) + 32%) 82%;
+  --chart-2: calc(var(--brand-h) - 7) calc(var(--brand-s) + 32%) 69%;
+  --chart-3: calc(var(--brand-h) - 1) calc(var(--brand-s) + 24%) 60%;
+  --chart-4: var(--brand-h) var(--brand-s) 51%;
+  --chart-5: calc(var(--brand-h) - 2) calc(var(--brand-s) - 7%) 42%;
 
-  /* Sidebar - Dark Mode (subtle indigo tint to match the dark app gradient) */
-  --sidebar-background: 248 14% 10%;
+  /* Sidebar - Dark Mode (subtle brand tint to match the dark app gradient) */
+  --sidebar-background: var(--brand-h) calc(var(--brand-s) - 54%) 10%;
   --sidebar-foreground: 0 0% 98%;
-  --sidebar-primary: 241 100% 69%;
+  --sidebar-primary: calc(var(--brand-h) - 7) calc(var(--brand-s) + 32%) 69%;
   --sidebar-primary-foreground: 226 100% 97%;
-  --sidebar-accent: 248 18% 17%;
+  --sidebar-accent: var(--brand-h) calc(var(--brand-s) - 50%) 17%;
   --sidebar-accent-foreground: 0 0% 98%;
-  --sidebar-border: 248 30% 100% / 10%;
-  --sidebar-ring: 248 20% 45%;
+  --sidebar-border: var(--brand-h) calc(var(--brand-s) - 38%) 100% / 10%;
+  --sidebar-ring: var(--brand-h) calc(var(--brand-s) - 48%) 45%;
 
-  --gradient-primary: linear-gradient(135deg, hsl(246 61% 42%), hsl(246 61% 52%));
+  --gradient-primary: linear-gradient(135deg, hsl(calc(var(--brand-h) - 2) calc(var(--brand-s) - 7%) 42%), hsl(calc(var(--brand-h) - 2) calc(var(--brand-s) - 7%) 52%));
   --gradient-success: linear-gradient(135deg, hsl(142 76% 52%), hsl(142 76% 60%));
   --gradient-warning: linear-gradient(135deg, hsl(41 92% 65%), hsl(41 92% 75%));
   --gradient-subtle: linear-gradient(135deg, hsl(159 15% 20%), hsl(159 15% 25%));
 
   --ds-shadow-sm: 0 1px 2px 0 hsl(159 21% 4% / 0.5);
   --ds-shadow-card: 0 4px 6px -1px hsl(159 21% 4% / 0.5), 0 2px 4px -1px hsl(159 21% 4% / 0.4);
-  --ds-shadow-hover: 0 10px 15px -3px hsl(246 61% 42% / 0.3), 0 4px 6px -2px hsl(246 61% 42% / 0.2);
+  --ds-shadow-hover: 0 10px 15px -3px hsl(calc(var(--brand-h) - 2) calc(var(--brand-s) - 7%) 42% / 0.3), 0 4px 6px -2px hsl(calc(var(--brand-h) - 2) calc(var(--brand-s) - 7%) 42% / 0.2);
 
   --glow-gold-subtle: 0 0 25px -5px hsl(var(--primary) / 0.35), 0 0 50px -10px hsl(var(--primary) / 0.2);
   --glow-gold-intense: 0 0 35px -5px hsl(var(--primary) / 0.55), 0 0 70px -10px hsl(var(--primary) / 0.3);
+}
+
+/* ---------------------------------------------------------------------------
+ * Table rows: hovered, selected, and the controls inside a row, as three
+ * distinct steps.
+ *
+ * ui-v2 TableRow paints hover and a menu-open row (`has-[[aria-expanded]]`)
+ * with --v2-row-hover and a selected row with --v2-hover; a ghost/outline
+ * Button inside the row hovers (or shows its open menu) with --v2-hover too.
+ * In dark both tokens are the same 17% step, so a hovered row looked selected
+ * and the row's "..." button showed no pill at all (measured 1.000:1). In a
+ * light selected row the button's pill equalled the selected fill the same way.
+ *
+ * Only the custom property is re-pointed, never a background. In light mode
+ * that is enough for a call site's own `hover:bg-transparent` or
+ * `hover:bg-primary/10` to decide. In dark it is not: tailwind-merge drops the
+ * ui-v2 Button's `hover:bg-…` for the call site's but keeps its
+ * `dark:hover:bg-…`, which out-ranks a plain `hover:` class, so a call site
+ * that wants its own hover in dark as well needs the `dark:hover:` twin too.
+ * The `:where()` keeps each rule at zero specificity: it beats inheritance from
+ * <body> but loses to a utility that sets its own `[--v2-hover:…]` (the
+ * forced-dark Select and submenu islands). The dark descendant rule sits after
+ * the light one because a dark selected row matches both.
+ * Selectors name only `.v2-theme`, `.dark` and attributes — never a utility.
+ * Lightness steps are fixed; hue and saturation follow the brand, like the
+ * tokens above (defaults: 248 68% 91%, 246 38% 23%, 246 38% 29%).
+ * ------------------------------------------------------------------------- */
+:where(.v2-theme [data-slot="table-row"][data-state="selected"]) * {
+  --v2-hover: var(--brand-h) var(--brand-s) 91%;
+}
+:where(.dark .v2-theme [data-slot="table-row"][data-state="selected"]) {
+  --v2-hover: calc(var(--brand-h) - 2) calc(var(--brand-s) - 30%) 23%;
+}
+:where(.dark .v2-theme [data-slot="table-row"]) * {
+  --v2-hover: calc(var(--brand-h) - 2) calc(var(--brand-s) - 30%) 29%;
+}
+/* Muted cell text measures 4.34:1 on a hovered light body row and 4.00:1 on
+   a selected one, so while a body row is tinted its muted text reads
+   --v2-muted-on-tint (light 5.03 / 4.84; in dark that token IS the muted
+   colour, so nothing changes there). Header rows keep theirs: they never tint. */
+:where(.v2-theme tbody > [data-slot="table-row"]:is(:hover, [data-state="selected"], :has([aria-expanded="true"]))) {
+  --muted-foreground: var(--v2-muted-on-tint);
 }
 
 /* ===========================================================================
@@ -618,6 +742,54 @@ body.v2-theme {
   background-clip: padding-box;
 }
 
+/* ── No scrollbar inside a dialog  (team lead, Sep 18 2026) ──────────────────
+ *
+ * "our sidebar / side scroll should not appear in any dialog". On his recording
+ * the feedback dialog — and the setup dialog behind it — each carried a native
+ * track down the right edge, which on a 480px panel is a grey gutter roughly as
+ * wide as the close button sitting next to it.
+ *
+ * HIDDEN, NOT CLIPPED. Only the two paint hooks are touched, never `overflow`:
+ * the element stays a scroll container, so the wheel, a trackpad swipe, a drag
+ * and — the one that gets forgotten — Page Down / Home / End with the panel
+ * focused all still move it, and the content below the fold is still reachable
+ * for a keyboard user. Turning the bar off is a paint decision; turning the
+ * overflow off would be a content decision, and would silently truncate the
+ * long dialogs this rule exists for.
+ *
+ * ONE RULE, NOT ONE FILE AT A TIME. `[role="dialog"]` is what Radix puts on
+ * every Content it renders (Dialog, AlertDialog via `alertdialog`, Sheet,
+ * Popover, the command palette), so every dialog in the app is covered — the
+ * ui-v2 ones, the v1 `components/ui/dialog` ones a v2 tenant still meets
+ * (SYSTEM_DIALOG_UI renders through those in BOTH chromes), and any dialog
+ * written after this. Chasing it per file would have meant editing ~90 call
+ * sites and missing the next one.
+ *
+ * The descendant half is the half that matters. The scroll container is rarely
+ * the dialog element itself: the large-dialog contract puts `overflow-y-auto`
+ * on an inner body (`FEATURE_DIALOG_UI.body`, `SYSTEM_DIALOG_UI.body`), and a
+ * dialog with a scrolling table or list inside has it deeper still. `*` is
+ * deliberate and matches the instruction as given — ANY scrollbar in ANY
+ * dialog — rather than a guess at which descendant scrolls.
+ *
+ * Attribute selectors, no leading dot on a utility name: this file `@apply`s
+ * utilities, so a `.overflow-y-auto`-style selector is a Tailwind circular
+ * dependency and 500s every page.
+ *
+ * AFTER `.scrollbar-thin` on purpose. `:is()` takes the specificity of its
+ * heaviest argument, so these land at (0,2,1) — exactly level with
+ * `.v2-theme .scrollbar-thin::-webkit-scrollbar`. Source order is what decides
+ * it, and a `.scrollbar-thin` list inside a dialog should lose. */
+.v2-theme :is([role="dialog"], [role="alertdialog"]),
+.v2-theme :is([role="dialog"], [role="alertdialog"]) * {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.v2-theme :is([role="dialog"], [role="alertdialog"])::-webkit-scrollbar,
+.v2-theme :is([role="dialog"], [role="alertdialog"]) *::-webkit-scrollbar {
+  display: none;
+}
+
 /* ── Integration panels — readable, still light ──────────────────────────────
  *
  * The brief was exact: the panels' light grey is LIKED, it is just too faint to
@@ -705,21 +877,56 @@ body.v2-theme {
   opacity: 0.95;
 }
 
-/* Soft ambient page background — faint indigo glow, adapts to light/dark */
-.v2-theme .bg-app-gradient {
+/* Soft ambient page background — faint brand glow, adapts to light/dark.
+ *
+ * Painted by a viewport-fixed layer behind the element's content, not as the
+ * element's own background. On the dashboard the element is the sidebar
+ * wrapper, which scrolls with the page, so a background painted on it scrolled
+ * away and left flat white behind the fixed, see-through sidebar and top bar.
+ * `background-attachment: fixed` is not used: it repaints on every scroll
+ * frame and is ignored on iOS.
+ *
+ * The layer's `z-index: -1` puts it behind the element's content and in front
+ * of the ground under it. Where that happens depends on the element:
+ *   - The dashboard wrapper (`data-slot="sidebar-wrapper"`) is deliberately NOT
+ *     made a stacking context. It holds `fixed` layers that must keep competing
+ *     with <body>-level ones (the first-run wizard at z-70 against the Trax
+ *     panel, the system banner and the arrival veil), and `isolation` would
+ *     trap them under all of those. Left alone, the layer paints in the root
+ *     context: over the canvas, which carries <body>'s colour because <html>
+ *     has no background, and under every box on the page. tailwind-merge drops
+ *     the wrapper's own `bg-background`, so nothing in between hides it.
+ *   - Everywhere else (the Trax panel and the arrival veil, both already
+ *     stacking contexts, and the playground frames) the element isolates, so
+ *     the wash lands on the element's own ground rather than under it.
+ * No `position: relative`: the Trax panel carries this class on a `fixed`
+ * element, and this rule would out-rank its `fixed` utility. Inside that panel
+ * `position: fixed` resolves against the panel itself (it has a transform), so
+ * the wash still fills just the panel. Nothing between <body> and the dashboard
+ * wrapper sets a transform or filter, so there it is the viewport. */
+.v2-theme .bg-app-gradient:not([data-slot="sidebar-wrapper"]) {
+  isolation: isolate;
+}
+.v2-theme .bg-app-gradient::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
   /* Every layer must be brand-derived. The top-left wash was a literal
      `hsl(247 92% 60%)`, so a tenant on green got a purple corner — the one
      gradient stop in the shell that ignored their colour. `--chart-3` is
      that exact value by default and follows the brand once themed, so this
      looks identical on the stock palette and correct on every other.
+     `--v2-wash` is --primary's old value in each mode, in the brand hue.
      Written as `hsl(var(--chart-3) / …)` rather than `@apply bg-chart-3`:
      chart-1..5 are not colour keys in this project's tailwind.config.ts, so
      the utility does not exist and `@apply` would be a build error. */
   background-image:
-    radial-gradient(70rem 50rem at 105% -10%, hsl(var(--primary) / 0.20), transparent 55%),
+    radial-gradient(70rem 50rem at 105% -10%, hsl(var(--v2-wash) / 0.20), transparent 55%),
     radial-gradient(60rem 48rem at -8% -6%, hsl(var(--chart-3) / 0.16), transparent 52%),
-    radial-gradient(55rem 45rem at 50% 115%, hsl(var(--primary) / 0.12), transparent 55%),
-    linear-gradient(180deg, hsl(var(--primary) / 0.07) 0%, transparent 45%);
+    radial-gradient(55rem 45rem at 50% 115%, hsl(var(--v2-wash) / 0.12), transparent 55%),
+    linear-gradient(180deg, hsl(var(--v2-wash) / 0.07) 0%, transparent 45%);
   background-repeat: no-repeat;
 }
 
@@ -909,6 +1116,53 @@ body.v2-theme {
   border-radius: var(--v2-radius-4xl);
 }
 
+/* --- Field, menu and dialog radius (v1 primitives) -----------------------
+ * The rest of the rounded system for the v1 primitives a v2 screen still
+ * mounts (shared settings panels, and every dialog and menu a v2 page opens
+ * from shared code). Each value is the one the ui-v2 twin resolves:
+ *
+ *   Input           `rounded-md border-input`       -> 3xl (ui-v2 Input)
+ *   Textarea        `rounded-md border-input`       -> 2xl (ui-v2 Textarea)
+ *   SelectTrigger   `rounded-md border-input`, role=combobox  -> 3xl
+ *   Menu, listbox and popover content `rounded-md bg-popover` -> 2xl
+ *   Menu, select and cmdk items       `rounded-sm`            -> xl
+ *   Dialog / AlertDialog              `sm:rounded-lg`         -> 4xl
+ *
+ * Same contract as the Button rule above: keyed on the DEFAULT radius class,
+ * so a call site that asked for another radius (twMerge drops `rounded-md`)
+ * keeps it. A field joined to a neighbour (`rounded-l-none`, `rounded-r-none`,
+ * responsive or not) is left alone as well: the rule would otherwise round the
+ * flat edge it deliberately shares. Checkbox, radio, colour and range inputs
+ * are not text fields and are skipped. The combobox rule skips v1's Button
+ * (`whitespace-nowrap`), which the Button rule above already rounds.
+ *
+ * Tooltips and hover cards carry no role and are not matched. A cmdk list
+ * inside a rounded popover inherits the corner, or its square background would
+ * paint over the popover's curved border. */
+.v2-theme input[class~="rounded-md"][class~="border-input"]:not([type="checkbox"], [type="radio"], [type="color"], [type="range"], [class*="rounded-l-none"], [class*="rounded-r-none"]) {
+  border-radius: var(--v2-radius-3xl);
+}
+.v2-theme textarea[class~="rounded-md"][class~="border-input"]:not([class*="rounded-l-none"], [class*="rounded-r-none"]) {
+  border-radius: var(--v2-radius-2xl);
+}
+.v2-theme button[role="combobox"][class~="rounded-md"][class~="border-input"]:not([class~="whitespace-nowrap"], [class*="rounded-l-none"], [class*="rounded-r-none"]) {
+  border-radius: var(--v2-radius-3xl);
+}
+.v2-theme :is([role="menu"], [role="listbox"], [role="dialog"])[class~="rounded-md"][class~="bg-popover"] {
+  border-radius: var(--v2-radius-2xl);
+}
+.v2-theme [role="dialog"][class~="bg-popover"] > [cmdk-root][class~="rounded-md"] {
+  border-radius: inherit;
+}
+.v2-theme :is([role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], [role="option"])[class~="rounded-sm"] {
+  border-radius: var(--v2-radius-xl);
+}
+@media (min-width: 640px) {
+  .v2-theme :is([role="dialog"], [role="alertdialog"])[class~="sm:rounded-lg"] {
+    border-radius: var(--v2-radius-4xl);
+  }
+}
+
 /* --- Trax floating panel: size and offset --------------------------------
  * Trax floats ABOVE the page (components/trax/trax-panel.tsx, portalled to
  * <body>). Opening it does not narrow the page any more, so nothing here
@@ -966,6 +1220,101 @@ html[data-trax-panel] {
 .v2-theme .settings-v2-body h3 {
   font-size: 1rem;
   line-height: 1.5rem;
-  font-weight: 500;
+  font-weight: 600;
   letter-spacing: normal;
 }
+
+/* `border-border/60` compiles to `hsl(var(--border) / 0.6)`. The dark v2
+ * `--border` already carries its alpha (`0 0% 100% / 10%`), so that colour is
+ * invalid and the border falls back to currentColor: a near-white 1px line
+ * round every Installments card and the example dialog's calendar. Inside a
+ * settings body, or a dialog that marks itself as one with
+ * `data-settings-v2-body`, give it the colour it means: 60% of the 10% white
+ * hairline. The light token has no alpha, so light mode is already right. The
+ * class is matched as an attribute string, not a class selector (see above). */
+.dark .v2-theme :is(.settings-v2-body, [data-settings-v2-body]) [class~="border-border/60"] {
+  border-color: hsl(0 0% 100% / 6%);
+}
+
+/* ── Pointer cursor on clickable controls ─────────────────────────────────────
+ * Team lead, Sep 16 2026: every clickable control shows the hand on hover.
+ *
+ * Buttons, [role=button] and <a href> already do (Tailwind 3.4 Preflight and
+ * the browser's own stylesheet), and so does every Radix trigger, switch,
+ * checkbox, radio, tab, accordion/collapsible trigger, toggle and calendar day,
+ * because each of those renders a <button>. What does NOT:
+ *   - Radix menu items and Select items, and cmdk items, which BOTH primitive
+ *     sets (components/ui and components/ui-v2) pin to `cursor-default`. Both
+ *     sets also render for v1 tenants, so their markup is not edited;
+ *   - native <select>, checkbox, radio and colour inputs, and <summary>;
+ *   - the <label> that toggles a checkbox, radio or switch.
+ *
+ * Scoped to `.v2-theme`, which sits on <body> and so also reaches Radix
+ * portals. v1 tenants never match. Specificity (0,3,1) and up beats
+ * `cursor-default` (0,1,0) whatever order the stylesheets load in.
+ *
+ * Disabled controls keep their own cursor. Radix marks them `data-disabled=""`;
+ * cmdk writes `data-disabled="true"`, and "false" when ENABLED, so a bare
+ * `[data-disabled]` here would drop every cmdk result. An element carrying an
+ * unconditional non-pointer cursor utility (not-allowed, grab, move, help,
+ * text) keeps it. `[class~=…]` is an attribute selector: like the rest of this
+ * file, no rule here may name a Tailwind utility as a CLASS selector.
+ *
+ * Deliberately NOT listed: [role=button] (Preflight has it, and dnd-kit drag
+ * handles use it with `cursor-grab`), [role=combobox] (cmdk's search input
+ * must keep the text cursor), and a bare `label[for]` (that would put the hand
+ * on every text-field label). */
+.v2-theme :is(
+    [role="menuitem"],
+    [role="menuitemcheckbox"],
+    [role="menuitemradio"],
+    [role="option"],
+    [role="tab"],
+    [role="switch"],
+    [role="checkbox"],
+    [role="radio"],
+    select,
+    input[type="checkbox"],
+    input[type="radio"],
+    input[type="color"],
+    summary
+  ):not(
+    :disabled,
+    [data-disabled=""],
+    [data-disabled="true"],
+    [aria-disabled="true"],
+    [class~="cursor-not-allowed"],
+    [class~="cursor-grab"],
+    [class~="cursor-move"],
+    [class~="cursor-help"],
+    [class~="cursor-text"]
+  ) {
+  cursor: pointer;
+}
+
+/* Labels that toggle an enabled checkbox, radio or switch. A separate rule
+ * because `:has()` is not forgiving: a browser without it drops the whole rule,
+ * and must not take the menu-item rule above down with it.
+ *   1. the label wraps the control;
+ *   2. the label sits right after it, or after the aria-hidden bubble <input>
+ *      Radix inserts next to a checkbox/switch/radio inside a <form>;
+ *   3. the label sits right before it;
+ *   4. settings rows: the label heads a text column that sits right before
+ *      the control, or right after it (skipped when that column also holds a
+ *      text field, whose label must keep the arrow);
+ *   5. SettingsRow: the label's column sits right before a column whose first
+ *      child is the control (same text-field exception).
+ * Every shape except the wrap needs `for`, without which a click toggles
+ * nothing. */
+.v2-theme label:has(:is([role="checkbox"], [role="radio"], [role="switch"], input[type="checkbox"], input[type="radio"]):not(:disabled, [data-disabled=""])),
+.v2-theme :is([role="checkbox"], [role="radio"], [role="switch"], input[type="checkbox"], input[type="radio"]):not(:disabled, [data-disabled=""]) + label[for],
+.v2-theme :is([role="checkbox"], [role="radio"], [role="switch"]):not(:disabled, [data-disabled=""]) + input[aria-hidden="true"] + label[for],
+.v2-theme label[for]:has(+ :is([role="checkbox"], [role="radio"], [role="switch"]):not(:disabled, [data-disabled=""])),
+.v2-theme :is(div, span):has(+ :is([role="switch"], [role="checkbox"], [role="radio"]):not(:disabled, [data-disabled=""])) > label[for]:not(:has(~ :is(input:not([type="checkbox"], [type="radio"]), textarea, select, [role="combobox"]))),
+.v2-theme div:has(+ div > :is([role="switch"], [role="checkbox"], [role="radio"]):first-child:not(:disabled, [data-disabled=""])) > label[for]:not(:has(~ :is(input:not([type="checkbox"], [type="radio"]), textarea, select, [role="combobox"]))),
+.v2-theme :is([role="checkbox"], [role="radio"], [role="switch"]):not(:disabled, [data-disabled=""]) + :is(div, span) > label[for],
+.v2-theme :is([role="checkbox"], [role="radio"], [role="switch"]):not(:disabled, [data-disabled=""]) + input[aria-hidden="true"] + :is(div, span) > label[for] {
+  cursor: pointer;
+}
+/* ── end: pointer cursor on clickable controls (pinned by
+ * __tests__/components/v2-cursor-hover-polish.test.ts) ── */

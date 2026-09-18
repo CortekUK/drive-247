@@ -1,7 +1,6 @@
 import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
-import { isV2 } from '@/lib/v2';
-import { tenantSlugFromHeaders } from '@/lib/tenant-server';
+import { serverIsV2 } from '@/lib/v2-server';
 import { SupportView } from './support-view';
 
 /**
@@ -19,9 +18,7 @@ import { SupportView } from './support-view';
  * tenant there.
  */
 export default async function SupportPage() {
-  const tenantSlug = await tenantSlugFromHeaders();
-
-  if (!isV2('chrome', tenantSlug)) {
+  if (!(await serverIsV2('chrome'))) {
     notFound();
   }
 

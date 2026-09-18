@@ -32,7 +32,7 @@ import { DeleteInvoiceDialog } from "@/components/invoices/delete-invoice-dialog
 import { SendInvoiceEmailDialog } from "@/components/invoices/send-invoice-email-dialog";
 import { useTenant } from "@/contexts/TenantContext";
 import { useRouter } from "next/navigation";
-import { isLeanTenant } from "@/lib/lean-areas";
+import { useIsLean } from "@/lib/lean-context";
 import { InvoicesTeachingEmptyState } from "@/components/empty-states/lean-empty-states";
 import { useForcedEmptyState } from "@/hooks/use-forced-empty-state";
 import { cn } from "@/lib/utils";
@@ -41,6 +41,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { PaymentRequestsTab } from "@/components/invoices/payment-requests-tab";
 import { useV2 } from "@/lib/v2-context";
 import { InvoicesTableV2 } from "@/components/invoices-v2/invoices-table-v2";
+import { HEADER_ACTIONS_V2, HeaderIconButton } from "@/components/shared/header-icon-button-v2";
 
 interface Invoice {
   id: string;
@@ -150,7 +151,7 @@ const InvoicesList = () => {
   // `devForceEmpty` is the /dev preview switch (lib/dev-overrides.ts): inert
   // outside development, and INSIDE the slug gate so it reaches nobody else.
   const devForceEmpty = useForcedEmptyState("invoices");
-  const teachEmptyInvoices = isLeanTenant(tenantSlug) && (!invoices?.length || devForceEmpty);
+  const teachEmptyInvoices = useIsLean() && (!invoices?.length || devForceEmpty);
 
   // v2 (northwind) swaps only the populated table for the rentals list's table,
   // with no pager. Loading, teaching and "no results" states stay shared.
@@ -259,8 +260,16 @@ const InvoicesList = () => {
           <h1 className="text-2xl sm:text-3xl font-bold">Invoices</h1>
           <p className="text-muted-foreground text-sm sm:text-base">Rental invoices, plus every payment link/charge you&apos;ve sent to customers</p>
         </div>
-        <div className="flex items-center gap-2">
+        {/* v2: every control here is 32px and the cluster sits on the subtitle
+            line (HEADER_ACTIONS_V2, team lead Sep 16 2026). v1 keeps
+            "flex items-center gap-2" and its outline icon Button byte for byte. */}
+        <div className={`flex items-center gap-2${v2Chrome ? ` ${HEADER_ACTIONS_V2}` : ""}`}>
           {activeTab === "invoices" && (
+            v2Chrome ? (
+              <HeaderIconButton label="Export CSV" onClick={handleExportCSV} disabled={!filteredInvoices.length}>
+                <Download className="h-4 w-4" />
+              </HeaderIconButton>
+            ) : (
             <Button
               variant="outline"
               size="icon"
@@ -270,6 +279,7 @@ const InvoicesList = () => {
             >
               <Download className="h-4 w-4" />
             </Button>
+            )
           )}
         </div>
       </div>

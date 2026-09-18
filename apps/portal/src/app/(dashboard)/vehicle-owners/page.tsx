@@ -15,7 +15,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { useTenant } from "@/contexts/TenantContext";
-import { isAreaHidden } from "@/lib/lean-areas";
+import { useIsAreaHidden } from "@/lib/lean-context";
 import { useVehicleOwners } from "@/hooks/use-vehicle-owners";
 import { useOwnerPayouts } from "@/hooks/use-owner-payouts";
 import { OwnerFormDialog } from "@/components/vehicle-owners/owner-form-dialog";
@@ -35,7 +35,8 @@ export default function VehicleOwnersPage() {
   // actually settling payouts here -- Global Motion Transport above all, with
   // 15 live owner_payouts rows -- keep the page during the first-paint tick
   // before TenantContext resolves.
-  if (isAreaHidden("owners", tenantSlug)) notFound();
+  const ownersHidden = useIsAreaHidden("owners");
+  if (ownersHidden) notFound();
   const [includeInactive, setIncludeInactive] = useState(false);
   const [search, setSearch] = useState("");
   const [showAdd, setShowAdd] = useState(false);

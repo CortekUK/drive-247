@@ -1917,10 +1917,16 @@
           ]
         },
         {
-          "path": "apps/portal/src/components/dashboard-v2/announcement-carousel.tsx",
+          "path": "apps/portal/src/components/announcements/feature-announcement-deck.tsx",
           "symbols": [
-            "Read more",
-            "Got it, hide this"
+            "See how it works"
+          ]
+        },
+        {
+          "path": "apps/portal/src/components/announcements/feature-announcement-dialog.tsx",
+          "symbols": [
+            "Don't show again",
+            "Got it"
           ]
         },
         {
@@ -2163,10 +2169,12 @@
           ]
         },
         {
-          "path": "apps/portal/src/components/shared/layout/org-switcher.tsx",
+          "path": "apps/portal/src/components/settings-v2/settings-index.tsx",
           "symbols": [
-            "canSeeUsers",
-            "Manage Users"
+            "title: \"Team\"",
+            "href: \"/users\"",
+            "headAdminOnly: true",
+            "isHeadAdmin"
           ]
         },
         {
@@ -2208,6 +2216,8 @@
             "invite staff",
             "create user account",
             "manage users",
+            "add team member",
+            "manage team",
             "naya staff",
             "staff add karna"
           ],

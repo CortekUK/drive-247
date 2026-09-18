@@ -4,7 +4,8 @@
  * v2 (northwind): the "All promo codes" section under the create form, with
  * every state it can be in.
  *
- *   loading, nothing yet -> a table-shaped skeleton (no jump when rows land)
+ *   loading, nothing yet -> a table-shaped skeleton (no jump when rows land);
+ *                           stacked rows below `sm`, where the list is rows
  *   read failed, no rows -> "Couldn't load promo codes" + Try again. Never the
  *                           empty copy: "no codes yet" over a failed read tells
  *                           an operator their codes are gone.
@@ -80,7 +81,12 @@ export function PromoCodesSectionV2<T extends PromoCodeRowV2>({
 
   let body: React.ReactNode;
   if (!hasRows && (isLoading || !error)) {
-    body = <SettingsSectionSkeleton variant="table" rows={4} columns={7} label="Loading promo codes" />;
+    body = (
+      <>
+        <SettingsSectionSkeleton variant="rows" rows={4} label="Loading promo codes" className="sm:hidden" />
+        <SettingsSectionSkeleton variant="table" rows={4} columns={7} label="Loading promo codes" className="hidden sm:block" />
+      </>
+    );
   } else if (!hasRows) {
     body = <SettingsLoadError thing="promo codes" error={error} onRetry={onRetry} retrying={isFetching} />;
   } else if (promos.length === 0) {

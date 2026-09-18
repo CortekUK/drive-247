@@ -21,11 +21,19 @@
  * them up, so treat a key as permanent once shipped.
  *
  * ⚠️ THE LINKS BELOW ARE PLACEHOLDERS, and the SQL says so too. No walkthrough
- * has been recorded and no written guide has been written yet, so each row
+ * has been recorded and no external written guide exists yet, so each row
  * points at the screen where the feature is actually configured — real,
- * reachable today, and where the operator would end up anyway. The moment a
- * real video or a real written guide exists, a super admin swaps it in from
- * /admin/setup-checklist and this constant stops being read.
+ * reachable today, and what satisfies the "at least one link" rule the table's
+ * CHECK constraint enforces. The moment a real video or a real written guide
+ * exists, a super admin swaps it in from /admin/setup-checklist and this
+ * constant stops being read.
+ *
+ * THE DASHBOARD CARD NO LONGER SHOWS THOSE SETTINGS LINKS. "We keep settings
+ * to settings; we don't educate about features in settings." The card's read
+ * button opens the compiled guide for the row's key
+ * (lib/setup-checklist-guides.ts) in a book-style reader, and falls back only
+ * to an EXTERNAL written guide (`externalGuideLink`). An in-portal `guideUrl`
+ * is kept in the data for the link rule and the seed, but is never a button.
  */
 
 import {
@@ -99,7 +107,7 @@ export const SETUP_CHECKLIST_ITEMS: readonly SetupChecklistItem[] = [
     key: 'payg',
     title: 'Pay as you go',
     description:
-      'The settings under pay-as-you-go are the fiddliest in the product. Go through them once with someone rather than guessing.',
+      'Rentals charged day by day with no return date — how the daily charges build up, how the customer pays them, and the limits that catch people out.',
     videoUrl: null,
     videoDurationSeconds: null,
     guideUrl: '/settings?tab=payg',
@@ -259,12 +267,27 @@ export function guideLinkKind(url: string | null | undefined): GuideLinkKind | n
 }
 
 /**
+ * The read button's accessible name and tooltip — "Read the Auto-extension
+ * guide". One wording for both things a read button can open (the in-portal
+ * reader and an external written guide), so the operator is promised the same
+ * thing either way. It names the feature because four icon buttons all called
+ * "Read the guide" are indistinguishable to anyone navigating by screen reader.
+ */
+export function readGuideText(title: string): string {
+  return `Read the ${title} guide`;
+}
+
+/**
  * The guide button's accessible name and tooltip, naming the feature.
  *
  * Same honesty as `guideLinkLabel` — the words follow the destination, so a
  * settings screen is never announced as a guide — plus the feature's title,
  * because four icon buttons that are all called "Open in the portal" are
  * indistinguishable to anyone navigating by screen reader.
+ *
+ * The dashboard card now only ever shows the `'guide'` wording (see
+ * `externalGuideLink`); the other two remain for any caller that still links
+ * into the portal.
  */
 export function guideLinkText(
   title: string,
@@ -276,10 +299,24 @@ export function guideLinkText(
     case 'portal':
       return `Open ${title} in the portal`;
     case 'guide':
-      return `Read the ${title} guide`;
+      return readGuideText(title);
     default:
       return null;
   }
+}
+
+/**
+ * The row's external written guide — an absolute http(s) page that passed
+ * `safeChecklistLink` — or `null`.
+ *
+ * `null` for every in-portal path, not only `/settings`: a book icon that lands
+ * on a portal screen is the "small lie" `guideLinkLabel` exists to avoid, and
+ * the card routes nowhere inside the portal any more. It is the read button's
+ * fallback for a row with no compiled guide.
+ */
+export function externalGuideLink(url: string | null | undefined): string | null {
+  const safe = safeChecklistLink(url);
+  return safe && guideLinkKind(safe) === 'guide' ? safe : null;
 }
 
 /** The video a row plays, once the rules below have picked one. */

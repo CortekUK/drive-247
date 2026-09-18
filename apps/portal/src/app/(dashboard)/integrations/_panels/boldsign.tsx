@@ -54,7 +54,7 @@ import Link from "next/link";
 
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import { isTestModeUiHidden, resolveBoldSignMode } from "@/lib/lean-areas";
+import { useBoldSignMode, useIsTestModeUiHidden } from "@/lib/lean-context";
 import { Button } from "@/components/ui-v2/button";
 import { Input } from "@/components/ui-v2/input";
 import { Label } from "@/components/ui-v2/label";
@@ -308,14 +308,16 @@ function useBoldSignActivity(tenant: PanelTenant) {
  */
 export function BoldSignStatus({ tenant }: { tenant: PanelTenant }) {
   const { data, isLoading, isError } = useBoldSignHealth(tenant);
+  // Above the early returns below: `useBoldSignMode` is a hook, and a hook
+  // called after a conditional return is a rules-of-hooks violation that only
+  // shows up as "rendered fewer hooks than expected" once the read fails.
+  const mode = useBoldSignMode(tenant.boldsign_mode);
 
   // A failed read is not a broken integration. Saying "Not connected" here
   // would invite the operator to go looking for a connection that does not
   // exist (_kit: never render a failed read as disconnected).
   if (isError) return <StatusChip state="attention" label="Status unknown" />;
   if (isLoading || !data) return <StatusChip state="loading" />;
-
-  const mode = resolveBoldSignMode(tenant.boldsign_mode, tenant.slug);
 
   if (mode === "test") return <StatusChip state="attention" label="Sandbox — not binding" />;
 
@@ -335,8 +337,8 @@ export default function BoldSignPanel({ tenant, onClose }: IntegrationPanelProps
   const health = useBoldSignHealth(tenant);
   const activity = useBoldSignActivity(tenant);
 
-  const mode = resolveBoldSignMode(tenant.boldsign_mode, tenant.slug);
-  const hideModeUi = isTestModeUiHidden(tenant.slug);
+  const mode = useBoldSignMode(tenant.boldsign_mode);
+  const hideModeUi = useIsTestModeUiHidden();
   /** The stored column and the mode actually used are allowed to disagree. */
   const storedMode = (tenant.boldsign_mode as string | null) ?? "test";
   const columnDisagrees = storedMode !== mode;

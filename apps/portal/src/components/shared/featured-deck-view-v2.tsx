@@ -11,30 +11,25 @@ import {
   type ReactNode,
 } from "react";
 import Link from "next/link";
-import { ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowUpRight, ChevronLeft, ChevronRight } from "lucide-react";
 import { useReducedMotion } from "motion/react";
 import { cn } from "@/lib/utils";
-import type { FeatureAnnouncement } from "@/hooks/use-feature-announcements";
-import { DetailDialog } from "@/components/dashboard-v2/announcement-detail-dialog";
 import {
   browserStorage,
   readLastShown,
   startIndex,
   writeLastShown,
-  type DeckBadge,
   type DeckCard,
-  type FeaturedArtKey,
   type FeaturedHandlers,
 } from "@/lib/featured-cards";
-import { FeaturedArtSlot } from "./featured-card-art-v2";
 
 /**
  * The featured deck, presentation only: one card at a time in one fixed slot.
  *
  * It is handed an already-ordered list (lib/featured-cards.ts `buildDeck`) and
  * owns only what happens on screen: which card is showing, rotation between
- * visits, auto-advance and its pauses, manual navigation, and the announcement
- * detail dialog. The connected wrapper that gathers the list from hooks is
+ * visits, auto-advance and its pauses, and manual navigation. The connected
+ * wrapper that gathers the list from hooks is
  * components/shared/featured-deck-v2.tsx; tabs use that one.
  *
  * ---------------------------------------------------------------------------
@@ -43,19 +38,19 @@ import { FeaturedArtSlot } from "./featured-card-art-v2";
  * This is the front face of a flip that animates when the face's measured
  * height changes (rentals-overview-flip.tsx), so rotating cards must never
  * change the height. The root is a grid item that stretches to the row the
- * chart sets, with a minimum for when the row stacks on a narrow screen; inside
- * it every card has the same three bands (badge row, art box, two-line text
- * block) with the title truncated and the subtitle clamped to two lines that
- * are always reserved. The root element is the same node from the first paint
+ * chart sets, with a minimum for when the row stacks on a narrow screen. The
+ * card is minimal (team lead, Sep 16 2026): a diagonal "opens" arrow at the top
+ * right, and at the bottom the title (truncated) over a two-line description
+ * (always reserved). No badge and no art; a paper-like background graphic is
+ * planned for the empty middle. The root element is the same node from the first paint
  * (an empty shell while the inputs resolve) to the last card.
  *
  * ---------------------------------------------------------------------------
  * MOTION
  *
  * Auto-advance every ADVANCE_MS, paused while the pointer is over the deck,
- * while focus is inside it, while the tab is hidden and while the detail
- * dialog is open. Any manual navigation (dots, arrows, arrow keys) stops it for
- * good: someone who has taken the wheel should not have it taken back. Under
+ * while focus is inside it and while the tab is hidden. Any manual navigation
+ * (dots, arrows, arrow keys) stops it for good: someone who has taken the wheel should not have it taken back. Under
  * reduced motion there is no auto-advance, no slide fade and no art animation.
  *
  * ---------------------------------------------------------------------------
@@ -88,11 +83,11 @@ export const ADVANCE_MS = 8000;
 export const MAX_DOTS = 8;
 
 /**
- * The Calendar View card's look (components/rentals-v2/rentals-overview.tsx),
- * generalised: primary-tinted gradient, soft glows, a lift on hover.
+ * Minimal: a soft primary-tinted ground and a hairline border that deepens to
+ * purple on hover. No glows, no lift, no shadow (team lead, Sep 16 2026).
  */
 export const FEATURED_SHELL_CLASS =
-  "group/deck relative isolate flex min-h-[15rem] flex-col overflow-hidden rounded-xl border border-primary/20 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent text-foreground shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-primary/30 hover:shadow-lg hover:shadow-primary/15 motion-reduce:transition-none motion-reduce:hover:translate-y-0";
+  "group/deck relative isolate flex min-h-[15rem] flex-col overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent text-foreground transition-colors duration-200 hover:border-primary/40 motion-reduce:transition-none";
 
 export function FeaturedCardShell({
   className,
@@ -101,98 +96,41 @@ export function FeaturedCardShell({
 }: HTMLAttributes<HTMLElement> & { children?: ReactNode; "data-tour"?: string; "data-motion"?: string }) {
   return (
     <section className={cn(FEATURED_SHELL_CLASS, className)} {...rest}>
-      <span className="pointer-events-none absolute -right-8 -top-8 size-28 rounded-full bg-primary/15 blur-2xl transition-all duration-300 group-hover/deck:bg-primary/25" />
-      <span className="pointer-events-none absolute -bottom-10 -left-6 size-24 rounded-full bg-primary/10 blur-2xl" />
       {children}
     </section>
   );
 }
 
-const BADGE_CLASS: Record<DeckBadge, string> = {
-  // Dark mode's --primary is a deep indigo that sinks into the near-black
-  // ground (see hero-chart-v2.tsx), so the chip moves to the chart indigos.
-  // The TINT stays --chart-2; the TEXT is the lighter --chart-1. --chart-2 text
-  // on its own 14% tint measured 3.8:1, and cannot reach 4.5:1 on any ground
-  // this card has (it would need one darker than the card itself); --chart-1
-  // measures well above it. Light mode's primary-on-tint is 5.8:1.
-  New: "bg-primary/10 text-primary ring-primary/25 dark:bg-[hsl(var(--chart-2)/0.14)] dark:text-[hsl(var(--chart-1))] dark:ring-[hsl(var(--chart-2)/0.3)]",
-  // Solid, like the dashboard carousel's critical chip: "important" must not
-  // become "on-brand".
-  //
-  // Dark mode's --destructive is a LIGHT red (359 100% 70%): white 11px text on
-  // it measures about 2.9:1, the theme's near-black destructive-foreground about
-  // 6:1. So the dark text is that token, written as an ARBITRARY value on
-  // purpose. The plain `text-destructive-foreground` class must never sit next to
-  // `bg-destructive` here: styles/v2-theme.css ("Destructive fill") matches that
-  // exact class pair and repaints it as a pale tint, which is what this chip
-  // briefly became. A test pins it.
-  Important: "bg-destructive text-white shadow-sm ring-white/20 dark:text-[hsl(var(--destructive-foreground))]",
-  Suggested: "bg-background/70 text-muted-foreground ring-foreground/10",
-};
-
-/** Badge row, art box and text: the inside of every card. */
-export function FeaturedCardFace({
-  title,
-  subtitle,
-  badge,
-  art,
-  imageUrl,
-  still,
-}: {
-  title: string;
-  subtitle: string;
-  badge: DeckBadge | null;
-  art: FeaturedArtKey;
-  imageUrl?: string | null;
-  still: boolean;
-}) {
+/** The inside of the card: the "opens" arrow, then the title and description. */
+export function FeaturedCardFace({ title, subtitle }: { title: string; subtitle: string }) {
   return (
     <>
-      <div className="relative flex h-5 shrink-0 items-start justify-between gap-2">
-        {badge ? (
-          <span
-            className={cn(
-              "inline-flex h-5 items-center rounded-full px-2 text-[11px] font-semibold leading-none ring-1 ring-inset",
-              BADGE_CLASS[badge],
-            )}
-          >
-            {badge}
-          </span>
-        ) : (
-          <span />
-        )}
-        <ArrowRight
-          aria-hidden
-          className="size-5 shrink-0 text-primary dark:text-[hsl(var(--chart-2))]"
-          style={still ? undefined : { animation: "arrow-nudge 4s ease-in-out infinite" }}
-        />
+      <div className="relative flex shrink-0 justify-end">
+        {/* Diagonal on purpose: it says "this opens", which a plain right
+            arrow (read as "next") did not. */}
+        <ArrowUpRight aria-hidden className="size-5 shrink-0 text-primary dark:text-[hsl(var(--chart-2))]" />
       </div>
-      <FeaturedArtSlot art={art} imageUrl={imageUrl} still={still} />
       <div className="relative shrink-0">
         <div className="truncate text-lg font-bold leading-6 tracking-tight" title={title}>
           {title}
         </div>
-        <div className="line-clamp-2 min-h-[2.5rem] text-sm leading-5 text-muted-foreground">{subtitle}</div>
+        <div className="mt-0.5 line-clamp-2 min-h-[2.5rem] text-sm leading-5 text-muted-foreground">{subtitle}</div>
       </div>
     </>
   );
 }
 
 const ACTION_CLASS =
-  "relative flex min-h-0 flex-1 flex-col rounded-xl px-4 pt-4 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring";
+  "relative flex min-h-0 flex-1 flex-col justify-between rounded-2xl px-4 pt-4 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring";
 
 function CardAction({
   card,
   handlers,
-  onOpenAnnouncement,
-  still,
   actionRef,
   withControls,
 }: {
   card: DeckCard;
   handlers: FeaturedHandlers;
-  onOpenAnnouncement: (a: FeatureAnnouncement) => void;
-  still: boolean;
   actionRef: MutableRefObject<HTMLElement | null>;
   withControls: boolean;
 }) {
@@ -200,24 +138,8 @@ function CardAction({
   const setRef = (el: HTMLElement | null) => {
     actionRef.current = el;
   };
-  const face = (
-    <FeaturedCardFace
-      title={card.title}
-      subtitle={card.subtitle}
-      badge={card.badge}
-      art={card.art}
-      imageUrl={card.source === "announcement" ? card.imageUrl : null}
-      still={still}
-    />
-  );
+  const face = <FeaturedCardFace title={card.title} subtitle={card.subtitle} />;
 
-  if (card.source === "announcement") {
-    return (
-      <button ref={setRef} type="button" className={className} onClick={() => onOpenAnnouncement(card.announcement)}>
-        {face}
-      </button>
-    );
-  }
   if (card.action.kind === "handler") {
     const handler = handlers[card.action.handler];
     return (
@@ -268,8 +190,6 @@ export interface FeaturedDeckViewProps {
   handlers?: FeaturedHandlers;
   /** localStorage key for rotation between visits. Omit to start at the first card. */
   storageKey?: string;
-  /** Called with the raw announcement id from the dialog's "Got it, hide this". */
-  onDismissAnnouncement?: (id: string) => void;
   /** data-tour anchor on the root. */
   anchor?: string;
   /** Accessible name of the carousel region. */
@@ -282,7 +202,6 @@ export function FeaturedDeckView({
   ready = true,
   handlers = {},
   storageKey,
-  onDismissAnnouncement,
   anchor,
   label = "Featured",
   className,
@@ -295,7 +214,6 @@ export function FeaturedDeckView({
   const [hovered, setHovered] = useState(false);
   const [focusInside, setFocusInside] = useState(false);
   const [documentHidden, setDocumentHidden] = useState(false);
-  const [detail, setDetail] = useState<FeatureAnnouncement | null>(null);
   const [liveMessage, setLiveMessage] = useState("");
 
   const cardsRef = useRef(cards);
@@ -315,8 +233,8 @@ export function FeaturedDeckView({
   }
 
   const found = currentId === null ? -1 : cards.findIndex((c) => c.id === currentId);
-  // The card on screen can leave the deck (an announcement hidden from the
-  // dialog): the card that slid into its place shows, clamped to the end.
+  // The card on screen can leave the deck (a gate closing on a reload): the
+  // card that slid into its place shows, clamped to the end.
   const activeIndex = count === 0 ? -1 : found !== -1 ? found : Math.min(lastIndexRef.current, count - 1);
   const active = ready && activeIndex >= 0 ? cards[activeIndex] : null;
   const activeId = active?.id ?? null;
@@ -347,7 +265,7 @@ export function FeaturedDeckView({
     return () => document.removeEventListener("visibilitychange", sync);
   }, []);
 
-  const paused = stopped || reduceMotion || hovered || focusInside || documentHidden || detail !== null;
+  const paused = stopped || reduceMotion || hovered || focusInside || documentHidden;
 
   // One timeout per card on screen, so every card gets its full interval and a
   // pause always restarts the count. Keyed on the id, not the array: the page
@@ -420,8 +338,6 @@ export function FeaturedDeckView({
             <CardAction
               card={active}
               handlers={handlers}
-              onOpenAnnouncement={setDetail}
-              still={reduceMotion}
               actionRef={actionRef}
               withControls={withControls}
             />
@@ -470,18 +386,6 @@ export function FeaturedDeckView({
           {liveMessage}
         </p>
       </FeaturedCardShell>
-
-      {/* Outside the shell on purpose: React bubbles focus and key events
-          through portals, and the dialog must not pause or steer the deck by
-          proxy. It renders nothing in place (Radix portals to <body>), so the
-          hero row's empty-slot check is unaffected. */}
-      <DetailDialog
-        announcement={detail}
-        onOpenChange={(open) => {
-          if (!open) setDetail(null);
-        }}
-        onDismiss={(id) => onDismissAnnouncement?.(id)}
-      />
     </>
   );
 }

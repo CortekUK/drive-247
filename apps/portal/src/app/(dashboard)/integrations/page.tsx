@@ -1,6 +1,5 @@
 import { notFound } from 'next/navigation';
-import { isV2 } from '@/lib/v2';
-import { tenantSlugFromHeaders } from '@/lib/tenant-server';
+import { serverIsV2 } from '@/lib/v2-server';
 import { IntegrationsBoard } from './integrations-board';
 
 /**
@@ -16,9 +15,19 @@ import { IntegrationsBoard } from './integrations-board';
  * when this route did not exist at all. No v1 behaviour changes for anyone,
  * because there is no v1 behaviour here to change.
  *
- * `tenantSlugFromHeaders()` never throws and returns null on any failure, so an
- * unresolvable tenant falls through to `notFound()` too. The gate fails closed
- * onto the pre-existing behaviour, never open onto unfinished code.
+ * `serverIsV2()` never throws: an unresolvable tenant, a missing row, a read
+ * error, an unknown `portal_experience` value or a missing column GRANT all
+ * fall through to `notFound()`. The gate fails closed onto the pre-existing
+ * behaviour, never open onto unfinished code.
+ *
+ * It resolves BOTH sources — the `V2_AREAS` slug list and the tenant's own
+ * `portal_experience` column — from one cached read, which is why it replaced
+ * the bare `isV2(area, await tenantSlugFromHeaders())` this file used to call.
+ * A self-serve tenant is flagged on the row and is in no slug list; gating this
+ * route on the list alone while the v2 Settings navigation (which HIDES the
+ * Stripe, Square, Twilio, Bonzah and BoldSign tabs because this board replaces
+ * them) moved to the column would have left a brand-new tenant with no route at
+ * all to Stripe onboarding.
  *
  * It rides the existing `appearance` area rather than adding one: this is the
  * same v2 look-and-feel work, gated to the same canary, and `lib/v2.ts` is
@@ -29,9 +38,7 @@ import { IntegrationsBoard } from './integrations-board';
  * without a flash — the two cannot be the same file.
  */
 export default async function IntegrationsPage() {
-  const tenantSlug = await tenantSlugFromHeaders();
-
-  if (!isV2('appearance', tenantSlug)) {
+  if (!(await serverIsV2('appearance'))) {
     notFound();
   }
 

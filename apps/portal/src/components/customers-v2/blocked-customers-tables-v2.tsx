@@ -27,7 +27,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@/components/ui-v2/dropdown-menu";
 import {
   LIST_ROW_ACTION,
   LIST_CLASSES,
@@ -118,7 +118,7 @@ export function BlockedCustomersTableV2<T extends BlockedCustomerRowV2>({
                       e.stopPropagation();
                       onOpen(customer);
                     }}
-                    className={`${LIST_CLASSES.identifier} block max-w-full truncate text-left hover:underline`}
+                    className={`${LIST_CLASSES.identifier} mx-auto block max-w-full truncate text-center hover:underline`}
                   >
                     {customer.name}
                   </button>
@@ -187,13 +187,13 @@ export function BlockedCustomersTableV2<T extends BlockedCustomerRowV2>({
                           <MoreHorizontal className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
+                      <DropdownMenuContent align="end" className="w-auto">
                         <DropdownMenuItem
                           onClick={() => onUnblock(customer)}
                           disabled={isLoading}
                           className="text-green-600 focus:text-green-600"
                         >
-                          <CheckCircle className="h-4 w-4 mr-2" />
+                          <CheckCircle className="h-4 w-4" />
                           Unblock
                         </DropdownMenuItem>
                       </DropdownMenuContent>
@@ -303,13 +303,13 @@ export function BlockedIdentitiesTableV2<T extends BlockedIdentity>({
                         <MoreHorizontal className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
+                    <DropdownMenuContent align="end" className="w-auto">
                       <DropdownMenuItem
                         onClick={() => onRemove(identity)}
                         disabled={isLoading}
                         className="text-destructive focus:text-destructive"
                       >
-                        <Trash2 className="h-4 w-4 mr-2" />
+                        <Trash2 className="h-4 w-4" />
                         Remove from Blocklist
                       </DropdownMenuItem>
                     </DropdownMenuContent>

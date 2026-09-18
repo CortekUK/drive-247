@@ -15,7 +15,7 @@ import {
     type HandoverRow,
     type RentalTimeFacts,
 } from '@/lib/agreement-datetime';
-import { resolveBoldSignMode } from '@/lib/lean-tenants';
+import { readTenantOnV2ById, resolveBoldSignMode } from '@/lib/lean-tenants';
 import { FALLBACK_COMPANY_NAME } from '@/lib/tenant-defaults';
 
 // BoldSign configuration — resolved per-request based on tenant mode
@@ -546,7 +546,9 @@ export async function POST(request: NextRequest) {
             const { data: tenantData } = await supabase
                 .from('tenants')
                 // integration_bonzah drives the Bonzah insurance addendum below.
-                // `slug` feeds resolveBoldSignMode() — the lean gate is slug-keyed.
+                // `slug` feeds resolveBoldSignMode(), which is slug-keyed AND column-keyed:
+                // `tenants.portal_experience` is the second term, read separately
+                // below so an unreadable column cannot refuse this whole row.
                 .select('slug, company_name, contact_email, contact_phone, phone, address, admin_name, admin_email, currency_code, logo_url, boldsign_mode, boldsign_test_brand_id, boldsign_live_brand_id, monthly_tier_days, integration_bonzah, deposit_charge_enabled, deposit_mode, global_deposit_amount, security_deposit_enabled, timezone')
                 .eq('id', tenantId)
                 .single();
@@ -699,9 +701,19 @@ export async function POST(request: NextRequest) {
         // This is the CREATE path, so the mode chosen here is what gets recorded
         // on the agreement/rental rows below — which is how the webhook later
         // downloads the signed PDF with the matching key.
+        //
+        // `portal_experience = 'v2'` makes a tenant lean too — that is how every
+        // self-serve and hand-flipped v2 tenant arrives, since the canary list
+        // only ever named `northwind`. Read in a query of its own rather than
+        // added to the tenant select above: naming a column Postgres cannot yet
+        // read refuses the WHOLE row, so `boldsign_mode` would come back
+        // undefined for every tenant and live operators' documents would 404
+        // against the sandbox key.
+        const onV2 = await readTenantOnV2ById(supabase, tenantId);
         const boldsignMode: 'test' | 'live' = resolveBoldSignMode(
             tenant?.boldsign_mode,
             (tenant as { slug?: string | null } | null)?.slug,
+            onV2,
         );
         const BOLDSIGN_API_KEY = getBoldSignApiKey(boldsignMode);
         if (!BOLDSIGN_API_KEY) {

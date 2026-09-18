@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useGuardedRouter } from "@/lib/leave-guard";
 import {
   Search,
   User,
@@ -93,7 +93,8 @@ interface GlobalSearchProps {
 }
 
 export const GlobalSearch = ({ open, onOpenChange }: GlobalSearchProps) => {
-  const router = useRouter();
+  // Asks a v2 page with unsaved edits first; exactly useRouter() everywhere else.
+  const router = useGuardedRouter();
   const { tenant } = useTenant();
   const hideInsurance = isInsuranceExemptTenant(tenant?.id);
   const {

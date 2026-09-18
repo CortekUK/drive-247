@@ -113,7 +113,7 @@ function NoteRow({
   const when = note.remind_at ? formatRemindAt(note.remind_at, now) : null;
 
   return (
-    <div className="group flex w-full items-start gap-3 px-5 py-2.5 transition-colors hover:bg-[var(--pv-wash)]">
+    <div className="group flex w-full items-start gap-3 px-5 py-2.5 transition-colors hover:bg-[var(--pv-accent-bg)]">
       {/* The box is the button. `TodoRow` wrapped its in a <label> with nothing
           to label; a real control needs to be reachable by keyboard and to
           announce its own state. */}
@@ -258,7 +258,7 @@ function Composer({
           // The input mounts on this render; focus it once it exists.
           window.setTimeout(() => inputRef.current?.focus(), 0);
         }}
-        className="group mt-auto flex w-full items-center gap-2.5 border-t border-[var(--pv-line)] px-6 py-4 text-left transition-colors hover:bg-[var(--pv-wash)]"
+        className="group mt-auto flex w-full items-center gap-2.5 border-t border-[var(--pv-line)] px-6 py-4 text-left transition-colors hover:bg-[var(--pv-accent-bg)]"
       >
         <span className="flex size-[15px] shrink-0 items-center justify-center rounded-[5px] border border-dashed border-[var(--pv-line-2)] text-[var(--pv-ink-3)] group-hover:border-[var(--pv-accent)] group-hover:text-[var(--pv-accent)]">
           <Plus className="size-2.5" strokeWidth={3} />

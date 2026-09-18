@@ -14,12 +14,12 @@
  * location never changes which lists it appears in.
  */
 
-import { useEffect, useState, type ReactNode } from "react";
-import { Loader2, MapPinned, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { Loader2, Search } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import { Input } from "@/components/ui-v2/input";
-import { Switch } from "@/components/ui-v2/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui-v2/select";
+import { Skeleton } from "@/components/ui-v2/skeleton";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,20 +30,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui-v2/alert-dialog";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui-v2/tooltip";
-import { SettingsPanel, SettingsRow } from "@/components/settings-v2/settings-kit";
+import { SettingsPanel, SettingsRow, useSettingsPageSave } from "@/components/settings-v2/settings-kit";
+import type { RegisterSectionSave } from "@/components/settings-v2/pricing-money-parts";
 import {
-  SettingsEmptyState,
   SettingsLoadError,
   SettingsNoMatch,
   SettingsSaveState,
   SettingsSectionSkeleton,
   TabularValue,
-  TruncatedText,
   describeSaveError,
   formatSettingsMoney,
   formatSettingsNumber,
-  settingsControlProps,
   useSettingsSaveStatus,
 } from "@/components/settings-v2/section-states";
 import type { LocationSettings, PickupLocation } from "@/hooks/use-pickup-locations";
@@ -101,6 +98,67 @@ export function useImageLoadFailed(src: string | null | undefined): boolean {
   return !!src && failedSrc === src;
 }
 
+/**
+ * Loading placeholder with the exact frame of a `SettingsPanel` of `SettingsRow`s
+ * (bordered, a title bar when `title`, one ~64px row per setting), so the page
+ * does not jump when the real panel replaces it.
+ */
+export function SettingsPanelSkeleton({
+  rows = 2,
+  title = false,
+  footer = false,
+  descriptionLines = 1,
+  label = "Loading",
+  className,
+}: {
+  rows?: number;
+  title?: boolean;
+  /** The Save footer a panel shows to someone who can edit (never inside a page save bar). */
+  footer?: boolean;
+  /** Help lines under each row label (a long description wraps to two). */
+  descriptionLines?: 1 | 2;
+  label?: string;
+  className?: string;
+}) {
+  return (
+    <section
+      role="status"
+      aria-busy="true"
+      aria-live="polite"
+      data-settings-state="loading"
+      className={cn("rounded-xl border bg-card", className)}
+    >
+      <span className="sr-only">{label}</span>
+      {title && (
+        <div aria-hidden="true" className="space-y-1.5 px-5 pt-4 pb-1">
+          <Skeleton className="h-4 w-32 rounded-full" />
+          <Skeleton className="h-3 w-72 max-w-full rounded-full" />
+        </div>
+      )}
+      <div aria-hidden="true" className="divide-y">
+        {Array.from({ length: Math.max(1, rows) }).map((_, i) => (
+          <div
+            key={i}
+            className="flex flex-col gap-3 px-5 py-4 md:grid md:grid-cols-[minmax(0,420px)_minmax(0,1fr)] md:items-center md:gap-x-10"
+          >
+            <div className="min-w-0 space-y-1.5">
+              <Skeleton className="h-3.5 w-24 rounded-full" />
+              <Skeleton className="h-3 w-56 max-w-full rounded-full" />
+              {descriptionLines === 2 && <Skeleton className="h-3 w-40 max-w-full rounded-full" />}
+            </div>
+            <Skeleton className="h-9 w-56 max-w-full shrink-0 rounded-3xl" />
+          </div>
+        ))}
+      </div>
+      {footer && (
+        <div aria-hidden="true" className="flex items-center justify-end border-t px-5 py-3">
+          <Skeleton className="h-8 w-[88px] rounded-full" />
+        </div>
+      )}
+    </section>
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /* General: regional settings                                                  */
 /* -------------------------------------------------------------------------- */
@@ -142,6 +200,9 @@ export interface GeneralSaveDeps {
   writeOrg: (patch: { currency_code: string; distance_unit: "km" | "miles" }) => Promise<unknown>;
 }
 
+export const PARTIAL_GENERAL_SAVE_MESSAGE =
+  "Only part of this change was saved, so some screens may still show the old setting. Retry to finish saving it.";
+
 /** Marks an error whose toast has already been shown by a hook. */
 export function isAlreadyToasted(error: unknown): boolean {
   return !!error && typeof error === "object" && (error as { alreadyToasted?: unknown }).alreadyToasted === true;
@@ -177,8 +238,10 @@ export async function saveGeneralSettingsV2({
   try {
     await writeOrg({ currency_code: values.currency_code, distance_unit: values.distance_unit });
   } catch (orgError) {
-    const wrapped = orgError instanceof Error ? orgError : new Error(String(orgError));
-    throw Object.assign(wrapped, { alreadyToasted: true });
+    // The tenants row is already written, so say it was a partial save: a Retry
+    // writes both again (the tenants write is idempotent) and finishes the job.
+    // The org hook has toasted the transport failure itself.
+    throw Object.assign(new Error(PARTIAL_GENERAL_SAVE_MESSAGE), { alreadyToasted: true, cause: orgError });
   }
 }
 
@@ -197,7 +260,16 @@ export interface BusinessRegionalPanelProps {
   /** Persist. Throws on failure (see `saveGeneralSettingsV2`). */
   onSave: () => Promise<void>;
   onDiscard: () => void;
+  /**
+   * The settings page's section registry. Inside a page save bar the panel has
+   * no Save of its own: it registers its save (which still asks before a
+   * currency change) and its discard under `general-regional`.
+   */
+  registerSave?: RegisterSectionSave;
 }
+
+/** Thrown when Save changes was pressed but the currency change was not confirmed. */
+export const CURRENCY_NOT_CONFIRMED_MESSAGE = "The currency change wasn't confirmed, so it wasn't saved.";
 
 export function BusinessRegionalPanel({
   form,
@@ -211,11 +283,15 @@ export function BusinessRegionalPanel({
   retryingLoad,
   onSave,
   onDiscard,
+  registerSave,
 }: BusinessRegionalPanelProps) {
+  const pageSave = useSettingsPageSave();
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<unknown>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const status = useSettingsSaveStatus({ isDirty, isPending: saving, error: saveError });
+  /** A page Save waiting on the currency confirm. */
+  const pendingConfirm = useRef<{ resolve: () => void; reject: (error: unknown) => void } | null>(null);
 
   // Discarding (or a later successful save) clears a stale failure.
   useEffect(() => {
@@ -247,20 +323,74 @@ export function BusinessRegionalPanel({
     else void runSave();
   };
 
+  // The page's Save changes: the same confirm before a currency change, then the
+  // same save. Rejects when it did not save, so the page reports it and stays.
+  // The page toasts a failure itself, so none is shown here.
+  const latestPageSave = useRef<() => Promise<void>>(async () => undefined);
+  latestPageSave.current = async () => {
+    if (currencyChanged) {
+      await new Promise<void>((resolve, reject) => {
+        pendingConfirm.current = { resolve, reject };
+        setConfirmOpen(true);
+      });
+    }
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await onSave();
+    } catch (error) {
+      setSaveError(error);
+      throw error;
+    } finally {
+      setSaving(false);
+    }
+  };
+  const stablePageSave = useCallback(() => latestPageSave.current(), []);
+  const latestDiscard = useRef(onDiscard);
+  latestDiscard.current = onDiscard;
+  const stableDiscard = useCallback(() => latestDiscard.current(), []);
+  const registered = pageSave && canEdit && ready ? registerSave : undefined;
+  useEffect(() => {
+    if (isDirty) registered?.("general-regional", stablePageSave, stableDiscard);
+    else registered?.("general-regional", null);
+  }, [registered, isDirty, stablePageSave, stableDiscard]);
+  useEffect(() => () => registered?.("general-regional", null), [registered]);
+
+  const onConfirmOpenChange = (open: boolean) => {
+    setConfirmOpen(open);
+    if (!open && pendingConfirm.current) {
+      pendingConfirm.current.reject(Object.assign(new Error(CURRENCY_NOT_CONFIRMED_MESSAGE), { alreadyToasted: true }));
+      pendingConfirm.current = null;
+    }
+  };
+
+  const confirmCurrency = () => {
+    if (pendingConfirm.current) {
+      const pending = pendingConfirm.current;
+      pendingConfirm.current = null;
+      setConfirmOpen(false);
+      pending.resolve();
+      return;
+    }
+    void runSave();
+  };
+
   if (!ready && loadError) {
     return (
       <SettingsLoadError thing="your regional settings" error={loadError} onRetry={onRetryLoad} retrying={retryingLoad} />
     );
   }
   if (!ready) {
-    return <SettingsSectionSkeleton variant="form" rows={2} label="Loading regional settings" />;
+    return <SettingsPanelSkeleton rows={2} footer={canEdit && !pageSave} label="Loading regional settings" />;
   }
 
   return (
     <>
       <SettingsPanel
         footer={
-          canEdit ? (
+          canEdit && pageSave ? (
+            status === "error" ? <SettingsSaveState status="error" error={saveError} /> : null
+          ) : canEdit ? (
             <>
               <SettingsSaveState
                 status={status}
@@ -332,7 +462,7 @@ export function BusinessRegionalPanel({
         </SettingsRow>
       </SettingsPanel>
 
-      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+      <AlertDialog open={confirmOpen} onOpenChange={onConfirmOpenChange}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
@@ -345,7 +475,7 @@ export function BusinessRegionalPanel({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => void runSave()}>Change currency</AlertDialogAction>
+            <AlertDialogAction onClick={confirmCurrency}>Change currency</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -368,7 +498,10 @@ export interface LocationFormState {
   fixedPickupAddress: string;
   fixedReturnAddress: string;
   sameReturnAddress: boolean;
+  /** The pickup (delivery) area's radius. */
   areaRadius: number | null;
+  /** The return (collection) area's own radius. v1 wrote `areaRadius` to both. */
+  returnAreaRadius: number | null;
   areaDeliveryFee: number | null;
   areaCenterLat: number | null;
   areaCenterLon: number | null;
@@ -393,6 +526,7 @@ export function locationFormFromSettings(
     fixedReturnAddress: s.fixed_return_address || "",
     sameReturnAddress: !s.fixed_return_address || s.fixed_return_address === s.fixed_pickup_address,
     areaRadius: s.pickup_area_radius_km != null ? kmToDisplay(s.pickup_area_radius_km) : 100,
+    returnAreaRadius: s.return_area_radius_km != null ? kmToDisplay(s.return_area_radius_km) : 100,
     areaDeliveryFee: s.area_delivery_fee ?? 0,
     areaCenterLat: s.area_center_lat,
     areaCenterLon: s.area_center_lon,
@@ -413,21 +547,119 @@ export function isLocationFormDirty(current: LocationFormState, saved: LocationF
   return current.tiers.some((t, i) => t.up_to !== saved.tiers[i].up_to || t.fee !== saved.tiers[i].fee);
 }
 
-/** Inline errors for the Area Settings fields. Empty when area delivery is off. */
-export function areaFieldErrors(
-  f: LocationFormState,
-  unitLabel: string,
-): { center?: string; radius?: string; fee?: string } {
-  const out: { center?: string; radius?: string; fee?: string } = {};
+export interface AreaFieldErrors {
+  center?: string;
+  /** The pickup area's radius (checked while pickup area delivery is on). */
+  radius?: string;
+  /** The return area's radius (checked while return area collection is on). */
+  returnRadius?: string;
+  fee?: string;
+  /** The price bands as a whole: none left, or two at the same distance. */
+  bands?: string;
+  /** One reason per invalid band, keyed by its index in `tiers`. */
+  bandRows?: Record<number, string>;
+  maxDistance?: string;
+}
+
+/**
+ * Inline errors for the area fields. Empty when area delivery is off. Each
+ * side's radius is checked only while that side's area option is on (a hidden
+ * field never blocks a save). The price-band checks are v1's save-time checks
+ * (which only ever toasted), shown beside the band instead.
+ */
+export function areaFieldErrors(f: LocationFormState, unitLabel: string): AreaFieldErrors {
+  const out: AreaFieldErrors = {};
   if (!(f.pickupAreaEnabled || f.returnAreaEnabled)) return out;
   if (!f.areaCenterLat || !f.areaCenterLon) out.center = "Pick a center point from the address suggestions.";
-  if (f.areaRadius == null || !Number.isFinite(f.areaRadius)) {
-    out.radius = `Enter a radius of at least 1 ${unitLabel}.`;
-  } else if (f.areaRadius < 1) {
-    out.radius = `Radius must be at least 1 ${unitLabel}.`;
+  const radiusError = (radius: number | null) =>
+    radius == null || !Number.isFinite(radius)
+      ? `Enter a radius of at least 1 ${unitLabel}.`
+      : radius < 1
+        ? `Radius must be at least 1 ${unitLabel}.`
+        : undefined;
+  if (f.pickupAreaEnabled) {
+    const radius = radiusError(f.areaRadius);
+    if (radius) out.radius = radius;
+  }
+  if (f.returnAreaEnabled) {
+    const radius = radiusError(f.returnAreaRadius);
+    if (radius) out.returnRadius = radius;
   }
   if (!f.deliveryTiersEnabled && f.areaDeliveryFee != null && f.areaDeliveryFee < 0) {
     out.fee = "Fee can't be negative.";
+  }
+  if (f.deliveryTiersEnabled) {
+    if (f.tiers.length === 0) out.bands = "Add at least one price band, or choose One fee.";
+    const rows: Record<number, string> = {};
+    f.tiers.forEach((t, i) => {
+      if (t.up_to !== null && (!Number.isFinite(t.up_to) || t.up_to <= 0)) {
+        rows[i] = `Distance must be more than 0 ${unitLabel}.`;
+      } else if (!Number.isFinite(t.fee)) {
+        rows[i] = "Enter a valid fee.";
+      } else if (t.fee < 0) {
+        rows[i] = "Fee can't be negative.";
+      }
+    });
+    if (Object.keys(rows).length > 0) out.bandRows = rows;
+    const bounded = f.tiers
+      .map((t) => t.up_to)
+      .filter((u): u is number => u !== null && Number.isFinite(u) && u > 0)
+      .sort((a, b) => a - b);
+    if (!out.bands && bounded.some((u, i) => i > 0 && u <= bounded[i - 1])) {
+      out.bands = "Two bands have the same distance. Give each band its own distance.";
+    }
+    if (f.maxDeliveryDistance != null) {
+      const furthest = bounded.length > 0 ? bounded[bounded.length - 1] : 0;
+      if (!Number.isFinite(f.maxDeliveryDistance) || f.maxDeliveryDistance <= 0) {
+        out.maxDistance = "Enter a distance above 0, or leave it blank for no limit.";
+      } else if (furthest > 0 && f.maxDeliveryDistance < furthest) {
+        out.maxDistance = `Must be at least your furthest band (${formatSettingsNumber(furthest)} ${unitLabel}).`;
+      }
+    }
+  }
+  return out;
+}
+
+/** "Up to 20 mi" / "Anywhere further": how a band is named in an error. */
+export function bandLabel(tier: { up_to: number | null }, unitLabel: string): string {
+  return tier.up_to === null ? "Anywhere further" : `Up to ${formatSettingsNumber(tier.up_to)} ${unitLabel}`;
+}
+
+/** v1 shows a stored centre point (it has no address) as "lat, lon" in the address field. */
+export function centerCoordinateLabel(lat: number | null, lon: number | null): string | null {
+  if (!lat || !lon) return null;
+  return `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+}
+
+export interface LocationSaveContext {
+  unitLabel: string;
+  /** Active locations on each side, or `null` while the list is loading or failed. */
+  pickupActiveLocations: number | null;
+  returnActiveLocations: number | null;
+}
+
+/** Why an option can't be saved, keyed by the row that shows it. */
+export interface LocationOptionIssues {
+  pickupOptions?: string;
+  returnOptions?: string;
+  pickupAddress?: string;
+  returnAddress?: string;
+  pickupList?: string;
+  returnList?: string;
+}
+
+/** The option checks `validateLocationSettingsV2` runs before the area checks. */
+export function locationOptionIssues(f: LocationFormState, ctx: LocationSaveContext): LocationOptionIssues {
+  const out: LocationOptionIssues = {};
+  if (!f.pickupFixedEnabled && !f.pickupMultipleEnabled && !f.pickupAreaEnabled) out.pickupOptions = "Turn on at least one pickup option.";
+  if (!f.returnFixedEnabled && !f.returnMultipleEnabled && !f.returnAreaEnabled) out.returnOptions = "Turn on at least one return option.";
+  if (f.pickupFixedEnabled && !f.fixedPickupAddress.trim()) out.pickupAddress = "Enter your pickup address.";
+  if (f.returnFixedEnabled && !f.sameReturnAddress && !f.fixedReturnAddress.trim()) out.returnAddress = "Enter your return address.";
+  if (f.pickupMultipleEnabled && ctx.pickupActiveLocations === 0) {
+    out.pickupList = "Delivery locations is on but none are active. Add or switch on a location, or turn it off.";
+  }
+  if (f.returnMultipleEnabled && ctx.returnActiveLocations === 0) {
+    out.returnList = "Collection locations is on but none are active. Add or switch on a location, or turn it off.";
   }
   return out;
 }
@@ -438,38 +670,26 @@ export function areaFieldErrors(
  * a zero/negative/blank radius (v1 silently saved 100) and a negative fee.
  * Active-location counts are `null` while the list is loading or failed.
  */
-export function validateLocationSettingsV2(
-  f: LocationFormState,
-  ctx: { unitLabel: string; pickupActiveLocations: number | null; returnActiveLocations: number | null },
-): string | null {
-  if (!f.pickupFixedEnabled && !f.pickupMultipleEnabled && !f.pickupAreaEnabled) return "Turn on at least one pickup option.";
-  if (!f.returnFixedEnabled && !f.returnMultipleEnabled && !f.returnAreaEnabled) return "Turn on at least one return option.";
-  if (f.pickupFixedEnabled && !f.fixedPickupAddress.trim()) return "Enter your pickup address.";
-  if (f.returnFixedEnabled && !f.sameReturnAddress && !f.fixedReturnAddress.trim()) return "Enter your return address.";
-  if (f.pickupMultipleEnabled && ctx.pickupActiveLocations === 0) {
-    return "Delivery locations is on but none are active. Add or switch on a location, or turn it off.";
-  }
-  if (f.returnMultipleEnabled && ctx.returnActiveLocations === 0) {
-    return "Collection locations is on but none are active. Add or switch on a location, or turn it off.";
-  }
+export function validateLocationSettingsV2(f: LocationFormState, ctx: LocationSaveContext): string | null {
+  const options = locationOptionIssues(f, ctx);
+  const option =
+    options.pickupOptions ??
+    options.returnOptions ??
+    options.pickupAddress ??
+    options.returnAddress ??
+    options.pickupList ??
+    options.returnList;
+  if (option) return option;
   const area = areaFieldErrors(f, ctx.unitLabel);
-  return area.center ?? area.radius ?? area.fee ?? null;
+  const firstBand = area.bandRows ? Number(Object.keys(area.bandRows)[0]) : null;
+  const bandRow =
+    firstBand !== null && area.bandRows
+      ? `Price band "${bandLabel(f.tiers[firstBand], ctx.unitLabel)}": ${area.bandRows[firstBand]}`
+      : undefined;
+  return (
+    area.center ?? area.radius ?? area.returnRadius ?? area.fee ?? area.bands ?? bandRow ?? area.maxDistance ?? null
+  );
 }
-
-/** Phone layout and contrast for the Area Settings card, applied from a wrapper. */
-export const AREA_SETTINGS_V2_CLASS = [
-  // Price bands: the distance takes its own line, then fee and delete.
-  "max-sm:[&_.space-y-3>div.gap-2]:flex-wrap",
-  "max-sm:[&_.space-y-3>div.gap-2>.flex-1]:basis-full",
-  "max-sm:[&_.space-y-3>div.gap-2>.w-32]:flex-1",
-  // Maximum delivery distance: the explanation above a full-width input.
-  "max-sm:[&_.space-y-3>div.border-t]:flex-col",
-  "max-sm:[&_.space-y-3>div.border-t]:items-stretch",
-  "max-sm:[&_.space-y-3>div.border-t>.w-32]:w-full",
-  // amber-500 text is too faint on a light card.
-  "[&_.text-amber-500]:text-amber-700",
-  "dark:[&_.text-amber-500]:text-amber-400",
-].join(" ");
 
 /* -------------------------------------------------------------------------- */
 /* Locations: delivery / collection list                                       */
@@ -508,10 +728,6 @@ export function validateLocationDraft(d: LocationDraft): LocationDraftErrors {
   return out;
 }
 
-export function roundMoney(amount: number): number {
-  return Math.round(amount * 100) / 100;
-}
-
 /**
  * The row to write. A NEW location is put on the side its dialog was opened
  * from. An EDIT sends no flags at all, so a location used for both delivery and
@@ -532,7 +748,9 @@ export function buildLocationPayload(
     name: d.name.trim(),
     address: d.address.trim(),
     description: d.description.trim() || null,
-    delivery_fee: roundMoney(d.delivery_fee ?? 0),
+    // Exactly what v1 sends. pickup_locations.delivery_fee is numeric(10,2), so
+    // Postgres rounds half-cents; Math.round(x * 100) / 100 disagrees (1.005 -> 1.00).
+    delivery_fee: d.delivery_fee ?? 0,
   };
   if (editing) return base;
   return { ...base, is_pickup_enabled: mode === "pickup", is_return_enabled: mode === "return" };
@@ -555,44 +773,21 @@ export interface LocationsListV2Props {
   onRetry: () => unknown;
   retrying?: boolean;
   onAdd: () => void;
-  onEdit: (location: PickupLocation) => void;
-  onConfirmDelete: (id: string, name: string) => void;
-  onToggleActive: (location: PickupLocation) => void;
-  isUpdating: boolean;
+  /** Opens the location's dialog, which holds its fields, on/off and delete. */
+  onOpen: (location: PickupLocation) => void;
   currencyCode: string;
   readOnly: boolean;
 }
 
-function IconAction({
-  label,
-  onClick,
-  destructive,
-  children,
-}: {
-  label: string;
-  onClick: () => void;
-  destructive?: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          aria-label={label}
-          onClick={onClick}
-          className={destructive ? "text-destructive hover:text-destructive" : undefined}
-        >
-          {children}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
-    </Tooltip>
-  );
-}
+/** The v2 hover pair: a light primary tint, never a grey or white fill. */
+const LOCATION_ROW_HOVER = "hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]";
 
+/**
+ * One side's delivery or collection locations. Each location is ONE row: its
+ * name, address, fee, and a muted "Off" when customers can't pick it. There is
+ * no switch or icon button in a row; pressing it opens the location's dialog.
+ * A viewer sees the same rows without the press.
+ */
 export function LocationsListV2({
   side,
   locations,
@@ -601,10 +796,7 @@ export function LocationsListV2({
   onRetry,
   retrying,
   onAdd,
-  onEdit,
-  onConfirmDelete,
-  onToggleActive,
-  isUpdating,
+  onOpen,
   currencyCode,
   readOnly,
 }: LocationsListV2Props) {
@@ -625,20 +817,24 @@ export function LocationsListV2({
       />
     );
   }
+
+  const addButton = readOnly ? null : (
+    <Button type="button" variant="outline" size="sm" onClick={onAdd}>
+      Add location
+    </Button>
+  );
+
   if (locations.length === 0) {
     return (
-      <SettingsEmptyState
-        variant="compact"
-        icon={MapPinned}
-        headline={`No ${noun} locations yet`}
-        body={
-          side === "pickup"
-            ? "Places customers can choose for delivery at checkout, like an airport terminal or a hotel. Until you add one, they see an empty list."
-            : "Places customers can choose for returning the car, like an airport terminal or a hotel. Until you add one, they see an empty list."
-        }
-        primaryAction={readOnly ? undefined : { label: "Add your first location", icon: Plus, onClick: onAdd }}
-        footnote={readOnly ? undefined : "A location saves as soon as you add it."}
-      />
+      <div className="space-y-3" data-settings-state="empty">
+        <p className="text-[13px] leading-snug text-muted-foreground">
+          No {noun} locations yet.{" "}
+          {side === "pickup"
+            ? "Add places customers can choose for delivery, like an airport terminal or a hotel."
+            : "Add places customers can choose for returning the car, like an airport terminal or a hotel."}
+        </p>
+        {addButton}
+      </div>
     );
   }
 
@@ -647,104 +843,82 @@ export function LocationsListV2({
   const visible = showSearch ? filterLocations(locations, query) : locations;
 
   return (
-    <TooltipProvider delayDuration={300}>
-      <div className="space-y-3" data-settings-state="content">
-        {!!error && (
-          <SettingsLoadError variant="inline" thing={`${noun} locations`} error={error} onRetry={onRetry} retrying={retrying} />
-        )}
+    <div className="space-y-3" data-settings-state="content">
+      {!!error && (
+        <SettingsLoadError variant="inline" thing={`${noun} locations`} error={error} onRetry={onRetry} retrying={retrying} />
+      )}
 
+      {showSearch && (
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-xs text-muted-foreground tabular-nums">
-            {formatSettingsNumber(locations.length)} {locations.length === 1 ? "location" : "locations"} ·{" "}
-            {formatSettingsNumber(activeCount)} active
+            {formatSettingsNumber(locations.length)} locations · {formatSettingsNumber(activeCount)} active
           </p>
-          {showSearch && (
-            <div className="relative w-full sm:w-56">
-              <Search
-                className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
-                aria-hidden="true"
-              />
-              <Input
-                type="search"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder={`Search ${noun} locations`}
-                aria-label={`Search ${noun} locations`}
-                className="h-8 pl-8 text-sm"
-              />
-            </div>
-          )}
+          <div className="relative w-full sm:w-56">
+            <Search
+              className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <Input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={`Search ${noun} locations`}
+              aria-label={`Search ${noun} locations`}
+              className="h-8 rounded-xl pl-8 text-sm"
+            />
+          </div>
         </div>
+      )}
 
-        {visible.length === 0 ? (
-          <SettingsNoMatch size="compact" query={query} noun={`${noun} locations`} onClear={() => setQuery("")} />
-        ) : (
-          <ul
-            aria-label={`${side === "pickup" ? "Delivery" : "Collection"} locations`}
-            className="max-h-[22rem] space-y-2 overflow-y-auto overscroll-contain pr-1"
-          >
-            {visible.map((location) => {
-              const fee = Number(location.delivery_fee);
-              const free = !Number.isFinite(fee) || fee === 0;
-              return (
-                <li
-                  key={location.id}
-                  className={cn(
-                    "flex items-center gap-3 rounded-2xl bg-muted/50 px-3 py-2.5",
-                    !location.is_active && "opacity-60",
-                  )}
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <TruncatedText text={location.name} className="text-sm font-medium text-foreground" />
-                      {free ? (
-                        <span className="shrink-0 text-xs font-medium text-emerald-700 dark:text-emerald-400">Free</span>
-                      ) : (
-                        <TabularValue negative={fee < 0} className="shrink-0 text-xs font-medium">
-                          {formatSettingsMoney(fee, currencyCode)}
-                        </TabularValue>
-                      )}
-                    </div>
-                    <TruncatedText text={location.address} className="text-xs text-muted-foreground" />
-                    {location.description && (
-                      <TruncatedText text={location.description} className="text-xs text-muted-foreground/80" />
+      {visible.length === 0 ? (
+        <SettingsNoMatch size="compact" query={query} noun={`${noun} locations`} onClear={() => setQuery("")} />
+      ) : (
+        <ul
+          aria-label={`${side === "pickup" ? "Delivery" : "Collection"} locations`}
+          className="-mx-3 max-h-[22rem] space-y-0.5 overflow-y-auto overscroll-contain"
+        >
+          {visible.map((location) => {
+            const fee = Number(location.delivery_fee);
+            const content = (
+              <>
+                <span className="min-w-0 flex-1">
+                  <span title={location.name} className="block truncate text-sm font-medium text-foreground">
+                    {location.name}
+                  </span>
+                  <span title={location.address} className="block truncate text-xs text-muted-foreground">
+                    {location.address}
+                  </span>
+                </span>
+                <TabularValue negative={fee < 0} className="shrink-0 text-sm">
+                  {!Number.isFinite(fee) || fee === 0 ? "No fee" : formatSettingsMoney(fee, currencyCode)}
+                </TabularValue>
+                {!location.is_active && <span className="w-7 shrink-0 text-right text-xs text-muted-foreground">Off</span>}
+              </>
+            );
+            return (
+              <li key={location.id}>
+                {readOnly ? (
+                  <div className="flex min-w-0 items-center gap-3 rounded-xl px-3 py-2.5">{content}</div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => onOpen(location)}
+                    className={cn(
+                      // Inset ring: the scrolling list would clip one drawn outside the row.
+                      "flex w-full min-w-0 items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors outline-none focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-ring/30",
+                      LOCATION_ROW_HOVER,
                     )}
-                  </div>
-                  <div className="flex shrink-0 items-center gap-1">
-                    <Switch
-                      checked={location.is_active}
-                      onCheckedChange={() => onToggleActive(location)}
-                      aria-label={`${location.is_active ? "Switch off" : "Switch on"} ${location.name}`}
-                      {...settingsControlProps(!readOnly, isUpdating)}
-                    />
-                    {!readOnly && (
-                      <>
-                        <IconAction label={`Edit ${location.name}`} onClick={() => onEdit(location)}>
-                          <Pencil />
-                        </IconAction>
-                        <IconAction
-                          label={`Delete ${location.name}`}
-                          destructive
-                          onClick={() => onConfirmDelete(location.id, location.name)}
-                        >
-                          <Trash2 />
-                        </IconAction>
-                      </>
-                    )}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
+                  >
+                    {content}
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
 
-        {!readOnly && (
-          <Button type="button" variant="outline" size="sm" onClick={onAdd} className="w-full">
-            <Plus data-icon="inline-start" />
-            Add location
-          </Button>
-        )}
-      </div>
-    </TooltipProvider>
+      {addButton}
+    </div>
   );
 }

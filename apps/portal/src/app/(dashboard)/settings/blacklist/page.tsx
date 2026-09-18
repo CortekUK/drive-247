@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import {
@@ -27,7 +27,6 @@ import { format } from 'date-fns';
 import { useRouter } from 'next/navigation';
 import { useV2 } from '@/lib/v2-context';
 import { GlobalBlacklistTableV2 } from '@/components/blacklist-v2/global-blacklist-table-v2';
-import { GlobalBlacklistPageV2 } from '@/components/blacklist-v2/global-blacklist-page-v2';
 
 interface BlockingTenant {
   tenant_id: string;
@@ -56,7 +55,9 @@ export default function GlobalBlacklistPage() {
   const v2Chrome = useV2('chrome');
 
   // Fetch global blacklist with tenant details
-  const { data: blacklist, isLoading, error, refetch, isFetching } = useQuery({
+  const { data: blacklist, isLoading, error } = useQuery({
+    // v2 never shows this list (see the redirect below), so it is not fetched there.
+    enabled: !v2Chrome,
     queryKey: ['global-blacklist'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -69,34 +70,19 @@ export default function GlobalBlacklistPage() {
     },
   });
 
-  // v2 (northwind): the whole page is the v2 component, with a state for
-  // loading, a failed read, an empty list and a search with no match. It
-  // returns before the v1 filter below, which calls `entry.email.toLowerCase()`
+  // v2 (northwind): the global blacklist is out of Settings for now, so a
+  // typed or bookmarked /settings/blacklist goes to the Settings index instead
+  // of opening a page nothing links to. `replace`, so Back does not return
+  // here. The v2 page (components/blacklist-v2/global-blacklist-page-v2) stays
+  // in the codebase for when it comes back. Every other tenant keeps the v1
+  // page below, unchanged.
+  useEffect(() => {
+    if (v2Chrome) router.replace('/settings');
+  }, [v2Chrome, router]);
+
+  // Returns before the v1 filter below, which calls `entry.email.toLowerCase()`
   // and would throw on a row with no email; every hook above has already run.
-  // Its Back goes to /settings: v1's `?tab=blacklist` is forwarded straight
-  // back here on v2, so it would loop.
-  if (v2Chrome) {
-    return (
-      <GlobalBlacklistPageV2
-        blacklist={blacklist}
-        isLoading={isLoading}
-        isFetching={isFetching}
-        error={error}
-        refetch={refetch}
-        searchTerm={searchTerm}
-        onSearchChange={setSearchTerm}
-        expandedIds={expandedRows}
-        onToggle={(id) =>
-          setExpandedRows((prev) => {
-            const next = new Set(prev);
-            if (next.has(id)) next.delete(id);
-            else next.add(id);
-            return next;
-          })
-        }
-      />
-    );
-  }
+  if (v2Chrome) return null;
 
   // Filter blacklist by search term
   const filteredBlacklist = blacklist?.filter(entry =>

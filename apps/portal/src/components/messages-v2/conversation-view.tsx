@@ -147,7 +147,7 @@ function PendingRow({
           <Paperclip className="h-3.5 w-3.5" />
           <span className="max-w-[180px] truncate">{f.name}</span>
           <button type="button" onClick={() => onRemoveFile(i)} aria-label={`Remove ${f.name}`}
-            className="rounded-full p-0.5 hover:bg-foreground/10">
+            className="rounded-full p-0.5 hover:bg-[hsl(var(--v2-hover,var(--foreground)_/_0.1))]">
             <X className="h-3 w-3" />
           </button>
         </span>

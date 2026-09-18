@@ -45,9 +45,13 @@ export default function VehiclesAnalyticsPage() {
   const { tenant } = useTenant();
   const currencyCode = tenant?.currency_code || 'USD';
 
-  // Fetch vehicles
+  // Fetch vehicles. Its own key under the "vehicles-list" prefix: /vehicles
+  // caches a different shape (photos, owners, every column) at exactly
+  // ["vehicles-list", tenantId], and sharing that key handed whichever page
+  // opened second the other's rows for up to the 60s stale time. The
+  // ["vehicles-list"] prefix invalidations elsewhere still reach this one.
   const { data: vehicles = [], isLoading } = useQuery({
-    queryKey: ["vehicles-list", tenant?.id],
+    queryKey: ["vehicles-list", tenant?.id, "analytics"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("vehicles")

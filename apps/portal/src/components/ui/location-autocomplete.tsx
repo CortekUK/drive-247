@@ -5,6 +5,8 @@ import { Input } from "@/components/ui/input";
 import { MapPin, Loader2 } from "lucide-react";
 import { useGoogleMapsLoader } from "@/hooks/use-google-maps-loader";
 import { PlacesSessionManager } from "@/lib/google-places-session";
+import { cn } from "@/lib/utils";
+import { useV2 } from "@/lib/v2-context";
 
 interface LocationAutocompleteProps {
   id?: string;
@@ -26,6 +28,17 @@ export function sanitizeAddressInputV2(input: string): string {
   return input.replace(/[\u0000-\u001F\u007F]/g, '');
 }
 
+/* The suggestions menu. v1 is byte-identical to what it always rendered; v2
+   rounds it like every other v2 menu, hovers with the brand tint instead of
+   grey, and keeps the plain border token (a slash opacity on it paints nothing
+   in dark v2). */
+const MENU_V1 = "absolute z-50 w-full mt-1 bg-popover border border-border rounded-md shadow-lg max-h-60 overflow-auto";
+const MENU_V2 = "absolute z-50 w-full mt-1 bg-popover border border-border rounded-xl shadow-lg max-h-60 overflow-auto";
+const ITEM_V1 =
+  "group w-full px-3 py-2 text-left hover:bg-accent hover:text-accent-foreground flex items-start gap-2 transition-colors border-b border-border/50 last:border-0";
+const ITEM_V2 =
+  "group w-full px-3 py-2 text-left hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] focus-visible:bg-primary/10 dark:focus-visible:bg-[hsl(var(--v2-hover,var(--muted)))] focus-visible:outline-none flex items-start gap-2 transition-colors border-b border-border last:border-0";
+
 interface Suggestion {
   placeId: string;
   mainText: string;
@@ -43,6 +56,9 @@ export function LocationAutocomplete({
   disabled = false
 }: LocationAutocompleteProps) {
   const { isLoaded } = useGoogleMapsLoader();
+  // v2 (northwind) only: the suggestions menu in the v2 shapes and hover colours.
+  // Every other tenant renders the classes below exactly as before.
+  const v2Chrome = useV2('chrome');
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -171,7 +187,7 @@ export function LocationAutocomplete({
           onChange={(e) => handleInputChange(e.target.value)}
           onFocus={handleFocus}
           placeholder={placeholder}
-          className={className}
+          className={v2States ? cn(className, "pr-9") : className}
           autoComplete="off"
           disabled={disabled}
         />
@@ -183,19 +199,31 @@ export function LocationAutocomplete({
       </div>
 
       {showSuggestions && suggestions.length > 0 && !disabled && (
-        <div className="absolute z-50 w-full mt-1 bg-popover border border-border rounded-md shadow-lg max-h-60 overflow-auto">
+        <div className={v2Chrome ? MENU_V2 : MENU_V1}>
           {suggestions.map((suggestion) => (
             <button
               key={suggestion.placeId}
               type="button"
-              className="group w-full px-3 py-2 text-left hover:bg-accent hover:text-accent-foreground flex items-start gap-2 transition-colors border-b border-border/50 last:border-0"
+              className={v2Chrome ? ITEM_V2 : ITEM_V1}
               onClick={() => handleSelectSuggestion(suggestion)}
             >
-              <MapPin className="w-4 h-4 mt-0.5 text-muted-foreground group-hover:text-accent-foreground/70 flex-shrink-0" />
+              <MapPin
+                className={
+                  v2Chrome
+                    ? "w-4 h-4 mt-0.5 text-muted-foreground flex-shrink-0"
+                    : "w-4 h-4 mt-0.5 text-muted-foreground group-hover:text-accent-foreground/70 flex-shrink-0"
+                }
+              />
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium">{suggestion.mainText}</div>
                 {suggestion.secondaryText && (
-                  <div className="text-xs text-muted-foreground group-hover:text-accent-foreground/70 truncate">
+                  <div
+                    className={
+                      v2Chrome
+                        ? "text-xs text-muted-foreground truncate"
+                        : "text-xs text-muted-foreground group-hover:text-accent-foreground/70 truncate"
+                    }
+                  >
                     {suggestion.secondaryText}
                   </div>
                 )}

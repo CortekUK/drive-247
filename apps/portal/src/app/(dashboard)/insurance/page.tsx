@@ -63,6 +63,7 @@ import { useTenant } from "@/contexts/TenantContext";
 import { isInsuranceExemptTenant } from "@/config/tenant-config";
 import { useV2 } from "@/lib/v2-context";
 import { InsurancePolicyListV2 } from "@/components/insurance-v2/insurance-policy-list-v2";
+import { HEADER_ACTIONS_V2, HEADER_PRIMARY_V2 } from "@/components/shared/header-icon-button-v2";
 
 type SortField = "customer" | "vehicle" | "policy_number" | "provider" | "start_date" | "expiry_date" | "status" | "docs_count";
 type SortDirection = "asc" | "desc";
@@ -165,7 +166,8 @@ export default function InsuranceListEnhanced() {
   };
 
   const handleExportCSV = useCallback(() => {
-    exportInsuranceToCSV(sortedPolicies, `insurance-policies-${format(new Date(), "yyyy-MM-dd")}.csv`);
+    // The rows in the order the table lists them (v2: newest added first).
+    exportInsuranceToCSV(listedPolicies, `insurance-policies-${format(new Date(), "yyyy-MM-dd")}.csv`);
     toast.success("Insurance policies exported to CSV");
   }, [policies]);
 
@@ -246,6 +248,24 @@ export default function InsuranceListEnhanced() {
     return 0;
   });
 
+  // v2 lists every policy newest added first and cannot be re-sorted, like
+  // every v2 list. v1 keeps its sortable table (soonest expiry first). A plain
+  // computation, not a hook: this is below the insurance-exempt early return.
+  // `Date.parse`, not string order: timestamps can carry different fractional
+  // precision. A missing or unreadable date sorts last. `sort` is stable, so
+  // ties keep the query's order.
+  const createdAtMs = (value: string | null | undefined) => {
+    const ms = value ? Date.parse(value) : NaN;
+    return Number.isNaN(ms) ? -Infinity : ms;
+  };
+  const listedPolicies = v2Chrome
+    ? [...policies].sort((a, b) => {
+        const aMs = createdAtMs(a.created_at);
+        const bMs = createdAtMs(b.created_at);
+        return aMs === bMs ? 0 : bMs > aMs ? 1 : -1;
+      })
+    : sortedPolicies;
+
   // Check if policy is expiring within 7 days for visual indicator
   const isPolicyUrgent = (expiryDate: string) => {
     const today = new Date();
@@ -274,10 +294,23 @@ export default function InsuranceListEnhanced() {
             Comprehensive compliance tracking for customer insurance policies
           </p>
         </div>
+        {v2Chrome ? (
+          // v2: the 32px Add Policy pill, centred on the subtitle line (team lead
+          // Sep 16 2026). The subtitle inherits the body size, which v2 sets to
+          // 16px/24px below 769px and 14px/20px above, so the box follows it:
+          // h-6 from sm, h-5 from md.
+          <div className={`flex items-center gap-2 ${HEADER_ACTIONS_V2} md:h-5`}>
+            <Button onClick={handleAddPolicy} className={`flex items-center gap-2 ${HEADER_PRIMARY_V2}`}>
+              <Plus className="h-4 w-4" />
+              Add Policy
+            </Button>
+          </div>
+        ) : (
         <Button onClick={handleAddPolicy} className="flex items-center gap-2">
           <Plus className="h-4 w-4" />
           Add Policy
         </Button>
+        )}
       </div>
 
       {/* KPIs */}
@@ -306,7 +339,7 @@ export default function InsuranceListEnhanced() {
       {v2Chrome ? (
         isLoading ? (
           <div className="text-center py-12 text-muted-foreground">Loading insurance policies...</div>
-        ) : sortedPolicies.length === 0 ? (
+        ) : listedPolicies.length === 0 ? (
           // v2, nothing to list: v1's empty row on its own, with no table header
           // around it, as the other v2 lists show theirs.
           <div className="text-center py-12 space-y-3">
@@ -325,11 +358,8 @@ export default function InsuranceListEnhanced() {
           // v2: the rentals list's table (components/shared/list-table-v2). Rows
           // arrive as it scrolls. The row opens the policy drawer, as in v1.
           <InsurancePolicyListV2
-            policies={sortedPolicies}
-            resetKey={`${tenant?.id ?? ""}|${filters.search}|${filters.status}|${filters.dateRange.from?.getTime() ?? ""}|${filters.dateRange.to?.getTime() ?? ""}|${sortField}|${sortDirection}`}
-            sortField={sortField}
-            sortDirection={sortDirection}
-            onSort={handleSort}
+            policies={listedPolicies}
+            resetKey={`${tenant?.id ?? ""}|${filters.search}|${filters.status}|${filters.dateRange.from?.getTime() ?? ""}|${filters.dateRange.to?.getTime() ?? ""}`}
             isUrgent={isPolicyUrgent}
             onView={handleViewPolicy}
             onEdit={handleEditPolicy}

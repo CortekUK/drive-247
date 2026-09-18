@@ -23,7 +23,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@/components/ui-v2/dropdown-menu";
 import {
   LIST_CLASSES,
   LIST_ROW_ACTION,
@@ -158,10 +158,10 @@ export function InvoicesTableV2<T extends InvoiceRowV2>({
                         <MoreHorizontal className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
+                    <DropdownMenuContent align="end" className="w-auto">
                       {canEdit('invoices') && (
                         <DropdownMenuItem onClick={() => onSendEmail(invoice)}>
-                          <Mail className="h-4 w-4 mr-2" />
+                          <Mail className="h-4 w-4" />
                           Send Email
                         </DropdownMenuItem>
                       )}
@@ -170,7 +170,7 @@ export function InvoicesTableV2<T extends InvoiceRowV2>({
                           className="text-destructive focus:text-destructive"
                           onClick={() => onDelete(invoice)}
                         >
-                          <Trash2 className="h-4 w-4 mr-2" />
+                          <Trash2 className="h-4 w-4" />
                           Delete
                         </DropdownMenuItem>
                       )}

@@ -13,6 +13,7 @@ import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useSubscriptionGateDisabled } from "@/hooks/use-subscription-gate-disabled";
 import { SubscriptionGateDialog } from "@/components/subscription/subscription-gate-dialog";
 import { SubscriptionActivatedDialog } from "@/components/subscription/subscription-activated-dialog";
+import { PaymentDueBar } from "@/components/subscription/payment-due-bar";
 import { SetupReminderDialog } from "@/components/dashboard/setup-reminder-dialog";
 import { MigrationBlockerDialog } from "@/components/migration/migration-blocker-dialog";
 import { TenantSuspendedScreen } from "@/components/tenant/tenant-suspended-screen";
@@ -53,6 +54,9 @@ import { WelcomePackPrompt } from "@/components/welcome/welcome-pack-prompt";
 import { FirstRunWizard } from "@/components/onboarding/first-run-wizard";
 import { FirstRunHandoffGate } from "@/components/onboarding/first-run-handoff-gate";
 import { FirstRentalTour } from "@/components/onboarding/first-rental-tour";
+import { usePortalAnnouncements } from "@/hooks/use-portal-announcements";
+import { SystemAnnouncementBanner } from "@/components/announcements/system-announcement-banner";
+import { AnnouncementDialogHost } from "@/components/announcements/announcement-dialog-host";
 
 function LoadingSkeleton() {
   return (
@@ -139,6 +143,12 @@ export default function DashboardLayout({
   // revokes their session — immediately via realtime broadcast, and on tab
   // focus / reopen via a server-authoritative session check.
   useSessionGuard();
+
+  // Announcements from the super admin (system notices for every tenant, feature
+  // cards for the v2 dashboard). Called here, above every early return, so the read
+  // starts while the skeleton below is still held; the banner, the dialog host and
+  // the dashboard's desk band all read this same cached query.
+  usePortalAnnouncements();
 
   // Pages where the user MUST be able to reach even without a subscription —
   // otherwise they'd have no way to subscribe or contact us.
@@ -248,9 +258,27 @@ export default function DashboardLayout({
     subscriptionResolved &&
     (!plansNeededForGate || plansResolved);
 
+  /* ── does the tenant's BILLING STATE block them? ──────────────────────────
+   *
+   * Route-independent, and the pair below is the whole answer: no
+   * `isSubscriptionPage` anywhere in them. `showExpiredGate` / `showSetupGate`
+   * are then these two minus the exempt routes, so the gate DIALOG behaves
+   * exactly as it did.
+   *
+   * The split exists because `showGate` was doing two different jobs. It says
+   * "the gate dialog is on screen", which is correctly false on /subscription
+   * and /settings — those routes stay reachable so a blocked tenant can always
+   * pay. But it was also the only suppression signal handed to the four
+   * full-screen onboarding prompts below, and on exactly those routes it
+   * suppressed nothing: a hard-blocked operator who had not finished onboarding
+   * was shown the first-run wizard on top of the one screen that takes money.
+   * `gateWouldBlock` is the signal those prompts actually wanted — "this tenant
+   * is blocked", regardless of which route they are standing on.
+   */
+  const expiredGateApplies = gateStateKnown && hasExpiredSubscription;
+
   // Expired/canceled subscription — same hard modal, different copy.
-  const showExpiredGate =
-    gateStateKnown && hasExpiredSubscription && !isSubscriptionPage;
+  const showExpiredGate = expiredGateApplies && !isSubscriptionPage;
 
   // Never-subscribed — Finish Setup modal. We gate when the tenant either has a
   // plan to buy OR when we could not load their plans at all: an errored plans
@@ -260,14 +288,21 @@ export default function DashboardLayout({
   // un-gated, so an operator with no plan configured is never locked out of a
   // product they cannot buy. With no plans loaded the dialog falls back to its
   // contact-support copy, and the sign-out escape still applies.
-  const showSetupGate =
+  const setupGateApplies =
     gateStateKnown &&
     !isSubscribed &&
     !hasExpiredSubscription &&
-    (hasActivePlans || plansErrored) &&
-    !isSubscriptionPage;
+    (hasActivePlans || plansErrored);
+
+  const showSetupGate = setupGateApplies && !isSubscriptionPage;
 
   const gateOpen = (showSetupGate || showExpiredGate) && !gateSuppressed;
+
+  /* The same question with the route exemption taken out — see the note above
+     `expiredGateApplies`. Feeds `gateWouldBlock` only; nothing about when the
+     gate dialog opens, when the skeleton is held, or when the latch is set
+     reads this. */
+  const gateWouldOpen = (setupGateApplies || expiredGateApplies) && !gateSuppressed;
 
   // A latched gate with nothing left to sell is a dead end: if a super admin
   // deactivates the tenant's last plan, there is no longer anything the tenant
@@ -294,6 +329,37 @@ export default function DashboardLayout({
 
   const showGate =
     !gateSuppressed && !isSubscriptionPage && (gateOpen || gateLatched);
+
+  /**
+   * "This tenant is blocked" — the same decision as `showGate`, minus the route
+   * exemption. Only the four full-screen onboarding prompts read it.
+   *
+   * `gateLatched` is ORed in exactly as `showGate` does, so a tenant who met the
+   * gate on a normal route and then walked to /subscription keeps the prompts
+   * suppressed. The latch itself is still set from `gateOpen` (route-dependent)
+   * on purpose: this fix changes what the PROMPTS see, and nothing about when
+   * the gate dialog appears or when the first paint is held.
+   */
+  const gateWouldBlock = !gateSuppressed && (gateWouldOpen || gateLatched);
+
+  /**
+   * ...and while we do not YET know, on the routes a hard block is hidden on.
+   *
+   * `gateWouldOpen` is false until `gateStateKnown`, and `holdForGateState`
+   * deliberately does not hold the first paint on `/subscription`, `/settings`
+   * or `/credits` — so a hard-blocked tenant opening `/subscription` cold had a
+   * window, however short, in which the billing queries were still in flight and
+   * the full-screen first-run wizard could own the one screen that takes their
+   * money. (The wizard's own query can resolve first, and the billing trio uses
+   * `retry: false`, so an errored leg is slower still.)
+   *
+   * Suppressing an onboarding PROMPT for that window costs a healthy tenant
+   * nothing — every one of these four is a nudge that reappears on the next
+   * render once the answer lands — while an operator who cannot pay is a
+   * cancelled subscription. Scoped to the exempt routes so no other page's
+   * first-run experience changes at all.
+   */
+  const promptsSuppressed = gateWouldBlock || (!gateStateKnown && !!isSubscriptionPage);
 
   // Has this session ever rendered the dashboard with a *trustworthy* gate
   // decision? Only the very first paint may be held back; after that the page
@@ -422,6 +488,15 @@ export default function DashboardLayout({
 
   return (
     <DynamicThemeProvider>
+      {/* The full-width system announcement banner, for every tenant in both
+          chromes. It is `position: fixed` across the top of the viewport and
+          renders its own in-flow spacer, so it sits OUTSIDE the sidebar wrapper
+          below and spans the sidebar column and the top bar end to end. It also
+          publishes `html[data-system-banner]` + `--system-banner-h`, which the
+          offsets in global.css use to move the fixed sidebars, the sticky top bar
+          and the docked Trax panel down. Renders nothing (no spacer, no attribute)
+          when there is no active banner, which is every tenant by default. */}
+      <SystemAnnouncementBanner />
       {/* The v2 page tint lives HERE, on the sidebar wrapper, exactly as it
           does on `improv/portal-side` — `<SidebarProvider className="bg-background
           bg-app-gradient">`. It is not a token: `--background` is plain white in
@@ -461,6 +536,11 @@ export default function DashboardLayout({
         /* The Support rail holds ticket rows (subject, reference, preview, time,
            status), so it is 19rem there instead of the nav's 16rem. */
         style={v2Chrome && isSupportWorkspace ? ({ "--sidebar-width": "19rem" } as React.CSSProperties) : undefined}
+        /* Marks the bounded-height routes for global.css, which shortens the
+           wrapper by the system banner's height while one is showing (otherwise
+           Messages and Trax would scroll the document by exactly that much).
+           No attribute at all on every other route. */
+        data-bounded-height={isBoundedHeight ? "" : undefined}
       >
         <TraxWrap>
         <SearchSlotWrap>
@@ -503,6 +583,47 @@ export default function DashboardLayout({
               .join(" ") || undefined
           }
         >
+          {/* The dunning warning FOR A PHONE, and nothing else on the screen
+              carries it there.
+              During grace the only billing surface is the chip in the sidebar
+              footer, and below `md` both sidebars live inside a closed Sheet —
+              so the chip is not off-screen, it is absent, and an operator on a
+              phone was warned about nothing for the whole window before meeting
+              a non-dismissible paywall. `md:hidden` inside the component, so
+              desktop keeps the chip and only the chip.
+
+              FIRST CHILD OF <Inset>, ABOVE THE HEADER ROW, and that position is
+              load-bearing rather than cosmetic. `main` carries
+              `md:[header+&]:pt-0 md:[header+&]:-mt-3.5` (see the long note above
+              <main>), which is an ADJACENT-sibling rule, and adjacency is
+              structural: `display: none` does not exempt an element from it. So
+              mounting this bar between the header and main — where it is
+              invisible at md and up — silently cancelled that alignment for the
+              whole grace window at every desktop width, pushing every page's
+              title row 30px low with no banner on screen to justify it
+              (measured at 1280px: padding-top 16px / margin-top 0 instead of
+              0 / -14px). Above the header row, `header + main` stays intact in
+              every billing state.
+
+              IN FLOW, never `position: fixed`. `SystemAnnouncementBanner` is the
+              fixed bar at the top of the viewport and global.css offsets the
+              chrome by its height; a second fixed bar would have to join that
+              arithmetic. Inside <Inset> rather than above it, so it spans the
+              content column and scrolls with the page instead of covering the
+              sidebar too.
+
+              Route-independent on purpose: on /subscription and /settings, which
+              the hard gate leaves reachable, this bar is a phone user's only
+              route to the hosted invoice. */}
+          {/* `allWidths` on exactly the two routes that mount no sidebar, and so
+              carry no billing chip: /messages renders null in its place and
+              /trax swaps it for TraxRail. Without this, a desktop operator who
+              spent the grace window in Messages saw no warning at all — the
+              chip was not mounted and the bar was `md:hidden` — and then met the
+              paywall with no notice, which is the very defect this bar exists to
+              close, one route over. Everywhere else it stays phone-only so it
+              never doubles up with the chip. */}
+          <PaymentDueBar allWidths={isMessagesWorkspace || isTraxWorkspace} />
           {/* v2 only — the Stripe-style chrome row: search, messages,
               notifications. Sits in exactly the slot v1's <header> occupies, as a
               `shrink-0` flex sibling ABOVE the banners and <main>, so the flex
@@ -659,14 +780,14 @@ export default function DashboardLayout({
             feedback modal stacked on a non-dismissible one leaves the operator
             unable to act on either. */}
         <FeedbackDialog />
-        <FeedbackForcePrompt suppressed={showGate} />
+        <FeedbackForcePrompt suppressed={promptsSuppressed} />
 
         {/* First-login nudge toward the welcome pack. Dismissible, and
             suppressed while the paywall owns the screen — this is the fifth
             dialog mounted here, and a new operator can already meet the
             subscription gate, the policy gate and the setup reminder before
             seeing a single screen. Same rule as FeedbackForcePrompt above. */}
-        <WelcomePackPrompt suppressed={showGate} />
+        <WelcomePackPrompt suppressed={promptsSuppressed} />
 
         {/* First-run onboarding wizard — step 5 of the signup flow, between
             "Go to portal" and the dashboard. Full screen, shown exactly once,
@@ -691,7 +812,7 @@ export default function DashboardLayout({
             different origin than the one /dev was usually opened on. */}
         <FirstRunHandoffGate />
 
-        <FirstRunWizard suppressed={showGate} />
+        <FirstRunWizard suppressed={promptsSuppressed} />
 
         {/* First-rental walkthrough — step 7, immediately after the wizard
             above. Eleven steps across six pages (dashboard, Vehicles,
@@ -713,7 +834,21 @@ export default function DashboardLayout({
             the sidebar behind a non-dismissible paywall is still nonsense the
             operator cannot act on. It also self-gates on the first-run wizard
             having settled, so the two can never share the screen. */}
-        <FirstRentalTour suppressed={showGate} />
+        <FirstRentalTour suppressed={promptsSuppressed} />
+
+        {/* Announcement dialogs: system notices (soft or hard) for every tenant,
+            and the v2 dashboard's feature dialog. Mounted LAST, and it opens
+            nothing while any surface above owns the screen: it takes the same
+            paywall signal as the prompts above, and reads the migration,
+            wizard, tour, feedback and open-modal state itself (see
+            hooks/use-announcement-blocked.ts). One dialog at a time; a hard
+            blocker is not shown on the pages `isSubscriptionPage` keeps
+            reachable. */}
+        <AnnouncementDialogHost
+          showGate={showGate}
+          isSubscriptionPage={!!isSubscriptionPage}
+          pathname={pathname ?? "/"}
+        />
       </Provider>
     </DynamicThemeProvider>
   );

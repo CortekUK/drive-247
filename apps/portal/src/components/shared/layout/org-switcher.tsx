@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useTheme } from "next-themes";
-import { ChevronsUpDown, Settings, CreditCard, History, Users } from "lucide-react";
+import { ChevronsUpDown, Settings, CreditCard, History } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,7 +13,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui-v2/dropdown-menu";
 import { useTenantBranding } from "@/hooks/use-tenant-branding";
-import { useAuth } from "@/stores/auth-store";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { getBrandInitials } from "@/components/shared/layout/brand-logo";
 import { cn } from "@/lib/utils";
@@ -22,18 +21,23 @@ import { cn } from "@/lib/utils";
  * Square tenant mark for the avatar-sized slot at the top of the v2 sidebar.
  *
  * Deliberately local rather than exported from `brand-logo.tsx`: that file is a
- * v1 file, and v2 does not edit v1 files (V2_PLAN §3). It shares `BrandLogo`'s
- * source rule — `dark_logo_url` wins in dark mode, and a tenant with no logo
- * gets a chip of their own initials, never the platform's brand.
+ * v1 file, and v2 does not edit v1 files (V2_PLAN §3).
+ *
+ * Source order: the small logo (`favicon_url`, the square icon Settings →
+ * Branding asks for exactly this slot) first, since a full logo with its name
+ * shrinks to an unreadable sliver at 32px. Then `BrandLogo`'s rule for the full
+ * logo (`dark_logo_url` wins in dark mode), and a tenant with neither gets a
+ * chip of their own initials, never the platform's brand.
  */
 function OrgMark({ className }: { className?: string }) {
   const { resolvedTheme } = useTheme();
   const { branding, brandName } = useTenantBranding();
 
   const logoUrl =
-    resolvedTheme === "dark" && branding?.dark_logo_url
+    branding?.favicon_url ||
+    (resolvedTheme === "dark" && branding?.dark_logo_url
       ? branding.dark_logo_url
-      : branding?.logo_url;
+      : branding?.logo_url);
 
   if (logoUrl) {
     return (
@@ -41,7 +45,7 @@ function OrgMark({ className }: { className?: string }) {
       <img
         src={logoUrl}
         alt={brandName}
-        className={cn("h-8 w-8 shrink-0 rounded-md bg-muted object-contain p-0.5", className)}
+        className={cn("h-8 w-8 shrink-0 rounded-lg bg-muted object-contain p-0.5", className)}
       />
     );
   }
@@ -50,7 +54,7 @@ function OrgMark({ className }: { className?: string }) {
     <div
       title={brandName}
       className={cn(
-        "flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary text-[12px] font-semibold text-primary-foreground",
+        "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-[12px] font-semibold text-primary-foreground",
         className
       )}
     >
@@ -76,7 +80,6 @@ export function OrgSwitcher({ collapsed }: { collapsed?: boolean }) {
   // reaches the trigger itself.
   const [open, setOpen] = useState(false);
   const { branding } = useTenantBranding();
-  const { appUser } = useAuth();
   const { isManager, canView } = useManagerPermissions();
 
   const orgName = branding?.app_name || "Organization";
@@ -86,9 +89,8 @@ export function OrgSwitcher({ collapsed }: { collapsed?: boolean }) {
   // v1's Administration group runs every item through ROUTE_TO_TAB; `/audit-logs`
   // maps to the `audit_logs` tab.
   const canSeeAuditLogs = !isManager || canView("audit_logs");
-  // v1 marks Manage Users `headAdminOnly`, and `canAccessRoute` refuses `/users`
-  // to every manager regardless of grants.
-  const canSeeUsers = appUser?.role === "head_admin";
+  // Team management is not in this menu: it is the Team entry on the Settings
+  // index (head admins only, like v1's `headAdminOnly` Manage Users).
 
   const Logo = <OrgMark />;
 
@@ -120,20 +122,12 @@ export function OrgSwitcher({ collapsed }: { collapsed?: boolean }) {
           Billing &amp; subscription
         </Link>
       </DropdownMenuItem>
-      {(canSeeAuditLogs || canSeeUsers) && <DropdownMenuSeparator />}
+      {canSeeAuditLogs && <DropdownMenuSeparator />}
       {canSeeAuditLogs && (
         <DropdownMenuItem asChild>
           <Link href="/audit-logs">
             <History className="mr-2 h-4 w-4 text-muted-foreground" />
             Audit Logs
-          </Link>
-        </DropdownMenuItem>
-      )}
-      {canSeeUsers && (
-        <DropdownMenuItem asChild>
-          <Link href="/users">
-            <Users className="mr-2 h-4 w-4 text-muted-foreground" />
-            Manage Users
           </Link>
         </DropdownMenuItem>
       )}
@@ -151,7 +145,7 @@ export function OrgSwitcher({ collapsed }: { collapsed?: boolean }) {
           <button
             aria-label="Organization menu"
             title={orgName}
-            className="flex w-full cursor-pointer items-center justify-center rounded-lg p-1.5 outline-none transition-colors hover:bg-foreground/5 data-[state=open]:bg-foreground/5"
+            className="flex w-full cursor-pointer items-center justify-center rounded-lg p-1.5 outline-none transition-colors hover:bg-primary/10 data-[state=open]:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:data-[state=open]:bg-[hsl(var(--v2-hover,var(--muted)))]"
           >
             {Logo}
           </button>
@@ -168,8 +162,8 @@ export function OrgSwitcher({ collapsed }: { collapsed?: boolean }) {
     // tenant's accent colour, so on a warm brand this went solid orange.
     <div
       className={cn(
-        "flex items-center rounded-lg transition-colors hover:bg-foreground/5",
-        open && "bg-foreground/5"
+        "flex items-center rounded-lg transition-colors hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]",
+        open && "bg-primary/10 dark:bg-[hsl(var(--v2-hover,var(--muted)))]"
       )}
     >
       {/* Logo and name open the menu as well, but as a plain button rather than
@@ -194,7 +188,7 @@ export function OrgSwitcher({ collapsed }: { collapsed?: boolean }) {
           href="/settings"
           aria-label="Settings"
           title="Settings"
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-[hsl(var(--v2-link,var(--primary)))]"
         >
           <Settings className="h-4 w-4" />
         </Link>
@@ -204,7 +198,7 @@ export function OrgSwitcher({ collapsed }: { collapsed?: boolean }) {
         <DropdownMenuTrigger asChild>
           <button
             aria-label="Switch organization"
-            className="mr-1 flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-foreground/10 hover:text-foreground"
+            className="mr-1 flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-primary/10 hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-[hsl(var(--v2-link,var(--primary)))]"
           >
             <ChevronsUpDown className="h-4 w-4" />
           </button>

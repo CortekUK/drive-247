@@ -472,7 +472,7 @@ function PageStatus({
                   target="_blank"
                   rel="noreferrer"
                   onClick={() => setMenu(false)}
-                  className="flex w-full items-center gap-2 rounded-2xl px-3 py-2 text-left text-[13px] transition-colors hover:bg-muted/60"
+                  className="flex w-full items-center gap-2 rounded-2xl px-3 py-2 text-left text-[13px] transition-colors hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]"
                 >
                   <ExternalLink className="size-3.5 text-muted-foreground" />
                   View on your website
@@ -484,7 +484,7 @@ function PageStatus({
                   onHistory();
                   setMenu(false);
                 }}
-                className="flex w-full cursor-pointer items-center gap-2 rounded-2xl px-3 py-2 text-left text-[13px] transition-colors hover:bg-muted/60"
+                className="flex w-full cursor-pointer items-center gap-2 rounded-2xl px-3 py-2 text-left text-[13px] transition-colors hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]"
               >
                 <History className="size-3.5 text-muted-foreground" />
                 Earlier versions
@@ -846,7 +846,7 @@ function IconPicker({
               "flex size-8 cursor-pointer items-center justify-center rounded-2xl transition-colors disabled:cursor-default",
               on
                 ? "bg-primary text-primary-foreground"
-                : "bg-muted/60 text-muted-foreground hover:bg-primary/10 hover:text-primary"
+                : "bg-muted/60 text-muted-foreground hover:bg-primary/10 hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-[hsl(var(--v2-link,var(--primary)))]"
             )}
           >
             <Icon className="size-4" />
@@ -986,7 +986,7 @@ function GalleryField({
           type="button"
           disabled={isUploading}
           onClick={() => input.current?.click()}
-          className="flex size-16 cursor-pointer items-center justify-center rounded-2xl border border-dashed border-foreground/15 text-muted-foreground/50 transition-colors hover:border-primary/40 hover:text-primary disabled:opacity-50"
+          className="flex size-16 cursor-pointer items-center justify-center rounded-2xl border border-dashed border-foreground/15 text-muted-foreground/50 transition-colors hover:border-primary/40 hover:text-primary dark:hover:border-[hsl(var(--v2-link,var(--primary))_/_0.4)] dark:hover:text-[hsl(var(--v2-link,var(--primary)))] disabled:opacity-50"
         >
           {isUploading ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
         </button>
@@ -1182,7 +1182,7 @@ function RemoveButton({ label, onClick }: { label: string; onClick: () => void }
       type="button"
       aria-label={label}
       onClick={onClick}
-      className="mt-1 flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted-foreground/60 opacity-0 transition-opacity hover:bg-foreground/5 hover:text-foreground group-hover:opacity-100"
+      className="mt-1 flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted-foreground/60 opacity-0 transition-opacity hover:bg-primary/10 hover:text-foreground dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] group-hover:opacity-100"
     >
       <X className="size-3.5" />
     </button>

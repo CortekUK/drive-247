@@ -12,7 +12,7 @@ import { useTenant } from '@/contexts/TenantContext';
 import { SquareSettings } from '@/components/settings/square-settings';
 import { PaymentProviderChoice } from '@/components/settings/payment-provider-choice';
 import { OwnStripeSettings } from './own-stripe-settings';
-import { isTestModeUiHidden } from '@/lib/lean-areas';
+import { useIsTestModeUiHidden } from '@/lib/lean-context';
 
 interface StripeConnectStatus {
   stripe_account_id: string | null;
@@ -27,7 +27,7 @@ export function StripeConnectSettings() {
   const { tenant: tenantContext, tenantSlug } = useTenant();
   // Lean tenants have no test modes — the TEST/LIVE mode banner below is a
   // concept they do not have. UI only: stripe_mode itself is untouched.
-  const hideTestModeUi = isTestModeUiHidden(tenantSlug);
+  const hideTestModeUi = useIsTestModeUiHidden();
 
   // Get current tenant's Stripe Connect status
   const { data: tenantStatus, isLoading } = useQuery({

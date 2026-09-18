@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/select";
 import { notFound } from "next/navigation";
 import { useTenant } from "@/contexts/TenantContext";
-import { isAreaHidden } from "@/lib/lean-areas";
+import { useIsAreaHidden } from "@/lib/lean-context";
 import { supabase } from "@/integrations/supabase/client";
 import { getApplyUrl } from "@/lib/booking-url";
 
@@ -31,7 +31,8 @@ interface TenantSettings {
 
 export default function LeadManagementSettingsPage() {
   const { tenant, tenantSlug, refetchTenant } = useTenant() as ReturnType<typeof useTenant> & { refetchTenant: () => Promise<void> };
-  if (isAreaHidden("leads", tenantSlug)) notFound();
+  const leadsHidden = useIsAreaHidden("leads");
+  if (leadsHidden) notFound();
   const [settings, setSettings] = useState<TenantSettings | null>(null);
   const [saving, setSaving] = useState(false);
 

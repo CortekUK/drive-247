@@ -19,7 +19,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { useTenant } from '@/contexts/TenantContext';
-import { formatCurrency } from '@/lib/format-utils';
+import { formatCurrency, getCurrencySymbol } from '@/lib/format-utils';
 import { useV2 } from '@/lib/v2-context';
 import { useManagerPermissions } from '@/hooks/use-manager-permissions';
 import { ExtrasTableV2 } from '@/components/settings-v2/extras-table-v2';
@@ -29,6 +29,7 @@ import {
   SettingsDependencyNotice,
   SettingsEmptyState,
   SettingsLoadError,
+  SettingsSaveState,
   SettingsSectionSkeleton,
   describeSaveError,
   formatSettingsNumber,
@@ -86,6 +87,15 @@ const EMPTY_FORM: ExtraFormData = {
   is_active: true,
 };
 
+/**
+ * v2 only: the Add/Edit Extra dialog's option cards and image tiles follow the
+ * v2 rounded system (cards 2xl) and hover light purple, with the --v2-hover
+ * tint in dark mode where primary/10 all but vanishes. Every tenant on v1 keeps
+ * `rounded-lg` and the grey `hover:bg-muted/50` it has today.
+ */
+const V2_CARD_RADIUS = 'rounded-2xl';
+const V2_OPTION_HOVER = 'hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]';
+
 function isLowStock(extra: RentalExtra): boolean {
   if (extra.max_quantity === null || extra.max_quantity === 0) return false;
   const remaining = extra.remaining_stock ?? extra.max_quantity;
@@ -103,12 +113,15 @@ function SortableImage({
   index,
   onRemove,
   touchVisible = false,
+  v2 = false,
 }: {
   url: string;
   index: number;
   onRemove: () => void;
   /** v2: the drag handle and remove button stay visible below `sm` (touch has no hover). */
   touchVisible?: boolean;
+  /** v2: rounded like the Add tile beside it (`rounded-2xl`); v1 keeps `rounded-lg`. */
+  v2?: boolean;
 }) {
   const {
     attributes,
@@ -130,19 +143,19 @@ function SortableImage({
     <div
       ref={setNodeRef}
       style={style}
-      className={`relative group flex-shrink-0 ${index === 0 ? 'ring-2 ring-primary rounded-lg' : ''}`}
+      className={`relative group flex-shrink-0 ${index === 0 ? `ring-2 ring-primary ${v2 ? V2_CARD_RADIUS : 'rounded-lg'}` : ''}`}
     >
       <div
         {...attributes}
         {...listeners}
-        className={`absolute top-0 left-0 right-0 h-6 flex items-center justify-center cursor-grab active:cursor-grabbing bg-black/40 rounded-t-lg ${touchVisible ? 'sm:opacity-0 sm:group-hover:opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity`}
+        className={`absolute top-0 left-0 right-0 h-6 flex items-center justify-center cursor-grab active:cursor-grabbing bg-black/40 ${v2 ? 'rounded-t-2xl' : 'rounded-t-lg'} ${touchVisible ? 'sm:opacity-0 sm:group-hover:opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity`}
       >
         <GripVertical className="h-3 w-3 text-white" />
       </div>
       <img
         src={url}
         alt={`Image ${index + 1}`}
-        className="w-20 h-20 rounded-lg object-cover border"
+        className={`w-20 h-20 ${v2 ? V2_CARD_RADIUS : 'rounded-lg'} object-cover border`}
       />
       {index === 0 && (
         <div className="absolute -top-1.5 -left-1.5 w-5 h-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
@@ -200,10 +213,21 @@ export function ExtrasSettings() {
   const [stockErrorV2, setStockErrorV2] = useState<unknown>(null);
   const [deleteErrorV2, setDeleteErrorV2] = useState<unknown>(null);
   const [formTriedV2, setFormTriedV2] = useState(false);
+  // v2: the Add/Edit save's failure, shown in the dialog (it stays open) until
+  // the next attempt or the next time the dialog opens.
+  const [saveErrorV2, setSaveErrorV2] = useState<unknown>(null);
+  // v2: the form as it was when the dialog opened, so closing it over typed
+  // changes (or uploaded images) asks first instead of dropping them.
+  const [formOpenedAsV2, setFormOpenedAsV2] = useState('');
+  const [confirmDiscardV2, setConfirmDiscardV2] = useState(false);
 
-  // Fetch all tenant vehicles for per-vehicle pricing picker
+  // Fetch all tenant vehicles for per-vehicle pricing picker. Its own key under
+  // the 'vehicles-list' prefix: /vehicles caches every column plus photos at
+  // exactly ['vehicles-list', tenantId], and sharing it served that page these
+  // reg-ordered, photo-less rows (or this picker Disposed cars) for up to the
+  // 60s stale time. Prefix invalidations of ['vehicles-list'] still reach it.
   const { data: allVehicles, isLoading: vehiclesLoadingV2, isError: vehiclesErrorV2, refetch: refetchVehiclesV2 } = useQuery({
-    queryKey: ['vehicles-list', tenant?.id],
+    queryKey: ['vehicles-list', tenant?.id, 'extras-picker'],
     queryFn: async () => {
       if (!tenant?.id) return [];
       const { data, error } = await supabase
@@ -244,12 +268,14 @@ export function ExtrasSettings() {
     setEditingExtra(null);
     setFormData(EMPTY_FORM);
     setFormTriedV2(false);
+    setSaveErrorV2(null);
+    if (v2Chrome) setFormOpenedAsV2(JSON.stringify(EMPTY_FORM));
     setIsDialogOpen(true);
   };
 
   const handleOpenEdit = (extra: RentalExtra) => {
     setEditingExtra(extra);
-    setFormData({
+    const openedFormV2: ExtraFormData = {
       name: extra.name,
       description: extra.description || '',
       price: String(extra.price),
@@ -266,8 +292,11 @@ export function ExtrasSettings() {
       max_quantity: extra.max_quantity ? String(extra.max_quantity) : '10',
       is_quantity_based: extra.max_quantity !== null,
       is_active: extra.is_active,
-    });
+    };
+    setFormData(openedFormV2);
     setFormTriedV2(false);
+    setSaveErrorV2(null);
+    if (v2Chrome) setFormOpenedAsV2(JSON.stringify(openedFormV2));
     setIsDialogOpen(true);
   };
 
@@ -276,6 +305,8 @@ export function ExtrasSettings() {
     if (!files || files.length === 0) return;
 
     setUploading(true);
+    // v2: collected outside the try, so a failure part-way keeps what uploaded.
+    const newUrlsV2: string[] = [];
     try {
       const newUrls: string[] = [];
       for (const file of Array.from(files)) {
@@ -293,9 +324,15 @@ export function ExtrasSettings() {
           .getPublicUrl(path);
 
         newUrls.push(urlData.publicUrl);
+        newUrlsV2.push(urlData.publicUrl);
       }
       setFormData((prev) => ({ ...prev, image_urls: [...prev.image_urls, ...newUrls] }));
     } catch (err: any) {
+      // v2: the files uploaded before the failure are kept in the form, so
+      // only the one that failed has to be added again.
+      if (v2Chrome && newUrlsV2.length > 0) {
+        setFormData((prev) => ({ ...prev, image_urls: [...prev.image_urls, ...newUrlsV2] }));
+      }
       toast({
         title: 'Upload Failed',
         description: err.message || 'Failed to upload image',
@@ -340,6 +377,7 @@ export function ExtrasSettings() {
         return;
       }
       setFormTriedV2(false);
+      setSaveErrorV2(null);
     }
     if (!formData.name.trim()) {
       toast({ title: 'Error', description: 'Name is required.', variant: 'destructive' });
@@ -398,8 +436,10 @@ export function ExtrasSettings() {
         await createExtra(payload);
       }
       setIsDialogOpen(false);
-    } catch {
+    } catch (err) {
       // Error handled by mutation callbacks
+      // v2: and said in the dialog, which stays open with the form as typed.
+      if (v2Chrome) setSaveErrorV2(err ?? new Error('Save failed'));
     }
   };
 
@@ -474,6 +514,27 @@ export function ExtrasSettings() {
     ) : null;
 
   const canEditExtrasV2 = canEditSettings('extras');
+  const formDirtyV2 = v2Chrome && isDialogOpen && formOpenedAsV2 !== '' && JSON.stringify(formData) !== formOpenedAsV2;
+  // v2: every way out of the Add/Edit dialog (Cancel, X, Escape, outside click)
+  // asks before dropping typed changes. Saving closes it directly.
+  const uploadedSinceOpenV2 = (() => {
+    if (!formDirtyV2) return false;
+    try {
+      const opened = JSON.parse(formOpenedAsV2) as ExtraFormData;
+      return formData.image_urls.some((url) => !opened.image_urls.includes(url));
+    } catch {
+      return false;
+    }
+  })();
+  const requestCloseDialogV2 = (open: boolean) => {
+    if (!open && formDirtyV2 && !isCreating && !isUpdating) {
+      setConfirmDiscardV2(true);
+      return;
+    }
+    if (!open && (isCreating || isUpdating)) return;
+    setIsDialogOpen(open);
+  };
+  const currencySymbolV2 = getCurrencySymbol(tenant?.currency_code || 'USD');
   const extrasHeaderV2 = (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       <div className="min-w-0">
@@ -506,7 +567,10 @@ export function ExtrasSettings() {
             retrying={isFetchingExtras}
           />
         ) : (
-          <SettingsSectionSkeleton variant="table" rows={4} columns={7} label="Loading rental extras" />
+          <>
+            <SettingsSectionSkeleton variant="rows" rows={4} thumbnail label="Loading rental extras" className="sm:hidden" />
+            <SettingsSectionSkeleton variant="table" rows={4} columns={7} label="Loading rental extras" className="hidden sm:block" />
+          </>
         )}
       </div>
     );
@@ -846,9 +910,9 @@ export function ExtrasSettings() {
                 autoFocus
               />
             </div>
-            {stockValue && parseInt(stockValue) > 0 && (
+            {(v2Chrome ? stockAddV2 !== null && !stockInvalidV2 : stockValue && parseInt(stockValue) > 0) && (
               <p className="text-xs text-muted-foreground">
-                New total will be: {(stockTarget?.max_quantity || 0) + parseInt(stockValue)}
+                New total will be: {v2Chrome ? formatSettingsNumber((stockTarget?.max_quantity || 0) + (stockAddV2 ?? 0)) : (stockTarget?.max_quantity || 0) + parseInt(stockValue)}
               </p>
             )}
             {v2Chrome && stockTarget && (
@@ -898,7 +962,7 @@ export function ExtrasSettings() {
       </Dialog>
 
       {/* Add/Edit Dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <Dialog open={isDialogOpen} onOpenChange={v2Chrome ? requestCloseDialogV2 : setIsDialogOpen}>
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>
@@ -927,12 +991,12 @@ export function ExtrasSettings() {
                 <div className="space-y-2">
                   <Label>Price *</Label>
                   <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">{v2Chrome ? currencySymbolV2 : '$'}</span>
                     <Input
                       type="number"
                       value={formData.price}
                       onChange={(e) => setFormData((p) => ({ ...p, price: e.target.value }))}
-                      className="pl-7"
+                      className={v2Chrome && currencySymbolV2.length > 1 ? 'pl-12' : 'pl-7'}
                       min={0}
                       step={0.01}
                       placeholder="0.00"
@@ -950,10 +1014,10 @@ export function ExtrasSettings() {
                 <button
                   type="button"
                   onClick={() => setFormData((p) => ({ ...p, billing_type: 'per_trip' }))}
-                  className={`rounded-lg border p-3 text-left text-sm transition-colors ${
+                  className={`${v2Chrome ? V2_CARD_RADIUS : 'rounded-lg'} border p-3 text-left text-sm transition-colors ${
                     formData.billing_type === 'per_trip'
                       ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                      : 'hover:bg-muted/50'
+                      : v2Chrome ? V2_OPTION_HOVER : 'hover:bg-muted/50'
                   }`}
                 >
                   <p className="font-medium">Per trip</p>
@@ -962,10 +1026,10 @@ export function ExtrasSettings() {
                 <button
                   type="button"
                   onClick={() => setFormData((p) => ({ ...p, billing_type: 'per_day' }))}
-                  className={`rounded-lg border p-3 text-left text-sm transition-colors ${
+                  className={`${v2Chrome ? V2_CARD_RADIUS : 'rounded-lg'} border p-3 text-left text-sm transition-colors ${
                     formData.billing_type === 'per_day'
                       ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                      : 'hover:bg-muted/50'
+                      : v2Chrome ? V2_OPTION_HOVER : 'hover:bg-muted/50'
                   }`}
                 >
                   <p className="font-medium">Per day</p>
@@ -981,10 +1045,10 @@ export function ExtrasSettings() {
                 <button
                   type="button"
                   onClick={() => setFormData((p) => ({ ...p, pricing_type: 'global' }))}
-                  className={`flex items-center gap-2 rounded-lg border p-3 text-left text-sm transition-colors ${
+                  className={`flex items-center gap-2 ${v2Chrome ? V2_CARD_RADIUS : 'rounded-lg'} border p-3 text-left text-sm transition-colors ${
                     formData.pricing_type === 'global'
                       ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                      : 'hover:bg-muted/50'
+                      : v2Chrome ? V2_OPTION_HOVER : 'hover:bg-muted/50'
                   }`}
                 >
                   <div>
@@ -995,10 +1059,10 @@ export function ExtrasSettings() {
                 <button
                   type="button"
                   onClick={() => setFormData((p) => ({ ...p, pricing_type: 'per_vehicle' }))}
-                  className={`flex items-center gap-2 rounded-lg border p-3 text-left text-sm transition-colors ${
+                  className={`flex items-center gap-2 ${v2Chrome ? V2_CARD_RADIUS : 'rounded-lg'} border p-3 text-left text-sm transition-colors ${
                     formData.pricing_type === 'per_vehicle'
                       ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                      : 'hover:bg-muted/50'
+                      : v2Chrome ? V2_OPTION_HOVER : 'hover:bg-muted/50'
                   }`}
                 >
                   <div>
@@ -1027,10 +1091,10 @@ export function ExtrasSettings() {
                           ? `${vp.vehicle_reg} - ${vp.vehicle_make || ''} ${vp.vehicle_model || ''}`
                           : vp.vehicle_id;
                       return (
-                        <div key={vp.vehicle_id} className="flex items-center gap-2 rounded-lg border p-2">
+                        <div key={vp.vehicle_id} className={`flex items-center gap-2 ${v2Chrome ? V2_CARD_RADIUS : 'rounded-lg'} border p-2`}>
                           <span className="flex-1 text-sm truncate">{label}</span>
-                          <div className="relative w-24">
-                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">$</span>
+                          <div className={v2Chrome && currencySymbolV2.length > 1 ? 'relative w-28 flex-shrink-0' : 'relative w-24'}>
+                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">{v2Chrome ? currencySymbolV2 : '$'}</span>
                             <Input
                               type="number"
                               value={vp.price}
@@ -1041,7 +1105,7 @@ export function ExtrasSettings() {
                                   return { ...p, vehicle_pricing: updated };
                                 });
                               }}
-                              className="h-8 text-sm pl-5"
+                              className={v2Chrome && currencySymbolV2.length > 1 ? 'h-8 text-sm pl-10' : 'h-8 text-sm pl-5'}
                               min={0}
                               step={0.01}
                             />
@@ -1167,13 +1231,14 @@ export function ExtrasSettings() {
                             index={i}
                             onRemove={() => handleRemoveImage(i)}
                             touchVisible={v2Chrome}
+                            v2={v2Chrome}
                           />
                         ))}
                       </div>
                     </SortableContext>
                   </DndContext>
                 )}
-                <label className="w-20 h-20 rounded-lg border-2 border-dashed border-muted-foreground/30 flex flex-col items-center justify-center cursor-pointer hover:border-primary/50 hover:bg-muted/50 transition-colors flex-shrink-0">
+                <label className={`w-20 h-20 ${v2Chrome ? V2_CARD_RADIUS : 'rounded-lg'} border-2 border-dashed border-muted-foreground/30 flex flex-col items-center justify-center cursor-pointer hover:border-primary/50 ${v2Chrome ? V2_OPTION_HOVER : 'hover:bg-muted/50'} transition-colors flex-shrink-0`}>
                   {uploading ? (
                     <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                   ) : (
@@ -1197,7 +1262,7 @@ export function ExtrasSettings() {
 
             {/* Row 4: Toggles */}
             <div className={v2Chrome ? 'grid grid-cols-1 sm:grid-cols-2 gap-3' : 'grid grid-cols-2 gap-3'}>
-              <div className="flex items-center justify-between rounded-lg border p-2.5">
+              <div className={`flex items-center justify-between ${v2Chrome ? V2_CARD_RADIUS : 'rounded-lg'} border p-2.5`}>
                 <div>
                   <Label className="text-sm font-medium">Quantity-based</Label>
                   <p className="text-xs text-muted-foreground">Multiple units</p>
@@ -1224,7 +1289,7 @@ export function ExtrasSettings() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between rounded-lg border p-2.5">
+              <div className={`flex items-center justify-between ${v2Chrome ? V2_CARD_RADIUS : 'rounded-lg'} border p-2.5`}>
                 <div>
                   <Label className="text-sm font-medium">Active</Label>
                   <p className="text-xs text-muted-foreground">Visible to customers</p>
@@ -1240,8 +1305,11 @@ export function ExtrasSettings() {
             {fieldErrorV2(formIssuesV2.max_quantity)}
           </div>
 
+          {v2Chrome && saveErrorV2 && !isCreating && !isUpdating ? (
+            <SettingsSaveState status="error" error={saveErrorV2} onRetry={handleSave} />
+          ) : null}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+            <Button variant="outline" onClick={() => (v2Chrome ? requestCloseDialogV2(false) : setIsDialogOpen(false))}>
               Cancel
             </Button>
             <Button onClick={handleSave} disabled={isCreating || isUpdating || uploading}>
@@ -1251,6 +1319,38 @@ export function ExtrasSettings() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {v2Chrome && (
+        // A Dialog, not an AlertDialog: the Add/Edit dialog sits at z-[100]
+        // and the AlertDialog layer at z-50 would open BEHIND it.
+        <Dialog open={confirmDiscardV2} onOpenChange={setConfirmDiscardV2}>
+          <DialogContent role="alertdialog" className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Discard your changes?</DialogTitle>
+              <DialogDescription className="[overflow-wrap:anywhere]">
+                {editingExtra
+                  ? `Your edits to "${editingExtra.name}" haven't been saved.`
+                  : "This extra hasn't been added yet."}
+                {uploadedSinceOpenV2 ? ' The images you just uploaded won\'t be attached to it.' : ''}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setConfirmDiscardV2(false)}>
+                Keep editing
+              </Button>
+              <Button
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={() => {
+                  setConfirmDiscardV2(false);
+                  setIsDialogOpen(false);
+                }}
+              >
+                Discard
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

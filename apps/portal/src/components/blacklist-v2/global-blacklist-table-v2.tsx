@@ -32,7 +32,7 @@ import {
   ListTableHeader,
   useProgressiveRows,
 } from "@/components/shared/list-table-v2";
-import { formatCompanyCount } from "@/components/settings-v2/settings-shell-state";
+import { formatCompanyCount, isPositiveCount } from "@/components/settings-v2/settings-shell-state";
 
 const Blank = () => <span className="text-muted-foreground">—</span>;
 
@@ -82,7 +82,7 @@ export function GlobalBlacklistTableV2<T extends GlobalBlacklistEntryRowV2>({
           <ListHead className="w-[15%]">Status</ListHead>
           <ListHead className="w-[14%]">First blocked</ListHead>
           <ListHead className="w-[14%]">Last blocked</ListHead>
-          <ListHead className="w-[15%] text-right">Details</ListHead>
+          <ListHead className="w-[15%]">Details</ListHead>
         </ListTableHeader>
         <ListBody>
           {entryRows.visible.map((entry) => {
@@ -90,18 +90,32 @@ export function GlobalBlacklistTableV2<T extends GlobalBlacklistEntryRowV2>({
             const detailsId = `global-blacklist-details-${entry.id}`;
             const firstBlocked = formatBlockedDateV2(entry.first_blocked_at);
             const lastBlocked = formatBlockedDateV2(entry.last_blocked_at);
+            const companies = formatCompanyCount(entry.blocked_tenant_count);
             return (
               <Fragment key={entry.id}>
                 <ListRow onOpen={() => onToggle(entry.id)}>
                   <ListCell>
-                    <span className={`block truncate ${LIST_CLASSES.identifier}`} title={entry.email}>
-                      {entry.email}
-                    </span>
+                    {/* The email column is NOT NULL, but a row without one must
+                        still say what it is rather than leave the cell blank. */}
+                    {entry.email ? (
+                      <span className={`block truncate ${LIST_CLASSES.identifier}`} title={entry.email}>
+                        {entry.email}
+                      </span>
+                    ) : (
+                      <span className="block truncate text-sm text-muted-foreground">No email on record</span>
+                    )}
                   </ListCell>
                   <ListCell>
-                    {/* v1's destructive "{n} companies" badge, as coloured text.
-                        Every row here is blacklisted, so the tone never varies. */}
-                    <ListStatusText tone="danger">{formatCompanyCount(entry.blocked_tenant_count)}</ListStatusText>
+                    {/* v1's destructive "{n} companies" badge, as coloured text,
+                        cut with its full text as a title so a long count never
+                        runs into First blocked on a narrow screen. Red only
+                        while a company still blocks the customer: "0 companies"
+                        (every block lifted) and a broken count ("—") are muted. */}
+                    <span className="block truncate tabular-nums" title={companies}>
+                      <ListStatusText tone={isPositiveCount(entry.blocked_tenant_count) ? "danger" : "muted"}>
+                        {companies}
+                      </ListStatusText>
+                    </span>
                   </ListCell>
                   <ListCell className="tabular-nums">
                     {firstBlocked ? <span className={LIST_CLASSES.text}>{firstBlocked}</span> : <Blank />}
@@ -116,8 +130,8 @@ export function GlobalBlacklistTableV2<T extends GlobalBlacklistEntryRowV2>({
                   {/* The flex wrapper keeps the labelled button off the text
                       baseline. Inline, its label's descender space made the row
                       3px taller than a rentals row even with `-my-1.5`. */}
-                  <ListCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex justify-end">
+                  <ListCell onClick={(e) => e.stopPropagation()}>
+                    <div className="flex justify-center">
                       <Button
                         variant="ghost"
                         size="sm"
@@ -144,7 +158,7 @@ export function GlobalBlacklistTableV2<T extends GlobalBlacklistEntryRowV2>({
                 {expanded && (
                   // Not a toggle: as in v1, clicking inside the details leaves them open.
                   <ListRow id={detailsId} className="bg-muted/30 hover:bg-muted/30">
-                    <ListCell colSpan={5}>
+                    <ListCell colSpan={5} className="text-left">
                       <div className="space-y-2">
                         <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                           Blocking Companies

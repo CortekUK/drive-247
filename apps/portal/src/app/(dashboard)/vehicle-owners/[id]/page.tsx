@@ -22,7 +22,7 @@ import { AssignVehicleDialog } from "@/components/vehicle-owners/assign-vehicle-
 import { CreatePayoutDialog } from "@/components/vehicle-owners/create-payout-dialog";
 import { RecordPaymentDialog } from "@/components/vehicle-owners/record-payment-dialog";
 import { useTenant } from "@/contexts/TenantContext";
-import { isAreaHidden } from "@/lib/lean-areas";
+import { useIsAreaHidden } from "@/lib/lean-context";
 import { formatCurrency } from "@/lib/format-utils";
 import { PAYOUT_STATUS_LABEL, type OwnerPayout } from "@/types/vehicle-owners";
 
@@ -42,7 +42,8 @@ export default function VehicleOwnerDetailPage() {
   // actually settling payouts here -- Global Motion Transport above all, with
   // 15 live owner_payouts rows -- keep the page during the first-paint tick
   // before TenantContext resolves.
-  if (isAreaHidden("owners", tenantSlug)) notFound();
+  const ownersHidden = useIsAreaHidden("owners");
+  if (ownersHidden) notFound();
 
   const currency = tenant?.currency_code || "USD";
 

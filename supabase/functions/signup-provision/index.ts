@@ -74,6 +74,113 @@ import { buildCmsContent, seedTenantCmsContent } from "../_shared/tenant-cms-con
 
 const LOG = "[signup-provision]";
 
+/**
+ * The v2 portal's default brand colour — #442DD7, hsl(248 68% 51%).
+ *
+ * Kept in step with `V2_DEFAULT_BRAND_COLOR` in
+ * apps/portal/src/lib/appearance/presets.ts: it is the v2 stylesheet's default,
+ * the "Indigo" preset, and what Settings → Branding → "Restore default colour"
+ * writes. A tenant provisioned with this colour is painted exactly like
+ * northwind, the first v2 sale.
+ */
+const V2_DEFAULT_BRAND_COLOR = "#442DD7";
+
+/**
+ * The brand colours a tenant can only have because PROVISIONING chose them.
+ *
+ * `#1E293B` is `DEFAULT_PALETTE` in `_shared/brand-colors.ts` — what the old
+ * code wrote when it could not extract a colour from the operator's website.
+ * An empty value is the same situation with nothing written at all. Repainting
+ * is limited to these, so an operator who has already picked their own colour
+ * in Settings → Branding keeps it.
+ */
+const PROVISIONING_DEFAULT_COLORS = new Set(["#1E293B", ""]);
+
+/**
+ * Make sure a tenant this run ADOPTED is on v2, like one it created.
+ *
+ * Two paths hand back an existing tenant instead of inserting one: the
+ * idempotency hit (`meta.tenantId` already set) and the recovery promotion
+ * (`meta.pendingTenantId` past the point of no return). Both existed before
+ * this function set `portal_experience` at all, and neither re-inserts — so a
+ * signup whose row was written by an OLDER DEPLOY of this function and then
+ * retried or recovered would be handed back a v1 tenant permanently, with the
+ * slate palette, and reported to the operator as a success. That is exactly how
+ * `nasir` reached a team-lead demo on the v1 login screen (2026-09-18), and the
+ * window reopens on every future deploy of this function, so it is closed here
+ * rather than left to a one-off SQL repair.
+ *
+ * Deliberately non-fatal in every direction: an adoption that already worked
+ * must not start failing because a cosmetic follow-up write did. A failure is
+ * logged loudly instead, since the visible symptom otherwise is just "the new
+ * portal did not apply".
+ */
+async function ensureV2Experience(
+  supabase: ReturnType<typeof createClient>,
+  tenantId: string,
+  log: string,
+): Promise<void> {
+  try {
+    const { data, error } = await supabase
+      .from("tenants")
+      .select("portal_experience, primary_color, light_primary_color")
+      .eq("id", tenantId)
+      .maybeSingle();
+
+    if (error || !data) {
+      console.error(`${log} could not read tenant ${tenantId} to confirm its portal experience:`, error);
+      return;
+    }
+
+    const row = data as {
+      portal_experience?: string | null;
+      primary_color?: string | null;
+      light_primary_color?: string | null;
+    };
+
+    const patch: Record<string, string> = {};
+    if (row.portal_experience !== "v2") patch.portal_experience = "v2";
+
+    // The flag alone yields a structurally-correct v2 portal painted slate,
+    // which is indistinguishable from "v2 did not apply" to the person looking
+    // at it — so the paint travels with the flag, under the same guard the
+    // manual repair uses.
+    const current = (row.light_primary_color ?? row.primary_color ?? "").toUpperCase();
+    if (PROVISIONING_DEFAULT_COLORS.has(current)) {
+      patch.primary_color = V2_DEFAULT_BRAND_COLOR;
+      patch.light_primary_color = V2_DEFAULT_BRAND_COLOR;
+    }
+
+    if (Object.keys(patch).length === 0) return;
+
+    const { error: updateError } = await supabase.from("tenants").update(patch).eq("id", tenantId);
+    if (updateError) {
+      console.error(
+        `${log} ADOPTED tenant ${tenantId} is still on ${row.portal_experience ?? "(unset)"} — the v2 follow-up write failed:`,
+        updateError,
+      );
+      return;
+    }
+    console.log(`${log} adopted tenant ${tenantId} brought up to v2: ${JSON.stringify(patch)}`);
+  } catch (e) {
+    console.error(`${log} unexpected failure confirming the portal experience for ${tenantId}:`, e);
+  }
+}
+
+/**
+ * Does this write error mean "that column does not exist"?
+ *
+ * PostgREST answers PGRST204 with a message naming the column when its schema
+ * cache has no such column (42703 is the equivalent straight from Postgres).
+ * The column name is matched as well, so an unrelated schema fault is never
+ * quietly retried as if it were this one.
+ */
+function isMissingColumnError(error: unknown, column: string): boolean {
+  if (!error || typeof error !== "object") return false;
+  const e = error as { code?: string | null; message?: string | null };
+  if (e.code !== "PGRST204" && e.code !== "42703") return false;
+  return typeof e.message === "string" && e.message.includes(column);
+}
 
 /**
  * Escape user-supplied text before it goes into the welcome email's HTML.
@@ -212,6 +319,9 @@ Deno.serve(async (req) => {
 
       if (existingTenant) {
         console.log(`${LOG} idempotent hit — tenant ${existingTenant.id} already provisioned`);
+        // The row may have been written by an older deploy of this function,
+        // before it set portal_experience. See ensureV2Experience.
+        await ensureV2Experience(supabase, existingTenant.id, LOG);
         return jsonResponse({
           success: true,
           tenantId: existingTenant.id,
@@ -338,6 +448,9 @@ Deno.serve(async (req) => {
           console.warn(
             `${LOG} recovering tenant ${pendingId} — it is past the point of no return but was never recorded`,
           );
+          // Same reason as the idempotency hit above: this tenant was INSERTED by
+          // whichever build died mid-run, which may not have set the column.
+          await ensureV2Experience(supabase, pendingId, LOG);
           const portalUrl = meta.portalUrl ?? `https://${pendingTenant.slug}.portal.drive-247.com`;
           const bookingUrl = meta.bookingUrl ?? `https://${pendingTenant.slug}.drive-247.com`;
           meta = await writeSignupMeta(supabase, authUserId, {
@@ -681,7 +794,38 @@ Deno.serve(async (req) => {
     //    can never block a paid provision.
     // =====================================================================
     const colors = await extractBrandColorsFromText(businessColours, null);
-    const palette = buildTenantPalette(colors);
+    // The PRIMARY is not negotiable for a self-serve tenant: this path lands on
+    // the v2 portal (`portal_experience` at the insert below), and v2 paints its
+    // entire chrome from one colour — primary_color / light_primary_color.
+    //
+    // Leaving the extractor's answer there is what made the newest tenant look
+    // nothing like northwind. Its blank-input default is the platform slate
+    // #1E293B, and slate is a perfectly USABLE brand colour (hsl 217 33% 17%
+    // clears the portal's `isUsableV2Brand` guard at s >= 15, 12 <= l <= 92), so
+    // nothing downstream falls back for us — the whole portal simply comes up
+    // slate. Write the v2 default instead; the operator can change it in
+    // Settings → Branding whenever they like.
+    //
+    // Written EXPLICITLY rather than left NULL: the portal would fall back to
+    // this same colour, but the booking site reads primary_color directly and a
+    // NULL there falls back to the old platform green.
+    //
+    // EXACTLY TWO COLUMNS ARE PINNED, and which two is deliberate. v2 paints the
+    // portal from `light_primary_color || primary_color` (apps/portal/src/hooks/
+    // use-dynamic-theme.ts:159) and reads nothing else, so those two are all the
+    // Northwind match needs. Overriding the primary BEFORE buildTenantPalette
+    // instead would also rewrite `light_header_footer_color` and
+    // `dark_primary_color`, which it derives from the primary — and
+    // light_header_footer_color is the operator's public BOOKING site header and
+    // footer (apps/booking/src/hooks/useDynamicTheme.ts:179). Repainting that
+    // purple is a different product surface and a separate decision, so the rest
+    // of the palette keeps the extractor's colours and renders exactly as it does
+    // for a tenant provisioned today.
+    const palette = {
+      ...buildTenantPalette(colors),
+      primary_color: V2_DEFAULT_BRAND_COLOR,
+      light_primary_color: V2_DEFAULT_BRAND_COLOR,
+    };
     await markMilestone(supabase, authUserId, "brand_ready");
 
     // =====================================================================
@@ -816,27 +960,66 @@ Deno.serve(async (req) => {
     // column is a display name, not a full legal name.
     const firstName = meta.fullName.split(/\s+/)[0] || meta.fullName;
 
-    const { data: tenant, error: tenantError } = await supabase
+    // WHICH PORTAL UI THIS TENANT GETS. Every tenant that arrives through
+    // drive-247.com lands on v2 — the UI northwind, the first v2 sale, is on.
+    // The switch is the row, not a deployed slug list, because a self-serve
+    // slug does not exist until the moment the operator pays.
+    //
+    // This is also the ONLY path that sets the column. A tenant a super admin
+    // creates in the admin app never names it and keeps the DEFAULT 'v1', which
+    // is what keeps the ~56 existing tenants where they are.
+    // See ops/portal_experience.sql.
+    const tenantRow = {
+      company_name: companyName,
+      admin_name: firstName,
+      slug,
+      contact_email: meta.email,
+      contact_phone: phoneDisplay,
+      address: location,
+      business_hours: businessHours,
+      status: "active",
+      tenant_type: isProduction ? "production" : "test",
+      portal_experience: "v2",
+      ...identityCols,
+      ...palette,
+      ...logoCols,
+      ...modeCols,
+      ...hourCols,
+      ...tzCols,
+    };
+
+    let { data: tenant, error: tenantError } = await supabase
       .from("tenants")
-      .insert({
-        company_name: companyName,
-        admin_name: firstName,
-        slug,
-        contact_email: meta.email,
-        contact_phone: phoneDisplay,
-        address: location,
-        business_hours: businessHours,
-        status: "active",
-        tenant_type: isProduction ? "production" : "test",
-        ...identityCols,
-        ...palette,
-        ...logoCols,
-        ...modeCols,
-        ...hourCols,
-        ...tzCols,
-      })
+      .insert(tenantRow)
       .select("id")
       .single();
+
+    /*
+     * ops/portal_experience.sql not applied yet? Then PostgREST has no
+     * `portal_experience` in its schema cache and rejects the whole INSERT
+     * (PGRST204). The card is already charged at this point, and every retry
+     * would hit the same wall, so the workspace must not die over the column
+     * that decides which CSS the operator sees: insert again without it and let
+     * them land on v1.
+     *
+     * This is a net, not a plan. The deploy order is the SQL first, then this
+     * function (the file's header says so), and the log line below is written to
+     * be findable afterwards because a tenant that came through here needs one
+     * UPDATE to end up where they were meant to be.
+     */
+    if (tenantError && isMissingColumnError(tenantError, "portal_experience")) {
+      console.error(
+        `${LOG} tenants.portal_experience does not exist — APPLY ops/portal_experience.sql. ` +
+          `Provisioning "${slug}" on the v1 portal instead; afterwards run: ` +
+          `UPDATE public.tenants SET portal_experience = 'v2' WHERE slug = '${slug}';`,
+      );
+      const { portal_experience: _unsupported, ...rowWithoutExperience } = tenantRow;
+      ({ data: tenant, error: tenantError } = await supabase
+        .from("tenants")
+        .insert(rowWithoutExperience)
+        .select("id")
+        .single());
+    }
 
     if (tenantError || !tenant) {
       console.error(`${LOG} tenant insert failed:`, tenantError);

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Bot, CircleDollarSign, MessageCircle, Search, SlidersHorizontal } from "lucide-react";
+import { CircleDollarSign, MessageCircle, Search, SlidersHorizontal, Sparkles, X } from "lucide-react";
 
 import { Button } from "@/components/ui-v2/button";
 import { Separator } from "@/components/ui-v2/separator";
@@ -21,7 +21,8 @@ import { usePageSearchSlot } from "@/components/shared/layout/page-search-slot";
  *
  * Modelled on the Stripe dashboard: a bar spanning the CONTENT column only
  * (right of the sidebar, never the full window), search on the left, a
- * right-aligned icon cluster, a hairline bottom border, pinned while the page
+ * right-aligned icon cluster (credits, messages, notifications), Trax beside
+ * the search field, a hairline bottom border, pinned while the page
  * scrolls under it.
  *
  * It replaces two things the v2 chrome had instead of a bar:
@@ -82,9 +83,12 @@ import { usePageSearchSlot } from "@/components/shared/layout/page-search-slot";
 
 /** 32px, matching the icon buttons, so the row reads as one band of controls. */
 const FIELD =
-  "group relative flex h-9 w-full max-w-[460px] items-center gap-2 overflow-hidden rounded-full " +
+  "group relative flex h-8 w-full max-w-[380px] items-center gap-2 overflow-hidden rounded-full " +
   "border border-primary/25 bg-primary/[0.07] px-2.5 text-left backdrop-blur-[2px] transition-colors " +
   "hover:border-primary/40 hover:bg-primary/10 " +
+  // Dark: primary/10 over the dark bar is a 1.01:1 step, so hover and keyboard
+  // focus use the v2 hover tint and a light brand rim (--v2-link) instead.
+  "dark:hover:border-[hsl(var(--v2-link,var(--primary))_/_0.4)] dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:focus-visible:bg-[hsl(var(--v2-hover,var(--muted)))] " +
   "focus-visible:border-primary/50 focus-visible:bg-primary/10 focus-visible:outline-none " +
   "focus-visible:ring-3 focus-visible:ring-ring/30";
 
@@ -96,7 +100,9 @@ const FIELD =
  */
 const BELL_FIX =
   "[&>button]:relative [&>button]:size-8 [&>button]:rounded-4xl [&>button]:text-muted-foreground " +
-  "[&>button:hover]:bg-muted [&>button:hover]:text-foreground [&>button>svg]:!size-4";
+  "[&>button:hover]:bg-primary/10 dark:[&>button:hover]:bg-[hsl(var(--v2-hover,var(--muted)))] [&>button[aria-expanded=true]]:bg-primary/10 " +
+  "dark:[&>button[aria-expanded=true]]:bg-[hsl(var(--v2-hover,var(--muted)))] " +
+  "[&>button:hover]:text-foreground [&>button>svg]:!size-4";
 
 /** The v2 tooltip surface, matching what the dock used, so labels feel in-place. */
 const TIP =
@@ -138,6 +144,21 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
      keystroke — the 400ms is carried over from the search box this replaces,
      not invented here. */
   const [term, setTerm] = useState("");
+
+  /* Phones. Below `sm` the bar has no room for the page's field beside Trax and
+     the icons, so it used to be hidden outright, and a page's search (Settings,
+     the blacklist, every v2 list) could not be reached at all: the phone Search
+     button opens the global dialog, which searches bookings, customers and
+     vehicles only. With a page field, that button opens the field in the bar
+     instead, the way the field replaces the ⌘K pill on wider screens. It stays
+     open while it holds a term, so a filtered list always shows what filters
+     it, and its X clears the term and closes it. */
+  const [phoneFieldOpen, setPhoneFieldOpen] = useState(false);
+  const phoneField = !!slot && (phoneFieldOpen || term !== "");
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (phoneFieldOpen) inputRef.current?.focus();
+  }, [phoneFieldOpen]);
 
   /**
    * Values this field has pushed to the page whose echo has not come back yet,
@@ -185,6 +206,7 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
     clearTimeout(pendingPush.current);
     inFlight.current = [];
     setTerm(slot?.value ?? "");
+    setPhoneFieldOpen(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slot?.placeholder]);
 
@@ -259,20 +281,24 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
           local with nothing saying which, is the confusion this bar removes. */}
       {slot ? (
         <div
-          className={`hidden sm:flex ${FIELD}`}
+          className={`${phoneField ? "flex" : "hidden sm:flex"} ${FIELD}`}
           /* Carried from the search box this replaces. `tab-tours/rentals.ts`
              and `payments.ts` anchor a step to it, and a missing anchor does not
              fail loudly — it waits out the full timeout, skips, and starves the
              rest of that route's steps of their wait budget. */
           data-tour={slot.tourAnchor}
         >
-          <Search className="size-4 shrink-0 text-primary" aria-hidden />
+          <Search className="size-4 shrink-0 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" aria-hidden />
           <input
+            ref={inputRef}
             value={term}
             onChange={(e) => setTerm(e.target.value)}
             placeholder={slot.placeholder}
             aria-label={slot.placeholder}
-            className="min-w-0 flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground"
+            /* Muted measures 4.22:1 on the field's light purple ground (4.01
+               hovered); --v2-muted-on-tint is the v2 step that clears 4.5, and
+               is the muted token itself in dark. */
+            className="min-w-0 flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-[hsl(var(--v2-muted-on-tint,var(--muted-foreground)))]"
           />
           {slot.filters && (
             <button
@@ -284,15 +310,18 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
                 "relative flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors " +
                 (slot.filters.open
                   ? "bg-primary text-primary-foreground"
-                  : "bg-primary/10 text-primary hover:bg-primary/20")
+                  : "bg-primary/10 text-primary hover:bg-primary/20 dark:text-[hsl(var(--v2-link,var(--primary)))] dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]")
               }
             >
               <SlidersHorizontal className="size-4" />
               {/* Only while the panel is shut. Open, the chips say it better —
                   and closed, this is the sole thing on screen telling you the
-                  list you are reading is not the whole list. */}
+                  list you are reading is not the whole list.
+                  Pinned to the button's own corner, not hung outside it: the
+                  field clips its overflow (for the rounded ends), which cut an
+                  outside badge in half. */}
               {!slot.filters.open && slot.filters.activeCount > 0 && (
-                <span className="absolute -right-1.5 -top-1.5 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+                <span className="absolute right-0 top-0 flex size-3.5 items-center justify-center rounded-full bg-primary text-[9px] font-semibold leading-none text-primary-foreground">
                   {slot.filters.activeCount}
                 </span>
               )}
@@ -307,26 +336,87 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
           aria-label="Search"
           className={`hidden sm:flex ${FIELD}`}
         >
-          <Search className="size-4 shrink-0 text-primary" aria-hidden />
-          <span className="min-w-0 flex-1 truncate text-[13px] text-muted-foreground">
+          <Search className="size-4 shrink-0 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" aria-hidden />
+          {/* Muted measures 4.22:1 on this light purple pill (4.01 hovered);
+              --v2-muted-on-tint clears 4.5 and is the muted token in dark. */}
+          <span className="min-w-0 flex-1 truncate text-[13px] text-[hsl(var(--v2-muted-on-tint,var(--muted-foreground)))]">
             Search bookings, customers, vehicles…
           </span>
-          <kbd className="shrink-0 rounded-full bg-primary/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-primary">
+          <kbd className="shrink-0 rounded-full bg-primary/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
             ⌘K
           </kbd>
         </button>
       )}
 
-      <button
-        type="button"
-        onClick={open}
-        aria-label="Search"
-        className="inline-flex size-8 shrink-0 items-center justify-center rounded-full border border-primary/25 bg-primary/[0.07] text-primary sm:hidden"
-      >
-        <Search className="size-4" aria-hidden />
-      </button>
+      {phoneField && (
+        <button
+          type="button"
+          onClick={() => {
+            setPhoneFieldOpen(false);
+            setTerm("");
+          }}
+          aria-label="Clear and close search"
+          className="inline-flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-primary/10 hover:text-foreground dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] sm:hidden"
+        >
+          <X className="size-4" aria-hidden />
+        </button>
+      )}
 
-      <div className="ml-auto flex items-center gap-1">
+      {!phoneField && (
+        <button
+          type="button"
+          onClick={slot ? () => setPhoneFieldOpen(true) : open}
+          aria-label={slot ? "Search this page" : "Search"}
+          className="inline-flex size-8 shrink-0 items-center justify-center rounded-full border border-primary/25 bg-primary/[0.07] text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] sm:hidden"
+        >
+          <Search className="size-4" aria-hidden />
+        </button>
+      )}
+
+      {/* TRAX — right after the search field, not at the far end of the icon
+          cluster (team lead, Sep 2026): the two are the ways to ask the portal
+          something, so they sit together. Named, not just an icon. Its own control rather than a mode of
+          the search field: only we know which search is global, so a magnifier
+          that sometimes answers as an AI is a guess the operator would have to
+          make every time.
+          The label is deliberate. An unlabelled glyph is discoverable only by
+          hovering, and Trax is the one thing in this bar nobody arrives
+          already knowing.
+
+          Labelled "Help", not "Trax" (team lead, Sep 2026): operators read
+          "Help" and know what it is for, and Trax introduces itself on hover.
+          The generic AI sparkle replaces the robot for now. */}
+      {trax && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label="Help, ask Trax"
+              aria-expanded={trax.sheetOpen}
+              onClick={trax.sheetOpen ? trax.closeSheet : trax.openSheet}
+              className={
+                "h-8 gap-1.5 px-2.5 text-[13px] font-medium text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] hover:bg-primary/10 hover:text-primary dark:hover:text-[hsl(var(--v2-link,var(--primary)))] aria-expanded:bg-primary/10 " +
+                "dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:aria-expanded:bg-[hsl(var(--v2-hover,var(--muted)))] " +
+                (trax.sheetOpen ? "bg-primary/10 dark:bg-[hsl(var(--v2-hover,var(--muted)))]" : "") +
+                // On a phone the open page field takes the row (see phoneField).
+                (phoneField ? " max-sm:hidden" : "")
+              }
+            >
+              <Sparkles className="size-4" aria-hidden />
+              Help
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={8} className={TIP}>
+            Hi, I&apos;m Trax. How can I help?
+            <span className="ml-1.5 text-muted-foreground">⌘J</span>
+          </TooltipContent>
+        </Tooltip>
+      )}
+
+      {/* gap-0.5, and 8px side padding on credits: the icons sit a little closer
+          together (team lead, Sep 2026) while each keeps its full hover pill. */}
+      <div className={`ml-auto flex items-center gap-0.5${phoneField ? " max-sm:hidden" : ""}`}>
         <Separator
           orientation="vertical"
           /* The `data-[orientation=vertical]:` prefix has to be repeated: the
@@ -336,6 +426,38 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
           className="mx-1 hidden data-[orientation=vertical]:h-5 data-[orientation=vertical]:self-center sm:block"
         />
 
+        {/* Order, left to right: credits, messages, notifications. Notifications
+            sit at the extreme right (team lead, Sep 2026). */}
+        {/* CREDITS, deliberately on the face of every page.
+            Presentation is v2's rather than reusing `CreditBalance`, which is the
+            v1 pill: it hardcodes `text-[#404040]` and pulls the v1 Tooltip, both
+            of which read wrong in this bar and in v2 dark mode. The LOGIC is not
+            duplicated — both read the same `useCreditWallet`, so the low-balance
+            threshold lives in one place. Same split as app-sidebar / -v2. */}
+        {!creditsLoading && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Link
+                href="/credits"
+                aria-label={`Credits: ${balance.toFixed(0)}${isLowBalance ? " (low)" : ""}`}
+                className={
+                  "flex h-8 items-center gap-1.5 rounded-4xl px-2 text-[13px] font-medium transition-colors hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] " +
+                  (isLowBalance ? "text-destructive" : "text-foreground")
+                }
+              >
+                <CircleDollarSign
+                  className={`size-4 shrink-0 ${isLowBalance ? "text-destructive" : "text-emerald-500"}`}
+                  aria-hidden
+                />
+                <span className="tabular-nums">{balance.toFixed(0)}</span>
+              </Link>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={8} className={TIP}>
+              {isLowBalance ? "Credits running low" : "Credits"}
+            </TooltipContent>
+          </Tooltip>
+        )}
+
         <MessagesSheet
           trigger={
             <Tooltip>
@@ -344,7 +466,7 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
                   variant="ghost"
                   size="icon-sm"
                   aria-label="Messages"
-                  className="relative text-muted-foreground hover:text-foreground"
+                  className="relative text-muted-foreground hover:bg-primary/10 hover:text-foreground aria-expanded:bg-primary/10 aria-expanded:text-foreground dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:aria-expanded:bg-[hsl(var(--v2-hover,var(--muted)))]"
                 >
                   <MessageCircle />
                   {chatUnread > 0 && (
@@ -372,66 +494,9 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
           <NotificationBell />
         </div>
 
-        {/* CREDITS, deliberately on the face of every page.
-            Presentation is v2's rather than reusing `CreditBalance`, which is the
-            v1 pill: it hardcodes `text-[#404040]` and pulls the v1 Tooltip, both
-            of which read wrong in this bar and in v2 dark mode. The LOGIC is not
-            duplicated — both read the same `useCreditWallet`, so the low-balance
-            threshold lives in one place. Same split as app-sidebar / -v2. */}
-        {!creditsLoading && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Link
-                href="/credits"
-                aria-label={`Credits: ${balance.toFixed(0)}${isLowBalance ? " (low)" : ""}`}
-                className={
-                  "flex h-8 items-center gap-1.5 rounded-4xl px-2.5 text-[13px] font-medium transition-colors hover:bg-muted " +
-                  (isLowBalance ? "text-destructive" : "text-foreground")
-                }
-              >
-                <CircleDollarSign
-                  className={`size-4 shrink-0 ${isLowBalance ? "text-destructive" : "text-emerald-500"}`}
-                  aria-hidden
-                />
-                <span className="tabular-nums">{balance.toFixed(0)}</span>
-              </Link>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={8} className={TIP}>
-              {isLowBalance ? "Credits running low" : "Credits"}
-            </TooltipContent>
-          </Tooltip>
-        )}
 
-        {/* TRAX — named, not just an icon. Its own control rather than a mode of
-            the search field: only we know which search is global, so a magnifier
-            that sometimes answers as an AI is a guess the operator would have to
-            make every time.
-            The label is deliberate. An unlabelled glyph is discoverable only by
-            hovering, and Trax is the one thing in this bar nobody arrives
-            already knowing. */}
-        {trax && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                aria-label="Ask Trax"
-                aria-expanded={trax.sheetOpen}
-                onClick={trax.sheetOpen ? trax.closeSheet : trax.openSheet}
-                className={
-                  "h-8 gap-1.5 px-2.5 text-[13px] font-medium text-primary hover:bg-primary/10 hover:text-primary " +
-                  (trax.sheetOpen ? "bg-primary/10" : "")
-                }
-              >
-                <Bot className="size-4" aria-hidden />
-                Trax
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={8} className={TIP}>
-              Ask Trax · ⌘J
-            </TooltipContent>
-          </Tooltip>
-        )}
+
+
       </div>
 
       {/* The canary's ONLY GlobalSearch mount. It used to live in the sidebar and

@@ -202,7 +202,7 @@ export function BookingModeGrid({ selected, onSelect, available }: BookingModeGr
                     "absolute right-4 top-4 inline-flex h-7 w-7 items-center justify-center rounded-full transition-colors",
                     isActive
                       ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:bg-primary/10 hover:text-primary"
+                      : "text-muted-foreground hover:bg-primary/10 hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-[hsl(var(--v2-link,var(--primary)))]"
                   )}
                 >
                   {isActive ? <Check className="h-4 w-4" strokeWidth={3} /> : <Info className="h-4 w-4" />}
@@ -318,7 +318,7 @@ export function BookingModeGrid({ selected, onSelect, available }: BookingModeGr
                 "inline-flex items-center gap-1 rounded-xl px-3 py-2 text-sm font-medium transition-colors",
                 infoPage === 0
                   ? "text-muted-foreground/40 cursor-not-allowed"
-                  : "text-foreground hover:bg-muted"
+                  : "text-foreground hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]"
               )}
             >
               <ChevronLeft className="h-4 w-4" />

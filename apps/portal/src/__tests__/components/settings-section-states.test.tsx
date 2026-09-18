@@ -105,6 +105,15 @@ describe("SettingsSectionSkeleton", () => {
     expect(container.querySelectorAll(".rounded-2xl.bg-card")).toHaveLength(6);
   });
 
+  it("stack: full-width cards one above another, never a multi-column grid", () => {
+    render(<SettingsSectionSkeleton variant="stack" rows={3} label="Loading agreements" />);
+    const cards = container.querySelectorAll(".rounded-2xl.bg-card");
+    expect(cards).toHaveLength(3);
+    const list = cards[0].parentElement as HTMLElement;
+    expect(list.className).toContain("space-y-4");
+    expect(list.className).not.toContain("grid");
+  });
+
   it("never renders zero rows", () => {
     render(<SettingsSectionSkeleton variant="table" rows={0} />);
     expect(container.querySelectorAll(".h-\\[45px\\]")).toHaveLength(1);

@@ -4,11 +4,12 @@
  *
  * The ordering and gating rules are pinned in __tests__/lib/featured-cards.test.ts;
  * this file pins behaviour — auto-advance and its pauses, reduced motion,
- * manual navigation, the keyboard, rotation between visits, and hiding an
- * announcement through the shared detail dialog.
+ * manual navigation, the keyboard and rotation between visits. Announcements
+ * are no longer part of the deck (Sep 16 2026): they live on the dashboard
+ * desk band, pinned in feature-announcement-deck.test.tsx.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import React from 'react';
 
 const motion = vi.hoisted(() => ({ reduce: false }));
@@ -27,32 +28,12 @@ vi.mock('next/link', () => ({
 
 /** What the connected deck's hooks answer, per test. */
 const env = vi.hoisted(() => ({
-  announcements: [] as any[],
-  dismissCalls: [] as string[],
   trax: null as null | { openSheet: () => void },
   canEditCustomers: true,
   turoBridgeEnabled: true,
   tenantLoading: false,
 }));
 
-vi.mock('@/hooks/use-feature-announcements', async () => {
-  const { useState } = await import('react');
-  return {
-    useFeatureAnnouncements: () => {
-      const [dismissed, setDismissed] = useState<string[]>([]);
-      return {
-        announcements: env.announcements.filter((a) => !dismissed.includes(a.id)),
-        hasDismissed: dismissed.length > 0,
-        isLoading: false,
-        dismiss: (id: string) => {
-          env.dismissCalls.push(id);
-          setDismissed((prev) => [...prev, id]);
-        },
-        restore: () => setDismissed([]),
-      };
-    },
-  };
-});
 vi.mock('@/contexts/TenantContext', () => ({
   useTenant: () => ({
     tenant: { id: 't-1', slug: 'northwind', turo_bridge_enabled: env.turoBridgeEnabled },
@@ -143,8 +124,6 @@ beforeEach(() => {
   vi.stubGlobal('IntersectionObserver', ObserverStub);
   vi.stubGlobal('localStorage', memoryStorage());
   motion.reduce = false;
-  env.announcements = [];
-  env.dismissCalls = [];
   env.trax = null;
   env.canEditCustomers = true;
   env.turoBridgeEnabled = true;
@@ -217,14 +196,6 @@ describe('FeaturedDeckView — the slot', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Next card' }));
     expect(document.querySelector('[data-deck-count]')!.textContent).toBe('2 / 9');
     expect(slide()!.getAttribute('aria-label')).toBe('2 of 9');
-  });
-
-  it('keeps the Important chip solid: never the class pair the v2 theme repaints as a tint', () => {
-    // styles/v2-theme.css matches [class~="bg-destructive"][class~="text-destructive-foreground"].
-    render(<FeaturedDeckView cards={[{ ...feature('imp', 'Heads up'), badge: 'Important' }]} />);
-    const chip = within(slide()!).getByText('Important');
-    expect(chip.classList.contains('bg-destructive')).toBe(true);
-    expect(chip.classList.contains('text-destructive-foreground')).toBe(false);
   });
 
   it('renders titles as text, never as HTML', () => {
@@ -410,85 +381,69 @@ describe('FeaturedDeckView — rotation between visits', () => {
 });
 
 describe('FeaturedDeck — connected to the portal', () => {
-  const announcement = (fields: Record<string, unknown>) => ({
-    id: 'a-1',
-    title: 'Deposit Holds',
-    summary: 'Holds now refresh themselves.',
-    body_html: '<p>Nothing to do.</p>',
-    image_url: null,
-    cta_label: null,
-    cta_url: '/rentals',
-    severity: 'critical',
-    published_at: '2026-09-10T00:00:00Z',
-    expires_at: null,
-    sort_priority: 0,
-    audience_filter: null,
-    ...fields,
-  });
-
-  it('opens the shared detail dialog, and "Got it, hide this" removes the card through the hook', async () => {
-    env.announcements = [announcement({})];
+  it('shows ONE card — no dots, no arrows, no rotation — and Rentals names Calendar View', () => {
+    // Team lead, Sep 16 2026: a single minimal card, not a carousel.
+    vi.useFakeTimers();
+    env.trax = { openSheet: vi.fn() };
+    const openCalendar = vi.fn();
     render(
-      <V2Provider flags={{}}>
-        <FeaturedDeck tab="rentals" routePrefixes={['/rentals']} handlers={{ openCalendar: vi.fn() }} anchor="rentals-featured" />
+      <V2Provider flags={{ turo: true, availability: true }}>
+        <FeaturedDeck tab="rentals" routePrefixes={['/rentals', '/turo-bridge']} handlers={{ openCalendar }} anchor="rentals-featured" />
       </V2Provider>,
     );
-    expect(shownTitle()).toBe('Deposit Holds');
-    expect(within(slide()!).getByText('Important')).toBeInTheDocument();
-
-    fireEvent.click(within(slide()!).getByRole('button', { name: /Deposit Holds/ }));
-    const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).getByText('Holds now refresh themselves.')).toBeInTheDocument();
-
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Got it, hide this' }));
-    expect(env.dismissCalls).toEqual(['a-1']);
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    expect(screen.queryByText('Deposit Holds')).toBeNull();
+    // Turo Sync ranks above it and Ask Trax is eligible too; Rentals still shows Calendar View.
     expect(shownTitle()).toBe('Calendar View');
     expect(slide()!.getAttribute('aria-label')).toBe('1 of 1');
-  });
-
-  it('does not advance behind an open dialog', () => {
-    vi.useFakeTimers();
-    env.announcements = [announcement({})];
-    render(
-      <V2Provider flags={{}}>
-        <FeaturedDeck tab="rentals" routePrefixes={['/rentals']} handlers={{ openCalendar: vi.fn() }} />
-      </V2Provider>,
-    );
-    fireEvent.click(within(slide()!).getByRole('button', { name: /Deposit Holds/ }));
-    expect(screen.getByRole('dialog')).toBeInTheDocument();
-    // Pointer and focus have left the deck; only the open dialog holds it.
-    fireEvent.mouseLeave(screen.getByRole('region', { name: 'Featured' }));
-    act(() => (document.activeElement as HTMLElement | null)?.blur());
+    expect(screen.queryAllByRole('button', { name: /^Show / })).toHaveLength(0);
+    expect(screen.queryByRole('button', { name: 'Next card' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Previous card' })).toBeNull();
     tick(ADVANCE_MS * 3);
-    expect(shownTitle()).toBe('Deposit Holds');
+    expect(shownTitle()).toBe('Calendar View');
+    fireEvent.click(within(slide()!).getByRole('button', { name: /Calendar View/ }));
+    expect(openCalendar).toHaveBeenCalledTimes(1);
+    // No rotation, so nothing is remembered between visits.
+    expect(localStorage.getItem('portal:featured-deck:last-shown:rentals:user-1')).toBeNull();
   });
 
-  it('offers Ask Trax only under a Trax provider, and Turo Sync only with both gates', () => {
-    const openCalendar = vi.fn();
-    const dots = () => screen.getAllByRole('button', { name: /^Show / }).map((b) => b.getAttribute('aria-label'));
-
+  it('stands in the first eligible feature when the named card cannot show: Turo Sync needs both gates, Ask Trax a provider', () => {
+    // Vehicles names Availability; with that area off, the deck's own order decides.
     const withTuro = render(
       <V2Provider flags={{ turo: true }}>
-        <FeaturedDeck tab="rentals" routePrefixes={['/rentals']} handlers={{ openCalendar }} />
+        <FeaturedDeck tab="vehicles" routePrefixes={['/vehicles', '/turo-bridge']} />
       </V2Provider>,
     );
-    expect(dots()).toEqual(['Show Turo Sync, 1 of 2', 'Show Calendar View, 2 of 2']);
+    expect(shownTitle()).toBe('Turo Sync');
+    expect(screen.getByRole('link', { name: /Turo Sync/ }).getAttribute('href')).toBe('/turo-bridge');
     withTuro.unmount();
 
-    vi.stubGlobal('localStorage', memoryStorage());
     env.turoBridgeEnabled = false;
+    const none = render(
+      <V2Provider flags={{ turo: true }}>
+        <FeaturedDeck tab="vehicles" routePrefixes={['/vehicles']} anchor="vehicles-featured" />
+      </V2Provider>,
+    );
+    expect(document.querySelector('[data-tour="vehicles-featured"]')).toBeNull();
+    none.unmount();
+
     env.trax = { openSheet: vi.fn() };
     render(
       <V2Provider flags={{ turo: true }}>
-        <FeaturedDeck tab="rentals" routePrefixes={['/rentals']} handlers={{ openCalendar }} />
+        <FeaturedDeck tab="vehicles" routePrefixes={['/vehicles']} />
       </V2Provider>,
     );
-    expect(dots()).toEqual(['Show Calendar View, 1 of 2', 'Show Ask Trax, 2 of 2']);
-    fireEvent.click(screen.getByRole('button', { name: 'Show Ask Trax, 2 of 2' }));
+    expect(shownTitle()).toBe('Ask Trax');
     fireEvent.click(within(slide()!).getByRole('button', { name: /Ask Trax/ }));
     expect(env.trax.openSheet).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the named card once its area is on', () => {
+    env.trax = { openSheet: vi.fn() };
+    render(
+      <V2Provider flags={{ turo: true, availability: true }}>
+        <FeaturedDeck tab="vehicles" routePrefixes={['/vehicles', '/turo-bridge', '/blocked-dates']} />
+      </V2Provider>,
+    );
+    expect(shownTitle()).toBe('Availability');
   });
 
   it('drops invite and import without canEdit("customers"), leaving the lean Blocked link', () => {
@@ -509,51 +464,44 @@ describe('FeaturedDeck — connected to the portal', () => {
     expect(document.querySelector('[data-tour="customers-featured"]')).not.toBeNull();
   });
 
-  it('keeps its card, controls and Turo Sync while the tenant row reloads', () => {
+  it('keeps its card while the tenant row reloads, and follows the reload once it lands', () => {
     // refetchTenant() puts TenantContext's `loading` back to true with the page
     // still mounted. Before the latch this blanked the deck.
+    env.trax = { openSheet: vi.fn() };
     const deck = () => (
       <V2Provider flags={{ turo: true }}>
-        <FeaturedDeck tab="rentals" routePrefixes={['/rentals', '/turo-bridge']} handlers={{ openCalendar: vi.fn() }} anchor="rentals-featured" />
+        <FeaturedDeck tab="vehicles" routePrefixes={['/vehicles', '/turo-bridge']} anchor="vehicles-featured" />
       </V2Provider>
     );
-    const dots = () => screen.queryAllByRole('button', { name: /^Show / }).map((b) => b.getAttribute('aria-label'));
     const { rerender } = render(deck());
-    const root = document.querySelector('[data-tour="rentals-featured"]')!;
-    const next = screen.getByRole('button', { name: 'Next card' });
-    act(() => next.focus());
-    expect(dots()).toEqual(['Show Turo Sync, 1 of 2', 'Show Calendar View, 2 of 2']);
+    const root = document.querySelector('[data-tour="vehicles-featured"]')!;
     expect(shownTitle()).toBe('Turo Sync');
 
     env.tenantLoading = true;
     rerender(deck());
-    expect(document.querySelector('[data-tour="rentals-featured"]')).toBe(root);
+    expect(document.querySelector('[data-tour="vehicles-featured"]')).toBe(root);
     expect(root.getAttribute('aria-hidden')).toBeNull();
-    expect(root.getAttribute('aria-roledescription')).toBe('carousel');
-    expect(slide()!.getAttribute('aria-label')).toBe('1 of 2');
     expect(shownTitle()).toBe('Turo Sync');
-    expect(dots()).toEqual(['Show Turo Sync, 1 of 2', 'Show Calendar View, 2 of 2']);
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Next card' }));
 
-    // The reload lands with the switch turned off: now the card goes.
+    // The reload lands with the switch turned off: the next eligible card takes the slot.
     env.tenantLoading = false;
     env.turoBridgeEnabled = false;
     rerender(deck());
-    expect(dots()).toEqual([]);
-    expect(shownTitle()).toBe('Calendar View');
+    expect(shownTitle()).toBe('Ask Trax');
     expect(slide()!.getAttribute('aria-label')).toBe('1 of 1');
   });
 
   it('still refuses Turo Sync while the tenant row is FIRST loading', () => {
     env.tenantLoading = true;
+    env.trax = { openSheet: vi.fn() };
     const deck = () => (
       <V2Provider flags={{ turo: true }}>
-        <FeaturedDeck tab="rentals" routePrefixes={['/rentals']} handlers={{ openCalendar: vi.fn() }} anchor="rentals-featured" />
+        <FeaturedDeck tab="vehicles" routePrefixes={['/vehicles', '/turo-bridge']} anchor="vehicles-featured" />
       </V2Provider>
     );
     const { rerender } = render(deck());
     // Not ready: the shell holds the slot, nothing chosen, nothing announced.
-    expect(document.querySelector('[data-tour="rentals-featured"]')!.getAttribute('aria-hidden')).toBe('true');
+    expect(document.querySelector('[data-tour="vehicles-featured"]')!.getAttribute('aria-hidden')).toBe('true');
     expect(slide()).toBeNull();
     env.tenantLoading = false;
     rerender(deck());
@@ -574,7 +522,7 @@ describe('FeaturedDeck — connected to the portal', () => {
     expect(screen.getByRole('region', { name: 'Featured' }).getAttribute('data-tour')).toBe('from-anchor');
   });
 
-  it('remembers the card per tab and signed-in user', () => {
+  it('falls back to a recommendation when nothing else can show', () => {
     render(
       <V2Provider flags={{}}>
         <FeaturedDeck tab="vehicles" routePrefixes={['/vehicles']} recommendations={[
@@ -583,7 +531,19 @@ describe('FeaturedDeck — connected to the portal', () => {
       </V2Provider>,
     );
     expect(shownTitle()).toBe('3 cars have no photo');
-    expect(localStorage.getItem('portal:featured-deck:last-shown:vehicles:user-1')).toBe('recommendation:no-photo');
+  });
+
+  it('draws the minimal face: a diagonal "opens" arrow, no badge and no art', () => {
+    render(
+      <V2Provider flags={{}}>
+        <FeaturedDeck tab="rentals" routePrefixes={['/rentals']} handlers={{ openCalendar: vi.fn() }} />
+      </V2Provider>,
+    );
+    const card = slide()!;
+    expect(card.querySelector('svg.lucide-arrow-up-right')).not.toBeNull();
+    expect(card.querySelector('svg.lucide-arrow-right')).toBeNull();
+    expect(within(card).queryByText('New')).toBeNull();
+    expect(card.querySelector('[data-art]')).toBeNull();
   });
 });
 

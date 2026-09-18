@@ -14,6 +14,13 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import {
+  Select as SelectV2,
+  SelectContent as SelectContentV2,
+  SelectItem as SelectItemV2,
+  SelectTrigger as SelectTriggerV2,
+  SelectValue as SelectValueV2,
+} from '@/components/ui-v2/select';
+import {
   Bell, BellRing, Send, Smartphone, Monitor, AlertCircle, Loader2,
   Share, PlusSquare, CheckCircle2, XCircle, Users, UserCog, Download, Check,
 } from 'lucide-react';
@@ -65,7 +72,8 @@ export function PushNotificationSettings({ canEdit = true }: Props) {
   // The feature is per-tenant. Showing the screen to an operator who cannot use
   // it would just generate support questions.
   if (v2Chrome && !tenant) {
-    return <SettingsSectionSkeleton variant="form" rows={3} label="Loading push notification settings" />;
+    // Three stacked panels, like the loaded page (this device, send, recent sends).
+    return <SettingsSectionSkeleton variant="stack" rows={3} label="Loading push notification settings" />;
   }
   if (v2Chrome && !isEnabledForTenant) {
     return (
@@ -297,19 +305,19 @@ export function PushNotificationSettings({ canEdit = true }: Props) {
           {/* Enrolled device counts, split by audience — customer devices are on
               a different origin entirely, so they can never be enrolled here. */}
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-lg border p-3">
+            <div className={v2Chrome ? "rounded-2xl bg-muted/40 p-3" : "rounded-lg border p-3"}>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <UserCog className="h-4 w-4" /> Staff devices
               </div>
-              <p className="mt-1 text-2xl font-semibold">
+              <p className={v2Chrome ? "mt-1 text-2xl font-semibold tabular-nums" : "mt-1 text-2xl font-semibold"}>
                 {devicesLoading || (v2Chrome && devicesError) ? '—' : staffDevices.length}
               </p>
             </div>
-            <div className="rounded-lg border p-3">
+            <div className={v2Chrome ? "rounded-2xl bg-muted/40 p-3" : "rounded-lg border p-3"}>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Users className="h-4 w-4" /> Customer devices
               </div>
-              <p className="mt-1 text-2xl font-semibold">
+              <p className={v2Chrome ? "mt-1 text-2xl font-semibold tabular-nums" : "mt-1 text-2xl font-semibold"}>
                 {devicesLoading || (v2Chrome && devicesError) ? '—' : customerDevices.length}
               </p>
             </div>
@@ -377,6 +385,29 @@ export function PushNotificationSettings({ canEdit = true }: Props) {
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="push-target">Send to</Label>
+            {v2Chrome ? (
+              // v2: the v2 dropdown, with the same value, options and handler.
+              <SelectV2
+                value={target}
+                onValueChange={(v) => setTarget(v as SendPushInput['target'])}
+                disabled={!canEdit}
+              >
+                <SelectTriggerV2 id="push-target" className="w-full sm:w-72">
+                  <SelectValueV2 />
+                </SelectTriggerV2>
+                <SelectContentV2>
+                  {(Object.keys(TARGET_LABELS) as SendPushInput['target'][]).map((key) => (
+                    <SelectItemV2 key={key} value={key}>
+                      {TARGET_LABELS[key]}
+                      {key === 'staff' && staffDevices.length > 0 && ` (${staffDevices.length})`}
+                      {key === 'customers' && customerDevices.length > 0 && ` (${customerDevices.length})`}
+                      {key === 'all' && totalDevices > 0 && ` (${totalDevices})`}
+                      {key !== 'self' && devicesKnown && pushAudienceCount(key, staffDevices.length, customerDevices.length) === 0 && ' (0)'}
+                    </SelectItemV2>
+                  ))}
+                </SelectContentV2>
+              </SelectV2>
+            ) : (
             <Select
               value={target}
               onValueChange={(v) => setTarget(v as SendPushInput['target'])}
@@ -397,6 +428,7 @@ export function PushNotificationSettings({ canEdit = true }: Props) {
                 ))}
               </SelectContent>
             </Select>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -411,6 +443,10 @@ export function PushNotificationSettings({ canEdit = true }: Props) {
             />
             {v2Chrome && (
               <p className="text-xs text-muted-foreground">{title.length}/100</p>
+            )}
+            {/* Send is disabled without a title; say why, as the URL field does. */}
+            {v2Chrome && canEdit && !title.trim() && (
+              <p className="text-xs text-destructive">{PUSH_BLOCK_COPY.title}</p>
             )}
           </div>
 
@@ -520,9 +556,9 @@ export function PushNotificationSettings({ canEdit = true }: Props) {
                     <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
                   )}
                   <div className="min-w-0">
-                    <p className="truncate font-medium">{entry.title}</p>
+                    <p className="truncate font-medium" title={v2Chrome ? entry.title : undefined}>{entry.title}</p>
                     {entry.error && (
-                      <p className="truncate text-xs text-destructive">{entry.error}</p>
+                      <p className="truncate text-xs text-destructive" title={v2Chrome ? entry.error : undefined}>{entry.error}</p>
                     )}
                   </div>
                 </div>

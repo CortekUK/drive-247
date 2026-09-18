@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Clock, ChevronRight, CircleDollarSign, Layers, Timer, Zap, ShieldCheck, FileSignature, ArrowLeft, Building2, MapPin, Palette, Car, TrendingUp, Package, CreditCard, Bell, BellRing, FileText, Shield, Crown, Lock, Receipt, Banknote, MessageSquare, MessageSquarePlus, ShieldX, Bolt, Search, X, Wallet, AlertTriangle, BookOpen, Wrench , DownloadCloud } from "lucide-react";
+import { Clock, ChevronRight, CircleDollarSign, Layers, Timer, Zap, ShieldCheck, FileSignature, ArrowLeft, Building2, MapPin, Palette, Car, TrendingUp, Package, CreditCard, Bell, BellRing, FileText, Shield, Crown, Lock, Receipt, Banknote, MessageSquare, MessageSquarePlus, ShieldX, Bolt, Search, X, Wallet, AlertTriangle, BookOpen, Wrench, DownloadCloud, Sparkles } from "lucide-react";
 import { EarthIcon } from "@/components/ui/earth";
 import { CarIcon } from "@/components/ui/car";
 import { BlocksIcon } from "@/components/ui/blocks";
@@ -32,14 +32,16 @@ import { useRentalSettings } from "@/hooks/use-rental-settings";
 import { useFleetHealthStats } from "@/hooks/use-fleet-health";
 import { BrandLogo } from "@/components/shared/layout/brand-logo";
 import { useTenant } from "@/contexts/TenantContext";
-import { isAreaHidden } from "@/lib/lean-areas";
+import { useIsAreaHidden } from "@/lib/lean-context";
 import { isV2 } from "@/lib/v2";
+import { useV2 } from "@/lib/v2-context";
 import { UserPlus, Workflow } from "lucide-react";
 import { usePendingBookingsCount } from "@/hooks/use-pending-bookings";
 import { useUnreadCount } from "@/hooks/use-unread-count";
 import { useAuthStore } from "@/stores/auth-store";
 import { useTenantSubscription } from "@/hooks/use-tenant-subscription";
 import { useSetupStatus } from "@/hooks/use-setup-status";
+import { useCustomSiteEnabled } from "@/hooks/use-custom-site";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { ROUTE_TO_TAB } from "@/lib/permissions";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -167,6 +169,24 @@ export function AppSidebar() {
   const { data: reminderStats } = useReminderStats();
   const { settings } = useOrgSettings();
   const { tenant, tenantSlug } = useTenant();
+  // Every lean-hidden area this rail asks about, resolved ONCE here.
+  //
+  // `useIsAreaHidden` is a hook, and the questions below are asked from inside
+  // array spreads, a `.filter()` predicate and JSX branches — positions a hook
+  // cannot be called from. Hoisting them also means the rail asks each question
+  // exactly once, so two sites can no longer disagree about the same area.
+  const quotesHidden = useIsAreaHidden("quotes");
+  const ownersHidden = useIsAreaHidden("owners");
+  const expensesHidden = useIsAreaHidden("expenses");
+  const teslaHidden = useIsAreaHidden("tesla");
+  const accountingHidden = useIsAreaHidden("accounting");
+  const welcomeHidden = useIsAreaHidden("welcome");
+  const fleetHealthHidden = useIsAreaHidden("fleet-health");
+  // The `turo` area, from the RESOLVED flags and not the slug list alone: a
+  // tenant switched over by `portal_experience` is in no slug list, and this is
+  // half of what decides whether the Turo Sync entry exists at all. The slug
+  // term stays OR'd in so the answer can never be narrower than it was.
+  const turoV2 = useV2("turo") || isV2("turo", tenantSlug);
   // Turo Sync. BOTH gates, and in this order.
   //
   // `tenants.turo_bridge_enabled` is already true for five tenants in
@@ -179,7 +199,7 @@ export function AppSidebar() {
   // 42501-ing the whole tenant row. The column keeps its internal
   // `turo_bridge` name; only what the operator reads says "Turo Sync".
   const turoSyncEnabled =
-    isV2("turo", tenantSlug) &&
+    turoV2 &&
     (tenant as { turo_bridge_enabled?: boolean } | null)?.turo_bridge_enabled === true;
   const leadManagementEnabled = (tenant as { lead_management_enabled?: boolean } | null)?.lead_management_enabled === true;
   const automationsEnabled = (tenant as { automations_enabled?: boolean } | null)?.automations_enabled === true;
@@ -197,7 +217,7 @@ export function AppSidebar() {
   // about the other.
   const fleetHealthEnabled =
     (rentalSettings as unknown as { fleet_health_enabled?: boolean }).fleet_health_enabled === true &&
-    !isAreaHidden("fleet-health", tenantSlug);
+    !fleetHealthHidden;
   // Fleet Health alerting is pull-only by design — nothing is emailed or pushed —
   // so this badge is the only standing signal that work has come due.
   const { needsAttention: fleetNeedsAttention } = useFleetHealthStats();
@@ -234,6 +254,7 @@ export function AppSidebar() {
     : "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400";
   const { isLive } = useSetupStatus();
   const { isManager, canView, canViewSettings } = useManagerPermissions();
+  const { enabled: customSiteEnabled } = useCustomSiteEnabled();
 
   // Feedback entry point. Available to every role — a `viewer` hits the same
   // bugs as a head admin, so gating this on permissions would silence exactly
@@ -306,13 +327,13 @@ export function AppSidebar() {
         // the two identical means there is one rule to reason about rather than
         // two that can drift. The `vehicle_owners_enabled` flag still decides
         // for everyone else; the lean gate only ever subtracts the canary.
-        ...(vehicleOwnersEnabled && !isAreaHidden("owners", tenantSlug) ? [
+        ...(vehicleOwnersEnabled && !ownersHidden ? [
           { name: "Vehicle Owners", href: "/vehicle-owners", icon: AnimatedUsers },
           { name: "Owner Payouts", href: "/owner-payouts", icon: Banknote },
         ] : []),
         { name: "Rentals", href: "/rentals", icon: AnimatedFileText },
         ...(turoSyncEnabled ? [{ name: "Turo Sync", href: "/turo-bridge", icon: DownloadCloud }] : []),
-        ...(isAreaHidden("quotes", tenantSlug)
+        ...(quotesHidden
           ? []
           : [{ name: "Fleet Quotes", href: "/quotes", icon: CircleDollarSign }]),
         ...(showPendingBookings ? [{ name: "Pending Bookings", href: "/pending-bookings", icon: Clock, badge: pendingBookingsCount || 0 }] : []),
@@ -352,7 +373,7 @@ export function AppSidebar() {
         { name: "Payments", href: "/payments", icon: AnimatedCreditCard },
         { name: "Invoices", href: "/invoices", icon: AnimatedReceipt },
         { name: "Fines", href: "/fines", icon: AnimatedBadgeAlert },
-        ...(isAreaHidden("expenses", tenantSlug)
+        ...(expensesHidden
           ? []
           : [{ name: "Expenses", href: "/expenses", icon: Wallet }]),
         { name: "Credits", href: "/credits", icon: CircleDollarSign },
@@ -374,6 +395,11 @@ export function AppSidebar() {
       icon: AnimatedEarth,
       items: [
         { name: "Website Content", href: "/cms", icon: AnimatedEarth },
+        // Only while this tenant's custom website is switched on by a super
+        // admin. The route itself re-checks, so a bookmark cannot get in.
+        ...(customSiteEnabled
+          ? [{ name: "New Website Content", href: "/cms/new-website", icon: Sparkles }]
+          : []),
         { name: "Audit Logs", href: "/audit-logs", icon: AnimatedHistory },
         { name: "Manage Users", href: "/users", icon: AnimatedUsers, headAdminOnly: true },
       ].filter(item => {
@@ -505,14 +531,14 @@ export function AppSidebar() {
                   // alone. Presentation only — the settings tab, the edge
                   // functions and the hourly Supercharger sync all stay put for
                   // Jangram and every other operator running Teslas.
-                  !(item.value === 'tesla' && isAreaHidden('tesla', tenantSlug)) &&
+                  !(item.value === 'tesla' && teslaHidden) &&
                   // Accounting (Xero + Zoho Books) is hidden from the lean
                   // canary and that tenant alone. Presentation only — the
                   // Settings tab, both OAuth pairs, the sync worker and the
                   // void-on-refund hooks all stay on main. This tab is the only
                   // route by which any other tenant could connect a ledger, so
                   // it must never be hidden from them.
-                  !(item.value === 'accounting' && isAreaHidden('accounting', tenantSlug)) &&
+                  !(item.value === 'accounting' && accountingHidden) &&
                   (query === "" || item.label.toLowerCase().includes(query))
                 ),
               }))
@@ -709,7 +735,7 @@ export function AppSidebar() {
                   rail, not this one, so this gate changes nothing today — it
                   is here so the predicate is uniform across both rails and a
                   later flip of the rail cannot silently un-hide the row. */}
-              {!isAreaHidden("welcome", tenantSlug) && (
+              {!welcomeHidden && (
               <SidebarMenuItem>
                 <SidebarMenuButton
                   asChild

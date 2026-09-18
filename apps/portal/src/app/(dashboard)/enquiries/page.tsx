@@ -30,7 +30,7 @@ import { useEnquiryStats } from "@/hooks/use-enquiry-stats";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { EnquiryDetailDrawer } from "@/components/enquiries/enquiry-detail-drawer";
 import { useTenant } from "@/contexts/TenantContext";
-import { isAreaHidden } from "@/lib/lean-areas";
+import { useIsAreaHidden } from "@/lib/lean-context";
 
 const STATUS_FILTERS: { value: EnquiryStatus | "all"; label: string }[] = [
   { value: "all", label: "All" },
@@ -274,7 +274,8 @@ function StatCard({ label, value, highlight }: { label: string; value: number; h
 
 export default function EnquiriesPage() {
   const { tenantSlug } = useTenant();
-  if (isAreaHidden("enquiries", tenantSlug)) notFound();
+  const enquiriesHidden = useIsAreaHidden("enquiries");
+  if (enquiriesHidden) notFound();
 
   return (
     <Suspense

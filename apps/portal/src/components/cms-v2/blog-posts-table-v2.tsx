@@ -26,7 +26,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@/components/ui-v2/dropdown-menu";
 import {
   LIST_ROW_ACTION,
   LIST_CLASSES,
@@ -118,7 +118,7 @@ export function BlogPostsTableV2({
             return (
               <ListRow key={post.id} onOpen={() => onOpen(post)}>
                 <ListCell>
-                  <div className="flex min-w-0 items-center gap-1.5">
+                  <div className="flex min-w-0 items-center justify-center gap-1.5">
                     {/* A real button, so the post stays reachable by keyboard. */}
                     <button
                       type="button"
@@ -127,7 +127,7 @@ export function BlogPostsTableV2({
                         onOpen(post);
                       }}
                       title={titleTooltip}
-                      className={`${LIST_CLASSES.identifier} truncate text-left hover:underline`}
+                      className={`${LIST_CLASSES.identifier} truncate text-center hover:underline`}
                     >
                       {post.title}
                     </button>
@@ -186,12 +186,12 @@ export function BlogPostsTableV2({
                           <MoreHorizontal className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
+                      <DropdownMenuContent align="end" className="w-auto">
                         <DropdownMenuItem
                           onClick={() => onDelete(post)}
                           className="text-destructive focus:text-destructive"
                         >
-                          <Trash2 className="h-4 w-4 mr-2" />
+                          <Trash2 className="h-4 w-4" />
                           Delete
                         </DropdownMenuItem>
                       </DropdownMenuContent>

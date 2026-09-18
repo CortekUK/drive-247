@@ -2,6 +2,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { useTenant } from '@/contexts/TenantContext';
+import { useV2 } from '@/lib/v2-context';
+import { describeSaveError } from '@/components/settings-v2/settings-error-copy';
 
 export interface OrgSettings {
   id?: string;
@@ -53,6 +55,8 @@ export interface OrgSettings {
 export const useOrgSettings = () => {
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
+  // v2 (northwind): a failed save toasts in the operator's words. v1 is unchanged.
+  const v2 = useV2('chrome');
 
   // Fetch settings query with fallback defaults
   const {
@@ -165,6 +169,12 @@ export const useOrgSettings = () => {
     },
     onError: (error: Error) => {
       console.error('Settings update error:', error);
+      if (v2) {
+        // The mutation already prefixed "Failed to update settings:"; the title says that.
+        const reason = describeSaveError(String(error?.message ?? '').replace(/^Failed to update settings:\s*/, ''));
+        toast({ title: "Couldn't save settings", description: reason, variant: "destructive" });
+        return;
+      }
       toast({
         title: "Error",
         description: `Failed to update settings: ${error.message}`,

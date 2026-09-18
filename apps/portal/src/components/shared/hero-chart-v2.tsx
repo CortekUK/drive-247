@@ -16,8 +16,13 @@
  *     booked, verified beside new customers, the fleet beside cars on rent),
  *     named in a small legend with its own total;
  *   - the period before it as a faint dotted line.
- * Above the chart: the number, a change chip against the previous period, and
- * the previous number in words. No grid, no axes, no end labels.
+ * Above the chart: the number and a change chip against the previous period on
+ * the left; on the right one legend, every entry drawn alike, naming each line:
+ * the metric, the second line with its total, and the previous period with its
+ * total ("Previous 30 days $522"). No grid, no axes, no end labels.
+ *
+ * "All time" (offered only when every metric can draw it) has no period before
+ * it, so it draws no chip, no previous legend entry and no dotted line.
  *
  * The numbers come from lib/hero-series.ts, pure functions of the rows the page
  * already fetched, so nothing drawn here can disagree with the table below it.
@@ -40,6 +45,7 @@ import {
 import { cn } from "@/lib/utils";
 import {
   HERO_RANGES,
+  earliestEventDay,
   flowSeries,
   stockSeries,
   type HeroEvent,
@@ -78,6 +84,12 @@ export type HeroMetric =
       kind: "stock";
       valueOn: (day: Date) => number;
       secondary?: SecondaryBase & { valueOn: (day: Date) => number };
+      /**
+       * The first day `valueOn` (and the second line's) has real history for.
+       * Without it the metric cannot say where "all time" starts, so "All time"
+       * is not offered. Vehicles leaves it out: its rentals read covers 24 months.
+       */
+      historyStart?: Date;
     });
 
 /** A point as drawn: the series point, plus the second line's value when there is one. */
@@ -107,8 +119,10 @@ const chartConfig: ChartConfig = {
  * properties are not defined, so they carry the same colours as classes.
  */
 const SWATCH = {
-  current: "bg-primary dark:bg-[hsl(var(--chart-2))]",
-  secondary: "bg-primary/40 dark:bg-[hsl(var(--chart-1)/0.6)]",
+  current: "h-0.5 w-3 rounded-full bg-primary dark:bg-[hsl(var(--chart-2))]",
+  secondary: "h-0.5 w-3 rounded-full bg-primary/40 dark:bg-[hsl(var(--chart-1)/0.6)]",
+  // The dotted line, drawn as the tooltip draws it.
+  previous: "w-3 border-t-2 border-dotted border-muted-foreground",
 };
 
 const PICKER =
@@ -122,10 +136,18 @@ const PICKER =
  * negative margin, so the text sits exactly where it did and the ring clears
  * it. On the right the ring falls in the chevron's own blank margin.
  */
-const RANGE_PICKER = `${PICKER} -my-0.5 -ml-1.5 py-0.5 pl-1.5 focus-visible:ring-inset`;
+// A pill, like every other v2 control: `cn` lets `rounded-full` replace the
+// picker's `rounded-md`, so the inset ring is drawn round too.
+const RANGE_PICKER = cn(PICKER, "-my-0.5 -ml-1.5 rounded-full py-0.5 pl-1.5 focus-visible:ring-inset");
 
-/** "Previous 30 days" reads "previous 30 days" mid-sentence. */
-const midSentence = (label: string) => label.charAt(0).toLowerCase() + label.slice(1);
+/** The metric picker: the same pill and inset ring, at the row's left edge. */
+const METRIC_PICKER = cn(PICKER, "-my-0.5 -ml-1.5 self-start rounded-full py-0.5 pl-1.5 focus-visible:ring-inset");
+
+/** "All time" needs a first day: a flow metric has its events, a stock metric must say. */
+function supportsAllTime(metric: HeroMetric): boolean {
+  if (metric.kind === "flow") return true;
+  return metric.historyStart instanceof Date && !Number.isNaN(metric.historyStart.getTime());
+}
 
 export function HeroChart({
   metrics,
@@ -150,24 +172,43 @@ export function HeroChart({
   today?: Date;
 }) {
   const [metricKey, setMetricKey] = useState(defaultMetric ?? metrics[0]?.key);
-  const [range, setRange] = useState<HeroRange>(defaultRange);
+  const [chosenRange, setRange] = useState<HeroRange>(defaultRange);
   useDayRollover(!today);
   // The series depend only on the calendar day, so they are recomputed when the
   // day changes, not on every render.
   const dayKey = startOfDay(today ?? new Date()).getTime();
 
   const metric = metrics.find((m) => m.key === metricKey) ?? metrics[0];
+  // "All time" is offered only when every metric can draw it, so switching
+  // metric never lands on one that cannot. Should the metrics change under a
+  // chosen "All time" to ones that cannot, the chart shows the default period.
+  const allTimeOffered = metrics.length > 0 && metrics.every(supportsAllTime);
+  const fallbackRange: HeroRange = defaultRange === "all" ? "30d" : defaultRange;
+  const range: HeroRange =
+    chosenRange === "all" && !(allTimeOffered && metric && supportsAllTime(metric)) ? fallbackRange : chosenRange;
+
   const series = useMemo(() => {
     if (!metric) return null;
     const day = new Date(dayKey);
+    // "All time" starts from ONE day for both lines, the earliest of either (a
+    // stock metric's history start), so their buckets are the same.
+    const since =
+      range !== "all"
+        ? undefined
+        : metric.kind === "flow"
+          ? earliestEventDay([metric.events, metric.secondary?.events ?? []], day)
+          : metric.historyStart;
+    const options = { since };
     const main =
-      metric.kind === "flow" ? flowSeries(metric.events, range, day) : stockSeries(metric.valueOn, range, day);
-    // Same range, same day: the second series has exactly the same buckets, so
-    // its points line up with the main ones index for index.
+      metric.kind === "flow"
+        ? flowSeries(metric.events, range, day, options)
+        : stockSeries(metric.valueOn, range, day, options);
+    // Same range, same day, same `since`: the second series has exactly the same
+    // buckets, so its points line up with the main ones index for index.
     const second =
       metric.kind === "flow"
-        ? metric.secondary && flowSeries(metric.secondary.events, range, day)
-        : metric.secondary && stockSeries(metric.secondary.valueOn, range, day);
+        ? metric.secondary && flowSeries(metric.secondary.events, range, day, options)
+        : metric.secondary && stockSeries(metric.secondary.valueOn, range, day, options);
     const points: ChartPoint[] = second
       ? main.points.map((p, i) => ({ ...p, secondary: second.points[i]?.current ?? 0 }))
       : main.points;
@@ -184,19 +225,38 @@ export function HeroChart({
   // the pointer is always the one the tooltip names.
   const curve = metric.kind === "stock" ? "step" : "monotone";
   // A level has no total over a period. So for a stock metric the headline is
-  // named as today's, and the comparison as the one day it was read on
-  // ("on Aug 16"), not as "previous 30 days". Flow metrics are unchanged.
-  const previousDay = metric.kind === "stock" ? series.previousDay : undefined;
-  const headlineLabel = previousDay ? `${metric.label} today` : metric.label;
-  const compareLabel = previousDay
-    ? `On ${format(previousDay, previousDay.getFullYear() === new Date(dayKey).getFullYear() ? "MMM d" : "MMM d, yyyy")}`
-    : rangeInfo.compareLabel;
+  // named as today's (on every range, All time included), and the comparison as
+  // the one day it was read on ("On Aug 16"), not as "Previous 30 days". Flow
+  // metrics are unchanged.
+  const isStock = metric.kind === "stock";
+  const previousDay = isStock ? series.previousDay : undefined;
+  const headlineLabel = isStock ? `${metric.label} today` : metric.label;
+  // Null when there is nothing to compare with (All time).
+  const previousTotal = series.hasPrevious ? series.previousTotal : null;
+  const compareLabel =
+    previousTotal === null
+      ? null
+      : previousDay
+        ? `On ${format(previousDay, previousDay.getFullYear() === new Date(dayKey).getFullYear() ? "MMM d" : "MMM d, yyyy")}`
+        : rangeInfo.compareLabel;
   const secondaryText =
     secondaryLabel && series.secondaryTotal !== null
-      ? previousDay
+      ? isStock
         ? ` ${secondaryLabel} today: ${metric.format(series.secondaryTotal)}.`
         : ` ${secondaryLabel}, ${rangeInfo.label.toLowerCase()}: ${metric.format(series.secondaryTotal)}.`
       : "";
+  // " Previous 30 days: 4." or " On Aug 16: 1.", and nothing on All time.
+  const previousSentence =
+    compareLabel !== null && previousTotal !== null ? ` ${compareLabel}: ${metric.format(previousTotal)}.` : "";
+  // The legend, one entry per line drawn. The main line carries no value: the
+  // big number is its value.
+  const legend: LegendEntryProps[] = [{ swatch: SWATCH.current, label: metric.label }];
+  if (secondaryLabel && series.secondaryTotal !== null) {
+    legend.push({ swatch: SWATCH.secondary, label: secondaryLabel, value: metric.format(series.secondaryTotal) });
+  }
+  if (compareLabel !== null && previousTotal !== null) {
+    legend.push({ swatch: SWATCH.previous, label: compareLabel, value: metric.format(previousTotal) });
+  }
 
   return (
     <section className="flex flex-col gap-3" aria-label={`${metric.label}, ${rangeInfo.label.toLowerCase()}`}>
@@ -208,7 +268,7 @@ export function HeroChart({
         <div className="flex items-center justify-between gap-4">
           {metrics.length > 1 ? (
             <DropdownMenu>
-              <DropdownMenuTrigger className={cn(PICKER, "self-start")} aria-label={`Metric: ${metric.label}`}>
+              <DropdownMenuTrigger className={METRIC_PICKER} aria-label={`Metric: ${metric.label}`}>
                 {headlineLabel}
                 <ChevronDown className="size-3.5 text-muted-foreground" />
               </DropdownMenuTrigger>
@@ -238,7 +298,7 @@ export function HeroChart({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuRadioGroup value={range} onValueChange={(v) => setRange(v as HeroRange)}>
-                  {HERO_RANGES.map((r) => (
+                  {HERO_RANGES.filter((r) => r.key !== "all" || allTimeOffered).map((r) => (
                     <DropdownMenuRadioItem key={r.key} value={r.key}>
                       {r.label}
                     </DropdownMenuRadioItem>
@@ -249,8 +309,8 @@ export function HeroChart({
           </div>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1.5">
-          {/* The number, how it moved, and what it moved from, read as one line:
-              "$9,177.00  ↗ 1,659%  vs $522.00 previous 30 days". */}
+          {/* The number and how it moved: "$9,177.00  ↗ 1,659%". What it moved
+              from is in the legend. */}
           <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
             <span className="flex items-baseline gap-1.5" title={metric.description}>
               <span className="font-heading text-3xl leading-none tracking-tight tabular-nums">
@@ -258,28 +318,22 @@ export function HeroChart({
               </span>
               {metric.suffix && <span className="text-sm text-muted-foreground">{metric.suffix}</span>}
             </span>
-            <ChangeChip
-              kind={metric.kind}
-              current={series.currentTotal}
-              previous={series.previousTotal}
-              format={metric.format}
-            />
-            <span className="text-sm text-muted-foreground">
-              vs <span className="font-medium tabular-nums text-foreground/80">{metric.format(series.previousTotal)}</span>{" "}
-              {midSentence(compareLabel)}
-            </span>
+            {previousTotal !== null && (
+              <ChangeChip
+                kind={metric.kind}
+                current={series.currentTotal}
+                previous={previousTotal}
+                format={metric.format}
+              />
+            )}
           </div>
-          {secondaryLabel && series.secondaryTotal !== null && (
+          {/* Each line named, with its total: "— Booked value  — Picked up $4,210
+              ⋯ Previous 30 days $522". Decorative: the sr-only summary says it. */}
+          {legend.length >= 2 && (
             <div className="ml-auto flex min-h-[30px] flex-wrap items-center justify-end gap-x-4 gap-y-1 text-xs text-muted-foreground" aria-hidden>
-              <span className="inline-flex items-center gap-1.5">
-                <span className={cn("h-0.5 w-3 rounded-full", SWATCH.current)} />
-                {metric.label}
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className={cn("h-0.5 w-3 rounded-full", SWATCH.secondary)} />
-                {secondaryLabel}
-                <span className="font-medium tabular-nums text-foreground/80">{metric.format(series.secondaryTotal)}</span>
-              </span>
+              {legend.map((entry) => (
+                <LegendEntry key={entry.swatch} {...entry} />
+              ))}
             </div>
           )}
         </div>
@@ -297,21 +351,24 @@ export function HeroChart({
                 metric={metric}
                 secondaryLabel={secondaryLabel}
                 averaged={metric.kind === "stock" && series.averaged === true}
+                showPrevious={series.hasPrevious}
               />
             }
           />
-          <Line
-            dataKey="previous"
-            type={curve}
-            stroke="var(--color-previous)"
-            strokeOpacity={0.6}
-            strokeWidth={2}
-            strokeDasharray="2 4"
-            strokeLinecap="round"
-            dot={false}
-            activeDot={false}
-            isAnimationActive={false}
-          />
+          {series.hasPrevious && (
+            <Line
+              dataKey="previous"
+              type={curve}
+              stroke="var(--color-previous)"
+              strokeOpacity={0.6}
+              strokeWidth={2}
+              strokeDasharray="2 4"
+              strokeLinecap="round"
+              dot={false}
+              activeDot={false}
+              isAnimationActive={false}
+            />
+          )}
           {secondaryLabel && (
             <Line
               dataKey="secondary"
@@ -336,9 +393,9 @@ export function HeroChart({
       </ChartContainer>
 
       <p className="sr-only">
-        {previousDay
-          ? `${headlineLabel}: ${metric.format(series.currentTotal)}${metric.suffix ? ` ${metric.suffix}` : ""}. ${compareLabel}: ${metric.format(series.previousTotal)}.${secondaryText}${series.averaged ? " Each point on the line is a daily average." : ""}`
-          : `${metric.label}, ${rangeInfo.label.toLowerCase()}: ${metric.format(series.currentTotal)}. ${rangeInfo.compareLabel}: ${metric.format(series.previousTotal)}.${secondaryText}`}
+        {isStock
+          ? `${headlineLabel}: ${metric.format(series.currentTotal)}${metric.suffix ? ` ${metric.suffix}` : ""}.${previousSentence}${secondaryText}${series.averaged ? " Each point on the line is a daily average." : ""}`
+          : `${metric.label}, ${rangeInfo.label.toLowerCase()}: ${metric.format(series.currentTotal)}.${previousSentence}${secondaryText}`}
       </p>
     </section>
   );
@@ -355,13 +412,14 @@ const CHIP_TONE = {
  *
  * FLOW (a total over the period): the change as a percentage of the previous
  * total. With nothing in the previous period a percentage has no meaning, so
- * there is no chip, and the words beside it ("vs 0 previous 30 days") say it.
+ * there is no chip, and the legend beside it ("Previous 30 days 0") says it.
  *
  * STOCK (a level on a day): the change in the level itself ("↗ 5" cars), since
  * a percentage of a handful of cars reads as noise.
  *
  * Every metric on these tabs is one where more is better, so up is green.
- * Decorative: the sr-only summary carries both numbers.
+ * Decorative: the sr-only summary carries both numbers. Not drawn at all on
+ * "All time", which has no previous period.
  */
 function ChangeChip({
   kind,
@@ -437,12 +495,32 @@ function useDayRollover(enabled: boolean) {
   }, [enabled]);
 }
 
+interface LegendEntryProps {
+  /** The line's swatch classes (SWATCH). */
+  swatch: string;
+  label: string;
+  /** The line's total, formatted. The main line has none: the big number is its value. */
+  value?: string;
+}
+
+/** One legend entry. Every entry is this markup, so they all sit and space alike. */
+function LegendEntry({ swatch, label, value }: LegendEntryProps) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className={cn("shrink-0", swatch)} />
+      {label}
+      {value !== undefined && <span className="font-medium tabular-nums text-foreground/80">{value}</span>}
+    </span>
+  );
+}
+
 function HeroTooltip({
   active,
   payload,
   metric,
   secondaryLabel,
   averaged = false,
+  showPrevious = true,
 }: {
   active?: boolean;
   payload?: { payload: ChartPoint }[];
@@ -450,11 +528,13 @@ function HeroTooltip({
   secondaryLabel: string | null;
   /** Each point is a level averaged over several days (a week or a month). */
   averaged?: boolean;
+  /** False on "All time", which has no previous period. */
+  showPrevious?: boolean;
 }) {
   const point = active ? payload?.[0]?.payload : undefined;
   if (!point) return null;
   return (
-    <div className="min-w-[200px] rounded-lg border bg-background px-3 py-2 text-xs shadow-md">
+    <div className="min-w-[200px] rounded-xl border bg-background px-3 py-2 text-xs shadow-md">
       <div className="mb-1.5 flex items-baseline justify-between gap-3">
         <span className="font-medium text-foreground">{point.currentLabel}</span>
         {averaged && <span className="text-[11px] text-muted-foreground">Daily average</span>}
@@ -471,11 +551,13 @@ function HeroTooltip({
           <span className="ml-auto pl-3 font-medium tabular-nums">{metric.format(point.secondary)}</span>
         </div>
       )}
-      <div className="mt-1.5 flex items-center gap-2">
-        <span className="w-3 shrink-0 border-t-2 border-dotted border-muted-foreground" aria-hidden />
-        <span className="text-muted-foreground">{point.previousLabel}</span>
-        <span className="ml-auto pl-3 tabular-nums text-muted-foreground">{metric.format(point.previous)}</span>
-      </div>
+      {showPrevious && point.previous !== null && point.previousLabel !== null && (
+        <div className="mt-1.5 flex items-center gap-2">
+          <span className="w-3 shrink-0 border-t-2 border-dotted border-muted-foreground" aria-hidden />
+          <span className="text-muted-foreground">{point.previousLabel}</span>
+          <span className="ml-auto pl-3 tabular-nums text-muted-foreground">{metric.format(point.previous)}</span>
+        </div>
+      )}
     </div>
   );
 }

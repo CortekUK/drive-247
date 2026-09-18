@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/stores/auth-store';
-import { getTabKeyForRoute, SETTINGS_VALUE_TO_KEY } from '@/lib/permissions';
+import { getTabKeysForRoute, SETTINGS_VALUE_TO_KEY } from '@/lib/permissions';
 
 export interface ManagerPermission {
   id: string;
@@ -100,9 +100,13 @@ export function useManagerPermissions() {
     // Subscription page is always accessible (for billing)
     if (pathname === '/subscription') return true;
 
-    const tabKey = getTabKeyForRoute(pathname);
-    if (!tabKey) return true; // Unknown routes are allowed
-    return canView(tabKey);
+    // ANY of the grants that open this route, not just its primary one: on v2,
+    // `/integrations` replaces the hidden Settings > Payments tab, so a manager
+    // holding `settings.payments` must be able to reach it or they have no
+    // route to Stripe onboarding at all. See ROUTE_ALSO_ALLOWED_BY.
+    const tabKeys = getTabKeysForRoute(pathname);
+    if (tabKeys.length === 0) return true; // Unknown routes are allowed
+    return tabKeys.some((key) => canView(key));
   };
 
   /**

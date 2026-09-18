@@ -27,7 +27,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@/components/ui-v2/dropdown-menu";
 import {
   LIST_CLASSES,
   LIST_ROW_ACTION,
@@ -103,7 +103,7 @@ export function UsersTableV2<T extends AppUser>({
                     name is. */}
                 {!user.auth_user_id && (
                   <span
-                    className="flex items-center gap-1 text-[11px] font-medium text-red-600 dark:text-red-400"
+                    className="flex items-center justify-center gap-1 text-[11px] font-medium text-red-600 dark:text-red-400"
                     title="This user has no login account, so they cannot sign in. Remove them and add them again."
                   >
                     <AlertCircle className="size-3 shrink-0" />
@@ -123,7 +123,7 @@ export function UsersTableV2<T extends AppUser>({
               <ListCell className="whitespace-nowrap">
                 {/* A 20px line with or without the chip, so the chip does not make
                     its rows taller than the rest. */}
-                <div className="flex h-5 items-center gap-2">
+                <div className="flex h-5 items-center justify-center gap-2">
                   <ListStatusText tone={user.is_active ? "success" : "danger"}>
                     {user.is_active ? 'Active' : 'Inactive'}
                   </ListStatusText>
@@ -153,22 +153,22 @@ export function UsersTableV2<T extends AppUser>({
                       <MoreHorizontal className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
+                  <DropdownMenuContent align="end" className="w-auto">
                     <DropdownMenuLabel>Actions</DropdownMenuLabel>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={() => onResetPassword(user)}>
-                      <Key className="mr-2 h-4 w-4" />
+                      <Key className="h-4 w-4" />
                       Reset Password
                     </DropdownMenuItem>
                     {user.role !== 'head_admin' && (
                       <DropdownMenuItem onClick={() => onChangeRole(user)}>
-                        <Shield className="mr-2 h-4 w-4" />
+                        <Shield className="h-4 w-4" />
                         Change Role
                       </DropdownMenuItem>
                     )}
                     {user.role === 'manager' && (
                       <DropdownMenuItem onClick={() => onEditPermissions(user)}>
-                        <Settings2 className="mr-2 h-4 w-4" />
+                        <Settings2 className="h-4 w-4" />
                         Edit Permissions
                       </DropdownMenuItem>
                     )}
@@ -176,12 +176,12 @@ export function UsersTableV2<T extends AppUser>({
                       <DropdownMenuItem onClick={() => onToggleActive(user)}>
                         {user.is_active ? (
                           <>
-                            <UserX className="mr-2 h-4 w-4" />
+                            <UserX className="h-4 w-4" />
                             Deactivate
                           </>
                         ) : (
                           <>
-                            <UserCheck className="mr-2 h-4 w-4" />
+                            <UserCheck className="h-4 w-4" />
                             Activate
                           </>
                         )}

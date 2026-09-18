@@ -15,6 +15,7 @@
 import { AlertTriangle, Check, Wand2 } from 'lucide-react';
 import { Button } from '@/components/ui-v2/button';
 import { deepenUntilReadable, judgeBrandColor } from '@/lib/appearance/color';
+import { useV2 } from '@/lib/v2-context';
 import { cn } from '@/lib/utils';
 
 interface BrandColorFieldProps {
@@ -24,13 +25,23 @@ interface BrandColorFieldProps {
 }
 
 export function BrandColorField({ value, onChange, disabled }: BrandColorFieldProps) {
+  // v2 (northwind): say something only when there is something to fix. "Text on
+  // this colour will be white and easy to read" under every good choice was
+  // noise, so the 'excellent' verdict is not shown. v1 keeps all three.
+  // (Text is dark or white, whichever reads better, so the best of the two is
+  // never under ~4.45:1: 'poor' is all but unreachable, and 'good' is the one
+  // warning a person actually meets.)
+  const v2Chrome = useV2('chrome');
   const verdict = judgeBrandColor(value);
   if (!verdict) return null;
+  if (v2Chrome && verdict.grade === 'excellent') return null;
 
   return (
     <div
       className={cn(
-        'flex items-start gap-2.5 rounded-md border px-3 py-2.5 text-xs',
+        v2Chrome
+          ? 'flex items-start gap-2.5 rounded-xl border px-3 py-2.5 text-xs'
+          : 'flex items-start gap-2.5 rounded-md border px-3 py-2.5 text-xs',
         verdict.grade === 'poor'
           ? 'border-destructive/30 bg-destructive/5 text-destructive'
           : verdict.grade === 'good'
@@ -45,7 +56,8 @@ export function BrandColorField({ value, onChange, disabled }: BrandColorFieldPr
       )}
       <div className="flex-1 space-y-1.5">
         <p className="leading-snug">{verdict.message}</p>
-        {verdict.grade === 'poor' && (
+        {/* v2 also offers the fix for 'good': its line already suggests a deeper shade. */}
+        {(verdict.grade === 'poor' || (v2Chrome && verdict.grade === 'good')) && (
           <Button
             type="button"
             size="sm"

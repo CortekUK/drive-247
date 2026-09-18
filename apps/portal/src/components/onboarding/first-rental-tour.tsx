@@ -8,6 +8,7 @@ import { ArrowRight, Check, Compass, LayoutDashboard, Loader2 } from 'lucide-rea
 import { Button } from '@/components/ui-v2/button';
 import { cn } from '@/lib/utils';
 import { useFirstRentalTour } from '@/hooks/use-first-rental-tour';
+import { useSystemAnnouncementPriority } from '@/lib/announcements/system-priority';
 import { routePathname, type ResolvedStep, type TourSide, type TourStep } from '@/lib/first-rental-tour';
 
 /**
@@ -38,6 +39,14 @@ import { routePathname, type ResolvedStep, type TourSide, type TourStep } from '
  * aside (a do-this step that opens a dialog). Every card carries a visible
  * Skip, Back and Next; Esc skips, → advances, ← goes back.
  *
+ * SYSTEM ANNOUNCEMENTS GO FIRST. A run that started BY ITSELF (autostart, silent
+ * resume) and that nobody has touched yet, the transit pill of such a run, and the
+ * resume prompt carry `data-yields-to-system`: they step aside for a system
+ * announcement dialog (the hook does the stepping aside, recording nothing), so the
+ * announcement host does not wait for them. A run the operator started or has pressed
+ * Next / Back in carries no such attribute, and the host waits for it to end. See
+ * lib/announcements/system-priority.ts.
+ *
  * THEME. It renders through a portal onto `<body>`, which is where `.v2-theme`
  * lives, so `bg-card`, `rounded-3xl`, `ring-foreground/5` and the rest resolve
  * to the v2 ramp exactly as they do inside the app. Outside the canary the hook
@@ -46,15 +55,20 @@ import { routePathname, type ResolvedStep, type TourSide, type TourStep } from '
 export function FirstRentalTour({ suppressed = false }: { suppressed?: boolean }) {
   const tour = useFirstRentalTour(suppressed);
   const [mounted, setMounted] = useState(false);
+  // The hook steps an untouched run aside in an effect; this keeps it off screen from the
+  // very render in which a system announcement dialog became due, so it is never painted.
+  const systemPriority = useSystemAnnouncementPriority();
+  const stepAside = tour.yieldsToSystem && systemPriority !== 'idle';
 
   // Portals need a document. Next renders this on the server first.
   useEffect(() => setMounted(true), []);
 
-  if (!mounted) return null;
+  if (!mounted || stepAside) return null;
 
   if (tour.phase === 'prompt') {
     return createPortal(
       <ResumePrompt
+        yieldsToSystem
         onResume={tour.resume}
         onStartOver={tour.startOver}
         onDismiss={tour.dismissPrompt}
@@ -65,7 +79,11 @@ export function FirstRentalTour({ suppressed = false }: { suppressed?: boolean }
 
   if (tour.phase === 'transit' || tour.phase === 'navigating' || tour.phase === 'waiting') {
     return createPortal(
-      <TransitPill label={tour.steps[tour.index]?.label} onSkip={tour.end} />,
+      <TransitPill
+        label={tour.steps[tour.index]?.label}
+        onSkip={tour.end}
+        yieldsToSystem={tour.yieldsToSystem}
+      />,
       document.body,
     );
   }
@@ -83,6 +101,7 @@ export function FirstRentalTour({ suppressed = false }: { suppressed?: boolean }
         onFinishToDashboard={tour.finishToDashboard}
         onAnchorLost={tour.anchorLost}
         onPause={tour.pause}
+        yieldsToSystem={tour.yieldsToSystem}
       />,
       document.body,
     );
@@ -412,6 +431,7 @@ function TourLayer({
   onFinishToDashboard,
   onAnchorLost,
   onPause,
+  yieldsToSystem = false,
 }: {
   resolved: ResolvedStep;
   steps: readonly TourStep[];
@@ -423,6 +443,8 @@ function TourLayer({
   onFinishToDashboard: () => void;
   onAnchorLost: () => void;
   onPause: () => void;
+  /** Launched by itself and untouched: steps aside for a system announcement dialog. */
+  yieldsToSystem?: boolean;
 }) {
   const { step, element, notes } = resolved;
   const [rect, setRect] = useState<Rect | null>(null);
@@ -836,6 +858,7 @@ function TourLayer({
           aria-label={`${step.title} — step ${index + 1} of ${steps.length}`}
           tabIndex={-1}
           data-first-rental-tour=""
+          data-yields-to-system={yieldsToSystem ? '' : undefined}
           data-tour-step={step.id}
           initial={reduceMotion ? false : { opacity: 0, y: 8, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -996,7 +1019,15 @@ function TourLayer({
  * back for a beat so an anchor that is already on screen never flashes it.
  * Carries a way out: a pill with no exit is a stall with a spinner on it.
  */
-function TransitPill({ label, onSkip }: { label?: string; onSkip: () => void }) {
+function TransitPill({
+  label,
+  onSkip,
+  yieldsToSystem = false,
+}: {
+  label?: string;
+  onSkip: () => void;
+  yieldsToSystem?: boolean;
+}) {
   const [visible, setVisible] = useState(false);
   useEffect(() => {
     const t = setTimeout(() => setVisible(true), 350);
@@ -1007,6 +1038,7 @@ function TransitPill({ label, onSkip }: { label?: string; onSkip: () => void }) 
     <div className="pointer-events-none fixed inset-x-0 bottom-6 z-[65] flex justify-center">
       <div
         data-tour-transit=""
+        data-yields-to-system={yieldsToSystem ? '' : undefined}
         role="status"
         className="pointer-events-auto flex items-center gap-2.5 rounded-full bg-card py-1.5 pl-3.5 pr-1.5 text-[13px] text-foreground shadow-md ring-1 ring-foreground/10 dark:ring-foreground/15"
       >
@@ -1026,7 +1058,10 @@ function ResumePrompt({
   onResume,
   onStartOver,
   onDismiss,
+  yieldsToSystem = false,
 }: {
+  /** Always true from the tour: the prompt opens by itself, and any answer to it ends it. */
+  yieldsToSystem?: boolean;
   onResume: () => void;
   onStartOver: () => void;
   onDismiss: () => void;
@@ -1036,6 +1071,7 @@ function ResumePrompt({
     <div className="pointer-events-none fixed inset-x-0 bottom-6 z-[65] flex justify-center px-4">
       <motion.div
         data-tour-prompt=""
+        data-yields-to-system={yieldsToSystem ? '' : undefined}
         role="dialog"
         aria-modal="false"
         aria-label="Pick up the walkthrough where you left off?"

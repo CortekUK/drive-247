@@ -1,6 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
-import { resolveBoldSignMode } from '../_shared/lean-tenants.ts';
+import { readTenantOnV2ById, resolveBoldSignMode } from '../_shared/lean-tenants.ts';
 
 /**
  * retry-credit-failed-agreements
@@ -72,7 +72,14 @@ async function processRental(supabase: Supa, rentalId: string): Promise<Record<s
 
   const tenant = rental.tenants as { slug?: string; boldsign_mode?: string } | null;
   // Lean tenants are always live, whatever the column says.
-  const boldsignMode = resolveBoldSignMode(tenant?.boldsign_mode, tenant?.slug);
+  //
+  // `portal_experience = 'v2'` is read in a query of its own, not folded into
+  // the embedded `tenants:tenant_id(...)` select above: a column Postgres cannot
+  // yet read fails the WHOLE query, and this runs nightly on cron with no one
+  // watching. Without this term the retry mints sandbox agreements for a
+  // column-flagged tenant whose portal-created agreements are live.
+  const onV2 = await readTenantOnV2ById(supabase, tenantId);
+  const boldsignMode = resolveBoldSignMode(tenant?.boldsign_mode, tenant?.slug, onV2);
   const isLive = boldsignMode !== 'test';
 
   // Idempotency: is a valid agreement already covering the current full period?

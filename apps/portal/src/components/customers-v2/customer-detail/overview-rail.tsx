@@ -134,7 +134,7 @@ function Line({
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-primary/10"
+      className="flex w-full cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]"
     >
       {body}
     </button>
@@ -274,7 +274,7 @@ function CustomerOverview({
                   key={k.id}
                   type="button"
                   onClick={() => onJump(k.tab)}
-                  className="flex w-full cursor-pointer items-start gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-primary/10"
+                  className="flex w-full cursor-pointer items-start gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]"
                 >
                   <span className={cn("mt-px flex size-4 shrink-0 items-center justify-center rounded-full", m.cls)}>
                     <m.icon className="size-2.5" strokeWidth={3} />

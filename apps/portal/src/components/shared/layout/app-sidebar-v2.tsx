@@ -3,6 +3,7 @@
 import { Fragment, useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { runThroughLeaveGuard } from "@/lib/leave-guard";
 // The source worktree draws this sidebar in `@phosphor-icons/react`, which is
 // not a dependency here and is not being added for a canary. Every icon below
 // is the closest lucide equivalent; the aliases keep the source's own names so
@@ -89,7 +90,7 @@ import { useOrgSettings } from "@/hooks/use-org-settings";
 import { useRentalSettings } from "@/hooks/use-rental-settings";
 import { useFleetHealthStats } from "@/hooks/use-fleet-health";
 import { useTenant } from "@/contexts/TenantContext";
-import { isAreaHidden, isLeanTenant, isSettingsTabHidden } from "@/lib/lean-areas";
+import { useIsAreaHidden } from "@/lib/lean-context";
 import { usePendingBookingsCount } from "@/hooks/use-pending-bookings";
 import { useAuthStore } from "@/stores/auth-store";
 import { useTenantSubscription } from "@/hooks/use-tenant-subscription";
@@ -227,6 +228,22 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   const { data: reminderStats } = useReminderStats();
   const { settings } = useOrgSettings();
   const { tenant, tenantSlug } = useTenant();
+  // Every lean-hidden area this rail asks about, resolved ONCE here.
+  //
+  // `useIsAreaHidden` is a hook, and the questions below are asked from inside
+  // array spreads and JSX branches — positions a hook cannot be called from.
+  // Hoisting them also means the rail asks each question exactly once, so two
+  // sites can no longer disagree about the same area.
+  const quotesHidden = useIsAreaHidden("quotes");
+  const leadsHidden = useIsAreaHidden("leads");
+  const automationsHidden = useIsAreaHidden("automations");
+  const ownersHidden = useIsAreaHidden("owners");
+  const expensesHidden = useIsAreaHidden("expenses");
+  const remindersHidden = useIsAreaHidden("reminders");
+  const reportsHidden = useIsAreaHidden("reports");
+  const plDashboardHidden = useIsAreaHidden("pl-dashboard");
+  const welcomeHidden = useIsAreaHidden("welcome");
+  const fleetHealthHidden = useIsAreaHidden("fleet-health");
   // Website rail + its publish switches. React Query dedupes this against the
   // /cms dashboard's own read, so the extra mount costs nothing.
   const {
@@ -252,7 +269,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   // about the other.
   const fleetHealthEnabled =
     (rentalSettings as unknown as { fleet_health_enabled?: boolean }).fleet_health_enabled === true &&
-    !isAreaHidden("fleet-health", tenantSlug);
+    !fleetHealthHidden;
   // Fleet Health alerting is pull-only by design — nothing is emailed or pushed —
   // so this badge is the only standing signal that work has come due.
   const { needsAttention: fleetNeedsAttention } = useFleetHealthStats();
@@ -329,9 +346,14 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   const switchView = useCallback(
     (next: "admin" | "cms") => {
       if (next === "cms" && !canSeeCms) return;
-      setActiveView(next);
       closeMobileOnNav();
-      router.push(next === "cms" ? "/cms" : "/");
+      // Through the leave guard: a v2 settings page with unsaved edits asks
+      // first, and the rail flips only when the page really changes.
+      const target = next === "cms" ? "/cms" : "/";
+      runThroughLeaveGuard(target, () => {
+        setActiveView(next);
+        router.push(target);
+      });
     },
     [router, closeMobileOnNav, canSeeCms]
   );
@@ -563,7 +585,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
       label: "Bookings",
       icon: CalendarDays,
       items: [
-        ...(isAreaHidden("quotes", tenantSlug)
+        ...(quotesHidden
           ? []
           : [{ name: "Fleet Quotes", href: "/quotes", icon: CircleDollarSign }]),
         ...(showPendingBookings
@@ -616,13 +638,13 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
       icon: Users,
       items: [] as NavItem[],
     },
-    ...(leadManagementEnabled && !isAreaHidden("leads", tenantSlug)
+    ...(leadManagementEnabled && !leadsHidden
       ? [{
           label: "Pipeline",
           icon: Users,
           items: [
             { name: "Leads", href: "/leads", icon: UserPlus },
-            ...(automationsEnabled && !isAreaHidden("automations", tenantSlug)
+            ...(automationsEnabled && !automationsHidden
               ? [{ name: "Automations", href: "/automations", icon: Workflow }]
               : []),
           ],
@@ -634,7 +656,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
     // Settings -> Features. Nothing is removed -- the 7 tenants with the flag
     // on, Global Motion Transport among them (3 owners, 15 payouts), are
     // untouched.
-    ...(vehicleOwnersEnabled && !isAreaHidden("owners", tenantSlug)
+    ...(vehicleOwnersEnabled && !ownersHidden
       ? [{
           label: "Owners",
           icon: Users,
@@ -653,7 +675,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
       label: "Finance",
       icon: CreditCard,
       items: [
-        ...(isAreaHidden("expenses", tenantSlug)
+        ...(expensesHidden
           ? []
           : [{ name: "Expenses", href: "/expenses", icon: Wallet }]),
       ],
@@ -670,13 +692,13 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
         // lean-hidden. If Reminders is hidden too this group empties, and the
         // `.filter(g => g.items.length > 0)` below drops the whole "Records"
         // row rather than leaving a dead one.
-        ...(isAreaHidden("reminders", tenantSlug)
+        ...(remindersHidden
           ? []
           : [{ name: "Reminders", href: "/reminders", icon: Bell, badge: reminderStats?.due || 0 }]),
-        ...(isAreaHidden("reports", tenantSlug)
+        ...(reportsHidden
           ? []
           : [{ name: "Reports", href: "/reports", icon: BarChart3 }]),
-        ...(isAreaHidden("pl-dashboard", tenantSlug)
+        ...(plDashboardHidden
           ? []
           : [{ name: "P&L Dashboard", href: "/pl-dashboard", icon: TrendingUp }]),
       ],
@@ -775,14 +797,14 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
             {collapsed ? (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Link href="/rentals" className="flex items-center justify-center w-full h-8 rounded-md hover:bg-muted/50 transition-colors">
+                  <Link href="/rentals" className="flex items-center justify-center w-full h-8 rounded-full hover:bg-primary/10 hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-[hsl(var(--v2-link,var(--primary)))] transition-colors">
                     <ArrowLeft className="h-4 w-4 shrink-0" />
                   </Link>
                 </TooltipTrigger>
                 <TooltipContent side="right">Back to rentals</TooltipContent>
               </Tooltip>
             ) : (
-              <Link href="/rentals" className="flex items-center gap-2 h-8 px-1 rounded-md hover:bg-muted/50 transition-colors text-muted-foreground hover:text-foreground">
+              <Link href="/rentals" className="flex items-center gap-2 h-8 px-1 rounded-xl hover:bg-primary/10 transition-colors text-muted-foreground hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-[hsl(var(--v2-link,var(--primary)))]">
                 <ArrowLeft className="h-4 w-4 shrink-0" />
                 <span className="text-[13px]">All rentals</span>
               </Link>
@@ -913,14 +935,14 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
             {collapsed ? (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Link href="/vehicles" className="flex items-center justify-center w-full h-8 rounded-md hover:bg-muted/50 transition-colors">
+                  <Link href="/vehicles" className="flex items-center justify-center w-full h-8 rounded-full hover:bg-primary/10 hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-[hsl(var(--v2-link,var(--primary)))] transition-colors">
                     <ArrowLeft className="h-4 w-4 shrink-0" />
                   </Link>
                 </TooltipTrigger>
                 <TooltipContent side="right">Back to vehicles</TooltipContent>
               </Tooltip>
             ) : (
-              <Link href="/vehicles" className="flex items-center gap-2 h-8 px-1 rounded-md hover:bg-muted/50 transition-colors text-muted-foreground hover:text-foreground">
+              <Link href="/vehicles" className="flex items-center gap-2 h-8 px-1 rounded-xl hover:bg-primary/10 transition-colors text-muted-foreground hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-[hsl(var(--v2-link,var(--primary)))]">
                 <ArrowLeft className="h-4 w-4 shrink-0" />
                 <span className="text-[13px]">All vehicles</span>
               </Link>
@@ -1050,14 +1072,14 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
             {collapsed ? (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Link href="/customers" className="flex items-center justify-center w-full h-8 rounded-md hover:bg-muted/50 transition-colors">
+                  <Link href="/customers" className="flex items-center justify-center w-full h-8 rounded-full hover:bg-primary/10 hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-[hsl(var(--v2-link,var(--primary)))] transition-colors">
                     <ArrowLeft className="h-4 w-4 shrink-0" />
                   </Link>
                 </TooltipTrigger>
                 <TooltipContent side="right">Back to customers</TooltipContent>
               </Tooltip>
             ) : (
-              <Link href="/customers" className="flex items-center gap-2 h-8 px-1 rounded-md hover:bg-muted/50 transition-colors text-muted-foreground hover:text-foreground">
+              <Link href="/customers" className="flex items-center gap-2 h-8 px-1 rounded-xl hover:bg-primary/10 transition-colors text-muted-foreground hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-[hsl(var(--v2-link,var(--primary)))]">
                 <ArrowLeft className="h-4 w-4 shrink-0" />
                 <span className="text-[13px]">All customers</span>
               </Link>
@@ -1180,11 +1202,11 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
             without the `cms` grant — v1 hides "Website Content" from them too. */}
         {canSeeCms && !collapsed && (
           <div className="px-1.5 pb-1 pt-0.5">
-            <div className="relative grid grid-cols-2 rounded-lg p-1">
+            <div className="relative grid grid-cols-2 rounded-full p-1">
               {/* Sliding active pill */}
               <span
                 aria-hidden
-                className="pointer-events-none absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-md bg-background shadow-sm ring-1 ring-primary/20 transition-transform duration-300 ease-out"
+                className="pointer-events-none absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-full bg-background shadow-sm ring-1 ring-primary/20 transition-transform duration-300 ease-out"
                 style={{ transform: view === "cms" ? "translateX(100%)" : "translateX(0)" }}
               />
               {([
@@ -1194,17 +1216,17 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                 <button
                   key={tab.key}
                   onClick={() => switchView(tab.key)}
-                  className={`relative z-10 flex items-center justify-between gap-1.5 cursor-pointer rounded-md px-2.5 py-1 text-[12px] font-medium transition-colors ${
+                  className={`relative z-10 flex items-center justify-between gap-1.5 cursor-pointer rounded-full px-2.5 py-1 text-[12px] font-medium transition-colors ${
                     view === tab.key
-                      ? "text-primary"
+                      ? "text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]"
                       : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
                   <span>{tab.label}</span>
                   <kbd
-                    className={`rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold transition-colors ${
+                    className={`rounded-full px-1.5 py-0.5 font-mono text-[10px] font-semibold transition-colors ${
                       view === tab.key
-                        ? "bg-primary/15 text-primary"
+                        ? "bg-primary/15 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]"
                         : "bg-foreground/10 text-foreground/70"
                     }`}
                   >
@@ -1332,9 +1354,9 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                             key={section.id}
                             type="button"
                             onClick={() => outlinePick?.(section.id)}
-                            className={`flex w-full cursor-pointer items-center gap-2 rounded-md px-2.5 py-1 text-left text-[12px] leading-tight transition-colors ${
+                            className={`flex w-full cursor-pointer items-center gap-2 rounded-xl px-2.5 py-1 text-left text-[12px] leading-tight transition-colors ${
                               outlineActiveId === section.id
-                                ? "font-medium text-primary"
+                                ? "font-medium text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]"
                                 : "text-sidebar-foreground/55 hover:text-foreground"
                             }`}
                           >
@@ -1386,7 +1408,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                     which is the only tenant on this rail; it lights up on its
                     own for the next tenant that has Leads. A row that 404s
                     would be worse than a row that waits. */}
-                {!isAreaHidden("leads", tenantSlug) && (
+                {!leadsHidden && (
                   <SidebarMenuItem>
                     <SidebarMenuButton
                       asChild
@@ -1489,7 +1511,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                       sees; the v1 rail below carries the identical predicate so
                       the two cannot drift. Everyone else keeps the row — 16
                       operators across 14 tenants have read the pack. */}
-                  {!isAreaHidden("welcome", tenantSlug) && (
+                  {!welcomeHidden && (
                   <SidebarMenuItem>
                     <SidebarMenuButton
                       asChild
@@ -1628,7 +1650,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                 {(groups.length > 0 || moreItems.length > 0) && (
                   <SidebarGroup className="p-1.5 pt-1 pb-2">
                     {!collapsed && (
-                      <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 px-2.5 pb-1">
+                      <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground px-2.5 pb-1">
                         More
                       </p>
                     )}

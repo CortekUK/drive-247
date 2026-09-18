@@ -6,7 +6,7 @@ import { useTenant } from '@/contexts/TenantContext';
 import { useManagerPermissions } from '@/hooks/use-manager-permissions';
 import { TraxRequestScope, traxPageContext } from '@/lib/trax-session';
 import { isV2 } from '@/lib/v2';
-import { useV2 } from '@/lib/v2-context';
+import { useV2, usePortalOnV2 } from '@/lib/v2-context';
 import type { ChatMessage, ChatApiResponse, UseChatReturn, TraxNavigation, TraxCapabilities } from '@/types/trax-support';
 
 class ChatFailure extends Error { constructor(message:string,public code:string){super(message);} }
@@ -30,15 +30,26 @@ export const OPERATIONAL_SOURCE_TABLES=['application_knowledge','vehicles','rent
   // scoping are enforced in the backend; this list only says the shape is expected.
   'business_query',
   // A generated report's job record, cited when a file has actually been produced.
-  'trax_report_jobs'] as const;
+  'trax_report_jobs',
+  // Integration connection state, which is stored on the tenant's own row. Reading
+  // it is already permission-checked in the backend; this list only says the shape
+  // is one the client expects, so the answer is not discarded on arrival.
+  'tenants'] as const;
 export const FINANCE_SOURCE_TABLES=['payment_check','stripe_account_summary','payment_evidence'] as const;
 
 export function useTraxSupport(enabled = true, surfaceVisible = true): UseChatReturn {
   const { appUser, user } = useAuthStore();
   const { tenant } = useTenant();
   const chromeEnabled=useV2('chrome');
+  const onV2=usePortalOnV2();
   // Follow the reviewed V2 rollout, including tenants enrolled after Northwind.
-  enabled=enabled && chromeEnabled && isV2('chrome',tenant?.slug);
+  // TWO terms, ANDed, and the AND is deliberate: `chromeEnabled` says the v2
+  // chrome is what is rendering, and the second says this tenant is on the
+  // rollout. A v1 layout must not reach support even on a rollout tenant.
+  // Only the SECOND term gains the column — a tenant switched over by
+  // `portal_experience` is in no slug list, so without `onV2` here the AND
+  // would refuse every self-serve tenant.
+  enabled=enabled && chromeEnabled && (onV2 || isV2('chrome',tenant?.slug));
   const { permissions } = useManagerPermissions();
   const pathname=usePathname();const router=useRouter();
   const userId=user?.id??appUser?.auth_user_id;

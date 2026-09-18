@@ -57,7 +57,9 @@ export function RentalOnboardingShell({
       // scrolled (the observer below can fire at any scroll position) sizes the
       // shell exactly as one at scroll 0 would.
       const top = el.getBoundingClientRect().top + window.scrollY;
-      setHeight(`${Math.max(320, window.innerHeight - top - 12)}px`);
+      // 16 = <main>'s bottom padding (p-4). With 12 the page ended 4px below the
+      // viewport, so it scrolled by 4px at every width, banner or not.
+      setHeight(`${Math.max(320, window.innerHeight - top - 16)}px`);
     };
     update();
     window.addEventListener("resize", update);
@@ -66,11 +68,18 @@ export function RentalOnboardingShell({
     // every 60s) and at md+ also switches off the layout's switch-row pull-up, so
     // <main> drops 70px (40px banner + 30px), not 40. With only the resize
     // listener the shell kept its old height: 74px of page scroll with Continue
-    // 58px below the fold at 1440x900 (HEAD 44 / 28). <body> changes size
-    // whenever that happens, and an unchanged height string is a no-op, so the
-    // observer settles after one pass instead of looping.
+    // 58px below the fold at 1440x900 (HEAD 44 / 28). An unchanged height
+    // string is a no-op, so the observer settles after one pass instead of
+    // looping.
+    // <main> as well as <body>: with the shell ending exactly at the viewport
+    // bottom the page no longer overflows, so <body> rests at the layout's
+    // min-h-svh and does not change size when a banner above unmounts. <main>
+    // is flex-1 and grows into the freed space, so it still reports, and the
+    // shell grows back instead of leaving a 70px gap under Continue.
     const ro = new ResizeObserver(update);
     ro.observe(document.body);
+    const main = el.closest("main");
+    if (main) ro.observe(main);
     return () => {
       window.removeEventListener("resize", update);
       ro.disconnect();
@@ -82,8 +91,8 @@ export function RentalOnboardingShell({
        centred on the sidebar's Portal / Website switch. main's content box
        starts at 50px there, so 50 + 24 + 18 = 92; it sat at 50, under the 64px
        top bar. The padding is inside the measured height (border-box), and the
-       height still comes from the live top: innerHeight - 50 - 12, ending 12px
-       above the viewport bottom exactly as it did from the old top of 80. */
+       height still comes from the live top: innerHeight - top - 16, so the
+       shell plus main's 16px bottom padding ends exactly at the viewport bottom. */
     <div ref={rootRef} style={{ height }} className="min-h-0 flex flex-col overflow-hidden md:pt-6">
       <div className="mx-auto w-full max-w-5xl flex flex-1 min-h-0 flex-col">
         {/* Fixed header */}

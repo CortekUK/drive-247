@@ -97,6 +97,12 @@ vi.mock('next/link', () => ({
 }));
 vi.mock('@/lib/v2-context', () => ({
   useV2: (area: string) => (area === 'availability' ? gate.availability : true),
+  // The provider now carries the tenant-level half of the same answer
+  // (`onV2` = tenants.portal_experience, `lean` = that OR the slug list).
+  // All-false here leaves the `LEAN_TENANTS` slug list to decide, which is
+  // what these cases meant before the column existed.
+  usePortalExperience: () => ({ onV2: false, lean: false }),
+  usePortalOnV2: () => false,
 }));
 vi.mock('@/hooks/use-manager-permissions', () => ({
   useManagerPermissions: () => ({
@@ -478,7 +484,8 @@ describe('VehiclesOverview: the row', () => {
     expect(summary()).toBe('Cars on rent today: 4 of 4 cars + 1 disposed. On Aug 16: 0. Fleet today: 4.');
     expect(screen.getByText('Cars on rent today')).toBeInTheDocument();
     expect(screen.getByText('of 4 cars + 1 disposed')).toBeInTheDocument();
-    expect(document.body.textContent).toContain('vs 0 on Aug 16');
+    // The legend names that day with its count: "On Aug 16" then "0".
+    expect(screen.getByText('On Aug 16').closest('span')?.textContent).toBe('On Aug 160');
     // A level moves by cars, not by a percentage: 4 against 0 is up 4.
     const chip = document.querySelector('[data-change]');
     expect(chip?.getAttribute('data-change')).toBe('up');

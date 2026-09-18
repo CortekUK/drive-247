@@ -11,13 +11,13 @@ const badgeVariants = cva(
       variant: {
         default: "bg-primary text-primary-foreground [a&]:hover:bg-primary/80",
         secondary:
-          "bg-secondary text-secondary-foreground [a&]:hover:bg-secondary/80",
+          "bg-secondary text-secondary-foreground [a&]:hover:bg-primary/10 dark:[a&]:hover:bg-[hsl(var(--v2-hover,var(--muted)))]",
         destructive:
           "bg-destructive/10 text-destructive focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:focus-visible:ring-destructive/40 [a&]:hover:bg-destructive/20",
         outline:
-          "border-border text-foreground [a&]:hover:bg-muted [a&]:hover:text-muted-foreground",
+          "border-border text-foreground [a&]:hover:bg-primary/10 [a&]:hover:text-primary dark:[a&]:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:[a&]:hover:text-[hsl(var(--v2-link,229.66_93.55%_81.76%))]",
         ghost:
-          "hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted/50",
+          "hover:bg-primary/10 hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-[hsl(var(--v2-link,229.66_93.55%_81.76%))]",
         link: "text-primary underline-offset-4 hover:underline",
         // Kept for API compatibility with main — dashboard KPI/stat cards use
         // variant="success". Styled to match the new destructive treatment.

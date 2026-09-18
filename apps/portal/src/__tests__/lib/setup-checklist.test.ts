@@ -9,17 +9,26 @@
  * those rules look like on screen.
  */
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 import {
   MAX_VIDEO_DURATION_SECONDS,
   SETUP_CHECKLIST_ITEMS,
+  externalGuideLink,
   formatChecklistDuration,
   guideLinkKind,
   guideLinkLabel,
   guideLinkText,
+  readGuideText,
   resolveChecklistVideo,
   safeChecklistLink,
 } from '@/lib/setup-checklist';
+import {
+  CHECKLIST_GUIDES_CHECKED_ON,
+  SETUP_CHECKLIST_GUIDES,
+  checklistGuideFor,
+} from '@/lib/setup-checklist-guides';
 
 describe('safeChecklistLink — what may ever reach an href, the router or window.open', () => {
   it('keeps same-origin paths and absolute http(s) URLs, trimmed', () => {
@@ -140,6 +149,99 @@ describe('guideLinkText — the guide button’s name and tooltip', () => {
   });
 });
 
+describe('readGuideText — the read button’s name, for the reader and an external guide alike', () => {
+  it('names the feature', () => {
+    expect(readGuideText('Bonzah insurance')).toBe('Read the Bonzah insurance guide');
+    // The external-guide wording is the same words, by construction.
+    expect(guideLinkText('Bonzah insurance', 'https://docs.example.com/b')).toBe(
+      readGuideText('Bonzah insurance'),
+    );
+  });
+});
+
+describe('externalGuideLink — the only guide URL the card may still open', () => {
+  it('keeps an absolute http(s) page, trimmed', () => {
+    expect(externalGuideLink('https://docs.example.com/payg')).toBe('https://docs.example.com/payg');
+    expect(externalGuideLink('  http://example.com/guide  ')).toBe('http://example.com/guide');
+  });
+
+  it('refuses every in-portal path — settings or not', () => {
+    expect(externalGuideLink('/settings?tab=payg')).toBeNull();
+    expect(externalGuideLink('/settings')).toBeNull();
+    expect(externalGuideLink('/welcome')).toBeNull();
+    expect(externalGuideLink('/rentals?mode=payg')).toBeNull();
+  });
+
+  it('refuses anything safeChecklistLink refuses', () => {
+    expect(externalGuideLink('javascript:alert(1)')).toBeNull();
+    expect(externalGuideLink('//evil.example')).toBeNull();
+    expect(externalGuideLink('/.//evil.example')).toBeNull();
+    expect(externalGuideLink('')).toBeNull();
+    expect(externalGuideLink(null)).toBeNull();
+    expect(externalGuideLink(undefined)).toBeNull();
+  });
+
+  it('gives none of the compiled rows an external guide — they read the compiled guides', () => {
+    expect(SETUP_CHECKLIST_ITEMS.map((i) => externalGuideLink(i.guideUrl))).toEqual([
+      null,
+      null,
+      null,
+      null,
+    ]);
+  });
+});
+
+describe('the compiled guides (lib/setup-checklist-guides.ts)', () => {
+  it('has one guide per compiled row, under the same key and title, in the same order', () => {
+    expect(SETUP_CHECKLIST_GUIDES.map((g) => [g.key, g.title])).toEqual([
+      ['auto_extension', 'Auto-extension'],
+      ['installments', 'Installments'],
+      ['payg', 'Pay as you go'],
+      ['bonzah', 'Bonzah insurance'],
+    ]);
+    expect(SETUP_CHECKLIST_GUIDES.map((g) => [g.key, g.title])).toEqual(
+      SETUP_CHECKLIST_ITEMS.map((i) => [i.key, i.title]),
+    );
+  });
+
+  it('has the page and point counts of the checked brief', () => {
+    // Auto-extension 3 pages; installments, pay as you go and Bonzah 4 each;
+    // four points on every page.
+    expect(SETUP_CHECKLIST_GUIDES.map((g) => g.pages.length)).toEqual([3, 4, 4, 4]);
+    for (const guide of SETUP_CHECKLIST_GUIDES) {
+      for (const page of guide.pages) {
+        expect(page.heading.trim(), guide.key).not.toBe('');
+        expect(page.points, `${guide.key}: ${page.heading}`).toHaveLength(4);
+        for (const point of page.points) expect(point.trim(), guide.key).toBe(point);
+      }
+    }
+  });
+
+  it('ships no evidence — no file paths, line references or table names', () => {
+    const text = SETUP_CHECKLIST_GUIDES.flatMap((g) =>
+      g.pages.flatMap((p) => [p.heading, ...p.points]),
+    ).join('\n');
+    expect(text).not.toMatch(/\/home\/|apps\/|supabase\/|\.tsx?\b|\.sql\b|:\d+-\d+|_[a-z]+_/);
+    expect(text).not.toMatch(/\(memory:/);
+  });
+
+  it('records the day it was checked against the code', () => {
+    expect(CHECKLIST_GUIDES_CHECKED_ON).toBe('2026-09-16');
+  });
+
+  it('finds a guide by exact key, and nothing for anything else', () => {
+    expect(checklistGuideFor('bonzah')?.title).toBe('Bonzah insurance');
+    expect(checklistGuideFor('BONZAH')).toBeNull();
+    expect(checklistGuideFor('unwritten')).toBeNull();
+    // A key from a database row must never find an object's built-ins.
+    expect(checklistGuideFor('constructor')).toBeNull();
+    expect(checklistGuideFor('toString')).toBeNull();
+    expect(checklistGuideFor('')).toBeNull();
+    expect(checklistGuideFor(null)).toBeNull();
+    expect(checklistGuideFor(undefined)).toBeNull();
+  });
+});
+
 describe('the compiled rows', () => {
   it('carry no video and no length, and every guide is a settings screen', () => {
     // The four features named in the planning meeting, in order.
@@ -161,6 +263,33 @@ describe('the compiled rows', () => {
       'Open Pay as you go settings',
       'Open Bonzah insurance settings',
     ]);
+  });
+
+  it('describe the feature, never its settings', () => {
+    // The description is the row's hover text on the card, beside a button
+    // that opens a guide — "we keep settings to settings; we don't educate
+    // about features in settings". Pay as you go's used to open "The settings
+    // under pay-as-you-go are the fiddliest in the product".
+    for (const item of SETUP_CHECKLIST_ITEMS) {
+      expect(item.description.trim(), item.key).not.toBe('');
+      expect(item.description, item.key).not.toMatch(/setting/i);
+    }
+  });
+
+  it('match the seed in ops/setup_checklist_items.sql word for word', () => {
+    // Applying the seed must not change what an operator sees, so every
+    // compiled title and description appears in it as an SQL literal (a single
+    // quote doubled inside one). __dirname is apps/portal/src/__tests__/lib, so
+    // the repository root is five levels up.
+    const seed = readFileSync(
+      join(__dirname, '..', '..', '..', '..', '..', 'ops', 'setup_checklist_items.sql'),
+      'utf8',
+    );
+    const literal = (s: string) => `'${s.replace(/'/g, "''")}'`;
+    for (const item of SETUP_CHECKLIST_ITEMS) {
+      expect(seed, `${item.key} title`).toContain(literal(item.title));
+      expect(seed, `${item.key} description`).toContain(literal(item.description));
+    }
   });
 });
 

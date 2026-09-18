@@ -400,7 +400,7 @@ function PeriodCard({
       onClick={onOpen}
       className={cn(
         "flex w-full cursor-pointer items-center gap-3 rounded-3xl px-3.5 py-2.5 text-left transition-colors",
-        current ? "bg-primary/5 hover:bg-primary/10" : "bg-muted/40 hover:bg-muted/70"
+        current ? "bg-primary/5 hover:bg-primary/10" : "bg-muted/40 hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]"
       )}
     >
       <span className={cn("min-w-0 flex-1 truncate text-[13px] font-medium", future && "text-muted-foreground")}>

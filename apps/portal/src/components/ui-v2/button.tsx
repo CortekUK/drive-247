@@ -10,6 +10,8 @@ const buttonVariants = cva(
   // over verbatim from the design branch; harmless under v3's Preflight, which
   // leaves the browser default alone. `disabled:pointer-events-none` already
   // suppresses the cursor on disabled buttons.
+  // (Correction, Sep 2026: this repo's Tailwind 3.4 Preflight already gives
+  // `button, [role=button]` the pointer, so under v3 it is belt-and-braces.)
   "group/button inline-flex shrink-0 cursor-pointer items-center justify-center rounded-4xl border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 active:[&:not([aria-haspopup])]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-[invalid=true]:border-destructive aria-[invalid=true]:ring-3 aria-[invalid=true]:ring-destructive/20 dark:aria-[invalid=true]:border-destructive/50 dark:aria-[invalid=true]:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
@@ -40,6 +42,35 @@ const buttonVariants = cva(
         "icon-lg": "size-10",
       },
     },
+    // v2 hover tints (team lead, Sep 16 2026: hovers are a light purple tint,
+    // and buttons are never white). They ride here, AFTER the variant strings,
+    // rather than rewriting them: this Button also renders for v1 tenants
+    // (notification bell, shared settings panels, support, fines), so the
+    // strings above stay exactly as they were, and <Button> always renders
+    // through `cn()`, where tailwind-merge drops each variant class these
+    // replace (a call site's own className still comes last and wins).
+    // Only `.v2-theme` defines `--v2-hover`, `--v2-outline-fill` and
+    // `--v2-link`, so for v1 each `var()` falls back to exactly the token and
+    // alpha the replaced class used.
+    compoundVariants: [
+      {
+        variant: "outline",
+        className:
+          "bg-[var(--v2-outline-fill,hsl(var(--background)))] hover:bg-[hsl(var(--v2-hover,var(--muted)))] aria-expanded:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:bg-[hsl(var(--v2-hover,var(--input)_/_0.3))]",
+      },
+      {
+        variant: "secondary",
+        className:
+          "hover:bg-[hsl(var(--v2-hover,var(--secondary)_/_0.8))] aria-expanded:bg-[hsl(var(--v2-hover,var(--secondary)))]",
+      },
+      {
+        variant: "ghost",
+        className:
+          "hover:bg-[hsl(var(--v2-hover,var(--muted)))] aria-expanded:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:bg-[hsl(var(--v2-hover,var(--muted)_/_0.5))]",
+      },
+      // Dark v2 only: dark --primary is 1.97:1 as link text on the dark page.
+      { variant: "link", className: "text-[hsl(var(--v2-link,var(--primary)))]" },
+    ],
     defaultVariants: {
       variant: "default",
       size: "default",

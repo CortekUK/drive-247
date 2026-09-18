@@ -1,8 +1,10 @@
 "use client";
 
 /**
- * v2 (northwind): the whole `/settings/blacklist` page. The route returns this
- * inside its `useV2('chrome')` branch, so the other tenants keep the v1 page.
+ * v2 (northwind): the whole `/settings/blacklist` page. NOT MOUNTED for now:
+ * the global blacklist is out of Settings, and the route's `useV2('chrome')`
+ * branch sends v2 to /settings instead. Kept so bringing it back is one line in
+ * that route (render this instead of redirecting). Other tenants keep the v1 page.
  *
  * Every state has something to show (see `resolveBlacklistView`):
  *   loading      -> table skeleton, stat tiles pulse
@@ -16,7 +18,6 @@
  * The search is the top bar's (the v2 search slot), like every other v2 list.
  */
 
-import { useRouter } from "next/navigation";
 import { ShieldAlert, ShieldCheck } from "lucide-react";
 import { Skeleton } from "@/components/ui-v2/skeleton";
 import { usePageSearch } from "@/components/shared/layout/page-search-slot";
@@ -28,6 +29,7 @@ import {
   SettingsSectionSkeleton,
 } from "@/components/settings-v2/section-states";
 import {
+  isPositiveCount,
   matchesBlacklistSearch,
   resolveBlacklistView,
 } from "@/components/settings-v2/settings-shell-state";
@@ -37,6 +39,15 @@ import {
 } from "@/components/blacklist-v2/global-blacklist-table-v2";
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+
+/**
+ * The page's white surfaces (tiles, empty and no-match cards) carry the ui-v2
+ * Card's hairline ring: once the app gradient fades to white further down a
+ * phone screen, a bare bg-card has no edge and a tile reads as a floating
+ * number. `ring-foreground/*`, not `border-border/*`, which is invalid in v2
+ * dark (the token already carries an alpha).
+ */
+const SURFACE = "ring-1 ring-foreground/5 dark:ring-foreground/10";
 
 export function GlobalBlacklistPageV2<T extends GlobalBlacklistEntryRowV2>({
   blacklist,
@@ -62,7 +73,6 @@ export function GlobalBlacklistPageV2<T extends GlobalBlacklistEntryRowV2>({
   /** For tests: the clock the "last 30 days" tile counts from. */
   now?: number;
 }) {
-  const router = useRouter();
   const rows = blacklist ?? null;
   const filtered = rows ? rows.filter((entry) => matchesBlacklistSearch(entry, searchTerm)) : [];
   const view = resolveBlacklistView({
@@ -82,7 +92,8 @@ export function GlobalBlacklistPageV2<T extends GlobalBlacklistEntryRowV2>({
   const stats = rows
     ? {
         customers: rows.length,
-        blocks: rows.reduce((acc, entry) => acc + (Number.isFinite(entry.blocked_tenant_count) ? entry.blocked_tenant_count : 0), 0),
+        // Only real counts: a broken or negative one would pull the total down.
+        blocks: rows.reduce((acc, entry) => acc + (isPositiveCount(entry.blocked_tenant_count) ? entry.blocked_tenant_count : 0), 0),
         recent: rows.filter((entry) => {
           if (!entry.last_blocked_at) return false;
           const t = new Date(entry.last_blocked_at).getTime();
@@ -98,16 +109,18 @@ export function GlobalBlacklistPageV2<T extends GlobalBlacklistEntryRowV2>({
   };
 
   return (
-    <div className="mx-auto w-full max-w-[1160px] space-y-6 pb-16 md:pt-7" data-blacklist-view={view}>
+    // No mx-auto: like the Settings index and every v2 settings page, the page
+    // starts on the top bar's search line instead of centring on wide screens.
+    // md:pt-[26px]: the 32px title line centres at 50 + 26 + 16 = 92, the
+    // sidebar switch's row (as on the Settings index).
+    <div className="w-full max-w-[1160px] space-y-6 pb-16 md:pt-[26px]" data-blacklist-view={view}>
       <SettingsPageHeader
-        section="Bookings"
         title="Global blacklist"
         description="Customers blocked by 3 or more rental companies across the platform."
-        onBack={() => router.push("/settings")}
       />
 
       <div role="note" className="flex items-start gap-3 rounded-2xl bg-muted/60 px-4 py-3 text-sm">
-        <ShieldAlert className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
+        <ShieldAlert className="mt-0.5 size-4 shrink-0 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" aria-hidden="true" />
         <p className="min-w-0">
           <span className="font-medium text-foreground">Platform-wide protection.</span>{" "}
           <span className="text-muted-foreground">
@@ -123,7 +136,7 @@ export function GlobalBlacklistPageV2<T extends GlobalBlacklistEntryRowV2>({
           { label: "Total blocks", value: stats?.blocks },
           { label: "Added in the last 30 days", value: stats?.recent },
         ].map((tile) => (
-          <div key={tile.label} className="rounded-2xl bg-card px-4 py-3.5">
+          <div key={tile.label} className={`rounded-2xl bg-card px-4 py-3.5 ${SURFACE}`}>
             <dt className="text-xs text-muted-foreground">{tile.label}</dt>
             <dd className="mt-1 flex h-8 items-center font-heading text-2xl font-semibold tabular-nums text-foreground">
               {statValue(tile.value)}
@@ -152,6 +165,7 @@ export function GlobalBlacklistPageV2<T extends GlobalBlacklistEntryRowV2>({
 
         {view === "empty" && (
           <SettingsEmptyState
+            className={SURFACE}
             icon={ShieldCheck}
             headline="No one is on the platform blacklist"
             body="A customer is added here automatically once 3 or more rental companies block them. Until then there is nothing to review."
@@ -159,7 +173,7 @@ export function GlobalBlacklistPageV2<T extends GlobalBlacklistEntryRowV2>({
         )}
 
         {view === "no-match" && (
-          <div className="rounded-2xl bg-card">
+          <div className={`rounded-2xl bg-card ${SURFACE}`}>
             <SettingsNoMatch query={searchTerm} noun="customers" onClear={() => onSearchChange("")} />
           </div>
         )}

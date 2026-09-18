@@ -1,6 +1,5 @@
 import { notFound } from 'next/navigation';
-import { isV2 } from '@/lib/v2';
-import { tenantSlugFromHeaders } from '@/lib/tenant-server';
+import { serverIsV2 } from '@/lib/v2-server';
 import { InsightsView } from './insights-view';
 
 /**
@@ -16,9 +15,19 @@ import { InsightsView } from './insights-view';
  * when this route did not exist at all. No v1 behaviour changes for anyone,
  * because there is no v1 behaviour here to change.
  *
- * `tenantSlugFromHeaders()` never throws and returns null on any failure, so an
- * unresolvable tenant falls through to `notFound()` too. The gate fails closed
- * onto the pre-existing behaviour, never open onto unfinished code.
+ * `serverIsV2()` never throws: an unresolvable tenant, a missing row, a read
+ * error, an unknown `portal_experience` value or a missing column GRANT all
+ * fall through to `notFound()`. The gate fails closed onto the pre-existing
+ * behaviour, never open onto unfinished code.
+ *
+ * It resolves BOTH sources — the `V2_AREAS` slug list and the tenant's own
+ * `portal_experience` column — from one cached read, which is why it replaced
+ * the bare `isV2(area, await tenantSlugFromHeaders())` this file used to call.
+ * A self-serve tenant is flagged on the row and is in no slug list, and the
+ * lean gate already routes it here: `app-sidebar-v2` hides `/reports` and
+ * `/pl-dashboard` for a lean tenant and the v2 login lands on `/insights`
+ * instead, so gating this route on the list alone would have left a brand-new
+ * tenant with no money screen at all.
  *
  * ── Why this is its own area and not a rename of /reports ────────────────────
  *
@@ -46,9 +55,7 @@ import { InsightsView } from './insights-view';
  * resolvable without a flash — the two cannot be the same file.
  */
 export default async function InsightsPage() {
-  const tenantSlug = await tenantSlugFromHeaders();
-
-  if (!isV2('insights', tenantSlug)) {
+  if (!(await serverIsV2('insights'))) {
     notFound();
   }
 

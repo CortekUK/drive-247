@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
-import { isAreaHidden } from "@/lib/lean-areas";
+import { useIsAreaHidden } from "@/lib/lean-context";
 import { useTenantSubscription } from "@/hooks/use-tenant-subscription";
 import { useSetupStatus } from "@/hooks/use-setup-status";
 import { useBonzahBalance, getBonzahPortalUrl } from "@/hooks/use-bonzah-balance";
@@ -57,7 +57,7 @@ export function usePlatformStatus(): PlatformStatus {
   // The two CMD rows below are "coming soon" teasers for CheckMyDriver, which
   // the lean product does not carry. Dropped from the canary's checklist only;
   // every other tenant still sees them. Fails OPEN on an unresolved slug.
-  const cmdHidden = isAreaHidden("cmd", tenantSlug);
+  const cmdHidden = useIsAreaHidden("cmd");
   const {
     isSubscribed,
     isTrialing,
@@ -158,7 +158,7 @@ export function usePlatformStatus(): PlatformStatus {
   // renders for EVERY tenant whatever `integration_inshur` says, so a lean
   // tenant would otherwise still get an "INSHUR Period Z — Learn more" row on
   // its dashboard linking to a Settings tab that no longer exists for it.
-  const inshurHidden = isAreaHidden("inshur", tenantSlug);
+  const inshurHidden = useIsAreaHidden("inshur");
   // `enabled` is null while the config read is in flight or has failed; the
   // TenantContext copy of the same flag is the fallback so a slow settings read
   // does not demote a configured tenant to the "coming soon" row.

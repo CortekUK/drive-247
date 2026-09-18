@@ -28,7 +28,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@/components/ui-v2/dropdown-menu";
 import {
   LIST_CLASSES,
   LIST_ROW_ACTION,
@@ -134,7 +134,7 @@ export function InsurancePoliciesTableV2<T extends InsurancePolicyRowV2>({
               truncates with the whole name in its title, and Customer truncates. */}
           <ListHead className="w-[30.5%]">Document</ListHead>
           <ListHead className="w-[10%]">Customer</ListHead>
-          <ListHead className="w-[9.5%] text-right">Premium</ListHead>
+          <ListHead className="w-[9.5%]">Premium</ListHead>
           <ListHead className="w-[17.5%]">Policy status</ListHead>
           <ListHead className="w-[8%]">Payment</ListHead>
           <ListHead className="w-[16.5%]">Created</ListHead>
@@ -184,8 +184,8 @@ export function InsurancePoliciesTableV2<T extends InsurancePolicyRowV2>({
                 onOpen={canViewRental ? () => onViewRental(doc) : undefined}
               >
                 <ListCell>
-                  <div className="flex min-w-0 flex-col gap-0.5">
-                    <div className="flex min-w-0 items-center gap-1.5">
+                  <div className="flex min-w-0 flex-col items-center gap-0.5">
+                    <div className="flex min-w-0 max-w-full items-center justify-center gap-1.5">
                       <span className={cn("truncate", LIST_CLASSES.identifier)} title={doc.document_name}>
                         {doc.document_name}
                       </span>
@@ -203,7 +203,7 @@ export function InsurancePoliciesTableV2<T extends InsurancePolicyRowV2>({
                         with the chip's own warning as its tooltip. */}
                     {notLive && (
                       <span
-                        className="flex items-center gap-1 text-[11px] font-medium text-amber-600 dark:text-amber-400"
+                        className="flex max-w-full items-center gap-1 text-[11px] font-medium text-amber-600 dark:text-amber-400"
                         title={
                           testAccount
                             ? "Written against ABI’s test account. Nobody is insured by this record."
@@ -227,7 +227,7 @@ export function InsurancePoliciesTableV2<T extends InsurancePolicyRowV2>({
                 </ListCell>
                 {/* v1's exact text: a hard-coded "$" and two decimals. Never
                     truncated, an ellipsis here hides money. */}
-                <ListCell className="text-right tabular-nums">
+                <ListCell className="tabular-nums">
                   {doc.premium_amount != null ? (
                     <span className={LIST_CLASSES.text}>{`$${doc.premium_amount.toFixed(2)}`}</span>
                   ) : doc.provider === "inshur" ? (
@@ -321,17 +321,17 @@ export function InsurancePoliciesTableV2<T extends InsurancePolicyRowV2>({
                               )}
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
+                          <DropdownMenuContent align="end" className="w-auto">
                             {hasFile ? (
                               <>
                                 <DropdownMenuItem
                                   onClick={() => onDownload(doc.file_url!, doc.file_name || doc.document_name)}
                                 >
-                                  <Download className="h-4 w-4 mr-2" />
+                                  <Download className="h-4 w-4" />
                                   Download
                                 </DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => onView(doc.file_url!)}>
-                                  <ExternalLink className="h-4 w-4 mr-2" />
+                                  <ExternalLink className="h-4 w-4" />
                                   Open in new tab
                                 </DropdownMenuItem>
                               </>
@@ -339,23 +339,23 @@ export function InsurancePoliciesTableV2<T extends InsurancePolicyRowV2>({
                               <>
                                 {canAddPayment && (
                                   <DropdownMenuItem onClick={() => onAddPayment(doc)}>
-                                    <DollarSign className="h-4 w-4 mr-2" />
+                                    <DollarSign className="h-4 w-4" />
                                     Add Payment
                                   </DropdownMenuItem>
                                 )}
                                 {hasPdf && (
                                   <DropdownMenuItem onClick={() => onBonzahDownload(doc)} disabled={pdfBusy}>
                                     {pdfBusy ? (
-                                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                      <Loader2 className="h-4 w-4 animate-spin" />
                                     ) : (
-                                      <Download className="h-4 w-4 mr-2" />
+                                      <Download className="h-4 w-4" />
                                     )}
                                     Download PDF
                                   </DropdownMenuItem>
                                 )}
                                 {canViewRental && (
                                   <DropdownMenuItem onClick={() => onViewRental(doc)}>
-                                    <ExternalLink className="h-4 w-4 mr-2" />
+                                    <ExternalLink className="h-4 w-4" />
                                     View Rental
                                   </DropdownMenuItem>
                                 )}

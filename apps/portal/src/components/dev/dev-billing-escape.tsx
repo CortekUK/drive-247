@@ -36,7 +36,7 @@
 import { useSyncExternalStore } from "react";
 import { RotateCcw } from "lucide-react";
 import { useTenant } from "@/contexts/TenantContext";
-import { isLeanTenant } from "@/lib/lean-areas";
+import { useIsLean } from "@/lib/lean-context";
 import {
   BILLING_SCENARIOS,
   readBillingScenario,
@@ -48,6 +48,8 @@ import {
 /** The active scenario, or null when this browser must not have one. */
 function useActiveScenario(): { id: BillingScenarioId; label: string } | null {
   const { tenant } = useTenant();
+  /** Read before the early returns below; a hook cannot be called after one. */
+  const isCanary = useIsLean();
   const scenario = useSyncExternalStore(
     subscribeDevOverrides,
     () => readBillingScenario(),
@@ -55,7 +57,7 @@ function useActiveScenario(): { id: BillingScenarioId; label: string } | null {
   );
 
   if (scenario === "off") return null;
-  if (!tenant?.slug || !isLeanTenant(tenant.slug)) return null;
+  if (!tenant?.slug || !isCanary) return null;
 
   return {
     id: scenario,

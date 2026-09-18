@@ -15,6 +15,7 @@
 
 import { format } from "date-fns";
 import { formatCurrency } from "@/lib/format-utils";
+import { describeSaveError } from "@/components/settings-v2/settings-error-copy";
 
 export type NumberLike = number | string | null | undefined;
 
@@ -127,6 +128,11 @@ export function feesPayload(form: FeesFormFields) {
 export function taxIssue(form: Pick<FeesFormFields, "tax_enabled" | "tax_percentage">): FieldIssue | null {
   if (!form.tax_enabled) return null;
   const rate = toFiniteNumber(form.tax_percentage);
+  // A negative rate can only come from the saved row (typing strips "-"), and
+  // folding it into the 0% line contradicted the field beside it.
+  if (rate !== null && rate < 0) {
+    return { tone: "danger", message: `The rate is ${plain(rate)}%. A tax rate can't be negative. Enter 0 or more.` };
+  }
   if (rate === null || rate <= 0) {
     return { tone: "warning", message: "Tax is on but the rate is 0%, so no tax will be added." };
   }
@@ -138,6 +144,8 @@ export function taxIssue(form: Pick<FeesFormFields, "tax_enabled" | "tax_percent
 
 export function serviceFeeIssue(
   form: Pick<FeesFormFields, "service_fee_enabled" | "service_fee_type" | "service_fee_value">,
+  /** Formats a negative fixed fee in the tenant's currency ("-$10.00"). */
+  currencyCode?: string,
 ): FieldIssue | null {
   if (!form.service_fee_enabled) return null;
   const value = toFiniteNumber(form.service_fee_value);
@@ -149,6 +157,15 @@ export function serviceFeeIssue(
       blocksSave: true,
       message: `${plain(value)}% is more than the whole rental. Enter a percentage up to 100, or switch back to Fixed amount.`,
     };
+  }
+  if (value !== null && value < 0) {
+    const shown =
+      form.service_fee_type === "percentage"
+        ? `${plain(value)}%`
+        : currencyCode
+          ? formatCurrency(value, currencyCode)
+          : plain(value);
+    return { tone: "danger", message: `The fee is ${shown}. A service fee can't be negative. Enter 0 or more.` };
   }
   if (value === null || value <= 0) {
     return { tone: "warning", message: "The service fee is on but set to 0, so nothing will be added." };
@@ -254,6 +271,12 @@ export function depositAmountIssue(form: DepositFormFields, currencyCode: string
   if (!form.security_deposit_enabled) return null;
   const amount = toFiniteNumber(form.global_deposit_amount) ?? 0;
   if (amount > 0) return null;
+  if (amount < 0) {
+    return {
+      tone: "danger",
+      message: `The amount is ${formatCurrency(amount, currencyCode)}. A deposit can't be negative. Enter 0 or more.`,
+    };
+  }
   const zero = formatCurrency(0, currencyCode);
   if (form.deposit_mode === "per_vehicle") {
     return { tone: "warning", message: `The amount is ${zero}, so vehicles without their own deposit will have none.` };
@@ -367,6 +390,30 @@ export function localDateKey(date: Date = new Date()): string {
 /** A one-time holiday whose last day is before today. Yearly ones come round again. */
 export function isHolidayPast(holiday: { end_date: string; recurs_annually: boolean }, today: string): boolean {
   return !holiday.recurs_annually && !!holiday.end_date && holiday.end_date < today;
+}
+
+/**
+ * Why a holiday could not be deleted. The save copy for a constraint failure
+ * ("One of the values isn't allowed. Check the fields") names fields a delete
+ * confirm does not have, and "Your changes are still here" has no changes to
+ * keep, so a refused delete says what happened instead. Permission and plain
+ * messages keep the save copy.
+ */
+export function describeHolidayDeleteError(error: unknown): string {
+  const code =
+    error && typeof error === "object" && "code" in error ? String((error as { code?: unknown }).code ?? "") : "";
+  const message =
+    error && typeof error === "object" && "message" in error
+      ? String((error as { message?: unknown }).message ?? "").toLowerCase()
+      : "";
+  if (code === "23503" || message.includes("foreign key")) {
+    return "Other records still point to this holiday, so it can't be deleted yet. Nothing was removed.";
+  }
+  const copy = describeSaveError(error);
+  if (copy.startsWith("One of the values isn't allowed")) {
+    return "The database refused to delete this holiday. Nothing was removed. Try again.";
+  }
+  return copy.replace("Your changes are still here.", "Nothing was removed.");
 }
 
 export function excludedVehicleCount(holiday: { excluded_vehicle_ids?: unknown }): number {

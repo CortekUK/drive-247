@@ -50,7 +50,7 @@ import { TraxIcon } from "@/components/chat/TraxIcon";
 import { VehicleOwnershipPanel } from "@/components/vehicles/vehicle-ownership-panel";
 import { InshurEligibilityCard, useInshurEligibilityConfig } from "@/components/vehicles/inshur-eligibility-badge";
 import { TeslaLogo } from "@/components/icons/tesla-logo";
-import { isAreaHidden } from "@/lib/lean-areas";
+import { useIsAreaHidden } from "@/lib/lean-context";
 import { useV2 } from "@/lib/v2-context";
 import { VehicleDetailV2 } from "@/components/vehicles-v2/vehicle-detail-v2";
 import { Package, Loader2 as SpinnerIcon, Zap, CalendarRange, CalendarClock } from "lucide-react";
@@ -334,14 +334,18 @@ function VehicleDetail() {
   const { logAction } = useAuditLog();
   const { tenant, tenantSlug } = useTenant();
   // Hidden from the lean canary only; every other tenant keeps the card.
-  const teslaHidden = isAreaHidden('tesla', tenantSlug);
+  const teslaHidden = useIsAreaHidden('tesla');
   const queryClient = useQueryClient();
   const { settings: rentalSettings } = useRentalSettings();
   const { canEdit } = useManagerPermissions();
   const inshurConfig = useInshurEligibilityConfig();
   // INSHUR Period Z, hidden from the lean canary and that tenant alone. The
   // hook, the eligibility cache and vehicles.garaging_state are untouched.
-  const inshurHidden = isAreaHidden('inshur', tenantSlug);
+  const inshurHidden = useIsAreaHidden('inshur');
+  // Hoisted rather than asked inline in the Ownership panel's JSX below:
+  // `useIsAreaHidden` is a hook, so it cannot be called from inside a
+  // conditional branch of the render tree.
+  const ownersHidden = useIsAreaHidden('owners');
   const distanceUnit = (tenant?.distance_unit || 'miles') as DistanceUnit;
   const currencyCode = tenant?.currency_code || 'USD';
   const [showAddFineDialog, setShowAddFineDialog] = useState(false);
@@ -1236,7 +1240,7 @@ function VehicleDetail() {
               tenant sees the owner/commission editor on every vehicle. Gated for
               the canary only; the panel, its hook and vehicles.owner_id are
               untouched -- jangramrentals has 12 vehicles assigned and GMT 9. */}
-          {!isAreaHidden('owners', tenantSlug) && (
+          {!ownersHidden && (
             <div className="mt-6">
               <VehicleOwnershipPanel vehicleId={vehicle.id} />
             </div>

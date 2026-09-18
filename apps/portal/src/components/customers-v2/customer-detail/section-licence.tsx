@@ -188,7 +188,7 @@ export function SectionLicence({ c, set, onJump, canEdit }: SectionProps) {
                           size="icon-sm"
                           aria-label={`Remove ${g.file_name}`}
                           onClick={() => deleteGig.mutate(g)}
-                          className="absolute right-2 top-2 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
+                          className="absolute right-2 top-2 bg-primary-light/90 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
                         >
                           <Trash2 className="size-3.5" />
                         </Button>

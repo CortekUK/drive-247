@@ -3,14 +3,13 @@
 import { useMemo, useRef, useState } from "react";
 import { useV2 } from "@/lib/v2-context";
 import { useTenant } from "@/contexts/TenantContext";
-import { useAuth } from "@/stores/auth-store";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
-import { useFeatureAnnouncements } from "@/hooks/use-feature-announcements";
 import { useTraxOptional } from "@/components/trax/trax-provider";
 import { LEAN_HIDDEN_AREAS, isLeanTenant } from "@/lib/lean-areas";
+import { useIsLean } from "@/lib/lean-context";
 import {
   buildDeck,
-  rotationKey,
+  pickHeroCard,
   type FeatureCardId,
   type FeaturedContext,
   type FeaturedHandlers,
@@ -31,8 +30,14 @@ export {
 export { FeaturedArtSlot, FeaturedCardArt } from "./featured-card-art-v2";
 
 /**
- * The featured deck for a hero tab: the card beside the graph, which shows off
- * a feature, a recommendation or a platform announcement, one at a time.
+ * The featured card for a hero tab: the ONE card beside the graph.
+ *
+ * It was a rotating carousel of features, recommendations and announcements.
+ * Team lead, Sep 16 2026: show a single, minimal card instead. Announcements
+ * left the hero decks the same day; they live on the dashboard desk band only
+ * (components/announcements/feature-announcement-deck.tsx). `buildDeck`
+ * still works out what is eligible; `pickHeroCard` keeps one (Calendar View on
+ * Rentals). With one card the view draws no dots, no arrows and never rotates.
  *
  * USE
  *
@@ -57,8 +62,8 @@ export { FeaturedArtSlot, FeaturedCardArt } from "./featured-card-art-v2";
  *
  * The tab supplies only what it alone knows: its callbacks (`openCalendar`,
  * `openInvite`, `openImport`, or any a recommendation names), the
- * recommendations it can derive from rows it already holds, "already adopted"
- * signals, and the route prefixes an announcement must point under. Everything
+ * recommendations it can derive from rows it already holds and "already adopted"
+ * signals. Everything
  * a gate reads — v2 area flags, the lean product, manager permissions, the
  * tenant's Turo switch, whether Trax is mounted, the signed-in user for
  * rotation — is read here, from the same hooks the destinations themselves
@@ -73,11 +78,14 @@ export { FeaturedArtSlot, FeaturedCardArt } from "./featured-card-art-v2";
 export interface FeaturedDeckProps {
   tab: FeaturedTab;
   /**
-   * Same-origin route prefixes an announcement's CTA must fall under to join
-   * this deck, e.g. Rentals ["/rentals"], Vehicles ["/vehicles",
-   * "/blocked-dates"], Customers ["/customers"].
+   * Same-origin route prefixes this tab lives under, e.g. Rentals ["/rentals"],
+   * Vehicles ["/vehicles", "/blocked-dates"], Customers ["/customers"].
+   *
+   * NOT READ any more. It decided which platform announcements joined the deck,
+   * and announcements left the hero decks on Sep 16 2026. Kept, optional, so
+   * the tabs that pass it (and their tests, which assert it) need no change.
    */
-  routePrefixes: readonly string[];
+  routePrefixes?: readonly string[];
   /** Callbacks by handler name. A card whose handler is missing is not shown. */
   handlers?: FeaturedHandlers;
   /** Derived by the page from data it already holds. A count of 0 hides one. */
@@ -100,7 +108,6 @@ export interface FeaturedDeckProps {
 
 export function FeaturedDeck({
   tab,
-  routePrefixes,
   handlers,
   recommendations,
   adopted,
@@ -116,10 +123,8 @@ export function FeaturedDeck({
   const availability = useV2("availability");
 
   const { tenant, tenantSlug, loading: tenantLoading } = useTenant();
-  const { appUser } = useAuth();
   const { canView, canEdit, canAccessRoute, isLoading: permissionsLoading } = useManagerPermissions();
   const openTrax = useTraxOptional()?.openSheet;
-  const { announcements, isLoading: announcementsLoading, dismiss } = useFeatureAnnouncements();
   const [mountedAt] = useState(() => new Date());
 
   const supplied = useMemo<FeaturedHandlers>(() => {
@@ -148,7 +153,10 @@ export function FeaturedDeck({
       : null;
 
   const slug = tenantSlug ?? tenant?.slug ?? null;
-  const lean = isLeanTenant(slug);
+  // The resolved answer (slug list OR `portal_experience`) OR'd with this
+  // deck's own slug fallback, which also accepts `tenant.slug` when the
+  // header slug is absent. Never narrower than it was.
+  const lean = useIsLean() || isLeanTenant(slug);
   const ctx: FeaturedContext = {
     v2: { turo, availability },
     isLean: lean,
@@ -165,26 +173,26 @@ export function FeaturedDeck({
     adopted: adopted ?? {},
   };
 
-  const cards = buildDeck({
+  const cards = pickHeroCard(
     tab,
-    ctx,
-    routePrefixes,
-    announcements,
-    recommendations,
-    now: now ?? mountedAt,
-  });
+    buildDeck({
+      tab,
+      ctx,
+      recommendations,
+      now: now ?? mountedAt,
+    }),
+  );
 
-  // A manager's grants, the tenant row and the announcements read can each add
-  // or remove cards when they land, so the visit's start card waits for all
-  // three. Non-managers and non-canary tenants resolve at once (both queries
-  // are disabled for them).
+  // A manager's grants and the tenant row can each add or remove cards when
+  // they land, so the visit's start card waits for both. Non-managers resolve
+  // at once (the grants query is disabled for them).
   //
   // LATCHED: once ready, the deck stays ready for the life of this mount. A
   // later reload of any input (refetchTenant() flips the tenant's `loading`
   // back on; a changed query key re-pends a query) must not blank the card,
   // unmount its dots and controls, mark the region aria-hidden and drop a
   // keyboard user's focus to <body>. Cards still follow the inputs as they are.
-  const inputsResolved = !announcementsLoading && !tenantLoading && !permissionsLoading;
+  const inputsResolved = !tenantLoading && !permissionsLoading;
   const [wasReady, setWasReady] = useState(false);
   if (inputsResolved && !wasReady) setWasReady(true);
   const ready = inputsResolved || wasReady;
@@ -194,8 +202,6 @@ export function FeaturedDeck({
       cards={cards}
       ready={ready}
       handlers={supplied}
-      storageKey={rotationKey(tab, appUser?.id)}
-      onDismissAnnouncement={dismiss}
       anchor={anchor ?? dataTour}
       className={className}
     />

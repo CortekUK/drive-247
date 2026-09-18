@@ -19,7 +19,10 @@
  *   the mouse cannot reach.
  * - NUMBERS. Auto-extend's hours and retries are checked on blur. An empty,
  *   negative, decimal or out-of-range value is not saved: the field shows why.
- *   An unchanged value is not re-saved.
+ *   An unchanged value is not re-saved. A value ALREADY saved outside the range
+ *   (written before these checks) is shown as saved, marked, and explained; it
+ *   is never corrected silently. Each field widens for a long number instead of
+ *   cutting digits off.
  *
  * Values that ARE saved are exactly the ones the inline page saved.
  */
@@ -27,9 +30,10 @@
 import { useState, type ReactNode } from "react";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui-v2/select";
 import { SettingsPanel, SettingsRow } from "@/components/settings-v2/settings-kit";
 import {
+  formatSettingsNumber,
   SettingsDependencyNotice,
   SettingsLoadError,
   SettingsReadOnlyFieldset,
@@ -270,7 +274,18 @@ export function AutoExtendSettingsV2({ canEdit }: { canEdit: boolean }) {
     await instant.save(key, check.value);
   };
 
-  const numberErrors = NUMBER_KEYS.filter((key) => fieldErrors[key]);
+  // A saved value outside the allowed range, while the field is not being edited.
+  const savedOutOfRange = (key: AutoExtendNumberKey) => {
+    if (drafts[key] !== undefined || instant.isPending(key)) return null;
+    const value = saved[key];
+    if (typeof value !== "number" || !Number.isFinite(value)) return null;
+    const { min, max, unit } = AUTO_EXTEND_NUMBER_FIELDS[key];
+    return Number.isInteger(value) && value >= min && value <= max
+      ? null
+      : `The saved value ${formatSettingsNumber(value)} is outside ${min}–${max} ${unit}. Enter a new value.`;
+  };
+  const numberMessage = (key: AutoExtendNumberKey) => fieldErrors[key] ?? savedOutOfRange(key);
+  const numberErrors = NUMBER_KEYS.filter((key) => numberMessage(key));
 
   return (
     <div className="space-y-4">
@@ -332,8 +347,8 @@ export function AutoExtendSettingsV2({ canEdit }: { canEdit: boolean }) {
                   (numberErrors.length > 0 ? (
                     <ul role="alert" className="space-y-0.5 text-destructive">
                       {numberErrors.map((key) => (
-                        <li key={key}>
-                          {AUTO_EXTEND_NUMBER_FIELDS[key].label}: {fieldErrors[key]}
+                        <li key={key} className="[overflow-wrap:anywhere]">
+                          {AUTO_EXTEND_NUMBER_FIELDS[key].label}: {numberMessage(key)}
                         </li>
                       ))}
                     </ul>
@@ -342,7 +357,8 @@ export function AutoExtendSettingsV2({ canEdit }: { canEdit: boolean }) {
               >
                 {NUMBER_KEYS.map((key) => {
                   const field = AUTO_EXTEND_NUMBER_FIELDS[key];
-                  const invalid = Boolean(fieldErrors[key]);
+                  const invalid = Boolean(numberMessage(key));
+                  const shown = shownNumber(key);
                   const [before, after] =
                     key === "auto_extend_default_lead_hours"
                       ? ["Charge", "h early"]
@@ -358,7 +374,7 @@ export function AutoExtendSettingsV2({ canEdit }: { canEdit: boolean }) {
                         min={field.min}
                         max={field.max}
                         step={1}
-                        value={shownNumber(key)}
+                        value={shown}
                         onChange={(e) => setDrafts((prev) => ({ ...prev, [key]: e.target.value }))}
                         onBlur={() => void commitNumber(key)}
                         onKeyDown={(e) => {
@@ -368,6 +384,8 @@ export function AutoExtendSettingsV2({ canEdit }: { canEdit: boolean }) {
                         aria-invalid={invalid || undefined}
                         aria-label={`${field.label} (${field.min}–${field.max} ${field.unit})`}
                         className={cn("w-20 tabular-nums", invalid && "border-destructive")}
+                        // Wide enough for every digit: 80px cut "9999999" to "999999" on a phone.
+                        style={shown.length > 4 ? { minWidth: `calc(${Math.min(shown.length, 16)}ch + 1.75rem)` } : undefined}
                       />
                       {after}
                     </label>

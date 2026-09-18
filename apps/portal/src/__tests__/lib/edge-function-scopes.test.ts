@@ -51,5 +51,9 @@ describe("edge functions: no undefined references", () => {
 
     expect(findings).toEqual([]);
     expect(failed).toBe(false);
-  }, 60_000); // Parses every edge function in a child process; ~3s alone, more under a parallel run.
+    // It shells out to a scanner that parses every file under
+    // supabase/functions — 300+ of them, ~8s on this machine and slower when
+    // the suite runs them all at once. Vitest's 5s default made it fail as a
+    // timeout, which reads like an undefined reference it never found.
+  }, 60_000);
 });

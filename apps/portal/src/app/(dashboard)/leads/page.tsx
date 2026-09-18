@@ -17,7 +17,7 @@ import {
 
 import { notFound } from "next/navigation";
 import { useTenant } from "@/contexts/TenantContext";
-import { isAreaHidden } from "@/lib/lean-areas";
+import { useIsAreaHidden } from "@/lib/lean-context";
 import { useLeads, type LeadFilters } from "@/hooks/use-leads";
 import { useLeadBoard } from "@/hooks/use-lead-board";
 import { LeadBoard } from "@/components/leads/lead-board";
@@ -50,7 +50,8 @@ const SOURCE_OPTIONS = [
 
 export default function LeadsPage() {
   const { tenant, tenantSlug } = useTenant();
-  if (isAreaHidden("leads", tenantSlug)) notFound();
+  const leadsHidden = useIsAreaHidden("leads");
+  if (leadsHidden) notFound();
   const [tab, setTab] = useState<TabValue>("active");
   const [search, setSearch] = useState("");
   const [scoreBand, setScoreBand] = useState<string>("all");

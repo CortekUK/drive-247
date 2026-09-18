@@ -136,7 +136,7 @@ export function RailHeader({
       <div className="flex h-11 items-center px-2">
         <Link
           href={backHref}
-          className="flex h-8 items-center gap-2 rounded-md px-1 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+          className="flex h-8 items-center gap-2 rounded-md px-1 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-foreground dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]"
         >
           <ArrowLeft className="size-4 shrink-0" />
           <span className="text-[13px]">{backLabel}</span>
@@ -193,11 +193,11 @@ export function RailItem({
       className={cn(
         "flex w-full cursor-pointer items-center gap-2.5 overflow-hidden rounded-lg px-3 py-2 text-left transition-colors",
         active
-          ? "bg-primary/10 font-medium text-primary"
-          : "text-sidebar-foreground/70 hover:bg-primary/10 hover:text-primary"
+          ? "bg-primary/10 font-medium text-primary dark:bg-[hsl(var(--v2-hover,var(--muted)))] dark:text-[hsl(var(--v2-link,var(--primary)))]"
+          : "text-sidebar-foreground/70 hover:bg-primary/10 hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-[hsl(var(--v2-link,var(--primary)))]"
       )}
     >
-      <Icon className={cn("size-4 shrink-0", active ? "text-primary" : "text-sidebar-foreground/60")} />
+      <Icon className={cn("size-4 shrink-0", active ? "text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" : "text-sidebar-foreground/60")} />
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[13px] leading-tight">{label}</span>
         {summary && (
@@ -277,7 +277,7 @@ export function StageItem({
   const style = filled ? { backgroundColor: `hsl(var(--primary) / ${tintFor(index)})` } : undefined;
   const className = cn(
     "block w-full cursor-pointer rounded-2xl px-3.5 py-2.5 text-left transition-all",
-    !filled && "bg-foreground/[0.055] hover:bg-foreground/[0.08]",
+    !filled && "bg-foreground/[0.055] hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]",
     active && "ring-2 ring-primary/40"
   );
 

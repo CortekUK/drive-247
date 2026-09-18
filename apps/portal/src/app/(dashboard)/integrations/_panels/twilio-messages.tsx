@@ -995,7 +995,7 @@ function Disclosure({ label, children }: { label: string; children: React.ReactN
   const [open, setOpen] = useState(false);
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
-      <CollapsibleTrigger className="flex w-full items-center justify-between rounded-xl border px-3.5 py-2.5 text-sm text-foreground transition-colors hover:bg-muted/40">
+      <CollapsibleTrigger className="flex w-full items-center justify-between rounded-xl border px-3.5 py-2.5 text-sm text-foreground transition-colors hover:bg-primary/5 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]">
         {label}
         <ChevronDown className={`size-4 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
       </CollapsibleTrigger>

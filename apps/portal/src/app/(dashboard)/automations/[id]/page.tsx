@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
-import { isAreaHidden } from "@/lib/lean-areas";
+import { useIsAreaHidden } from "@/lib/lean-context";
 import { useAuthStore } from "@/stores/auth-store";
 import { toast } from "sonner";
 
@@ -90,7 +90,8 @@ function stepToDraft(s: AutomationStep): DraftStep {
 
 export default function AutomationBuilderPage({ params }: { params: Promise<{ id: string }> }) {
   const { tenantSlug } = useTenant();
-  if (isAreaHidden("automations", tenantSlug)) notFound();
+  const automationsHidden = useIsAreaHidden("automations");
+  if (automationsHidden) notFound();
 
   const { id } = use(params);
   const router = useRouter();

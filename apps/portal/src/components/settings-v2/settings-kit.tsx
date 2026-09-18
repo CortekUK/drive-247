@@ -4,58 +4,248 @@
  * The building blocks of a v2 settings page (northwind only — see
  * `settings/page.tsx`, which renders these behind `useV2('chrome')`).
  *
- * Modelled on Stripe's settings detail pages: a breadcrumb back to the index,
- * one heading, then flat panels of rows — label and a line of help on the left,
- * the control on the right. No card-per-field, no decorative icons, one Save per
- * panel. A row is ~64px, so a page of related settings fits on one screen where
- * v1 gave every single field its own card.
+ * Modelled on Stripe's settings detail pages: one heading, then flat panels of
+ * rows — label and a line of help on the left, the control right after it. No
+ * breadcrumb (Settings in the nav is the way back), no card-per-field, no
+ * decorative icons, and ONE save bar per page. A row is ~64px, so a page of
+ * related settings fits on one screen where v1 gave every field its own card.
+ *
+ * PAGE SAVE BAR (reusable)
+ *   <SettingsPageSaveProvider>          wrap the page body; sections inside it
+ *     …sections…                         drop their own Save buttons and footers
+ *   </SettingsPageSaveProvider>          and show only an inline save error
+ *   <SettingsStickySaveBar               the page's one Reset + Save changes,
+ *     dirty saving error                 sticky at the bottom while scrolling
+ *     onSave onReset />
+ *
+ *   useSettingsPageSave()  true inside the provider. Section save parts
+ *                          (SectionSaveBar, SaveFooter, the regional panel,
+ *                          lockbox messages, the monthly rate row) read it.
+ *   Sections still register `save` AND `discard` with the page
+ *   (`RegisterSectionSave`, pricing-money-parts.tsx): Save changes runs every
+ *   registered save, Reset runs every registered discard. Reset DISCARDS unsaved
+ *   edits; it never restores defaults.
+ *
+ * HEADINGS
+ *   SETTINGS_PAGE_TITLE     the page's h1, bold
+ *   SETTINGS_SECTION_TITLE  a section's h2, semibold, never a line under it
+ *
+ * SECTIONS AND DEEP LINKS
+ *   <SettingsSection anchor="tax-and-fees" title=… description=…>
+ *     a titled part of a longer page, with the id `settings-tax-and-fees`
+ *   useScrollToSection(id, ready)
+ *     scrolls that section to the top once the page's data is in, for a
+ *     `?tab=fees` link or a `#settings-…` hash
  */
 
-import type { ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, type ReactNode } from "react";
+import { Loader2 } from "lucide-react";
+import { Button } from "@/components/ui-v2/button";
+import { Skeleton } from "@/components/ui-v2/skeleton";
+import { SettingsSaveState } from "@/components/settings-v2/section-states";
+import { settingsSectionId } from "@/components/settings-v2/settings-shell-state";
 import { cn } from "@/lib/utils";
 
+/** The page title: always heavier than any section title under it. */
+export const SETTINGS_PAGE_TITLE = "font-heading text-2xl font-bold tracking-tight text-foreground";
+/** A section title (and a panel title). */
+export const SETTINGS_SECTION_TITLE = "font-heading text-base font-semibold tracking-tight text-foreground";
+
 export function SettingsPageHeader({
-  section,
   title,
   description,
-  onBack,
-  rootLabel = "Settings",
   tourAnchor,
 }: {
-  section: string;
   title: string;
   description?: ReactNode;
-  /** Goes back to the index. A callback, not a link, so the page can stop an
-   *  operator leaving with unsaved edits. */
-  onBack: () => void;
-  /** The breadcrumb's first crumb, for a page reached from somewhere else. */
-  rootLabel?: string;
   tourAnchor?: string;
 }) {
   return (
     <header className="space-y-1.5" data-tour={tourAnchor}>
-      <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-[13px]">
-        <button
-          type="button"
-          onClick={onBack}
-          className="font-medium text-primary hover:underline"
-        >
-          {rootLabel}
-        </button>
-        <span aria-hidden className="text-muted-foreground">
-          /
-        </span>
-        <span className="text-muted-foreground">{section}</span>
-      </nav>
-      <h1 className="text-2xl font-medium tracking-tight text-foreground">{title}</h1>
-      {description && (
-        <p className="max-w-2xl text-sm text-muted-foreground">{description}</p>
-      )}
+      <h1 className={SETTINGS_PAGE_TITLE}>{title}</h1>
+      {description && <p className="max-w-2xl text-sm text-muted-foreground">{description}</p>}
     </header>
   );
 }
 
-/** A flat bordered panel of rows, with an optional title and a footer for Save. */
+/** `SettingsPageHeader` before its page is known: the same two line boxes
+ *  (32px title, 20px description) and gap, so whatever follows it lands where
+ *  the loaded page's first panel will. Decorative only; pair it with a
+ *  skeleton that carries the loading label. */
+export function SettingsPageHeaderSkeleton() {
+  return (
+    <div aria-hidden="true" className="space-y-1.5">
+      <div className="flex h-8 items-center">
+        <Skeleton className="h-6 w-48 max-w-full rounded-full" />
+      </div>
+      <div className="flex h-5 items-center">
+        <Skeleton className="h-3.5 w-80 max-w-full rounded-full" />
+      </div>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* One save bar per page                                                       */
+/* -------------------------------------------------------------------------- */
+
+const SettingsPageSaveContext = createContext(false);
+
+/** Sections inside this defer Save and Reset to the page's `SettingsStickySaveBar`. */
+export function SettingsPageSaveProvider({ children, enabled = true }: { children: ReactNode; enabled?: boolean }) {
+  return <SettingsPageSaveContext.Provider value={enabled}>{children}</SettingsPageSaveContext.Provider>;
+}
+
+/** True when the page owns Save and Reset (see the header of this file). */
+export function useSettingsPageSave(): boolean {
+  return useContext(SettingsPageSaveContext);
+}
+
+/**
+ * The page's Reset and Save changes. The last child of the page wrapper: where
+ * the page is short it sits at the end, where it scrolls it floats 16px above
+ * the bottom of the window. Both buttons wait for a genuine change.
+ */
+export function SettingsStickySaveBar({
+  dirty,
+  saving,
+  error,
+  onSave,
+  onReset,
+  className,
+}: {
+  dirty: boolean;
+  saving: boolean;
+  /** Why the last Save changes failed; cleared by the page on the next edit or save. */
+  error?: unknown;
+  onSave: () => void;
+  onReset: () => void;
+  className?: string;
+}) {
+  const status = saving ? "saving" : error ? "error" : dirty ? "dirty" : "idle";
+  return (
+    <div
+      data-settings-save-bar=""
+      className={cn("pointer-events-none sticky bottom-4 z-30 flex justify-end pt-2", className)}
+    >
+      <div
+        role="region"
+        aria-label="Save changes"
+        className={cn(
+          "pointer-events-auto flex max-w-full flex-wrap items-center justify-end gap-2 border bg-card p-1.5 shadow-lg",
+          status === "error" ? "rounded-3xl pl-4" : "rounded-full pl-4",
+        )}
+      >
+        <SettingsSaveState status={status} error={error} className="mr-1 min-w-0" />
+        <Button type="button" variant="outline" size="sm" onClick={onReset} disabled={!dirty || saving}>
+          Reset
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          onClick={onSave}
+          disabled={!dirty || saving}
+          aria-busy={saving || undefined}
+          className="min-w-[112px]"
+        >
+          {saving && <Loader2 className="animate-spin" data-icon="inline-start" />}
+          Save changes
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Sections of a longer page                                                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * One titled part of a page that holds several (General). The id is
+ * `settings-<anchor>`, the target of a deep link; `scroll-mt-24` keeps its
+ * title clear of the 64px sticky top bar when it is scrolled to. `action` sits
+ * beside the title (a section's own "View only" on a partly editable page).
+ */
+export function SettingsSection({
+  anchor,
+  title,
+  description,
+  action,
+  children,
+  className,
+}: {
+  anchor: string;
+  title: string;
+  description?: ReactNode;
+  action?: ReactNode;
+  children: ReactNode;
+  className?: string;
+}) {
+  const id = settingsSectionId(anchor);
+  return (
+    <section
+      id={id}
+      aria-labelledby={`${id}-title`}
+      data-settings-section={anchor}
+      className={cn("scroll-mt-24 space-y-3", className)}
+    >
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <h2 id={`${id}-title`} className={SETTINGS_SECTION_TITLE}>
+            {title}
+          </h2>
+          {description && <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>}
+        </div>
+        {action && <div className="shrink-0">{action}</div>}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+/**
+ * Scroll the element with `targetId` to the top of the window once `ready`
+ * (the page's data is in, so the skeletons above it have given way and it will
+ * not be pushed down after the jump). Once per target: scrolling back up is
+ * not undone, and a new target (another deep link) scrolls again. A section
+ * that mounts a few frames late is still found (up to ~half a second).
+ */
+export const SCROLL_TO_SECTION_MAX_FRAMES = 30;
+
+export function useScrollToSection(targetId: string | null, ready: boolean) {
+  const scrolledTo = useRef<string | null>(null);
+  useEffect(() => {
+    if (!targetId) {
+      scrolledTo.current = null;
+      return;
+    }
+    if (!ready || scrolledTo.current === targetId) return;
+    let frames = 0;
+    let frame = 0;
+    const attempt = () => {
+      const target = document.getElementById(targetId);
+      if (target) {
+        scrolledTo.current = targetId;
+        target.scrollIntoView?.({ block: "start" });
+        return;
+      }
+      frames += 1;
+      if (frames < SCROLL_TO_SECTION_MAX_FRAMES) frame = window.requestAnimationFrame(attempt);
+    };
+    frame = window.requestAnimationFrame(attempt);
+    return () => window.cancelAnimationFrame(frame);
+  }, [targetId, ready]);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Panels and rows                                                             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A flat bordered panel of rows, with an optional title. `footer` is a panel
+ * action (e.g. "Add promo code"). Inside a page save bar there is no divider
+ * line above it, and it collapses when a section's save part renders nothing.
+ */
 export function SettingsPanel({
   title,
   description,
@@ -69,29 +259,30 @@ export function SettingsPanel({
   footer?: ReactNode;
   className?: string;
 }) {
+  const pageSave = useSettingsPageSave();
   return (
     <section className={cn("rounded-xl border bg-card", className)}>
       {(title || description) && (
-        <div className="border-b px-5 py-3.5">
-          {title && <h2 className="text-[15px] font-medium text-foreground">{title}</h2>}
-          {description && (
-            <p className="mt-0.5 text-[13px] text-muted-foreground">{description}</p>
-          )}
+        <div className="px-5 pt-4 pb-1">
+          {title && <h2 className={SETTINGS_SECTION_TITLE}>{title}</h2>}
+          {description && <p className="mt-0.5 text-[13px] text-muted-foreground">{description}</p>}
         </div>
       )}
       <div className="divide-y">{children}</div>
-      {footer && (
-        <div className="flex flex-wrap items-center justify-end gap-2 border-t px-5 py-3">
-          {footer}
-        </div>
-      )}
+      {footer &&
+        (pageSave ? (
+          <div className="flex flex-wrap items-center justify-start gap-2 px-5 pb-4 empty:hidden">{footer}</div>
+        ) : (
+          <div className="flex flex-wrap items-center justify-end gap-2 border-t px-5 py-3">{footer}</div>
+        ))}
     </section>
   );
 }
 
 /**
- * One setting. The label column is capped so the control never drifts to the
- * far edge of a wide screen, and the whole row stacks on a phone.
+ * One setting: a left-aligned grid. The label column is 420px and the control
+ * starts right after it, so it never drifts to the far edge of a wide screen.
+ * The whole row stacks on a phone.
  */
 export function SettingsRow({
   label,
@@ -111,8 +302,8 @@ export function SettingsRow({
 }) {
   return (
     <div className={cn("px-5 py-4", className)}>
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-8">
-        <div className="min-w-0 md:max-w-[460px]">
+      <div className="flex flex-col gap-3 md:grid md:grid-cols-[minmax(0,420px)_minmax(0,1fr)] md:items-center md:gap-x-10">
+        <div className="min-w-0">
           {htmlFor ? (
             <label htmlFor={htmlFor} className="text-sm font-medium text-foreground">
               {label}
@@ -121,18 +312,14 @@ export function SettingsRow({
             <p className="text-sm font-medium text-foreground">{label}</p>
           )}
           {description && (
-            <div className="mt-0.5 text-[13px] leading-snug text-muted-foreground">
-              {description}
-            </div>
+            <div className="mt-0.5 text-[13px] leading-snug text-muted-foreground">{description}</div>
           )}
         </div>
         {children && (
-          <div className="flex shrink-0 flex-wrap items-center gap-2 md:justify-end">
-            {children}
-          </div>
+          <div className="flex min-w-0 flex-wrap items-center justify-start gap-2">{children}</div>
         )}
       </div>
-      {note && <div className="mt-2 text-[13px] leading-snug">{note}</div>}
+      {note && <div className="mt-1.5 text-[13px] leading-snug">{note}</div>}
     </div>
   );
 }
@@ -165,4 +352,18 @@ export function SettingsField({
 /** A unit or connecting word beside an input ("years", "hours before pickup"). */
 export function Unit({ children }: { children: ReactNode }) {
   return <span className="text-sm text-muted-foreground">{children}</span>;
+}
+
+/**
+ * An input and its unit, held together, so in "[2] days [4] hours" each unit
+ * sits closer to its own box than to the next one. Put two or more groups in a
+ * `UnitGroups`, which spaces them further apart than a box is from its unit.
+ */
+export function UnitGroup({ children, className }: { children: ReactNode; className?: string }) {
+  return <span className={cn("inline-flex items-center gap-1.5", className)}>{children}</span>;
+}
+
+/** Several `UnitGroup`s on one row ("[2] days  [4] hours"). */
+export function UnitGroups({ children, className }: { children: ReactNode; className?: string }) {
+  return <div className={cn("flex flex-wrap items-center gap-x-4 gap-y-2", className)}>{children}</div>;
 }

@@ -11,7 +11,7 @@
  * values, so it stays dirty and Retry works), and a success flashes "Saved".
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import {
@@ -19,6 +19,8 @@ import {
   useSettingsSaveStatus,
   type SettingsSaveStatus,
 } from "@/components/settings-v2/section-states";
+import type { RegisterSectionSave } from "@/components/settings-v2/pricing-money-parts";
+import { useSettingsPageSave } from "@/components/settings-v2/settings-kit";
 import { cn } from "@/lib/utils";
 
 export interface SectionSave {
@@ -61,7 +63,81 @@ export function useSectionSave(isDirty: boolean): SectionSave {
   return { isPending, error, status, run };
 }
 
-/** The inline status on the left, one labelled Save on the right. Wraps on a phone. */
+/**
+ * While the section holds unsaved edits, give the settings page a save (and a
+ * discard) for its save bar and leave guard. Registering is what makes leaving
+ * warn at all: the page's own `rentalFormDirty` misses advance notice, the
+ * lockbox delivery method, the auto-send timing and the lockbox messages, so
+ * going to another screen from the sidebar dropped those edits without a word.
+ * The page's Save calls `save`, which must REJECT when it did not save, so the
+ * page stays put; its Reset calls `discard`.
+ */
+export function useRegisterLeaveSave(
+  registerSave: RegisterSectionSave | undefined,
+  key: string,
+  isDirty: boolean,
+  save: () => Promise<void>,
+  discard?: () => void,
+) {
+  const latest = useRef(save);
+  latest.current = save;
+  const stable = useCallback(() => latest.current(), []);
+  const latestDiscard = useRef(discard);
+  latestDiscard.current = discard;
+  const stableDiscard = useCallback(() => latestDiscard.current?.(), []);
+
+  useEffect(() => {
+    if (isDirty) registerSave?.(key, stable, stableDiscard);
+    else registerSave?.(key, null);
+  }, [registerSave, key, isDirty, stable, stableDiscard]);
+
+  useEffect(() => () => registerSave?.(key, null), [registerSave, key]);
+}
+
+/**
+ * `useRegisterLeaveSave` as a component, for a form whose state lives in the
+ * settings page itself (the booking-site colours), where a hook cannot be
+ * called per page. Renders nothing.
+ */
+export function SectionSaveRegistration({
+  registerSave,
+  sectionKey,
+  isDirty,
+  save,
+  discard,
+}: {
+  registerSave: RegisterSectionSave | undefined;
+  sectionKey: string;
+  isDirty: boolean;
+  save: () => Promise<void>;
+  discard?: () => void;
+}) {
+  useRegisterLeaveSave(registerSave, sectionKey, isDirty, save, discard);
+  return null;
+}
+
+/**
+ * The page keeps one shared form across its settings pages, so an edit left
+ * behind with "Don't Save" used to still be there when the page was opened
+ * again, and kept every later navigation asking about unsaved changes. When a
+ * section unmounts while dirty, put its fields back to what is saved.
+ */
+export function useDiscardOnUnmount(isDirty: boolean, discard: () => void) {
+  const latest = useRef({ isDirty, discard });
+  latest.current = { isDirty, discard };
+  useEffect(
+    () => () => {
+      if (latest.current.isDirty) latest.current.discard();
+    },
+    [],
+  );
+}
+
+/**
+ * The inline status on the left, one labelled Save on the right. Wraps on a
+ * phone. Inside a page save bar (`useSettingsPageSave`) the page owns Save and
+ * Reset, so this shows only a failed save, and nothing otherwise.
+ */
 export function SectionSaveBar({
   save,
   isDirty,
@@ -80,6 +156,10 @@ export function SectionSaveBar({
   label?: string;
   className?: string;
 }) {
+  const pageSave = useSettingsPageSave();
+  if (pageSave) {
+    return save.status === "error" ? <SettingsSaveState status="error" error={save.error} className={className} /> : null;
+  }
   return (
     <div className={cn("flex w-full flex-wrap items-center justify-end gap-x-3 gap-y-2", className)}>
       <SettingsSaveState

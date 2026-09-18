@@ -274,7 +274,7 @@ export function WeeklyHoursCard({
 
   return (
     <section className="rounded-2xl border border-border bg-card">
-      <div className="flex items-center justify-between gap-3 border-b border-border/60 px-5 py-3">
+      <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-3">
         <h2 className="text-[12px] font-semibold uppercase tracking-wider text-muted-foreground">
           Weekly hours
         </h2>
@@ -344,7 +344,7 @@ export function WeeklyHoursCard({
               <PopoverTrigger asChild>
                 <button
                   type="button"
-                  className="flex w-full items-center gap-3 px-5 py-2 text-left transition-colors hover:bg-accent/50"
+                  className="flex w-full items-center gap-3 px-5 py-2 text-left transition-colors hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]"
                 >
                   {row}
                 </button>
@@ -370,7 +370,7 @@ export function WeeklyHoursCard({
       </div>
 
       {lockedByGlobal && (
-        <p className="border-t border-border/60 px-5 py-2.5 text-[12px] text-muted-foreground">
+        <p className="border-t border-border px-5 py-2.5 text-[12px] text-muted-foreground">
           This account is open 24/7, so every day is bookable around the clock. Turn that off to
           set hours per day.
         </p>

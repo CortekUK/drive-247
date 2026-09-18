@@ -626,11 +626,14 @@ export function SwitchRow({
       aria-pressed={checked}
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      className="flex w-full cursor-pointer items-center gap-4 px-5 py-3.5 text-left transition-colors hover:bg-foreground/[0.02] disabled:cursor-not-allowed disabled:opacity-60"
+      className="group/switchrow flex w-full cursor-pointer items-center gap-4 px-5 py-3.5 text-left transition-colors hover:bg-primary/5 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] disabled:cursor-not-allowed disabled:opacity-60"
     >
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-medium">{label}</span>
-        {hint && <span className="mt-0.5 block truncate text-xs text-muted-foreground">{hint}</span>}
+        {/* Muted text is 4.36:1 on the light hover tint, so while this row is
+            hovered the hint reads --v2-muted-on-tint (v2 only; dark and v1 keep
+            the muted token). */}
+        {hint && <span className="mt-0.5 block truncate text-xs text-muted-foreground group-hover/switchrow:text-[hsl(var(--v2-muted-on-tint,var(--muted-foreground)))]">{hint}</span>}
       </span>
       <Switch checked={checked} />
     </button>
@@ -661,7 +664,7 @@ export function IconButton({
       disabled={disabled}
       className={cn(
         "shrink-0",
-        tone === "primary" && "text-primary hover:bg-primary-light hover:text-primary",
+        tone === "primary" && "text-primary hover:bg-primary-light hover:text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] dark:hover:text-[hsl(var(--v2-link,var(--primary)))]",
         tone === "destructive" && "text-destructive hover:bg-destructive/10 hover:text-destructive",
         tone === "muted" && "text-muted-foreground hover:text-foreground",
       )}

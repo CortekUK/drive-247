@@ -146,7 +146,14 @@ function InvoiceHistoryTable({
             const docs = billingDocumentsOf(inv);
             const docStatus = billingStatusOf(inv);
             return (
-              <tr key={inv.id} className="border-b transition-colors last:border-0 hover:bg-muted/40">
+              <tr
+                key={inv.id}
+                className={
+                  v2Chrome
+                    ? "border-b transition-colors last:border-0 hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]"
+                    : "border-b transition-colors last:border-0 hover:bg-muted/40"
+                }
+              >
                 <td className="whitespace-nowrap py-3 px-3 text-sm text-muted-foreground">
                   {formatDate(inv.period_start)} – {formatDate(inv.period_end)}
                 </td>
@@ -300,7 +307,7 @@ function InvoiceHistoryTable({
       {v2Chrome && (hiddenCount > 0 || v2Visible > RECENT_INVOICE_COUNT) && (
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 px-3 text-sm">
           {hiddenCount > 0 && (
-            <button type="button" onClick={() => setV2Visible((n) => n + 25)} className="font-medium text-primary hover:underline">
+            <button type="button" onClick={() => setV2Visible((n) => n + 25)} className="font-medium text-primary hover:underline dark:text-indigo-300">
               {`Show ${Math.min(25, hiddenCount)} more`}
             </button>
           )}
@@ -373,7 +380,7 @@ function UsageSummary() {
     return (
       <div role="alert" className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl bg-destructive/10 px-4 py-2 text-sm">
         <span className="min-w-0 flex-1">Couldn&apos;t load your metered usage.</span>
-        <button type="button" onClick={() => categories.forEach((c) => c.data.refetch?.())} className="font-medium text-primary hover:underline">
+        <button type="button" onClick={() => categories.forEach((c) => c.data.refetch?.())} className="font-medium text-primary hover:underline dark:text-indigo-300">
           Try again
         </button>
       </div>
@@ -531,3 +538,10 @@ export function UsageDashboard({
     </div>
   );
 }
+
+/**
+ * The usage block on its own, for the v2 billing page: a tenant accruing
+ * metered usage before its first invoice still sees that usage (the dashboard
+ * above only mounts once an invoice exists). Renders nothing without history.
+ */
+export { UsageSummary };

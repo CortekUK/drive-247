@@ -149,6 +149,74 @@ describe("05 — provision: the signup-provision contract (Layer 1)", () => {
   });
 });
 
+// =============================================================================
+// WHAT THE TENANT ROW COMES OUT AS (Layer 0 — source only).
+//
+// The contract above covers the REQUEST. Nothing covered the two decisions that
+// make a self-serve signup land on the v2 portal at all, and both live in one
+// statement each, one silent revert away from the exact bug they fixed: a brand
+// new tenant ("wings") whose portal came up as the old v1 chrome in slate.
+//
+// Deliberately NOT chain-gated, unlike everything above. These read a file off
+// disk — no session, no network, no dependency on steps 01-04 — and the moment
+// they are most needed is when someone has just edited signup-provision and runs
+// this one file, which the chain would otherwise skip in full.
+// =============================================================================
+describe("05 — provision: the tenant row lands on v2 (Layer 0)", () => {
+  const src = () => readEdgeFunctionSource("signup-provision");
+
+  it("inserts the tenant with portal_experience 'v2'", () => {
+    // ops/portal_experience.sql defaults the column to 'v1' so the ~56 existing
+    // tenants never move, which makes THIS INSERT the only thing that puts a
+    // self-serve tenant on the new UI. Drop it and the next sale silently gets
+    // the v1 portal — no error, no failing request, just the old chrome.
+    const s = src();
+    const row = s.slice(s.indexOf("const tenantRow = {"));
+    expect(
+      row.slice(0, 900),
+      "signup-provision's tenant insert no longer sets portal_experience. A tenant " +
+        "created through drive-247.com would fall back to the column DEFAULT 'v1' " +
+        "and be served the old portal. See ops/portal_experience.sql.",
+    ).toContain('portal_experience: "v2"');
+  });
+
+  it("paints it with the v2 default brand colour, written explicitly", () => {
+    // #442DD7 = hsl(248 68% 51%): the v2 stylesheet default, the Indigo preset,
+    // and what Branding → "Restore default colour" writes — so the tenant is
+    // painted exactly like northwind, the first v2 sale. Left to the brand
+    // extractor this is the platform slate #1E293B, which is a perfectly USABLE
+    // brand colour, so nothing downstream falls back and the whole portal comes
+    // up slate. Written rather than left NULL because the booking site reads
+    // primary_color directly and NULL there is the old platform green.
+    const s = src();
+    expect(s).toContain('const V2_DEFAULT_BRAND_COLOR = "#442DD7"');
+    const palette = s.slice(s.indexOf("const palette = {"));
+    expect(palette.slice(0, 400)).toContain("primary_color: V2_DEFAULT_BRAND_COLOR");
+    expect(palette.slice(0, 400)).toContain("light_primary_color: V2_DEFAULT_BRAND_COLOR");
+  });
+
+  it("pins those two colour columns only, and not the booking site's chrome", () => {
+    // The override is applied AFTER buildTenantPalette, not by feeding it a
+    // different primary. Overriding the input instead also rewrites
+    // light_header_footer_color and dark_primary_color, which that helper derives
+    // from the primary — and light_header_footer_color is the operator's public
+    // BOOKING site header and footer (apps/booking/src/hooks/useDynamicTheme.ts).
+    // The v2 portal reads light_primary_color || primary_color and nothing else,
+    // so repainting the booking site is a separate product decision, not a
+    // side effect of this one.
+    const s = src();
+    expect(
+      s,
+      "The v2 primary is being fed INTO buildTenantPalette again. That also " +
+        "repaints light_header_footer_color and dark_primary_color — i.e. the " +
+        "public booking site — which brief decision 3 does not ask for.",
+    ).not.toMatch(/buildTenantPalette\(\s*\{\s*\.\.\.\s*colors/);
+    const palette = s.slice(s.indexOf("const palette = {"));
+    expect(palette.slice(0, 400)).toContain("...buildTenantPalette(colors)");
+    expect(palette.slice(0, 400)).not.toContain("light_header_footer_color");
+  });
+});
+
 describe("05 — provision: live status (Layer 2)", () => {
   it("signup-provision is deployed and its auth gate holds", async (ctx) => {
     if (haltIfBroken(ctx, STEP)) return;

@@ -34,7 +34,7 @@ function MovementRow({ movement, onClick }: { movement: Movement; onClick: () =>
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors hover:bg-muted/60"
+      className="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]"
     >
       <span
         className={cn(
@@ -136,7 +136,7 @@ export function OnTheMoveToday({ className }: { className?: string }) {
           <button
             type="button"
             onClick={() => router.push('/rentals')}
-            className="mt-1 flex w-full shrink-0 items-center justify-between gap-2 rounded-lg px-2 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/60"
+            className="mt-1 flex w-full shrink-0 items-center justify-between gap-2 rounded-lg px-2 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]"
           >
             <span>
               {staleCount} over {staleAfterDays} days past their end date

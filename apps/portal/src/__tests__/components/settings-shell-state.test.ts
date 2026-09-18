@@ -7,14 +7,25 @@
 
 import { describe, it, expect } from "vitest";
 import {
+  SETTINGS_TAB_LABELS,
+  V2_GENERAL_PERM_TABS,
+  V2_GENERAL_SECTIONS,
+  V2_HIDDEN_SETTINGS_PAGES,
   canSaveAllDirty,
+  canSaveV2Edits,
+  canViewAny,
   findSettingsSearchHandoff,
   formatCompanyCount,
+  isPositiveCount,
   matchesBlacklistSearch,
   resolveBlacklistView,
   resolveSettingsPageData,
   resolveSettingsTabNotice,
+  resolveV2SettingsRoute,
+  settingsSectionId,
   settingsTabNoticeCopy,
+  v2HasUnsavedEdits,
+  v2NoticePages,
 } from "@/components/settings-v2/settings-shell-state";
 
 describe("resolveSettingsTabNotice", () => {
@@ -83,6 +94,138 @@ describe("resolveSettingsTabNotice", () => {
   });
 });
 
+describe("v2 General: six pages merged into one, and five pages hidden", () => {
+  const ALL_GENERAL_PERMS = ["general", "requirements", "duration", "lockbox", "fees", "preauth"];
+
+  it("General's sections run in the agreed order, each with its own id", () => {
+    expect(V2_GENERAL_SECTIONS.map((s) => s.anchor)).toEqual([
+      "regional",
+      "driver-requirements",
+      "booking-rules",
+      "key-handover",
+      "tax-and-fees",
+      "security-deposit",
+      "booking-site",
+      "optional-modules",
+    ]);
+    expect(settingsSectionId("tax-and-fees")).toBe("settings-tax-and-fees");
+    // Regional, Booking site and Optional modules all follow General's own permission, so it is listed once.
+    expect(V2_GENERAL_PERM_TABS).toEqual(ALL_GENERAL_PERMS);
+  });
+
+  it("hides exactly Promo codes, Extras, Installments, Pay as you go and Auto-extension, each with a notice label", () => {
+    expect([...V2_HIDDEN_SETTINGS_PAGES].sort()).toEqual(["auto-extend", "extras", "installments", "payg", "promos"]);
+    expect(SETTINGS_TAB_LABELS.promos).toBe("Promo codes");
+    expect(SETTINGS_TAB_LABELS.extras).toBe("Extras");
+    expect(SETTINGS_TAB_LABELS.installments).toBe("Installments");
+    expect(SETTINGS_TAB_LABELS.payg).toBe("Pay as you go");
+    expect(SETTINGS_TAB_LABELS["auto-extend"]).toBe("Auto-extension");
+  });
+
+  describe("resolveV2SettingsRoute", () => {
+    const pages = {
+      general: { permTab: "general" },
+      locations: { permTab: "locations" },
+      pricing: { permTab: "pricing" },
+      templates: { permTab: "templates" },
+      promos: { permTab: "promos" },
+    };
+    const none = { page: null, anchor: null, permTab: null };
+
+    it("no tab, or a blank one, is the index", () => {
+      expect(resolveV2SettingsRoute(null, pages)).toEqual(none);
+      expect(resolveV2SettingsRoute("  ", pages)).toEqual(none);
+    });
+
+    it("?tab=general opens General at the top, for anyone who may see any of its sections", () => {
+      expect(resolveV2SettingsRoute("general", pages)).toEqual({ page: "general", anchor: null, permTab: ALL_GENERAL_PERMS });
+    });
+
+    it("each merged page's old tab opens General at its section, under that section's permission", () => {
+      expect(resolveV2SettingsRoute("requirements", pages)).toEqual({ page: "general", anchor: "driver-requirements", permTab: "requirements" });
+      expect(resolveV2SettingsRoute("duration", pages)).toEqual({ page: "general", anchor: "booking-rules", permTab: "duration" });
+      expect(resolveV2SettingsRoute("lockbox", pages)).toEqual({ page: "general", anchor: "key-handover", permTab: "lockbox" });
+      expect(resolveV2SettingsRoute("fees", pages)).toEqual({ page: "general", anchor: "tax-and-fees", permTab: "fees" });
+      expect(resolveV2SettingsRoute("preauth", pages)).toEqual({ page: "general", anchor: "security-deposit", permTab: "preauth" });
+      expect(resolveV2SettingsRoute("booking-site", pages)).toEqual({ page: "general", anchor: "booking-site", permTab: "general" });
+    });
+
+    it("other pages open as themselves", () => {
+      expect(resolveV2SettingsRoute("locations", pages)).toEqual({ page: "locations", anchor: null, permTab: "locations" });
+      expect(resolveV2SettingsRoute(" pricing ", pages)).toEqual({ page: "pricing", anchor: null, permTab: "pricing" });
+    });
+
+    it("hidden pages (even with a page entry), the blacklist and unknown values open the index", () => {
+      expect(resolveV2SettingsRoute("promos", pages)).toEqual(none);
+      expect(resolveV2SettingsRoute("installments", pages)).toEqual(none);
+      expect(resolveV2SettingsRoute("blacklist", pages)).toEqual(none);
+      expect(resolveV2SettingsRoute("optional-modules", pages)).toEqual(none);
+      expect(resolveV2SettingsRoute("constructor", pages)).toEqual(none);
+    });
+  });
+
+  it("canViewAny: one tab, or any of several", () => {
+    const onlyFees = (t: string) => t === "fees";
+    expect(canViewAny("fees", onlyFees)).toBe(true);
+    expect(canViewAny("general", onlyFees)).toBe(false);
+    expect(canViewAny(["general", "fees"], onlyFees)).toBe(true);
+    expect(canViewAny(["general", "lockbox"], onlyFees)).toBe(false);
+    expect(canViewAny([], () => true)).toBe(false);
+  });
+
+  it("v2NoticePages: General with its any-of permission, each section under its old tab, no hidden page", () => {
+    expect(
+      v2NoticePages({
+        general: { title: "General", permTab: "general" },
+        locations: { title: "Locations", permTab: "locations" },
+        promos: { title: "Promo codes", permTab: "promos" },
+      }),
+    ).toEqual({
+      general: { title: "General", permTab: ALL_GENERAL_PERMS },
+      locations: { title: "Locations", permTab: "locations" },
+      requirements: { title: "Driver requirements", permTab: "requirements" },
+      duration: { title: "Booking rules", permTab: "duration" },
+      lockbox: { title: "Key handover", permTab: "lockbox" },
+      fees: { title: "Tax and fees", permTab: "fees" },
+      preauth: { title: "Security deposit", permTab: "preauth" },
+      "booking-site": { title: "Booking site", permTab: "general" },
+    });
+  });
+
+  describe("notices for the merged and hidden pages", () => {
+    const base = {
+      pages: v2NoticePages({ general: { title: "General", permTab: "general" }, pricing: { title: "Custom pricing", permTab: "pricing" } }),
+      redirects: { branding: "/settings/appearance" },
+      allTabs: ["general", "requirements", "lockbox", "fees", "promos", "payg", "blacklist", "pricing"],
+      isHidden: () => false,
+      boardCard: () => null,
+      permissionsLoading: false,
+    };
+    // A manager holding only the settings.rental grant behind Tax and fees.
+    const onlyFees = (t: string) => t === "fees";
+
+    it("General opens for someone who may see only one of its sections", () => {
+      expect(resolveSettingsTabNotice({ ...base, canView: onlyFees, tabParam: "general" })).toEqual({ kind: "none" });
+      expect(resolveSettingsTabNotice({ ...base, canView: onlyFees, tabParam: "fees" })).toEqual({ kind: "none" });
+    });
+
+    it("a section's old tab without that section's permission names the section", () => {
+      expect(resolveSettingsTabNotice({ ...base, canView: onlyFees, tabParam: "lockbox" })).toEqual({ kind: "no-access", label: "Key handover" });
+      expect(resolveSettingsTabNotice({ ...base, canView: onlyFees, tabParam: "booking-site" })).toEqual({ kind: "no-access", label: "Booking site" });
+    });
+
+    it("no General section at all: General itself says no access", () => {
+      expect(resolveSettingsTabNotice({ ...base, canView: () => false, tabParam: "general" })).toEqual({ kind: "no-access", label: "General" });
+    });
+
+    it("a hidden page and the global blacklist aren't part of the workspace", () => {
+      expect(resolveSettingsTabNotice({ ...base, canView: () => true, tabParam: "promos" })).toEqual({ kind: "unavailable", label: "Promo codes" });
+      expect(resolveSettingsTabNotice({ ...base, canView: () => true, tabParam: "payg" })).toEqual({ kind: "unavailable", label: "Pay as you go" });
+      expect(resolveSettingsTabNotice({ ...base, canView: () => true, tabParam: "blacklist" })).toEqual({ kind: "unavailable", label: "Global blacklist" });
+    });
+  });
+});
+
 describe("resolveSettingsPageData", () => {
   const boom = new Error("Failed to fetch");
   const realOrg = { settings: { org_id: "org-1", currency_code: "GBP" }, error: null };
@@ -94,18 +237,18 @@ describe("resolveSettingsPageData", () => {
     ).toEqual({ kind: "ready" });
   });
 
-  it("General waits on the org placeholder rather than showing its USD default", () => {
+  it("Team emails waits on the org placeholder rather than showing its defaults", () => {
     expect(
       resolveSettingsPageData({
-        page: "general",
+        page: "reminders",
         org: { settings: { org_id: "placeholder", currency_code: "USD" }, error: null },
         rental: realRental,
       }),
     ).toEqual({ kind: "loading" });
   });
 
-  it("General shows the failed org read, never the form", () => {
-    expect(resolveSettingsPageData({ page: "general", org: { settings: undefined, error: boom }, rental: realRental })).toEqual({
+  it("Team emails shows the failed org read, never the form", () => {
+    expect(resolveSettingsPageData({ page: "reminders", org: { settings: undefined, error: boom }, rental: realRental })).toEqual({
       kind: "error",
       source: "org",
       error: boom,
@@ -113,17 +256,17 @@ describe("resolveSettingsPageData", () => {
   });
 
   it("stale real org data with a refetch error is still the tenant's own: ready", () => {
-    expect(resolveSettingsPageData({ page: "general", org: { ...realOrg, error: boom }, rental: realRental })).toEqual({
+    expect(resolveSettingsPageData({ page: "reminders", org: { ...realOrg, error: boom }, rental: realRental })).toEqual({
       kind: "ready",
     });
   });
 
-  it("Fees waits on rental DEFAULTS (no _paygMigrationReady) and errors when the read failed", () => {
+  it("Customer messages waits on rental DEFAULTS (no _paygMigrationReady) and errors when the read failed", () => {
     const defaults = { tax_enabled: false, max_rental_days: 90 };
-    expect(resolveSettingsPageData({ page: "fees", org: realOrg, rental: { settings: defaults, error: null } })).toEqual({
+    expect(resolveSettingsPageData({ page: "templates", org: realOrg, rental: { settings: defaults, error: null } })).toEqual({
       kind: "loading",
     });
-    expect(resolveSettingsPageData({ page: "fees", org: realOrg, rental: { settings: defaults, error: boom } })).toEqual({
+    expect(resolveSettingsPageData({ page: "templates", org: realOrg, rental: { settings: defaults, error: boom } })).toEqual({
       kind: "error",
       source: "rental",
       error: boom,
@@ -131,7 +274,26 @@ describe("resolveSettingsPageData", () => {
   });
 
   it("a real rental row counts even when the marker's value is false", () => {
-    expect(resolveSettingsPageData({ page: "fees", org: realOrg, rental: realRental })).toEqual({ kind: "ready" });
+    expect(resolveSettingsPageData({ page: "templates", org: realOrg, rental: realRental })).toEqual({ kind: "ready" });
+  });
+
+  it("General never waits at page level: a failed org read or rental read no longer hides its other sections", () => {
+    const placeholderOrg = { settings: { org_id: "placeholder", currency_code: "USD" }, error: null };
+    const brokenOrg = { settings: undefined, error: boom };
+    const defaults = { tax_enabled: false, max_rental_days: 90 };
+    expect(resolveSettingsPageData({ page: "general", org: placeholderOrg, rental: realRental })).toEqual({ kind: "ready" });
+    expect(resolveSettingsPageData({ page: "general", org: brokenOrg, rental: realRental })).toEqual({ kind: "ready" });
+    expect(resolveSettingsPageData({ page: "general", org: realOrg, rental: { settings: defaults, error: boom } })).toEqual({
+      kind: "ready",
+    });
+  });
+
+  it("Custom pricing never waits at page level: each section gates on its own read", () => {
+    const defaults = { tax_enabled: false, max_rental_days: 90 };
+    for (const page of ["pricing"]) {
+      expect(resolveSettingsPageData({ page, org: realOrg, rental: { settings: defaults, error: null } })).toEqual({ kind: "ready" });
+      expect(resolveSettingsPageData({ page, org: realOrg, rental: { settings: defaults, error: boom } })).toEqual({ kind: "ready" });
+    }
   });
 
   it("pages reading neither query render regardless of their failures", () => {
@@ -140,12 +302,12 @@ describe("resolveSettingsPageData", () => {
     expect(resolveSettingsPageData({ page: "extras", org: broken, rental: broken })).toEqual({ kind: "ready" });
   });
 
-  it("General does not wait on rental settings, and Fees does not wait on org settings", () => {
+  it("Team emails does not wait on rental settings, and Customer messages does not wait on org settings", () => {
     expect(
-      resolveSettingsPageData({ page: "general", org: realOrg, rental: { settings: {}, error: boom } }),
+      resolveSettingsPageData({ page: "reminders", org: realOrg, rental: { settings: {}, error: boom } }),
     ).toEqual({ kind: "ready" });
     expect(
-      resolveSettingsPageData({ page: "fees", org: { settings: undefined, error: boom }, rental: realRental }),
+      resolveSettingsPageData({ page: "templates", org: { settings: undefined, error: boom }, rental: realRental }),
     ).toEqual({ kind: "ready" });
   });
 });
@@ -159,6 +321,45 @@ describe("canSaveAllDirty", () => {
   });
 });
 
+describe("v2HasUnsavedEdits", () => {
+  const clean = { sections: [] as string[], locations: false, pricing: false, rentalUncovered: false };
+
+  it("is false with nothing registered and nothing reported", () => {
+    expect(v2HasUnsavedEdits(clean)).toBe(false);
+  });
+
+  it("is true for any registered section, Locations, weekend pricing, or an uncovered rental field", () => {
+    expect(v2HasUnsavedEdits({ ...clean, sections: ["fees"] })).toBe(true);
+    expect(v2HasUnsavedEdits({ ...clean, locations: true })).toBe(true);
+    expect(v2HasUnsavedEdits({ ...clean, pricing: true })).toBe(true);
+    expect(v2HasUnsavedEdits({ ...clean, rentalUncovered: true })).toBe(true);
+  });
+});
+
+describe("canSaveV2Edits", () => {
+  const nothing = { registered: [] as string[], locations: false, pricing: false, rentalUncovered: false };
+
+  it("offers Save for a fees-only edit once Tax and fees registered (the old check hid it)", () => {
+    expect(canSaveV2Edits({ ...nothing, registered: ["fees"] })).toBe(true);
+    // Before: any rental-form edit outside the Business-rules fields counted as unsaveable.
+    expect(canSaveAllDirty({ rental: true, locations: false, pricing: false })).toBe(false);
+  });
+
+  it("counts weekend pricing as saveable only when it registered under pricing-weekend", () => {
+    expect(canSaveV2Edits({ ...nothing, pricing: true, registered: ["pricing-weekend"] })).toBe(true);
+    expect(canSaveV2Edits({ ...nothing, pricing: true, registered: ["fees"] })).toBe(false);
+  });
+
+  it("counts Locations only once it registers under locations", () => {
+    expect(canSaveV2Edits({ ...nothing, locations: true })).toBe(false);
+    expect(canSaveV2Edits({ ...nothing, locations: true, registered: ["locations"] })).toBe(true);
+  });
+
+  it("never offers Save over a rental-form edit no registered section saves", () => {
+    expect(canSaveV2Edits({ ...nothing, rentalUncovered: true, registered: ["fees", "preauth", "pricing-weekend"] })).toBe(false);
+  });
+});
+
 describe("findSettingsSearchHandoff", () => {
   it("points provider names at where they live", () => {
     expect(findSettingsSearchHandoff("stripe")).toEqual({ label: "Payments", where: "Integrations", href: "/integrations" });
@@ -169,7 +370,9 @@ describe("findSettingsSearchHandoff", () => {
       where: "Billing",
       href: "/subscription",
     });
-    expect(findSettingsSearchHandoff("change password")?.href).toBe("/users");
+    // Team members and passwords are the index's own Team entry now: no hand-off.
+    expect(findSettingsSearchHandoff("change password")).toBeNull();
+    expect(findSettingsSearchHandoff("users")).toBeNull();
   });
 
   it("matches a prefix only from 4 characters", () => {
@@ -209,6 +412,27 @@ describe("formatCompanyCount", () => {
     expect(formatCompanyCount(1234)).toBe("1,234 companies");
     expect(formatCompanyCount(null)).toBe("—");
     expect(formatCompanyCount(Number.NaN)).toBe("—");
+  });
+
+  it("never prints a count the database cannot hold: negative or fractional is a dash", () => {
+    expect(formatCompanyCount(-3)).toBe("—");
+    expect(formatCompanyCount(-1)).toBe("—");
+    expect(formatCompanyCount(2.5)).toBe("—");
+    expect(formatCompanyCount(Number.POSITIVE_INFINITY)).toBe("—");
+    expect(formatCompanyCount(9999999)).toBe("9,999,999 companies");
+  });
+});
+
+describe("isPositiveCount", () => {
+  it("is true only for whole numbers above zero", () => {
+    expect(isPositiveCount(1)).toBe(true);
+    expect(isPositiveCount(9999999)).toBe(true);
+    expect(isPositiveCount(0)).toBe(false);
+    expect(isPositiveCount(-3)).toBe(false);
+    expect(isPositiveCount(2.5)).toBe(false);
+    expect(isPositiveCount(Number.NaN)).toBe(false);
+    expect(isPositiveCount(null)).toBe(false);
+    expect(isPositiveCount("3")).toBe(false);
   });
 });
 

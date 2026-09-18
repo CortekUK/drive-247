@@ -75,6 +75,7 @@ import { LIST_CLASSES } from "@/components/shared/list-table-v2";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { formatCurrency } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
+import { describeSaveError } from "@/components/settings-v2/settings-error-copy";
 
 /* -------------------------------------------------------------------------- */
 /* Shared action shape                                                         */
@@ -129,8 +130,14 @@ export interface SettingsSectionSkeletonProps {
   /**
    * `table`: a v2 list-table card (header + rows at the kit's 45px row height).
    * `form`: label/field pairs. `cards`: a grid of soft cards.
+   * `rows`: the stacked rows a list shows below `sm` instead of its table, so a
+   * phone does not load a table that is cut off at the card edge and then jump.
+   * `stack`: full-width cards one above the other, at every width (a page of
+   * stacked panels, or options a person picks between).
    */
-  variant?: "table" | "form" | "cards";
+  variant?: "table" | "form" | "cards" | "rows" | "stack";
+  /** `rows` only: a square thumbnail at the start of each row. */
+  thumbnail?: boolean;
   /** Table rows, form pairs, or cards. Match what the section usually shows. */
   rows?: number;
   /** Table columns. */
@@ -151,6 +158,7 @@ export function SettingsSectionSkeleton({
   columns = 4,
   header = false,
   label = "Loading",
+  thumbnail = false,
   className,
 }: SettingsSectionSkeletonProps) {
   const count = Math.max(1, rows);
@@ -162,8 +170,6 @@ export function SettingsSectionSkeleton({
       data-settings-state="loading"
       className={cn("space-y-4", className)}
     >
-      <span className="sr-only">{label}</span>
-
       {header && (
         <div aria-hidden="true" className="flex items-center justify-between gap-4">
           <div className="space-y-2">
@@ -177,11 +183,13 @@ export function SettingsSectionSkeleton({
       {variant === "table" && (
         // Same shell as `ListTable`: the v2 Card with a p-0 body, a 40px head
         // row and 45px body rows (py-3 cell + 20px line + 1px row border).
+        // `min-w-0` on every column: the fixed-width header bars otherwise set
+        // a minimum that pushed the last one past the card edge on a phone.
         <Card aria-hidden="true">
           <CardContent className="p-0">
             <div className="flex h-10 items-center gap-6 border-b px-3">
               {Array.from({ length: columns }).map((_, c) => (
-                <div key={c} className="flex-1">
+                <div key={c} className="min-w-0 flex-1">
                   <Skeleton className={cn("h-2.5 rounded-full", c === 0 ? "w-24 max-w-full" : "w-16 max-w-full")} />
                 </div>
               ))}
@@ -192,7 +200,7 @@ export function SettingsSectionSkeleton({
                 className={cn("flex h-[45px] items-center gap-6 px-3", r < count - 1 && "border-b")}
               >
                 {Array.from({ length: columns }).map((_, c) => (
-                  <div key={c} className="flex-1">
+                  <div key={c} className="min-w-0 flex-1">
                     <Skeleton className={cn("h-3.5 rounded-full", BAR_WIDTHS[(r + c) % BAR_WIDTHS.length])} />
                   </div>
                 ))}
@@ -200,6 +208,22 @@ export function SettingsSectionSkeleton({
             ))}
           </CardContent>
         </Card>
+      )}
+
+      {variant === "rows" && (
+        <div aria-hidden="true" className="space-y-2">
+          {Array.from({ length: count }).map((_, r) => (
+            <div key={r} className="flex items-start gap-3 rounded-2xl bg-muted/40 px-4 py-3">
+              {thumbnail && <Skeleton className="size-10 shrink-0 rounded-lg" />}
+              <div className="min-w-0 flex-1 space-y-2 py-0.5">
+                <Skeleton className={cn("h-3.5 rounded-full", BAR_WIDTHS[r % BAR_WIDTHS.length])} />
+                <Skeleton className="h-3 w-1/2 rounded-full" />
+                <Skeleton className="h-3 w-2/3 rounded-full" />
+              </div>
+              <Skeleton className="size-8 shrink-0 rounded-full" />
+            </div>
+          ))}
+        </div>
       )}
 
       {variant === "form" && (
@@ -211,6 +235,21 @@ export function SettingsSectionSkeleton({
                 <Skeleton className="h-3 w-40 max-w-full rounded-full" />
               </div>
               <Skeleton className="h-9 w-full rounded-3xl" />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {variant === "stack" && (
+        <div aria-hidden="true" className="space-y-4">
+          {Array.from({ length: count }).map((_, r) => (
+            <div key={r} className="space-y-3 rounded-2xl bg-card p-5">
+              <div className="flex items-center gap-3">
+                <Skeleton className="size-5 shrink-0 rounded-full" />
+                <Skeleton className={cn("h-4 rounded-full", BAR_WIDTHS[r % BAR_WIDTHS.length], "max-w-xs")} />
+              </div>
+              <Skeleton className="h-3 w-2/3 rounded-full" />
+              <Skeleton className="h-14 w-full rounded-xl" />
             </div>
           ))}
         </div>
@@ -230,6 +269,14 @@ export function SettingsSectionSkeleton({
           ))}
         </div>
       )}
+
+      {/* Last, not first: as the first child it made the first shape a later
+          sibling, so space-y-4 gave it a 16px top margin. Inside a fieldset,
+          grid or flex item that margin cannot collapse away, and the skeleton
+          sat 16px below where the loaded section appears (Fees & tax, Deposit,
+          Installments, Pricing rules, Locations); after a space-y-3 heading it
+          sat 4px low. */}
+      <span className="sr-only">{label}</span>
     </div>
   );
 }
@@ -286,7 +333,7 @@ export function SettingsEmptyState({
       <div className={cn("mx-auto flex flex-col items-center text-center", compact ? "max-w-sm" : "max-w-lg")}>
         <span
           className={cn(
-            "flex items-center justify-center bg-primary/10 text-primary",
+            "flex items-center justify-center bg-primary/10 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]",
             compact ? "size-9 rounded-xl" : "size-11 rounded-2xl",
           )}
         >
@@ -311,7 +358,7 @@ export function SettingsEmptyState({
             {points.slice(0, 3).map((point) => (
               <li key={point} className="flex items-start gap-2.5">
                 <span className="mt-[3px] flex size-4 shrink-0 items-center justify-center rounded-full bg-primary/10">
-                  <Check className="size-2.5 text-primary" strokeWidth={3} aria-hidden="true" />
+                  <Check className="size-2.5 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" strokeWidth={3} aria-hidden="true" />
                 </span>
                 <span className="text-sm leading-snug text-foreground/80">{point}</span>
               </li>
@@ -571,6 +618,10 @@ export function settingsControlProps(canEdit: boolean, busy = false) {
  * Disables every native control inside when `readOnly` (browser-enforced:
  * inputs, selects, textareas and buttons, which covers Radix Switch, Select
  * and Checkbox triggers). Keep view-only actions outside it.
+ *
+ * The v2 Switch dims only on its own `disabled` prop (`data-[disabled]`), which
+ * a disabled fieldset never sets, so a view-only switch kept full colour beside
+ * dimmed inputs and looked editable. The fieldset dims it the same way.
  */
 export function SettingsReadOnlyFieldset({
   readOnly,
@@ -585,7 +636,10 @@ export function SettingsReadOnlyFieldset({
     <fieldset
       disabled={readOnly}
       data-read-only={readOnly || undefined}
-      className={cn("m-0 min-w-0 border-0 p-0", className)}
+      className={cn(
+        "m-0 min-w-0 border-0 p-0 [&_[role=switch]:disabled]:cursor-not-allowed [&_[role=switch]:disabled]:opacity-50",
+        className,
+      )}
     >
       {children}
     </fieldset>
@@ -632,7 +686,7 @@ export function SettingsDependencyNotice({
           aria-hidden="true"
           className={cn(
             "mt-0.5 size-4 shrink-0",
-            tone === "warning" ? "text-amber-600 dark:text-amber-400" : "text-primary",
+            tone === "warning" ? "text-amber-600 dark:text-amber-400" : "text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]",
           )}
         />
         <div className="min-w-0 [overflow-wrap:anywhere]">
@@ -664,43 +718,8 @@ export interface SettingsSaveStateProps {
   className?: string;
 }
 
-/**
- * A short reason for a failed save, in the operator's words. Database and
- * transport internals ("violates check constraint", "duplicate key", SQL
- * codes) are translated; a plain human message (e.g. from an edge function)
- * passes through, capped at 140 characters. The form keeps its values either
- * way, so every branch can promise that.
- */
-export function describeSaveError(error: unknown): string {
-  const msg =
-    typeof error === "string"
-      ? error
-      : error && typeof error === "object" && "message" in error
-        ? String((error as { message?: unknown }).message ?? "")
-        : "";
-  const code =
-    error && typeof error === "object" && "code" in error ? String((error as { code?: unknown }).code ?? "") : "";
-  const clean = msg.replace(/\s+/g, " ").trim();
-  const text = clean.toLowerCase();
-
-  if (!clean && !code) return "Your changes are still here. Try again.";
-  if ((typeof navigator !== "undefined" && navigator.onLine === false) || text.includes("failed to fetch") || text.includes("network")) {
-    return "We couldn't reach the server. Your changes are still here.";
-  }
-  if (code === "23505" || text.includes("duplicate key") || text.includes("already exists")) {
-    return "Something with that name already exists. Use a different one.";
-  }
-  if (code === "42501" || text.includes("permission denied") || text.includes("row-level security") || text.includes("not authorized")) {
-    return "You don't have permission to change this. Ask an admin.";
-  }
-  if (
-    /^(23|22|42|P0)/.test(code) ||
-    /violates|constraint|null value in column|invalid input syntax|out of range|relation "|column "|syntax error/.test(text)
-  ) {
-    return "One of the values isn't allowed. Check the fields and try again.";
-  }
-  return clean.length > 140 ? `${clean.slice(0, 137)}…` : clean;
-}
+// Lives in a plain module so hooks can share it; re-exported for the kit's callers.
+export { describeSaveError };
 
 /**
  * Inline, next to the section's Save button. It complements the toast rather
@@ -890,6 +909,9 @@ export function TruncatedText({
 }) {
   const ref = useRef<HTMLSpanElement>(null);
   const [cut, setCut] = useState(false);
+  // Always controlled: switching `open` between `false` and `undefined` made
+  // Radix warn "changing from controlled to uncontrolled" once a row measured.
+  const [tipOpen, setTipOpen] = useState(false);
   const value = text ?? "";
 
   const measure = () => {
@@ -919,7 +941,7 @@ export function TruncatedText({
 
   return (
     <TooltipProvider delayDuration={300}>
-      <Tooltip open={cut ? undefined : false}>
+      <Tooltip open={cut && tipOpen} onOpenChange={setTipOpen}>
         <TooltipTrigger asChild>{span}</TooltipTrigger>
         <TooltipContent className="max-w-sm break-words">{value}</TooltipContent>
       </Tooltip>
@@ -985,6 +1007,23 @@ export function SettingsBlank() {
  * exactly). This only adds the edge cases: null/NaN/Infinity -> "—".
  * Render the result inside `<TabularValue>` so columns align.
  */
+/**
+ * A phone list row's facts ("AED 12.50 · Active · 3 left"): the dot belongs to
+ * the fact AFTER it and sits in the gap to its left, and the line clips its
+ * left edge. When a fact wraps onto a new line its dot is cut off, instead of
+ * dangling at the end of the line above.
+ *
+ *   <p className={SETTINGS_PHONE_FACTS.line}>
+ *     <span>AED 12.50</span>
+ *     <span className={SETTINGS_PHONE_FACTS.afterDot}>Active</span>
+ *   </p>
+ */
+export const SETTINGS_PHONE_FACTS = {
+  line: "flex flex-wrap items-baseline gap-x-3 gap-y-0.5 overflow-hidden",
+  afterDot:
+    "relative before:absolute before:right-full before:w-3 before:text-center before:text-muted-foreground before:content-['·']",
+} as const;
+
 export function formatSettingsMoney(amount: number | string | null | undefined, currencyCode = "USD"): string {
   const n = typeof amount === "string" ? Number(amount) : amount;
   if (n === null || n === undefined || !Number.isFinite(n)) return "—";

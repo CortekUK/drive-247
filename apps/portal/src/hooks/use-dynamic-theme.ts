@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTheme } from 'next-themes';
-import { useTenantBranding } from './use-tenant-branding';
+import { useTenantBranding, type TenantBranding } from './use-tenant-branding';
+import { V2_BRAND_VAR_NAMES, v2BrandVars } from '@/lib/appearance/color';
 
 // Default theme colors - must match index.css
 const DEFAULT_COLORS = {
@@ -112,10 +113,32 @@ function generateColorVariants(hex: string) {
   };
 }
 
-export function useDynamicTheme() {
-  const { branding } = useTenantBranding();
+/**
+ * Write the v2 brand parameters onto <body>, or clear them.
+ *
+ * The v2 theme is the `v2-theme` class on <body>, and styles/v2-theme.css
+ * redeclares every colour token there. A token set inline on <html>, as the v1
+ * path below does, is inherited by <body> and then overridden by that class,
+ * so it never reaches a v2 element. The stylesheet instead derives its
+ * brand-coloured tokens from `--brand-h` / `--brand-s` / `--brand-l`, and this
+ * sets only those (plus the few extras `v2BrandVars` decides) on <body> itself.
+ * Nothing else: background, card, muted and the sidebar ground stay the
+ * stylesheet's, and nothing is cached for the v1 anti-flash script — the root
+ * layout paints these same vars on first byte instead.
+ */
+export function applyV2BrandVars(body: HTMLElement, hex: string | null | undefined) {
+  for (const name of V2_BRAND_VAR_NAMES) body.style.removeProperty(name);
+  const vars = v2BrandVars(hex);
+  if (!vars) return;
+  for (const [name, value] of Object.entries(vars)) body.style.setProperty(name, value);
+}
+
+export function useDynamicTheme({ v2Theme = false }: { v2Theme?: boolean } = {}) {
+  const { branding, hasBrandingData } = useTenantBranding();
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  // Always false for v1, so the v1 effect below re-runs on exactly what it did.
+  const v2Ready = v2Theme && hasBrandingData;
 
   // Wait for client-side mount to avoid hydration mismatch
   useEffect(() => {
@@ -125,6 +148,19 @@ export function useDynamicTheme() {
   useEffect(() => {
     // Only run on client after mount to avoid hydration mismatch
     if (!mounted || !branding) return;
+
+    if (v2Theme) {
+      // Wait for the real row. Until it arrives `branding` is a placeholder
+      // built from the tenant context, whose missing colour defaults to the
+      // v1 platform green; applying that would repaint the page green and back
+      // between the server's first paint and the fetch. The Appearance try-on
+      // writes real query data, so it passes straight through.
+      if (v2Ready) {
+        applyV2BrandVars(document.body, branding.light_primary_color || branding.primary_color);
+      }
+      applyDocumentMeta(branding);
+      return;
+    }
 
     const root = document.documentElement;
     const isDarkMode = resolvedTheme === 'dark';
@@ -254,54 +290,7 @@ export function useDynamicTheme() {
       root.style.setProperty('--sidebar-foreground', defaults.sidebarForeground);
     }
 
-    // Update document title
-    if (branding.meta_title) {
-      document.title = branding.meta_title;
-    } else if (branding.app_name) {
-      document.title = `${branding.app_name} - Portal`;
-    }
-
-    // Update favicon if provided
-    if (branding.favicon_url) {
-      const link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
-      if (link) {
-        link.href = branding.favicon_url;
-      } else {
-        const newLink = document.createElement('link');
-        newLink.rel = 'icon';
-        newLink.href = branding.favicon_url;
-        document.head.appendChild(newLink);
-      }
-    }
-
-    // Update meta description
-    if (branding.meta_description) {
-      let metaDesc = document.querySelector('meta[name="description"]') as HTMLMetaElement;
-      if (metaDesc) {
-        metaDesc.content = branding.meta_description;
-      } else {
-        metaDesc = document.createElement('meta');
-        metaDesc.name = 'description';
-        metaDesc.content = branding.meta_description;
-        document.head.appendChild(metaDesc);
-      }
-    }
-
-    // Update OG meta tags
-    if (branding.meta_title) {
-      updateMetaTag('og:title', branding.meta_title);
-      updateMetaTag('twitter:title', branding.meta_title);
-    }
-
-    if (branding.meta_description) {
-      updateMetaTag('og:description', branding.meta_description);
-      updateMetaTag('twitter:description', branding.meta_description);
-    }
-
-    if (branding.og_image_url) {
-      updateMetaTag('og:image', branding.og_image_url);
-      updateMetaTag('twitter:image', branding.og_image_url);
-    }
+    applyDocumentMeta(branding);
 
     // Cache CSS variables for instant load on next visit
     try {
@@ -316,9 +305,61 @@ export function useDynamicTheme() {
       // localStorage might not be available
     }
 
-  }, [branding, resolvedTheme, mounted]);
+  }, [branding, resolvedTheme, mounted, v2Theme, v2Ready]);
 
   return { branding, mounted };
+}
+
+/** Title, favicon, description and share tags — the same for both themes. */
+function applyDocumentMeta(branding: TenantBranding) {
+  // Update document title
+  if (branding.meta_title) {
+    document.title = branding.meta_title;
+  } else if (branding.app_name) {
+    document.title = `${branding.app_name} - Portal`;
+  }
+
+  // Update favicon if provided
+  if (branding.favicon_url) {
+    const link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
+    if (link) {
+      link.href = branding.favicon_url;
+    } else {
+      const newLink = document.createElement('link');
+      newLink.rel = 'icon';
+      newLink.href = branding.favicon_url;
+      document.head.appendChild(newLink);
+    }
+  }
+
+  // Update meta description
+  if (branding.meta_description) {
+    let metaDesc = document.querySelector('meta[name="description"]') as HTMLMetaElement;
+    if (metaDesc) {
+      metaDesc.content = branding.meta_description;
+    } else {
+      metaDesc = document.createElement('meta');
+      metaDesc.name = 'description';
+      metaDesc.content = branding.meta_description;
+      document.head.appendChild(metaDesc);
+    }
+  }
+
+  // Update OG meta tags
+  if (branding.meta_title) {
+    updateMetaTag('og:title', branding.meta_title);
+    updateMetaTag('twitter:title', branding.meta_title);
+  }
+
+  if (branding.meta_description) {
+    updateMetaTag('og:description', branding.meta_description);
+    updateMetaTag('twitter:description', branding.meta_description);
+  }
+
+  if (branding.og_image_url) {
+    updateMetaTag('og:image', branding.og_image_url);
+    updateMetaTag('twitter:image', branding.og_image_url);
+  }
 }
 
 function updateMetaTag(property: string, content: string) {

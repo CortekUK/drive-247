@@ -13,7 +13,7 @@ import { parseLocalDate } from "@/lib/date-utils";
 import Link from "next/link";
 import { useState, useCallback } from "react";
 import { useTenant } from "@/contexts/TenantContext";
-import { isAreaHidden, isLeanTenant } from "@/lib/lean-areas";
+import { useIsAreaHidden, useIsLean } from "@/lib/lean-context";
 import { InsurancesTeachingEmptyState } from "@/components/empty-states/lean-empty-states";
 import { useForcedEmptyState } from "@/hooks/use-forced-empty-state";
 import { Input } from "@/components/ui/input";
@@ -39,6 +39,7 @@ import {
 } from "@/components/rentals/inshur-coverage-block";
 import { useV2 } from "@/lib/v2-context";
 import { InsurancePoliciesTableV2 } from "@/components/insurance-v2/insurance-policies-table-v2";
+import { HEADER_ACTIONS_V2, HEADER_PRIMARY_V2, HeaderIconButton } from "@/components/shared/header-icon-button-v2";
 
 /** Three providers now share this list, so a boolean discriminator no longer
  *  works: `uploaded` documents can name Bonzah as their carrier while not being
@@ -158,7 +159,10 @@ export default function InsurancesList() {
   // INSHUR row, ID-card button, mode chip and status badge in the table below.
   // Nothing INSHUR-shaped can reach a lean tenant's screen while it is false.
   const inshur = useInshur();
-  const inshurEnabled = inshur.enabled === true && !isAreaHidden("inshur", tenantSlug);
+  // Hoisted: `useIsAreaHidden` is a hook, and as the right operand of an &&
+  // it would be a CONDITIONAL hook call.
+  const inshurHidden = useIsAreaHidden("inshur");
+  const inshurEnabled = inshur.enabled === true && !inshurHidden;
 
   const {
     data: inshurCoverage = [],
@@ -283,7 +287,7 @@ export default function InsurancesList() {
   // `devForceEmpty` is the /dev preview switch (lib/dev-overrides.ts): inert
   // outside development, and INSIDE the slug gate so it reaches nobody else.
   const devForceEmpty = useForcedEmptyState("insurances");
-  const teachEmptyInsurances = isLeanTenant(tenantSlug) && (allInsurances.length === 0 || devForceEmpty);
+  const teachEmptyInsurances = useIsLean() && (allInsurances.length === 0 || devForceEmpty);
 
   const filteredInsurances = allInsurances.filter((doc) => {
     const needle = searchQuery.toLowerCase();
@@ -647,7 +651,32 @@ export default function InsurancesList() {
               : "Manage customer insurance documents and Bonzah policies"}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        {/* v2: one labelled button (Generate Insurance), every other control a
+            32px round icon, and the cluster sits on the subtitle line
+            (HEADER_ACTIONS_V2 / HEADER_PRIMARY_V2, team lead Sep 15-16 2026).
+            v1 keeps its outline Buttons and classes byte for byte. */}
+        <div className={`flex items-center gap-2${v2Chrome ? ` ${HEADER_ACTIONS_V2}` : ""}`}>
+          {v2Chrome ? (
+            <>
+              {allInsurances.length > 0 && (
+                <HeaderIconButton label="Insurance analytics" href="/insurances/analytics">
+                  <BarChart3 className="h-4 w-4" />
+                </HeaderIconButton>
+              )}
+              <HeaderIconButton
+                label="Export PDFs"
+                onClick={handleDownloadAll}
+                disabled={isDownloadingAll || allInsurances.length === 0}
+              >
+                {isDownloadingAll ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4" />
+                )}
+              </HeaderIconButton>
+            </>
+          ) : (
+            <>
           {allInsurances.length > 0 && (
             <Link href="/insurances/analytics" className="shrink-0">
               <Button variant="outline" size="icon" className="border-primary/20 hover:border-primary/40 hover:bg-primary/5">
@@ -668,13 +697,15 @@ export default function InsurancesList() {
             )}
             Export PDFs
           </Button>
+            </>
+          )}
           {/* Selling is blocked in Bonzah test mode — a sandbox policy is not real
               cover. Existing policies below stay fully viewable/downloadable. */}
           <span title={bonzahBlocked ?? undefined} className={bonzahBlocked ? 'cursor-not-allowed' : undefined}>
             <Button
               onClick={() => setGenerateOpen(true)}
               disabled={!!bonzahBlocked}
-              className="bg-gradient-primary"
+              className={`bg-gradient-primary${v2Chrome ? ` ${HEADER_PRIMARY_V2}` : ""}`}
             >
               <Plus className="h-4 w-4 mr-2" />
               Generate Insurance

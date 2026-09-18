@@ -51,7 +51,7 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "@/stores/auth-store";
-import { isTestModeUiHidden } from "@/lib/lean-areas";
+import { useIsTestModeUiHidden } from "@/lib/lean-context";
 import { Button } from "@/components/ui-v2/button";
 import { Checkbox } from "@/components/ui-v2/checkbox";
 import {
@@ -170,7 +170,7 @@ export default function SquarePanel({ tenant, onClose }: IntegrationPanelProps) 
   // Lean tenants have no test/live concept, so no mode row. Presentation only —
   // nothing in this file reads `square_mode` for anything but the two calls
   // that must carry it.
-  const hideModeUi = isTestModeUiHidden(tenant.slug);
+  const hideModeUi = useIsTestModeUiHidden();
 
   const verdict = useMemo(() => deriveSquareVerdict(status.data), [status.data]);
   const live = verdict.rail === "square" && !!verdict.connection;

@@ -3,7 +3,7 @@
 import { forwardRef, useImperativeHandle, useRef } from "react";
 import { TraxSupportDialog } from "./support/TraxSupportDialog";
 import { useTenant } from "@/contexts/TenantContext";
-import { useV2 } from "@/lib/v2-context";
+import { useV2, usePortalOnV2 } from "@/lib/v2-context";
 import { isV2 } from "@/lib/v2";
 
 /**
@@ -26,6 +26,7 @@ export const TraxLauncher = forwardRef<TraxLauncherHandle>(function TraxLauncher
   const hostRef = useRef<HTMLDivElement>(null);
   const { tenant } = useTenant();
   const chrome = useV2("chrome");
+  const onV2 = usePortalOnV2();
 
   useImperativeHandle(
     ref,
@@ -42,7 +43,11 @@ export const TraxLauncher = forwardRef<TraxLauncherHandle>(function TraxLauncher
     [],
   );
 
-  if (!chrome || !isV2('chrome',tenant?.slug)) return null;
+  // TWO terms, ANDed, as before: `chrome` says the v2 chrome is what is
+  // rendering, and the second says this tenant is on the rollout. Only the
+  // second gains the column — a tenant switched over by `portal_experience`
+  // is in no slug list, so without `onV2` the AND would refuse it.
+  if (!chrome || !(onV2 || isV2('chrome', tenant?.slug))) return null;
 
   return (
     <div ref={hostRef} className="contents [&>button]:hidden">

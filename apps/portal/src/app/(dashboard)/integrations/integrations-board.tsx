@@ -152,8 +152,8 @@ function IntegrationCard({
           "absolute right-3 top-3 z-10 rounded-full p-1.5 transition-colors",
           "focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
           pinned
-            ? "text-primary hover:bg-primary/10"
-            : "text-muted-foreground/30 hover:bg-muted hover:text-foreground",
+            ? "text-primary hover:bg-primary/10 dark:text-[hsl(var(--v2-link,var(--primary)))] dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]"
+            : "text-muted-foreground/30 hover:bg-primary/10 hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-[hsl(var(--v2-link,var(--primary)))]",
         )}
       >
         <Pin className={cn("size-4", pinned && "fill-current")} />

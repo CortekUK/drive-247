@@ -10,7 +10,7 @@ import { Link2, CheckCircle2, Loader2, ExternalLink, TestTube2, Zap } from 'luci
 import { toast } from '@/hooks/use-toast';
 import { useTenant } from '@/contexts/TenantContext';
 import { useAuthStore } from '@/stores/auth-store';
-import { isTestModeUiHidden } from '@/lib/lean-areas';
+import { useIsTestModeUiHidden } from '@/lib/lean-context';
 
 interface OwnStripeStatus {
   id: string;
@@ -28,10 +28,10 @@ interface OwnStripeStatus {
  */
 export function OwnStripeSettings() {
   const queryClient = useQueryClient();
-  const { tenant: tenantContext, tenantSlug } = useTenant();
+  const { tenant: tenantContext } = useTenant();
   // Lean tenants have no test modes — the Test/Live chip is a concept they
   // do not have. UI only: stripe_mode itself is untouched.
-  const hideTestModeUi = isTestModeUiHidden(tenantSlug);
+  const hideTestModeUi = useIsTestModeUiHidden();
   // Not `!hideTestModeUi`: the lean tenants that hide the Test/Live chip are exactly
   // the ones a test connection is needed for, so that gate would hide it everywhere
   // it matters. The edge function applies the real authorization either way.
@@ -174,7 +174,7 @@ export function OwnStripeSettings() {
               No Stripe account connected for {mode} mode yet. Connecting takes about 2 minutes —
               sign in to your existing Stripe account or create one during the process.
             </p>
-            <Button onClick={startOAuth} disabled={connecting}>
+            <Button onClick={() => startOAuth()} disabled={connecting}>
               {connecting ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Redirecting to Stripe…

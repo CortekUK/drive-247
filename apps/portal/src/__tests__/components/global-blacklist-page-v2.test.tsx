@@ -135,6 +135,26 @@ describe("GlobalBlacklistPageV2", () => {
     expect(search.reg?.placeholder).toBe("Search by email, company or reason");
   });
 
+  it("Total blocks adds only real counts: a negative or fractional count is left out", () => {
+    render({
+      blacklist: [
+        { ...ROWS[0], id: "p", blocked_tenant_count: 5 },
+        { ...ROWS[0], id: "z", blocked_tenant_count: 0 },
+        { ...ROWS[0], id: "n", blocked_tenant_count: -3 },
+        { ...ROWS[0], id: "f", blocked_tenant_count: 2.5 },
+      ],
+    });
+    // 4 customers; 5 + 0 = 5 blocks (-3 and 2.5 ignored); all four share row a's recent date.
+    expect(tiles()).toEqual(["4", "5", "4"]);
+  });
+
+  it("starts on the top bar's search line: the wrapper is not centred", () => {
+    render();
+    const wrapper = container.querySelector("[data-blacklist-view]")!;
+    expect(wrapper.className).toContain("max-w-[1160px]");
+    expect(wrapper.className.split(/\s+/)).not.toContain("mx-auto");
+  });
+
   it("search narrows by company name", () => {
     render({ searchTerm: "kedic" });
     expect(container.querySelector('[data-testid="table"]')?.textContent).toBe("a@example.com");
@@ -155,10 +175,12 @@ describe("GlobalBlacklistPageV2", () => {
     expect(container.querySelector('[data-testid="table"]')).not.toBeNull();
   });
 
-  it("Back goes to the settings index, not the ?tab=blacklist loop", () => {
+  it("has no breadcrumb (Settings in the nav is the way back) and a bold title", () => {
     render();
-    const back = Array.from(container.querySelectorAll("nav button")).find((b) => b.textContent === "Settings")!;
-    act(() => (back as HTMLButtonElement).click());
-    expect(nav.push).toHaveBeenCalledWith("/settings");
+    expect(container.querySelector('nav[aria-label="Breadcrumb"]')).toBeNull();
+    const title = container.querySelector("h1")!;
+    expect(title.textContent).toBe("Global blacklist");
+    expect(title.className).toContain("font-bold");
+    expect(nav.push).not.toHaveBeenCalled();
   });
 });

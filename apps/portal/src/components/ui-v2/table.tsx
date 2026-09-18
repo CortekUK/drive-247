@@ -53,11 +53,15 @@ function TableFooter({ className, ...props }: React.ComponentProps<"tfoot">) {
 }
 
 function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
+  // One `hover:` class and no `dark:hover:` twin, so a call site's own
+  // `hover:bg-transparent` (list headers) still replaces it in tailwind-merge.
+  // `--v2-row-hover` / `--v2-hover` are the purple tints under `.v2-theme`;
+  // elsewhere each falls back to the old `muted/50` / `muted`.
   return (
     <tr
       data-slot="table-row"
       className={cn(
-        "border-b transition-colors hover:bg-muted/50 has-[[aria-expanded=true]]:bg-muted/50 data-[state=selected]:bg-muted",
+        "border-b transition-colors hover:bg-[hsl(var(--v2-row-hover,var(--muted)_/_0.5))] has-[[aria-expanded=true]]:bg-[hsl(var(--v2-row-hover,var(--muted)_/_0.5))] data-[state=selected]:bg-[hsl(var(--v2-hover,var(--muted)))]",
         className
       )}
       {...props}

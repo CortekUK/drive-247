@@ -19,6 +19,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, ImageIcon, Loader2, ShieldCheck, Upload } from "lucide-react";
+import { useYieldToSystemAnnouncements } from "@/lib/announcements/system-priority";
+import { useV2 } from "@/lib/v2-context";
 
 /**
  * Logo upload limits. The `company-logos` bucket has NO server-side MIME or
@@ -80,8 +82,24 @@ interface ReminderFlags {
  * the portal until Bonzah / logo / Stripe Connect are actually done. "Don't
  * show me again" dismisses it permanently (localStorage). Both keys are
  * per-tenant, so switching tenants re-evaluates from that tenant's own state.
+ *
+ * It opens by itself, so a SYSTEM announcement dialog goes first
+ * (lib/announcements/system-priority.ts): while one is due or open this stays
+ * closed, and if it is already open and untouched it closes WITHOUT snoozing
+ * (`onOpenChange` never runs for a close the operator did not make) and comes
+ * back once the announcement is closed. Once the operator has clicked or typed
+ * inside it, it stays, and the announcement waits for it.
+ *
+ * V2 NEVER SEES IT. On v2 the nudge comes back as a system announcement, which
+ * another session owns — so this component stays whole for the other tenants
+ * and simply is not mounted there. The gate is in the wrapper below rather than
+ * an early return in here, so a v2 tenant runs none of these hooks: no
+ * `setup-reminder` query, no subscription or migration read, and nothing
+ * written to that tenant's `setup-reminder-dismissed-*` / `-snoozed-*` keys.
+ * If the announcement version is ever pulled, this is still exactly the dialog
+ * it was.
  */
-export function SetupReminderDialog() {
+function SetupReminderDialogV1() {
   const router = useRouter();
   const { tenant, refetchTenant } = useTenant();
   const queryClient = useQueryClient();
@@ -300,7 +318,7 @@ export function SetupReminderDialog() {
     });
   }
 
-  const open =
+  const wantsOpen =
     // Paywall interlock — never render alongside SubscriptionGateDialog.
     isResolved &&
     isSubscribed &&
@@ -318,6 +336,7 @@ export function SetupReminderDialog() {
     flags.tenantId === tenantId &&
     !flags.permanentlyDismissed &&
     flags.dueBySnooze;
+  const { show: open, engage } = useYieldToSystemAnnouncements(wantsOpen);
 
   // sessionStorage, so it silences the reminder for THIS portal session only —
   // next time the tenant opens the portal it shows again, until the tasks are
@@ -354,7 +373,11 @@ export function SetupReminderDialog() {
           centers via translate and locks body scroll, so the overflow clips BOTH
           ends — taking the close button and "Don't show me again" with it and
           leaving the tenant unable to dismiss the dialog at all. */}
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
+      <DialogContent
+        className="max-h-[85vh] overflow-y-auto sm:max-w-xl"
+        onPointerDownCapture={engage}
+        onKeyDownCapture={engage}
+      >
         <DialogHeader>
           <div className="mb-1 flex h-11 w-11 items-center justify-center rounded-full bg-primary/10">
             <ShieldCheck className="h-5 w-5 text-primary" />
@@ -452,4 +475,23 @@ export function SetupReminderDialog() {
       </DialogContent>
     </Dialog>
   );
+}
+
+/**
+ * The mount point, and the v2 gate.
+ *
+ * `(dashboard)/layout.tsx` mounts this unconditionally, so the gate has to live
+ * here. It is a wrapper rather than an early return inside the dialog because
+ * "not shown" has to mean "nothing ran": returning null after the hooks would
+ * still issue every query and still let the dialog's own effects touch that
+ * tenant's localStorage/sessionStorage keys.
+ *
+ * `chrome` is the area the rest of the layout's v2 branches read, and it is
+ * true both for a slug in `V2_AREAS` and for `portal_experience = 'v2'`, so a
+ * self-serve signup is covered without being in any list.
+ */
+export function SetupReminderDialog() {
+  const v2Chrome = useV2("chrome");
+  if (v2Chrome) return null;
+  return <SetupReminderDialogV1 />;
 }

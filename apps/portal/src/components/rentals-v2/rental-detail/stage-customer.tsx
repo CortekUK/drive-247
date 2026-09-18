@@ -43,7 +43,7 @@ import {
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
-import { isAreaHidden } from "@/lib/lean-areas";
+import { useIsAreaHidden } from "@/lib/lean-context";
 import { formatVerificationProvider } from "@/lib/verification-provider";
 import { BlurredImage } from "@/components/ui/blurred-image";
 import { Button } from "@/components/ui-v2/button";
@@ -315,7 +315,7 @@ export function StageCustomer({ detail }: StageProps) {
   // CheckMyDriver is hidden from lean tenants, and the hook gates its own query
   // on that — so an undefined row here means either "not offered" or "not
   // started", and only `cmdHidden` tells the two apart.
-  const cmdHidden = isAreaHidden("cmd", tenantSlug);
+  const cmdHidden = useIsAreaHidden("cmd");
   const { data: cmd } = useCmdVerification(customerId ?? undefined);
 
   const state = deriveVerificationState(verification, customer?.identity_verification_status);

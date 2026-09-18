@@ -180,7 +180,7 @@ export function PendingBookingsTableV2({
                     give way first. */}
                 <ListCell>
                   {reg && makeModel ? (
-                    <span className="flex max-w-full items-center gap-1.5" title={`${reg} • ${makeModel}`}>
+                    <span className="flex max-w-full items-center justify-center gap-1.5" title={`${reg} • ${makeModel}`}>
                       <span className={`${LIST_CLASSES.text} shrink-0 tabular-nums`}>{reg}</span>
                       <span className="min-w-0 truncate text-muted-foreground">{makeModel}</span>
                     </span>

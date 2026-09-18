@@ -1,8 +1,9 @@
 "use client";
 
 /**
- * v2 Settings (northwind): the Pricing rules page. When the monthly rate starts,
- * weekend pricing, and holiday pricing, each with every state an operator can
+ * v2 Settings (northwind): the Custom pricing page (`?tab=pricing`, formerly
+ * "Pricing rules"; the tab key and the manager permission are unchanged). When
+ * the monthly rate starts, weekend pricing, and holiday pricing, each with every state an operator can
  * meet: first load, a failed read, nothing configured, view-only access,
  * unsaved / saving / failed saves, and extreme data (long names, past holidays,
  * huge percentages, 100+ holidays).
@@ -13,7 +14,7 @@
  * does; the dialog now warns when that clears a holiday's vehicle exclusions.
  */
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { CalendarRange, Loader2, Pencil, Plus, Trash2, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import { Input } from "@/components/ui-v2/input";
@@ -50,7 +51,7 @@ import {
   ListTableHeader,
   useProgressiveRows,
 } from "@/components/shared/list-table-v2";
-import { SettingsField, SettingsPanel, SettingsRow, Unit } from "@/components/settings-v2/settings-kit";
+import { SettingsField, SettingsPanel, SettingsRow, Unit, useSettingsPageSave } from "@/components/settings-v2/settings-kit";
 import {
   SettingsDependencyNotice,
   SettingsEmptyState,
@@ -74,6 +75,7 @@ import {
   BLOCKED_SAVE_MESSAGE,
   EMPTY_HOLIDAY_FORM,
   WEEKEND_DAY_LIMIT,
+  describeHolidayDeleteError,
   excludedVehicleCount,
   formatHolidayDates,
   formatPercent,
@@ -123,7 +125,7 @@ export interface PricingRulesV2Props {
 
 export function PricingRulesV2({ canEdit, registerSave, onDirtyChange, monthlyTier }: PricingRulesV2Props) {
   return (
-    <div className="pointer-events-auto space-y-8">
+    <div className="pointer-events-auto space-y-10">
       {monthlyTier && <MonthlyTierSection {...monthlyTier} canEdit={canEdit} registerSave={registerSave} />}
       <WeekendPricingSection canEdit={canEdit} registerSave={registerSave} onDirtyChange={onDirtyChange} />
       <HolidayPricingSection canEdit={canEdit} />
@@ -146,62 +148,72 @@ function MonthlyTierSection({
 }: MonthlyTierProps & { canEdit: boolean; registerSave?: RegisterSectionSave }) {
   const saved = savedValue ?? 30;
   const dirty = read.hasData && Number(value) !== Number(saved);
+  const pageSave = useSettingsPageSave();
   const save = useSectionSave({
     sectionKey: "pricing-monthly-tier",
     isDirty: dirty,
     registerSave,
     signature: String(value),
     run: onSave,
+    discard: () => onChange(Number(saved)),
   });
   const options = [30, 31].includes(Number(value)) ? [30, 31] : [30, 31, Number(value)];
 
   return (
-    <ReadGate read={read} thing="monthly pricing" rows={1}>
-      <SettingsReadOnlyFieldset readOnly={!canEdit}>
-        <SettingsPanel>
-          <SettingsRow
-            label="Monthly rate starts at"
-            description="Rentals this long or longer use the monthly rate. Also used for mileage allowance and extensions."
-            note={
-              canEdit && save.status !== "idle" ? (
-                <SettingsSaveState
-                  status={save.status}
-                  error={save.error}
-                  onRetry={save.retry}
-                  onDiscard={() => onChange(Number(saved))}
-                />
-              ) : undefined
-            }
-          >
-            <Select value={String(value)} onValueChange={(next) => onChange(parseInt(next))}>
-              <SelectTrigger className="w-28" aria-label="Monthly rate starts at">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {options.map((days) => (
-                  <SelectItem key={days} value={String(days)}>
-                    {days} days
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {canEdit && (
-              <Button
-                type="button"
-                size="sm"
-                variant={dirty ? "default" : "outline"}
-                disabled={!dirty || save.saving}
-                aria-busy={save.saving || undefined}
-                onClick={save.trigger}
-              >
-                {save.saving && <Loader2 className="animate-spin" data-icon="inline-start" />}
-                Save
-              </Button>
-            )}
-          </SettingsRow>
-        </SettingsPanel>
-      </SettingsReadOnlyFieldset>
-    </ReadGate>
+    <section aria-labelledby="v2-monthly-rate" className="space-y-3">
+      <SectionHeader
+        id="v2-monthly-rate"
+        title="Monthly rate"
+        description="When a rental is long enough to be priced at your monthly rate instead of the daily or weekly one."
+      />
+      <ReadGate read={read} thing="monthly pricing" rows={1}>
+        <SettingsReadOnlyFieldset readOnly={!canEdit}>
+          <SettingsPanel>
+            <SettingsRow
+              label="Monthly rate starts at"
+              description="Rentals this long or longer use the monthly rate. Also used for mileage allowance and extensions."
+              note={
+                // Inside the page's save bar only a failed save is said here.
+                canEdit && (pageSave ? save.status === "error" : save.status !== "idle") ? (
+                  <SettingsSaveState
+                    status={save.status}
+                    error={save.error}
+                    onRetry={pageSave ? undefined : save.retry}
+                    onDiscard={pageSave ? undefined : () => onChange(Number(saved))}
+                  />
+                ) : undefined
+              }
+            >
+              <Select value={String(value)} onValueChange={(next) => onChange(parseInt(next))}>
+                <SelectTrigger className="w-28" aria-label="Monthly rate starts at">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {options.map((days) => (
+                    <SelectItem key={days} value={String(days)}>
+                      {days} days
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {canEdit && !pageSave && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={dirty ? "default" : "outline"}
+                  disabled={!dirty || save.saving}
+                  aria-busy={save.saving || undefined}
+                  onClick={save.trigger}
+                >
+                  {save.saving && <Loader2 className="animate-spin" data-icon="inline-start" />}
+                  Save
+                </Button>
+              )}
+            </SettingsRow>
+          </SettingsPanel>
+        </SettingsReadOnlyFieldset>
+      </ReadGate>
+    </section>
   );
 }
 
@@ -254,6 +266,12 @@ function WeekendPricingSection({
   const percentNote = percentIssue ?? weekendOffNote(percent);
   const daysNote = weekendDaysIssue(percent, days);
 
+  const discard = () => {
+    setPercent(settings.weekend_surcharge_percent || "");
+    setDays(settings.weekend_days || [6, 0]);
+    setStack(settings.stack_surcharges ?? false);
+  };
+
   const save = useSectionSave({
     sectionKey: "pricing-weekend",
     isDirty: dirty,
@@ -267,13 +285,8 @@ function WeekendPricingSection({
         stack_surcharges: stack,
       });
     },
+    discard,
   });
-
-  const discard = () => {
-    setPercent(settings.weekend_surcharge_percent || "");
-    setDays(settings.weekend_days || [6, 0]);
-    setStack(settings.stack_surcharges ?? false);
-  };
 
   const toggleDay = (day: number) =>
     setDays((prev) =>
@@ -494,7 +507,7 @@ function HolidayPricingSection({ canEdit }: { canEdit: boolean }) {
               <ListTableHeader>
                 <ListHead>Holiday</ListHead>
                 <ListHead className="hidden w-[30%] sm:table-cell">Dates</ListHead>
-                <ListHead className="w-[6.5rem] sm:w-[16%]">Surcharge</ListHead>
+                <ListHead className="w-[8rem] sm:w-[16%]">Surcharge</ListHead>
                 <ListHead className="hidden w-[12%] md:table-cell">Repeats</ListHead>
                 {canEdit && (
                   <ListHead className="w-[5.5rem] text-right">
@@ -509,7 +522,8 @@ function HolidayPricingSection({ canEdit }: { canEdit: boolean }) {
                   return (
                     <ListRow key={holiday.id}>
                       <ListCell>
-                        <div className="flex min-w-0 items-center gap-2">
+                        {/* Centred like every other v2 cell: a flex row ignores the cell's text-center. */}
+                        <div className="flex min-w-0 items-center justify-center gap-2">
                           <TruncatedText
                             text={holiday.name}
                             className={cn(LIST_CLASSES.identifier, "min-w-0", past && "text-muted-foreground")}
@@ -534,8 +548,11 @@ function HolidayPricingSection({ canEdit }: { canEdit: boolean }) {
                         </span>
                       </ListCell>
                       <ListCell>
-                        <TabularValue className={past ? "text-muted-foreground" : undefined}>
-                          {formatPercent(holiday.surcharge_percent, true)}
+                        {/* Never cut: a percentage missing digits reads as a different
+                            one. Too wide for its column, it wraps at a thousands
+                            separator inside the cell instead of running under Edit. */}
+                        <TabularValue className={cn("max-w-full whitespace-normal", past && "text-muted-foreground")}>
+                          <BreakAtCommas text={formatPercent(holiday.surcharge_percent, true)} />
                         </TabularValue>
                       </ListCell>
                       <ListCell className="hidden md:table-cell">
@@ -704,7 +721,7 @@ function HolidayPricingSection({ canEdit }: { canEdit: boolean }) {
           </AlertDialogHeader>
           {deleteError != null && (
             <p role="alert" className="text-sm text-destructive [overflow-wrap:anywhere]">
-              <span className="font-medium">Couldn&apos;t delete.</span> {describeSaveError(deleteError)}
+              <span className="font-medium">Couldn&apos;t delete.</span> {describeHolidayDeleteError(deleteError)}
             </p>
           )}
           <AlertDialogFooter>
@@ -723,6 +740,25 @@ function HolidayPricingSection({ canEdit }: { canEdit: boolean }) {
         </AlertDialogContent>
       </AlertDialog>
     </section>
+  );
+}
+
+/** "+99,999,999,999.99%" with a line-break opportunity after each comma, so it never splits mid-group. */
+function BreakAtCommas({ text }: { text: string }) {
+  const parts = text.split(",");
+  return (
+    <>
+      {parts.map((part, i) => (
+        <Fragment key={i}>
+          {part}
+          {i < parts.length - 1 && (
+            <>
+              ,<wbr />
+            </>
+          )}
+        </Fragment>
+      ))}
+    </>
   );
 }
 

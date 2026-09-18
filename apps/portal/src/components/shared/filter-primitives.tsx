@@ -48,8 +48,8 @@ export function FilterChip({
         active
           ? color
             ? ""
-            : "border-primary/40 bg-primary/10 text-primary"
-          : "border-border bg-background text-muted-foreground hover:border-primary/30 hover:text-foreground"
+            : "border-primary/40 bg-primary/10 text-primary dark:border-[hsl(var(--v2-link,var(--primary))_/_0.4)] dark:text-[hsl(var(--v2-link,var(--primary)))]"
+          : "border-border bg-transparent text-muted-foreground hover:border-primary/30 hover:bg-primary/5 hover:text-foreground dark:hover:border-[hsl(var(--v2-link,var(--primary))_/_0.3)] dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]"
       )}
     >
       {children}

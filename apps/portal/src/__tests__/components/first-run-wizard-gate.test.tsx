@@ -32,6 +32,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { FirstRunWizard } from '@/components/onboarding/first-run-wizard';
 import { FIRST_RUN_QUESTIONS } from '@/lib/first-run-questions';
+import {
+  __resetSystemAnnouncementPriority,
+  setSystemAnnouncementPriority,
+} from '@/lib/announcements/system-priority';
 
 // ── Test doubles ───────────────────────────────────────────────────────────
 
@@ -101,6 +105,7 @@ afterEach(() => {
   act(() => root.unmount());
   container.remove();
   queryClient.clear();
+  __resetSystemAnnouncementPriority();
 });
 
 const SENTINEL = 'DASHBOARD-BEHIND-THE-WIZARD';
@@ -347,5 +352,65 @@ describe('FirstRunWizard — shown exactly once', () => {
     expect(button('Continue').disabled).toBe(true);
     await answerCurrentStep();
     expect(button('Continue').disabled).toBe(false);
+  });
+});
+
+// ── A system announcement dialog goes first ────────────────────────────────
+
+describe('FirstRunWizard — a system announcement dialog goes first', () => {
+  const tenant = { id: 'northwind-sys', slug: 'northwind' };
+  const priority = (p: 'idle' | 'pending' | 'open') => act(() => setSystemAnnouncementPriority(p));
+
+  it('does not come up while one is due or open, writes nothing, and comes up once it is closed', async () => {
+    priority('pending');
+    const text = await renderFor(tenant);
+    expect(wizardIsUp()).toBe(false);
+    expect(text).toContain(SENTINEL);
+    priority('open');
+    await settle();
+    expect(wizardIsUp()).toBe(false);
+    expect(upsertCount).toBe(0);
+
+    priority('idle');
+    await settle();
+    expect(wizardIsUp()).toBe(true);
+    expect(container.textContent).toContain(FIRST_PROMPT);
+  });
+
+  it('up and untouched when one becomes due: it steps aside, keeping its place and writing nothing, and comes back', async () => {
+    await renderFor(tenant);
+    expect(wizardIsUp()).toBe(true);
+    expect(container.querySelector('[data-first-run-wizard]')!.hasAttribute('data-yields-to-system')).toBe(true);
+    // A step forward by script (no pointer or key went down inside it: still untouched).
+    await answerCurrentStep();
+    await click(button('Continue'));
+    const secondPrompt = FIRST_RUN_QUESTIONS[1].prompt;
+    expect(container.textContent).toContain(secondPrompt);
+
+    priority('pending');
+    await settle();
+    expect(wizardIsUp()).toBe(false);
+    expect(upsertCount).toBe(0);
+    expect(stored.get(tenant.id)).toBeUndefined();
+
+    priority('idle');
+    await settle();
+    expect(wizardIsUp()).toBe(true);
+    expect(container.textContent).toContain(secondPrompt);
+  });
+
+  it('once the operator is answering it (a pointer went down inside), it stays and loses the yield marker', async () => {
+    await renderFor(tenant);
+    const root = container.querySelector<HTMLElement>('[data-first-run-wizard]')!;
+    await act(async () => {
+      root.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    });
+    expect(container.querySelector('[data-first-run-wizard]')!.hasAttribute('data-yields-to-system')).toBe(false);
+    priority('pending');
+    await settle();
+    expect(wizardIsUp()).toBe(true);
+    priority('open');
+    await settle();
+    expect(wizardIsUp()).toBe(true);
   });
 });
