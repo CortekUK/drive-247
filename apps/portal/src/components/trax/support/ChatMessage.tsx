@@ -13,6 +13,7 @@ import { ChatRentalCards } from '@/components/chat/ChatRentalCards';
 import { ChatActionCard, ActionResultBadge } from '@/components/chat/ChatActionCard';
 import { useTenantBranding } from '@/hooks/use-tenant-branding';
 import { PaymentEvidence } from './PaymentEvidence';
+import { AnswerChart, chartable, type AnswerGroup } from "./AnswerChart";
 import type { ChatMessage as ChatMessageType, TraxNavigation } from '@/types/trax-support';
 
 interface ChatMessageProps {
@@ -194,6 +195,7 @@ export function ChatMessage({ message, onConfirmAction, onRejectAction, onNaviga
             {result.status==='verified'&&!result.findings.some(f=>f.blocking)&&result.checks.some(c=>['website_visibility','rental_occupancy','checkout_overlap_precheck'].includes(c))&&<p className="mt-2">No blocker found in the evaluated checks.</p>}
             {!!result.limitations.length && <p className="mt-2 text-muted-foreground">{result.limitations.join(' ')}</p>}
             {Array.isArray(result.data?.paymentCards) && <div className="mt-2"><PaymentEvidence cards={result.data!.paymentCards!} totals={result.data!.totals} explanations={result.data!.explanations} /></div>}
+            {chartable((result.data as {answer?:{groups?:AnswerGroup[]}} | undefined)?.answer?.groups) && <AnswerChart groups={(result.data as unknown as {answer:{groups:AnswerGroup[]}}).answer.groups} caption={(result.data as unknown as {answer?:{definition?:string}}).answer?.definition?.split(". ")[0]} />}
           </div>
         ))}
         {/* The reference and the destination are the server's; nothing here is composed
