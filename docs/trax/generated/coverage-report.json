@@ -438,6 +438,12 @@
       "status": "partially_documented"
     },
     {
+      "route": "/cms/new-website",
+      "source": "apps/portal/src/app/(dashboard)/cms/new-website/page.tsx",
+      "feature": "website",
+      "status": "partially_documented"
+    },
+    {
       "route": "/cms",
       "source": "apps/portal/src/app/(dashboard)/cms/page.tsx",
       "feature": "website",
