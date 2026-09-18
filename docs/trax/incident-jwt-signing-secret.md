@@ -123,3 +123,36 @@ If the old credential is still accepted anywhere, the incident is **open**, rega
 - Restrict access to the session transcript containing the disclosure using whatever controls the platform offers, and treat it as a secret-bearing artefact.
 - Keep this sanitized record as the shareable one. Do not paste the secret into a ticket, a commit message, a chat, or any document — including this one.
 - Reference the value only by where it lives (the Supabase dashboard) and never by content.
+
+---
+
+## 9. Second disclosure, same transcript: a Supabase personal access token
+
+On 2026-09-18, in the same session, the project owner pasted a Supabase **personal
+access token** (`sbp_…`) into the chat in order to authorize a deployment. No value
+is recorded here, and none should be added.
+
+**Why this is more serious than it looks.** A personal access token is scoped to the
+*account*, not to one project. It authenticates the Management API, which can read
+and modify every project the account can reach: run SQL, change configuration,
+read secrets, create and delete projects. It is not limited to `hviqoaokxvlancmftwuo`.
+
+**Required action, independent of everything else in this document:**
+
+1. **Revoke it** — Supabase dashboard → Account → Access Tokens → revoke the token
+   issued on 2026-09-18. Revocation is immediate and breaks nothing that is not
+   already using it.
+2. **Issue a replacement** only if a token is genuinely needed, and keep it in an
+   environment variable or a secret manager. Never in chat, a commit, a ticket, or
+   a script's source.
+3. **Review recent Management API activity** for the account, not just the project,
+   for the period the token existed.
+
+**Preventive note for future deployments.** A deploy does not need a token pasted
+into a conversation. `scripts/trax-deploy.mjs` reads `SUPABASE_ACCESS_TOKEN` from the
+environment precisely so the value never appears in a transcript, a shell history
+or a file.
+
+Both disclosures in this session share one cause: a credential travelling through a
+conversation. The fix in both cases is the same — rotate, then change the path so
+the value never needs to be spoken.
