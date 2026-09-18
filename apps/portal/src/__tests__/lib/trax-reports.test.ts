@@ -5,6 +5,7 @@ import { calendarClock } from '../../../../../supabase/functions/trax-support/su
 import { createBusinessReads, type BusinessDatabase, type BusinessContext } from '../../../../../supabase/functions/trax-support/support/business-query';
 import { generateReport, parseReportRequest, DOWNLOAD_TTL_SECONDS, type ReportStore, type ReportJob, type JobState } from '../../../../../supabase/functions/trax-support/support/report-tools';
 import type { SupportContext, Permission } from '../../../../../supabase/functions/trax-support/support/types';
+import { configuredReports, type ReportDatabase } from '../../../../../supabase/functions/trax-support/support/report-store';
 import { postgrestShim, type Row, type Statement } from '../helpers/postgrest-shim';
 
 /*
@@ -16,8 +17,8 @@ import { postgrestShim, type Row, type Statement } from '../helpers/postgrest-sh
  * with the figures the same call returned.
  *
  * The store is in-memory here. The real one writes to a private bucket and a job
- * table created by docs/trax/pending-migrations/01-trax-report-jobs.sql, which is
- * not applied — so nothing here touches storage or a live database.
+ * table created by docs/trax/pending-migrations/01-trax-report-jobs.sql, applied
+ * 2026-09-18 — but nothing here touches storage or a live database.
  */
 const tenant = '00000000-0000-4000-8000-000000000001';
 const other = '00000000-0000-4000-8000-000000000002';
@@ -256,5 +257,43 @@ describe('what may be asked for', () => {
     const env = { ...context(), reports: undefined } as unknown as BusinessContext & { reports: ReportStore };
     await expect(generateReport({ dataset: 'vehicles', metric: 'vehicle_count', format: 'csv' }, env))
       .rejects.toMatchObject({ code: 'reports_unavailable' });
+  });
+});
+
+/*
+ * Whether reports are offered at all.
+ *
+ * This used to need TRAX_REPORTS=enabled. The flag was the honest default while the
+ * bucket and job table did not exist, but it is not what makes reports safe: the
+ * store refuses honestly when they are missing. These tests pin both halves of that
+ * claim, because the default being wrong is the difference between TRAX producing a
+ * file and TRAX insisting it cannot.
+ */
+describe('report availability', () => {
+  const db = () => ({
+    from: () => ({
+      insert: () => ({ select: () => ({ single: async () => ({ data: null, error: { message: 'relation "trax_report_jobs" does not exist' } }) }) }),
+      update: () => ({ eq: async () => ({ error: null }) }),
+    }),
+    storage: { from: () => ({ upload: async () => ({ error: null }), createSignedUrl: async () => ({ data: null, error: null }) }) },
+  }) as unknown as ReportDatabase;
+
+  it('is offered with no environment variable set at all', () => {
+    expect(configuredReports(db(), () => undefined)).toBeDefined();
+  });
+
+  it('is withheld only by TRAX_REPORTS=disabled, and not by any other value', () => {
+    expect(configuredReports(db(), k => (k === 'TRAX_REPORTS' ? 'disabled' : undefined))).toBeUndefined();
+    for (const value of ['enabled', 'DISABLED', 'false', '0', '']) {
+      expect(configuredReports(db(), k => (k === 'TRAX_REPORTS' ? value : undefined))).toBeDefined();
+    }
+  });
+
+  // The reason the default can be turned around: an environment without the
+  // migration refuses instead of inventing a file, flag or no flag.
+  it('refuses with report_failed when the job table is missing, rather than claiming a file', async () => {
+    const store = configuredReports(db(), () => undefined)!;
+    await expect(store.createJob({ tenantId: tenant, requestedBy: customerA, kind: 'vehicles.vehicle_count', format: 'csv', state: 'queued' }))
+      .rejects.toMatchObject({ code: 'report_failed' });
   });
 });
