@@ -166,6 +166,7 @@ export const CUSTOMERS: Dataset = {
   meaning: 'Every customer record this account holds, including blocked and inactive ones. A customer is a person or company that can hold rentals; counting customers is not counting renters with an open rental.',
   fields: [
     { name: 'status', column: 'status', kind: 'text', label: 'Status', groupable: true, filterable: true, meaning: 'The customer record status (for example active or inactive).' },
+    { name: 'name', column: 'name', kind: 'text', label: 'Name', filterable: true, meaning: 'The customer name as recorded. Contact details are deliberately not readable here.' },
     { name: 'customer_type', column: 'customer_type', kind: 'text', label: 'Type', groupable: true, filterable: true, meaning: 'Individual or company.' },
     { name: 'blocked', column: 'is_blocked', kind: 'boolean', label: 'Blocked', groupable: true, filterable: true },
     { name: 'identity_verification', column: 'identity_verification_status', kind: 'enum', values: ['unverified', 'pending', 'verified', 'rejected'], label: 'Identity verification', groupable: true, filterable: true },
@@ -191,6 +192,8 @@ export const PAYMENTS: Dataset = {
   meaning: 'Payment records as Drive247 stores them. The collected metric counts only money the application treats as received — not authorizations waiting to be captured, and net of refunds recorded against the same payment. It is not a Stripe balance and not an amount owed.',
   fields: [
     { name: 'status', column: 'status', kind: 'enum', values: ['Applied', 'Credit', 'Partial', 'Reversed', 'Pending', 'Completed', 'Refunded', 'Partial Refund'], label: 'Status', groupable: true, filterable: true },
+    { name: 'payment_date', column: 'payment_date', kind: 'date', label: 'Paid on', filterable: true },
+    { name: 'amount', column: 'amount', kind: 'money', label: 'Amount', meaning: 'The recorded amount of this payment, before any refund against it.' },
     { name: 'payment_type', column: 'payment_type', kind: 'text', label: 'Type', groupable: true, filterable: true },
     CUSTOMER_REF,
     RENTAL_REF,

@@ -270,7 +270,17 @@ export function parseSpec(input: unknown): QuerySpec {
     }
     const raw = args.period as Record<string, unknown>;
     onlyKeys(raw, ['basis', 'from', 'to', 'preset']);
-    const basis = dataset.dateBases.find((b) => b.name === raw.basis);
+    /*
+     * An omitted basis takes the dataset's primary one; a WRONG one still refuses.
+     *
+     * Requiring it meant "payments last month" had to know that payments are dated
+     * by payment_date, so the model guessed "business" and the question failed over
+     * a word rather than over anything about the data. The basis actually used is
+     * stated in the answer, so a default is disclosed rather than assumed — but a
+     * basis that was asked for and does not exist is still an error, because that
+     * is a different date and silently substituting one would change the figure.
+     */
+    const basis = raw.basis == null ? dataset.dateBases[0] : dataset.dateBases.find((b) => b.name === raw.basis);
     if (!basis) throw new SupportError('invalid_input', `${dataset.name} has no "${String(raw.basis)}" date basis. Use one of: ${dataset.dateBases.map((b) => b.name).join(', ')}.`);
     if (raw.preset != null && !PRESETS.includes(String(raw.preset) as Preset)) throw new SupportError('invalid_input', `"${String(raw.preset)}" is not a supported period. Use one of: ${PRESETS.join(', ')}.`);
     for (const key of ['from', 'to'] as const) if (raw[key] != null && !DATE.test(String(raw[key]))) throw new SupportError('invalid_input', 'Dates use YYYY-MM-DD.');

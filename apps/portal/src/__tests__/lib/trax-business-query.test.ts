@@ -407,3 +407,46 @@ describe('listing records', () => {
     expect(() => parseListSpec({ dataset: 'rentals', limit: 500 })).toThrow(/between 1 and 25/);
   });
 });
+
+/*
+ * The catalog must describe itself correctly.
+ *
+ * listFields was written by hand against remembered field names, and two of them
+ * did not exist: `payment_date` is a date BASIS rather than a field, and `amount`
+ * and customer `name` were not in the catalog at all. Nothing caught it, so the
+ * listing compiled a select over columns the table did not expose and every
+ * payments listing failed with "the live read failed" — a message that blames the
+ * database for a typo in this file.
+ */
+describe('catalog integrity', () => {
+  for (const dataset of BUSINESS_CATALOG.datasets.filter((d) => d.listFields?.length)) {
+    it(`${dataset.name}: every listed field exists and is readable`, () => {
+      for (const name of dataset.listFields!) {
+        const field = dataset.fields.find((f) => f.name === name);
+        expect(field, `${dataset.name}.listFields names "${name}", which is not a field of that dataset`).toBeDefined();
+        // A listing selects this column by name, so it has to be a real column.
+        expect(typeof field!.column).toBe('string');
+        expect(field!.column.length).toBeGreaterThan(0);
+      }
+    });
+  }
+
+  it('every dataset a listing offers can actually be listed', () => {
+    const listable = BUSINESS_CATALOG.datasets.filter((d) => d.listFields?.length).map((d) => d.name);
+    expect(listable).toEqual(expect.arrayContaining(['rentals', 'vehicles', 'customers', 'payments']));
+  });
+});
+
+describe('a period without a basis', () => {
+  it('uses the dataset’s primary date and reports which one it used', async () => {
+    const result = await runBusinessQuery(parseSpec({ dataset: 'rentals', metric: 'rental_count', period: { preset: 'last_month' } }), context());
+    // Stated, not assumed: the answer carries the date it actually filtered on.
+    expect(answerOf(result).period?.from).toBe('2026-08-01');
+    expect((result.data!.answer as { period: { basis: string } }).period.basis).toBe('start_date');
+  });
+
+  it('still refuses a basis that was asked for and does not exist', () => {
+    expect(() => parseSpec({ dataset: 'rentals', metric: 'rental_count', period: { basis: 'business', preset: 'last_month' } }))
+      .toThrow(/has no "business" date basis. Use one of: start_date/);
+  });
+});
