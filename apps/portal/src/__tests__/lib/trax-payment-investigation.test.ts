@@ -228,7 +228,9 @@ describe('read-only Stripe evidence adapter',()=>{
 describe('Supabase secret bridge (trax-stripe-read)',()=>{
   const route:PaymentRoute={platform:'uae',mode:'live',accountId:'acct_TestA1234',accountType:'standard',basis:'connected_before_payment',exclusive:true,strictOwnership:false};
   const serviceKey='service-role-offline',endpoint='https://project.offline/functions/v1/trax-stripe-read',signal=new AbortController().signal;
-  const secrets:Record<string,string>={SUPABASE_SERVICE_ROLE_KEY:serviceKey,STRIPE_UAE_LIVE_SECRET_KEY:'sk_live_offline'};
+  // The restricted key is the only credential TRAX reads with; the platform secret is
+  // present here precisely to prove the bridge does not reach for it.
+  const secrets:Record<string,string>={SUPABASE_SERVICE_ROLE_KEY:serviceKey,TRAX_STRIPE_READ_UAE_LIVE_KEY:'rk_live_offline',STRIPE_UAE_LIVE_SECRET_KEY:'sk_live_offline'};
   const session={object:'checkout.session',id:'cs_live_A1',livemode:true,status:'complete',payment_intent:'pi_A1',metadata:{tenant_id:tenantA,rental_id:rentalA}};
   const intent=(metadata:Record<string,string>={tenant_id:tenantA})=>({object:'payment_intent',id:'pi_A1',livemode:true,currency:'usd',status:'succeeded',amount:25000,amount_received:25000,amount_capturable:0,created:1754062140,metadata,client_secret:'pi_secret_must_not_escape',
     latest_charge:{object:'charge',payment_intent:'pi_A1',currency:'usd',livemode:true,captured:true,refunded:false,amount_captured:25000,amount_refunded:0,created:1754062141}});
@@ -247,9 +249,9 @@ describe('Supabase secret bridge (trax-stripe-read)',()=>{
     expect(r).toMatchObject({intentStatus:'succeeded',ownership:'metadata',capturedAmount:{display:'USD 250.00'}});
     expect((bridge.mock.calls[0] as unknown as [string])[0]).toBe(endpoint);
     expect(stripeCalls.map(c=>c[1].method)).toEqual(['GET','GET']);
-    for(const [,init] of stripeCalls)expect(init.headers).toMatchObject({Authorization:'Bearer sk_live_offline','Stripe-Account':'acct_TestA1234'});
-    expect(portalBodies.join()).not.toMatch(/sk_live_offline|pi_secret_must_not_escape/);
-    expect(String((bridge.mock.calls[0] as unknown as [string,RequestInit])[1].body)).not.toMatch(/sk_/);
+    for(const [,init] of stripeCalls)expect(init.headers).toMatchObject({Authorization:'Bearer rk_live_offline','Stripe-Account':'acct_TestA1234'});
+    expect(portalBodies.join()).not.toMatch(/rk_live_offline|sk_live_offline|pi_secret_must_not_escape/);
+    expect(String((bridge.mock.calls[0] as unknown as [string,RequestInit])[1].body)).not.toMatch(/[sr]k_/);
   });
   it('passes TRAX refusal codes back unchanged',async()=>{
     const {remote}=setup();

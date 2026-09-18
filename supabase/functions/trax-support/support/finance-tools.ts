@@ -4,7 +4,7 @@ import { object, onlyKeys, SupportError, UUID } from './types.ts';
 import type { OperationalResult } from './operational-types.ts';
 import { financeScopes, type FinancePolicy, type FinanceServices, type FinanceScope, type StripeMapping } from './finance-types.ts';
 import { FINANCE_LIMIT, createFinanceReads, type FinanceDatabase } from './finance-reads.ts';
-import { recordedMinorUnits, stripeMoney } from './stripe-readonly.ts';
+import { recordedMinorUnits, stripeMoney, hasStripeReadKey } from './stripe-readonly.ts';
 import { configuredReadOnlyStripe } from './stripe-remote.ts';
 
 /** Who may use payment checks comes from Supabase staff roles/permissions (financeScopes);
@@ -19,8 +19,23 @@ export function configuredFinancePolicy(mappingsText:string|undefined):FinancePo
     return {mappings};
   }catch{throw new SupportError('finance_configuration_invalid','The read-only finance policy needs administrator review.',503);}
 }
+/**
+ * Stripe payment investigation is configured when a RESTRICTED read key exists —
+ * the configuration itself is the switch, so no separate environment variable has
+ * to say "yes" about keys that are either present or not.
+ *
+ * `TRAX_FINANCE_READS=disabled` still turns it off outright, and `=enabled` is
+ * still honoured for an environment that wants it on with the remote reader (the
+ * deployed trax-stripe-read function) rather than local keys.
+ *
+ * Without a restricted key this returns undefined, so the finance tools are not
+ * offered at all and TRAX hands a payment question to a person — which is the
+ * honest answer when it cannot check the provider.
+ */
 export function configuredFinance(db:FinanceDatabase,env:(key:string)=>string|undefined):FinanceServices|undefined {
-  if(env('TRAX_FINANCE_READS')!=='enabled')return undefined;
+  const setting=env('TRAX_FINANCE_READS');
+  if(setting==='disabled')return undefined;
+  if(setting!=='enabled'&&!hasStripeReadKey(env))return undefined;
   return {policy:configuredFinancePolicy(env('TRAX_STRIPE_RECORD_MAPPINGS')),reads:createFinanceReads(db),stripe:configuredReadOnlyStripe(env),sharedTestAccountId:env('STRIPE_TEST_CONNECT_ACCOUNT_ID')};
 }
 export interface FinanceToolContext extends ToolContext {finance:FinanceServices;now:number;signal:AbortSignal}

@@ -86,15 +86,15 @@ Two design points worth knowing:
 
 - Writers are dependency-free (`report-format.ts`) and verified by independent parsers: JSZip opens the XLSX, pdf-lib loads the PDF, node's `zlib.crc32` re-computes the ZIP checksums.
 - Storage is a **private** bucket, every object path beginning with the tenant id, and a job row that moves `queued → running → ready|failed`. Downloads are 15-minute signed links; the bucket is never public and is not listable by staff.
-- **Not switched on.** The bucket and job table need `docs/trax/pending-migrations/01-trax-report-jobs.sql`, which is not applied and sits outside `supabase/migrations` while the migration drift is unresolved. Until `TRAX_REPORTS=enabled`, the tool is not offered and TRAX says it cannot produce a file rather than inventing one.
+- **On.** The bucket and job table come from `docs/trax/pending-migrations/01-trax-report-jobs.sql`, applied to production 2026-09-18; it still sits outside `supabase/migrations` because the migration drift is unresolved. Reports are offered unless `TRAX_REPORTS=disabled`, and an environment without the migration refuses with `report_failed` rather than inventing a file — so the flag is not what makes it safe.
 
 ## What it would take to turn all this on
 
-Each is a separate, currently unmet precondition — none of it is live:
+Each is a separate precondition; the struck-through ones are now met.
 
-1. **Deploy** the `trax-support` edge function. Nothing in this work is deployed; Vercel does not deploy Supabase functions, and no automation does.
-2. **Finance reads:** `databaseFinanceScopes` is in code, but see `finance-authorization-review.md` — it is an explicit permission widening awaiting review.
-3. **Reports:** apply the pending migration, then set `TRAX_REPORTS=enabled`.
+1. ~~**Deploy** the `trax-support` edge function.~~ Done — version 4, deployed 2026-09-18 with `scripts/trax-deploy.mjs`. Vercel does not deploy Supabase functions and no automation does, so every later change needs that script run again.
+2. **Finance reads:** `databaseFinanceScopes` is in code, but see `finance-authorization-review.md` — it is an explicit permission widening awaiting review. Stripe reads additionally need a restricted `rk_` key in the project secrets, and the project is at its 100-secret limit.
+3. ~~**Reports:** apply the pending migration, then set `TRAX_REPORTS=enabled`.~~ Done — migration applied 2026-09-18, and reports no longer need a flag.
 4. **Tenant reach:** TRAX is gated to V2 tenants and `northwind` is the only one, so every other account sees nothing regardless.
 5. **Security containment** is still open and unrelated to any of the above — see `containment-review.md` and `incident-jwt-signing-secret.md`.
 

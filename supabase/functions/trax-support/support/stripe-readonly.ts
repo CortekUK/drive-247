@@ -34,13 +34,41 @@ const metadataOf=(value:unknown):Record<string,string>=>{
 /** The existing Supabase secrets, read by name at runtime exactly like _shared/stripe-client.ts. */
 export const PLATFORM_SECRET_NAMES={uk:{live:'STRIPE_LIVE_SECRET_KEY',test:'STRIPE_TEST_SECRET_KEY'},uae:{live:'STRIPE_UAE_LIVE_SECRET_KEY',test:'STRIPE_UAE_TEST_SECRET_KEY'}} as const;
 const restrictedName=(platform:string,mode:string)=>`TRAX_STRIPE_READ_${platform.toUpperCase()}_${mode.toUpperCase()}_KEY`;
-/** A dedicated restricted key wins when configured; otherwise the platform secret for the same
- * platform and mode. A key for the other mode, or a publishable key, is never used. */
+/**
+ * One secret can hold every platform/mode key: `{"uk":{"live":"rk_live_…"}}`.
+ *
+ * A separate variable per platform and mode is clearer, but it costs up to four
+ * slots, and this project is at its secret limit with nothing safe to remove — the
+ * unreferenced names all belong to integrations whose functions are still deployed.
+ * Packing them costs one slot instead of four. The individual names win when both
+ * are set, and a malformed blob yields no key rather than a partial guess.
+ */
+function packedReadKey(env:(key:string)=>string|undefined,platform:string,mode:string):string|undefined {
+  const raw=env('TRAX_STRIPE_READ_KEYS');
+  if(!raw||raw.length>4_000)return undefined;
+  let parsed:unknown;
+  try{parsed=JSON.parse(raw);}catch{return undefined;}
+  if(!parsed||typeof parsed!=='object'||Array.isArray(parsed))return undefined;
+  const byPlatform=(parsed as Record<string,unknown>)[platform];
+  if(!byPlatform||typeof byPlatform!=='object'||Array.isArray(byPlatform))return undefined;
+  const value=(byPlatform as Record<string,unknown>)[mode];
+  return typeof value==='string'?value:undefined;
+}
+/**
+ * TRAX reads Stripe with a RESTRICTED key or not at all.
+ *
+ * This used to fall back to the platform secret (`STRIPE_LIVE_SECRET_KEY` and
+ * friends) when no restricted key was configured. Those exist on the deployed
+ * project, so the fallback meant TRAX would quietly authenticate to Stripe with a
+ * FULL-ACCESS live key. Nothing here can write — the module contains three GETs
+ * and no general request method — but that made least privilege an accident of
+ * this file's contents rather than a property of the credential.
+ *
+ * A key for the other mode, or a publishable key, is never used.
+ */
 export function stripeReadKey(env:(key:string)=>string|undefined,platform:'uk'|'uae',mode:'test'|'live'):string|null {
-  const restricted=env(restrictedName(platform,mode));
-  if(restricted?.startsWith(`rk_${mode}_`))return restricted;
-  const secret=env(PLATFORM_SECRET_NAMES[platform][mode]);
-  return secret&&(secret.startsWith(`sk_${mode}_`)||secret.startsWith(`rk_${mode}_`))?secret:null;
+  const restricted=env(restrictedName(platform,mode))??packedReadKey(env,platform,mode);
+  return restricted?.startsWith(`rk_${mode}_`)?restricted:null;
 }
 export function hasStripeReadKey(env:(key:string)=>string|undefined):boolean {
   return (['uk','uae'] as const).some(p=>(['live','test'] as const).some(m=>stripeReadKey(env,p,m)!==null));

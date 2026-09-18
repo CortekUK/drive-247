@@ -6,9 +6,9 @@
 -- nothing new goes into that directory until the drift is reconciled. Applying
 -- this is its own reviewed decision, separate from the security containment.
 --
--- Until it is applied, leave TRAX_REPORTS unset. The orchestrator then does not
--- offer the report tool, and TRAX says it cannot produce a file rather than
--- describing one that does not exist.
+-- APPLIED to production 2026-09-18. No flag is needed to use reports; an
+-- environment WITHOUT this migration refuses with `report_failed`, so TRAX says
+-- it could not produce a file rather than describing one that does not exist.
 --
 -- Scope: one table, one bucket, and policies. It adds no capability to any
 -- existing table and changes no existing policy.
@@ -92,12 +92,11 @@ commit;
 --   select relrowsecurity from pg_class where relname = 'trax_report_jobs';
 --   select grantee, privilege_type from information_schema.role_table_grants
 --    where table_name = 'trax_report_jobs' order by grantee;
--- Then set TRAX_REPORTS=enabled on the trax-support function and ask TRAX for a
--- CSV. Expect a job row in state `ready`, an object under <tenant_id>/, and a
--- link that stops working after 15 minutes.
+-- Then ask TRAX for a CSV. Expect a job row in state `ready`, an object under
+-- <tenant_id>/, and a link that stops working after 15 minutes.
 --
 -- ── Rollback ────────────────────────────────────────────────────────────────
--- Unset TRAX_REPORTS first, so nothing tries to write while it is going away:
+-- Set TRAX_REPORTS=disabled first, so nothing tries to write while it is going away:
 --   drop policy if exists trax_reports_service on storage.objects;
 --   delete from storage.objects where bucket_id = 'trax-reports';
 --   delete from storage.buckets where id = 'trax-reports';

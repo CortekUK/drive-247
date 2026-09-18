@@ -72,12 +72,22 @@ export function createReportStore(db: ReportDatabase): ReportStore {
 }
 
 /**
- * Reports are off unless the deployment says otherwise, because the bucket and
- * table must exist first. `TRAX_REPORTS=enabled` is the switch, set only after
- * the pending migration has been reviewed and applied.
+ * Reports are ON unless a deployment turns them off with `TRAX_REPORTS=disabled`.
+ *
+ * They used to require `TRAX_REPORTS=enabled`, because the bucket and job table
+ * had to exist first and an opt-in was the honest default while they did not.
+ * They do exist now (docs/trax/pending-migrations/01-trax-report-jobs.sql, applied
+ * 2026-09-18), so the opt-in had become a switch that cost an environment variable
+ * to say "yes" — and on a project already at its secret limit, that is a real cost
+ * for no safety.
+ *
+ * Turning the default around is safe because the store already fails honestly: if
+ * the table or bucket is missing, `createJob` raises `report_failed` and TRAX says
+ * no file was produced rather than inventing one. An environment without the
+ * migration therefore refuses reports whether or not anyone remembered a flag.
  */
 export function configuredReports(db: ReportDatabase, env: (key: string) => string | undefined): ReportStore | undefined {
-  if (env('TRAX_REPORTS') !== 'enabled') return undefined;
+  if (env('TRAX_REPORTS') === 'disabled') return undefined;
   return createReportStore(db);
 }
 

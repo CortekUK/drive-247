@@ -51,5 +51,5 @@ describe("edge functions: no undefined references", () => {
 
     expect(findings).toEqual([]);
     expect(failed).toBe(false);
-  });
+  }, 60_000); // Parses every edge function in a child process; ~3s alone, more under a parallel run.
 });
