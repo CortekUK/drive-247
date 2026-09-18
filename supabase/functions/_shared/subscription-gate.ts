@@ -126,29 +126,44 @@ async function isSubscriptionGateDisabled(
   supabase: SupabaseClient,
   tenantId: string,
 ): Promise<boolean> {
+  // The two switches are INDEPENDENT, and each is read in its own try/catch on
+  // purpose. A single shared catch let a failing `admin_settings` read skip the
+  // per-tenant read entirely and answer false — so support would flip
+  // tenants.subscription_gate_disabled, watch the portal open (it ORs the two
+  // separately), and still get 402 from every gated function until the
+  // admin_settings blip cleared. Each read failing SAFE on its own keeps the
+  // paywall un-disableable by one broken query without making the other switch
+  // depend on it.
+  let global = false;
   try {
-    const { data: globalRow, error: globalErr } = await supabase
+    const { data, error } = await supabase
       .from("admin_settings")
       .select("subscription_gate_disabled")
       .eq("subscription_gate_disabled", true)
       .limit(1)
       .maybeSingle();
+    if (error) throw error;
+    global = !!data;
+  } catch (err) {
+    console.error(
+      "[subscription-gate] global kill-switch read failed; treating it as OFF and still checking the tenant's own switch:",
+      err,
+    );
+  }
+  if (global) return true;
 
-    if (globalErr) throw globalErr;
-    if (globalRow) return true;
-
-    const { data: tenantRow, error: tenantErr } = await supabase
+  try {
+    const { data, error } = await supabase
       .from("tenants")
       .select("subscription_gate_disabled")
       .eq("id", tenantId)
       .maybeSingle();
-
-    if (tenantErr) throw tenantErr;
-    return (tenantRow as { subscription_gate_disabled?: boolean } | null)
+    if (error) throw error;
+    return (data as { subscription_gate_disabled?: boolean } | null)
       ?.subscription_gate_disabled === true;
   } catch (err) {
     console.error(
-      "[subscription-gate] kill-switch read failed; NOT suppressing the gate:",
+      "[subscription-gate] per-tenant kill-switch read failed; NOT suppressing the gate:",
       err,
     );
     return false;
@@ -227,15 +242,24 @@ export async function requireActiveSubscription(
       //     a debt belonging to a dead, abandoned subscription cannot expire the
       //     window of a tenant who owes nothing on the live one
       //   - oldest by Stripe's own date, not by our INSERT time
-      // Capped at 50 rows: enough to find the oldest debt of any real tenant
-      // (production carries 2–3 invoice rows each) while keeping this one query.
+      //
+      // The cap and the ordering are BOTH on Stripe's date, and that pairing is
+      // the point. A 50-row cap ordered by `created_at` could hide the very row
+      // that decides the answer: `created_at` is our INSERT time, so a
+      // reconciler backfilling an ancient debt stamps it NEWEST and pushes it
+      // out of the window, leaving the gate to allow a tenant the portal has
+      // long since blocked. Ordering by `invoice_date` keeps the oldest debts —
+      // the only ones that can anchor the clock — whenever the cap bites at all.
+      // 500 is far past any real tenant (production carries 2–3 invoice rows
+      // each) and still one small query of four columns.
       const { data: unpaidInvoices, error: invErr } = await supabase
         .from("tenant_subscription_invoices")
         .select("created_at, invoice_date, period_end, subscription_id")
         .eq("tenant_id", tenantId)
         .in("status", ["open", "uncollectible"])
+        .order("invoice_date", { ascending: true, nullsFirst: false })
         .order("created_at", { ascending: true })
-        .limit(50);
+        .limit(500);
 
       if (invErr) throw invErr;
 

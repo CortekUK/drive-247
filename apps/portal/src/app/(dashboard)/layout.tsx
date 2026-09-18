@@ -332,6 +332,25 @@ export default function DashboardLayout({
    */
   const gateWouldBlock = !gateSuppressed && (gateWouldOpen || gateLatched);
 
+  /**
+   * ...and while we do not YET know, on the routes a hard block is hidden on.
+   *
+   * `gateWouldOpen` is false until `gateStateKnown`, and `holdForGateState`
+   * deliberately does not hold the first paint on `/subscription`, `/settings`
+   * or `/credits` — so a hard-blocked tenant opening `/subscription` cold had a
+   * window, however short, in which the billing queries were still in flight and
+   * the full-screen first-run wizard could own the one screen that takes their
+   * money. (The wizard's own query can resolve first, and the billing trio uses
+   * `retry: false`, so an errored leg is slower still.)
+   *
+   * Suppressing an onboarding PROMPT for that window costs a healthy tenant
+   * nothing — every one of these four is a nudge that reappears on the next
+   * render once the answer lands — while an operator who cannot pay is a
+   * cancelled subscription. Scoped to the exempt routes so no other page's
+   * first-run experience changes at all.
+   */
+  const promptsSuppressed = gateWouldBlock || (!gateStateKnown && !!isSubscriptionPage);
+
   // Has this session ever rendered the dashboard with a *trustworthy* gate
   // decision? Only the very first paint may be held back; after that the page
   // stays mounted no matter what the billing queries do. A webhook flipping an
@@ -582,7 +601,15 @@ export default function DashboardLayout({
               Route-independent on purpose: on /subscription and /settings, which
               the hard gate leaves reachable, this bar is a phone user's only
               route to the hosted invoice. */}
-          <PaymentDueBar />
+          {/* `allWidths` on exactly the two routes that mount no sidebar, and so
+              carry no billing chip: /messages renders null in its place and
+              /trax swaps it for TraxRail. Without this, a desktop operator who
+              spent the grace window in Messages saw no warning at all — the
+              chip was not mounted and the bar was `md:hidden` — and then met the
+              paywall with no notice, which is the very defect this bar exists to
+              close, one route over. Everywhere else it stays phone-only so it
+              never doubles up with the chip. */}
+          <PaymentDueBar allWidths={isMessagesWorkspace || isTraxWorkspace} />
           {/* v2 only — the Stripe-style chrome row: search, messages,
               notifications. Sits in exactly the slot v1's <header> occupies, as a
               `shrink-0` flex sibling ABOVE the banners and <main>, so the flex
@@ -738,14 +765,14 @@ export default function DashboardLayout({
             feedback modal stacked on a non-dismissible one leaves the operator
             unable to act on either. */}
         <FeedbackDialog />
-        <FeedbackForcePrompt suppressed={gateWouldBlock} />
+        <FeedbackForcePrompt suppressed={promptsSuppressed} />
 
         {/* First-login nudge toward the welcome pack. Dismissible, and
             suppressed while the paywall owns the screen — this is the fifth
             dialog mounted here, and a new operator can already meet the
             subscription gate, the policy gate and the setup reminder before
             seeing a single screen. Same rule as FeedbackForcePrompt above. */}
-        <WelcomePackPrompt suppressed={gateWouldBlock} />
+        <WelcomePackPrompt suppressed={promptsSuppressed} />
 
         {/* First-run onboarding wizard — step 5 of the signup flow, between
             "Go to portal" and the dashboard. Full screen, shown exactly once,
@@ -770,7 +797,7 @@ export default function DashboardLayout({
             different origin than the one /dev was usually opened on. */}
         <FirstRunHandoffGate />
 
-        <FirstRunWizard suppressed={gateWouldBlock} />
+        <FirstRunWizard suppressed={promptsSuppressed} />
 
         {/* First-rental walkthrough — step 7, immediately after the wizard
             above. Eleven steps across six pages (dashboard, Vehicles,
@@ -792,7 +819,7 @@ export default function DashboardLayout({
             the sidebar behind a non-dismissible paywall is still nonsense the
             operator cannot act on. It also self-gates on the first-run wizard
             having settled, so the two can never share the screen. */}
-        <FirstRentalTour suppressed={gateWouldBlock} />
+        <FirstRentalTour suppressed={promptsSuppressed} />
 
         {/* Announcement dialogs: system notices (soft or hard) for every tenant,
             and the v2 dashboard's feature dialog. Mounted LAST, and it opens

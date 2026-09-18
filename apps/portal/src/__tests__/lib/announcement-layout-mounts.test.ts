@@ -67,7 +67,7 @@ describe('(dashboard)/layout.tsx mounts', () => {
     // /subscription is not handed the first-run wizard instead of a pay link.
     // See subscription-gate-route-exemption.test.ts. The host still takes
     // `showGate` — it decides for itself, and its props are asserted below.
-    const tour = at('<FirstRentalTour suppressed={gateWouldBlock} />');
+    const tour = at('<FirstRentalTour suppressed={promptsSuppressed} />');
     const host = at('<AnnouncementDialogHost');
     expect(host).toBeGreaterThan(tour);
     expect(host).toBeLessThan(at('</Provider>'));
@@ -76,7 +76,7 @@ describe('(dashboard)/layout.tsx mounts', () => {
     expect(tag).toContain('isSubscriptionPage={!!isSubscriptionPage}');
     expect(tag).toContain('pathname={pathname ?? "/"}');
     // Nothing but whitespace between the tour and the host.
-    expect(layout.slice(tour, host)).toMatch(/^<FirstRentalTour suppressed=\{gateWouldBlock\} \/>\s*$/);
+    expect(layout.slice(tour, host)).toMatch(/^<FirstRentalTour suppressed=\{promptsSuppressed\} \/>\s*$/);
   });
 
   it('marks the bounded-height routes on the Provider wrapper', () => {

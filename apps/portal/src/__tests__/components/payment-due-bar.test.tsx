@@ -74,9 +74,9 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-const paint = async () => {
+const paint = async (props: { allWidths?: boolean } = {}) => {
   await act(async () => {
-    root.render(<PaymentDueBar />);
+    root.render(<PaymentDueBar {...props} />);
   });
 };
 
@@ -222,5 +222,53 @@ describe('PaymentDueBar — the phone-only dunning surface', () => {
     expect(classes).not.toContain('fixed');
     expect(classes).not.toContain('sticky');
     expect(classes).not.toContain('absolute');
+  });
+
+  /**
+   * The routes that mount NO sidebar (/messages renders null in its place,
+   * /trax swaps it for TraxRail) carry no billing chip, so `md:hidden` left a
+   * desktop operator there with no warning at all for the whole grace window —
+   * the same defect this bar exists to close, one route over. `allWidths` is how
+   * the layout opts those two routes in, and it must stay OFF everywhere the
+   * chip is on screen.
+   */
+  it('allWidths drops md:hidden, for the routes that mount no sidebar chip', async () => {
+    billing = {
+      isInGracePeriod: true,
+      isGraceExpired: false,
+      graceSeverity: 'warning',
+      outstandingInvoiceUrl: INVOICE_URL,
+    };
+    await paint({ allWidths: true });
+    const classes = bar()!.className.split(/\s+/);
+    expect(classes).not.toContain('md:hidden');
+    // Everything else about it is unchanged — same tint, same flow, same action.
+    expect(classes).toContain('flex');
+    expect(classes).toContain('bg-amber-50');
+    expect(classes).not.toContain('fixed');
+    expect(anchors()).toContain(INVOICE_URL);
+  });
+
+  it('allWidths defaults to off, so desktop still defers to the chip', async () => {
+    billing = {
+      isInGracePeriod: true,
+      isGraceExpired: false,
+      graceSeverity: 'warning',
+      outstandingInvoiceUrl: INVOICE_URL,
+    };
+    await paint();
+    expect(bar()!.className.split(/\s+/)).toContain('md:hidden');
+  });
+
+  it('allWidths does not make it render for a healthy tenant', async () => {
+    billing = {
+      isInGracePeriod: false,
+      isGraceExpired: false,
+      graceSeverity: 'none',
+      outstandingInvoiceUrl: null,
+    };
+    await paint({ allWidths: true });
+    expect(bar()).toBeNull();
+    expect(container.innerHTML).toBe('');
   });
 });

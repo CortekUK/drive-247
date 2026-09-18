@@ -202,6 +202,39 @@ describe('FeatureAnnouncementDialog — paging', () => {
     expect(spans.map((s) => s.className.includes('w-4'))).toEqual([false, true, false]);
   });
 
+  /**
+   * A position indicator needs more than one position, and Back needs somewhere
+   * to go. With a single slide both were rendered anyway: one active dot read as
+   * a stray purple dash beside a permanently disabled button. Announcements can
+   * carry 1-10 slides, so one slide is ordinary rather than an edge case.
+   */
+  it('drops the dots and Back for a single-slide announcement', () => {
+    setup({
+      announcement: feature({
+        slides: [{ heading: 'Only', body: 'one slide', image_url: null }],
+      }),
+    });
+    expect(dialog().querySelector('[aria-hidden="true"].flex.items-center.gap-1\\.5')).toBeNull();
+    expect([...dialog().querySelectorAll('button')].map((b) => b.textContent)).not.toContain('Back');
+    // The one action still works: a single slide IS the last slide.
+    expect([...dialog().querySelectorAll('button')].map((b) => b.textContent)).not.toContain('Next');
+  });
+
+  it('keeps the dots and Back as soon as there are two slides', () => {
+    setup({
+      announcement: feature({
+        slides: [
+          { heading: 'One', body: 'a', image_url: null },
+          { heading: 'Two', body: 'b', image_url: null },
+        ],
+      }),
+    });
+    const dots = dialog().querySelector('[aria-hidden="true"].flex.items-center.gap-1\\.5');
+    expect(dots).not.toBeNull();
+    expect([...dots!.querySelectorAll('span')]).toHaveLength(2);
+    expect([...dialog().querySelectorAll('button')].map((b) => b.textContent)).toContain('Back');
+  });
+
   it('starts again at slide one when a different announcement arrives, but not for a fresh copy of the same one', () => {
     const { rerender, props } = setup();
     fireEvent.click(button('Next'));

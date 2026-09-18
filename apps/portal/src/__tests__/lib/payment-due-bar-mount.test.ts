@@ -55,7 +55,7 @@ describe('PaymentDueBar is mounted where it cannot break the v2 alignment', () =
     expect(SRC).toContain(
       'import { PaymentDueBar } from "@/components/subscription/payment-due-bar";',
     );
-    expect(SRC.split('<PaymentDueBar />').length - 1).toBe(1);
+    expect(SRC.split('<PaymentDueBar ').length - 1).toBe(1);
   });
 
   it('the alignment rule it must not break is still there, and still ADJACENT', () => {
@@ -68,18 +68,18 @@ describe('PaymentDueBar is mounted where it cannot break the v2 alignment', () =
   });
 
   it('renders ABOVE the v2 top bar', () => {
-    expect(at('<PaymentDueBar />')).toBeLessThan(at('<TopBarV2 showNavTrigger='));
+    expect(at('<PaymentDueBar ')).toBeLessThan(at('<TopBarV2 showNavTrigger='));
   });
 
   it('renders ABOVE the v1 header', () => {
-    expect(at('<PaymentDueBar />')).toBeLessThan(at('<header className="flex h-16 shrink-0'));
+    expect(at('<PaymentDueBar ')).toBeLessThan(at('<header className="flex h-16 shrink-0'));
   });
 
   it('is the FIRST child of <Inset>, so nothing can drift in above it', () => {
     // Anything mounted between the opening <Inset> tag and the bar would end up
     // between the header and main again the day it grows a wrapper element.
     const inset = at(/<Inset\b/);
-    const bar = at('<PaymentDueBar />');
+    const bar = at('<PaymentDueBar ');
     // Everything between the <Inset ...> opening tag and the bar, with JSX
     // comments stripped: no other element may live there.
     const between = SRC.slice(inset, bar)
@@ -89,7 +89,7 @@ describe('PaymentDueBar is mounted where it cannot break the v2 alignment', () =
   });
 
   it('still sits above the two legacy banners and above <main>', () => {
-    const bar = at('<PaymentDueBar />');
+    const bar = at('<PaymentDueBar ');
     expect(bar).toBeLessThan(at('<MaintenanceBanner />'));
     expect(bar).toBeLessThan(at('<AppBannerStack scope="app" />'));
     expect(bar).toBeLessThan(at(/<main\b/));
@@ -99,7 +99,17 @@ describe('PaymentDueBar is mounted where it cannot break the v2 alignment', () =
     // Above <Inset> it would span the sidebar column too, which is
     // SystemAnnouncementBanner's job (fixed, with its own --system-banner-h
     // offsets that global.css applies to the chrome).
-    expect(at('<PaymentDueBar />')).toBeGreaterThan(at(/<Inset\b/));
-    expect(at('<PaymentDueBar />')).toBeLessThan(at('</Inset>'));
+    expect(at('<PaymentDueBar ')).toBeGreaterThan(at(/<Inset\b/));
+    expect(at('<PaymentDueBar ')).toBeLessThan(at('</Inset>'));
+  });
+
+  /**
+   * `allWidths` must be true for EXACTLY the two routes whose chrome mounts no
+   * sidebar — and therefore no billing chip. Anywhere else it would put the bar
+   * and the chip on screen together.
+   */
+  it('opts in exactly the two sidebar-less routes, and no others', () => {
+    const tag = SRC.slice(at('<PaymentDueBar '), at('<PaymentDueBar ') + 200);
+    expect(tag).toContain('allWidths={isMessagesWorkspace || isTraxWorkspace}');
   });
 });

@@ -51,7 +51,22 @@ import { useTenantSubscription } from "@/hooks/use-tenant-subscription";
  * because that file belongs to the chrome and this one does not — if they are
  * ever restyled, they must be restyled together.
  */
-export function PaymentDueBar() {
+export interface PaymentDueBarProps {
+  /**
+   * Show at EVERY width, not just below `md`.
+   *
+   * For the routes that do not mount the sidebar at all — `/messages` replaces
+   * it with null and `/trax` swaps `AppSidebarV2` for `TraxRail` — the chip this
+   * bar defers to does not exist, so `md:hidden` left a desktop operator who
+   * spends the grace window in Messages or Trax with NO warning anywhere, then a
+   * paywall on day 7. Passed by `(dashboard)/layout.tsx`, which is the only
+   * place that knows which chrome a route mounts; it must stay false everywhere
+   * the chip IS on screen, or the two surfaces double up.
+   */
+  allWidths?: boolean;
+}
+
+export function PaymentDueBar({ allWidths = false }: PaymentDueBarProps) {
   const {
     isInGracePeriod,
     isGraceExpired,
@@ -77,7 +92,7 @@ export function PaymentDueBar() {
     ? "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-400"
     : "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400";
 
-  const className = `md:hidden flex w-full items-center gap-2 px-4 py-2.5 text-xs font-medium ${tint}`;
+  const className = `${allWidths ? "" : "md:hidden "}flex w-full items-center gap-2 px-4 py-2.5 text-xs font-medium ${tint}`;
 
   const body = (
     <>

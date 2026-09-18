@@ -271,11 +271,26 @@ describe('layout wiring: which signal reaches which surface', () => {
     'FirstRunWizard',
     'FirstRentalTour',
   ])('%s takes the route-independent signal', (component) => {
-    expect(tagFor(component)).toContain('suppressed={gateWouldBlock}');
+    expect(tagFor(component)).toContain('suppressed={promptsSuppressed}');
   });
 
   it('the gate dialog still takes the route-dependent one', () => {
     expect(SRC).toMatch(/<SubscriptionGateDialog\s+open=\{showGate\}/);
+  });
+
+  /**
+   * `promptsSuppressed` is what the prompts read, so the route-independence
+   * proved below only reaches them THROUGH it. It must be `gateWouldBlock`
+   * widened — never a replacement that drops it — plus the window in which the
+   * billing answer is not known yet on the routes a hard block is hidden on
+   * (there the first paint is deliberately not held, so a full-screen wizard
+   * could otherwise own the one screen that takes the tenant's money).
+   */
+  it('promptsSuppressed widens gateWouldBlock rather than replacing it', () => {
+    const decl = codeOnly(liftDeclaration(RAW, 'promptsSuppressed', { tsx: true }));
+    expect(decl).toContain('gateWouldBlock');
+    expect(decl).toContain('gateStateKnown');
+    expect(decl).toContain('isSubscriptionPage');
   });
 
   it('gateWouldBlock is route-independent: no isSubscriptionPage in its chain', () => {
@@ -300,7 +315,7 @@ describe('the pay link is reachable on the exempt routes', () => {
     expect(SRC).toContain(
       'import { PaymentDueBar } from "@/components/subscription/payment-due-bar";',
     );
-    const mount = SRC.indexOf('<PaymentDueBar />');
+    const mount = SRC.indexOf('<PaymentDueBar ');
     expect(mount, 'PaymentDueBar should be mounted in (dashboard)/layout.tsx').toBeGreaterThan(-1);
 
     // Inside <Inset> and above <main> — in flow, NOT `position: fixed`, so it
@@ -325,8 +340,15 @@ describe('the pay link is reachable on the exempt routes', () => {
     const around = SRC.slice(Math.max(0, mount - 200), mount + 200);
     expect(around).not.toContain('isSubscriptionPage');
     expect(around).not.toContain('showGate');
-    // And no props at all: the bar reads its own state, so no route can gate it.
-    expect(SRC).not.toMatch(/<PaymentDueBar\s+[a-zA-Z]/);
+    // Its ONLY prop is `allWidths`, which widens where it shows (the two routes
+    // that mount no sidebar, so carry no chip) and can never narrow it: nothing
+    // route-conditional may gate the mount itself, which is what keeps it
+    // reachable on /subscription. A second prop would need this test rewritten
+    // deliberately, which is the point.
+    const tag = SRC.slice(mount, SRC.indexOf('/>', mount) + 2);
+    const props = Array.from(tag.matchAll(/\s([a-zA-Z]+)=/g)).map((m) => m[1]);
+    expect(props).toEqual(['allWidths']);
+    expect(tag).not.toContain('isSubscriptionPage');
   });
 
   it('the bar itself is route-blind', () => {
