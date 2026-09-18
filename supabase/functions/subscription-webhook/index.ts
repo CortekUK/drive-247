@@ -1024,7 +1024,19 @@ async function handleSubscriptionUpdated(
   // when the event was CREATED and Stripe retries for up to three days, so a
   // late delivery would otherwise set the plan and run auto-go-live off state
   // that is no longer true.
-  if (["active", "trialing"].includes(patch.status)) {
+  //
+  // past_due RESOLVES ITS PLAN like a live status. A tenant whose renewal has
+  // just failed is still inside the grace window and still a paying customer;
+  // leaving activePlan at "basic" wrote "basic" over their real plan NAME the
+  // moment dunning started, and left it wrong for the whole window — wrong on
+  // the admin tenant list, on the admin tenant detail page, and anywhere else
+  // that reads tenants.subscription_plan. (It is the recorded NAME only:
+  // entitlement is driven by tenant_subscriptions.status, not by this column.)
+  // Only handleSubscriptionDeleted — a subscription that has genuinely ended —
+  // reverts to "basic". The auto-go-live branch below deliberately stays on
+  // `patch.status === "active"`: going live must require a genuinely active
+  // subscription, never one in dunning.
+  if (["active", "trialing", "past_due"].includes(patch.status)) {
     const subPlanName = subscription.metadata?.plan_name;
     if (subPlanName) {
       activePlan = subPlanName;
@@ -1227,9 +1239,13 @@ async function handleInvoicePaid(supabase: any, invoice: any, stripe?: Stripe) {
   // $1 setup-fee / trial-start invoice ("subscription_create") never triggers
   // a premature go-live during the trial.
   if (sub?.id && invoice.billing_reason === "subscription_cycle" && (invoice.amount_paid || 0) > 0) {
+    // current_period_end comes along for the MONOTONIC period write below — the
+    // settled invoice's period is not necessarily the subscription's current
+    // cycle, so the write has to know what is already stored. Widened on the
+    // existing read rather than added as a second round-trip.
     const { data: currentSub } = await supabase
       .from("tenant_subscriptions")
-      .select("status")
+      .select("status, current_period_end")
       .eq("id", sub.id)
       .single();
 
@@ -1273,12 +1289,64 @@ async function handleInvoicePaid(supabase: any, invoice: any, stripe?: Stripe) {
     // has its own readiness gate. Terminal states are still excluded so a
     // canceled subscription is never resurrected.
     if (currentSub && ["trialing", "past_due", "incomplete", "active"].includes(currentSub.status)) {
+      // ── the billing window, written FORWARD ONLY ─────────────────────────
+      //
+      // An invoice's period is the cycle THAT INVOICE covers, which is NOT
+      // always the subscription's current cycle. On an ordinary renewal the
+      // `subscription_cycle` invoice carries the period that just ENDED, and a
+      // late payment — or a retried / out-of-order delivery of an older
+      // invoice.paid after the next renewal has already landed — carries a
+      // period a month or more in the past. This used to write that period onto
+      // the row unconditionally, walking current_period_end BACKWARDS, and
+      // everything keyed on that date then misreads: the portal's "next
+      // payment" date, and the neighbours of the grace anchor.
+      //
+      // So: prefer the subscription's OWN window from Stripe when a client is
+      // in hand (authoritative, and it self-heals a row whose
+      // customer.subscription.updated was lost), fall back to the invoice, and
+      // in BOTH cases refuse to move current_period_end earlier than the value
+      // already stored — a retry can deliver stale data from either source, and
+      // the status promotion below must happen regardless.
+      let period = resolveSubscriptionPeriod({
+        current_period_start: invoice.period_start,
+        current_period_end: invoice.period_end,
+      });
+      if (stripe && subscriptionId) {
+        try {
+          const liveSub = await stripe.subscriptions.retrieve(subscriptionId);
+          const livePeriod = resolveSubscriptionPeriod(liveSub);
+          // Only replace the invoice-derived window if Stripe actually gave us
+          // one; a nulled-out answer must never erase what the invoice knows.
+          if (livePeriod.end || livePeriod.start) period = livePeriod;
+        } catch (retrieveErr) {
+          console.warn(
+            `invoice.paid: could not retrieve subscription ${subscriptionId} for its billing window (non-fatal, falling back to the invoice's period):`,
+            (retrieveErr as any)?.message ?? retrieveErr,
+          );
+        }
+      }
+
+      const storedEndMs = currentSub.current_period_end
+        ? new Date(currentSub.current_period_end).getTime()
+        : NaN;
+      const candidateEndMs = period.end ? new Date(period.end).getTime() : NaN;
+      // No stored value (or an unparseable one) is not a reason to refuse: a
+      // first real window is always an improvement on nothing.
+      const advancesPeriod =
+        Number.isFinite(candidateEndMs) &&
+        (!Number.isFinite(storedEndMs) || candidateEndMs > storedEndMs);
+
+      if (period.end && !advancesPeriod) {
+        console.log(
+          `invoice.paid: period write SKIPPED for subscription ${sub.id} (invoice ${invoice.id}) — candidate current_period_end ${period.end} is not newer than the stored ${currentSub.current_period_end}; status still promoted to active`,
+        );
+      }
+
       await supabase
         .from("tenant_subscriptions")
         .update({
           status: "active",
-          ...(invoice.period_start ? { current_period_start: new Date(invoice.period_start * 1000).toISOString() } : {}),
-          ...(invoice.period_end ? { current_period_end: new Date(invoice.period_end * 1000).toISOString() } : {}),
+          ...(advancesPeriod ? periodPatch(period) : {}),
           updated_at: new Date().toISOString(),
         })
         .eq("id", sub.id);

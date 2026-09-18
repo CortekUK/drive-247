@@ -13,6 +13,7 @@ import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useSubscriptionGateDisabled } from "@/hooks/use-subscription-gate-disabled";
 import { SubscriptionGateDialog } from "@/components/subscription/subscription-gate-dialog";
 import { SubscriptionActivatedDialog } from "@/components/subscription/subscription-activated-dialog";
+import { PaymentDueBar } from "@/components/subscription/payment-due-bar";
 import { SetupReminderDialog } from "@/components/dashboard/setup-reminder-dialog";
 import { MigrationBlockerDialog } from "@/components/migration/migration-blocker-dialog";
 import { TenantSuspendedScreen } from "@/components/tenant/tenant-suspended-screen";
@@ -247,9 +248,27 @@ export default function DashboardLayout({
     subscriptionResolved &&
     (!plansNeededForGate || plansResolved);
 
+  /* ── does the tenant's BILLING STATE block them? ──────────────────────────
+   *
+   * Route-independent, and the pair below is the whole answer: no
+   * `isSubscriptionPage` anywhere in them. `showExpiredGate` / `showSetupGate`
+   * are then these two minus the exempt routes, so the gate DIALOG behaves
+   * exactly as it did.
+   *
+   * The split exists because `showGate` was doing two different jobs. It says
+   * "the gate dialog is on screen", which is correctly false on /subscription
+   * and /settings — those routes stay reachable so a blocked tenant can always
+   * pay. But it was also the only suppression signal handed to the four
+   * full-screen onboarding prompts below, and on exactly those routes it
+   * suppressed nothing: a hard-blocked operator who had not finished onboarding
+   * was shown the first-run wizard on top of the one screen that takes money.
+   * `gateWouldBlock` is the signal those prompts actually wanted — "this tenant
+   * is blocked", regardless of which route they are standing on.
+   */
+  const expiredGateApplies = gateStateKnown && hasExpiredSubscription;
+
   // Expired/canceled subscription — same hard modal, different copy.
-  const showExpiredGate =
-    gateStateKnown && hasExpiredSubscription && !isSubscriptionPage;
+  const showExpiredGate = expiredGateApplies && !isSubscriptionPage;
 
   // Never-subscribed — Finish Setup modal. We gate when the tenant either has a
   // plan to buy OR when we could not load their plans at all: an errored plans
@@ -259,14 +278,21 @@ export default function DashboardLayout({
   // un-gated, so an operator with no plan configured is never locked out of a
   // product they cannot buy. With no plans loaded the dialog falls back to its
   // contact-support copy, and the sign-out escape still applies.
-  const showSetupGate =
+  const setupGateApplies =
     gateStateKnown &&
     !isSubscribed &&
     !hasExpiredSubscription &&
-    (hasActivePlans || plansErrored) &&
-    !isSubscriptionPage;
+    (hasActivePlans || plansErrored);
+
+  const showSetupGate = setupGateApplies && !isSubscriptionPage;
 
   const gateOpen = (showSetupGate || showExpiredGate) && !gateSuppressed;
+
+  /* The same question with the route exemption taken out — see the note above
+     `expiredGateApplies`. Feeds `gateWouldBlock` only; nothing about when the
+     gate dialog opens, when the skeleton is held, or when the latch is set
+     reads this. */
+  const gateWouldOpen = (setupGateApplies || expiredGateApplies) && !gateSuppressed;
 
   // A latched gate with nothing left to sell is a dead end: if a super admin
   // deactivates the tenant's last plan, there is no longer anything the tenant
@@ -293,6 +319,18 @@ export default function DashboardLayout({
 
   const showGate =
     !gateSuppressed && !isSubscriptionPage && (gateOpen || gateLatched);
+
+  /**
+   * "This tenant is blocked" — the same decision as `showGate`, minus the route
+   * exemption. Only the four full-screen onboarding prompts read it.
+   *
+   * `gateLatched` is ORed in exactly as `showGate` does, so a tenant who met the
+   * gate on a normal route and then walked to /subscription keeps the prompts
+   * suppressed. The latch itself is still set from `gateOpen` (route-dependent)
+   * on purpose: this fix changes what the PROMPTS see, and nothing about when
+   * the gate dialog appears or when the first paint is held.
+   */
+  const gateWouldBlock = !gateSuppressed && (gateWouldOpen || gateLatched);
 
   // Has this session ever rendered the dashboard with a *trustworthy* gate
   // decision? Only the very first paint may be held back; after that the page
@@ -548,6 +586,24 @@ export default function DashboardLayout({
               </div>
             </header>
           )}
+          {/* The dunning warning FOR A PHONE, and nothing else on the screen
+              carries it there.
+              During grace the only billing surface is the chip in the sidebar
+              footer, and below `md` both sidebars live inside a closed Sheet —
+              so the chip is not off-screen, it is absent, and an operator on a
+              phone was warned about nothing for the whole window before meeting
+              a non-dismissible paywall. `md:hidden` inside the component, so
+              desktop keeps the chip and only the chip.
+              HERE, in flow, deliberately: `SystemAnnouncementBanner` is the
+              fixed bar at the top of the viewport and global.css offsets the
+              chrome by its height, and a second fixed bar would have to join
+              that arithmetic. It renders nothing at all in every other state,
+              which is what keeps main's `md:[header+&]` alignment intact for
+              healthy tenants — the same contract MaintenanceBanner and
+              AppBannerStack already honour. Route-independent on purpose: on
+              /subscription and /settings, which the hard gate leaves reachable,
+              this bar is a phone user's only route to the hosted invoice. */}
+          <PaymentDueBar />
           <MaintenanceBanner />
           {/*
             Deposit-hold alerts, and the mount point every future banner should
@@ -667,14 +723,14 @@ export default function DashboardLayout({
             feedback modal stacked on a non-dismissible one leaves the operator
             unable to act on either. */}
         <FeedbackDialog />
-        <FeedbackForcePrompt suppressed={showGate} />
+        <FeedbackForcePrompt suppressed={gateWouldBlock} />
 
         {/* First-login nudge toward the welcome pack. Dismissible, and
             suppressed while the paywall owns the screen — this is the fifth
             dialog mounted here, and a new operator can already meet the
             subscription gate, the policy gate and the setup reminder before
             seeing a single screen. Same rule as FeedbackForcePrompt above. */}
-        <WelcomePackPrompt suppressed={showGate} />
+        <WelcomePackPrompt suppressed={gateWouldBlock} />
 
         {/* First-run onboarding wizard — step 5 of the signup flow, between
             "Go to portal" and the dashboard. Full screen, shown exactly once,
@@ -699,7 +755,7 @@ export default function DashboardLayout({
             different origin than the one /dev was usually opened on. */}
         <FirstRunHandoffGate />
 
-        <FirstRunWizard suppressed={showGate} />
+        <FirstRunWizard suppressed={gateWouldBlock} />
 
         {/* First-rental walkthrough — step 7, immediately after the wizard
             above. Eleven steps across six pages (dashboard, Vehicles,
@@ -721,7 +777,7 @@ export default function DashboardLayout({
             the sidebar behind a non-dismissible paywall is still nonsense the
             operator cannot act on. It also self-gates on the first-run wizard
             having settled, so the two can never share the screen. */}
-        <FirstRentalTour suppressed={showGate} />
+        <FirstRentalTour suppressed={gateWouldBlock} />
 
         {/* Announcement dialogs: system notices (soft or hard) for every tenant,
             and the v2 dashboard's feature dialog. Mounted LAST, and it opens

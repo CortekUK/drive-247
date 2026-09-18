@@ -62,7 +62,12 @@ describe('(dashboard)/layout.tsx mounts', () => {
   });
 
   it('mounts the host after FirstRentalTour, inside the Provider, with the three props', () => {
-    const tour = at('<FirstRentalTour suppressed={showGate} />');
+    // `gateWouldBlock`, not `showGate`: the four onboarding prompts take the
+    // ROUTE-INDEPENDENT paywall signal, so a hard-blocked tenant on
+    // /subscription is not handed the first-run wizard instead of a pay link.
+    // See subscription-gate-route-exemption.test.ts. The host still takes
+    // `showGate` — it decides for itself, and its props are asserted below.
+    const tour = at('<FirstRentalTour suppressed={gateWouldBlock} />');
     const host = at('<AnnouncementDialogHost');
     expect(host).toBeGreaterThan(tour);
     expect(host).toBeLessThan(at('</Provider>'));
@@ -71,7 +76,7 @@ describe('(dashboard)/layout.tsx mounts', () => {
     expect(tag).toContain('isSubscriptionPage={!!isSubscriptionPage}');
     expect(tag).toContain('pathname={pathname ?? "/"}');
     // Nothing but whitespace between the tour and the host.
-    expect(layout.slice(tour, host)).toMatch(/^<FirstRentalTour suppressed=\{showGate\} \/>\s*$/);
+    expect(layout.slice(tour, host)).toMatch(/^<FirstRentalTour suppressed=\{gateWouldBlock\} \/>\s*$/);
   });
 
   it('marks the bounded-height routes on the Provider wrapper', () => {

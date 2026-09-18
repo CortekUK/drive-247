@@ -256,17 +256,22 @@ export function SubscriptionGateDialog({
           </>
         )}
 
-        {/* Same rule as the body above: the escape is hidden only while a
-            variant that genuinely needs plans is waiting for them. */}
-        {(!plansLoading || isPastDue) && (
-          <button
-            type="button"
-            onClick={handleSignOut}
-            className="mx-auto mt-1 text-xs text-muted-foreground underline-offset-4 hover:underline"
-          >
-            Sign out
-          </button>
-        )}
+        {/* THE ESCAPE HATCH IS NEVER CONDITIONAL.
+            This used to be `{(!plansLoading || isPastDue) && …}` — the same
+            condition as the body above — which is wrong for a different reason
+            than the body is. `expired` genuinely needs the plans to render its
+            pricing cards, so its BODY may wait; but it has no pay link to fall
+            back on, so gating Sign out on the same flag left a modal that
+            refuses Esc, outside-click and a close button with no way forward
+            AND no way out — indefinitely, if that query hangs. The body can
+            load; the exit cannot be something a pending request takes away. */}
+        <button
+          type="button"
+          onClick={handleSignOut}
+          className="mx-auto mt-1 text-xs text-muted-foreground underline-offset-4 hover:underline"
+        >
+          Sign out
+        </button>
 
         {/* A way OUT of a state a developer switched on.
             This dialog is deliberately inescapable — no Esc, no click-outside,

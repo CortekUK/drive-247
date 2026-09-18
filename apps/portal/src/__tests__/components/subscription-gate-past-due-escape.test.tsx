@@ -17,6 +17,15 @@
  *
  * Found by simulating the real lifecycle: renewal declines → 7-day grace →
  * hard block. See scratchpad/ann/subsim.
+ *
+ * The second block below is the same defect one variant over, and it is the
+ * reason the rule is now "the escape hatch is NEVER conditional" rather than
+ * "skip the loading branch for past_due". `variant="expired"` — a canceled
+ * subscription with no outstanding invoice — genuinely needs the plans in order
+ * to render its pricing cards, so its BODY may wait. But it has no pay link to
+ * fall back on, so gating Sign out on the same condition left a non-dismissible
+ * modal with no way forward AND no way out, for as long as that query was in
+ * flight — indefinitely if it hangs.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -114,5 +123,43 @@ describe('SubscriptionGateDialog — past_due while the plans query is in flight
     // `setup` renders PricingCards from `plans`, so waiting is correct there.
     expect(text()).toContain('Loading plans');
     expect(links()).not.toContain(INVOICE_URL);
+  });
+});
+
+describe('SubscriptionGateDialog — the escape hatch is never conditional', () => {
+  it('offers Sign out for variant="expired" while the plans query is in flight', async () => {
+    plansLoading = true;
+    await act(async () => {
+      root.render(<SubscriptionGateDialog open variant="expired" />);
+    });
+
+    // The body may still be a loader — `expired` sells plans, so waiting for
+    // them is correct — but the way out is not negotiable.
+    expect(buttonLabels()).toContain('Sign out');
+  });
+
+  it('that Sign out actually signs out', async () => {
+    plansLoading = true;
+    await act(async () => {
+      root.render(<SubscriptionGateDialog open variant="expired" />);
+    });
+
+    const signOutButton = Array.from(document.querySelectorAll('button')).find(
+      (b) => (b.textContent ?? '').trim() === 'Sign out',
+    );
+    expect(signOutButton).toBeDefined();
+    await act(async () => {
+      signOutButton!.click();
+    });
+    expect(signOut).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers Sign out for variant="setup" while the plans query is in flight', async () => {
+    plansLoading = true;
+    await act(async () => {
+      root.render(<SubscriptionGateDialog open variant="setup" />);
+    });
+
+    expect(buttonLabels()).toContain('Sign out');
   });
 });
