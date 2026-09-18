@@ -66,7 +66,11 @@ export async function resolvePaymentRoute(p:FinancePayment,ctx:RouteContext):Pro
     const account=mode==='live'?ctx.tenant.own_stripe_account_id:ctx.tenant.own_stripe_test_account_id;
     if(!account)return {ok:false,reason:mode==='test'?'shared_test_account':'account_unproven'};
     // 3. The current own account was connected before this payment, so the payment cannot predate it.
-    const connected=time(ctx.tenant.own_stripe_connected_at);
+    // The timestamp must be the one belonging to the account actually selected above: a test
+    // payment is proven by when the TEST account was connected. Checking the live timestamp for a
+    // test payment refused every test payment made by a tenant that had not connected live yet,
+    // and "proved" the rest against an unrelated date.
+    const connected=time(mode==='live'?ctx.tenant.own_stripe_connected_at:ctx.tenant.own_stripe_test_connected_at);
     if(!Number.isFinite(connected)||connected>created)return {ok:false,reason:'account_unproven'};
     return finish({platform,mode,accountId:account,accountType,basis:'connected_before_payment'});
   }

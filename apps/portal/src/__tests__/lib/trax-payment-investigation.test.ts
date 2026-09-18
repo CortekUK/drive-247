@@ -47,6 +47,32 @@ describe('payment routing uses recorded evidence and never guesses an account',(
     tenantRow.own_stripe_connected_at='2026-09-01T00:00:00Z';
     expect(await resolvePaymentRoute(pay(),ctx())).toEqual({ok:false,reason:'account_unproven'});
   });
+  /*
+   * A test payment is proven by when the TEST account was connected.
+   *
+   * These two cases are the ones a tenant connecting only a Stripe test account
+   * actually hits. Checking `own_stripe_connected_at` for a test payment refused
+   * every such payment outright, and for a tenant that also had a live connection it
+   * "proved" the test payment against an unrelated date.
+   */
+  it('proves a test-mode payment against the test account’s own connection time',async()=>{
+    tenantRow.stripe_mode='test';
+    tenantRow.own_stripe_test_account_id='acct_TestOwn99';
+    tenantRow.own_stripe_test_connected_at='2026-07-01T00:00:00Z';
+    tenantRow.own_stripe_account_id=null;   // never connected live
+    tenantRow.own_stripe_connected_at=null;
+    const testPayment=pay({stripe_checkout_session_id:'cs_test_A1'});
+    expect(await resolvePaymentRoute(testPayment,ctx())).toEqual({ok:true,route:{
+      platform:'uae',mode:'test',accountId:'acct_TestOwn99',accountType:'standard',
+      basis:'connected_before_payment',exclusive:true,strictOwnership:false}});
+  });
+  it('still refuses a test payment made before the test account was connected',async()=>{
+    tenantRow.own_stripe_test_account_id='acct_TestOwn99';
+    tenantRow.own_stripe_test_connected_at='2026-09-30T00:00:00Z';
+    expect(await resolvePaymentRoute(pay({stripe_checkout_session_id:'cs_test_A1'}),ctx()))
+      .toEqual({ok:false,reason:'account_unproven'});
+  });
+
   it('reports platform-era payments instead of searching the connected account',async()=>{
     expect(await resolvePaymentRoute(pay({created_at:'2025-12-30T10:00:00Z',paid_at:'2025-12-30T10:00:00Z'}),ctx())).toEqual({ok:false,reason:'platform_era'});
   });

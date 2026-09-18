@@ -12,7 +12,7 @@ export interface FinanceTenant {
   stripe_mode:string; stripe_account_id:string|null; stripe_onboarding_complete:boolean|null;
   own_stripe_account_id:string|null; own_stripe_test_account_id:string|null;
   /** When the current own (Standard) account was connected. Older payments are never routed to it. */
-  own_stripe_connected_at?:string|null; timezone?:string|null;
+  own_stripe_connected_at?:string|null; own_stripe_test_connected_at?:string|null; timezone?:string|null;
 }
 export interface FinancePayment {
   id:string; tenant_id:string; rental_id:string|null; amount:number|string;
