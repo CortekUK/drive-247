@@ -38,11 +38,23 @@ const LEAN_TENANTS: readonly string[] = ['northwind'];
 /**
  * Is this tenant on the lean v2 product?
  *
+ * True when the slug is in `LEAN_TENANTS` (the canary list) OR `onV2` says the
+ * tenant's row carries `portal_experience = 'v2'`.
+ *
  * Fails OPEN on every unknown: a null, undefined or unresolved slug is NOT lean,
- * so every gate built on this keeps v1 behaviour until the tenant is known.
+ * so every gate built on this keeps v1 behaviour until the tenant is known —
+ * and that holds even with `onV2` set, because `onV2` can only be true for a
+ * tenant whose row we just read. One rule: no resolved tenant, nothing lean.
+ *
+ * `onV2` defaults to false, so a caller that has not been given the row answers
+ * exactly what it answered before the column existed.
  */
-export function isLeanTenant(tenantSlug: string | null | undefined): boolean {
+export function isLeanTenant(
+  tenantSlug: string | null | undefined,
+  onV2: boolean = false,
+): boolean {
   if (!tenantSlug) return false;
+  if (onV2) return true;
   return LEAN_TENANTS.includes(tenantSlug);
 }
 
@@ -58,11 +70,63 @@ export function isLeanTenant(tenantSlug: string | null | undefined): boolean {
  * rewritten: a document created in the BoldSign sandbox must keep being read
  * with the sandbox key or it 404s. New records for a lean tenant simply record
  * `live`, because creation resolves through here.
+ *
+ * `onV2` carries `tenants.portal_experience = 'v2'`. It MUST be passed wherever
+ * this decides a live/test key, or a column-flagged tenant signs live from the
+ * portal and in the sandbox from here — the half-gated state described above.
  */
 export function resolveBoldSignMode(
   tenantMode: string | null | undefined,
   tenantSlug: string | null | undefined,
+  onV2: boolean = false,
 ): 'test' | 'live' {
-  if (isLeanTenant(tenantSlug)) return 'live';
+  if (isLeanTenant(tenantSlug, onV2)) return 'live';
   return tenantMode === 'live' ? 'live' : 'test';
+}
+
+/** The v2 switch on `public.tenants`. */
+const V2_EXPERIENCE = 'v2';
+
+/**
+ * The narrowest thing this needs from a Supabase client, so a caller can pass
+ * the client it already built without dragging table generics through here.
+ */
+type TenantByIdReader = {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  from: (table: string) => any;
+};
+
+/**
+ * Is the tenant with this id on v2, per `tenants.portal_experience`?
+ *
+ * DELIBERATELY A SECOND QUERY rather than one more column on the select the
+ * caller already makes for `boldsign_mode`. Postgres refuses the WHOLE row when
+ * a named column is missing or ungranted (42703 / 42501), so widening those
+ * selects would make `boldsign_mode` come back undefined for EVERY tenant while
+ * the deploy is ahead of the SQL — every tenant currently on `live` would fall
+ * back to `test` and their signed documents would 404 against the wrong key.
+ * A separate query cannot do that: it fails on its own and answers false.
+ *
+ * Fails closed to false — v1 — on a missing id, a missing row, an unreadable
+ * column, an unknown value, or any thrown error. Never throws.
+ */
+export async function readTenantOnV2ById(
+  client: TenantByIdReader,
+  tenantId: string | null | undefined,
+): Promise<boolean> {
+  if (!tenantId) return false;
+  try {
+    const { data, error } = (await client
+      .from('tenants')
+      .select('portal_experience')
+      .eq('id', tenantId)
+      .maybeSingle()) as {
+      data: { portal_experience?: string | null } | null;
+      error: { message?: string } | null;
+    };
+    if (error) return false;
+    return data?.portal_experience === V2_EXPERIENCE;
+  } catch {
+    return false;
+  }
 }

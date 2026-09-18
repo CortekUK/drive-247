@@ -34,11 +34,27 @@ import { isV2Experience } from '@/lib/v2';
  * every page, for as long as the deploy was ahead of the SQL.
  *
  * The ladder below makes that window harmless: try the full list, and on a
- * column-or-permission error retry the list this file used to send. The retry is
- * a strict SUBSET of the first attempt, which is what makes it a safety net
- * rather than a re-run of the query that just failed — the same two-tier shape
- * `TenantContext` already uses on the client, for the same reason and after the
- * same outage.
+ * column-or-permission error retry a strictly SMALLER list. Each rung dropping
+ * columns is what makes it a safety net rather than a re-run of the query that
+ * just failed — the same shape `TenantContext` already uses on the client, for
+ * the same reason and after the same outage.
+ *
+ * There are THREE rungs, not two, and the third one is not decoration. The
+ * unreadable-column test fires on ANY 42501/42703, not only one naming
+ * `portal_experience` — deliberately, because PostgREST does not reliably
+ * forward which column a privilege error was about. So a privilege error
+ * originating in `primary_color` or `light_primary_color` also takes the retry
+ * branch. With only two rungs the retry re-sent both brand columns, the same
+ * error came back, and the function returned null: every tenant loses its
+ * <title>, favicon and OG image — the exact outcome the ladder exists to
+ * prevent. Rung 3 is the genuine pre-change v1 column list (metadata only:
+ * `withBrand` was false for all ~56 non-canary tenants), so a brand-column
+ * failure degrades to untouched v1 behaviour instead of a doomed retry.
+ *
+ * Today's grants make rung 3 unreachable — `20260723090000_lock_down_tenants_rls.sql`
+ * grants `anon` SELECT on both brand columns and `authenticated` keeps its
+ * table-level grant. It is here because a future grant change must cost a
+ * tenant its brand colour, not its whole page.
  *
  * It is stateless on purpose: no module-level "the column is missing" latch.
  * This module is shared across every request the server process handles, so a
@@ -65,9 +81,20 @@ export type PortalTenantRow = {
   portal_experience?: string | null;
 };
 
-/** What `generateMetadata` and the brand paint have always needed. */
-const BASE_COLUMNS =
-  'app_name, company_name, meta_title, meta_description, favicon_url, og_image_url, primary_color, light_primary_color';
+/**
+ * The columns this file sent for a v1 tenant before the v2 work — i.e. what
+ * `generateMetadata` needs and nothing more. `withBrand` was
+ * `isV2('theme', slug)`, false for every non-canary tenant, so this list is the
+ * genuinely untouched behaviour and the floor of the ladder.
+ */
+const METADATA_COLUMNS =
+  'app_name, company_name, meta_title, meta_description, favicon_url, og_image_url';
+
+/** The brand paint's two columns, added for every tenant now the flag is in the row. */
+const BRAND_COLUMNS = 'primary_color, light_primary_color';
+
+/** What `generateMetadata` and the brand paint together need. */
+const BASE_COLUMNS = `${METADATA_COLUMNS}, ${BRAND_COLUMNS}`;
 
 /** The v2 switch. Ships with `GRANT SELECT (portal_experience) … TO anon, authenticated`. */
 const EXPERIENCE_COLUMN = 'portal_experience';
@@ -129,9 +156,8 @@ export const readPortalTenant = cache(
 
     if (!isColumnUnreadable(first.error)) return null;
 
-    // Rung 2: the column list this file sent before `portal_experience`
-    // existed. The tenant keeps its title, favicon and brand; the gates
-    // resolve to v1 because `portal_experience` comes back undefined.
+    // Rung 2: drop `portal_experience`. The tenant keeps its title, favicon and
+    // brand; the gates resolve to v1 because the column comes back undefined.
     console.debug(
       '[portal-tenant] `portal_experience` is not readable; retrying without ' +
         'it and resolving every gate to v1. Expected until the column and its ' +
@@ -139,8 +165,27 @@ export const readPortalTenant = cache(
       first.error.message
     );
     const second = await select(BASE_COLUMNS);
-    if (second.error) return null;
-    return (second.data as unknown as PortalTenantRow | null) ?? null;
+    if (!second.error) {
+      return (second.data as unknown as PortalTenantRow | null) ?? null;
+    }
+    if (!isColumnUnreadable(second.error)) return null;
+
+    // Rung 3: drop the brand columns too, leaving the exact list a v1 tenant's
+    // request sent before any of this. Reached when the privilege error was
+    // never about `portal_experience` at all — which rung 2 cannot tell, since
+    // PostgREST does not reliably name the offending column. Without this rung
+    // that case returns null and every tenant loses its <title>, favicon and OG
+    // image; with it, the page is exactly what it was and only the brand colour
+    // falls back to the stylesheet default.
+    console.debug(
+      '[portal-tenant] a brand column is not readable either; retrying with ' +
+        'metadata only. The tenant keeps its page and falls back to the ' +
+        'default brand colour. Cause:',
+      second.error.message
+    );
+    const third = await select(METADATA_COLUMNS);
+    if (third.error) return null;
+    return (third.data as unknown as PortalTenantRow | null) ?? null;
   }
 );
 

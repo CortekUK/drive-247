@@ -70,6 +70,7 @@ import { UnsavedChangesDialog } from '@/components/shared/unsaved-changes-dialog
 import { useAuditLogOnOpen } from '@/hooks/use-audit-log-on-open';
 import { useAuditLog } from '@/hooks/use-audit-log';
 import { useV2 } from '@/lib/v2-context';
+import { isV2 } from '@/lib/v2';
 import { PromoCodesTableV2 } from '@/components/settings-v2/promo-codes-table-v2';
 import { SettingsIndexV2 } from '@/components/settings-v2/settings-index';
 import * as BusinessV2 from '@/components/settings-v2/business-settings-states';
@@ -503,7 +504,17 @@ const Settings = () => {
   // tenant switched over by `portal_experience` is in no slug list, and this
   // gate is what decides whether the Turo Sync switch exists on this page at
   // all. Both the v1 and v2 layouts read this one value.
-  const turoV2 = useV2('turo');
+  //
+  // The slug term stays OR'd in, exactly as `app-sidebar.tsx` and the two TRAX
+  // gates write it, so this can never answer NARROWER than it did before the
+  // column existed. `useV2` is resolved from `x-tenant-slug`, and there is one
+  // real host where that header is absent while the client knows the slug
+  // perfectly well: `proxy.ts` matches a custom portal domain with
+  // `.eq('status', 'active')` while `TenantContext` accepts
+  // `.in('status', ['active', 'suspended'])`. Without the OR, a suspended
+  // northwind on its own domain would keep the Turo Sync entry in the sidebar
+  // and lose the row and switch that configure it.
+  const turoV2 = useV2('turo') || isV2('turo', tenantSlug);
 
   // The tabs the lean gate hides, as one set so the fallback below can never
   // land on another hidden tab.

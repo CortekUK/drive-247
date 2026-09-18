@@ -15,7 +15,7 @@ import {
   type HandoverRow,
   type RentalTimeFacts,
 } from '../_shared/agreement-datetime.ts';
-import { resolveBoldSignMode } from '../_shared/lean-tenants.ts';
+import { readTenantOnV2ById, resolveBoldSignMode } from '../_shared/lean-tenants.ts';
 
 interface CreateDocumentRequest {
   rentalId: string;
@@ -996,7 +996,9 @@ Deno.serve(async (req) => {
     if (tenantId) {
       const { data: tenantInfo } = await supabase
         .from('tenants')
-        // `slug` feeds resolveBoldSignMode() — the lean gate is slug-keyed.
+        // `slug` feeds resolveBoldSignMode(), which is slug-keyed AND column-keyed:
+        // `tenants.portal_experience` is the second term, read in a query of
+        // its own so an unreadable column cannot refuse this whole row.
         .select('slug, currency_code, boldsign_mode, boldsign_test_brand_id, boldsign_live_brand_id')
         .eq('id', tenantId)
         .single();
@@ -1004,7 +1006,15 @@ Deno.serve(async (req) => {
       // Lean tenants are always live, whatever the column says. This is a CREATE
       // path, so the mode chosen here is recorded on the agreement row and is
       // what the webhook later uses to download the signed PDF.
-      boldsignMode = resolveBoldSignMode(tenantInfo?.boldsign_mode, tenantInfo?.slug);
+      //
+      // `portal_experience = 'v2'` makes a tenant lean too, and it is read in a
+      // query of its own rather than added to the select above — a column
+      // Postgres cannot yet read refuses the WHOLE row, which would drop
+      // `boldsign_mode` for every tenant. Without this term an automation step
+      // creates the agreement in the SANDBOX (watermarked, deleted after 14
+      // days) while the portal creates the same tenant's agreements live.
+      const onV2 = await readTenantOnV2ById(supabase, tenantId);
+      boldsignMode = resolveBoldSignMode(tenantInfo?.boldsign_mode, tenantInfo?.slug, onV2);
       const brandId = getBoldSignBrandId(tenantInfo || {}, boldsignMode);
       if (brandId) tenantBrandId = brandId;
     }

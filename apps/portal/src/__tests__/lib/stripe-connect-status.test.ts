@@ -136,6 +136,69 @@ describe("isRentalCreationBlocked", () => {
     expect(isRentalCreationBlocked(unusable, "6e5c544f-b374-451f-a662-360a634bff15")).toBe(false);
     expect(isRentalCreationBlocked(unusable, "8e6bc88f-86d6-4468-8610-73f7c8a88f6e")).toBe(false);
   });
+
+  /**
+   * THE THIRD ARGUMENT IS `onV2`, THE RAW COLUMN — not a pre-resolved `lean`.
+   *
+   * Every gate the v2-column work touched takes the column flag last and ORs it
+   * with the canary slug list internally: `isV2(area, slug, onV2)`,
+   * `isLeanTenant(slug, onV2)`, `isAreaHidden(area, slug, onV2)`,
+   * `isTestModeUiHidden(slug, onV2)`, `isSettingsTabHidden(tab, slug, onV2)`,
+   * `resolveBoldSignMode(mode, slug, onV2)`,
+   * `applyBillingScenario(real, scenario, slug, onV2)`. This one briefly took a
+   * resolved boolean in that position, which is a trap rather than a style
+   * quibble: a caller who followed the house shape would pass `onV2` — false for
+   * northwind, whose row is not 'v2' until the SQL lands — and the canary's New
+   * Rental flow would silently stop being gated on a usable Connect account,
+   * free to create rentals it cannot charge for.
+   */
+  it("still blocks the slug-list canary when onV2 is false", () => {
+    // northwind is lean through the LIST. A caller handing over the raw column
+    // flag must not be able to un-gate it.
+    expect(isRentalCreationBlocked(unusable, "northwind", false)).toBe(true);
+    expect(isRentalCreationBlocked(usable, "northwind", false)).toBe(false);
+  });
+
+  it("blocks a column-flagged tenant that is in no list at all", () => {
+    // The self-serve tenant: `portal_experience = 'v2'`, in no slug list.
+    expect(isRentalCreationBlocked(unusable, "wings", true)).toBe(true);
+    expect(isRentalCreationBlocked(usable, "wings", true)).toBe(false);
+    // And with the flag off it is an ordinary v1 tenant: never blocked.
+    expect(isRentalCreationBlocked(unusable, "wings", false)).toBe(false);
+    expect(isRentalCreationBlocked(unusable, "wings")).toBe(false);
+  });
+
+  it("never blocks a v1 operator even with the flag explicitly false", () => {
+    // 6 of the 18 trading tenants fail the Connect rule.
+    for (const slug of ["goniko", "revtekrentals", "globalmotiontransport"]) {
+      expect(isRentalCreationBlocked(unusable, slug, false)).toBe(false);
+    }
+  });
+
+  it("fails open on an unresolved slug even when the flag says v2", () => {
+    // One rule across every gate: no resolved tenant, nothing gated.
+    expect(isRentalCreationBlocked(unusable, null, true)).toBe(false);
+    expect(isRentalCreationBlocked(unusable, undefined, true)).toBe(false);
+    expect(isRentalCreationBlocked(unusable, "", true)).toBe(false);
+  });
+
+  it("is declared with the flag named onV2, so the convention is readable", () => {
+    // The name is the whole defence against the trap above: a reviewer reading
+    // the call site has to be able to see which of the two things is expected.
+    const src = readPortalSource("lib/stripe-connect-status.ts");
+    // `[\s\S]` rather than the `/s` flag: this tsconfig targets ES2017, where
+    // the dotAll flag is a compile error (TS1501).
+    expect(src).toMatch(/export function isRentalCreationBlocked\([^)]*onV2: boolean = false/);
+    expect(src).not.toMatch(/lean: boolean = isLeanTenant\(/);
+    // And it resolves the OR itself rather than trusting the caller to.
+    expect(src).toMatch(/if \(!isLeanTenant\(tenantSlug, onV2\)\) return false;/);
+  });
+
+  it("the one live call site passes the raw column flag", () => {
+    const hook = readPortalSource("hooks/use-rental-creation-gate.ts");
+    expect(hook).toMatch(/const onV2 = usePortalOnV2\(\);/);
+    expect(hook).toMatch(/isRentalCreationBlocked\(data, tenantSlug, onV2\)/);
+  });
 });
 
 /**

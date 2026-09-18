@@ -109,7 +109,15 @@ export function SubscriptionGateDialog({
         onPointerDownOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
       >
-        {plansLoading ? (
+        {/* WAIT FOR PLANS ONLY IF THIS VARIANT SELLS SOMETHING.
+            `setup` and `expired` build PricingCards out of `plans`, so they have
+            to wait. `past_due` never reads `plans` at all — it hands an existing
+            customer the hosted invoice link — and waiting made this modal a dead
+            end: no Esc, no outside click, no close button, and under the same
+            `plansLoading` condition no pay link and no Sign out either. One
+            request with retry: 1 is seconds on a bad network, and it lands on the
+            tenant who is already hard-blocked. */}
+        {plansLoading && !isPastDue ? (
           <div className="flex flex-col items-center py-8">
             {/* Radix requires a DialogTitle for an accessible name. With the old
                 titled intro removed, this loading state is the initial render on a
@@ -248,7 +256,9 @@ export function SubscriptionGateDialog({
           </>
         )}
 
-        {!plansLoading && (
+        {/* Same rule as the body above: the escape is hidden only while a
+            variant that genuinely needs plans is waiting for them. */}
+        {(!plansLoading || isPastDue) && (
           <button
             type="button"
             onClick={handleSignOut}
