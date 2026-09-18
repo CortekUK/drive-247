@@ -70,6 +70,12 @@ export interface BusinessReads {
   count(build: (query: BusinessQuery) => BusinessQuery, table: string): Promise<number>;
   /** One bounded page of the approved columns. */
   page(build: (query: BusinessQuery) => BusinessQuery, table: string, columns: string, offset: number, limit: number): Promise<{ rows: Record<string, unknown>[]; total: number }>;
+  /**
+   * The names for a set of ids, so a grouped answer reads as customers and cars
+   * rather than uuids. Tenant-scoped, one request, and only the columns the
+   * catalog names for that field.
+   */
+  labels(table: string, keyColumn: string, tenantColumn: string, tenantId: string, columns: readonly string[], ids: readonly string[]): Promise<Record<string, unknown>[]>;
 }
 
 export function createBusinessReads(db: BusinessDatabase): BusinessReads {
@@ -88,6 +94,15 @@ export function createBusinessReads(db: BusinessDatabase): BusinessReads {
       const result = await run(build(db.from(table).select(columns, { count: 'exact' })).order('id').range(offset, offset + limit - 1));
       if (!Array.isArray(result.data) || !Number.isSafeInteger(result.count) || result.count! < 0) throw new SupportError('incomplete_read', 'A complete page was not returned.', 503);
       return { rows: result.data as Record<string, unknown>[], total: result.count! };
+    },
+    labels: async (table, keyColumn, tenantColumn, tenantId, columns, ids) => {
+      if (!ids.length) return [];
+      // The tenant filter is the same one every other read carries: a name is still
+      // this account's record, and a label lookup must not become a way around that.
+      const select = [...new Set([keyColumn, tenantColumn, ...columns])].join(',');
+      const result = await run(db.from(table).select(select).eq(tenantColumn, tenantId).in(keyColumn, [...ids]).limit(ids.length));
+      if (!Array.isArray(result.data)) throw new SupportError('incomplete_read', 'Names for the grouped records were not returned.', 503);
+      return result.data as Record<string, unknown>[];
     },
   };
 }
@@ -402,6 +417,37 @@ export async function runBusinessQuery(spec: QuerySpec, env: BusinessContext): P
         answer.complete = false;
         limitations.push(`This query matched ${total} records and was measured over the first ${offset}. The figure shown is partial; narrow the period or the filters, or ask for a report.`);
         break;
+      }
+    }
+    /*
+     * Name the groups.
+     *
+     * Until here a bucket's label is the raw column value, so grouping by customer
+     * answered with uuids. One tenant-scoped lookup turns those into the names the
+     * account uses. A record that cannot be named keeps its id rather than being
+     * dropped or guessed at, and a failed lookup leaves every label as it was —
+     * unreadable, but never wrong.
+     */
+    if (groupField?.labels) {
+      // Bounded, not shaped: these keys came out of the column itself, so the risk
+      // is volume rather than content. Restricting them to uuids also silently
+      // skipped every table that keys on something else.
+      const ids = [...new Set([...totals.values()].map((b) => b.key).filter((key) => key && key.length <= 64))].slice(0, 200);
+      if (ids.length) {
+        try {
+          const { table, keyColumn, tenantColumn, columns } = groupField.labels;
+          const rows = await env.business.labels(table, keyColumn, tenantColumn, env.auth.tenant.id, columns, ids);
+          const named = new Map<string, string>();
+          for (const row of rows) {
+            if (String(row[tenantColumn]) !== env.auth.tenant.id) continue;   // never name another account's record
+            const text = columns.map((c) => row[c]).filter((v) => v !== null && v !== undefined && String(v).trim()).join(' ').trim();
+            if (text) named.set(String(row[keyColumn]), text);
+          }
+          for (const bucket of totals.values()) {
+            const name = named.get(bucket.key);
+            if (name) bucket.label = name;
+          }
+        } catch { /* A name is a convenience; the measurement stands without it. */ }
       }
     }
     answer.groups = [...totals.values()]

@@ -28,6 +28,9 @@ import { OPEN_RENTAL_STATUSES, OUT_NOW_STATUSES } from './availability-rules.gen
 
 export const CATALOG_VERSION = '0.2.0';
 
+import { CUSTOMER_REF, VEHICLE_REF, RENTAL_REF } from './business-catalog-refs.ts';
+export { CUSTOMER_REF, VEHICLE_REF, RENTAL_REF };
+
 export type FieldKind = 'text' | 'uuid' | 'number' | 'money' | 'date' | 'timestamp' | 'boolean' | 'enum';
 export interface Field {
   name: string; column: string; kind: FieldKind; label: string;
@@ -37,6 +40,15 @@ export interface Field {
   groupable?: boolean;
   filterable?: boolean;
   meaning?: string;
+  /**
+   * Turn a stored id into the name a person uses for it.
+   *
+   * Grouping by customer_id answered with "9927be94-078c-…" — the raw column value
+   * — so "what did each customer pay" was a list of UUIDs, useless to read and
+   * impossible to act on. The lookup is tenant-scoped and reads only the columns
+   * named here, so it can name a record without widening what the caller can see.
+   */
+  labels?: { table: string; keyColumn: string; tenantColumn: string; columns: readonly string[] };
 }
 export interface Metric {
   name: string; label: string; kind: 'count' | 'sum';
@@ -118,7 +130,7 @@ export const RENTALS: Dataset = {
   meaning: 'Every booking/rental record, at any stage of its life. A rental holds a vehicle while its status is one of ' + OPEN_RENTAL_STATUSES.join(', ') + '; it is out with a renter now when its status is ' + [...OUT_NOW_STATUSES].join(' or ') + '. Status is the recorded state, not proof of physical possession.',
   fields: [
     { name: 'status', column: 'status', kind: 'enum', values: RENTAL_STATUSES, label: 'Status', groupable: true, filterable: true, meaning: 'The recorded rental state.' },
-    { name: 'vehicle_id', column: 'vehicle_id', kind: 'uuid', label: 'Vehicle', groupable: true, filterable: true },
+    VEHICLE_REF,
     { name: 'rental_number', column: 'rental_number', kind: 'text', label: 'Rental number', filterable: true },
     { name: 'pay_as_you_go', column: 'is_pay_as_you_go', kind: 'boolean', label: 'Pay as you go', groupable: true, filterable: true },
   ],
@@ -164,8 +176,8 @@ export const PAYMENTS: Dataset = {
   fields: [
     { name: 'status', column: 'status', kind: 'enum', values: ['Applied', 'Credit', 'Partial', 'Reversed', 'Pending', 'Completed', 'Refunded', 'Partial Refund'], label: 'Status', groupable: true, filterable: true },
     { name: 'payment_type', column: 'payment_type', kind: 'text', label: 'Type', groupable: true, filterable: true },
-    { name: 'customer_id', column: 'customer_id', kind: 'uuid', label: 'Customer', groupable: true, filterable: true },
-    { name: 'rental_id', column: 'rental_id', kind: 'uuid', label: 'Rental', groupable: true, filterable: true },
+    CUSTOMER_REF,
+    RENTAL_REF,
   ],
   metrics: [
     { name: 'collected', label: 'Collected', kind: 'sum', column: 'amount', subtractColumn: 'refund_amount', currency: 'per_currency', definition: 'Money the application records as received: payments with a received status, excluding authorizations still awaiting capture, each counted as its amount minus any refund recorded against it (payment-status.ts). Not a Stripe payout, balance or bank figure.', dateBasis: 'payment_date' },
@@ -197,9 +209,9 @@ export const PROFIT_AND_LOSS: Dataset = {
   fields: [
     { name: 'side', column: 'side', kind: 'enum', values: ['Revenue', 'Cost'], label: 'Side', groupable: true, filterable: true },
     { name: 'category', column: 'category', kind: 'text', label: 'Category', groupable: true, filterable: true },
-    { name: 'vehicle_id', column: 'vehicle_id', kind: 'uuid', label: 'Vehicle', groupable: true, filterable: true },
-    { name: 'customer_id', column: 'customer_id', kind: 'uuid', label: 'Customer', groupable: true, filterable: true },
-    { name: 'rental_id', column: 'rental_id', kind: 'uuid', label: 'Rental', groupable: true, filterable: true },
+    VEHICLE_REF,
+    CUSTOMER_REF,
+    RENTAL_REF,
   ],
   metrics: [
     // _money-model.ts: NON_REVENUE_CATEGORIES and CAPITAL_COST_CATEGORIES.

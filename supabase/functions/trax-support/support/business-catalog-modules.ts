@@ -13,6 +13,7 @@
  * METRIC instead, so a role without finance can still count rows.
  */
 import type { Dataset } from './business-catalog.ts';
+import { CUSTOMER_REF, VEHICLE_REF, RENTAL_REF } from './business-catalog-refs.ts';
 
 /* ── Invoices ────────────────────────────────────────────────────────────── */
 export const INVOICES: Dataset = {
@@ -20,9 +21,9 @@ export const INVOICES: Dataset = {
   meaning: 'Invoice documents this account has issued. An invoice is what was billed, which is not the same as what was collected (payments) or what is still owed (customer balances). `status` is the invoice document state, not a payment state.',
   fields: [
     { name: 'status', column: 'status', kind: 'enum', values: ['pending', 'paid'], label: 'Status', groupable: true, filterable: true, meaning: 'Only these two values are stored; there is no cancelled or void state on the invoice itself.' },
-    { name: 'customer_id', column: 'customer_id', kind: 'uuid', label: 'Customer', groupable: true, filterable: true },
-    { name: 'rental_id', column: 'rental_id', kind: 'uuid', label: 'Rental', groupable: true, filterable: true },
-    { name: 'vehicle_id', column: 'vehicle_id', kind: 'uuid', label: 'Vehicle', groupable: true, filterable: true },
+    CUSTOMER_REF,
+    RENTAL_REF,
+    VEHICLE_REF,
   ],
   metrics: [
     { name: 'invoice_count', label: 'Invoices', kind: 'count', currency: 'none', definition: 'Number of invoice records matching the filters.', dateBasis: 'invoice_date' },
@@ -48,9 +49,9 @@ export const FINES: Dataset = {
     { name: 'status', column: 'status', kind: 'enum', values: ['Open', 'Paid', 'Waived'], label: 'Status', groupable: true, filterable: true },
     { name: 'type', column: 'type', kind: 'text', label: 'Type', groupable: true, filterable: true, meaning: 'Free text as entered by staff (Toll Fees, PCN, Key Replacement, Speeding, …), so it is not a fixed list.' },
     { name: 'liability', column: 'liability', kind: 'text', label: 'Liability', groupable: true, filterable: true, meaning: 'Who is responsible for the fine; every stored row currently says Customer.' },
-    { name: 'customer_id', column: 'customer_id', kind: 'uuid', label: 'Customer', groupable: true, filterable: true },
-    { name: 'vehicle_id', column: 'vehicle_id', kind: 'uuid', label: 'Vehicle', groupable: true, filterable: true },
-    { name: 'rental_id', column: 'rental_id', kind: 'uuid', label: 'Rental', groupable: true, filterable: true },
+    CUSTOMER_REF,
+    VEHICLE_REF,
+    RENTAL_REF,
   ],
   metrics: [
     { name: 'fine_count', label: 'Fines', kind: 'count', currency: 'none', definition: 'Number of fine records matching the filters.', dateBasis: 'issue_date' },
@@ -74,9 +75,9 @@ export const LEDGER: Dataset = {
   fields: [
     { name: 'type', column: 'type', kind: 'enum', values: ['Charge', 'Payment', 'Refund'], label: 'Type', groupable: true, filterable: true },
     { name: 'category', column: 'category', kind: 'text', label: 'Category', groupable: true, filterable: true, meaning: 'Rental, Extension Rental, Tax, Extension Tax, Service Fee, Insurance, Security Deposit, Fine, Delivery Fee, Extras, Excess Mileage, Adjustment and similar.' },
-    { name: 'customer_id', column: 'customer_id', kind: 'uuid', label: 'Customer', groupable: true, filterable: true },
-    { name: 'rental_id', column: 'rental_id', kind: 'uuid', label: 'Rental', groupable: true, filterable: true },
-    { name: 'vehicle_id', column: 'vehicle_id', kind: 'uuid', label: 'Vehicle', groupable: true, filterable: true },
+    CUSTOMER_REF,
+    RENTAL_REF,
+    VEHICLE_REF,
   ],
   metrics: [
     { name: 'entry_count', label: 'Entries', kind: 'count', currency: 'none', definition: 'Number of ledger entries matching the filters.', dateBasis: 'entry_date' },
@@ -100,7 +101,7 @@ export const EXPENSES: Dataset = {
   meaning: 'Money this account spent, recorded against a vehicle or as general overhead — servicing, repairs, insurance, salaries, rent, marketing, tolls and similar. Costs recorded here feed the profit and loss entries; this dataset is the expense records themselves.',
   fields: [
     { name: 'category', column: 'category', kind: 'text', label: 'Category', groupable: true, filterable: true, meaning: 'As entered by staff: Service, Rent, Insurance, Salaries, Repair, Valet, Marketing, Utilities, Tyres, Software, Tolls, Cleaning, Parking, Accessory and similar.' },
-    { name: 'vehicle_id', column: 'vehicle_id', kind: 'uuid', label: 'Vehicle', groupable: true, filterable: true },
+    VEHICLE_REF,
     { name: 'vendor', column: 'vendor', kind: 'text', label: 'Vendor', groupable: true, filterable: true },
     { name: 'payment_method', column: 'payment_method', kind: 'text', label: 'Payment method', groupable: true, filterable: true },
     { name: 'is_recurring', column: 'is_recurring', kind: 'boolean', label: 'Recurring', groupable: true, filterable: true },
@@ -152,7 +153,7 @@ export const RENTAL_EXTENSIONS: Dataset = {
   meaning: 'Requests to extend a rental beyond its end date, and what each was worth. An extension that is approved has been agreed; paid means the customer has settled it. Counting extensions is an operational question and needs no finance permission; their value does.',
   fields: [
     { name: 'status', column: 'status', kind: 'enum', values: ['approved', 'paid', 'cancelled'], label: 'Status', groupable: true, filterable: true },
-    { name: 'rental_id', column: 'rental_id', kind: 'uuid', label: 'Rental', groupable: true, filterable: true },
+    RENTAL_REF,
     { name: 'sequence_number', column: 'sequence_number', kind: 'number', label: 'Extension number', groupable: true, filterable: true, meaning: 'Which extension this is for that rental: 1 is the first.' },
   ],
   metrics: [
@@ -184,7 +185,7 @@ export const DEPOSITS: Dataset = {
     { name: 'platform_account', column: 'platform_account', kind: 'text', label: 'Platform account', groupable: true, filterable: true },
     { name: 'extended_auth_status', column: 'extended_auth_status', kind: 'text', label: 'Extended authorization', groupable: true, filterable: true },
     { name: 'card_funding', column: 'card_funding', kind: 'text', label: 'Card funding', groupable: true, filterable: true },
-    { name: 'rental_id', column: 'rental_id', kind: 'uuid', label: 'Rental', groupable: true, filterable: true },
+    RENTAL_REF,
   ],
   metrics: [
     { name: 'attempt_count', label: 'Hold attempts', kind: 'count', currency: 'none', definition: 'Number of deposit hold attempts matching the filters. One rental may have several. Available without the finance permission.', dateBasis: 'created_at' },
@@ -238,7 +239,7 @@ export const MAINTENANCE: Dataset = {
     { name: 'category', column: 'category', kind: 'text', label: 'Category', groupable: true, filterable: true },
     { name: 'service_type', column: 'service_type', kind: 'text', label: 'Service type', groupable: true, filterable: true },
     { name: 'vendor_name', column: 'vendor_name', kind: 'text', label: 'Vendor', groupable: true, filterable: true },
-    { name: 'vehicle_id', column: 'vehicle_id', kind: 'uuid', label: 'Vehicle', groupable: true, filterable: true },
+    VEHICLE_REF,
   ],
   metrics: [
     { name: 'job_count', label: 'Maintenance jobs', kind: 'count', currency: 'none', definition: 'Number of maintenance jobs matching the filters.', dateBasis: 'scheduled_start' },
@@ -265,7 +266,7 @@ export const VERIFICATIONS: Dataset = {
     { name: 'provider', column: 'provider', kind: 'text', label: 'Provider', groupable: true, filterable: true },
     { name: 'document_type', column: 'document_type', kind: 'text', label: 'Document type', groupable: true, filterable: true, meaning: 'The KIND of document (licence, passport) — never its number.' },
     { name: 'document_country', column: 'document_country', kind: 'text', label: 'Document country', groupable: true, filterable: true },
-    { name: 'customer_id', column: 'customer_id', kind: 'uuid', label: 'Customer', groupable: true, filterable: true },
+    CUSTOMER_REF,
   ],
   metrics: [
     { name: 'verification_count', label: 'Verifications', kind: 'count', currency: 'none', definition: 'Number of verification records matching the filters. One customer may have several attempts, so this is attempts, not verified customers.', dateBasis: 'created_at' },

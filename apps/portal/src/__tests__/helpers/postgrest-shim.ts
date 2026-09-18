@@ -31,6 +31,7 @@ export function postgrestShim(tables: () => Record<string, Row[]>, statements: S
             not: (c: string) => keep((r) => r[c] !== null && r[c] !== undefined, `${c}=not.is.null`),
             ilike: (c: string, p: string) => keep((r) => String(r[c] ?? '').toLowerCase().includes(p.replaceAll('%', '').toLowerCase()), `${c}=ilike.${p}`),
             order: () => query,
+            limit: (n: number) => { rows = rows.slice(0, n); return query; },
             // PostgREST reports the filtered total in the header, before the range.
             range: (from: number, to: number) => { matched = rows.length; rows = rows.slice(from, to + 1); return query; },
             then: (ok: (value: unknown) => unknown, no?: (e: unknown) => unknown) =>

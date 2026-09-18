@@ -45,6 +45,7 @@ function database(): BusinessDatabase {
             not: (c: string) => keep((r) => r[c] !== null && r[c] !== undefined, `${c}=not.is.null`),
             ilike: (c: string, p: string) => keep((r) => String(r[c] ?? '').toLowerCase().includes(p.replaceAll('%', '').toLowerCase()), `${c}=ilike.${p}`),
             order: () => query,
+            limit: (n: number) => { rows = rows.slice(0, n); return query; },
             range: (from: number, to: number) => { rows = rows.slice(from, to + 1); return query; },
             then: (ok: (value: unknown) => unknown, no?: (e: unknown) => unknown) =>
               Promise.resolve({ data: options?.head ? null : rows, error: null, count: (tables[table] ?? []).length && rows ? undefined : undefined }).then(() => ok({ data: options?.head ? null : rows, error: null, count: countOf(table, log) }), no),
@@ -328,5 +329,36 @@ describe('money and completeness', () => {
     } finally {
       Object.defineProperty(dataset, 'rowCap', cap!);
     }
+  });
+});
+
+/*
+ * Grouped answers name the record.
+ *
+ * A group's label was the raw column value, so "which car earned what" answered
+ * with uuids — technically correct and unusable. These pin the name, pin that the
+ * id survives as the key a follow-up addresses, and pin that naming never reaches
+ * outside the account.
+ */
+describe('grouped answers use names, not ids', () => {
+  it('names the vehicle instead of printing its id', async () => {
+    const result = await runBusinessQuery(parseSpec({ dataset: 'rentals', metric: 'rental_count', groupBy: 'vehicle_id' }), context());
+    const groups = answerOf(result).groups;
+    expect(groups.map((g) => g.label)).toEqual(['NWD-1 Toyota Yaris', 'NWD-2 Toyota Corolla']);
+    // The id stays as the key: it is how a follow-up addresses the record.
+    expect(groups.map((g) => g.key)).toEqual(['v1', 'v2']);
+  });
+
+  it('never borrows a name from another account', async () => {
+    const result = await runBusinessQuery(parseSpec({ dataset: 'rentals', metric: 'rental_count', groupBy: 'vehicle_id' }), context());
+    expect(JSON.stringify(answerOf(result).groups)).not.toContain('OTH-9');
+  });
+
+  it('keeps the id when the record cannot be named, and leaves the measurement alone', async () => {
+    tables.vehicles = [];   // the name lookup finds nothing
+    const result = await runBusinessQuery(parseSpec({ dataset: 'rentals', metric: 'rental_count', groupBy: 'vehicle_id' }), context());
+    const groups = answerOf(result).groups;
+    expect(groups.map((g) => g.label)).toEqual(['v1', 'v2']);
+    expect(groups.map((g) => g.value)).toEqual(['2', '1']);
   });
 });
