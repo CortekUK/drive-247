@@ -4,6 +4,8 @@ import { object, onlyKeys, SupportError, UUID } from './types.ts';
 import type { OperationalResult } from './operational-types.ts';
 import { financeScopes, type FinancePolicy, type FinanceServices, type FinanceScope, type StripeMapping } from './finance-types.ts';
 import { FINANCE_LIMIT, createFinanceReads, type FinanceDatabase } from './finance-reads.ts';
+import { toMinorUnits, fromMinorUnits } from './business-query.ts';
+import type { FinanceEntry, FinanceApplication } from './finance-types.ts';
 import { recordedMinorUnits, stripeMoney, hasStripeReadKey } from './stripe-readonly.ts';
 import { configuredReadOnlyStripe } from './stripe-remote.ts';
 
@@ -76,10 +78,12 @@ export async function getRentalPaymentSummary(input:unknown,env:FinanceToolConte
   r.checks=['rental_access','recorded_charges','payment_applications','direct_and_allocated_payments'];
   const page=rows.payments.slice(Number(offset),Number(offset)+25);
   r.data={rentalId:a.rentalId,totalLinkedPayments:rows.payments.length,completeRecordSet:true,nextOffset:Number(offset)+25<rows.payments.length?Number(offset)+25:null,
-    payments:page.map(p=>({id:p.id,recordedStatus:state(p.status),recordedCaptureStatus:state(p.capture_status),recordedVerification:state(p.verification_status),provider:state(p.payment_provider),hasStripeIntent:!!p.stripe_payment_intent_id,hasCheckoutLink:!!p.stripe_checkout_session_id,recordedRefundStatus:state(p.refund_status),applicationCount:rows.applications.filter(x=>x.payment_id===p.id).length})),moneyTotals:null};
+    payments:page.map(p=>({id:p.id,recordedStatus:state(p.status),recordedCaptureStatus:state(p.capture_status),recordedVerification:state(p.verification_status),provider:state(p.payment_provider),hasStripeIntent:!!p.stripe_payment_intent_id,hasCheckoutLink:!!p.stripe_checkout_session_id,recordedRefundStatus:state(p.refund_status),applicationCount:rows.applications.filter(x=>x.payment_id===p.id).length})),
+    money:rentalMoney(rows.entries,rows.applications,await env.finance.reads.tenant(env.auth.tenant.id).then(t=>t?.currency_code??null).catch(()=>null)),
+    moneyTotals:null};
   r.findings.push({code:'linked_payments',summary:`Drive247 records ${rows.payments.length} linked payment record(s) and ${rows.entries.filter(e=>e.type==='Charge').length} charge entry/entries for this rental. Showing ${page.length} payment record(s). These are internal records, not proof of Stripe collection.`,sourceIds:r.sources.map(s=>s.id),blocking:false});
   if(rows.payments.some(p=>p.capture_status==='requires_capture'))r.findings.push({code:'authorization_hold',summary:'At least one payment is recorded as awaiting capture. An authorization hold must not be treated as collected money.',sourceIds:r.sources.map(s=>s.id),blocking:false});
-  partial(r,'No rental money total is calculated: legacy ledger/payment rows lack historical currency provenance. Statuses are recorded state only; Stripe has not been checked by this tool.');
+  r.limitations.push('Amounts are in the account’s current currency: these rows carry no currency of their own, so a rental billed before a currency change would be restated in today’s. Recorded statuses are internal state; Stripe has not been checked by this tool.');
   return r;
 }
 export async function inspectRentalPayment(input:unknown,env:FinanceToolContext):Promise<OperationalResult> {
@@ -131,3 +135,65 @@ export async function getStripeAccountSummary(input:unknown,env:FinanceToolConte
   r.limitations=['Account-level funds only, not any rental’s balance. Currencies are separate; no conversion or payout-arrival guarantee is provided.'];return r;
 }
 export const FINANCE_TOOLS=Object.freeze({get_rental_payment_summary:getRentalPaymentSummary,inspect_rental_payment:inspectRentalPayment,get_stripe_account_summary:getStripeAccountSummary});
+
+/*
+ * What one rental is worth, charged and outstanding.
+ *
+ * getRentalPaymentSummary deliberately returns moneyTotals:null, on the grounds
+ * that legacy ledger rows carry no currency of their own. That is true, and it is
+ * also true that the portal shows Balance Due and Collected on every rental page
+ * from these same rows. Refusing to state what the screen beside it already states
+ * is a gap rather than a safeguard, so the figure is given WITH its provenance
+ * rather than withheld because of it.
+ *
+ * The rules are the portal's, not new ones:
+ * - charges are ledger rows of type 'Charge' (use-rental-ledger-data.ts:202-265);
+ * - the Security Deposit charge is excluded, because it is a held amount rather
+ *   than rental revenue (payments-model.ts:685-688);
+ * - outstanding is the remaining_amount the payment system maintains, never
+ *   amount minus a separately summed payments figure, so the two cannot drift;
+ * - paid is what was actually ALLOCATED to those charges (payment_applications),
+ *   which is why an uncaptured hold cannot appear as money received: nothing is
+ *   allocated from it.
+ *
+ * Pay-as-you-go rentals are refused rather than approximated: their outstanding
+ * lives in payg_accruals, which this reader does not fetch, and summing the ledger
+ * for them double-counts the same day (use-customer-balance.ts:7-15).
+ */
+const DEPOSIT_CATEGORY = 'Security Deposit';
+
+export interface RentalMoney {
+  currency: string | null;
+  charged: string; paid: string; outstanding: string;
+  chargeCount: number; excludedDeposit: boolean;
+  basis: string;
+}
+
+export function rentalMoney(
+  entries: readonly FinanceEntry[],
+  applications: readonly FinanceApplication[],
+  currency: string | null,
+): RentalMoney {
+  const charges = entries.filter((e) => e.type === 'Charge');
+  const counted = charges.filter((e) => e.category !== DEPOSIT_CATEGORY);
+  const chargeIds = new Set(counted.map((e) => e.id));
+
+  let charged = 0, outstanding = 0, paid = 0;
+  for (const entry of counted) {
+    charged += toMinorUnits(entry.amount);
+    outstanding += Math.max(0, toMinorUnits(entry.remaining_amount ?? 0));
+  }
+  for (const application of applications) {
+    if (chargeIds.has(application.charge_entry_id)) paid += toMinorUnits(application.amount_applied);
+  }
+
+  return {
+    currency,
+    charged: fromMinorUnits(charged),
+    paid: fromMinorUnits(paid),
+    outstanding: fromMinorUnits(outstanding),
+    chargeCount: counted.length,
+    excludedDeposit: counted.length !== charges.length,
+    basis: 'Charged is this rental’s charge entries; paid is what has been allocated to them; outstanding is the remaining amount the payment system maintains. An authorization awaiting capture allocates nothing, so it is not counted as paid. A charged security deposit is excluded — it is held, not earned. These are the account’s own records, not a Stripe or bank figure.',
+  };
+}

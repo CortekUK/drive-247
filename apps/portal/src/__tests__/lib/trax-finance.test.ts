@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { webcrypto } from 'node:crypto';
 import { authorize } from '../../../../../supabase/functions/trax-support/support/auth';
-import { configuredFinancePolicy, getRentalPaymentSummary, inspectRentalPayment, getStripeAccountSummary, type FinanceToolContext } from '../../../../../supabase/functions/trax-support/support/finance-tools';
+import { configuredFinancePolicy, getRentalPaymentSummary, inspectRentalPayment, getStripeAccountSummary, rentalMoney, type FinanceToolContext } from '../../../../../supabase/functions/trax-support/support/finance-tools';
 import { createFinanceReads, type FinanceDatabase } from '../../../../../supabase/functions/trax-support/support/finance-reads';
 import { createReadOnlyStripe, isReadEndpoint, stripeKeyIsRestricted, stripeMoney, recordedMinorUnits } from '../../../../../supabase/functions/trax-support/support/stripe-readonly';
 import { financeScopes, type FinancePayment, type FinanceServices, type StripeMapping } from '../../../../../supabase/functions/trax-support/support/finance-types';
@@ -46,7 +46,19 @@ describe('finance permissions and bounded tenant reads',()=>{
   it('rejects another tenant rental before financial reads and hides its existence',async()=>{await expect(getRentalPaymentSummary({rentalId:other},await env())).rejects.toMatchObject({code:'record_unavailable'});expect(finance.reads.entries).not.toHaveBeenCalled();});
   it('does not trust a tenant returned incorrectly by an adapter',async()=>{p.tenant_id=other;await expect(getRentalPaymentSummary({rentalId:rental},await env())).rejects.toMatchObject({code:'record_unavailable'});});
   it('includes customer-level payments allocated to the rental without inventing a direct link',async()=>{p.rental_id=null;const r=await getRentalPaymentSummary({rentalId:rental},await env());expect(r.data).toMatchObject({totalLinkedPayments:1,moneyTotals:null});expect(finance.reads.payments).toHaveBeenCalledWith(tenant,rental,[payment]);});
-  it('lists holds separately from collected money, without guessing historical currency totals',async()=>{p.capture_status='requires_capture';const r=await getRentalPaymentSummary({rentalId:rental},await env());expect(r.findings.some(f=>f.code==='authorization_hold')).toBe(true);expect(r.status).toBe('partial');expect(r.data?.moneyTotals).toBeNull();expect(finance.stripe.intent).not.toHaveBeenCalled();});
+  it('lists holds separately from collected money, and never counts one as paid',async()=>{
+    // The rental now DOES get a money figure, so the result is no longer "partial";
+    // what must stay true is that a hold contributes nothing to it. The hold
+    // allocates nothing, so `paid` is unmoved and the charge is still outstanding.
+    p.capture_status='requires_capture';
+    finance.reads.entries=vi.fn(async()=>[{id:charge,tenant_id:tenant,rental_id:rental,type:'Charge',amount:100,category:'Rental',remaining_amount:100}]);
+    finance.reads.applications=vi.fn(async()=>[]);
+    const r=await getRentalPaymentSummary({rentalId:rental},await env());
+    expect(r.findings.some(f=>f.code==='authorization_hold')).toBe(true);
+    expect(r.data?.money).toMatchObject({charged:'100.00',paid:'0.00',outstanding:'100.00',currency:'USD'});
+    expect(r.limitations.join(' ')).toMatch(/current currency/);
+    expect(finance.stripe.intent).not.toHaveBeenCalled();
+  });
   it('does not turn missing application payments into a complete total',async()=>{finance.reads.payments=vi.fn(async()=>[]);await expect(getRentalPaymentSummary({rentalId:rental},await env())).rejects.toMatchObject({code:'finance_incomplete'});});
   it('stops at a sentinel limit with no misleading zero totals',async()=>{finance.reads.entries=vi.fn(async()=>Array.from({length:201},()=>({id:charge,tenant_id:tenant,rental_id:rental,type:'Charge',amount:1,category:'Rental',remaining_amount:1})));const r=await getRentalPaymentSummary({rentalId:rental},await env());expect(r.status).toBe('partial');expect(r.data).toBeUndefined();expect(finance.reads.applications).not.toHaveBeenCalled();});
   it('counts all bounded records while exposing at most 25 records per page',async()=>{finance.reads.payments=vi.fn(async()=>Array.from({length:30},(_,n)=>({...p,id:n? id(100+n):payment})));const r=await getRentalPaymentSummary({rentalId:rental,offset:0},await env());expect(r.data).toMatchObject({totalLinkedPayments:30,nextOffset:25});expect(r.data?.payments).toHaveLength(25);});
@@ -186,4 +198,56 @@ describe('model investigation, escalation and conversation boundaries',()=>{
     deps.model=sequence();await request(deps,{...body,message:'Check again please',contextScope:second.body.contextScope,conversationId:second.body.conversationId});expect(evidence).toHaveBeenCalledTimes(2);
   });
   it('rejects model-invented money even when an account tool returned a real result',async()=>{const r=await request(dependencies(scripted(call('get_stripe_account_summary',{}),answer('Your account has USD 9999999.00.'))),{message:'My Stripe balance'});expect(r.body.modelUnavailable).toBe(true);expect(JSON.stringify(r.body)).not.toContain('9999999');expect(r.body.response).toContain('checks may have been attempted');});
+});
+
+/*
+ * What one rental is worth.
+ *
+ * getRentalPaymentSummary used to refuse this outright, because legacy rows carry
+ * no currency. The portal shows the same figures on every rental page from the same
+ * rows, so the figure is given with its provenance instead of withheld. These pin
+ * the rules that keep it honest.
+ */
+describe('rental money totals', () => {
+  const charge = (id: string, amount: number, remaining: number, category = 'Rental') =>
+    ({ id, tenant_id: tenant, rental_id: rental, type: 'Charge', category, amount, remaining_amount: remaining });
+  const applied = (chargeId: string, amount: number) =>
+    ({ id: `a-${chargeId}`, tenant_id: tenant, payment_id: 'p1', charge_entry_id: chargeId, amount_applied: amount });
+
+  it('reports charged, paid and outstanding from the account’s own rows', () => {
+    const money = rentalMoney([charge('c1', 500, 0), charge('c2', 250, 100)], [applied('c1', 500), applied('c2', 150)], 'USD');
+    expect(money).toMatchObject({ currency: 'USD', charged: '750.00', paid: '650.00', outstanding: '100.00', chargeCount: 2 });
+  });
+
+  // An authorization allocates nothing, which is exactly why paid is read from
+  // allocations rather than from payment rows.
+  it('does not count an uncaptured hold as paid, because it allocates nothing', () => {
+    const money = rentalMoney([charge('c1', 500, 500)], [], 'USD');
+    expect(money.paid).toBe('0.00');
+    expect(money.outstanding).toBe('500.00');
+  });
+
+  it('excludes a charged security deposit, which is held rather than earned', () => {
+    const money = rentalMoney([charge('c1', 500, 0), charge('d1', 300, 300, 'Security Deposit')], [applied('c1', 500)], 'USD');
+    expect(money.charged).toBe('500.00');
+    expect(money.outstanding).toBe('0.00');
+    expect(money.excludedDeposit).toBe(true);
+  });
+
+  it('ignores payment and refund ledger rows, which would double every figure', () => {
+    const rows = [charge('c1', 500, 0),
+      { id: 'p-row', tenant_id: tenant, rental_id: rental, type: 'Payment', category: 'Rental', amount: -500, remaining_amount: 0 },
+      { id: 'r-row', tenant_id: tenant, rental_id: rental, type: 'Refund', category: 'Rental', amount: -100, remaining_amount: 0 }];
+    expect(rentalMoney(rows, [applied('c1', 500)], 'USD').charged).toBe('500.00');
+  });
+
+  it('never reports a negative outstanding when a charge is over-allocated', () => {
+    expect(rentalMoney([charge('c1', 100, -50)], [applied('c1', 150)], 'USD').outstanding).toBe('0.00');
+  });
+
+  it('states what the figures are, and that Stripe was not consulted', () => {
+    const money = rentalMoney([charge('c1', 100, 0)], [], 'GBP');
+    expect(money.basis).toMatch(/not a Stripe or bank figure/);
+    expect(money.basis).toMatch(/awaiting capture allocates nothing/);
+  });
 });
