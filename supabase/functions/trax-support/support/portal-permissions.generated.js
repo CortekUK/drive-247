@@ -149,6 +149,18 @@ export function getTabKeyForRoute(pathname) {
     }
     return null;
 }
+export const ROUTE_ALSO_ALLOWED_BY = {
+    '/integrations': ['settings.payments'],
+};
+export function getTabKeysForRoute(pathname) {
+    const primary = getTabKeyForRoute(pathname);
+    if (!primary)
+        return [];
+    const extras = Object.entries(ROUTE_ALSO_ALLOWED_BY)
+        .filter(([route]) => pathname === route || pathname.startsWith(route + '/'))
+        .flatMap(([, keys]) => keys);
+    return [primary, ...extras.filter((k) => k !== primary)];
+}
 export const WIDGET_TAB_REQUIREMENTS = {
     ActionItems: 'payments',
     CalendarWidget: 'rentals',

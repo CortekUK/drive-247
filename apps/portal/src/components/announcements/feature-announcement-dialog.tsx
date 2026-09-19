@@ -340,11 +340,19 @@ export function FeatureAnnouncementDialog({
                 children, a phone's wrapped actions row let justify-between push
                 the link to the right edge on the last slide only. */}
             <div className="flex items-center gap-3">
-              <div aria-hidden="true" className={FEATURE_DIALOG_UI.dots}>
-                {slides.map((_, i) => (
-                  <span key={i} className={i === current ? FEATURE_DIALOG_UI.dotActive : FEATURE_DIALOG_UI.dot} />
-                ))}
-              </div>
+              {/* A position indicator needs more than one position. With a
+                  single slide the row rendered one active dot — a lone purple
+                  dash in the corner next to a permanently disabled Back button,
+                  which reads as a stray mark rather than "slide 1 of 1".
+                  Announcements can carry 1–10 slides since Sep 17 2026, so the
+                  single-slide case is ordinary, not an edge case. */}
+              {total > 1 && (
+                <div aria-hidden="true" className={FEATURE_DIALOG_UI.dots}>
+                  {slides.map((_, i) => (
+                    <span key={i} className={i === current ? FEATURE_DIALOG_UI.dotActive : FEATURE_DIALOG_UI.dot} />
+                  ))}
+                </div>
+              )}
 
               {showDontShowAgain && (
                 <button
@@ -358,14 +366,20 @@ export function FeatureAnnouncementDialog({
             </div>
 
             <div className={FEATURE_DIALOG_UI.actions}>
-              <button
-                type="button"
-                className={cn(FEATURE_DIALOG_UI.secondaryButton, FOCUS_RING)}
-                onClick={() => go(-1)}
-                disabled={isFirst}
-              >
-                Back
-              </button>
+              {/* Same reason as the dots: with one slide there is nowhere to go
+                  back TO, so a disabled Back is furniture that only tells the
+                  operator something is unavailable. The pager keyboard handlers
+                  are unaffected — `go()` already clamps. */}
+              {total > 1 && (
+                <button
+                  type="button"
+                  className={cn(FEATURE_DIALOG_UI.secondaryButton, FOCUS_RING)}
+                  onClick={() => go(-1)}
+                  disabled={isFirst}
+                >
+                  Back
+                </button>
+              )}
               {!isLast ? (
                 <button
                   ref={primaryRef}

@@ -18,6 +18,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const perms = vi.hoisted(() => ({ edit: true }));
+const flags = vi.hoisted(() => ({ v2: true }));
+const sb = vi.hoisted(() => ({ vehicles: [] as Array<{ id: string; reg: string; make: string | null; model: string | null }> }));
 const ex = vi.hoisted(() => ({ current: {} as any }));
 const toastSpy = vi.hoisted(() => vi.fn());
 
@@ -35,7 +37,7 @@ vi.mock("@/hooks/use-toast", () => ({ toast: toastSpy, useToast: () => ({ toast:
 vi.mock("@/hooks/use-rental-extras", () => ({ useRentalExtras: () => ex.current }));
 vi.mock("@/contexts/TenantContext", () => ({ useTenant: () => ({ tenant: { id: "t1", currency_code: "USD" } }) }));
 vi.mock("@/lib/v2-context", () => ({
-  useV2: () => true,
+  useV2: () => flags.v2,
   // The provider now carries the tenant-level half of the same answer
   // (`onV2` = tenants.portal_experience, `lean` = that OR the slug list).
   // All-false here leaves the `LEAN_TENANTS` slug list to decide, which is
@@ -46,7 +48,8 @@ vi.mock("@/lib/v2-context", () => ({
 vi.mock("@/integrations/supabase/client", () => {
   const chain: any = {};
   for (const m of ["from", "select", "eq", "neq"]) chain[m] = () => chain;
-  chain.order = () => Promise.resolve({ data: [], error: null });
+  // The only list ExtrasSettings reads itself: the vehicles for per-vehicle prices.
+  chain.order = () => Promise.resolve({ data: sb.vehicles, error: null });
   return { supabase: chain, supabaseUntyped: chain };
 });
 
@@ -70,6 +73,8 @@ beforeEach(() => {
   // jsdom has no scrollIntoView; the Add dialog scrolls its first field error into view.
   if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = () => {};
   perms.edit = true;
+  flags.v2 = true;
+  sb.vehicles = [];
   toastSpy.mockClear();
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -328,7 +333,9 @@ describe("ExtrasSettings (v2) states", () => {
   it("keeps the header and shows a skeleton while loading, with no Add button yet", () => {
     ex.current = extrasApi({ hasLoaded: false, isLoading: true });
     render(<ExtrasSettings />);
-    expect(text()).toContain("Rental Extras");
+    // The page header names Extras; the list has a plain section title under it.
+    expect(text()).toContain("All extras");
+    expect(text()).not.toContain("Rental Extras");
     expect(container.querySelector('[data-settings-state="loading"]')).not.toBeNull();
     // Stacked rows (with a thumbnail) below sm, the table from sm up.
     expect(container.querySelectorAll('[data-settings-state="loading"]')).toHaveLength(2);
@@ -436,5 +443,97 @@ describe("ExtrasSettings (v2) states", () => {
     expect(text()).toContain("Enter a price of 0 or more");
     expect(text()).toContain("Add at least one image. Customers see it when they book.");
     expect(ex.current.createExtra).not.toHaveBeenCalled();
+  });
+});
+
+describe("ExtrasSettings (v2) look, and v1 unchanged", () => {
+  const dialogContent = () => document.body.querySelector('[role="dialog"]');
+  const optionCard = (label: string) =>
+    Array.from(document.body.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')).find((b) =>
+      b.textContent?.startsWith(label),
+    )!;
+
+  it("the list title is the v2 section title, with no description repeating the page header", () => {
+    ex.current = extrasApi({ extras: [extra()] });
+    render(<ExtrasSettings />);
+    const h2 = Array.from(container.querySelectorAll("h2")).find((h) => h.textContent === "All extras")!;
+    expect(h2.className).toBe("font-heading text-base font-semibold tracking-tight text-foreground");
+    expect(text()).not.toContain("Manage optional add-ons");
+  });
+
+  it("v2: the Add dialog is the v2 dialog, its fields are v2, and its option cards are rounded-xl with the purple hover", () => {
+    ex.current = extrasApi({ extras: [extra()] });
+    render(<ExtrasSettings />);
+    act(() => buttonByText("Add Extra")!.click());
+    expect(dialogContent()?.getAttribute("data-slot")).toBe("dialog-content");
+    expect(document.body.querySelector('[role="dialog"] input')?.getAttribute("data-slot")).toBe("input");
+    expect(document.body.querySelector('[role="dialog"] textarea')?.getAttribute("data-slot")).toBe("textarea");
+    expect(document.body.querySelector('[role="dialog"] [role="switch"]')?.getAttribute("data-slot")).toBe("switch");
+    for (const label of ["Per trip", "Per day", "Same price for all vehicles", "Different price per vehicle"]) {
+      const card = optionCard(label);
+      const cls = card.className.split(/\s+/);
+      expect(cls, label).toContain("rounded-xl");
+      expect(cls, label).not.toContain("rounded-2xl");
+      expect(cls, label).not.toContain("rounded-lg");
+      if (cls.includes("ring-primary")) continue; // the selected card has no hover of its own
+      expect(cls, label).toContain("hover:bg-primary/10");
+      expect(cls, label).toContain("dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]");
+      expect(cls, label).not.toContain("hover:bg-muted/50");
+    }
+  });
+
+  it("v2: the per-vehicle picker is the v2 dropdown", async () => {
+    sb.vehicles = [{ id: "v1", reg: "AB12 CDE", make: "Ford", model: "Focus" }];
+    ex.current = extrasApi({ extras: [extra()] });
+    render(<ExtrasSettings />);
+    // Let the vehicles read land before the dialog opens.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    act(() => buttonByText("Add Extra")!.click());
+    await act(async () => optionCard("Different price per vehicle").click());
+    const trigger = document.body.querySelector('[role="dialog"] [role="combobox"]');
+    expect(trigger?.getAttribute("data-slot")).toBe("select-trigger");
+    expect(trigger?.textContent).toContain("Add a vehicle...");
+  });
+
+  it("v1: the same dialog keeps v1's parts, square-ish cards and grey hover", () => {
+    flags.v2 = false;
+    ex.current = extrasApi({ extras: [extra()] });
+    render(<ExtrasSettings />);
+    act(() => buttonByText("Add Extra")!.click());
+    expect(dialogContent()?.getAttribute("data-slot")).toBeNull();
+    expect(document.body.querySelector('[role="dialog"] input')?.getAttribute("data-slot")).toBeNull();
+    const card = optionCard("Per day");
+    expect(card.className).toBe(
+      "rounded-lg border p-3 text-left text-sm transition-colors hover:bg-muted/50",
+    );
+  });
+});
+
+describe("ExtrasTableV2 order", () => {
+  it("lists the newest extra first, and an extra with no readable date last", () => {
+    render(
+      table([
+        extra({ id: "a", name: "Oldest", created_at: "2026-01-05T10:00:00Z", sort_order: 0 }),
+        extra({ id: "b", name: "Newest", created_at: "2026-09-01T10:00:00Z", sort_order: 1 }),
+        extra({ id: "c", name: "Undated", created_at: "", sort_order: 2 }),
+        extra({ id: "d", name: "Middle", created_at: "2026-05-20T10:00:00Z", sort_order: 3 }),
+      ]),
+    );
+    // Each phone row's name carries its full text in `title` (TruncatedText).
+    const phoneNames = Array.from(container.querySelectorAll('ul[aria-label="Rental extras"] li')).map((li) =>
+      li.querySelector("[title]")?.getAttribute("title"),
+    );
+    expect(phoneNames).toEqual(["Newest", "Middle", "Oldest", "Undated"]);
+  });
+});
+
+describe("PromoCodesSectionV2 look", () => {
+  it("'All promo codes' is the v2 section title", () => {
+    render(section({ promos: [promo()] }).node);
+    const h2 = container.querySelector("#v2-promo-list-heading")!;
+    expect(h2.textContent).toBe("All promo codes");
+    expect(h2.className).toBe("font-heading text-base font-semibold tracking-tight text-foreground");
   });
 });

@@ -742,6 +742,54 @@ body.v2-theme {
   background-clip: padding-box;
 }
 
+/* ── No scrollbar inside a dialog  (team lead, Sep 18 2026) ──────────────────
+ *
+ * "our sidebar / side scroll should not appear in any dialog". On his recording
+ * the feedback dialog — and the setup dialog behind it — each carried a native
+ * track down the right edge, which on a 480px panel is a grey gutter roughly as
+ * wide as the close button sitting next to it.
+ *
+ * HIDDEN, NOT CLIPPED. Only the two paint hooks are touched, never `overflow`:
+ * the element stays a scroll container, so the wheel, a trackpad swipe, a drag
+ * and — the one that gets forgotten — Page Down / Home / End with the panel
+ * focused all still move it, and the content below the fold is still reachable
+ * for a keyboard user. Turning the bar off is a paint decision; turning the
+ * overflow off would be a content decision, and would silently truncate the
+ * long dialogs this rule exists for.
+ *
+ * ONE RULE, NOT ONE FILE AT A TIME. `[role="dialog"]` is what Radix puts on
+ * every Content it renders (Dialog, AlertDialog via `alertdialog`, Sheet,
+ * Popover, the command palette), so every dialog in the app is covered — the
+ * ui-v2 ones, the v1 `components/ui/dialog` ones a v2 tenant still meets
+ * (SYSTEM_DIALOG_UI renders through those in BOTH chromes), and any dialog
+ * written after this. Chasing it per file would have meant editing ~90 call
+ * sites and missing the next one.
+ *
+ * The descendant half is the half that matters. The scroll container is rarely
+ * the dialog element itself: the large-dialog contract puts `overflow-y-auto`
+ * on an inner body (`FEATURE_DIALOG_UI.body`, `SYSTEM_DIALOG_UI.body`), and a
+ * dialog with a scrolling table or list inside has it deeper still. `*` is
+ * deliberate and matches the instruction as given — ANY scrollbar in ANY
+ * dialog — rather than a guess at which descendant scrolls.
+ *
+ * Attribute selectors, no leading dot on a utility name: this file `@apply`s
+ * utilities, so a `.overflow-y-auto`-style selector is a Tailwind circular
+ * dependency and 500s every page.
+ *
+ * AFTER `.scrollbar-thin` on purpose. `:is()` takes the specificity of its
+ * heaviest argument, so these land at (0,2,1) — exactly level with
+ * `.v2-theme .scrollbar-thin::-webkit-scrollbar`. Source order is what decides
+ * it, and a `.scrollbar-thin` list inside a dialog should lose. */
+.v2-theme :is([role="dialog"], [role="alertdialog"]),
+.v2-theme :is([role="dialog"], [role="alertdialog"]) * {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.v2-theme :is([role="dialog"], [role="alertdialog"])::-webkit-scrollbar,
+.v2-theme :is([role="dialog"], [role="alertdialog"]) *::-webkit-scrollbar {
+  display: none;
+}
+
 /* ── Integration panels — readable, still light ──────────────────────────────
  *
  * The brief was exact: the panels' light grey is LIKED, it is just too faint to

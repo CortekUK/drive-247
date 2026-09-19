@@ -36,7 +36,7 @@ export interface OperationalReads {
 }
 export type EvidenceStatus = 'verified' | 'partial' | 'restricted' | 'missing' | 'error' | 'needs_input';
 export interface Evidence {
-  id: string; table: 'vehicles' | 'rentals' | 'pickup_locations' | 'blocked_dates' | 'rental_key_handovers' | 'availability_check' | 'account_summary' | 'payment_check' | 'stripe_account_summary' | 'payment_evidence';
+  id: string; table: 'vehicles' | 'rentals' | 'pickup_locations' | 'blocked_dates' | 'rental_key_handovers' | 'availability_check' | 'account_summary' | 'payment_check' | 'stripe_account_summary' | 'payment_evidence' | 'business_query';
   recordId?: string; title: string; observedAt: string;
 }
 export interface Finding { code: string; summary: string; sourceIds: string[]; blocking: boolean }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { isLeanTenant } from '@/lib/lean-tenants';
+import { isLeanTenant, readTenantOnV2ById } from '@/lib/lean-tenants';
 
 // BoldSign configuration — resolved per-request based on tenant mode
 const BOLDSIGN_BASE_URL = process.env.BOLDSIGN_BASE_URL || 'https://api.boldsign.com';
@@ -126,7 +126,11 @@ export async function POST(request: NextRequest) {
                     .eq('id', rentalMode.tenant_id)
                     .single();
                 // Lean tenants are always live; everyone else keeps the column.
-                if (isLeanTenant(tenantData?.slug)) {
+                // Lean by canary slug OR by `tenants.portal_experience = 'v2'`,
+                // read separately so an unreadable column cannot take
+                // `boldsign_mode` down with it.
+                const onV2 = await readTenantOnV2ById(supabase, rentalMode.tenant_id);
+                if (isLeanTenant(tenantData?.slug, onV2)) {
                     boldsignMode = 'live';
                 } else if (tenantData?.boldsign_mode) {
                     boldsignMode = tenantData.boldsign_mode as 'test' | 'live';

@@ -1,10 +1,14 @@
 /**
  * v2 Pay As You Go and Auto-extension pages (`settings-v2/payment-modes-v2`).
  *
- * Both pages save a control the moment it changes, so the states that matter
- * are the ones that could write a wrong value: no switch over placeholder
- * defaults or after a failed read, a failed write shows the SAVED value again,
- * read-only users cannot operate anything, and a bad number is never saved.
+ * Both pages are forms that save through the settings page's one save bar
+ * (Sep 19 2026; they used to write each control the moment it changed). The
+ * states that matter are the ones that could write a wrong value: no switch
+ * over placeholder defaults or after a failed read, a change is a draft until
+ * saved and only changed keys are written, a failed save keeps the edit and
+ * says why, read-only users cannot operate anything, and a bad number is never
+ * saved. Inside the page's save bar the form shows no Save of its own and
+ * hands the page its save and discard.
  *
  * HARNESS: `react-dom/client` + `act` (the repo lacks @testing-library/dom).
  */
@@ -25,7 +29,16 @@ vi.mock("next/link", () => ({
   ),
 }));
 
+const nav = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
+vi.mock("next/navigation", () => ({ useRouter: () => nav }));
+
+import { useCallback, useRef, useState } from "react";
 import { AutoExtendSettingsV2, PayAsYouGoSettingsV2 } from "@/components/settings-v2/payment-modes-v2";
+import { SettingsPageSaveProvider, SettingsStickySaveBar } from "@/components/settings-v2/settings-kit";
+import { LeaveDialogV2 } from "@/components/settings-v2/leave-dialog-v2";
+import { useLeaveGuardV2 } from "@/hooks/use-leave-guard-v2";
+import { runThroughLeaveGuard } from "@/lib/leave-guard";
+import type { RegisterSectionSave } from "@/components/settings-v2/pricing-money-parts";
 
 let container: HTMLDivElement;
 let root: Root;
@@ -59,6 +72,13 @@ function render(node: React.ReactNode) {
 
 const switches = () => Array.from(container.querySelectorAll<HTMLButtonElement>('[role="switch"]'));
 const text = () => container.textContent ?? "";
+const buttonByText = (label: string) =>
+  Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((b) => b.textContent?.trim() === label);
+/** The last registration under `key` that carried a save: [key, save, discard]. */
+const registered = (registerSave: ReturnType<typeof vi.fn>, key: string) => {
+  const calls = registerSave.mock.calls.filter((call) => call[0] === key && call[1]);
+  return calls[calls.length - 1] as [string, () => Promise<unknown>, () => void] | undefined;
+};
 
 function deferred() {
   let resolve!: (v?: unknown) => void;
@@ -133,67 +153,162 @@ describe("PayAsYouGoSettingsV2", () => {
     expect(text()).not.toContain("Off for new rentals");
   });
 
-  it("saves only the flipped key, shows it saving, then shows the SAVED value again when the write fails", async () => {
+  it("a flip is an unsaved change, not a write; Save writes only that key, and a failed save keeps the flip and says why", async () => {
     const write = deferred();
     rs.current = api({ updateSettings: vi.fn(() => write.promise) });
     render(<PayAsYouGoSettingsV2 canEdit />);
 
-    await act(async () => switches()[0].click());
-    expect(rs.current.updateSettings).toHaveBeenCalledWith({ pay_as_you_go_enabled: true });
+    act(() => switches()[0].click());
+    expect(rs.current.updateSettings).not.toHaveBeenCalled();
     expect(switches()[0].getAttribute("aria-checked")).toBe("true");
-    expect(switches()[0].disabled).toBe(true);
+    // The follow-up switches show for the draft at once.
+    expect(switches()).toHaveLength(3);
+    expect(text()).toContain("Unsaved changes");
+
+    await act(async () => buttonByText("Save")!.click());
+    expect(rs.current.updateSettings).toHaveBeenCalledTimes(1);
+    expect(rs.current.updateSettings).toHaveBeenCalledWith({ pay_as_you_go_enabled: true });
     expect(text()).toContain("Saving…");
+    expect(switches()[0].disabled).toBe(true);
 
     await act(async () => {
       write.reject(new Error("permission denied"));
       await write.promise.catch(() => undefined);
     });
-    // The database still says off, so the switch says off.
-    expect(switches()[0].getAttribute("aria-checked")).toBe("false");
+    // The edit is kept, so Retry (or Save) writes it again.
+    expect(switches()[0].getAttribute("aria-checked")).toBe("true");
     expect(switches()[0].disabled).toBe(false);
-    expect(text()).toContain("Couldn't turn pay as you go on. Nothing was changed.");
+    expect(text()).toContain("Couldn't save.");
+    expect(text()).toContain("You don't have permission to change this. Ask an admin.");
 
     rs.current.updateSettings.mockResolvedValueOnce({});
-    const retry = Array.from(container.querySelectorAll("button")).find((b) => b.textContent === "Try again")!;
-    await act(async () => retry.click());
+    await act(async () => buttonByText("Retry")!.click());
     expect(rs.current.updateSettings).toHaveBeenCalledTimes(2);
     expect(rs.current.updateSettings).toHaveBeenLastCalledWith({ pay_as_you_go_enabled: true });
-    expect(text()).not.toContain("Nothing was changed.");
+    expect(text()).not.toContain("Couldn't save.");
   });
 
-  it("disables every control for a read-only user, keyboard included (native fieldset)", () => {
+  it("flipping back to the saved value is no change: nothing to save", () => {
     rs.current = api({}, { pay_as_you_go_enabled: true });
-    render(<PayAsYouGoSettingsV2 canEdit={false} />);
+    render(<PayAsYouGoSettingsV2 canEdit />);
+    act(() => switches()[1].click());
+    expect(text()).toContain("Unsaved changes");
+    act(() => switches()[1].click());
+    expect(text()).not.toContain("Unsaved changes");
+    expect(buttonByText("Save")!.disabled).toBe(true);
+  });
+
+  it("inside the page's save bar: no Save of its own; the page gets a save that writes only the changed keys, and a discard", async () => {
+    const registerSave = vi.fn();
+    rs.current = api({}, { pay_as_you_go_enabled: true });
+    render(
+      <SettingsPageSaveProvider>
+        <PayAsYouGoSettingsV2 canEdit registerSave={registerSave} />
+      </SettingsPageSaveProvider>,
+    );
+    expect(buttonByText("Save")).toBeUndefined();
+    expect(registerSave).toHaveBeenLastCalledWith("payg", null);
+
+    // Upfront on (saved off), reminders off (saved on).
+    act(() => switches()[1].click());
+    act(() => switches()[2].click());
+    const [, save, discard] = registered(registerSave, "payg")!;
+    await act(async () => {
+      await save();
+    });
+    expect(rs.current.updateSettings).toHaveBeenCalledTimes(1);
+    expect(rs.current.updateSettings).toHaveBeenCalledWith({ payg_upfront_required: true, payg_auto_reminders_enabled: false });
+
+    // Reset: the draft goes, the saved values show, and the page is told it is clean.
+    act(() => switches()[1].click());
+    expect(switches()[1].getAttribute("aria-checked")).toBe("true");
+    act(() => registered(registerSave, "payg")![2]());
+    expect(switches()[1].getAttribute("aria-checked")).toBe("false");
+    expect(registerSave).toHaveBeenLastCalledWith("payg", null);
+    expect(typeof discard).toBe("function");
+  });
+
+  it("inside the page's save bar, a failed save rejects for the page and says why beside the form", async () => {
+    const registerSave = vi.fn();
+    const failure = new Error("Failed to fetch");
+    rs.current = api({ updateSettings: vi.fn().mockRejectedValue(failure) });
+    render(
+      <SettingsPageSaveProvider>
+        <PayAsYouGoSettingsV2 canEdit registerSave={registerSave} />
+      </SettingsPageSaveProvider>,
+    );
+    act(() => switches()[0].click());
+    const [, save] = registered(registerSave, "payg")!;
+    let rejected: unknown = null;
+    await act(async () => {
+      await save().catch((err) => {
+        rejected = err;
+      });
+    });
+    expect(rejected).toBe(failure);
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("We couldn't reach the server. Your changes are still here.");
+    expect(switches()[0].getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("disables every control for a read-only user, keyboard included (native fieldset), with no Save and no registration", () => {
+    const registerSave = vi.fn();
+    rs.current = api({}, { pay_as_you_go_enabled: true });
+    render(<PayAsYouGoSettingsV2 canEdit={false} registerSave={registerSave} />);
     expect(container.querySelector("fieldset")?.disabled).toBe(true);
     expect(switches().every((s) => s.disabled)).toBe(true);
+    expect(buttonByText("Save")).toBeUndefined();
+    expect(registerSave.mock.calls.every(([, save]) => save === undefined || save === null)).toBe(true);
   });
 });
 
 describe("AutoExtendSettingsV2", () => {
   const inputs = () => Array.from(container.querySelectorAll<HTMLInputElement>('input[type="number"]'));
 
-  it("refuses empty, decimal and out-of-range numbers without saving, and skips unchanged ones", async () => {
+  it("refuses empty, decimal and out-of-range numbers as they are typed, never saves them, and a typed-back value is no change", async () => {
     rs.current = api({}, { auto_extend_enabled: true });
     render(<AutoExtendSettingsV2 canEdit />);
     const [lead, grace, retries] = inputs();
     expect([lead.value, grace.value, retries.value]).toEqual(["0", "48", "3"]);
 
     typeInto(grace, "");
-    await blur(grace);
     expect(text()).toContain("Grace window: Enter 0–720 hours");
     expect(grace.getAttribute("aria-invalid")).toBe("true");
 
     typeInto(lead, "1.5");
-    await blur(lead);
     expect(text()).toContain("Charge lead time: Enter 0–168 hours");
 
     typeInto(retries, "25");
-    await blur(retries);
     expect(text()).toContain("Retries: Enter 0–20 retries");
+    // Save waits while a field is invalid.
+    expect(buttonByText("Save")!.disabled).toBe(true);
 
     typeInto(grace, "48"); // back to the saved value
-    await blur(grace);
     expect(text()).not.toContain("Grace window:");
+
+    typeInto(lead, "0"); // back to the saved value
+    typeInto(retries, "3"); // back to the saved value
+    expect(text()).not.toContain("Unsaved changes");
+    expect(buttonByText("Save")!.disabled).toBe(true);
+    expect(rs.current.updateSettings).not.toHaveBeenCalled();
+  });
+
+  it("the page's save refuses an invalid number with the field's own words, and writes nothing", async () => {
+    const registerSave = vi.fn();
+    rs.current = api({}, { auto_extend_enabled: true });
+    render(
+      <SettingsPageSaveProvider>
+        <AutoExtendSettingsV2 canEdit registerSave={registerSave} />
+      </SettingsPageSaveProvider>,
+    );
+    typeInto(inputs()[2], "25");
+    const [, save] = registered(registerSave, "auto-extend")!;
+    let rejected: unknown = null;
+    await act(async () => {
+      await save().catch((err) => {
+        rejected = err;
+      });
+    });
+    expect((rejected as Error).message).toBe("Retries: Enter 0–20 retries.");
     expect(rs.current.updateSettings).not.toHaveBeenCalled();
   });
 
@@ -207,22 +322,57 @@ describe("AutoExtendSettingsV2", () => {
     expect(lead.getAttribute("aria-invalid")).toBe("true");
     expect(grace.getAttribute("aria-invalid")).toBeNull();
     expect(lead.style.minWidth).toBe("calc(7ch + 1.75rem)");
+    // Not edited, so not a change: nothing to save.
+    expect(text()).not.toContain("Unsaved changes");
     expect(rs.current.updateSettings).not.toHaveBeenCalled();
 
     typeInto(lead, "24");
-    await blur(lead);
+    await act(async () => buttonByText("Save")!.click());
+    // Only the edited field: the out-of-range retries are left as saved.
+    expect(rs.current.updateSettings).toHaveBeenCalledTimes(1);
     expect(rs.current.updateSettings).toHaveBeenCalledWith({ auto_extend_default_lead_hours: 24 });
     expect(text()).toContain("Retries: The saved value -3");
   });
 
-  it("saves a valid changed number as a number, under its own key", async () => {
+  it("saves a valid changed number as a number, under its own key, with the other changes in one write", async () => {
     rs.current = api({}, { auto_extend_enabled: true });
     render(<AutoExtendSettingsV2 canEdit />);
     const grace = inputs()[1];
     typeInto(grace, "72");
-    await blur(grace);
+    expect(rs.current.updateSettings).not.toHaveBeenCalled();
+    await act(async () => buttonByText("Save")!.click());
     expect(rs.current.updateSettings).toHaveBeenCalledTimes(1);
     expect(rs.current.updateSettings).toHaveBeenCalledWith({ auto_extend_grace_hours: 72 });
+  });
+
+  it("turning it off hides the numbers, and saving then writes just the switch, even over a half-typed number", async () => {
+    rs.current = api({}, { auto_extend_enabled: true });
+    render(<AutoExtendSettingsV2 canEdit />);
+    typeInto(inputs()[1], "");
+    act(() => switches()[0].click());
+    expect(inputs()).toHaveLength(0);
+    expect(text()).toContain("Off for new rentals");
+    await act(async () => buttonByText("Save")!.click());
+    expect(rs.current.updateSettings).toHaveBeenCalledTimes(1);
+    expect(rs.current.updateSettings).toHaveBeenCalledWith({ auto_extend_enabled: false });
+  });
+
+  it("hands the page a save and a discard under 'auto-extend' while it holds a change", () => {
+    const registerSave = vi.fn();
+    rs.current = api({}, { auto_extend_enabled: true });
+    render(
+      <SettingsPageSaveProvider>
+        <AutoExtendSettingsV2 canEdit registerSave={registerSave} />
+      </SettingsPageSaveProvider>,
+    );
+    expect(buttonByText("Save")).toBeUndefined();
+    expect(registerSave).toHaveBeenLastCalledWith("auto-extend", null);
+    typeInto(inputs()[0], "12");
+    const [key, , discard] = registered(registerSave, "auto-extend")!;
+    expect(key).toBe("auto-extend");
+    act(() => discard());
+    expect(inputs()[0].value).toBe("0");
+    expect(registerSave).toHaveBeenLastCalledWith("auto-extend", null);
   });
 
   it("warns when auto-charge is the default but no payment provider is connected", () => {
@@ -253,5 +403,130 @@ describe("AutoExtendSettingsV2", () => {
     const trigger = container.querySelector('[aria-label="How to take payment"]')!;
     expect(trigger.getAttribute("data-slot")).toBe("select-trigger");
     expect(trigger.className).toContain("rounded-3xl");
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* Through the page's save bar and leave dialog                                */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The settings page's wiring around a form, in miniature (the page is too
+ * large to mount): the registry (`registerV2SectionSave`), the one save bar,
+ * the v2 leave guard and its "Save your changes?" dialog.
+ */
+function PageHarness({ form }: { form: (register: RegisterSectionSave) => React.ReactNode }) {
+  const saves = useRef<Record<string, () => Promise<unknown>>>({});
+  const discards = useRef<Record<string, () => void>>({});
+  const [dirty, setDirty] = useState<string[]>([]);
+  const register = useCallback<RegisterSectionSave>((key, save, discard) => {
+    if (save) saves.current[key] = save;
+    else delete saves.current[key];
+    if (save && discard) discards.current[key] = discard;
+    else delete discards.current[key];
+    setDirty((prev) => (prev.includes(key) === !!save ? prev : save ? [...prev, key] : prev.filter((k) => k !== key)));
+  }, []);
+  const saveAll = async () => {
+    const results = await Promise.allSettled(Object.values(saves.current).map((save) => save()));
+    return results.every((result) => result.status === "fulfilled");
+  };
+  const reset = () => Object.values(discards.current).forEach((discard) => discard());
+  const guard = useLeaveGuardV2({ enabled: true, isDirty: dirty.length > 0, canSave: true, onSave: saveAll, onDiscard: reset });
+  return (
+    <>
+      <SettingsPageSaveProvider>{form(register)}</SettingsPageSaveProvider>
+      <SettingsStickySaveBar dirty={dirty.length > 0} saving={guard.saving} onSave={() => void saveAll()} onReset={reset} />
+      <LeaveDialogV2
+        open={guard.open}
+        canSave={guard.canSave}
+        saving={guard.saving}
+        onSave={() => void guard.save()}
+        onDiscard={guard.discard}
+        onCancel={guard.cancel}
+      />
+    </>
+  );
+}
+
+describe("Pay as you go and Auto-extension with the page's save bar and leave dialog", () => {
+  const barButton = (label: string) =>
+    Array.from(container.querySelectorAll<HTMLButtonElement>("[data-settings-save-bar] button")).find(
+      (b) => b.textContent?.trim() === label,
+    );
+  const dialogButton = (label: string) =>
+    Array.from(document.body.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button')).find(
+      (b) => b.textContent?.trim() === label,
+    );
+  const bodyText = () => document.body.textContent ?? "";
+  const numberInputs = () => Array.from(container.querySelectorAll<HTMLInputElement>('input[type="number"]'));
+
+  beforeEach(() => {
+    nav.push.mockReset();
+  });
+
+  it("Pay as you go: clean, leaving asks nothing; a flip lights the bar and its Save writes only that key", async () => {
+    rs.current = api();
+    render(<PageHarness form={(register) => <PayAsYouGoSettingsV2 canEdit registerSave={register} />} />);
+    expect(barButton("Save changes")!.disabled).toBe(true);
+    const proceed = vi.fn();
+    act(() => runThroughLeaveGuard("/rentals", proceed));
+    expect(proceed).toHaveBeenCalledTimes(1);
+    expect(bodyText()).not.toContain("Save your changes?");
+
+    act(() => switches()[0].click());
+    expect(container.querySelector("[data-settings-save-bar]")!.textContent).toContain("Unsaved changes");
+    await act(async () => barButton("Save changes")!.click());
+    expect(rs.current.updateSettings).toHaveBeenCalledTimes(1);
+    expect(rs.current.updateSettings).toHaveBeenCalledWith({ pay_as_you_go_enabled: true });
+  });
+
+  it("Pay as you go: the bar's Reset puts the switch back and writes nothing", () => {
+    rs.current = api();
+    render(<PageHarness form={(register) => <PayAsYouGoSettingsV2 canEdit registerSave={register} />} />);
+    act(() => switches()[0].click());
+    expect(switches()[0].getAttribute("aria-checked")).toBe("true");
+    act(() => barButton("Reset")!.click());
+    expect(switches()[0].getAttribute("aria-checked")).toBe("false");
+    expect(barButton("Save changes")!.disabled).toBe(true);
+    expect(rs.current.updateSettings).not.toHaveBeenCalled();
+  });
+
+  it("Auto-extension: leaving with an edit asks; Save writes the typed number, then leaves", async () => {
+    rs.current = api({}, { auto_extend_enabled: true });
+    render(<PageHarness form={(register) => <AutoExtendSettingsV2 canEdit registerSave={register} />} />);
+    typeInto(numberInputs()[1], "72"); // grace, saved 48
+    const proceed = vi.fn();
+    act(() => runThroughLeaveGuard("/rentals", proceed));
+    expect(bodyText()).toContain("Save your changes?");
+    expect(proceed).not.toHaveBeenCalled();
+
+    await act(async () => dialogButton("Save")!.click());
+    expect(rs.current.updateSettings).toHaveBeenCalledTimes(1);
+    expect(rs.current.updateSettings).toHaveBeenCalledWith({ auto_extend_grace_hours: 72 });
+    expect(proceed).toHaveBeenCalledTimes(1);
+  });
+
+  it("Auto-extension: Don't save puts the number back, writes nothing and leaves", () => {
+    rs.current = api({}, { auto_extend_enabled: true });
+    render(<PageHarness form={(register) => <AutoExtendSettingsV2 canEdit registerSave={register} />} />);
+    typeInto(numberInputs()[0], "12"); // lead, saved 0
+    const proceed = vi.fn();
+    act(() => runThroughLeaveGuard("/rentals", proceed));
+    act(() => dialogButton("Don't save")!.click());
+    expect(numberInputs()[0].value).toBe("0");
+    expect(rs.current.updateSettings).not.toHaveBeenCalled();
+    expect(proceed).toHaveBeenCalledTimes(1);
+  });
+
+  it("Auto-extension: an invalid number keeps the page on Save and writes nothing", async () => {
+    rs.current = api({}, { auto_extend_enabled: true });
+    render(<PageHarness form={(register) => <AutoExtendSettingsV2 canEdit registerSave={register} />} />);
+    typeInto(numberInputs()[2], "25"); // retries, 0–20
+    const proceed = vi.fn();
+    act(() => runThroughLeaveGuard("/rentals", proceed));
+    await act(async () => dialogButton("Save")!.click());
+    expect(rs.current.updateSettings).not.toHaveBeenCalled();
+    expect(proceed).not.toHaveBeenCalled();
+    expect(bodyText()).toContain("Save your changes?");
   });
 });

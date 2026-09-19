@@ -113,4 +113,42 @@ describe("Turo Sync — every surface consults the gate", () => {
         "here would show the entry to any tenant carrying the column.",
     ).toBe(true);
   });
+
+  /**
+   * ONE FORMULA, ALL FOUR SITES.
+   *
+   * `useV2(area)` is the server-resolved answer, built from the slug in
+   * `x-tenant-slug`. `isV2(area, tenantSlug)` is the client's own answer, built
+   * from the slug `TenantContext` resolved. Those two disagree in exactly one
+   * real case, and it is not hypothetical: `proxy.ts` resolves a CUSTOM PORTAL
+   * DOMAIN with `.eq('status', 'active')` while `TenantContext` accepts
+   * `.in('status', ['active', 'suspended'])`. For a suspended tenant on a custom
+   * domain the server therefore gets NO slug at all — every flag false — while
+   * the client resolves it fine.
+   *
+   * So a site that drops the slug term answers NARROWER than it did before this
+   * change, for northwind, on that host. The sidebar and the two TRAX gates keep
+   * the term OR'd in; the Settings page must too, or the Turo Sync row and switch
+   * vanish from a page whose sidebar entry still says the feature is there.
+   *
+   * Either formula is defensible. Four sites picking two of them is not.
+   */
+  it.each([
+    ["the v1 sidebar", "components/shared/layout/app-sidebar.tsx", "turo", "tenantSlug"],
+    ["the settings toggle", "app/(dashboard)/settings/page.tsx", "turo", "tenantSlug"],
+    ["the TRAX launcher", "components/trax/trax-launcher.tsx", "chrome", "tenant?.slug"],
+    ["the TRAX hook", "hooks/use-trax-support.ts", "chrome", "tenant?.slug"],
+  ])("%s ORs the resolved flag with the slug list", (_label, path, area, slugExpr) => {
+    const src = read(path);
+    const q = "['\"]";
+    const slug = slugExpr.replace(/[?.]/g, (c) => `\\${c}`);
+    const pattern = new RegExp(`isV2\\(\\s*${q}${area}${q}\\s*,\\s*${slug}\\s*\\)`);
+    expect(
+      pattern.test(src),
+      `${path} no longer ORs isV2('${area}', ${slugExpr}) with the resolved ` +
+        "flag, so it answers narrower than it did for a suspended tenant on a " +
+        "custom portal domain — where proxy.ts sends no x-tenant-slug but " +
+        "TenantContext resolves the slug anyway.",
+    ).toBe(true);
+  });
 });

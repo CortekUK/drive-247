@@ -16,18 +16,12 @@ export function AdminSupportWorkspace({ initialId }: { initialId?: string }) {
     : signedOut ? 'Sign in again to open Support'
     : 'Support is currently unavailable';
 
-  /* One compact page header over one workspace, the same shape as the tenant's
-     Support section — the workspace itself is bounded to the viewport so the
-     ticket list and the conversation scroll inside themselves and the reply box
-     never falls below a long page. */
+  /* The same three areas as the tenant's Support section: the ticket list is the
+     Support rail on a desktop (AdminSupportRail, in the layout's sidebar slot), and
+     this fills the height the layout bounds, so the conversation and the details
+     panel scroll inside themselves and the reply box never falls below the page. */
   return (
-    <div className="flex h-[calc(100dvh-8rem)] min-h-[480px] w-full min-w-0 flex-col gap-3">
-      <header className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1">
-        <div className="min-w-0 flex-1">
-          <h1 className="text-lg font-semibold tracking-tight">Support</h1>
-          <p className="hidden text-[12px] text-muted-foreground sm:block">Tenant conversations across every company. Replies and status changes reach the requester's own Support section.</p>
-        </div>
-      </header>
+    <div className="flex min-h-[420px] w-full min-w-0 flex-1 flex-col gap-3">
       {support.allowed ? (
         <SupportInbox key={support.scope} call={support.call} admin scope={support.scope} initialId={initialId} uploadAttachment={support.uploadAttachment} />
       ) : (

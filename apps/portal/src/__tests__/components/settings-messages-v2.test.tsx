@@ -21,7 +21,7 @@ const h = vi.hoisted(() => {
   const mut = () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false, variables: undefined as any });
   return {
     mut,
-    perms: { edit: true },
+    perms: { edit: true, hidden: [] as string[] },
     v2: { on: true },
     tenant: { value: { id: "t1", slug: "northwind", push_notifications_enabled: true } as any },
     router: { push: vi.fn(), replace: vi.fn() },
@@ -41,7 +41,7 @@ const h = vi.hoisted(() => {
 });
 
 vi.mock("@/hooks/use-manager-permissions", () => ({
-  useManagerPermissions: () => ({ canEditSettings: () => h.perms.edit, canViewSettings: () => true }),
+  useManagerPermissions: () => ({ canEditSettings: () => h.perms.edit, canViewSettings: (tab: string) => !h.perms.hidden.includes(tab) }),
 }));
 vi.mock("@/lib/v2-context", () => ({
   useV2: () => h.v2.on,
@@ -190,6 +190,7 @@ beforeEach(() => {
   document.body.appendChild(container);
   root = createRoot(container);
   h.perms.edit = true;
+  h.perms.hidden = [];
   h.v2.on = true;
   h.search.value = "";
   h.tenant.value = { id: "t1", slug: "northwind", push_notifications_enabled: true };
@@ -748,6 +749,20 @@ describe("AgreementTemplatesPageV2", () => {
     const selected = container.querySelector('[role="tab"][aria-selected="true"]');
     expect(selected?.textContent).toContain("Standard");
     expect(container.querySelectorAll('[role="tab"]')).toHaveLength(3); // no PAYG tab
+    // The way to turn it on: the Pay as you go settings page, back on the index.
+    const open = container.querySelector('[data-settings-state="dependency"] a[href="/settings?tab=payg"]');
+    expect(open?.textContent).toBe("Open Pay As You Go");
+  });
+
+  it("?category=payg while Pay As You Go is off: no link for someone who may not open the Pay as you go page", () => {
+    h.perms.hidden = ["payg"];
+    h.search.value = "category=payg";
+    h.rental = { settings: { pay_as_you_go_enabled: false }, isLoading: false };
+    resetSelection({ defaultTemplate: { template_content: "<p>T</p>", updated_at: null }, customTemplate: { template_content: "" } });
+    render(<AgreementTemplatesPageV2 />);
+    expect(text()).toContain("Pay As You Go is off");
+    expect(container.querySelector('a[href="/settings?tab=payg"]')).toBeNull();
+    expect(text()).not.toContain("Open Pay As You Go");
   });
 
   it("a failed read shows a retry and never runs first-time setup", () => {

@@ -18,7 +18,6 @@
  *    BoldSign on whatever its column says
  *  - a component rendered OUTSIDE the provider is v1, not a crash
  */
-import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { renderHook } from '@testing-library/react';
 
@@ -64,8 +63,15 @@ function v1() {
   return { flags, experience: { onV2: false, lean: false } };
 }
 
+/**
+ * `children?: any` is the house pattern for a renderHook wrapper here, and it
+ * is not laziness: the monorepo carries TWO copies of `@types/react` (19 at the
+ * root, a stale 18 nested in apps/portal), so a `ReactNode`-typed wrapper is
+ * the nested type while `@testing-library/react` expects the root one, and the
+ * two are structurally incompatible. See the alias note in vitest.config.ts.
+ */
 function wrap(value: { flags: Partial<Record<V2Area, boolean>>; experience: { onV2: boolean; lean: boolean } } | null) {
-  return ({ children }: { children: ReactNode }) =>
+  return ({ children }: { children?: any }) =>
     value ? (
       <V2Provider flags={value.flags} experience={value.experience}>
         {children}

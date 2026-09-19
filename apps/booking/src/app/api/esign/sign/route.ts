@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { isLeanTenant } from '@/lib/lean-tenants';
+import { isLeanTenant, readTenantOnV2ById } from '@/lib/lean-tenants';
 
 // BoldSign configuration — resolved per-request based on tenant mode
 const BOLDSIGN_BASE_URL = process.env.BOLDSIGN_BASE_URL || 'https://api.boldsign.com';
@@ -37,7 +37,25 @@ export async function POST(request: NextRequest) {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     let envelopeId: string | null = null;
-    let boldsignMode: 'test' | 'live' = 'test';
+    /**
+     * NULL means "not resolved yet", and that distinction is the whole point.
+     *
+     * This was `let boldsignMode: 'test' | 'live' = 'test'` and every later
+     * step asked `if (boldsignMode === 'test' && …)` to mean "if nobody has
+     * decided yet". But 'test' is also a LEGITIMATE resolved answer, so a
+     * document genuinely created in test mode was indistinguishable from one
+     * nothing had spoken for, and it fell through to the next step. The last of
+     * those steps forces LIVE for a lean/v2 tenant — so a test-mode document
+     * belonging to a v2 tenant was signed against the LIVE BoldSign account,
+     * where its document id does not exist. The signer sees a failure they
+     * cannot act on, and the tenant's test document is unsignable.
+     *
+     * With a sentinel, the most specific source that actually spoke wins:
+     * the agreement row, else the rental row, else the tenant. `?? 'test'` at
+     * the end keeps the old default for the case where none of them said
+     * anything, which is what the original initialiser was really for.
+     */
+    let boldsignMode: 'test' | 'live' | null = null;
     let documentStatus: string | null = null;
     let customerEmail: string | null = null;
     let customerName: string | null = null;
@@ -98,25 +116,32 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, error: 'Customer info not found' }, { status: 400 });
     }
 
-    // Resolve BoldSign mode from rental if not set
-    if (boldsignMode === 'test' && rental.boldsign_mode) {
+    // Resolve BoldSign mode from the rental, then the tenant — but only while
+    // nothing more specific has already answered. Mirrors view/route.ts:115-136.
+    if (!boldsignMode && rental.boldsign_mode) {
       boldsignMode = rental.boldsign_mode as 'test' | 'live';
-    }
-    if (boldsignMode === 'test' && rental.tenant_id) {
+    } else if (!boldsignMode && rental.tenant_id) {
       const { data: tenantData } = await supabase
         .from('tenants')
         .select('boldsign_mode, slug')
         .eq('id', rental.tenant_id)
         .single();
-      // Lean tenants are always live; everyone else keeps the column.
-      if (isLeanTenant(tenantData?.slug)) {
+      // Lean tenants are always live; everyone else keeps the column. A tenant
+      // is lean by canary slug OR by `tenants.portal_experience = 'v2'`, read in
+      // a query of its own so an unreadable column cannot take `boldsign_mode`
+      // down with it.
+      const onV2 = await readTenantOnV2ById(supabase, rental.tenant_id);
+      if (isLeanTenant(tenantData?.slug, onV2)) {
         boldsignMode = 'live';
       } else if (tenantData?.boldsign_mode) {
         boldsignMode = tenantData.boldsign_mode as 'test' | 'live';
       }
     }
 
-    const BOLDSIGN_API_KEY = getBoldSignApiKey(boldsignMode);
+    // Nothing recorded a mode: keep the historical default rather than guessing.
+    const resolvedMode: 'test' | 'live' = boldsignMode ?? 'test';
+
+    const BOLDSIGN_API_KEY = getBoldSignApiKey(resolvedMode);
     if (!BOLDSIGN_API_KEY) {
       return NextResponse.json({ ok: false, error: 'BoldSign not configured' }, { status: 500 });
     }
@@ -125,7 +150,7 @@ export async function POST(request: NextRequest) {
     const returnUrl = body.returnUrl || `${request.headers.get('origin')}/portal/agreements?signed=true`;
 
     // Get embedded signing link from BoldSign
-    console.log('Getting embedded signing link from BoldSign... (mode:', boldsignMode, ')');
+    console.log('Getting embedded signing link from BoldSign... (mode:', resolvedMode, ')');
     const signLinkResponse = await fetch(
       `${BOLDSIGN_BASE_URL}/v1/document/getEmbeddedSignLink?documentId=${envelopeId}&signerEmail=${encodeURIComponent(customer.email)}&redirectUrl=${encodeURIComponent(returnUrl)}`,
       {

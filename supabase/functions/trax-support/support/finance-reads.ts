@@ -18,7 +18,7 @@ export function createFinanceReads(db:FinanceDatabase):FinanceReads {
   };
   const ids=(values:string[])=>{if(values.length>FINANCE_LIMIT||values.some(id=>!UUID.test(id)))throw new SupportError('invalid_input','Invalid payment relationship.');return values;};
   return {
-    tenant:t=>read<FinanceTenant|null>(db.from('tenants').select('id,currency_code,payment_provider,payment_model,stripe_mode,stripe_account_id,stripe_onboarding_complete,own_stripe_account_id,own_stripe_test_account_id,own_stripe_connected_at,timezone').eq('id',t).maybeSingle()),
+    tenant:t=>read<FinanceTenant|null>(db.from('tenants').select('id,currency_code,payment_provider,payment_model,stripe_mode,stripe_account_id,stripe_onboarding_complete,own_stripe_account_id,own_stripe_test_account_id,own_stripe_connected_at,own_stripe_test_connected_at,timezone').eq('id',t).maybeSingle()),
     entries:(t,r)=>read<FinanceEntry[]>(db.from('ledger_entries').select('id,tenant_id,rental_id,type,category,amount,remaining_amount').eq('tenant_id',t).eq('rental_id',r).order('id').limit(FINANCE_LIMIT+1)),
     applications:(t,charges)=>charges.length?read<FinanceApplication[]>(db.from('payment_applications').select('id,tenant_id,payment_id,charge_entry_id,amount_applied').eq('tenant_id',t).in('charge_entry_id',ids(charges)).order('id').limit(FINANCE_LIMIT+1)):Promise.resolve([]),
     payments:(t,r,pids)=>{

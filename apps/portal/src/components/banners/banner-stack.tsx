@@ -61,6 +61,7 @@ import {
 
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
+import { useV2 } from "@/lib/v2-context";
 
 import {
   compareBanners,
@@ -81,6 +82,16 @@ interface Tone {
   body: string;
   btn: string;
   Icon: typeof AlertTriangle;
+}
+
+/**
+ * Control shape and the neutral hover, which differ between the two designs and
+ * are otherwise the only thing the button helpers below would need a gate for.
+ * Passing one object down keeps `useV2` to a single call site in `BannerRow`.
+ */
+interface ControlSkin {
+  radius: string;
+  ghostHover: string;
 }
 
 /**
@@ -129,6 +140,117 @@ const TONE: Record<BannerSeverity, Tone> = {
   },
 };
 
+const CONTROL_V1: ControlSkin = {
+  radius: "rounded-md",
+  ghostHover: "hover:bg-black/5 dark:hover:bg-white/10",
+};
+
+/**
+ * The same four severities, in v2's language. (Team lead, Sep 18 2026: "the
+ * background at the top has become odd", and the test-mode bar and the
+ * announcement bar "look like two different systems".)
+ *
+ * ── WHAT WAS ACTUALLY WRONG, MEASURED ────────────────────────────────────────
+ *
+ * Sampled down the content column at 1280×800 with the real stylesheet, a
+ * warning announcement bar showing and this stack holding the critical
+ * test-mode notice:
+ *
+ *   y   0– 36   amber-50   #fffbeb   the announcement bar
+ *   y  37–101   #ebe9fc               the page wash, at its most saturated
+ *   y 102–154   red-50     #fef2f2   THIS bar
+ *   y 155+      #f4f3fd               the page wash, visibly paler
+ *
+ * The wash is four gradients anchored to the top of the viewport, so its
+ * strongest band is the top ~100px — and two opaque pastel slabs now cut that
+ * band into pieces. What is left between them reads as a stripe of the wrong
+ * colour, and the wash below the bars is ten units paler than the stripe above
+ * them, which is what "odd" is. It is the same defect the lead reported when
+ * the top bar carried a white fill (see top-bar-v2.tsx): a band across the top
+ * makes the page's colour look like it starts lower down. The bar has to stop
+ * REPLACING the ground.
+ *
+ * Dark was worse, and in the literal sense: `dark:bg-red-950/40` is 40% alpha,
+ * so the wash showed THROUGH this bar (sampled #230b11, nothing like red-950)
+ * while the announcement bar beside it was fully opaque. Two bars, two
+ * different compositing models, side by side.
+ *
+ * ── THE TREATMENT ────────────────────────────────────────────────────────────
+ *
+ * A deliberate tint over the page ground instead of a slab of foreign colour:
+ * `bg-<token>/10` (`/20` in dark, where a 10% tint on near-black is invisible).
+ * This is not a new invention — it is exactly what ui-v2/button.tsx and
+ * ui-v2/badge.tsx already do for destructive, and what v2-theme.css retrofits
+ * onto v1's solid `bg-destructive` fills. The wash keeps running from the very
+ * top, which is the invariant the transparent top bar exists to protect, and
+ * the bar still reads red at a glance.
+ *
+ * Ink is `panel-ink-*`, not `text-destructive`/`text-warning`. Those tokens are
+ * ACCENT values picked to sit under white on a solid button; v2-theme.css
+ * measures them at 1.98:1 (warn) and 4.04:1 (danger) as type on their own 10%
+ * wash, and defines the corrected inks used here at 5.54:1 and 5.40:1. Those
+ * classes are scoped to `.v2-theme`, which is precisely where this map is used.
+ *
+ * `body` is `text-foreground/70` and NOT `text-muted-foreground`, which is the
+ * obvious choice and is the one that fails. The tint is transparent, so the row
+ * composites over the page wash rather than over white: measured on the real
+ * stylesheet at 1280px, `text-muted-foreground` lands at 2.87–4.03:1 across the
+ * four severities in light mode — under AA, and worst on the critical row,
+ * whose second sentence is "Real customer payments aren't being collected". v1
+ * renders that sentence at 7.60:1. `text-foreground/70` measures 5.94–7.07:1
+ * light and 6.7–9.0:1 dark, and still reads a step quieter than the title.
+ * Numbers move with the wash: re-measure rather than re-reason if either
+ * changes.
+ *
+ * `info` is the brand, not blue: in v2 an informational notice is the tenant's
+ * own colour, and `--primary` follows `--brand-h/s/l` off <body>. No hardcoded
+ * indigo anywhere — every colour here is a token.
+ *
+ * Colour is still never the only channel; the icons and the wording are
+ * untouched, and so is every rule about when a banner shows.
+ */
+const TONE_V2: Record<BannerSeverity, Tone> = {
+  critical: {
+    wrap: "border-destructive/20 bg-destructive/10 dark:bg-destructive/20",
+    icon: "panel-ink-danger",
+    title: "text-foreground",
+    body: "text-foreground/70",
+    btn: "bg-destructive/15 panel-ink-danger hover:bg-destructive/25 dark:bg-destructive/25 dark:hover:bg-destructive/35",
+    Icon: AlertOctagon,
+  },
+  warning: {
+    wrap: "border-warning/25 bg-warning/10 dark:bg-warning/20",
+    icon: "panel-ink-warn",
+    title: "text-foreground",
+    body: "text-foreground/70",
+    btn: "bg-warning/20 panel-ink-warn hover:bg-warning/30 dark:bg-warning/25 dark:hover:bg-warning/35",
+    Icon: AlertTriangle,
+  },
+  info: {
+    wrap: "border-primary/20 bg-primary/10 dark:bg-primary/15",
+    icon: "text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]",
+    title: "text-foreground",
+    body: "text-foreground/70",
+    btn: "bg-primary/15 text-primary hover:bg-primary/25 dark:text-[hsl(var(--v2-link,var(--primary)))] dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]",
+    Icon: Info,
+  },
+  success: {
+    wrap: "border-success/25 bg-success/10 dark:bg-success/20",
+    icon: "panel-ink-success",
+    title: "text-foreground",
+    body: "text-foreground/70",
+    btn: "bg-success/20 panel-ink-success hover:bg-success/30 dark:bg-success/25 dark:hover:bg-success/35",
+    Icon: CheckCircle2,
+  },
+};
+
+/** Pills, and the v2 hover pair for anything without a fill of its own. */
+const CONTROL_V2: ControlSkin = {
+  radius: "rounded-full",
+  ghostHover:
+    "hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]",
+};
+
 /* -------------------------------------------------------------------------- */
 /* BannerStack                                                                 */
 /* -------------------------------------------------------------------------- */
@@ -163,6 +285,8 @@ export function BannerStack({
   const pathname = usePathname();
   const isMobile = useIsMobile();
   const cap = maxVisible ?? (isMobile ? 1 : 2);
+  /* Same gate as `BannerRow`, for the queue strip below the notice. */
+  const v2 = useV2("theme");
 
   const dismissRefs = useRef(new Map<string, HTMLButtonElement | null>());
   const regionRef = useRef<HTMLElement | null>(null);
@@ -341,7 +465,11 @@ export function BannerStack({
           <div
             className={cn(
               "flex items-center justify-center gap-1 border-b px-4 py-1.5",
-              "bg-muted/30 text-[11px] font-medium text-muted-foreground",
+              /* v2 tints the page ground the way the notice above it does,
+                 rather than laying a grey slab over the wash. Slotted where
+                 `bg-muted/30` sat, so v1's class string is unchanged. */
+              v2 ? "bg-muted/20" : "bg-muted/30",
+              "text-[11px] font-medium text-muted-foreground",
             )}
           >
             <button
@@ -349,7 +477,10 @@ export function BannerStack({
               onClick={() => go(-1)}
               aria-label={`Previous notice (${cursor + 1} of ${visible.length})`}
               className={cn(
-                "grid h-5 w-5 place-items-center rounded hover:bg-muted",
+                "grid h-5 w-5 place-items-center",
+                v2
+                  ? "rounded-full hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]"
+                  : "rounded hover:bg-muted",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               )}
             >
@@ -388,9 +519,13 @@ export function BannerStack({
                     "h-1.5 rounded-full transition-all motion-reduce:transition-none",
                     i === cursor ? "w-4" : "w-1.5",
                     b.severity === "critical"
-                      ? "bg-red-600 dark:bg-red-400"
+                      ? v2
+                        ? "bg-destructive"
+                        : "bg-red-600 dark:bg-red-400"
                       : b.severity === "warning"
-                        ? "bg-amber-600 dark:bg-amber-400"
+                        ? v2
+                          ? "bg-warning"
+                          : "bg-amber-600 dark:bg-amber-400"
                         : "bg-muted-foreground/40",
                     i !== cursor && "opacity-60 hover:opacity-100",
                   )}
@@ -403,7 +538,10 @@ export function BannerStack({
               onClick={() => go(1)}
               aria-label={`Next notice (${cursor + 1} of ${visible.length})`}
               className={cn(
-                "grid h-5 w-5 place-items-center rounded hover:bg-muted",
+                "grid h-5 w-5 place-items-center",
+                v2
+                  ? "rounded-full hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]"
+                  : "rounded hover:bg-muted",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               )}
             >
@@ -416,7 +554,12 @@ export function BannerStack({
               click is required to learn that something serious is queued.
             */}
             {criticalCount > 0 && current.severity !== "critical" && (
-              <span className="ml-1 font-semibold text-red-700 dark:text-red-400">
+              <span
+                className={cn(
+                  "ml-1 font-semibold",
+                  v2 ? "panel-ink-danger" : "text-red-700 dark:text-red-400",
+                )}
+              >
                 · {criticalCount} urgent
               </span>
             )}
@@ -448,11 +591,26 @@ interface BannerRowProps {
  */
 const BannerRow = forwardRef<HTMLButtonElement, BannerRowProps>(
   ({ banner, onDismiss }, ref) => {
-    const tone = TONE[banner.severity];
+    /**
+     * The ONE gate in this file. `theme` and not `chrome`, because everything
+     * it switches — the tint tokens, `panel-ink-*`, `--v2-hover` — is defined
+     * under `.v2-theme`, which the layout applies from this same flag. Outside
+     * the provider `useV2` answers false, so the ~56 v1 tenants and every test
+     * that renders this stack bare keep the exact classes they have today.
+     */
+    const v2 = useV2("theme");
+    const tone = (v2 ? TONE_V2 : TONE)[banner.severity];
+    const skin = v2 ? CONTROL_V2 : CONTROL_V1;
     const Icon = banner.icon ?? tone.Icon;
 
     const dismissButton = banner.dismissal ? (
-      <DismissButton ref={ref} banner={banner} tone={tone} onDismiss={onDismiss} />
+      <DismissButton
+        ref={ref}
+        banner={banner}
+        tone={tone}
+        skin={skin}
+        onDismiss={onDismiss}
+      />
     ) : null;
 
     /**
@@ -505,9 +663,16 @@ const BannerRow = forwardRef<HTMLButtonElement, BannerRowProps>(
               full width instead of being crushed against the dismiss target. */}
           <div className="flex shrink-0 items-center gap-2 self-end sm:self-auto">
             {banner.secondaryAction && (
-              <ActionButton action={banner.secondaryAction} tone={tone} ghost />
+              <ActionButton
+                action={banner.secondaryAction}
+                tone={tone}
+                skin={skin}
+                ghost
+              />
             )}
-            {banner.action && <ActionButton action={banner.action} tone={tone} />}
+            {banner.action && (
+              <ActionButton action={banner.action} tone={tone} skin={skin} />
+            )}
             {dismissButton}
           </div>
         </div>
@@ -524,11 +689,12 @@ BannerRow.displayName = "BannerRow";
 interface DismissButtonProps {
   banner: AppBanner;
   tone: Tone;
+  skin: ControlSkin;
   onDismiss: () => void;
 }
 
 const DismissButton = forwardRef<HTMLButtonElement, DismissButtonProps>(
-  ({ banner, tone, onDismiss }, ref) => {
+  ({ banner, tone, skin, onDismiss }, ref) => {
     /**
      * Never a bare "Dismiss": with three stacked banners a screen reader would
      * read three identical buttons and the user could not tell which one they
@@ -551,11 +717,11 @@ const DismissButton = forwardRef<HTMLButtonElement, DismissButtonProps>(
         className={cn(
           // 44px touch target on mobile, tightened at desktop where the
           // pointer is precise.
-          "inline-flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-md sm:h-8",
+          `inline-flex h-11 shrink-0 items-center justify-center gap-1.5 ${skin.radius} sm:h-8`,
           hasVisibleLabel ? "w-11 sm:w-auto sm:px-2" : "w-11 sm:w-8",
           "text-xs font-medium",
           tone.icon,
-          "hover:bg-black/5 dark:hover:bg-white/10",
+          skin.ghostHover,
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current focus-visible:ring-offset-1",
         )}
       >
@@ -578,18 +744,18 @@ DismissButton.displayName = "DismissButton";
 function ActionButton({
   action,
   tone,
+  skin,
   ghost,
 }: {
   action: BannerAction;
   tone: Tone;
+  skin: ControlSkin;
   ghost?: boolean;
 }): ReactNode {
   const classes = cn(
-    "inline-flex h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-3 text-xs font-medium sm:h-8",
+    `inline-flex h-9 items-center justify-center gap-1.5 whitespace-nowrap ${skin.radius} px-3 text-xs font-medium sm:h-8`,
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current focus-visible:ring-offset-1",
-    ghost
-      ? cn("bg-transparent hover:bg-black/5 dark:hover:bg-white/10", tone.body)
-      : tone.btn,
+    ghost ? cn("bg-transparent", skin.ghostHover, tone.body) : tone.btn,
   );
 
   if (action.href) {

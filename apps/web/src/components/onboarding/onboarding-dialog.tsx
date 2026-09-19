@@ -235,9 +235,30 @@ export function OnboardingDialog() {
     (dialogStep === "account" && accountReset.open) ||
     (dialogStep === "payment" && state.error?.code === "CONFIG_MISSING");
 
+  /**
+   * The Terms checkbox gates the primary button rather than failing on press.
+   *
+   * Accepting the Terms and the Privacy Policy is a legal precondition, not a
+   * field to get wrong and be told about afterwards: before this, "Continue to
+   * payment" looked ready, and pressing it returned "Please accept the Terms
+   * and Privacy Policy to continue" — an error for something the form could
+   * simply have refused to start. Greyed out until it is ticked, so the button
+   * only ever looks pressable when it is.
+   *
+   * Scoped to the two account forms that actually SHOW the checkbox (see
+   * steps/account-step.tsx: the create-account form and the `mode === "tenant"`
+   * details form). The sign-in panel has no consent field — it is an existing
+   * account signing in — so gating there would disable a button with nothing on
+   * screen to explain it. `state.business.acceptedTerms` is the same value the
+   * checkbox writes, so the two cannot disagree.
+   */
+  const consentPending =
+    dialogStep === "account" && !state.signInPrompt && !state.business.acceptedTerms;
+
   const primaryDisabled =
     state.busy ||
     resolving ||
+    consentPending ||
     // Nothing to submit until the PaymentElement has an intent to confirm.
     (dialogStep === "payment" && !state.payment.clientSecret);
 

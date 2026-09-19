@@ -20,11 +20,23 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+// v2 (northwind) only: the Promo codes page and its dialogs are drawn with the
+// v2 primitives. A v1 dropdown or date picker opens in its own layer, so v1 and
+// v2 parts are never mixed inside one dialog.
+import { Button as ButtonV2 } from '@/components/ui-v2/button';
+import { Input as InputV2 } from '@/components/ui-v2/input';
+import { Label as LabelV2 } from '@/components/ui-v2/label';
+import { Select as SelectV2, SelectContent as SelectContentV2, SelectItem as SelectItemV2, SelectTrigger as SelectTriggerV2, SelectValue as SelectValueV2 } from '@/components/ui-v2/select';
+import { Popover as PopoverV2, PopoverContent as PopoverContentV2, PopoverTrigger as PopoverTriggerV2 } from '@/components/ui-v2/popover';
+import { Calendar as CalendarV2 } from '@/components/ui-v2/calendar';
+import { Dialog as DialogV2, DialogContent as DialogContentV2, DialogDescription as DialogDescriptionV2, DialogFooter as DialogFooterV2, DialogHeader as DialogHeaderV2, DialogTitle as DialogTitleV2 } from '@/components/ui-v2/dialog';
+import { AlertDialog as AlertDialogV2, AlertDialogAction as AlertDialogActionV2, AlertDialogCancel as AlertDialogCancelV2, AlertDialogContent as AlertDialogContentV2, AlertDialogDescription as AlertDialogDescriptionV2, AlertDialogFooter as AlertDialogFooterV2, AlertDialogHeader as AlertDialogHeaderV2, AlertDialogTitle as AlertDialogTitleV2 } from '@/components/ui-v2/alert-dialog';
 import { format } from 'date-fns';
 import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, BellRing, Zap, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, ShieldCheck, FilePenLine, PenLine, Receipt, Banknote, Shield, Copy, Check, Clock, Crown, Package, Lock, RefreshCw, Eye, TrendingUp, MessageSquare, ArrowRight, ArrowLeft, Info, Sun, Undo2, Landmark, Globe } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useOrgSettings } from '@/hooks/use-org-settings';
 import { useTenantBranding } from '@/hooks/use-tenant-branding';
+import { CustomSiteAccentField } from '@/components/settings/custom-site-accent-field';
 import { useTenant } from '@/contexts/TenantContext';
 import { useRentalSettings } from '@/hooks/use-rental-settings';
 import { LogoUploadWithResize } from '@/components/settings/logo-upload-with-resize';
@@ -70,6 +82,7 @@ import { UnsavedChangesDialog } from '@/components/shared/unsaved-changes-dialog
 import { useAuditLogOnOpen } from '@/hooks/use-audit-log-on-open';
 import { useAuditLog } from '@/hooks/use-audit-log';
 import { useV2 } from '@/lib/v2-context';
+import { isV2 } from '@/lib/v2';
 import { PromoCodesTableV2 } from '@/components/settings-v2/promo-codes-table-v2';
 import { SettingsIndexV2 } from '@/components/settings-v2/settings-index';
 import * as BusinessV2 from '@/components/settings-v2/business-settings-states';
@@ -109,6 +122,23 @@ import {
   v2HasUnsavedEdits,
   v2NoticePages,
 } from '@/components/settings-v2/settings-shell-state';
+
+/**
+ * The parts the promo code Edit and Delete dialogs are drawn with. v1 keeps
+ * exactly the components it always used; the v2 canary gets the v2 ones, so a
+ * v2 dropdown or calendar never opens under a v1 dialog (or the reverse). Typed
+ * as v1's: every prop the dialogs pass is one both sets accept.
+ */
+const PROMO_DIALOG_UI_V1 = {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  Button, Input, Label, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Popover, PopoverContent, PopoverTrigger, Calendar,
+};
+const PROMO_DIALOG_UI_V2 = {
+  Dialog: DialogV2, DialogContent: DialogContentV2, DialogDescription: DialogDescriptionV2, DialogFooter: DialogFooterV2, DialogHeader: DialogHeaderV2, DialogTitle: DialogTitleV2,
+  AlertDialog: AlertDialogV2, AlertDialogAction: AlertDialogActionV2, AlertDialogCancel: AlertDialogCancelV2, AlertDialogContent: AlertDialogContentV2, AlertDialogDescription: AlertDialogDescriptionV2, AlertDialogFooter: AlertDialogFooterV2, AlertDialogHeader: AlertDialogHeaderV2, AlertDialogTitle: AlertDialogTitleV2,
+  Button: ButtonV2, Input: InputV2, Label: LabelV2, Select: SelectV2, SelectContent: SelectContentV2, SelectItem: SelectItemV2, SelectTrigger: SelectTriggerV2, SelectValue: SelectValueV2, Popover: PopoverV2, PopoverContent: PopoverContentV2, PopoverTrigger: PopoverTriggerV2, Calendar: CalendarV2,
+} as unknown as typeof PROMO_DIALOG_UI_V1;
 
 /**
  * The pointer left behind by a control that now lives in the Website section.
@@ -165,19 +195,20 @@ const MovedToWebsite = ({
  *
  * Tabs an Integrations card owns are absent on purpose — the effect that sends
  * them to /integrations still runs — and `insurance` is here only because the
- * Bonzah card deep-links to its application wizard. Installments, Pay as you
- * go, Auto-extension, Promo codes and Extras keep their entries and render
- * cases but are hidden (V2_HIDDEN_SETTINGS_PAGES): nothing opens them.
+ * Bonzah card deep-links to its application wizard. Promo codes and Extras
+ * sit under Pricing on the index, and Installments, Pay as you go and
+ * Auto-extension under Payment plans (they were hidden for a while through
+ * V2_HIDDEN_SETTINGS_PAGES, which is empty now).
  */
 const V2_SETTINGS_PAGES: Record<string, { section: string; title: string; description: string; permTab: string }> = {
   general: { section: 'Business', title: 'General', description: 'Regional settings, driver and booking rules, key handover, fees and deposits, and your booking site.', permTab: 'general' },
   locations: { section: 'Business', title: 'Locations', description: 'Where customers pick up and return cars, and where you deliver.', permTab: 'locations' },
   pricing: { section: 'Pricing', title: 'Custom pricing', description: 'Weekend and holiday surcharges, and when monthly pricing starts.', permTab: 'pricing' },
-  installments: { section: 'Pricing and payments', title: 'Installments', description: 'Let customers pay for a rental in weekly or monthly parts.', permTab: 'installments' },
-  payg: { section: 'Pricing and payments', title: 'Pay as you go', description: 'Bill long rentals day by day instead of all upfront.', permTab: 'payg' },
-  'auto-extend': { section: 'Pricing and payments', title: 'Auto-extension', description: 'Rentals that renew each week or month and are billed in advance.', permTab: 'auto-extend' },
-  promos: { section: 'Pricing and payments', title: 'Promo codes', description: 'Codes customers type at checkout, or discounts that apply by themselves on long rentals.', permTab: 'promos' },
-  extras: { section: 'Pricing and payments', title: 'Extras', description: 'Add-ons customers can buy with a rental.', permTab: 'extras' },
+  promos: { section: 'Pricing', title: 'Promo codes', description: 'Codes customers type at checkout, or discounts that apply by themselves on long rentals.', permTab: 'promos' },
+  extras: { section: 'Pricing', title: 'Extras', description: 'Add-ons customers can buy with a rental, such as a child seat or GPS.', permTab: 'extras' },
+  installments: { section: 'Payment plans', title: 'Installments', description: 'Let customers pay for a rental in weekly or monthly parts.', permTab: 'installments' },
+  payg: { section: 'Payment plans', title: 'Pay as you go', description: 'Bill long rentals day by day instead of all upfront.', permTab: 'payg' },
+  'auto-extend': { section: 'Payment plans', title: 'Auto-extension', description: 'Rentals that renew each week or month and are billed in advance.', permTab: 'auto-extend' },
   reminders: { section: 'Notifications', title: 'Team emails', description: 'Which emails your team receives.', permTab: 'reminders' },
   push: { section: 'Notifications', title: 'Push notifications', description: "Alerts on your team's phones and browsers.", permTab: 'push' },
   templates: { section: 'Notifications', title: 'Customer messages', description: 'The reminders, emails and agreement your customers receive, including the lockbox code email.', permTab: 'templates' },
@@ -207,9 +238,12 @@ const V2_PAGES_GATING_OWN_CONTROLS = new Set(['reminders', 'push', 'general', 'l
  * SettingsPageSaveProvider no panel shows a Save of its own. Holiday pricing
  * and reminder rules stay per item (dialogs and cards), as do Locations'
  * delivery and collection locations (Locations registers the rest under
- * "locations"). Installments keeps its own Save.
+ * "locations"). Installments, Pay as you go and Auto-extension are forms too
+ * and save here ("installments", "payg", "auto-extend"). Promo codes and
+ * Extras are lists: each code or extra saves in its own form or dialog, so
+ * they have no bar.
  */
-const V2_PAGES_WITH_SAVE_BAR = new Set(['general', 'templates', 'pricing', 'locations']);
+const V2_PAGES_WITH_SAVE_BAR = new Set(['general', 'templates', 'pricing', 'locations', 'installments', 'payg', 'auto-extend']);
 
 /**
  * v2 tabs whose home is another screen: Branding is the Appearance page (the
@@ -503,7 +537,17 @@ const Settings = () => {
   // tenant switched over by `portal_experience` is in no slug list, and this
   // gate is what decides whether the Turo Sync switch exists on this page at
   // all. Both the v1 and v2 layouts read this one value.
-  const turoV2 = useV2('turo');
+  //
+  // The slug term stays OR'd in, exactly as `app-sidebar.tsx` and the two TRAX
+  // gates write it, so this can never answer NARROWER than it did before the
+  // column existed. `useV2` is resolved from `x-tenant-slug`, and there is one
+  // real host where that header is absent while the client knows the slug
+  // perfectly well: `proxy.ts` matches a custom portal domain with
+  // `.eq('status', 'active')` while `TenantContext` accepts
+  // `.in('status', ['active', 'suspended'])`. Without the OR, a suspended
+  // northwind on its own domain would keep the Turo Sync entry in the sidebar
+  // and lose the row and switch that configure it.
+  const turoV2 = useV2('turo') || isV2('turo', tenantSlug);
 
   // The tabs the lean gate hides, as one set so the fallback below can never
   // land on another hidden tab.
@@ -2427,23 +2471,25 @@ const Settings = () => {
     handleUpdatePromo();
   };
 
-  // Shared by the v1 tabs and the v2 pages, so both render the same dialogs.
+  // Shared by the v1 tabs and the v2 pages, so both render the same dialogs,
+  // each drawn with its own design's parts (PROMO_DIALOG_UI_V1 / _V2).
+  const PromoUi = v2Chrome ? PROMO_DIALOG_UI_V2 : PROMO_DIALOG_UI_V1;
   const promoDialogs = (
     <>
           {/* Edit Promo Dialog */}
-          <Dialog open={!!editingPromo} onOpenChange={(open) => !open && setEditingPromo(null)}>
-            <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Edit Promo Code</DialogTitle>
-                <DialogDescription>
+          <PromoUi.Dialog open={!!editingPromo} onOpenChange={(open) => !open && setEditingPromo(null)}>
+            <PromoUi.DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+              <PromoUi.DialogHeader>
+                <PromoUi.DialogTitle>Edit Promo Code</PromoUi.DialogTitle>
+                <PromoUi.DialogDescription>
                   Update the details of your promo code.
-                </DialogDescription>
-              </DialogHeader>
+                </PromoUi.DialogDescription>
+              </PromoUi.DialogHeader>
               {editingPromo && (
                 <div className="space-y-6 py-4">
                   <div className="space-y-2">
-                    <Label htmlFor="edit_name">Name</Label>
-                    <Input
+                    <PromoUi.Label htmlFor="edit_name">Name</PromoUi.Label>
+                    <PromoUi.Input
                       id="edit_name"
                       value={editingPromo.name}
                       onChange={(e) => setEditingPromo({ ...editingPromo, name: e.target.value })}
@@ -2453,31 +2499,31 @@ const Settings = () => {
 
                   <div className={v2Chrome ? "flex flex-col gap-4 sm:flex-row" : "flex gap-4"}>
                     <div className={v2Chrome ? "space-y-2 w-full min-w-0 sm:w-1/2" : "space-y-2 w-1/2"}>
-                      <Label>Expiration Date</Label>
-                      <Popover modal={true}>
-                        <PopoverTrigger asChild>
-                          <Button
+                      <PromoUi.Label>Expiration Date</PromoUi.Label>
+                      <PromoUi.Popover modal={true}>
+                        <PromoUi.PopoverTrigger asChild>
+                          <PromoUi.Button
                             variant={"outline"}
                             className="w-full justify-start text-left font-normal"
                           >
                             <CalendarIcon className="mr-2 h-4 w-4" />
                             {editingPromo.expires_at ? format(editingPromo.expires_at, "PPP") : <span>Pick a date</span>}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                          <Calendar
+                          </PromoUi.Button>
+                        </PromoUi.PopoverTrigger>
+                        <PromoUi.PopoverContent className="w-auto p-0" align="start">
+                          <PromoUi.Calendar
                             mode="single"
                             selected={editingPromo.expires_at}
                             onSelect={(date) => date && setEditingPromo({ ...editingPromo, expires_at: date })}
                             initialFocus
                           />
-                        </PopoverContent>
-                      </Popover>
+                        </PromoUi.PopoverContent>
+                      </PromoUi.Popover>
                       {editPromoFieldErrorV2(editPromoIssuesV2.expires_at)}
                     </div>
                     <div className={v2Chrome ? "space-y-2 w-full min-w-0 sm:w-1/2" : "space-y-2 w-1/2"}>
-                      <Label htmlFor="edit_max_users">Max Users</Label>
-                      <Input
+                      <PromoUi.Label htmlFor="edit_max_users">Max Users</PromoUi.Label>
+                      <PromoUi.Input
                         id="edit_max_users"
                         type="text"
                         inputMode="numeric"
@@ -2494,23 +2540,23 @@ const Settings = () => {
 
                   <div className={v2Chrome ? "flex flex-col gap-4 sm:flex-row" : "flex gap-4"}>
                     <div className={v2Chrome ? "space-y-2 w-full min-w-0 sm:w-1/2" : "space-y-2 w-1/2"}>
-                      <Label htmlFor="edit_type">Type</Label>
-                      <Select
+                      <PromoUi.Label htmlFor="edit_type">Type</PromoUi.Label>
+                      <PromoUi.Select
                         value={editingPromo.type}
                         onValueChange={(val) => setEditingPromo({ ...editingPromo, type: val })}
                       >
-                        <SelectTrigger id="edit_type">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="percentage">Percentage</SelectItem>
-                          <SelectItem value="value">Value</SelectItem>
-                        </SelectContent>
-                      </Select>
+                        <PromoUi.SelectTrigger id="edit_type">
+                          <PromoUi.SelectValue />
+                        </PromoUi.SelectTrigger>
+                        <PromoUi.SelectContent>
+                          <PromoUi.SelectItem value="percentage">Percentage</PromoUi.SelectItem>
+                          <PromoUi.SelectItem value="value">Value</PromoUi.SelectItem>
+                        </PromoUi.SelectContent>
+                      </PromoUi.Select>
                     </div>
                     <div className={v2Chrome ? "space-y-2 w-full min-w-0 sm:w-1/2" : "space-y-2 w-1/2"}>
-                      <Label htmlFor="edit_value">Value</Label>
-                      <Input
+                      <PromoUi.Label htmlFor="edit_value">Value</PromoUi.Label>
+                      <PromoUi.Input
                         id="edit_value"
                         type="text"
                         inputMode="decimal"
@@ -2525,8 +2571,8 @@ const Settings = () => {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="edit_min_duration">Auto-apply for rentals of N+ days <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                    <Input
+                    <PromoUi.Label htmlFor="edit_min_duration">Auto-apply for rentals of N+ days <span className="text-muted-foreground font-normal">(optional)</span></PromoUi.Label>
+                    <PromoUi.Input
                       id="edit_min_duration"
                       type="text"
                       inputMode="numeric"
@@ -2544,17 +2590,17 @@ const Settings = () => {
                   </div>
 
                   <div className="space-y-2">
-                    <Label>Promo Code</Label>
+                    <PromoUi.Label>Promo Code</PromoUi.Label>
                     <div className="flex gap-2">
-                      <Input
+                      <PromoUi.Input
                         value={editingPromo.code}
                         onChange={(e) => setEditingPromo({ ...editingPromo, code: e.target.value.toUpperCase().replace(/\s/g, '') })}
                         placeholder="e.g. SUMMER20"
                         className={editPromoCodeError ? "border-destructive" : ""}
                       />
-                      <Button variant="outline" size="icon" onClick={regenerateEditCode} title="Auto-generate Code">
+                      <PromoUi.Button variant="outline" size="icon" onClick={regenerateEditCode} title="Auto-generate Code">
                         <Zap className="h-4 w-4" />
-                      </Button>
+                      </PromoUi.Button>
                     </div>
                     {editPromoCodeError && (
                       <p className="text-sm text-destructive">{editPromoCodeError}</p>
@@ -2577,40 +2623,40 @@ const Settings = () => {
                   onRetry={handleUpdatePromoV2}
                 />
               )}
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setEditingPromo(null)}>Cancel</Button>
-                <Button
+              <PromoUi.DialogFooter>
+                <PromoUi.Button variant="outline" onClick={() => setEditingPromo(null)}>Cancel</PromoUi.Button>
+                <PromoUi.Button
                   onClick={v2Chrome ? handleUpdatePromoV2 : handleUpdatePromo}
                   disabled={updatePromoMutation.isPending || !!editPromoCodeError || (v2Chrome && Object.keys(editPromoIssuesV2).length > 0)}
                 >
                   {updatePromoMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Save Changes
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+                </PromoUi.Button>
+              </PromoUi.DialogFooter>
+            </PromoUi.DialogContent>
+          </PromoUi.Dialog>
 
           {/* Delete Confirmation Dialog */}
-          <AlertDialog open={!!deletingPromo} onOpenChange={(open) => !open && setDeletingPromo(null)}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle className="text-destructive flex items-center gap-2">
+          <PromoUi.AlertDialog open={!!deletingPromo} onOpenChange={(open) => !open && setDeletingPromo(null)}>
+            <PromoUi.AlertDialogContent>
+              <PromoUi.AlertDialogHeader>
+                <PromoUi.AlertDialogTitle className="text-destructive flex items-center gap-2">
                   <AlertTriangle className="h-5 w-5" />
                   Delete Promo Code?
-                </AlertDialogTitle>
-                <AlertDialogDescription>
+                </PromoUi.AlertDialogTitle>
+                <PromoUi.AlertDialogDescription>
                   Are you sure you want to delete the promo code <strong>{deletingPromo?.name}</strong>?
                   This action cannot be undone and may affect active users trying to use this code.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
+                </PromoUi.AlertDialogDescription>
+              </PromoUi.AlertDialogHeader>
               {v2Chrome && deletePromoMutation.isError && (
                 <p role="alert" className="text-sm text-destructive">
                   Couldn&apos;t delete this code. Nothing was deleted. Try again.
                 </p>
               )}
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
+              <PromoUi.AlertDialogFooter>
+                <PromoUi.AlertDialogCancel>Cancel</PromoUi.AlertDialogCancel>
+                <PromoUi.AlertDialogAction
                   className="bg-destructive hover:bg-destructive/90"
                   onClick={v2Chrome
                     ? (e) => {
@@ -2622,10 +2668,10 @@ const Settings = () => {
                   disabled={v2Chrome ? deletePromoMutation.isPending : undefined}
                 >
                   {deletePromoMutation.isPending ? "Deleting..." : "Delete Promo Code"}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+                </PromoUi.AlertDialogAction>
+              </PromoUi.AlertDialogFooter>
+            </PromoUi.AlertDialogContent>
+          </PromoUi.AlertDialog>
     </>
   );
 
@@ -3161,18 +3207,16 @@ const Settings = () => {
             />
           );
 
+        // Forms: each registers its save and discard with the page, whose one
+        // save bar (V2_PAGES_WITH_SAVE_BAR) and leave dialog save them.
         case 'installments':
-          return (
-            <div className="settings-v2-body">
-              <InstallmentSettings registerSave={registerV2SectionSave} />
-            </div>
-          );
+          return <InstallmentSettings registerSave={registerV2SectionSave} />;
 
         case 'payg':
-          return <PayAsYouGoSettingsV2 canEdit={canEditPage} />;
+          return <PayAsYouGoSettingsV2 canEdit={canEditPage} registerSave={registerV2SectionSave} />;
 
         case 'auto-extend':
-          return <AutoExtendSettingsV2 canEdit={canEditPage} />;
+          return <AutoExtendSettingsV2 canEdit={canEditPage} registerSave={registerV2SectionSave} />;
 
         case 'promos': {
           const promoIssuesV2 = visiblePromoIssues(validatePromoDraft(promoForm), promoSubmittedV2);
@@ -3189,6 +3233,25 @@ const Settings = () => {
           };
           const promoFieldError = (message?: string) =>
             message ? <span role="alert" className="text-destructive">{message}</span> : undefined;
+          // The two date fields: a v2 outline button that opens the v2 calendar.
+          const promoDateField = (value: Date | undefined, onPick: (date: Date) => void, label: string) => (
+            <PopoverV2>
+              <PopoverTriggerV2 asChild>
+                <ButtonV2
+                  variant="outline"
+                  className="w-full justify-start font-normal"
+                  aria-label={`${label}: ${value ? format(value, "PPP") : "pick a date"}`}
+                >
+                  <CalendarIcon data-icon="inline-start" className="text-muted-foreground" />
+                  {value ? format(value, "PPP") : <span className="text-muted-foreground">Pick a date</span>}
+                </ButtonV2>
+              </PopoverTriggerV2>
+              <PopoverContentV2 className="w-auto p-0" align="start">
+                <CalendarV2 mode="single" selected={value} onSelect={(date) => date && onPick(date)} initialFocus />
+              </PopoverContentV2>
+            </PopoverV2>
+          );
+          // One code at a time, saved by its own Add (a list page: no save bar).
           return (
             <div className="space-y-6">
               {canEditPage && (
@@ -3200,40 +3263,42 @@ const Settings = () => {
                       status={createPromoMutation.isPending ? 'saving' : createPromoMutation.isError ? 'error' : 'idle'}
                       error={promoSaveError(createPromoMutation.error)}
                     />
-                    <Button size="sm" onClick={handleCreatePromoV2} disabled={createPromoMutation.isPending || !!promoCodeError || promoCheckUnavailableV2}>
-                      {createPromoMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    <ButtonV2 size="sm" onClick={handleCreatePromoV2} disabled={createPromoMutation.isPending || !!promoCodeError || promoCheckUnavailableV2}>
+                      {createPromoMutation.isPending && <Loader2 className="animate-spin" data-icon="inline-start" />}
                       Add promo code
-                    </Button>
+                    </ButtonV2>
                     </>
                   }
                 >
                   <div className="grid gap-4 px-5 py-4 sm:grid-cols-2 lg:grid-cols-3">
                     <SettingsField label="Name" htmlFor="v2_promo_name" hint={promoFieldError(promoIssuesV2.name)}>
-                      <Input
+                      <InputV2
                         id="v2_promo_name"
                         placeholder="Winter sale"
                         value={promoForm.name}
                         onChange={(e) => setPromoForm(prev => ({ ...prev, name: e.target.value }))}
+                        aria-invalid={promoIssuesV2.name ? true : undefined}
                       />
                     </SettingsField>
                     <SettingsField label="Discount" htmlFor="v2_promo_value" hint={promoFieldError(promoIssuesV2.value)}>
                       <div className="flex gap-2">
-                        <Select value={promoForm.type} onValueChange={(val) => setPromoForm(prev => ({ ...prev, type: val }))}>
-                          <SelectTrigger className="w-32" aria-label="Discount type">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="percentage">Percent</SelectItem>
-                            <SelectItem value="value">Amount</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Input
+                        <SelectV2 value={promoForm.type} onValueChange={(val) => setPromoForm(prev => ({ ...prev, type: val }))}>
+                          <SelectTriggerV2 className="w-32 shrink-0" aria-label="Discount type">
+                            <SelectValueV2 />
+                          </SelectTriggerV2>
+                          <SelectContentV2>
+                            <SelectItemV2 value="percentage">Percent</SelectItemV2>
+                            <SelectItemV2 value="value">Amount</SelectItemV2>
+                          </SelectContentV2>
+                        </SelectV2>
+                        <InputV2
                           id="v2_promo_value"
                           type="text"
                           inputMode="decimal"
                           placeholder={promoForm.type === 'percentage' ? '10' : '20.00'}
                           value={promoForm.value}
                           onChange={(e) => setPromoForm(prev => ({ ...prev, value: e.target.value.replace(/[^0-9.]/g, '') }))}
+                          aria-invalid={promoIssuesV2.value ? true : undefined}
                         />
                       </div>
                     </SettingsField>
@@ -3243,60 +3308,33 @@ const Settings = () => {
                       hint={promoCheckUnavailableV2 ? (promoCodesErrorV2 ? <span className="text-destructive">Couldn&apos;t check existing codes. Load the list below, then add.</span> : 'Checking existing codes…') : promoCodeError ? <span className="text-destructive">{promoCodeError}</span> : 'Made from the name and discount. You can change it.'}
                     >
                       <div className="flex gap-2">
-                        <Input
+                        <InputV2
                           id="v2_promo_code"
                           value={promoForm.code}
                           onChange={(e) => setPromoForm(prev => ({ ...prev, code: e.target.value.toUpperCase().replace(/\s/g, '') }))}
                           placeholder="SUMMER20"
-                          className={promoCodeError ? 'border-destructive' : ''}
+                          aria-invalid={promoCodeError ? true : undefined}
                         />
-                        <Button variant="outline" size="sm" className="h-10" onClick={generatePromoCode}>
+                        <ButtonV2 variant="outline" onClick={generatePromoCode}>
                           Generate
-                        </Button>
+                        </ButtonV2>
                       </div>
                     </SettingsField>
-                    <SettingsField label="Starts" >
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button variant="outline" className="w-full justify-start font-normal">
-                            {promoForm.created_at ? format(promoForm.created_at, "PPP") : <span className="text-muted-foreground">Pick a date</span>}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                          <Calendar
-                            mode="single"
-                            selected={promoForm.created_at}
-                            onSelect={(date) => date && setPromoForm(prev => ({ ...prev, created_at: date }))}
-                            initialFocus
-                          />
-                        </PopoverContent>
-                      </Popover>
+                    <SettingsField label="Starts">
+                      {promoDateField(promoForm.created_at, (date) => setPromoForm(prev => ({ ...prev, created_at: date })), 'Starts')}
                     </SettingsField>
                     <SettingsField label="Expires" hint={promoFieldError(promoIssuesV2.expires_at)}>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button variant="outline" className="w-full justify-start font-normal">
-                            {promoForm.expires_at ? format(promoForm.expires_at, "PPP") : <span className="text-muted-foreground">Pick a date</span>}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                          <Calendar
-                            mode="single"
-                            selected={promoForm.expires_at}
-                            onSelect={(date) => date && setPromoForm(prev => ({ ...prev, expires_at: date }))}
-                            initialFocus
-                          />
-                        </PopoverContent>
-                      </Popover>
+                      {promoDateField(promoForm.expires_at, (date) => setPromoForm(prev => ({ ...prev, expires_at: date })), 'Expires')}
                     </SettingsField>
                     <SettingsField label="Max uses" htmlFor="v2_promo_max_users" hint={promoFieldError(promoIssuesV2.max_users)}>
-                      <Input
+                      <InputV2
                         id="v2_promo_max_users"
                         type="text"
                         inputMode="numeric"
                         placeholder="100"
                         value={promoForm.max_users}
                         onChange={(e) => setPromoForm(prev => ({ ...prev, max_users: digitsOnly(e.target.value) }))}
+                        aria-invalid={promoIssuesV2.max_users ? true : undefined}
                       />
                     </SettingsField>
                     <SettingsField
@@ -3306,7 +3344,7 @@ const Settings = () => {
                       className="sm:col-span-2 lg:col-span-1"
                     >
                       <div className="flex items-center gap-2">
-                        <Input
+                        <InputV2
                           id="v2_promo_min_duration"
                           type="text"
                           inputMode="numeric"
@@ -4801,6 +4839,10 @@ const Settings = () => {
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
+
+              {/* The custom booking site's one operator-set colour. It saves
+                  itself, so it stays out of the branding form's dark-sync. */}
+              <CustomSiteAccentField />
 
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
               {/* Undo for anything unsaved — including a "Sync dark theme from light". */}

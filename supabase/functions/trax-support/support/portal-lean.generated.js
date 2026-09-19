@@ -22,25 +22,31 @@ export const LEAN_HIDDEN_AREAS = [
     'pl-dashboard',
     'reminders',
 ];
-export function isAreaHidden(area, tenantSlug) {
-    if (!tenantSlug)
+export function isAreaHiddenForLean(area, lean) {
+    if (!lean)
         return false;
-    if (!LEAN_HIDDEN_AREAS.includes(area))
-        return false;
-    return isLeanTenant(tenantSlug);
+    return LEAN_HIDDEN_AREAS.includes(area);
 }
-export function isLeanTenant(tenantSlug) {
+export function isAreaHidden(area, tenantSlug, onV2 = false) {
+    return isAreaHiddenForLean(area, isLeanTenant(tenantSlug, onV2));
+}
+export function isLeanTenant(tenantSlug, onV2 = false) {
     if (!tenantSlug)
         return false;
+    if (onV2)
+        return true;
     return LEAN_TENANTS.includes(tenantSlug);
 }
-export function resolveBoldSignMode(tenantMode, tenantSlug) {
-    if (isLeanTenant(tenantSlug))
+export function resolveBoldSignMode(tenantMode, tenantSlug, onV2 = false) {
+    return resolveBoldSignModeForLean(tenantMode, isLeanTenant(tenantSlug, onV2));
+}
+export function resolveBoldSignModeForLean(tenantMode, lean) {
+    if (lean)
         return 'live';
     return tenantMode === 'live' ? 'live' : 'test';
 }
-export function isTestModeUiHidden(tenantSlug) {
-    return isLeanTenant(tenantSlug);
+export function isTestModeUiHidden(tenantSlug, onV2 = false) {
+    return isLeanTenant(tenantSlug, onV2);
 }
 const SETTINGS_TAB_AREAS = {
     payments: 'settings-payments',
@@ -51,11 +57,14 @@ const SETTINGS_TAB_AREAS = {
     inshur: 'inshur',
     tesla: 'tesla',
 };
-export function isSettingsTabHidden(tabValue, tenantSlug) {
+export function isSettingsTabHidden(tabValue, tenantSlug, onV2 = false) {
+    return isSettingsTabHiddenForLean(tabValue, isLeanTenant(tenantSlug, onV2));
+}
+export function isSettingsTabHiddenForLean(tabValue, lean) {
     const area = SETTINGS_TAB_AREAS[tabValue];
     if (!area)
         return false;
-    return isAreaHidden(area, tenantSlug);
+    return isAreaHiddenForLean(area, lean);
 }
 export const SETTINGS_TAB_BOARD_ROUTE = '/integrations';
 export function settingsTabBoardCard(tabValue) {

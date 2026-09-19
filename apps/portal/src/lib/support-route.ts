@@ -1,7 +1,7 @@
 /**
  * The portal's one Support destination.
  *
- * The profile menu's Support item, TRAX's Support control and the escalation
+ * The main sidebar's Support item, TRAX's Support control and the escalation
  * handoff all use this, so every entry point lands on the same section and the
  * same authorized tickets. `issue` opens the new-request composer for a TRAX
  * issue (opening still creates nothing); `ticket` opens an existing conversation.

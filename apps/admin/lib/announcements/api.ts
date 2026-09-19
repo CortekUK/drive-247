@@ -131,6 +131,46 @@ function thrown<T>(e: unknown, fallback: string): Result<T> {
   return { ok: false, message: e instanceof Error && e.message ? e.message : fallback, code: null };
 }
 
+/**
+ * The row this page is showing is not in the database any more.
+ *
+ * supabase-js returns `{ error: null, data: [] }` when RLS filters a write out
+ * AND when the row simply is not there, so a zero-row DELETE or UPDATE cannot
+ * be read as either on its own. Callers that get this code must REFRESH the
+ * list: the screen is stale, and every retry against that id will fail exactly
+ * the same way. Sep 18 2026: three system announcements had already been
+ * deleted, the list still showed them because a failed delete never refetched,
+ * and "Reload the page and try again" appeared on every attempt — correct, and
+ * useless, because the row it pointed at could not be deleted by anyone.
+ */
+export const STALE_ROW_CODE = 'STALE_ROW';
+
+/**
+ * Which of the two zero-row causes was it?
+ *
+ * One extra read, only on the failure path. SELECT on the announcement table is
+ * governed by the same `is_super_admin()` policy as the write, so:
+ *  - the row reads back  → it exists and the WRITE was refused → a real
+ *    permission problem, and saying "already deleted" would be a lie;
+ *  - the row does not    → it is gone (or was never visible to this session),
+ *    so the list is stale and must be refreshed.
+ */
+async function classifyZeroRows<T>(id: string, staleMessage: string): Promise<Result<T>> {
+  try {
+    const { data, error } = await supabase
+      .from(ANNOUNCEMENT_TABLES.content)
+      .select('id')
+      .eq('id', id)
+      .maybeSingle();
+    if (!error && data) {
+      return { ok: false, message: NOT_SUPER_ADMIN_MESSAGE, code: '42501' };
+    }
+  } catch {
+    /* fall through to the stale answer: we still know the write did nothing */
+  }
+  return { ok: false, message: staleMessage, code: STALE_ROW_CODE };
+}
+
 /** Undefined table (42P01), undefined function (42883), PostgREST schema-cache misses (PGRST202/205). */
 export const NOT_INSTALLED_CODES: readonly string[] = ['42P01', '42883', 'PGRST202', 'PGRST205'];
 
@@ -251,7 +291,7 @@ async function setAnnouncementActiveInner(id: string, isActive: boolean): Promis
     if (error) return fail(error, 'Could not change Active.');
     if (!Array.isArray(data) || data.length !== 1) {
       if (!(await ensureSession())) return sessionExpired();
-      return { ok: false, message: 'The announcement was not updated. Reload the page and try again.', code: null };
+      return await classifyZeroRows(id, 'That announcement is no longer there. The list is up to date now.');
     }
     return { ok: true, data: null };
   } catch (e) {
@@ -270,7 +310,7 @@ async function deleteAnnouncementInner(id: string): Promise<Result<null>> {
     if (error) return fail(error, 'Could not delete the announcement.');
     if (!Array.isArray(data) || data.length !== 1) {
       if (!(await ensureSession())) return sessionExpired();
-      return { ok: false, message: 'The announcement was not deleted. Reload the page and try again.', code: null };
+      return await classifyZeroRows(id, 'That announcement had already been deleted. The list is up to date now.');
     }
     return { ok: true, data: null };
   } catch (e) {

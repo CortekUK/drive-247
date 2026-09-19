@@ -41,14 +41,27 @@ The adapter adds one fixed GET shape (`checkout/sessions/{cs}` then `payment_int
 
 The dialog shows "Checking rental payments… Verifying with Stripe…" while a payment question is running (not per-read streaming). Check again re-runs the server-held rental/payment check. A discrepancy scores 75; `request_support_handoff` can reach 100 after partial or failed payment checks, and the handler then creates or reuses the issue's ticket automatically and answers with its real reference. The ticket handoff includes structured `paymentReferences` (internal payment ID, Stripe reference, mode, account label, verification result, reason, observation time), without links, amounts or credentials. A dashboard-link request never creates a ticket.
 
-Activation requires `TRAX_FINANCE_READS=enabled` and the deployed `trax-stripe-read` edge function. Who may use payment checks comes from Supabase (staff role and manager tab permissions); there is no separate grant list. Stripe keys are the existing Supabase secrets, read by name at runtime (see the configuration section below).
+Activation requires a usable Stripe key for the account's platform and mode — a restricted `rk_` key by preference, otherwise the existing platform secret — and the deployed `trax-stripe-read` edge function; `TRAX_FINANCE_READS=disabled` turns it off even when a key exists, and `=enabled` is retained for environments that provide the key some other way. Who may use payment checks comes from Supabase (staff role and manager tab permissions); there is no separate grant list. Which credential is used, and why read-only does not depend on it, is in the configuration section below.
 
 ### Verification status
 
 - Offline: routing, adapter, tools, handler conversation, two-tenant reference isolation, handoff and hook-link validation tests (`trax-payment-investigation.test.ts`, `use-trax-support.test.tsx`), plus `node tests/trax/browser.mjs --finance`.
 - Real model with fixture data: gpt-4.1 completed the English/Roman Urdu conversation (show payments, cannot find in Stripe, which account, link, Check again) through the real handler and tools.
-- Authorized live Stripe reads: **not performed** — `trax-stripe-read` is not deployed, and Northwind (the only V2 tenant) has no Stripe-linked payments.
-- Dashboard links opened with a tenant's Stripe account: **none**.
+- Authorized live Stripe reads: **performed, 2026-09-19.** The first real one in this
+  project. `trax-stripe-read` is deployed (v1, ACTIVE since 2026-09-15), Northwind has
+  its own Stripe TEST account connected (`own_stripe_test_account_id`), and a USD 500.00
+  test payment on rental `R-b8621b` was read back through the deployed bridge with the
+  same route the tools build: `intentStatus: succeeded`, `livemode: false`,
+  requested/received/captured all `USD 500.00`, `refunded: USD 0.00`,
+  `ownership: metadata` (Stripe's own `tenant_id` matched), `platformFlow: false`, and a
+  Stripe-hosted receipt URL.
+
+  Everything before this date was fixture-driven: `tests/trax/browser.mjs --finance`
+  imports `finance-fixtures.mjs`, so the payment conversation was exercised against
+  invented records. Real model, real handler, real tools, no real Stripe.
+- Dashboard links opened with a tenant's Stripe account: **none yet.** The link is now
+  derivable — Standard account, exclusive to this tenant, not a platform flow — but
+  nobody has opened one as the tenant.
 
 The sections below describe the earlier summary/inspection tools, which remain as backend functions; the model now uses the tools above.
 
@@ -82,12 +95,18 @@ Currency formatting preserves integer minor units. USD/GBP/AED and other reviewe
 
 ## Server configuration and authorization
 
-Payment access follows the authenticated staff record in Supabase, the same finance staff policy as guidance: head admins and admins (super-admins act as head admin) get rental payments and account funds; managers need the Payments tab permission, plus Rentals for rental payments; ops and viewers get none. Nothing is available until `TRAX_FINANCE_READS=enabled`.
+Payment access follows the authenticated staff record in Supabase, the same finance staff policy as guidance: head admins and admins (super-admins act as head admin) get rental payments and account funds; managers need the Payments tab permission, plus Rentals for rental payments; ops and viewers get none. Nothing is available until a usable Stripe key resolves for that platform and mode.
 
-1. `TRAX_FINANCE_READS=enabled` enables configuration loading on the V2 server only.
+1. A usable Stripe key enables configuration loading on the V2 server only. `TRAX_FINANCE_READS=disabled` suppresses it regardless; `=enabled` forces loading without one, for an environment that supplies the key elsewhere — every read still refuses with `stripe_configuration_required` until a key resolves.
 2. `TRAX_FINANCE_GRANTS` is no longer read. Access comes from Supabase staff roles and manager permissions as described above.
 3. `TRAX_STRIPE_RECORD_MAPPINGS` is an optional bounded JSON array of `{tenantId, paymentId, platform, mode, accountId, currency, verifiedAt}`. Platform is `uk` or `uae`, mode is `test` or `live`, currency is the verified three-letter uppercase historical currency, and review date is ISO. This is reviewed server deployment data, not model output or a user-entered chat mapping. Missing links stay missing. It does not change original payment rows. Keep the tenant-specific registry in server configuration, not the shared knowledge bundle.
-4. Stripe keys: inside Supabase the adapter reads the existing secrets by name, like `_shared/stripe-client.ts` (`STRIPE_LIVE_SECRET_KEY`/`STRIPE_TEST_SECRET_KEY` for `uk`, `STRIPE_UAE_LIVE_SECRET_KEY`/`STRIPE_UAE_TEST_SECRET_KEY` for `uae`), only for the matching mode. A backend outside Supabase (the local portal) calls the `trax-stripe-read` edge function, which requires the service-role credential and runs the same fixed read-only GETs; key values never leave Supabase. An optional restricted key `TRAX_STRIPE_READ_{UK|UAE}_{LIVE|TEST}_KEY` (`rk_` only) takes precedence when configured. The existing secret keys can technically write, so read-only behavior rests on the adapter's fixed GET shapes; a restricted key would add Stripe-side enforcement.
+4. Stripe keys, in order of preference: `TRAX_STRIPE_READ_{UK|UAE}_{LIVE|TEST}_KEY` (`rk_` only), then the packed form below, then **the existing platform secret for the same platform and mode** (`STRIPE_LIVE_SECRET_KEY` and friends). Platform and mode must match exactly; a key for the other mode, the other platform, or a publishable key is never used, and the restricted slots accept nothing but `rk_`.
+
+   The platform-secret step is a deliberate, recorded compromise. Those keys can write. A restricted key remains the preference and `stripeKeyIsRestricted()` reports which kind is in use — but this project sits at Supabase's 100-secret cap, no secret can be removed, and the platform keys are already present, so requiring a restricted key would mean no Stripe reads at all.
+
+   **Read-only therefore rests on the code, not on the credential.** `isReadEndpoint()` is the single boundary: every request path must match one of exactly three shapes — `balance`, `payment_intents/pi_…?expand[]=latest_charge`, `checkout/sessions/cs_{live,test}_…` — and it is checked before a credential is even looked up. Anything else raises `stripe_read_refused` and sends nothing. The returned object exposes only `balance`, `intent` and `evidence`; there is no general request method, no SDK and no write path. That predicate is exported and tested directly rather than through the tools, because the tools' own id checks would reject a bad path first and a test routed through them would pass for the wrong reason. A backend outside Supabase (the local portal) calls the `trax-stripe-read` edge function, which requires the service-role credential and runs the same fixed read-only GETs; key values never leave Supabase. Restricted keys need only the read permissions for Balance, PaymentIntents, Charges and Checkout Sessions.
+
+   Because this project is at its Supabase secret limit, one secret can carry them all: `TRAX_STRIPE_READ_KEYS={"uk":{"live":"rk_live_…","test":"rk_test_…"},"uae":{…}}`, costing one slot instead of four. A per-name variable wins over the packed one for the same platform and mode. A blob that is malformed, oversized, holds a key for the other mode, or holds anything but an `rk_` string yields no key at all — never a partial guess — and the read then refuses.
 
 `STRIPE_TEST_CONNECT_ACCOUNT_ID` is used only to recognize and exclude the existing shared-test account from tenant balance reads. It is never a fallback balance source. Configuration changes alter the authorization scope used for subsequent conversation requests. Identity/membership/manager permissions are freshly checked at every model/tool boundary; returned payment/account mapping changes also invalidate the financial check. Existing support scope invalidation discards incompatible histories and late frontend responses.
 

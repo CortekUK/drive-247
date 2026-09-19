@@ -23,6 +23,7 @@ import { useTenantBranding } from '@/hooks/use-tenant-branding';
 import { useAuth } from '@/stores/auth-store';
 import { cn } from '@/lib/utils';
 import type { ChatMessage as ChatMessageType } from '@/types/trax-support';
+import { SIDEBAR_HIGHLIGHT_FOCUS, SIDEBAR_HIGHLIGHT_HOVER } from '@/components/ui-v2/sidebar';
 
 // ── Suggestion categories ─────────────────────────────────────────
 const SUGGESTION_CATEGORIES = [
@@ -200,7 +201,7 @@ function EmptyState({
                     className={cn(
                       'flex items-center justify-between gap-2 rounded-lg px-3 py-2',
                       'text-left text-[12.5px] text-muted-foreground',
-                      'hover:text-foreground hover:bg-secondary/50',
+                      SIDEBAR_HIGHLIGHT_HOVER, SIDEBAR_HIGHLIGHT_FOCUS,
                       'transition-all duration-150 cursor-pointer group/chip'
                     )}
                   >
@@ -445,7 +446,7 @@ function TraxSupportDialogInner({ isOpen, setIsOpen }: { isOpen: boolean; setIsO
                 size="icon"
                 onClick={clearChat}
                 aria-label="Clear conversation"
-                className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground"
+                className={cn("h-8 w-8 rounded-lg text-muted-foreground", SIDEBAR_HIGHLIGHT_HOVER, SIDEBAR_HIGHLIGHT_FOCUS)}
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </Button>
@@ -455,7 +456,7 @@ function TraxSupportDialogInner({ isOpen, setIsOpen }: { isOpen: boolean; setIsO
               size="icon"
               onClick={() => setIsOpen(false)}
               aria-label="Close TRAX"
-              className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground"
+              className={cn("h-8 w-8 rounded-lg text-muted-foreground", SIDEBAR_HIGHLIGHT_HOVER, SIDEBAR_HIGHLIGHT_FOCUS)}
             >
               <X className="h-4 w-4" />
             </Button>

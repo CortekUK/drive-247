@@ -6,6 +6,16 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button as ButtonV2 } from "@/components/ui-v2/button";
+import { Switch as SwitchV2 } from "@/components/ui-v2/switch";
+import {
+  Dialog as DialogV2,
+  DialogContent as DialogContentV2,
+  DialogDescription as DialogDescriptionV2,
+  DialogFooter as DialogFooterV2,
+  DialogHeader as DialogHeaderV2,
+  DialogTitle as DialogTitleV2,
+} from "@/components/ui-v2/dialog";
 import { useTenant } from "@/contexts/TenantContext";
 import { useRentalSettings } from "@/hooks/use-rental-settings";
 import { useToast } from "@/hooks/use-toast";
@@ -14,6 +24,7 @@ import { cn } from "@/lib/utils";
 import { useV2 } from "@/lib/v2-context";
 import type { RegisterSectionSave } from "@/components/settings-v2/pricing-money-parts";
 import { useRegisterLeaveSave } from "@/components/settings-v2/business-section-save";
+import { SettingsPanel, SettingsRow, useSettingsPageSave } from "@/components/settings-v2/settings-kit";
 import {
   formatSettingsNumber,
   SettingsDependencyNotice,
@@ -81,20 +92,39 @@ function planAvailabilityLabelV2(
   return online > days ? `${base} (${formatSettingsNumber(online)}+ when booked online)` : base;
 }
 
+/** v2: a link-styled button (See example), light purple in dark mode. */
+const V2_INLINE_LINK =
+  "inline-flex items-center gap-1.5 text-sm font-medium text-primary underline-offset-4 hover:underline dark:text-[hsl(var(--v2-link,var(--primary)))]";
+
+/**
+ * Installments: the checkout switch (`tenants.installments_enabled`) and the
+ * weekly and monthly plans (`tenants.installment_config`).
+ *
+ * v1 saves the switch the moment it flips and the plans with their own Save.
+ *
+ * v2 (northwind) is one form. The switch and the plans are a draft, and the
+ * settings page's save bar saves them in one write: `registerSave` hands the
+ * page this section's save and discard (key "installments") while it holds
+ * unsaved edits, so the bar's Save changes and Reset, and the page's "Save
+ * your changes?" dialog on the way out, cover it. Inside the page's save bar
+ * (`useSettingsPageSave`) the section shows no Save of its own, only why a
+ * save failed. Rendered outside one, it keeps a Save.
+ */
 export function InstallmentSettings({ registerSave }: { registerSave?: RegisterSectionSave } = {}) {
   const { tenant } = useTenant();
   const { toast } = useToast();
   const { settings, updateSettings, isUpdating } = useRentalSettings();
 
   // v2 (northwind): read state for the loading / failed-read gate below, who
-  // may edit, and the inline save state. The hooks run for every tenant; only
-  // the v2 branch renders anything from them.
+  // may edit, whether the page's save bar owns Save, and the inline save
+  // state. The hooks run for every tenant; only the v2 branch renders anything
+  // from them.
   const v2Chrome = useV2("chrome");
   const rentalSettingsReadV2 = useRentalSettings();
   const { canEdit: canEditV2 } = useSettingsAccess("installments");
+  const pageSaveV2 = useSettingsPageSave();
   const [savingPlansV2, setSavingPlansV2] = useState(false);
   const [plansErrorV2, setPlansErrorV2] = useState<unknown>(null);
-  const [masterErrorV2, setMasterErrorV2] = useState<null | "on" | "off">(null);
 
   // The portal's TenantContext does NOT include installment_config in its
   // SELECT list, so we read from useRentalSettings() (which does SELECT *).
@@ -117,7 +147,8 @@ export function InstallmentSettings({ registerSave }: { registerSave?: RegisterS
   // Master gate the CHECKOUT actually reads (tenants.installments_enabled). The
   // weekly/monthly toggles below only configure the plans (installment_config);
   // without this ON, the split-payment option never appears at checkout — the
-  // customer pays in full. Kept as instant-save (like the Pay As You Go toggle).
+  // customer pays in full. v1: instant-save (like the Pay As You Go toggle).
+  // v2: part of the form, saved with the plans.
   const [installmentsEnabled, setInstallmentsEnabled] = useState(false);
 
   // Hydrate local state from server when the server snapshot changes (initial
@@ -143,30 +174,72 @@ export function InstallmentSettings({ registerSave }: { registerSave?: RegisterS
     setInstallmentsEnabled(settings?.installments_enabled ?? false);
   }, [settings?.installments_enabled]);
 
-  // v2: the plan toggles are local until Save, so say when they differ from
-  // what is saved, and warn before the page is closed with them unsaved.
+  // v2: the switch and the plans are local until saved, so say when they
+  // differ from what is saved, and warn before the page is closed with them
+  // unsaved.
+  const savedEnabledV2 = settings?.installments_enabled ?? false;
+  const masterDirtyV2 = v2Chrome && installmentsEnabled !== savedEnabledV2;
   const plansDirtyV2 = v2Chrome && isInstallmentDraftDirty(config, tenantCfg);
-  const plansStatusV2 = useSettingsSaveStatus({ isDirty: plansDirtyV2, isPending: savingPlansV2, error: plansErrorV2 });
-  useWarnOnUnsavedChanges(plansDirtyV2);
+  const dirtyV2 = masterDirtyV2 || plansDirtyV2;
+  const plansStatusV2 = useSettingsSaveStatus({ isDirty: dirtyV2, isPending: savingPlansV2, error: plansErrorV2 });
+  useWarnOnUnsavedChanges(dirtyV2);
   // v2: a view-only user, or a save in flight (a toggle flipped mid-save would
-  // be overwritten by the saved row when it lands), cannot change the plans.
+  // be overwritten by the saved row when it lands), cannot change the form.
   const planLockedV2 = v2Chrome && (!canEditV2 || savingPlansV2);
 
-  // v2: while the plans hold unsaved edits, the settings page's leave guard
-  // warns on Back / the Settings breadcrumb, and "Save & Leave" saves them.
-  // The leave save REJECTS when the write failed, so the page stays put.
+  // v2: putting every edit back (Reset, "Don't save", or flipping it back by
+  // hand) clears a stale save error.
+  useEffect(() => {
+    if (!dirtyV2) setPlansErrorV2(null);
+  }, [dirtyV2]);
+
+  // v2: one write for whatever changed: the checkout switch, the plans merged
+  // into the saved config (see `save` for why they are merged), or both.
+  // Resolves false, with the error kept for the section, when it did not save.
   const plansErrorRefV2 = useRef<unknown>(null);
-  useRegisterLeaveSave(v2Chrome ? registerSave : undefined, "installments", plansDirtyV2 && canEditV2, async () => {
-    if (await save()) return;
-    throw plansErrorRefV2.current ?? new Error("Couldn't save your installment plans.");
-  });
+  async function saveV2(): Promise<boolean> {
+    if (!tenant?.id) return false;
+    const updates: Record<string, unknown> = {};
+    if (masterDirtyV2) updates.installments_enabled = installmentsEnabled;
+    if (plansDirtyV2) updates.installment_config = { ...(tenantCfg ?? {}), ...config };
+    if (Object.keys(updates).length === 0) return true;
+    setPlansErrorV2(null);
+    plansErrorRefV2.current = null;
+    setSavingPlansV2(true);
+    try {
+      await updateSettings(updates as never);
+      return true;
+    } catch (error) {
+      // useRentalSettings already shows an error toast; the section says it too.
+      setPlansErrorV2(error);
+      plansErrorRefV2.current = error;
+      return false;
+    } finally {
+      setSavingPlansV2(false);
+    }
+  }
+  const discardV2 = () => {
+    setPlansErrorV2(null);
+    setConfig(installmentDraftFromConfig(tenantCfg));
+    setInstallmentsEnabled(savedEnabledV2);
+  };
+
+  // v2: while the form holds unsaved edits, the settings page's save bar saves
+  // it, its Reset discards it, and leaving asks first. The page's save REJECTS
+  // when the write failed, so the page stays put and the bar says why.
+  useRegisterLeaveSave(
+    v2Chrome ? registerSave : undefined,
+    "installments",
+    dirtyV2 && canEditV2,
+    async () => {
+      if (await saveV2()) return;
+      throw plansErrorRefV2.current ?? new Error("Couldn't save your installment settings.");
+    },
+    discardV2,
+  );
 
   async function save() {
     if (!tenant?.id) return;
-    if (v2Chrome) {
-      setPlansErrorV2(null);
-      setSavingPlansV2(true);
-    }
     try {
       // Merge with the existing config so fields owned by the broader settings
       // page (charge_first_upfront, what_gets_split, minimum_days_*,
@@ -177,15 +250,9 @@ export function InstallmentSettings({ registerSave }: { registerSave?: RegisterS
       const merged = { ...(tenantCfg ?? {}), ...config };
       await updateSettings({ installment_config: merged as any });
       toast({ title: "Saved", description: "Installment settings updated." });
-      if (v2Chrome) setSavingPlansV2(false);
       return true;
     } catch (error) {
       // useRentalSettings already shows an error toast — nothing to do here.
-      if (v2Chrome) {
-        setSavingPlansV2(false);
-        setPlansErrorV2(error);
-        plansErrorRefV2.current = error;
-      }
     }
   }
 
@@ -206,17 +273,152 @@ export function InstallmentSettings({ registerSave }: { registerSave?: RegisterS
     );
   }
 
+  if (v2Chrome) {
+    const controlsLocked = !canEditV2 || savingPlansV2;
+    // Inside the page's save bar only a failed save is said here; the bar says the rest.
+    const footer = pageSaveV2 ? (
+      plansStatusV2 === "error" ? <SettingsSaveState status="error" error={plansErrorV2} /> : undefined
+    ) : canEditV2 ? (
+      <div className="flex w-full flex-wrap items-center justify-end gap-x-3 gap-y-2">
+        <SettingsSaveState
+          status={plansStatusV2}
+          error={plansErrorV2}
+          onRetry={saveV2}
+          onDiscard={discardV2}
+          className="mr-auto"
+        />
+        <ButtonV2
+          type="button"
+          size="sm"
+          onClick={() => void saveV2()}
+          disabled={saving || savingPlansV2 || !dirtyV2}
+          className="min-w-[112px]"
+        >
+          {savingPlansV2 && <Loader2 className="animate-spin" data-icon="inline-start" />}
+          Save changes
+        </ButtonV2>
+      </div>
+    ) : undefined;
+
+    return (
+      <div className="space-y-6">
+        {rentalSettingsReadV2.error ? (
+          <SettingsLoadError
+            variant="inline"
+            thing="installment settings"
+            error={rentalSettingsReadV2.error}
+            onRetry={() => rentalSettingsReadV2.refetch()}
+            retrying={rentalSettingsReadV2.isFetching}
+          />
+        ) : null}
+
+        {installmentsEnabled && !config.weekly_enabled && !config.monthly_enabled && (
+          <SettingsDependencyNotice
+            tone="warning"
+            title="Installments is on, but no plan is enabled"
+            body="Customers will still pay in full. Turn on the weekly or monthly plan below, then save."
+          />
+        )}
+        {installmentsEnabled && paymentProviderState(settings as never) === "missing" && (
+          <SettingsDependencyNotice
+            tone="warning"
+            title="No payment provider is connected"
+            body="Installment payments are charged to the customer's card through your payment provider, and none is connected yet."
+            action={{ label: "Open Integrations", href: "/integrations" }}
+          />
+        )}
+
+        <SettingsPanel footer={footer}>
+          {/* The checkout switch. A disabled fieldset for a view-only user, so
+              the keyboard cannot flip what the mouse cannot. */}
+          <SettingsReadOnlyFieldset readOnly={!canEditV2}>
+            <SettingsRow
+              label="Offer installments at checkout"
+              description="Customers split the rental, tax and service fees into payments. Insurance, deposits and delivery are always paid upfront."
+              note={
+                installmentsEnabled ? undefined : (
+                  <p className="text-muted-foreground">Turn this on to set up the weekly and monthly plans below.</p>
+                )
+              }
+            >
+              <SwitchV2
+                checked={installmentsEnabled}
+                onCheckedChange={setInstallmentsEnabled}
+                disabled={controlsLocked}
+                aria-label="Offer installments at checkout"
+              />
+            </SettingsRow>
+          </SettingsReadOnlyFieldset>
+
+          {/* The plans. Kept, dimmed and disabled (mouse and keyboard) while
+              the switch is off, so nothing configured is lost. */}
+          <PlanLockV2.Provider value={planLockedV2}>
+            <fieldset
+              disabled={!installmentsEnabled}
+              className={cn("m-0 min-w-0 divide-y border-0 p-0 transition-opacity", !installmentsEnabled && "opacity-60")}
+            >
+              <SettingsRow label="Weekly plan" description={planAvailabilityLabelV2(tenantCfg, "weekly")} htmlFor="weekly-enabled">
+                <SwitchV2
+                  id="weekly-enabled"
+                  checked={config.weekly_enabled}
+                  onCheckedChange={(v) => setConfig({ ...config, weekly_enabled: v })}
+                  disabled={!installmentsEnabled || planLockedV2}
+                />
+              </SettingsRow>
+              {config.weekly_enabled && (
+                <SettingsRow label="Payments per week" description="How often the customer pays in each week of the rental.">
+                  <PillButton active={config.weekly_payments_per_unit === 1} onClick={() => setConfig({ ...config, weekly_payments_per_unit: 1 })}>1×</PillButton>
+                  <PillButton active={config.weekly_payments_per_unit === 2} onClick={() => setConfig({ ...config, weekly_payments_per_unit: 2 })}>2× (twice weekly)</PillButton>
+                  <button
+                    type="button"
+                    className={cn(V2_INLINE_LINK, "ml-1")}
+                    onClick={() => setPreviewOpen({ unit: "week", paymentsPerUnit: config.weekly_payments_per_unit })}
+                  >
+                    <Eye className="size-4" aria-hidden="true" /> See example
+                  </button>
+                </SettingsRow>
+              )}
+              <SettingsRow label="Monthly plan" description={planAvailabilityLabelV2(tenantCfg, "monthly")} htmlFor="monthly-enabled">
+                <SwitchV2
+                  id="monthly-enabled"
+                  checked={config.monthly_enabled}
+                  onCheckedChange={(v) => setConfig({ ...config, monthly_enabled: v })}
+                  disabled={!installmentsEnabled || planLockedV2}
+                />
+              </SettingsRow>
+              {config.monthly_enabled && (
+                <SettingsRow label="Payments per month" description="How often the customer pays in each month of the rental.">
+                  <PillButton active={config.monthly_payments_per_unit === 1} onClick={() => setConfig({ ...config, monthly_payments_per_unit: 1 })}>1×</PillButton>
+                  <PillButton active={config.monthly_payments_per_unit === 2} onClick={() => setConfig({ ...config, monthly_payments_per_unit: 2 })}>2×</PillButton>
+                  <PillButton active={config.monthly_payments_per_unit === 4} onClick={() => setConfig({ ...config, monthly_payments_per_unit: 4 })}>4×</PillButton>
+                  <button
+                    type="button"
+                    className={cn(V2_INLINE_LINK, "ml-1")}
+                    onClick={() => setPreviewOpen({ unit: "month", paymentsPerUnit: config.monthly_payments_per_unit })}
+                  >
+                    <Eye className="size-4" aria-hidden="true" /> See example
+                  </button>
+                </SettingsRow>
+              )}
+            </fieldset>
+          </PlanLockV2.Provider>
+        </SettingsPanel>
+
+        {previewOpen && (
+          <ExampleDialog
+            open={Boolean(previewOpen)}
+            onClose={() => setPreviewOpen(null)}
+            unit={previewOpen.unit}
+            paymentsPerUnit={previewOpen.paymentsPerUnit}
+            currencyCode={tenant?.currency_code || "USD"}
+          />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      {v2Chrome && rentalSettingsReadV2.error ? (
-        <SettingsLoadError
-          variant="inline"
-          thing="installment settings"
-          error={rentalSettingsReadV2.error}
-          onRetry={() => rentalSettingsReadV2.refetch()}
-          retrying={rentalSettingsReadV2.isFetching}
-        />
-      ) : null}
       <div className="bg-card border border-border/60 rounded-lg p-6">
         <h2 className="text-lg font-medium text-foreground mb-1">Installments</h2>
         <p className="text-sm text-muted-foreground mb-4">Configure how customers can split their rental payments.</p>
@@ -226,7 +428,6 @@ export function InstallmentSettings({ registerSave }: { registerSave?: RegisterS
         </div>
       </div>
 
-      <V2ReadOnly active={v2Chrome} readOnly={!canEditV2}>
       {/* Master enable — this is the flag the CHECKOUT reads (tenants.installments_enabled).
           Instant-save, mirroring the Pay As You Go toggle. Passing ONLY installments_enabled
           leaves installment_config (the plans below) untouched. */}
@@ -242,26 +443,16 @@ export function InstallmentSettings({ registerSave }: { registerSave?: RegisterS
           className="shrink-0 mt-0.5"
           checked={installmentsEnabled}
           onCheckedChange={async (checked) => {
-            if (v2Chrome) setMasterErrorV2(null);
             setInstallmentsEnabled(checked);
             try {
               await updateSettings({ installments_enabled: checked });
               toast({ title: checked ? "Installments enabled" : "Installments disabled" });
             } catch {
               setInstallmentsEnabled(!checked);
-              if (v2Chrome) setMasterErrorV2(checked ? "on" : "off");
             }
           }}
-          disabled={v2Chrome ? isUpdating || !canEditV2 : undefined}
         />
       </div>
-      </V2ReadOnly>
-
-      {v2Chrome && masterErrorV2 && (
-        <p role="alert" className="-mt-2 px-1 text-sm text-destructive">
-          Couldn&apos;t turn installments {masterErrorV2}. Nothing was changed.
-        </p>
-      )}
 
       {!installmentsEnabled && (
         <p className="-mt-2 px-1 text-xs text-muted-foreground">
@@ -269,34 +460,13 @@ export function InstallmentSettings({ registerSave }: { registerSave?: RegisterS
         </p>
       )}
 
-      {v2Chrome && installmentsEnabled && !tenantCfg?.weekly_enabled && !tenantCfg?.monthly_enabled && (
-        <SettingsDependencyNotice
-          tone="warning"
-          title="Installments is on, but no plan is enabled"
-          body="Customers will still pay in full. Turn on the weekly or monthly plan below, then save."
-        />
-      )}
-      {v2Chrome && installmentsEnabled && paymentProviderState(settings as never) === "missing" && (
-        <SettingsDependencyNotice
-          tone="warning"
-          title="No payment provider is connected"
-          body="Installment payments are charged to the customer's card through your payment provider, and none is connected yet."
-          action={{ label: "Open Integrations", href: "/integrations" }}
-        />
-      )}
-
-      <PlanLockV2.Provider value={planLockedV2}>
-      <SectionRow
-        label="Weekly Plan"
-        sublabel={v2Chrome ? planAvailabilityLabelV2(tenantCfg, "weekly") : `Available for rentals ${WEEKLY_MIN_DAYS}+ days`}
-        disabled={!installmentsEnabled}
-      >
+      <SectionRow label="Weekly Plan" sublabel={`Available for rentals ${WEEKLY_MIN_DAYS}+ days`} disabled={!installmentsEnabled}>
         <div className="space-y-4">
           <div className="flex items-center gap-3">
             <Switch
               checked={config.weekly_enabled}
               onCheckedChange={(v) => setConfig({ ...config, weekly_enabled: v })}
-              disabled={v2Chrome ? !installmentsEnabled || planLockedV2 : !installmentsEnabled}
+              disabled={!installmentsEnabled}
               id="weekly-enabled"
             />
             <Label htmlFor="weekly-enabled" className="text-sm text-foreground/90">Enable weekly installments</Label>
@@ -304,7 +474,7 @@ export function InstallmentSettings({ registerSave }: { registerSave?: RegisterS
           {config.weekly_enabled && (
             <div className="space-y-2">
               <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Payments per week</div>
-              <div className={cn("flex items-center gap-2", v2Chrome && "flex-wrap gap-y-2")}>
+              <div className="flex items-center gap-2">
                 <PillButton active={config.weekly_payments_per_unit === 1} onClick={() => setConfig({ ...config, weekly_payments_per_unit: 1 })}>1×</PillButton>
                 <PillButton active={config.weekly_payments_per_unit === 2} onClick={() => setConfig({ ...config, weekly_payments_per_unit: 2 })}>2× (twice weekly)</PillButton>
                 <button
@@ -320,17 +490,13 @@ export function InstallmentSettings({ registerSave }: { registerSave?: RegisterS
         </div>
       </SectionRow>
 
-      <SectionRow
-        label="Monthly Plan"
-        sublabel={v2Chrome ? planAvailabilityLabelV2(tenantCfg, "monthly") : `Available for rentals ${MONTHLY_MIN_DAYS}+ days`}
-        disabled={!installmentsEnabled}
-      >
+      <SectionRow label="Monthly Plan" sublabel={`Available for rentals ${MONTHLY_MIN_DAYS}+ days`} disabled={!installmentsEnabled}>
         <div className="space-y-4">
           <div className="flex items-center gap-3">
             <Switch
               checked={config.monthly_enabled}
               onCheckedChange={(v) => setConfig({ ...config, monthly_enabled: v })}
-              disabled={v2Chrome ? !installmentsEnabled || planLockedV2 : !installmentsEnabled}
+              disabled={!installmentsEnabled}
               id="monthly-enabled"
             />
             <Label htmlFor="monthly-enabled" className="text-sm text-foreground/90">Enable monthly installments</Label>
@@ -338,7 +504,7 @@ export function InstallmentSettings({ registerSave }: { registerSave?: RegisterS
           {config.monthly_enabled && (
             <div className="space-y-2">
               <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Payments per month</div>
-              <div className={cn("flex items-center gap-2", v2Chrome && "flex-wrap gap-y-2")}>
+              <div className="flex items-center gap-2">
                 <PillButton active={config.monthly_payments_per_unit === 1} onClick={() => setConfig({ ...config, monthly_payments_per_unit: 1 })}>1×</PillButton>
                 <PillButton active={config.monthly_payments_per_unit === 2} onClick={() => setConfig({ ...config, monthly_payments_per_unit: 2 })}>2×</PillButton>
                 <PillButton active={config.monthly_payments_per_unit === 4} onClick={() => setConfig({ ...config, monthly_payments_per_unit: 4 })}>4×</PillButton>
@@ -354,38 +520,13 @@ export function InstallmentSettings({ registerSave }: { registerSave?: RegisterS
           )}
         </div>
       </SectionRow>
-      </PlanLockV2.Provider>
 
-      {v2Chrome ? (
-        canEditV2 ? (
-          <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
-            <SettingsSaveState
-              status={plansStatusV2}
-              error={plansErrorV2}
-              onRetry={save}
-              onDiscard={() => {
-                setPlansErrorV2(null);
-                setConfig(installmentDraftFromConfig(tenantCfg));
-              }}
-            />
-            <Button
-              onClick={save}
-              disabled={saving || !plansDirtyV2}
-              className="bg-foreground text-background hover:bg-foreground/90"
-            >
-              {savingPlansV2 ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-              Save changes
-            </Button>
-          </div>
-        ) : null
-      ) : (
       <div className="flex justify-end pt-2">
         <Button onClick={save} disabled={saving} className="bg-foreground text-background hover:bg-foreground/90">
           {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
           Save changes
         </Button>
       </div>
-      )}
 
       {previewOpen && (
         <ExampleDialog
@@ -397,20 +538,6 @@ export function InstallmentSettings({ registerSave }: { registerSave?: RegisterS
         />
       )}
     </div>
-  );
-}
-
-/**
- * v2: a native disabled fieldset around the controls for a read-only user, so
- * the keyboard cannot flip what the mouse cannot. v1 renders its children bare,
- * with no extra element.
- */
-function V2ReadOnly({ active, readOnly, children }: { active: boolean; readOnly: boolean; children: React.ReactNode }) {
-  if (!active) return <>{children}</>;
-  return (
-    <SettingsReadOnlyFieldset readOnly={readOnly} className="space-y-6">
-      {children}
-    </SettingsReadOnlyFieldset>
   );
 }
 
@@ -434,20 +561,24 @@ function SectionRow({ label, sublabel, disabled, children }: { label: string; su
 
 function PillButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   const lockedV2 = useContext(PlanLockV2);
-  // v2 only: a real pill with the purple hover. Every other tenant gets v1's
-  // exact class strings, so nothing they see changes.
+  // v2 only: a real pill with the purple hover, and the chosen one in the
+  // tenant's brand colour (not a fixed indigo), light in dark mode. Every other
+  // tenant gets v1's exact class strings, so nothing they see changes.
   const v2Chrome = useV2("chrome");
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={lockedV2 || undefined}
+      aria-pressed={v2Chrome ? active : undefined}
       className={cn(
         v2Chrome
           ? "px-3 py-1.5 rounded-full text-sm font-medium border transition-colors"
           : "px-3 py-1.5 rounded-md text-sm font-medium border transition-colors",
         active
-          ? "bg-primary/15 border-indigo-500/50 text-indigo-700 dark:text-indigo-300"
+          ? v2Chrome
+            ? "bg-primary/10 border-primary/40 text-primary dark:border-[hsl(var(--v2-link,var(--primary))_/_0.4)] dark:text-[hsl(var(--v2-link,var(--primary)))]"
+            : "bg-primary/15 border-indigo-500/50 text-indigo-700 dark:text-indigo-300"
           : v2Chrome
             ? "bg-card border-border text-muted-foreground hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]"
             : "bg-card border-border text-muted-foreground hover:bg-muted/40",
@@ -459,6 +590,18 @@ function PillButton({ active, onClick, children }: { active: boolean; onClick: (
   );
 }
 
+/** The example dialog's parts: v1's for every other tenant, the v2 ones for the canary. */
+const EXAMPLE_DIALOG_V1 = { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, Button };
+const EXAMPLE_DIALOG_V2 = {
+  Dialog: DialogV2,
+  DialogContent: DialogContentV2,
+  DialogDescription: DialogDescriptionV2,
+  DialogFooter: DialogFooterV2,
+  DialogHeader: DialogHeaderV2,
+  DialogTitle: DialogTitleV2,
+  Button: ButtonV2,
+};
+
 function ExampleDialog({ open, onClose, unit, paymentsPerUnit, currencyCode }: {
   open: boolean; onClose: () => void; unit: "week" | "month"; paymentsPerUnit: number; currencyCode: string;
 }) {
@@ -469,24 +612,32 @@ function ExampleDialog({ open, onClose, unit, paymentsPerUnit, currencyCode }: {
     ? (paymentsPerUnit === 1 ? "Weekly" : "Twice weekly")
     : (paymentsPerUnit === 1 ? "Monthly" : paymentsPerUnit === 2 ? "Twice monthly" : "Weekly via monthly");
   const fmt = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: currencyCode }).format(n);
-  // v2: marks the portalled dialog as a settings body, for the dark-mode border
-  // fix in styles/v2-theme.css. No attribute for any other tenant.
+  // v2: the v2 dialog, and a settings-body mark for the dark-mode border fix in
+  // styles/v2-theme.css. v1's dialog, with no attribute, for any other tenant.
   const v2ChromeDialog = useV2("chrome");
+  const ui = v2ChromeDialog ? EXAMPLE_DIALOG_V2 : EXAMPLE_DIALOG_V1;
 
   return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent
-        className="max-w-2xl max-h-[85vh] overflow-y-auto"
+    <ui.Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <ui.DialogContent
+        // v2's dialog caps its width at `sm:max-w-md`, so the wider cap is given at `sm:` too.
+        className={v2ChromeDialog ? "max-h-[85vh] overflow-y-auto sm:max-w-2xl" : "max-w-2xl max-h-[85vh] overflow-y-auto"}
         data-settings-v2-body={v2ChromeDialog || undefined}
       >
-        <DialogHeader>
-          <DialogTitle>{label} — example</DialogTitle>
-          <DialogDescription>
+        <ui.DialogHeader>
+          <ui.DialogTitle>{label} — example</ui.DialogTitle>
+          <ui.DialogDescription>
             Sample {sampleDays}-day rental, splittable amount {fmt(sampleTotal)}.
-          </DialogDescription>
-        </DialogHeader>
+          </ui.DialogDescription>
+        </ui.DialogHeader>
         <div className="space-y-4">
-          <div className="bg-muted/40 border border-border/60 rounded-md p-4 text-sm text-foreground/90">
+          <div
+            className={
+              v2ChromeDialog
+                ? "rounded-xl bg-muted/40 p-4 text-sm text-foreground/90"
+                : "bg-muted/40 border border-border/60 rounded-md p-4 text-sm text-foreground/90"
+            }
+          >
             Splittable {fmt(sampleTotal)} ÷ {schedule.length} payments → {fmt(schedule[0]?.amount ?? 0)} each
           </div>
           <InstallmentCalendar schedule={schedule} currencyCode={currencyCode} />
@@ -494,11 +645,11 @@ function ExampleDialog({ open, onClose, unit, paymentsPerUnit, currencyCode }: {
             Customers will see these amounts and dates before checkout.
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Close</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        <ui.DialogFooter>
+          <ui.Button variant="outline" onClick={onClose}>Close</ui.Button>
+        </ui.DialogFooter>
+      </ui.DialogContent>
+    </ui.Dialog>
   );
 }
 

@@ -14,7 +14,7 @@
  *   5. a tab with a home elsewhere        -> none (the page's redirect runs)
  *   6. a hidden tab the board owns        -> none (hand-off to /integrations)
  *   7. a known tab this workspace hides   -> index + "isn't available"
- *      (including V2_HIDDEN_SETTINGS_PAGES and the global blacklist)
+ *      (anything in V2_HIDDEN_SETTINGS_PAGES, and the global blacklist)
  *   8. anything else                      -> index + "doesn't exist"
  */
 
@@ -48,18 +48,17 @@ export const SETTINGS_TAB_LABELS: Record<string, string> = {
 /* -------------------------------------------------------------------------- */
 
 /**
- * v2 settings pages taken out of Settings for now (front end only). They keep
- * their page and render case in `settings/page.tsx`, so bringing one back is
- * deleting it from this set; until then the index does not list them and a
- * `?tab=` link to one lands on the index with "isn't part of your workspace".
+ * v2 settings pages taken out of Settings (front end only). A page listed here
+ * keeps its entry and render case in `settings/page.tsx`, but the index does
+ * not list it and a `?tab=` link to one lands on the index with "isn't part of
+ * your workspace". Hiding a page again is adding its tab here.
+ *
+ * NOTHING IS HIDDEN NOW. Promo codes, Extras, Installments, Pay as you go and
+ * Auto-extension were hidden from Sep 17 2026 and are back on the index (Sep
+ * 19 2026). The set and the notice path stay so the next page can be hidden
+ * with one line.
  */
-export const V2_HIDDEN_SETTINGS_PAGES: ReadonlySet<string> = new Set([
-  "promos",
-  "extras",
-  "installments",
-  "payg",
-  "auto-extend",
-]);
+export const V2_HIDDEN_SETTINGS_PAGES: ReadonlySet<string> = new Set<string>([]);
 
 export interface V2GeneralSection {
   /** The element id is `settings-<anchor>` (see `settingsSectionId`). */

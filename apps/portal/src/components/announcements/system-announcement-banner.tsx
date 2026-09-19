@@ -829,6 +829,27 @@ export function SystemAnnouncementBanner(): JSX.Element | null {
           multi && SLIDER_UI.rootFade,
           multi && SLIDER_UI.touch,
         )}
+        /**
+         * The bar must be AT LEAST as tall as the height it publishes.
+         *
+         * `publish()` rounds the measured height UP (`Math.ceil`) because the
+         * offsets that consume `--system-banner-h` — the fixed sidebars, the
+         * sticky top bar, the docked Trax panel — must clear the bar completely,
+         * and rounding down would tuck their first pixel underneath it. But the
+         * bar itself kept its own fractional height, so on any zoom or font
+         * scale that produced a non-integer (e.g. 41.6px measured, 42px
+         * published) the page below started 0.4px lower than the bar ends,
+         * leaving a hairline of raw page background — visible on v2, where the
+         * ground is a gradient wash rather than flat white. Measured and
+         * reported by the session that owns the banner stack.
+         *
+         * Setting the floor from the same variable makes the two agree by
+         * construction: whatever is published is exactly what the bar occupies.
+         * It is a floor, not a fixed height, so a wrapping message still grows
+         * the bar — and growth re-runs `publish()` through the ResizeObserver,
+         * which raises the floor with it.
+         */
+        style={{ minHeight: `var(${SYSTEM_BANNER_HEIGHT_VAR})` }}
         onPointerEnter={(e: PointerEvent<HTMLDivElement>) => {
           // A touch has no hover: a tap must not leave the bar waiting for good.
           if (e.pointerType !== "touch") setHovered(true);

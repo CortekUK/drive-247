@@ -986,13 +986,18 @@ describe("settings page wiring (source)", () => {
     expect(page).toMatch(/const V2_PAGES_GATING_OWN_CONTROLS = new Set\(\[[^\]]*'installments', 'payg', 'auto-extend', 'promos', 'extras'[^\]]*\]\);/);
   });
 
-  it("Installments registers unsaved plans with the leave guard, and keeps its own Save (no page save bar)", () => {
+  it("Installments, Pay as you go and Auto-extension register with the page and save through its one save bar", () => {
     expect(v2).toContain("<InstallmentSettings registerSave={registerV2SectionSave} />");
+    expect(v2).toContain("<PayAsYouGoSettingsV2 canEdit={canEditPage} registerSave={registerV2SectionSave} />");
+    expect(v2).toContain("<AutoExtendSettingsV2 canEdit={canEditPage} registerSave={registerV2SectionSave} />");
     const bar = page.match(/const V2_PAGES_WITH_SAVE_BAR = new Set\(\[([^\]]*)\]\);/);
     expect(bar).not.toBeNull();
-    expect(bar![1]).not.toContain("'installments'");
-    // Tax and fees and Security deposit save through General's bar now.
+    expect(bar![1]).toContain("'installments', 'payg', 'auto-extend'");
+    // Tax and fees and Security deposit save through General's bar.
     expect(bar![1]).toContain("'general', 'templates', 'pricing'");
+    // Promo codes and Extras are lists that save per item: no bar.
+    expect(bar![1]).not.toContain("'promos'");
+    expect(bar![1]).not.toContain("'extras'");
     // v1 still mounts it bare.
     expect(page.slice(v2End)).toContain("<InstallmentSettings />");
   });

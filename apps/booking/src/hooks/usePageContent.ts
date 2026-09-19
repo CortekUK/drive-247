@@ -214,6 +214,15 @@ export interface CarouselMediaItem {
   type: 'image' | 'video';
   alt?: string;
   thumbnail?: string;
+  /* Hero-slider fields. All optional, so every item saved before these existed
+     keeps working: absent `enabled` means enabled, absent `mobile_url` falls
+     back to `url`, absent `focal` centres the image. */
+  /** Unticked in the portal hides the slide without deleting the upload. */
+  enabled?: boolean;
+  /** Optional portrait crop served below the tablet breakpoint. */
+  mobile_url?: string;
+  /** CSS object-position, e.g. "50% 40%" — keeps the subject in frame. */
+  focal?: string;
 }
 
 // Home Page Content Types

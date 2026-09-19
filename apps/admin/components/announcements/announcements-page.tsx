@@ -17,6 +17,7 @@ import {
   setAnnouncementActive,
   showAnnouncementAgain,
   applyKindOrder,
+  STALE_ROW_CODE,
   type AnnouncementsData,
 } from '@/lib/announcements/api';
 import { compareAdminRows, type AdminAnnouncementRow, type AnnouncementKind } from '@/lib/announcements/contract';
@@ -270,6 +271,14 @@ export function AnnouncementsPage() {
     const res = await setAnnouncementActive(row.id, next);
     if (mounted.current) countWrite(-1);
     if (!res.ok) {
+      // Same stale-row case as delete: the switch cannot be moved on a row that
+      // no longer exists, so refresh rather than restoring a phantom.
+      if (res.code === STALE_ROW_CODE) {
+        updateRows((rows) => rows.filter((r) => r.id !== row.id));
+        toast.success(res.message);
+        void load('silent');
+        return;
+      }
       updateRows((rows) => rows.map((r) => (r.id === row.id ? { ...r, is_active: previous } : r)));
       toast.error('Could not change Active: ' + res.message);
       return;
@@ -300,6 +309,21 @@ export function AnnouncementsPage() {
     const res = await deleteAnnouncement(row.id);
     setDeleting(false);
     if (!res.ok) {
+      /**
+       * The row is already gone from the database. Leaving it on screen was the
+       * actual bug: the dialog stayed open over a row that no delete could ever
+       * remove, so the same "reload the page" toast appeared on every attempt
+       * (Sep 18 2026 — three system announcements, deleted, still listed). Close
+       * the dialog, drop the row, and refetch, which is what the message used to
+       * ask the operator to do by hand.
+       */
+      if (res.code === STALE_ROW_CODE) {
+        setDeleteTarget(null);
+        updateRows((rows) => rows.filter((r) => r.id !== row.id));
+        toast.success(res.message);
+        void load('silent');
+        return;
+      }
       toast.error('Could not delete: ' + res.message);
       return;
     }

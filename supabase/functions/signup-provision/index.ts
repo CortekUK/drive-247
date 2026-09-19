@@ -86,6 +86,88 @@ const LOG = "[signup-provision]";
 const V2_DEFAULT_BRAND_COLOR = "#442DD7";
 
 /**
+ * The brand colours a tenant can only have because PROVISIONING chose them.
+ *
+ * `#1E293B` is `DEFAULT_PALETTE` in `_shared/brand-colors.ts` — what the old
+ * code wrote when it could not extract a colour from the operator's website.
+ * An empty value is the same situation with nothing written at all. Repainting
+ * is limited to these, so an operator who has already picked their own colour
+ * in Settings → Branding keeps it.
+ */
+const PROVISIONING_DEFAULT_COLORS = new Set(["#1E293B", ""]);
+
+/**
+ * Make sure a tenant this run ADOPTED is on v2, like one it created.
+ *
+ * Two paths hand back an existing tenant instead of inserting one: the
+ * idempotency hit (`meta.tenantId` already set) and the recovery promotion
+ * (`meta.pendingTenantId` past the point of no return). Both existed before
+ * this function set `portal_experience` at all, and neither re-inserts — so a
+ * signup whose row was written by an OLDER DEPLOY of this function and then
+ * retried or recovered would be handed back a v1 tenant permanently, with the
+ * slate palette, and reported to the operator as a success. That is exactly how
+ * `nasir` reached a team-lead demo on the v1 login screen (2026-09-18), and the
+ * window reopens on every future deploy of this function, so it is closed here
+ * rather than left to a one-off SQL repair.
+ *
+ * Deliberately non-fatal in every direction: an adoption that already worked
+ * must not start failing because a cosmetic follow-up write did. A failure is
+ * logged loudly instead, since the visible symptom otherwise is just "the new
+ * portal did not apply".
+ */
+async function ensureV2Experience(
+  supabase: ReturnType<typeof createClient>,
+  tenantId: string,
+  log: string,
+): Promise<void> {
+  try {
+    const { data, error } = await supabase
+      .from("tenants")
+      .select("portal_experience, primary_color, light_primary_color")
+      .eq("id", tenantId)
+      .maybeSingle();
+
+    if (error || !data) {
+      console.error(`${log} could not read tenant ${tenantId} to confirm its portal experience:`, error);
+      return;
+    }
+
+    const row = data as {
+      portal_experience?: string | null;
+      primary_color?: string | null;
+      light_primary_color?: string | null;
+    };
+
+    const patch: Record<string, string> = {};
+    if (row.portal_experience !== "v2") patch.portal_experience = "v2";
+
+    // The flag alone yields a structurally-correct v2 portal painted slate,
+    // which is indistinguishable from "v2 did not apply" to the person looking
+    // at it — so the paint travels with the flag, under the same guard the
+    // manual repair uses.
+    const current = (row.light_primary_color ?? row.primary_color ?? "").toUpperCase();
+    if (PROVISIONING_DEFAULT_COLORS.has(current)) {
+      patch.primary_color = V2_DEFAULT_BRAND_COLOR;
+      patch.light_primary_color = V2_DEFAULT_BRAND_COLOR;
+    }
+
+    if (Object.keys(patch).length === 0) return;
+
+    const { error: updateError } = await supabase.from("tenants").update(patch).eq("id", tenantId);
+    if (updateError) {
+      console.error(
+        `${log} ADOPTED tenant ${tenantId} is still on ${row.portal_experience ?? "(unset)"} — the v2 follow-up write failed:`,
+        updateError,
+      );
+      return;
+    }
+    console.log(`${log} adopted tenant ${tenantId} brought up to v2: ${JSON.stringify(patch)}`);
+  } catch (e) {
+    console.error(`${log} unexpected failure confirming the portal experience for ${tenantId}:`, e);
+  }
+}
+
+/**
  * Does this write error mean "that column does not exist"?
  *
  * PostgREST answers PGRST204 with a message naming the column when its schema
@@ -237,6 +319,9 @@ Deno.serve(async (req) => {
 
       if (existingTenant) {
         console.log(`${LOG} idempotent hit — tenant ${existingTenant.id} already provisioned`);
+        // The row may have been written by an older deploy of this function,
+        // before it set portal_experience. See ensureV2Experience.
+        await ensureV2Experience(supabase, existingTenant.id, LOG);
         return jsonResponse({
           success: true,
           tenantId: existingTenant.id,
@@ -363,6 +448,9 @@ Deno.serve(async (req) => {
           console.warn(
             `${LOG} recovering tenant ${pendingId} — it is past the point of no return but was never recorded`,
           );
+          // Same reason as the idempotency hit above: this tenant was INSERTED by
+          // whichever build died mid-run, which may not have set the column.
+          await ensureV2Experience(supabase, pendingId, LOG);
           const portalUrl = meta.portalUrl ?? `https://${pendingTenant.slug}.portal.drive-247.com`;
           const bookingUrl = meta.bookingUrl ?? `https://${pendingTenant.slug}.drive-247.com`;
           meta = await writeSignupMeta(supabase, authUserId, {

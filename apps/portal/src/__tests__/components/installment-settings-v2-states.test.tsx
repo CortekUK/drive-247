@@ -7,6 +7,12 @@
  * the dirty + save-error state, the no-plan and no-provider notices, the saved
  * minimum days, read-only, and that a v1 tenant sees none of it.
  *
+ * Since Sep 19 2026 the v2 page is one form saved by the settings page's save
+ * bar: the checkout switch and the plans are a draft, the page gets the save
+ * and discard, and leaving with edits asks "Save your changes?". The settings
+ * page is too large to mount, so the last block wires the section to the same
+ * registry, save bar, leave guard and dialog the page uses.
+ *
  * HARNESS: `react-dom/client` + `act` (the repo lacks @testing-library/dom).
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
@@ -41,7 +47,16 @@ vi.mock("next/link", () => ({
   ),
 }));
 
+const nav = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
+vi.mock("next/navigation", () => ({ useRouter: () => nav }));
+
+import { useCallback, useRef, useState } from "react";
 import { InstallmentSettings } from "@/components/settings/InstallmentSettings";
+import { SettingsPageSaveProvider, SettingsStickySaveBar } from "@/components/settings-v2/settings-kit";
+import { LeaveDialogV2 } from "@/components/settings-v2/leave-dialog-v2";
+import { useLeaveGuardV2 } from "@/hooks/use-leave-guard-v2";
+import { runThroughLeaveGuard } from "@/lib/leave-guard";
+import type { RegisterSectionSave } from "@/components/settings-v2/pricing-money-parts";
 
 let container: HTMLDivElement;
 let root: Root;
@@ -84,6 +99,7 @@ beforeEach(() => {
   flags.v2 = true;
   flags.edit = true;
   toastSpy.mockClear();
+  nav.push.mockReset();
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -228,6 +244,20 @@ describe("InstallmentSettings plan pills", () => {
     }
   });
 
+  it("v2: the chosen pill is in the brand colour (light in dark mode), not a fixed indigo, and says it is chosen", () => {
+    rs.current = api({}, bothPlansOn);
+    render();
+    const pills = pillButtons();
+    // Saved per-unit is 1 for both plans: pills 0 ("1×" weekly) and 2 ("1×" monthly).
+    expect(pills.map((b) => b.getAttribute("aria-pressed"))).toEqual(["true", "false", "true", "false", "false"]);
+    for (const i of [0, 2]) {
+      const cls = pills[i].className.split(/\s+/);
+      expect(cls).toContain("text-primary");
+      expect(cls).toContain("dark:text-[hsl(var(--v2-link,var(--primary)))]");
+      expect(cls.some((c) => c.includes("indigo"))).toBe(false);
+    }
+  });
+
   it("v1: the pills keep v1's exact class lists", () => {
     flags.v2 = false;
     rs.current = api({}, bothPlansOn);
@@ -250,5 +280,219 @@ describe("InstallmentSettings v1 is unchanged", () => {
     expect(container.querySelector("[data-settings-state]")).toBeNull();
     expect(container.querySelector("fieldset[data-read-only]")).toBeNull();
     expect(saveButton()!.disabled).toBe(false);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* v2: one form, saved by the page's save bar                                  */
+/* -------------------------------------------------------------------------- */
+
+const masterSwitch = () =>
+  container.querySelector<HTMLButtonElement>('[role="switch"][aria-label="Offer installments at checkout"]')!;
+/** The last registration under "installments" that carried a save: [key, save, discard]. */
+const lastRegistration = (registerSave: ReturnType<typeof vi.fn>) => {
+  const calls = registerSave.mock.calls.filter((call) => call[0] === "installments" && call[1]);
+  return calls[calls.length - 1] as [string, () => Promise<unknown>, () => void] | undefined;
+};
+
+describe("InstallmentSettings v2 inside the page's save bar", () => {
+  function renderInPage(registerSave: ReturnType<typeof vi.fn>) {
+    act(() =>
+      root.render(
+        <SettingsPageSaveProvider>
+          <InstallmentSettings registerSave={registerSave as unknown as RegisterSectionSave} />
+        </SettingsPageSaveProvider>,
+      ),
+    );
+  }
+
+  it("shows no Save of its own, and the checkout switch is a draft, not an instant write", () => {
+    const registerSave = vi.fn();
+    rs.current = api({}, { installments_enabled: false });
+    renderInPage(registerSave);
+    expect(saveButton()).toBeUndefined();
+    expect(registerSave).toHaveBeenLastCalledWith("installments", null);
+
+    act(() => masterSwitch().click());
+    expect(masterSwitch().getAttribute("aria-checked")).toBe("true");
+    expect(rs.current.updateSettings).not.toHaveBeenCalled();
+    expect(lastRegistration(registerSave)).toBeDefined();
+    // Still no Save, and no "Unsaved changes" chip: the page's bar says it.
+    expect(saveButton()).toBeUndefined();
+    expect(text()).not.toContain("Unsaved changes");
+  });
+
+  it("the page's save writes the switch and the plans in ONE update, keeping every other saved key", async () => {
+    const registerSave = vi.fn();
+    rs.current = api({}, { installments_enabled: false });
+    renderInPage(registerSave);
+    act(() => masterSwitch().click());
+    act(() => container.querySelector<HTMLButtonElement>("#weekly-enabled")!.click());
+    const [, save] = lastRegistration(registerSave)!;
+    await act(async () => {
+      await save();
+    });
+    expect(rs.current.updateSettings).toHaveBeenCalledTimes(1);
+    expect(rs.current.updateSettings).toHaveBeenCalledWith({
+      installments_enabled: true,
+      installment_config: {
+        weekly_enabled: true,
+        weekly_payments_per_unit: 1,
+        monthly_enabled: false,
+        monthly_payments_per_unit: 1,
+        minimum_days_weekly: 14,
+        minimum_days_monthly: 45,
+        weekly_installments_limit: 4,
+        grace_period_days: 3,
+      },
+    });
+  });
+
+  it("the page's Reset puts the switch and the plans back and tells the page it is clean", () => {
+    const registerSave = vi.fn();
+    rs.current = api({}, { installments_enabled: true });
+    renderInPage(registerSave);
+    act(() => container.querySelector<HTMLButtonElement>("#monthly-enabled")!.click());
+    act(() => masterSwitch().click());
+    expect(masterSwitch().getAttribute("aria-checked")).toBe("false");
+    const [, , discard] = lastRegistration(registerSave)!;
+    act(() => discard());
+    expect(masterSwitch().getAttribute("aria-checked")).toBe("true");
+    expect(container.querySelector("#monthly-enabled")!.getAttribute("aria-checked")).toBe("false");
+    expect(registerSave).toHaveBeenLastCalledWith("installments", null);
+  });
+
+  it("a failed save rejects for the page, and says why beside the form without a Retry of its own", async () => {
+    const registerSave = vi.fn();
+    const failure = { code: "42501", message: "permission denied for table tenants" };
+    rs.current = api({ updateSettings: vi.fn().mockRejectedValue(failure) });
+    renderInPage(registerSave);
+    act(() => container.querySelector<HTMLButtonElement>("#weekly-enabled")!.click());
+    const [, save] = lastRegistration(registerSave)!;
+    let rejected: unknown = null;
+    await act(async () => {
+      await save().catch((err) => {
+        rejected = err;
+      });
+    });
+    expect(rejected).toBe(failure);
+    expect(container.querySelector('[data-settings-state="save-error"]')?.textContent).toBe(
+      "Couldn't save. You don't have permission to change this. Ask an admin.",
+    );
+    expect(Array.from(container.querySelectorAll("button")).some((b) => b.textContent?.includes("Retry"))).toBe(false);
+  });
+});
+
+/**
+ * The settings page's wiring around a section, in miniature: the registry
+ * (`registerV2SectionSave`), the one save bar, the v2 leave guard and its
+ * dialog, and a link to another screen.
+ */
+function PageHarness() {
+  const saves = useRef<Record<string, () => Promise<unknown>>>({});
+  const discards = useRef<Record<string, () => void>>({});
+  const [dirty, setDirty] = useState<string[]>([]);
+  const register = useCallback<RegisterSectionSave>((key, save, discard) => {
+    if (save) saves.current[key] = save;
+    else delete saves.current[key];
+    if (save && discard) discards.current[key] = discard;
+    else delete discards.current[key];
+    setDirty((prev) => (prev.includes(key) === !!save ? prev : save ? [...prev, key] : prev.filter((k) => k !== key)));
+  }, []);
+  const saveAll = async () => {
+    const results = await Promise.allSettled(Object.values(saves.current).map((save) => save()));
+    return results.every((result) => result.status === "fulfilled");
+  };
+  const reset = () => Object.values(discards.current).forEach((discard) => discard());
+  const guard = useLeaveGuardV2({ enabled: true, isDirty: dirty.length > 0, canSave: true, onSave: saveAll, onDiscard: reset });
+  return (
+    <>
+      <a href="/rentals">Rentals</a>
+      <SettingsPageSaveProvider>
+        <InstallmentSettings registerSave={register} />
+      </SettingsPageSaveProvider>
+      <SettingsStickySaveBar dirty={dirty.length > 0} saving={guard.saving} onSave={() => void saveAll()} onReset={reset} />
+      <LeaveDialogV2
+        open={guard.open}
+        canSave={guard.canSave}
+        saving={guard.saving}
+        onSave={() => void guard.save()}
+        onDiscard={guard.discard}
+        onCancel={guard.cancel}
+      />
+    </>
+  );
+}
+
+describe("InstallmentSettings v2 with the page's save bar and leave dialog", () => {
+  const bodyText = () => document.body.textContent ?? "";
+  const dialogButton = (label: string) =>
+    Array.from(document.body.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button')).find(
+      (b) => b.textContent?.trim() === label,
+    );
+  const barButton = (label: string) =>
+    Array.from(container.querySelectorAll<HTMLButtonElement>('[data-settings-save-bar] button')).find(
+      (b) => b.textContent?.trim() === label,
+    );
+  const renderPage = () => act(() => root.render(<PageHarness />));
+
+  it("with nothing changed, leaving asks nothing and the bar has nothing to save", () => {
+    rs.current = api();
+    renderPage();
+    expect(barButton("Save changes")!.disabled).toBe(true);
+    const proceed = vi.fn();
+    act(() => runThroughLeaveGuard("/rentals", proceed));
+    expect(proceed).toHaveBeenCalledTimes(1);
+    expect(bodyText()).not.toContain("Save your changes?");
+  });
+
+  it("an edit lights the bar; its Save changes writes the plans", async () => {
+    rs.current = api();
+    renderPage();
+    act(() => container.querySelector<HTMLButtonElement>("#weekly-enabled")!.click());
+    expect(container.querySelector("[data-settings-save-bar]")!.textContent).toContain("Unsaved changes");
+    await act(async () => barButton("Save changes")!.click());
+    expect(rs.current.updateSettings).toHaveBeenCalledWith({ installment_config: { ...savedConfig, weekly_enabled: true } });
+  });
+
+  it("leaving by a link with an edit asks; Don't save puts the plans back and leaves", () => {
+    rs.current = api();
+    renderPage();
+    act(() => container.querySelector<HTMLButtonElement>("#weekly-enabled")!.click());
+    act(() => container.querySelector<HTMLAnchorElement>('a[href="/rentals"]')!.click());
+    expect(bodyText()).toContain("Save your changes?");
+    expect(nav.push).not.toHaveBeenCalled();
+
+    act(() => dialogButton("Don't save")!.click());
+    expect(container.querySelector("#weekly-enabled")!.getAttribute("aria-checked")).toBe("false");
+    expect(rs.current.updateSettings).not.toHaveBeenCalled();
+    expect(nav.push).toHaveBeenCalledWith("/rentals");
+  });
+
+  it("Save in the dialog writes the edit, then leaves", async () => {
+    rs.current = api();
+    renderPage();
+    act(() => container.querySelector<HTMLButtonElement>("#weekly-enabled")!.click());
+    const proceed = vi.fn();
+    act(() => runThroughLeaveGuard("/rentals", proceed));
+    expect(bodyText()).toContain("Save your changes?");
+    expect(proceed).not.toHaveBeenCalled();
+
+    await act(async () => dialogButton("Save")!.click());
+    expect(rs.current.updateSettings).toHaveBeenCalledTimes(1);
+    expect(rs.current.updateSettings).toHaveBeenCalledWith({ installment_config: { ...savedConfig, weekly_enabled: true } });
+    expect(proceed).toHaveBeenCalledTimes(1);
+  });
+
+  it("a failed save in the dialog keeps the page and the edit", async () => {
+    rs.current = api({ updateSettings: vi.fn().mockRejectedValue(new Error("Failed to fetch")) });
+    renderPage();
+    act(() => container.querySelector<HTMLButtonElement>("#weekly-enabled")!.click());
+    const proceed = vi.fn();
+    act(() => runThroughLeaveGuard("/rentals", proceed));
+    await act(async () => dialogButton("Save")!.click());
+    expect(proceed).not.toHaveBeenCalled();
+    expect(bodyText()).toContain("Save your changes?");
+    expect(container.querySelector("#weekly-enabled")!.getAttribute("aria-checked")).toBe("true");
   });
 });

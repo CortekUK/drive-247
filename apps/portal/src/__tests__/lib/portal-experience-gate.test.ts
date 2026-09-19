@@ -254,6 +254,14 @@ const slug = { current: null as string | null };
 const rows: Record<string, Record<string, unknown> | null> = {};
 const selects: string[] = [];
 const throwOn = { current: null as string | null };
+/**
+ * Inject a Postgres error for a given column list, so the retry ladder in
+ * `readPortalTenant` can actually be walked. Returns null to let the read
+ * succeed.
+ */
+const errorFor = {
+  current: null as ((columns: string) => { code?: string; message?: string } | null) | null,
+};
 
 vi.mock('@/lib/tenant-server', () => ({ tenantSlugFromHeaders: async () => slug.current }));
 vi.mock('@supabase/supabase-js', () => ({
@@ -265,6 +273,8 @@ vi.mock('@supabase/supabase-js', () => ({
           eq: (_column: string, value: string) => ({
             single: async () => {
               if (throwOn.current === value) throw new Error('network down');
+              const error = errorFor.current?.(columns) ?? null;
+              if (error) return { data: null, error };
               return { data: rows[value] ?? null, error: null };
             },
           }),
@@ -275,6 +285,7 @@ vi.mock('@supabase/supabase-js', () => ({
 }));
 
 const { resolvePortalGates, serverIsV2 } = await import('@/lib/v2-server');
+const { readPortalTenant, readPortalOnV2 } = await import('@/lib/portal-tenant');
 
 describe('resolvePortalGates — one read, one set of answers, per request', () => {
   beforeEach(() => {
@@ -282,6 +293,7 @@ describe('resolvePortalGates — one read, one set of answers, per request', () 
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'anon';
     selects.length = 0;
     throwOn.current = null;
+    errorFor.current = null;
     slug.current = null;
     for (const key of Object.keys(rows)) delete rows[key];
   });
@@ -402,5 +414,148 @@ describe('resolvePortalGates — one read, one set of answers, per request', () 
     expect(third.tenantSlug).toBe(FLAGGED);
     expect(third.onV2).toBe(true);
     expect(third.flags.theme).toBe(true);
+  });
+});
+
+/**
+ * THE RETRY LADDER in `readPortalTenant`.
+ *
+ * `anon` holds COLUMN-level SELECT grants on `public.tenants`, and this read
+ * runs with the anon key before any session exists. Postgres refuses the WHOLE
+ * ROW for a column `anon` cannot read — it does not come back null — so a
+ * deploy that is ahead of the SQL the lead applies by hand would otherwise cost
+ * every tenant its <title>, favicon and OG image on every page.
+ *
+ * Each rung must send a STRICTLY SMALLER column list than the one that just
+ * failed. A rung that re-sends the offending column is not a safety net, it is
+ * the same query again — and that is precisely the bug this block was written
+ * to pin: the unreadable-column test fires on ANY 42501/42703, because
+ * PostgREST does not reliably name the offending column, so a privilege error
+ * on `primary_color` takes the retry branch too. With only two rungs the retry
+ * re-sent both brand columns, got the same error and returned null.
+ */
+describe('readPortalTenant — the retry ladder shrinks on every rung', () => {
+  /** What a v1 tenant's request sent before any of the v2 work. */
+  const PRE_CHANGE =
+    'app_name, company_name, meta_title, meta_description, favicon_url, og_image_url';
+
+  beforeEach(() => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'anon';
+    selects.length = 0;
+    throwOn.current = null;
+    errorFor.current = null;
+    slug.current = null;
+    for (const key of Object.keys(rows)) delete rows[key];
+  });
+  afterEach(() => {
+    delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+    delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  });
+
+  it('asks for portal_experience and the brand colours on ONE round trip', async () => {
+    rows['ladder-one'] = { portal_experience: 'v2', primary_color: '#442DD7' };
+
+    const row = await readPortalTenant('ladder-one');
+    expect(selects).toHaveLength(1);
+    expect(selects[0]).toContain('portal_experience');
+    expect(selects[0]).toContain('primary_color');
+    expect(selects[0]).toContain('light_primary_color');
+    expect(selects[0]).toContain('favicon_url');
+    expect(row?.portal_experience).toBe('v2');
+  });
+
+  it.each([
+    ['42703, the migration not applied', '42703', 'column tenants.portal_experience does not exist'],
+    ['42501, the GRANT forgotten', '42501', 'permission denied for column portal_experience'],
+  ])('rung 2 drops portal_experience and keeps the page on %s', async (label, code, message) => {
+    const tenant = `ladder-rung2-${code}`;
+    rows[tenant] = { app_name: 'Rung Two', primary_color: '#442DD7' };
+    errorFor.current = (columns) =>
+      columns.includes('portal_experience') ? { code, message } : null;
+
+    const row = await readPortalTenant(tenant);
+    // Two calls, the second a strict subset of the first.
+    expect(selects, label).toHaveLength(2);
+    expect(selects[1]).not.toContain('portal_experience');
+    expect(selects[1]).toContain('primary_color');
+    // The tenant keeps its metadata AND its brand; the gate answers v1 because
+    // the column simply is not in the row.
+    expect(row?.app_name).toBe('Rung Two');
+    expect(row?.primary_color).toBe('#442DD7');
+    expect(row?.portal_experience ?? null).toBeNull();
+  });
+
+  it('rung 3 drops the BRAND columns and still returns the row', async () => {
+    // THE ONE THE TWO-RUNG LADDER GOT WRONG. The error is about a brand column,
+    // not `portal_experience`, and rung 2 cannot tell — so it re-sent the
+    // offending columns, got the same error, and returned null. Every tenant
+    // then loses its <title>, favicon and OG image: the exact outcome the
+    // ladder exists to prevent.
+    rows['ladder-rung3'] = { app_name: 'Rung Three', meta_title: 'Kept' };
+    errorFor.current = (columns) =>
+      columns.includes('light_primary_color')
+        ? { code: '42501', message: 'permission denied for column light_primary_color' }
+        : null;
+
+    const row = await readPortalTenant('ladder-rung3');
+    expect(selects).toHaveLength(3);
+    expect(selects[2]).toBe(PRE_CHANGE);
+    expect(row).not.toBeNull();
+    expect(row?.app_name).toBe('Rung Three');
+    expect(row?.meta_title).toBe('Kept');
+    // No brand colour to paint — the stylesheet default covers that — and the
+    // gate stays on v1.
+    expect(row?.primary_color ?? null).toBeNull();
+  });
+
+  it('every rung is a strict subset of the rung before it', async () => {
+    // The property, not the three specific lists: a rung that re-sends a column
+    // the previous attempt was refused cannot be a safety net.
+    rows['ladder-subset'] = { app_name: 'Subset' };
+    errorFor.current = (columns) =>
+      columns === PRE_CHANGE ? null : { code: '42501', message: 'permission denied' };
+
+    await readPortalTenant('ladder-subset');
+    const asSets = selects.map((c) => new Set(c.split(',').map((x) => x.trim())));
+    expect(asSets.length).toBeGreaterThan(1);
+    for (let i = 1; i < asSets.length; i += 1) {
+      for (const col of asSets[i]) {
+        expect(asSets[i - 1].has(col), `rung ${i + 1} added ${col}`).toBe(true);
+      }
+      expect(asSets[i].size, `rung ${i + 1} did not shrink`).toBeLessThan(asSets[i - 1].size);
+    }
+    expect(selects[selects.length - 1]).toBe(PRE_CHANGE);
+  });
+
+  it('stops at three rungs and answers null when even metadata is refused', async () => {
+    // A real outage, not a grant gap. It must cost two extra round trips at
+    // most, and it must not loop.
+    errorFor.current = () => ({ code: '42501', message: 'permission denied' });
+
+    const row = await readPortalTenant('ladder-dead');
+    expect(selects).toHaveLength(3);
+    expect(row).toBeNull();
+    expect(await readPortalOnV2('ladder-dead')).toBe(false);
+  });
+
+  it('does NOT retry a missing row — an unknown slug is a real answer', async () => {
+    // PGRST116 doubling the queries for every 404 host is the thing the code
+    // list deliberately leaves out.
+    errorFor.current = () => ({ code: 'PGRST116', message: 'no rows returned' });
+
+    const row = await readPortalTenant('no-such-tenant');
+    expect(selects).toHaveLength(1);
+    expect(row).toBeNull();
+  });
+
+  it('leaves a flagged tenant on v2 through the whole ladder being unnecessary', async () => {
+    slug.current = FLAGGED;
+    rows[FLAGGED] = { portal_experience: 'v2', primary_color: '#442DD7' };
+
+    const gates = await resolvePortalGates();
+    expect(gates.onV2).toBe(true);
+    expect(gates.lean).toBe(true);
+    expect(selects).toHaveLength(1);
   });
 });

@@ -18,20 +18,29 @@ export function useMessagingClient({scope,token,tenantId,admin=false,url,anonKey
     return result;
   },[scope,token,tenantId,admin,url,anonKey]);
 }
-/** Persisted counts, rechecked on reconnect/focus. Never optimistically decrement. */
-export function useSupportUnread(call:MessagingCall,enabled=true){
+/**
+ * Persisted counts, rechecked on an interval, on focus, on reconnect, on returning to
+ * the tab and whenever a conversation acknowledges what was read. Never incremented
+ * or decremented locally: every value is the server's own count, so a repeated or
+ * late response cannot double-count, and a changed account resets to "unknown".
+ *
+ * `field`: `unread` is the ticket-level count (the platform inbox badge);
+ * `unreadMessages` is a requester's unread human-support MESSAGES (the portal
+ * sidebar). A response without the field is "not known" — no badge — never zero.
+ */
+export function useSupportUnread(call:MessagingCall,enabled=true,{field='unread',interval=5000}:{field?:'unread'|'unreadMessages';interval?:number}={}){
   const [state,setState]=useState<{count:number|null;allowed:boolean;checking:boolean;errorCode:string|null}>({count:null,allowed:false,checking:true,errorCode:null});
   const refreshRef=useRef<()=>Promise<void>>(async()=>{});
   const retry=useCallback(()=>refreshRef.current(),[]);
   useEffect(()=>{
     let active=true,busy=false;
     const refresh=async()=>{if(!active||!enabled||busy||document.visibilityState==='hidden')return;busy=true;setState(old=>({...old,checking:true}));
-      try{const data=await call('count');if(active)setState({count:data.unread,allowed:true,checking:false,errorCode:null});}catch(error){if(active){const errorCode=error instanceof MessagingError?error.code:'unavailable';setState(old=>({count:null,allowed:['forbidden','unauthorized','context_changed'].includes(errorCode)?false:old.allowed,checking:false,errorCode}));}}finally{busy=false;}};
+      try{const data=await call('count');const value=data?.[field];if(active)setState({count:typeof value==='number'&&Number.isFinite(value)&&value>=0?value:null,allowed:true,checking:false,errorCode:null});}catch(error){if(active){const errorCode=error instanceof MessagingError?error.code:'unavailable';setState(old=>({count:null,allowed:['forbidden','unauthorized','context_changed'].includes(errorCode)?false:old.allowed,checking:false,errorCode}));}}finally{busy=false;}};
     refreshRef.current=refresh;
-    setState({count:null,allowed:false,checking:enabled,errorCode:enabled?null:'forbidden'});void refresh();const timer=setInterval(refresh,5000);
+    setState({count:null,allowed:false,checking:enabled,errorCode:enabled?null:'forbidden'});void refresh();const timer=setInterval(refresh,interval);
     window.addEventListener('focus',refresh);window.addEventListener('online',refresh);
     // Count responses do not dispatch another count refresh (no polling loop).
     window.addEventListener('trax-support-read',refresh);document.addEventListener('visibilitychange',refresh);
     return()=>{active=false;clearInterval(timer);window.removeEventListener('focus',refresh);window.removeEventListener('online',refresh);window.removeEventListener('trax-support-read',refresh);document.removeEventListener('visibilitychange',refresh);};
-  },[call,enabled]);return {...state,retry};
+  },[call,enabled,field,interval]);return {...state,retry};
 }

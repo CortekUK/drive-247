@@ -21,10 +21,13 @@
  *  - Driver requirements, Booking rules, Key handover, Booking site, Tax and
  *    fees and Security deposit — sections of General now; their old `?tab=`
  *    links open General at that section.
- *  - Promo codes, Extras, Installments, Pay as you go, Auto-extension and the
- *    global blacklist — taken out of Settings for now (V2_HIDDEN_SETTINGS_PAGES
- *    in settings-shell-state). A `?tab=` link to one says it isn't part of the
- *    workspace.
+ *  - The global blacklist — out of Settings for now (it is to move to
+ *    Customers). A `?tab=blacklist` link says it isn't part of the workspace.
+ *
+ * Promo codes, Extras, Installments, Pay as you go and Auto-extension were
+ * hidden for a while (V2_HIDDEN_SETTINGS_PAGES, now empty) and are listed
+ * again: what a customer is charged under Pricing, and how and when they pay
+ * under Payment plans.
  *
  * Every description is 95–120 characters and wraps to two or three lines in
  * its 320px column.
@@ -112,6 +115,7 @@ export const SETTINGS_INDEX_SECTIONS: SettingsIndexSection[] = [
     ],
   },
   {
+    // What a customer is charged: surcharges, discounts and add-ons.
     title: "Pricing",
     items: [
       {
@@ -120,6 +124,48 @@ export const SETTINGS_INDEX_SECTIONS: SettingsIndexSection[] = [
         href: "/settings?tab=pricing",
         tab: "pricing",
         keywords: "custom pricing dynamic seasonal weekend holiday surcharge monthly tier rate",
+      },
+      {
+        title: "Promo codes",
+        description: "Create discount codes customers enter at checkout, or discounts that apply by themselves on longer rentals.",
+        href: "/settings?tab=promos",
+        tab: "promos",
+        keywords: "promo promotion discount coupon voucher code offer",
+      },
+      {
+        title: "Extras",
+        description: "Add-ons customers can buy with a rental, such as child seats or GPS, and the price of each one.",
+        href: "/settings?tab=extras",
+        tab: "extras",
+        keywords: "extras add-ons addons add ons child seat baby seat gps stock",
+      },
+    ],
+  },
+  {
+    // How and when a customer pays. Not "Payments": the payment provider
+    // (Stripe, Square) is set up in Integrations, which the footer says.
+    title: "Payment plans",
+    items: [
+      {
+        title: "Installments",
+        description: "Let customers split the cost of a longer rental into weekly or monthly payments instead of paying it all at once.",
+        href: "/settings?tab=installments",
+        tab: "installments",
+        keywords: "installment installments instalment split payment plan weekly monthly",
+      },
+      {
+        title: "Pay as you go",
+        description: "Bill long rentals day by day while the car is out, instead of asking the customer to pay everything upfront.",
+        href: "/settings?tab=payg",
+        tab: "payg",
+        keywords: "payg pay as you go daily billing arrears",
+      },
+      {
+        title: "Auto-extension",
+        description: "Let rentals renew automatically each week or month, with the customer billed before every new period starts.",
+        href: "/settings?tab=auto-extend",
+        tab: "auto-extend",
+        keywords: "auto extend auto-extend extension renew renewal recurring subscription",
       },
     ],
   },

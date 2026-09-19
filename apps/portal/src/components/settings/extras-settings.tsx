@@ -24,6 +24,13 @@ import { useV2 } from '@/lib/v2-context';
 import { useManagerPermissions } from '@/hooks/use-manager-permissions';
 import { ExtrasTableV2 } from '@/components/settings-v2/extras-table-v2';
 import { Button as ButtonV2 } from '@/components/ui-v2/button';
+import { Input as InputV2 } from '@/components/ui-v2/input';
+import { Label as LabelV2 } from '@/components/ui-v2/label';
+import { Switch as SwitchV2 } from '@/components/ui-v2/switch';
+import { Textarea as TextareaV2 } from '@/components/ui-v2/textarea';
+import { Select as SelectV2, SelectContent as SelectContentV2, SelectItem as SelectItemV2, SelectTrigger as SelectTriggerV2, SelectValue as SelectValueV2 } from '@/components/ui-v2/select';
+import { Dialog as DialogV2, DialogContent as DialogContentV2, DialogDescription as DialogDescriptionV2, DialogFooter as DialogFooterV2, DialogHeader as DialogHeaderV2, DialogTitle as DialogTitleV2 } from '@/components/ui-v2/dialog';
+import { AlertDialog as AlertDialogV2, AlertDialogAction as AlertDialogActionV2, AlertDialogCancel as AlertDialogCancelV2, AlertDialogContent as AlertDialogContentV2, AlertDialogDescription as AlertDialogDescriptionV2, AlertDialogFooter as AlertDialogFooterV2, AlertDialogHeader as AlertDialogHeaderV2, AlertDialogTitle as AlertDialogTitleV2 } from '@/components/ui-v2/alert-dialog';
 import { Package } from 'lucide-react';
 import {
   SettingsDependencyNotice,
@@ -35,6 +42,7 @@ import {
   formatSettingsNumber,
 } from '@/components/settings-v2/section-states';
 import { getExtraFormIssues, lowStockSentence } from '@/lib/settings-money-states';
+import { SETTINGS_SECTION_TITLE } from '@/components/settings-v2/settings-kit';
 import {
   DndContext,
   closestCenter,
@@ -89,12 +97,30 @@ const EMPTY_FORM: ExtraFormData = {
 
 /**
  * v2 only: the Add/Edit Extra dialog's option cards and image tiles follow the
- * v2 rounded system (cards 2xl) and hover light purple, with the --v2-hover
- * tint in dark mode where primary/10 all but vanishes. Every tenant on v1 keeps
- * `rounded-lg` and the grey `hover:bg-muted/50` it has today.
+ * v2 rounded system (cards and fields `rounded-xl`) and hover light purple,
+ * with the --v2-hover tint in dark mode where primary/10 all but vanishes.
+ * Every tenant on v1 keeps `rounded-lg` and the grey `hover:bg-muted/50` it
+ * has today.
  */
-const V2_CARD_RADIUS = 'rounded-2xl';
+const V2_CARD_RADIUS = 'rounded-xl';
 const V2_OPTION_HOVER = 'hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]';
+
+/**
+ * The parts the four dialogs (Add/Edit, Update Stock, Delete, Discard) are
+ * drawn with. v1 keeps exactly the components it always used; the v2 canary
+ * gets the v2 ones, so the vehicle dropdown never opens under a v1 dialog.
+ * Typed as v1's: every prop the dialogs pass is one both sets accept.
+ */
+const EXTRAS_DIALOG_UI_V1 = {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  Button, Input, Label, Switch, Textarea, Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+};
+const EXTRAS_DIALOG_UI_V2 = {
+  Dialog: DialogV2, DialogContent: DialogContentV2, DialogDescription: DialogDescriptionV2, DialogFooter: DialogFooterV2, DialogHeader: DialogHeaderV2, DialogTitle: DialogTitleV2,
+  AlertDialog: AlertDialogV2, AlertDialogAction: AlertDialogActionV2, AlertDialogCancel: AlertDialogCancelV2, AlertDialogContent: AlertDialogContentV2, AlertDialogDescription: AlertDialogDescriptionV2, AlertDialogFooter: AlertDialogFooterV2, AlertDialogHeader: AlertDialogHeaderV2, AlertDialogTitle: AlertDialogTitleV2,
+  Button: ButtonV2, Input: InputV2, Label: LabelV2, Switch: SwitchV2, Textarea: TextareaV2, Select: SelectV2, SelectContent: SelectContentV2, SelectItem: SelectItemV2, SelectTrigger: SelectTriggerV2, SelectValue: SelectValueV2,
+} as unknown as typeof EXTRAS_DIALOG_UI_V1;
 
 function isLowStock(extra: RentalExtra): boolean {
   if (extra.max_quantity === null || extra.max_quantity === 0) return false;
@@ -120,7 +146,7 @@ function SortableImage({
   onRemove: () => void;
   /** v2: the drag handle and remove button stay visible below `sm` (touch has no hover). */
   touchVisible?: boolean;
-  /** v2: rounded like the Add tile beside it (`rounded-2xl`); v1 keeps `rounded-lg`. */
+  /** v2: rounded like the Add tile beside it (`rounded-xl`); v1 keeps `rounded-lg`. */
   v2?: boolean;
 }) {
   const {
@@ -148,7 +174,7 @@ function SortableImage({
       <div
         {...attributes}
         {...listeners}
-        className={`absolute top-0 left-0 right-0 h-6 flex items-center justify-center cursor-grab active:cursor-grabbing bg-black/40 ${v2 ? 'rounded-t-2xl' : 'rounded-t-lg'} ${touchVisible ? 'sm:opacity-0 sm:group-hover:opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity`}
+        className={`absolute top-0 left-0 right-0 h-6 flex items-center justify-center cursor-grab active:cursor-grabbing bg-black/40 ${v2 ? 'rounded-t-xl' : 'rounded-t-lg'} ${touchVisible ? 'sm:opacity-0 sm:group-hover:opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity`}
       >
         <GripVertical className="h-3 w-3 text-white" />
       </div>
@@ -204,6 +230,8 @@ export function ExtrasSettings() {
   // the check behind the Settings page's view-only banner for this tab.
   const v2Chrome = useV2('chrome');
   const { canEditSettings } = useManagerPermissions();
+  // The dialogs' parts for this tenant's design (see EXTRAS_DIALOG_UI_V1 / _V2).
+  const ui = v2Chrome ? EXTRAS_DIALOG_UI_V2 : EXTRAS_DIALOG_UI_V1;
 
   // v2: which extra's Activate/Deactivate is in flight; the stock and delete
   // dialogs' save errors (they stay open on a failure instead of closing
@@ -535,14 +563,11 @@ export function ExtrasSettings() {
     setIsDialogOpen(open);
   };
   const currencySymbolV2 = getCurrencySymbol(tenant?.currency_code || 'USD');
+  // v2: the page's own header already names and describes Extras, so the list
+  // gets a plain section title (like "All promo codes") and the Add button.
   const extrasHeaderV2 = (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-      <div className="min-w-0">
-        <h2 className="font-heading text-base font-medium">Rental Extras</h2>
-        <p className="text-sm text-muted-foreground">
-          Manage optional add-ons customers can select during booking (GPS, baby seats, drinks, etc.)
-        </p>
-      </div>
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <h2 className={SETTINGS_SECTION_TITLE}>All extras</h2>
       {canEditExtrasV2 && extrasLoaded && extras.length > 0 && (
         <ButtonV2 onClick={handleOpenAdd} className="w-full shrink-0 sm:w-auto">
           <Plus data-icon="inline-start" />
@@ -836,23 +861,23 @@ export function ExtrasSettings() {
       )}
 
       {/* Delete Confirmation Dialog */}
-      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete &quot;{deleteTarget?.name}&quot;?</AlertDialogTitle>
-            <AlertDialogDescription>
+      <ui.AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <ui.AlertDialogContent>
+          <ui.AlertDialogHeader>
+            <ui.AlertDialogTitle>Delete &quot;{deleteTarget?.name}&quot;?</ui.AlertDialogTitle>
+            <ui.AlertDialogDescription>
               This will permanently remove this extra. Existing bookings with this extra will not be affected.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
+            </ui.AlertDialogDescription>
+          </ui.AlertDialogHeader>
           {v2Chrome && deleteErrorV2 ? (
             <p role="alert" className="text-sm text-destructive">
               Couldn&apos;t delete this extra. Nothing was deleted. Try again, or deactivate it instead.
             </p>
           ) : null}
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <ui.AlertDialogFooter>
+            <ui.AlertDialogCancel>Cancel</ui.AlertDialogCancel>
             {v2Chrome ? (
-              <AlertDialogAction
+              <ui.AlertDialogAction
                 onClick={(e) => {
                   // Stay open until the delete lands, so a failure is seen here.
                   e.preventDefault();
@@ -862,33 +887,33 @@ export function ExtrasSettings() {
                 disabled={isDeleting}
               >
                 {isDeleting ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Deleting…</> : 'Delete'}
-              </AlertDialogAction>
+              </ui.AlertDialogAction>
             ) : (
-            <AlertDialogAction
+            <ui.AlertDialogAction
               onClick={() => deleteTarget && handleDelete(deleteTarget.id)}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               disabled={isDeleting}
             >
               {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Delete'}
-            </AlertDialogAction>
+            </ui.AlertDialogAction>
             )}
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+          </ui.AlertDialogFooter>
+        </ui.AlertDialogContent>
+      </ui.AlertDialog>
 
       {/* Update Stock Dialog */}
-      <Dialog open={!!stockTarget} onOpenChange={(open) => !open && setStockTarget(null)}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Update Stock</DialogTitle>
-            <DialogDescription>
+      <ui.Dialog open={!!stockTarget} onOpenChange={(open) => !open && setStockTarget(null)}>
+        <ui.DialogContent className="sm:max-w-sm">
+          <ui.DialogHeader>
+            <ui.DialogTitle>Update Stock</ui.DialogTitle>
+            <ui.DialogDescription>
               Add stock to &quot;{stockTarget?.name}&quot;. Current total: {stockTarget?.max_quantity ?? 0}
-            </DialogDescription>
-          </DialogHeader>
+            </ui.DialogDescription>
+          </ui.DialogHeader>
           <div className="space-y-3 py-2">
             <div className="space-y-2">
-              <Label>Add Quantity</Label>
-              <Input
+              <ui.Label>Add Quantity</ui.Label>
+              <ui.Input
                 type="number"
                 value={stockValue}
                 onChange={(e) => setStockValue(e.target.value)}
@@ -932,18 +957,18 @@ export function ExtrasSettings() {
               </div>
             )}
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setStockTarget(null)}>Cancel</Button>
+          <ui.DialogFooter>
+            <ui.Button variant="outline" onClick={() => setStockTarget(null)}>Cancel</ui.Button>
             {v2Chrome ? (
-              <Button
+              <ui.Button
                 onClick={() => void handleAddStockV2()}
                 disabled={isUpdating || stockAddV2 === null || stockInvalidV2}
               >
                 {isUpdating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
                 Add Stock
-              </Button>
+              </ui.Button>
             ) : (
-            <Button
+            <ui.Button
               onClick={() => {
                 const add = parseInt(stockValue);
                 if (!isNaN(add) && add > 0 && stockTarget) {
@@ -955,32 +980,32 @@ export function ExtrasSettings() {
             >
               {isUpdating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
               Add Stock
-            </Button>
+            </ui.Button>
             )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </ui.DialogFooter>
+        </ui.DialogContent>
+      </ui.Dialog>
 
       {/* Add/Edit Dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={v2Chrome ? requestCloseDialogV2 : setIsDialogOpen}>
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>
+      <ui.Dialog open={isDialogOpen} onOpenChange={v2Chrome ? requestCloseDialogV2 : setIsDialogOpen}>
+        <ui.DialogContent className="sm:max-w-2xl">
+          <ui.DialogHeader>
+            <ui.DialogTitle>
               {editingExtra ? 'Edit Extra' : 'Add Extra'}
-            </DialogTitle>
-            <DialogDescription>
+            </ui.DialogTitle>
+            <ui.DialogDescription>
               {editingExtra
                 ? 'Update the rental extra details'
                 : 'Add a new optional extra for customers'}
-            </DialogDescription>
-          </DialogHeader>
+            </ui.DialogDescription>
+          </ui.DialogHeader>
 
           <div className="space-y-4 py-2 px-1 -mx-1 max-h-[70vh] overflow-y-auto">
             {/* Row 1: Name + Price (global only) */}
             <div className={`grid gap-4 ${formData.pricing_type === 'global' ? (v2Chrome ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-3') : 'grid-cols-1'}`}>
               <div className={formData.pricing_type === 'global' ? (v2Chrome ? 'sm:col-span-2 space-y-2' : 'col-span-2 space-y-2') : 'space-y-2'}>
-                <Label>Name *</Label>
-                <Input
+                <ui.Label>Name *</ui.Label>
+                <ui.Input
                   value={formData.name}
                   onChange={(e) => setFormData((p) => ({ ...p, name: e.target.value }))}
                   placeholder="e.g., GPS Navigation"
@@ -989,10 +1014,10 @@ export function ExtrasSettings() {
               </div>
               {formData.pricing_type === 'global' && (
                 <div className="space-y-2">
-                  <Label>Price *</Label>
+                  <ui.Label>Price *</ui.Label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">{v2Chrome ? currencySymbolV2 : '$'}</span>
-                    <Input
+                    <ui.Input
                       type="number"
                       value={formData.price}
                       onChange={(e) => setFormData((p) => ({ ...p, price: e.target.value }))}
@@ -1009,7 +1034,7 @@ export function ExtrasSettings() {
 
             {/* Billing frequency: per trip (flat) vs per day (x rental days) */}
             <div className="space-y-2">
-              <Label>Billing</Label>
+              <ui.Label>Billing</ui.Label>
               <div className="grid grid-cols-2 gap-3">
                 <button
                   type="button"
@@ -1040,7 +1065,7 @@ export function ExtrasSettings() {
 
             {/* Pricing Type */}
             <div className="space-y-2">
-              <Label>Pricing Type</Label>
+              <ui.Label>Pricing Type</ui.Label>
               <div className="grid grid-cols-2 gap-3">
                 <button
                   type="button"
@@ -1077,7 +1102,7 @@ export function ExtrasSettings() {
             {formData.pricing_type === 'per_vehicle' && (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <Label>Vehicle Pricing *</Label>
+                  <ui.Label>Vehicle Pricing *</ui.Label>
                   <p className="text-xs text-muted-foreground">{formData.vehicle_pricing.length} vehicle(s) assigned</p>
                 </div>
                 {fieldErrorV2(formIssuesV2.vehicle_pricing)}
@@ -1095,7 +1120,7 @@ export function ExtrasSettings() {
                           <span className="flex-1 text-sm truncate">{label}</span>
                           <div className={v2Chrome && currencySymbolV2.length > 1 ? 'relative w-28 flex-shrink-0' : 'relative w-24'}>
                             <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">{v2Chrome ? currencySymbolV2 : '$'}</span>
-                            <Input
+                            <ui.Input
                               type="number"
                               value={vp.price}
                               onChange={(e) => {
@@ -1110,7 +1135,7 @@ export function ExtrasSettings() {
                               step={0.01}
                             />
                           </div>
-                          <Button
+                          <ui.Button
                             type="button"
                             variant="ghost"
                             size="icon"
@@ -1123,7 +1148,7 @@ export function ExtrasSettings() {
                             }}
                           >
                             <X className="h-3.5 w-3.5" />
-                          </Button>
+                          </ui.Button>
                         </div>
                       );
                     })}
@@ -1162,7 +1187,7 @@ export function ExtrasSettings() {
                   }
                   if (available.length === 0) return null;
                   return (
-                    <Select
+                    <ui.Select
                       onValueChange={(vehicleId) => {
                         const vehicle = allVehicles?.find((v) => v.id === vehicleId);
                         if (!vehicle) return;
@@ -1182,17 +1207,17 @@ export function ExtrasSettings() {
                       }}
                       value=""
                     >
-                      <SelectTrigger className="h-9">
-                        <SelectValue placeholder="Add a vehicle..." />
-                      </SelectTrigger>
-                      <SelectContent>
+                      <ui.SelectTrigger className="h-9">
+                        <ui.SelectValue placeholder="Add a vehicle..." />
+                      </ui.SelectTrigger>
+                      <ui.SelectContent>
                         {available.map((v) => (
-                          <SelectItem key={v.id} value={v.id}>
+                          <ui.SelectItem key={v.id} value={v.id}>
                             {v.reg} - {v.make || ''} {v.model || ''}
-                          </SelectItem>
+                          </ui.SelectItem>
                         ))}
-                      </SelectContent>
-                    </Select>
+                      </ui.SelectContent>
+                    </ui.Select>
                   );
                 })()}
               </div>
@@ -1200,8 +1225,8 @@ export function ExtrasSettings() {
 
             {/* Row 2: Description */}
             <div className="space-y-2">
-              <Label>Description</Label>
-              <Textarea
+              <ui.Label>Description</ui.Label>
+              <ui.Textarea
                 value={formData.description}
                 onChange={(e) => setFormData((p) => ({ ...p, description: e.target.value }))}
                 placeholder="Brief description of the extra"
@@ -1212,7 +1237,7 @@ export function ExtrasSettings() {
             {/* Row 3: Images */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label>Images *</Label>
+                <ui.Label>Images *</ui.Label>
                 <p className="text-xs text-muted-foreground">
                   {formData.image_urls.length > 1
                     ? 'Drag to reorder. First image is the banner.'
@@ -1264,13 +1289,13 @@ export function ExtrasSettings() {
             <div className={v2Chrome ? 'grid grid-cols-1 sm:grid-cols-2 gap-3' : 'grid grid-cols-2 gap-3'}>
               <div className={`flex items-center justify-between ${v2Chrome ? V2_CARD_RADIUS : 'rounded-lg'} border p-2.5`}>
                 <div>
-                  <Label className="text-sm font-medium">Quantity-based</Label>
+                  <ui.Label className="text-sm font-medium">Quantity-based</ui.Label>
                   <p className="text-xs text-muted-foreground">Multiple units</p>
                 </div>
                 <div className="flex items-center gap-2">
                   {formData.is_quantity_based && (
                     <div className="relative w-16">
-                      <Input
+                      <ui.Input
                         type="number"
                         value={formData.max_quantity}
                         onChange={(e) => setFormData((p) => ({ ...p, max_quantity: e.target.value }))}
@@ -1280,7 +1305,7 @@ export function ExtrasSettings() {
                       />
                     </div>
                   )}
-                  <Switch
+                  <ui.Switch
                     checked={formData.is_quantity_based}
                     onCheckedChange={(checked) =>
                       setFormData((p) => ({ ...p, is_quantity_based: checked }))
@@ -1291,10 +1316,10 @@ export function ExtrasSettings() {
 
               <div className={`flex items-center justify-between ${v2Chrome ? V2_CARD_RADIUS : 'rounded-lg'} border p-2.5`}>
                 <div>
-                  <Label className="text-sm font-medium">Active</Label>
+                  <ui.Label className="text-sm font-medium">Active</ui.Label>
                   <p className="text-xs text-muted-foreground">Visible to customers</p>
                 </div>
-                <Switch
+                <ui.Switch
                   checked={formData.is_active}
                   onCheckedChange={(checked) =>
                     setFormData((p) => ({ ...p, is_active: checked }))
@@ -1308,37 +1333,37 @@ export function ExtrasSettings() {
           {v2Chrome && saveErrorV2 && !isCreating && !isUpdating ? (
             <SettingsSaveState status="error" error={saveErrorV2} onRetry={handleSave} />
           ) : null}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => (v2Chrome ? requestCloseDialogV2(false) : setIsDialogOpen(false))}>
+          <ui.DialogFooter>
+            <ui.Button variant="outline" onClick={() => (v2Chrome ? requestCloseDialogV2(false) : setIsDialogOpen(false))}>
               Cancel
-            </Button>
-            <Button onClick={handleSave} disabled={isCreating || isUpdating || uploading}>
+            </ui.Button>
+            <ui.Button onClick={handleSave} disabled={isCreating || isUpdating || uploading}>
               {(isCreating || isUpdating) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {editingExtra ? 'Save Changes' : 'Add Extra'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </ui.Button>
+          </ui.DialogFooter>
+        </ui.DialogContent>
+      </ui.Dialog>
 
       {v2Chrome && (
-        // A Dialog, not an AlertDialog: the Add/Edit dialog sits at z-[100]
-        // and the AlertDialog layer at z-50 would open BEHIND it.
-        <Dialog open={confirmDiscardV2} onOpenChange={setConfirmDiscardV2}>
-          <DialogContent role="alertdialog" className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Discard your changes?</DialogTitle>
-              <DialogDescription className="[overflow-wrap:anywhere]">
+        // A v2 Dialog (role alertdialog), the Add/Edit dialog's own kind: same
+        // layer, portalled after it, so it opens on top of it.
+        <ui.Dialog open={confirmDiscardV2} onOpenChange={setConfirmDiscardV2}>
+          <ui.DialogContent role="alertdialog" className="sm:max-w-md">
+            <ui.DialogHeader>
+              <ui.DialogTitle>Discard your changes?</ui.DialogTitle>
+              <ui.DialogDescription className="[overflow-wrap:anywhere]">
                 {editingExtra
                   ? `Your edits to "${editingExtra.name}" haven't been saved.`
                   : "This extra hasn't been added yet."}
                 {uploadedSinceOpenV2 ? ' The images you just uploaded won\'t be attached to it.' : ''}
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setConfirmDiscardV2(false)}>
+              </ui.DialogDescription>
+            </ui.DialogHeader>
+            <ui.DialogFooter>
+              <ui.Button variant="outline" onClick={() => setConfirmDiscardV2(false)}>
                 Keep editing
-              </Button>
-              <Button
+              </ui.Button>
+              <ui.Button
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 onClick={() => {
                   setConfirmDiscardV2(false);
@@ -1346,10 +1371,10 @@ export function ExtrasSettings() {
                 }}
               >
                 Discard
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+              </ui.Button>
+            </ui.DialogFooter>
+          </ui.DialogContent>
+        </ui.Dialog>
       )}
     </div>
   );

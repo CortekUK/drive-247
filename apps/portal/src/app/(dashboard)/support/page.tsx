@@ -5,7 +5,7 @@ import { SupportView } from './support-view';
 
 /**
  * Support — the portal's human-support section, and the only place tenants
- * manage tickets. The profile menu's Support item and TRAX's Support control
+ * manage tickets. The main sidebar's Support item and TRAX's Support control
  * both open this route, so both show the same authorized records.
  *
  * Gated on the server like the other v2-only routes (see insights/page.tsx):

@@ -486,7 +486,9 @@ describe("the rentals list", () => {
     // the slug list OR `tenants.portal_experience`, and only the hook can see
     // the second. The composition with the override is what this pins.
     expect(src).toContain("const devForceEmptyRentals = useIsLean() && devForceEmpty;");
-    expect(src).toContain("rentals.length > 0 && !devForceEmptyRentals ? (");
+    // `allRentals` is the list's own name for the unfiltered rows since the
+    // fixed-height table landed; the gate itself is unchanged.
+    expect(src).toContain("allRentals.length > 0 && !devForceEmptyRentals ? (");
   });
 });
 

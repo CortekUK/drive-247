@@ -1373,7 +1373,9 @@ export async function POST(request: NextRequest) {
             const { data: tenantData } = await supabase
                 .from('tenants')
                 // integration_bonzah drives the Bonzah insurance addendum below.
-                // `slug` feeds resolveBoldSignMode() — the lean gate is slug-keyed.
+                // `slug` feeds resolveBoldSignMode(), which is slug-keyed AND column-keyed:
+                // `tenants.portal_experience` is the second term, read in a query of
+                // its own so an unreadable column cannot refuse this whole row.
                 .select('slug, company_name, contact_email, contact_phone, phone, address, admin_name, admin_email, currency_code, logo_url, boldsign_mode, boldsign_test_brand_id, boldsign_live_brand_id, monthly_tier_days, integration_bonzah, deposit_charge_enabled, deposit_mode, global_deposit_amount, security_deposit_enabled, timezone')
                 .eq('id', body.tenantId)
                 .single();

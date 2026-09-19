@@ -7,6 +7,7 @@ import { useSubscriptionPlans } from "@/hooks/use-subscription-plans";
 import { useTenantSubscription } from "@/hooks/use-tenant-subscription";
 import { useTenant } from "@/contexts/TenantContext";
 import { useAuth } from "@/stores/auth-store";
+import { useV2 } from "@/lib/v2-context";
 import {
   Dialog,
   DialogContent,
@@ -96,10 +97,40 @@ export function SubscriptionGateDialog({
 
   const hasPlans = !!plans && plans.length > 0;
 
+  /* ── the v2 surface, on the v1 primitive ──────────────────────────────────
+   *
+   * This dialog stays on `ui/dialog` and keeps its `z-[100]`, deliberately:
+   * that is the stacking level the gates share, and it is what stops a system
+   * notice or the migration blocker painting over the paywall. `ui-v2/dialog`
+   * sits at `z-50`, so swapping the primitive would put the most important
+   * modal in the product UNDER the others. See the same note in
+   * `system-announcement-dialog.tsx`.
+   *
+   * What was wrong was only the SURFACE: on a v2 tenant the paywall rendered
+   * with v1's hard border, square-ish corners and flat shadow next to v2
+   * dialogs that use `rounded-4xl bg-popover ring-1 ring-foreground/5
+   * shadow-xl`. These are those tokens, and nothing else.
+   *
+   * Gated on the `theme` area, not applied unconditionally: `--v2-radius-4xl`
+   * is defined only inside the `.v2-theme` block, so off-gate `rounded-4xl`
+   * would resolve to Tailwind v4's 2rem fallback — neither design — and the
+   * other 56 tenants' class list stays byte-for-byte what it is today.
+   *
+   * `sm:rounded-4xl` is not redundant: `sm:rounded-lg` lives in the primitive's
+   * base class and lands inside a media query, so it beats a base-layer
+   * `rounded-4xl` from 640px up. The pairs below that collide with a base class
+   * (`bg-popover`, `shadow-xl`, `border-0`) are resolved by tailwind-merge in
+   * the primitive's own `cn`, last writer winning, which is this string.
+   */
+  const v2Theme = useV2("theme");
+  const v2Surface = v2Theme
+    ? " rounded-4xl sm:rounded-4xl border-0 bg-popover text-popover-foreground shadow-xl ring-1 ring-foreground/5 dark:ring-foreground/10"
+    : "";
+
   return (
     <Dialog open={open}>
       <DialogContent
-        className="sm:max-w-md max-h-[90vh] overflow-y-auto [&>button:last-child]:hidden"
+        className={`sm:max-w-md max-h-[90vh] overflow-y-auto [&>button:last-child]:hidden${v2Surface}`}
         /* The application behind this is BLURRED, not merely dimmed. A dimmed
            dashboard still reads as a dashboard you could use if you squinted,
            and this screen's whole job is to say that you cannot. `bg-background/70`
@@ -109,7 +140,15 @@ export function SubscriptionGateDialog({
         onPointerDownOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
       >
-        {plansLoading ? (
+        {/* WAIT FOR PLANS ONLY IF THIS VARIANT SELLS SOMETHING.
+            `setup` and `expired` build PricingCards out of `plans`, so they have
+            to wait. `past_due` never reads `plans` at all — it hands an existing
+            customer the hosted invoice link — and waiting made this modal a dead
+            end: no Esc, no outside click, no close button, and under the same
+            `plansLoading` condition no pay link and no Sign out either. One
+            request with retry: 1 is seconds on a bad network, and it lands on the
+            tenant who is already hard-blocked. */}
+        {plansLoading && !isPastDue ? (
           <div className="flex flex-col items-center py-8">
             {/* Radix requires a DialogTitle for an accessible name. With the old
                 titled intro removed, this loading state is the initial render on a
@@ -248,15 +287,22 @@ export function SubscriptionGateDialog({
           </>
         )}
 
-        {!plansLoading && (
-          <button
-            type="button"
-            onClick={handleSignOut}
-            className="mx-auto mt-1 text-xs text-muted-foreground underline-offset-4 hover:underline"
-          >
-            Sign out
-          </button>
-        )}
+        {/* THE ESCAPE HATCH IS NEVER CONDITIONAL.
+            This used to be `{(!plansLoading || isPastDue) && …}` — the same
+            condition as the body above — which is wrong for a different reason
+            than the body is. `expired` genuinely needs the plans to render its
+            pricing cards, so its BODY may wait; but it has no pay link to fall
+            back on, so gating Sign out on the same flag left a modal that
+            refuses Esc, outside-click and a close button with no way forward
+            AND no way out — indefinitely, if that query hangs. The body can
+            load; the exit cannot be something a pending request takes away. */}
+        <button
+          type="button"
+          onClick={handleSignOut}
+          className="mx-auto mt-1 text-xs text-muted-foreground underline-offset-4 hover:underline"
+        >
+          Sign out
+        </button>
 
         {/* A way OUT of a state a developer switched on.
             This dialog is deliberately inescapable — no Esc, no click-outside,
