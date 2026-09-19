@@ -17,9 +17,15 @@ interface AddUserDialogProps {
   onOpenChange: (open: boolean) => void;
   onSubmit: (data: AddUserFormValues) => void;
   isLoading?: boolean;
+  /**
+   * v2 (the Team page on v2 tenants): the title without its icon, and the
+   * line under it in plain words. Omitted or false, the dialog renders exactly
+   * as v1 always has.
+   */
+  v2?: boolean;
 }
 
-export function AddUserDialog({ open, onOpenChange, onSubmit, isLoading }: AddUserDialogProps) {
+export function AddUserDialog({ open, onOpenChange, onSubmit, isLoading, v2 = false }: AddUserDialogProps) {
   useAuditLogOnOpen({
     open,
     action: "user_create_dialog_shown",
@@ -59,13 +65,23 @@ export function AddUserDialog({ open, onOpenChange, onSubmit, isLoading }: AddUs
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className={isManager ? "sm:max-w-[650px] max-h-[90vh] overflow-y-auto" : "sm:max-w-[425px]"}>
         <DialogHeader>
+          {v2 ? (
+            <DialogTitle>Add New User</DialogTitle>
+          ) : (
           <DialogTitle className="flex items-center gap-2">
             <UserPlus className="h-5 w-5 text-primary" />
             Add New User
           </DialogTitle>
+          )}
+          {v2 ? (
+            <DialogDescription>
+              Add someone to your portal. They will get an email with their sign-in details.
+            </DialogDescription>
+          ) : (
           <DialogDescription>
             Create a new user account for this tenant. They will receive an email with login credentials.
           </DialogDescription>
+          )}
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">

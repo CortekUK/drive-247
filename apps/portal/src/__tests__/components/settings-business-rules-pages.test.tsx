@@ -1048,10 +1048,10 @@ describe("settings page wiring for the Business-rules pages (v2 branch)", () => 
 
   it("has no 'Unsaved changes' chip row under the header: one save bar at the end of the page says it", () => {
     expect(source).not.toContain("V2_PAGES_WITH_OWN_SAVE_STATUS");
-    // The Business-rules pages, Booking site, Tax and fees and Security deposit
-    // are sections of General, so they save through General's bar.
+    // Booking rules, Lockbox, Tax and deposit and Booking site are pages of
+    // their own again (Sep 19 2026), each saving through its own page's bar.
     expect(source).toContain(
-      "const V2_PAGES_WITH_SAVE_BAR = new Set(['general', 'templates', 'pricing', 'locations', 'installments', 'payg', 'auto-extend']);",
+      "const V2_PAGES_WITH_SAVE_BAR = new Set(['general', 'duration', 'lockbox', 'tax-and-deposit', 'booking-site', 'templates', 'pricing', 'locations', 'installments', 'payg', 'auto-extend']);",
     );
     expect(source).toContain("<SettingsPageSaveProvider enabled={v2PageHasSaveBar}>");
     expect(source).toContain("{canEditPage && v2PageHasSaveBar && (\n                  <SettingsStickySaveBar");

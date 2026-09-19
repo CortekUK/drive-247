@@ -28,15 +28,19 @@ import {
   fitWithinEdge,
   LARGE_LOGO_ACCEPT,
   LOGO_MAX_BYTES,
+  LOGO_SLOT_NAMES,
+  logoBestResultsText,
   logoFileProblem,
   logoFormatOf,
+  logoHelpText,
   logoSizeProblem,
+  logoSlotNoun,
   parseSvgSize,
   SMALL_LOGO_ACCEPT,
   uploadLogoBlob,
   withSvgSize,
 } from "@/lib/appearance/logo";
-import { V2_BRAND_PRESETS, V2_DEFAULT_BRAND_COLOR } from "@/lib/appearance/presets";
+import { V2_BRAND_PRESETS, V2_DEFAULT_BRAND_COLOR, V2_DEFAULT_BRAND_NAME } from "@/lib/appearance/presets";
 import { judgeBrandColor } from "@/lib/appearance/color";
 
 describe("logo limits", () => {
@@ -69,7 +73,7 @@ describe("logo limits", () => {
     expect(logoFileProblem("small", { name: "f.ico", type: "image/x-icon", size: 100 })).toBeNull();
   });
 
-  it("small logo: at least 128 px a side, and square within 0.9 to 1.1", () => {
+  it("square icon: 128 to 4096 px a side, and square within 0.9 to 1.1", () => {
     expect(logoSizeProblem("small", { width: 128, height: 128, vector: false })).toBeNull();
     expect(logoSizeProblem("small", { width: 128, height: 127, vector: false })?.kind).toBe("too-small");
     // 512 / 569 = 0.8998, just under 0.9; 512 / 568 = 0.9014, just over.
@@ -78,12 +82,20 @@ describe("logo limits", () => {
     // 1.1 × 500 = 550 exactly is allowed; 551 / 500 = 1.102 is not.
     expect(logoSizeProblem("small", { width: 550, height: 500, vector: false })).toBeNull();
     expect(logoSizeProblem("small", { width: 551, height: 500, vector: false })?.kind).toBe("not-square");
-    // An SVG has no pixel minimum, but its shape still counts.
+    // The top of the range: 4096 a side is allowed, 4097 either way is not.
+    expect(logoSizeProblem("small", { width: 4096, height: 4096, vector: false })).toBeNull();
+    expect(logoSizeProblem("small", { width: 4097, height: 4000, vector: false })?.kind).toBe("too-large");
+    expect(logoSizeProblem("small", { width: 4000, height: 4097, vector: false })?.kind).toBe("too-large");
+    // Too big AND not square (5000 / 2000 = 2.5): the size is the problem to fix first,
+    // so no "Fit into a square" offer for a file we would refuse anyway.
+    expect(logoSizeProblem("small", { width: 5000, height: 2000, vector: false })?.kind).toBe("too-large");
+    // An SVG has no pixel size, so neither end applies, but its shape still counts.
     expect(logoSizeProblem("small", { width: 16, height: 16, vector: true })).toBeNull();
+    expect(logoSizeProblem("small", { width: 9000, height: 9000, vector: true })).toBeNull();
     expect(logoSizeProblem("small", { width: 32, height: 16, vector: true })?.kind).toBe("not-square");
   });
 
-  it("large logo: at least 400 × 100 px, between 1:1 and 8:1", () => {
+  it("full logo: 400 to 6000 px wide, 100 to 3000 px tall, between 1:1 and 8:1", () => {
     expect(logoSizeProblem("large", { width: 400, height: 100, vector: false })).toBeNull(); // 4:1
     expect(logoSizeProblem("large", { width: 400, height: 400, vector: false })).toBeNull(); // 1:1
     expect(logoSizeProblem("large", { width: 800, height: 100, vector: false })).toBeNull(); // 8:1
@@ -91,6 +103,94 @@ describe("logo limits", () => {
     expect(logoSizeProblem("large", { width: 400, height: 99, vector: false })?.kind).toBe("too-small");
     expect(logoSizeProblem("large", { width: 400, height: 401, vector: false })?.kind).toBe("too-tall");
     expect(logoSizeProblem("large", { width: 120, height: 30, vector: true })).toBeNull();
+    // The top of the range. 6000 × 3000 is 2:1 and 6000 × 750 is 8:1, both allowed.
+    expect(logoSizeProblem("large", { width: 6000, height: 3000, vector: false })).toBeNull();
+    expect(logoSizeProblem("large", { width: 6000, height: 750, vector: false })).toBeNull();
+    // 6001 × 3000 is 2.0003:1, a fine shape: only the width is out.
+    expect(logoSizeProblem("large", { width: 6001, height: 3000, vector: false })?.kind).toBe("too-large");
+    // 3001 × 3001 is 1:1: only the height is out.
+    expect(logoSizeProblem("large", { width: 3001, height: 3001, vector: false })?.kind).toBe("too-large");
+    expect(logoSizeProblem("large", { width: 12000, height: 3000, vector: true })).toBeNull();
+  });
+
+  it("every end of every range, one step inside and one step outside", () => {
+    // File size: 1 byte is the smallest real file, 0 is empty; 10,485,760 is the cap.
+    const file = (size: number) => logoFileProblem("small", { name: "a.png", type: "image/png", size });
+    expect(file(1)).toBeNull();
+    expect(file(0)).not.toBeNull();
+    expect(file(10_485_760)).toBeNull();
+    expect(file(10_485_761)).not.toBeNull();
+
+    // Square icon, each side on its own: 128 and 4096 are in, 127 and 4097 are out.
+    // Width and height stay within 0.9 to 1.1 of each other (127 / 128 = 0.992,
+    // 4097 / 4096 = 1.0002), so only the size can be what is wrong.
+    const small = (width: number, height: number) => logoSizeProblem("small", { width, height, vector: false });
+    expect(small(128, 128)).toBeNull();
+    expect(small(127, 128)?.kind).toBe("too-small");
+    expect(small(128, 127)?.kind).toBe("too-small");
+    expect(small(4096, 4096)).toBeNull();
+    expect(small(4097, 4096)?.kind).toBe("too-large");
+    expect(small(4096, 4097)?.kind).toBe("too-large");
+    // The message names the file's own size and the rule it broke.
+    expect(small(127, 128)!.message).toBe(
+      "This image is 127 × 128 px. The square icon needs to be at least 128 × 128 px, and 512 × 512 px looks sharpest.",
+    );
+
+    // Full logo width 400 to 6000 (height 400 keeps it 1:1 at the low end).
+    const large = (width: number, height: number) => logoSizeProblem("large", { width, height, vector: false });
+    expect(large(400, 400)).toBeNull();
+    expect(large(399, 100)?.kind).toBe("too-small");
+    expect(large(6000, 1000)).toBeNull(); // 6:1
+    expect(large(6001, 1000)?.kind).toBe("too-large"); // 6.001:1, a fine shape
+    // Height 100 to 3000.
+    expect(large(400, 100)).toBeNull(); // 4:1
+    expect(large(400, 99)?.kind).toBe("too-small");
+    expect(large(3000, 3000)).toBeNull(); // 1:1
+    expect(large(3001, 3001)?.kind).toBe("too-large"); // 1:1, only the height is out
+    expect(large(399, 100)!.message).toBe(
+      "This image is 399 × 100 px. The full logo needs to be at least 400 px wide and 100 px tall.",
+    );
+
+    // Shape 1:1 to 8:1. 1000 × 1000 is 1:1 (in), 1000 × 1001 is taller than wide (out);
+    // 1600 × 200 is 8:1 (in), 1601 × 200 is 8.005:1 (out).
+    expect(large(1000, 1000)).toBeNull();
+    expect(large(1000, 1001)?.kind).toBe("too-tall");
+    expect(large(1600, 200)).toBeNull();
+    expect(large(1601, 200)?.kind).toBe("too-wide");
+  });
+
+  it("names the slots Square icon and Full logo in every message, never small, large or favicon", () => {
+    expect(LOGO_SLOT_NAMES).toEqual({ small: "Square icon", large: "Full logo" });
+    expect(logoSlotNoun("small")).toBe("square icon");
+    expect(logoSlotNoun("large")).toBe("full logo");
+    const messages = [
+      logoSizeProblem("small", { width: 100, height: 100, vector: false })!.message,
+      logoSizeProblem("small", { width: 5000, height: 5000, vector: false })!.message,
+      logoSizeProblem("small", { width: 600, height: 300, vector: false })!.message,
+      logoSizeProblem("large", { width: 300, height: 100, vector: false })!.message,
+      logoSizeProblem("large", { width: 7000, height: 1000, vector: false })!.message,
+      logoSizeProblem("large", { width: 500, height: 600, vector: false })!.message,
+      logoSizeProblem("large", { width: 900, height: 100, vector: false })!.message,
+      logoHelpText("small"),
+      logoHelpText("large"),
+      logoBestResultsText(),
+    ];
+    for (const message of messages) expect(message.toLowerCase()).not.toMatch(/small logo|large logo|favicon/);
+    // Each size message names the file's own pixel size.
+    expect(messages[1]).toBe(
+      "This image is 5000 × 5000 px. The square icon can be at most 4096 × 4096 px. Save a smaller copy (512 × 512 px is best) and try again.",
+    );
+    expect(messages[4]).toBe(
+      "This image is 7000 × 1000 px. The full logo can be at most 6000 px wide and 3000 px tall. Save a smaller copy (1200 px wide is plenty) and try again.",
+    );
+  });
+
+  it("builds the help lines and the best-results line from the limits", () => {
+    expect(logoHelpText("small")).toBe("PNG, WebP, JPG, SVG or ICO · up to 10 MB · square, 128 to 4096 px a side");
+    expect(logoHelpText("large")).toBe("PNG, WebP, JPG or SVG · up to 10 MB · 400 to 6000 px wide, 100 to 3000 px tall");
+    expect(logoBestResultsText()).toBe(
+      "Best results: a PNG with a transparent background. Square icon at least 512 × 512 px; full logo at least 1200 px wide.",
+    );
   });
 });
 
@@ -161,10 +261,11 @@ describe("uploadLogoBlob", () => {
 });
 
 describe("v2 brand colours", () => {
-  it("are exactly Indigo (the default), Blue, Teal, Rose and Graphite", () => {
+  it('are exactly Default, Blue, Teal, Rose and Graphite: the default is called "Default", never by its hue', () => {
     expect(V2_DEFAULT_BRAND_COLOR).toBe("#442DD7");
+    expect(V2_DEFAULT_BRAND_NAME).toBe("Default");
     expect(V2_BRAND_PRESETS.map((p) => [p.name, p.hex])).toEqual([
-      ["Indigo", "#442DD7"],
+      ["Default", "#442DD7"],
       ["Blue", "#2563EB"],
       ["Teal", "#0F766E"],
       ["Rose", "#BE123C"],

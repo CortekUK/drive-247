@@ -277,10 +277,10 @@ export function LockboxTemplatesSectionV2({
         title="Lockbox handover is off"
         body={
           keyHandoverHref
-            ? `Turn on lockbox handover in General, under Key handover, and save. Then you can edit ${messages}.`
+            ? `Turn on lockbox handover on the Lockbox page and save. Then you can edit ${messages}.`
             : `Turn on lockbox handover above and save. Then you can edit ${messages}.`
         }
-        action={keyHandoverHref ? { label: "Open Key handover", href: keyHandoverHref } : undefined}
+        action={keyHandoverHref ? { label: "Open Lockbox", href: keyHandoverHref } : undefined}
       />,
     );
   }

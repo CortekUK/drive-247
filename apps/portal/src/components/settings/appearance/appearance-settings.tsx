@@ -15,12 +15,13 @@
  * branding columns that already exist on `tenants`, and the active preset is
  * derived by matching those colours back against the preset list.
  *
- * TWO RENDERS. Every tenant but the v2 canary gets `AppearanceSettings` below,
- * exactly as before. Northwind (v2) gets "Branding": the same hooks gate on the
- * real branding row and the manager's permissions, then mount
- * `AppearanceFormV2` keyed on the tenant, which seeds its form once from that
- * row. Portal name, Brand colour and Logos in that order, the kit's page
- * header, sticky save bar and leave dialog, and five named brand colours.
+ * TWO RENDERS. Every v1 tenant gets `AppearanceSettings` below, exactly as
+ * before. A v2 tenant gets "Branding": the same hooks gate on the real
+ * branding row and the manager's permissions, then mount `AppearanceFormV2`
+ * keyed on the tenant, which seeds its form once from that row. Portal name
+ * (with a preview of where it shows), Brand colour and Logos in that order,
+ * one level of navigation (no tabs), the kit's page header, sticky save bar
+ * and leave dialog, and five named brand colours plus a custom one.
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -51,6 +52,8 @@ import { BrandColorField } from '@/components/settings/appearance/brand-color-fi
 import { LogoStudio } from '@/components/settings/appearance/logo-studio';
 import { LogosV2 } from '@/components/settings/appearance/logos-v2';
 
+import { LOGO_PREVIEW_HEIGHT, PortalNamePreview, portalTabTitle } from '@/components/settings/appearance/branding-previews';
+
 import { useTenantBranding, type TenantBranding } from '@/hooks/use-tenant-branding';
 import { useTenant } from '@/contexts/TenantContext';
 import { useV2 } from '@/lib/v2-context';
@@ -63,9 +66,10 @@ import {
   getPreset,
   V2_BRAND_PRESETS,
   V2_DEFAULT_BRAND_COLOR,
+  V2_DEFAULT_BRAND_NAME,
   type ThemePalette,
 } from '@/lib/appearance/presets';
-import { hexToHsl, isUsableV2Brand, sameColor, shade } from '@/lib/appearance/color';
+import { hexToHsl, isUsableV2Brand, shade } from '@/lib/appearance/color';
 import {
   describeSaveError,
   SettingsLoadError,
@@ -119,7 +123,7 @@ function paletteFromBrandColor(hex: string): ThemePalette {
 /**
  * Server branding → the shape this screen edits, with defaults filled in.
  * `fallbackColor` is the brand colour when none is stored: Drive Gold for v1,
- * Indigo for v2.
+ * the v2 Default (#442DD7) for v2.
  */
 function formFromBranding(
   branding: TenantBranding,
@@ -260,6 +264,7 @@ export function AppearanceSettings() {
         tenantId={tenant.id}
         companyName={tenant.company_name}
         initial={formFromBranding(branding, tenant.company_name, V2_DEFAULT_BRAND_COLOR)}
+        metaTitle={branding.meta_title}
         readOnly={readOnly}
       />
     );
@@ -528,6 +533,8 @@ const V2_PAGE_TITLE = 'Branding';
 // title, centred on the sidebar switch's row (50 + 26 + 16 = 92), as on every
 // other v2 settings page.
 const V2_PAGE_CLASS = 'w-full max-w-[1160px] space-y-8 pb-16 md:pt-[26px]';
+/** Between the three sections: close enough to read as one page (was space-y-10). */
+const V2_SECTIONS_CLASS = 'space-y-8';
 
 function V2PageDescription() {
   return (
@@ -570,16 +577,20 @@ function AppearanceFormV2({
   tenantId,
   companyName,
   initial,
+  metaTitle,
   readOnly,
 }: {
   tenantId: string;
   companyName?: string | null;
   initial: AppearanceForm;
+  /** The site title from Website settings: when set, the browser tab shows it instead of the name. */
+  metaTitle?: string | null;
   readOnly: boolean;
 }) {
   const { updateBranding, isUpdating } = useTenantBranding();
-  // Try-on: the whole portal repaints with the chosen colour before it is saved,
-  // and goes back to the saved one on Reset, "Don't save" or leaving.
+  // Try-on: the whole portal repaints with the chosen colour, and the sidebar
+  // badge and the browser tab pick up a new logo, before anything is saved.
+  // All of it goes back to what is saved on Reset, "Don't save" or leaving.
   const { preview: previewTheme, restore: restoreTheme, commit: commitTheme } = useThemePreview();
 
   const [form, setForm] = useState<AppearanceForm>(() => initial);
@@ -601,22 +612,47 @@ function AppearanceFormV2({
   /**
    * A finished colour the v2 theme cannot carry: near-black, near-white or grey
    * (`isUsableV2Brand`). It saves like any other, but the portal keeps the
-   * default Indigo, so say so rather than leave the tenant tapping a colour
+   * default colour, so say so rather than leave the tenant tapping a colour
    * that changes nothing. None of the five presets land here.
    */
   const brandHsl = hexInvalid ? null : hexToHsl(form.light_primary_color);
   const brandUnusable = !!brandHsl && !isUsableV2Brand(brandHsl);
-  const isDefaultColor =
-    sameColor(form.light_primary_color, V2_DEFAULT_BRAND_COLOR) && sameColor(form.primary_color, V2_DEFAULT_BRAND_COLOR);
 
   useEffect(() => {
     setSaveError(null);
   }, [form]);
 
+  /**
+   * The palette last tried on, or null for the saved one. A logo try-on rides
+   * on top of it, because each preview replaces the one before; the form's own
+   * colour cannot be used there, as it may be half typed.
+   */
+  const triedPalette = useRef<ThemePalette | null>(null);
+
+  /** Show `palette` (or the saved colours) and these logos on the running portal. */
+  const tryOn = (palette: ThemePalette | null, logos: Pick<AppearanceForm, 'favicon_url' | 'logo_url'>) => {
+    const saved = savedRef.current;
+    const patch: Partial<TenantBranding> = { ...palette, favicon_url: logos.favicon_url, logo_url: logos.logo_url };
+    // As the save will do (useTenantBranding): a dark-mode logo that was only
+    // following the old logo follows the new one, so the sidebar shows it in
+    // dark mode too. A deliberately different dark logo is left alone.
+    if (logos.logo_url !== saved.logo_url && (!saved.dark_logo_url || saved.dark_logo_url === saved.logo_url)) {
+      patch.dark_logo_url = null;
+    }
+    previewTheme(patch);
+  };
+
   /** Put a palette in the form and on the running portal at once. */
   const applyPalette = (palette: ThemePalette) => {
     setForm((prev) => ({ ...prev, ...palette }));
-    previewTheme(palette);
+    triedPalette.current = palette;
+    tryOn(palette, form);
+  };
+
+  /** A new (or removed) logo: in the form, and in the sidebar and browser tab straight away. */
+  const applyLogos = (patch: Partial<Pick<AppearanceForm, 'favicon_url' | 'logo_url'>>) => {
+    setForm((prev) => ({ ...prev, ...patch }));
+    tryOn(triedPalette.current, { favicon_url: form.favicon_url, logo_url: form.logo_url, ...patch });
   };
 
   const applyBrandColor = (hex: string) => {
@@ -628,11 +664,10 @@ function AppearanceFormV2({
     applyPalette(paletteFromBrandColor(hex));
   };
 
-  const restoreDefaultColor = () => applyPalette(paletteFromBrandColor(V2_DEFAULT_BRAND_COLOR));
-
   /** Reset and "Don't save": back to what is saved. Never to the defaults. */
   const discardChanges = () => {
     restoreTheme();
+    triedPalette.current = null;
     setForm(savedRef.current);
     setSaveError(null);
     setLogosVersion((v) => v + 1);
@@ -683,6 +718,7 @@ function AppearanceFormV2({
       // Save stays enabled and a later Reset brings the old colours back.
       savedRef.current = { ...values };
       setSavedVersion((v) => v + 1);
+      triedPalette.current = null;
       commitTheme();
       toast({
         title: 'Branding saved',
@@ -719,6 +755,10 @@ function AppearanceFormV2({
   }, [leave.open]);
 
   const portalNameTitleId = `${settingsSectionId('portal-name')}-title`;
+  const portalName = form.app_name.trim() || companyName || 'Your portal';
+  const tabTitle = portalTabTitle(portalName, metaTitle);
+  // What the sign-in page tints its hero with in light mode (login-v2).
+  const signInColor = form.light_accent_color || form.accent_color || form.light_primary_color || form.primary_color;
 
   return (
     <div className={V2_PAGE_CLASS}>
@@ -727,14 +767,14 @@ function AppearanceFormV2({
 
       <SettingsPageSaveProvider>
         <SettingsReadOnlyFieldset readOnly={readOnly}>
-          <div className="space-y-10">
+          <div className={V2_SECTIONS_CLASS}>
             <SettingsSection
               anchor="portal-name"
               title="Portal name"
-              description="Appears in the browser tab and beside your logo. Up to 60 characters."
+              description="Shows at the top of your sidebar and in the browser tab. Up to 60 characters."
             >
               <SettingsPanel>
-                <div className="px-5 py-4">
+                <div className="space-y-3 px-5 py-4">
                   <Input
                     id="app_name"
                     aria-labelledby={portalNameTitleId}
@@ -748,6 +788,12 @@ function AppearanceFormV2({
                     placeholder={companyName || 'Your company'}
                     onChange={(e) => setForm((p) => ({ ...p, app_name: e.target.value }))}
                   />
+                  <PortalNamePreview
+                    name={portalName}
+                    tabIconUrl={form.favicon_url}
+                    sidebarIconUrl={form.favicon_url || form.logo_url}
+                    tabTitle={tabTitle}
+                  />
                 </div>
               </SettingsPanel>
             </SettingsSection>
@@ -756,32 +802,9 @@ function AppearanceFormV2({
               anchor="brand-colour"
               title="Brand colour"
               description="Pick a colour and your portal updates around you straight away. Nothing is saved until you press Save changes."
-              action={
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button type="button" variant="ghost" size="sm" disabled={readOnly || isDefaultColor}>
-                      <RotateCcw data-icon="inline-start" />
-                      Restore default colour
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Restore the default colour?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        This sets your brand colour back to Indigo. Your portal name and logos
-                        stay as they are, and nothing is saved until you press Save changes.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={restoreDefaultColor}>Restore Indigo</AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              }
             >
               <SettingsPanel>
-                <div className="space-y-4 px-5 py-4">
+                <div className="space-y-3 px-5 py-4">
                   <BrandSwatches value={form.light_primary_color} onChange={applyBrandColor} disabled={readOnly} />
                   <BrandColorField value={form.light_primary_color} onChange={applyBrandColor} disabled={readOnly} />
                   {hexInvalid && (
@@ -792,7 +815,7 @@ function AppearanceFormV2({
                   {brandUnusable && (
                     <p role="status" className="text-[13px] text-muted-foreground">
                       This colour is too close to black, white or grey to colour the portal, so the
-                      portal keeps the default Indigo.
+                      portal keeps the {V2_DEFAULT_BRAND_NAME.toLowerCase()} colour.
                     </p>
                   )}
                 </div>
@@ -802,11 +825,13 @@ function AppearanceFormV2({
             <LogosV2
               key={logosVersion}
               tenantId={tenantId}
-              portalName={form.app_name.trim() || companyName || 'Your portal'}
+              portalName={portalName}
+              tabTitle={tabTitle}
+              brandColor={signInColor}
               faviconUrl={form.favicon_url}
               logoUrl={form.logo_url}
-              onFaviconChange={(url) => setForm((p) => ({ ...p, favicon_url: url }))}
-              onLogoChange={(url) => setForm((p) => ({ ...p, logo_url: url }))}
+              onFaviconChange={(url) => applyLogos({ favicon_url: url })}
+              onLogoChange={(url) => applyLogos({ logo_url: url })}
               disabled={readOnly}
               onBusyChange={setLogosBusy}
             />
@@ -846,22 +871,19 @@ function AppearanceFormV2({
  * down by one `space-y-8` gap.
  */
 function AppearanceSkeletonV2() {
-  const sectionHeading = (titleWidth: string, descriptionWidth: string, action = false) => (
-    <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-      <div className="min-w-0 flex-1">
-        <div className="flex h-6 items-center">
-          <Skeleton className={`h-4 ${titleWidth} rounded-full`} />
-        </div>
-        <div className="mt-0.5 flex h-5 items-center">
-          <Skeleton className={`h-3.5 ${descriptionWidth} max-w-full rounded-full`} />
-        </div>
+  const sectionHeading = (titleWidth: string, descriptionWidth: string) => (
+    <div>
+      <div className="flex h-6 items-center">
+        <Skeleton className={`h-4 ${titleWidth} rounded-full`} />
       </div>
-      {action && <Skeleton className="h-8 w-44 shrink-0 rounded-full" />}
+      <div className="mt-0.5 flex h-5 items-center">
+        <Skeleton className={`h-3.5 ${descriptionWidth} max-w-full rounded-full`} />
+      </div>
     </div>
   );
-  // The small logo's two previews stack on a phone; the large logo's stay side by side.
-  const logoCard = (previewHeight: string, previewGrid: string) => (
-    <div className="flex flex-col gap-4 rounded-xl border bg-card p-5">
+  // A logo card: title, a line of description, the preview, the help line and Upload.
+  const logoCard = (
+    <div className="flex flex-col gap-3 rounded-xl border bg-card p-4">
       <div>
         <div className="flex h-5 items-center">
           <Skeleton className="h-3.5 w-24 rounded-full" />
@@ -870,16 +892,7 @@ function AppearanceSkeletonV2() {
           <Skeleton className="h-3 w-4/5 rounded-full" />
         </div>
       </div>
-      <div className={`grid gap-3 ${previewGrid}`}>
-        {[0, 1].map((i) => (
-          <div key={i} className="space-y-1.5">
-            <Skeleton className={`${previewHeight} w-full rounded-xl`} />
-            <div className="flex h-[16.5px] items-center">
-              <Skeleton className="h-2.5 w-16 rounded-full" />
-            </div>
-          </div>
-        ))}
-      </div>
+      <Skeleton className={`${LOGO_PREVIEW_HEIGHT} w-full rounded-xl`} />
       <div className="flex h-4 items-center">
         <Skeleton className="h-3 w-3/4 rounded-full" />
       </div>
@@ -904,34 +917,43 @@ function AppearanceSkeletonV2() {
           </div>
         </div>
       </div>
-      <div aria-hidden="true" className="space-y-10">
+      <div aria-hidden="true" className={V2_SECTIONS_CLASS}>
         <div className="space-y-3">
           {sectionHeading('w-28', 'w-96')}
-          <div className="rounded-xl border bg-card px-5 py-4">
+          <div className="space-y-3 rounded-xl border bg-card px-5 py-4">
             <Skeleton className="h-9 w-full max-w-md rounded-3xl" />
+            {/* The sidebar row and the browser tab: the 44px row, 6px padding
+                a side and a 1px border a side make 58px tall; the 256px
+                sidebar plus that border makes 258px wide. */}
+            <div className="flex flex-wrap gap-3">
+              <Skeleton className="h-[58px] w-[258px] max-w-full rounded-xl" />
+              <Skeleton className="h-[58px] w-[258px] max-w-full rounded-xl" />
+            </div>
           </div>
         </div>
         <div className="space-y-3">
-          {sectionHeading('w-28', 'w-[36rem]', true)}
+          {sectionHeading('w-28', 'w-[36rem]')}
           <div className="rounded-xl border bg-card px-5 py-4">
-            <div className="flex flex-wrap items-start gap-2">
-              {V2_BRAND_PRESETS.map((preset) => (
-                <div key={preset.id} className="flex w-16 flex-col items-center gap-1.5 py-1.5">
-                  <Skeleton className="size-9 rounded-full" />
+            <div className="flex flex-wrap items-start gap-x-2 gap-y-1">
+              {/* The five colours and Custom. */}
+              {[...V2_BRAND_PRESETS.map((preset) => preset.id), 'custom'].map((id) => (
+                <div key={id} className="flex w-16 flex-col items-center gap-2 py-2">
+                  <Skeleton className="size-10 rounded-full" />
                   <div className="flex h-4 items-center">
                     <Skeleton className="h-3 w-10 rounded-full" />
                   </div>
                 </div>
               ))}
-              <Skeleton className="mt-1.5 h-9 w-24 rounded-full" />
             </div>
           </div>
         </div>
         <div className="space-y-3">
           {sectionHeading('w-16', 'w-[34rem]')}
+          {/* The "Best results" line. */}
+          <Skeleton className="h-10 w-full rounded-xl" />
           <div className="grid gap-4 lg:grid-cols-2">
-            {logoCard('h-14', 'sm:grid-cols-2')}
-            {logoCard('h-24', 'grid-cols-2')}
+            {logoCard}
+            {logoCard}
           </div>
         </div>
       </div>

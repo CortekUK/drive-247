@@ -11,12 +11,16 @@ import {
   V2_GENERAL_PERM_TABS,
   V2_GENERAL_SECTIONS,
   V2_HIDDEN_SETTINGS_PAGES,
+  V2_SECTIONED_PAGES,
+  V2_TAX_AND_DEPOSIT_PERM_TABS,
+  V2_TAX_AND_DEPOSIT_SECTIONS,
   canSaveAllDirty,
   canSaveV2Edits,
   canViewAny,
   findSettingsSearchHandoff,
   formatCompanyCount,
   isPositiveCount,
+  isTabbedV2Page,
   matchesBlacklistSearch,
   resolveBlacklistView,
   resolveSettingsPageData,
@@ -26,6 +30,7 @@ import {
   settingsTabNoticeCopy,
   v2HasUnsavedEdits,
   v2NoticePages,
+  v2PageSections,
 } from "@/components/settings-v2/settings-shell-state";
 
 describe("resolveSettingsTabNotice", () => {
@@ -94,23 +99,39 @@ describe("resolveSettingsTabNotice", () => {
   });
 });
 
-describe("v2 General: six pages merged into one, and the five hidden pages back", () => {
-  const ALL_GENERAL_PERMS = ["general", "requirements", "duration", "lockbox", "fees", "preauth"];
+describe("v2 General: two tabs, the pages that came out of it, and the five hidden pages back", () => {
+  // Written out by hand: Regional follows General's own grant, Driver
+  // requirements its own; Tax and fees and Security deposit likewise.
+  const GENERAL_PERMS = ["general", "requirements"];
+  const TAX_AND_DEPOSIT_PERMS = ["fees", "preauth"];
 
-  it("General's sections run in the agreed order, each with its own id", () => {
-    expect(V2_GENERAL_SECTIONS.map((s) => s.anchor)).toEqual([
-      "regional",
-      "driver-requirements",
-      "booking-rules",
-      "key-handover",
-      "tax-and-fees",
-      "security-deposit",
-      "booking-site",
-      "optional-modules",
+  it("General is two tabs, Regional then Driver requirements; Tax and deposit is Tax and fees then Security deposit", () => {
+    expect(V2_GENERAL_SECTIONS.map((s) => [s.anchor, s.title, s.permTab, s.tab])).toEqual([
+      ["regional", "Regional", "general", "general"],
+      ["driver-requirements", "Driver requirements", "requirements", "requirements"],
     ]);
-    expect(settingsSectionId("tax-and-fees")).toBe("settings-tax-and-fees");
-    // Regional, Booking site and Optional modules all follow General's own permission, so it is listed once.
-    expect(V2_GENERAL_PERM_TABS).toEqual(ALL_GENERAL_PERMS);
+    expect(V2_TAX_AND_DEPOSIT_SECTIONS.map((s) => [s.anchor, s.title, s.permTab, s.tab])).toEqual([
+      ["tax-and-fees", "Tax and fees", "fees", "fees"],
+      ["security-deposit", "Security deposit", "preauth", "preauth"],
+    ]);
+    expect(settingsSectionId("security-deposit")).toBe("settings-security-deposit");
+    expect(V2_GENERAL_PERM_TABS).toEqual(GENERAL_PERMS);
+    expect(V2_TAX_AND_DEPOSIT_PERM_TABS).toEqual(TAX_AND_DEPOSIT_PERMS);
+  });
+
+  it("General's sections are tabs; Tax and deposit's stack; every other page has none", () => {
+    expect(V2_SECTIONED_PAGES.general.layout).toBe("tabs");
+    expect(V2_SECTIONED_PAGES["tax-and-deposit"].layout).toBe("stack");
+    expect(isTabbedV2Page("general")).toBe(true);
+    expect(isTabbedV2Page("tax-and-deposit")).toBe(false);
+    expect(isTabbedV2Page("duration")).toBe(false);
+    expect(isTabbedV2Page(null)).toBe(false);
+    expect(isTabbedV2Page("constructor")).toBe(false);
+    expect(v2PageSections("general").map((s) => s.anchor)).toEqual(["regional", "driver-requirements"]);
+    expect(v2PageSections("tax-and-deposit").map((s) => s.anchor)).toEqual(["tax-and-fees", "security-deposit"]);
+    expect(v2PageSections("lockbox")).toEqual([]);
+    expect(v2PageSections("toString")).toEqual([]);
+    expect(v2PageSections(undefined)).toEqual([]);
   });
 
   it("hides nothing now: Promo codes, Extras, Installments, Pay as you go and Auto-extension are back, and keep their notice labels", () => {
@@ -130,6 +151,11 @@ describe("v2 General: six pages merged into one, and the five hidden pages back"
     const pages = {
       general: { permTab: "general" },
       locations: { permTab: "locations" },
+      duration: { permTab: "duration" },
+      lockbox: { permTab: "lockbox" },
+      "tax-and-deposit": { permTab: "fees" },
+      "booking-site": { permTab: "general" },
+      modules: { permTab: "general" },
       pricing: { permTab: "pricing" },
       templates: { permTab: "templates" },
       promos: { permTab: "promos" },
@@ -145,17 +171,25 @@ describe("v2 General: six pages merged into one, and the five hidden pages back"
       expect(resolveV2SettingsRoute("  ", pages)).toEqual(none);
     });
 
-    it("?tab=general opens General at the top, for anyone who may see any of its sections", () => {
-      expect(resolveV2SettingsRoute("general", pages)).toEqual({ page: "general", anchor: null, permTab: ALL_GENERAL_PERMS });
+    it("?tab=general opens General on Regional, for anyone who may see either tab", () => {
+      expect(resolveV2SettingsRoute("general", pages)).toEqual({ page: "general", anchor: null, permTab: GENERAL_PERMS });
     });
 
-    it("each merged page's old tab opens General at its section, under that section's permission", () => {
+    it("?tab=requirements (the setup guide's link) opens General on Driver requirements, under its own permission", () => {
       expect(resolveV2SettingsRoute("requirements", pages)).toEqual({ page: "general", anchor: "driver-requirements", permTab: "requirements" });
-      expect(resolveV2SettingsRoute("duration", pages)).toEqual({ page: "general", anchor: "booking-rules", permTab: "duration" });
-      expect(resolveV2SettingsRoute("lockbox", pages)).toEqual({ page: "general", anchor: "key-handover", permTab: "lockbox" });
-      expect(resolveV2SettingsRoute("fees", pages)).toEqual({ page: "general", anchor: "tax-and-fees", permTab: "fees" });
-      expect(resolveV2SettingsRoute("preauth", pages)).toEqual({ page: "general", anchor: "security-deposit", permTab: "preauth" });
-      expect(resolveV2SettingsRoute("booking-site", pages)).toEqual({ page: "general", anchor: "booking-site", permTab: "general" });
+    });
+
+    it("Tax and deposit: its own tab needs either half; ?tab=fees opens it at the top, ?tab=preauth at the deposit", () => {
+      expect(resolveV2SettingsRoute("tax-and-deposit", pages)).toEqual({ page: "tax-and-deposit", anchor: null, permTab: TAX_AND_DEPOSIT_PERMS });
+      expect(resolveV2SettingsRoute("fees", pages)).toEqual({ page: "tax-and-deposit", anchor: null, permTab: "fees" });
+      expect(resolveV2SettingsRoute("preauth", pages)).toEqual({ page: "tax-and-deposit", anchor: "security-deposit", permTab: "preauth" });
+    });
+
+    it("Booking rules, Lockbox, Booking site and Optional modules open as pages of their own, on their old tabs", () => {
+      expect(resolveV2SettingsRoute("duration", pages)).toEqual({ page: "duration", anchor: null, permTab: "duration" });
+      expect(resolveV2SettingsRoute("lockbox", pages)).toEqual({ page: "lockbox", anchor: null, permTab: "lockbox" });
+      expect(resolveV2SettingsRoute("booking-site", pages)).toEqual({ page: "booking-site", anchor: null, permTab: "general" });
+      expect(resolveV2SettingsRoute("modules", pages)).toEqual({ page: "modules", anchor: null, permTab: "general" });
     });
 
     it("other pages open as themselves", () => {
@@ -171,10 +205,13 @@ describe("v2 General: six pages merged into one, and the five hidden pages back"
       expect(resolveV2SettingsRoute("auto-extend", pages)).toEqual({ page: "auto-extend", anchor: null, permTab: "auto-extend" });
     });
 
-    it("the blacklist, a page with no entry and unknown values open the index", () => {
+    it("the blacklist, a page with no entry, section anchors and unknown values open the index", () => {
       expect(resolveV2SettingsRoute("promos", { general: { permTab: "general" } })).toEqual(none);
+      expect(resolveV2SettingsRoute("lockbox", { general: { permTab: "general" } })).toEqual(none);
       expect(resolveV2SettingsRoute("blacklist", pages)).toEqual(none);
       expect(resolveV2SettingsRoute("optional-modules", pages)).toEqual(none);
+      expect(resolveV2SettingsRoute("key-handover", pages)).toEqual(none);
+      expect(resolveV2SettingsRoute("regional", pages)).toEqual(none);
       expect(resolveV2SettingsRoute("constructor", pages)).toEqual(none);
     });
   });
@@ -188,36 +225,41 @@ describe("v2 General: six pages merged into one, and the five hidden pages back"
     expect(canViewAny([], () => true)).toBe(false);
   });
 
-  it("v2NoticePages: General with its any-of permission, each section under its old tab, and every page (none is hidden)", () => {
+  it("v2NoticePages: each sectioned page with its any-of permission, each section under its old tab, and every page (none is hidden)", () => {
     expect(
       v2NoticePages({
         general: { title: "General", permTab: "general" },
         locations: { title: "Locations", permTab: "locations" },
+        lockbox: { title: "Lockbox", permTab: "lockbox" },
+        "tax-and-deposit": { title: "Tax and deposit", permTab: "fees" },
         promos: { title: "Promo codes", permTab: "promos" },
       }),
     ).toEqual({
-      general: { title: "General", permTab: ALL_GENERAL_PERMS },
+      general: { title: "General", permTab: GENERAL_PERMS },
       locations: { title: "Locations", permTab: "locations" },
+      lockbox: { title: "Lockbox", permTab: "lockbox" },
+      "tax-and-deposit": { title: "Tax and deposit", permTab: TAX_AND_DEPOSIT_PERMS },
       promos: { title: "Promo codes", permTab: "promos" },
       requirements: { title: "Driver requirements", permTab: "requirements" },
-      duration: { title: "Booking rules", permTab: "duration" },
-      lockbox: { title: "Key handover", permTab: "lockbox" },
       fees: { title: "Tax and fees", permTab: "fees" },
       preauth: { title: "Security deposit", permTab: "preauth" },
-      "booking-site": { title: "Booking site", permTab: "general" },
     });
   });
 
-  describe("notices for the merged pages, the pages that are back, and the blacklist", () => {
+  describe("notices for the pages that came out of General, the pages that are back, and the blacklist", () => {
     const base = {
       pages: v2NoticePages({
         general: { title: "General", permTab: "general" },
+        duration: { title: "Booking rules", permTab: "duration" },
+        lockbox: { title: "Lockbox", permTab: "lockbox" },
+        "tax-and-deposit": { title: "Tax and deposit", permTab: "fees" },
+        "booking-site": { title: "Booking site", permTab: "general" },
         pricing: { title: "Custom pricing", permTab: "pricing" },
         promos: { title: "Promo codes", permTab: "promos" },
         payg: { title: "Pay as you go", permTab: "payg" },
       }),
       redirects: { branding: "/settings/appearance" },
-      allTabs: ["general", "requirements", "lockbox", "fees", "promos", "payg", "blacklist", "pricing"],
+      allTabs: ["general", "requirements", "duration", "lockbox", "fees", "preauth", "promos", "payg", "blacklist", "pricing"],
       isHidden: () => false,
       boardCard: () => null,
       permissionsLoading: false,
@@ -225,18 +267,29 @@ describe("v2 General: six pages merged into one, and the five hidden pages back"
     // A manager holding only the settings.rental grant behind Tax and fees.
     const onlyFees = (t: string) => t === "fees";
 
-    it("General opens for someone who may see only one of its sections", () => {
-      expect(resolveSettingsTabNotice({ ...base, canView: onlyFees, tabParam: "general" })).toEqual({ kind: "none" });
+    it("Tax and deposit opens for someone who may see only its tax half, by either link", () => {
+      expect(resolveSettingsTabNotice({ ...base, canView: onlyFees, tabParam: "tax-and-deposit" })).toEqual({ kind: "none" });
       expect(resolveSettingsTabNotice({ ...base, canView: onlyFees, tabParam: "fees" })).toEqual({ kind: "none" });
     });
 
-    it("a section's old tab without that section's permission names the section", () => {
-      expect(resolveSettingsTabNotice({ ...base, canView: onlyFees, tabParam: "lockbox" })).toEqual({ kind: "no-access", label: "Key handover" });
-      expect(resolveSettingsTabNotice({ ...base, canView: onlyFees, tabParam: "booking-site" })).toEqual({ kind: "no-access", label: "Booking site" });
+    it("General opens for someone who may see only Driver requirements", () => {
+      const onlyRequirements = (t: string) => t === "requirements";
+      expect(resolveSettingsTabNotice({ ...base, canView: onlyRequirements, tabParam: "general" })).toEqual({ kind: "none" });
+      expect(resolveSettingsTabNotice({ ...base, canView: onlyRequirements, tabParam: "requirements" })).toEqual({ kind: "none" });
     });
 
-    it("no General section at all: General itself says no access", () => {
+    it("a link without that page's (or section's) permission names it", () => {
+      expect(resolveSettingsTabNotice({ ...base, canView: onlyFees, tabParam: "lockbox" })).toEqual({ kind: "no-access", label: "Lockbox" });
+      expect(resolveSettingsTabNotice({ ...base, canView: onlyFees, tabParam: "duration" })).toEqual({ kind: "no-access", label: "Booking rules" });
+      expect(resolveSettingsTabNotice({ ...base, canView: onlyFees, tabParam: "booking-site" })).toEqual({ kind: "no-access", label: "Booking site" });
+      expect(resolveSettingsTabNotice({ ...base, canView: onlyFees, tabParam: "preauth" })).toEqual({ kind: "no-access", label: "Security deposit" });
+      expect(resolveSettingsTabNotice({ ...base, canView: onlyFees, tabParam: "requirements" })).toEqual({ kind: "no-access", label: "Driver requirements" });
+      expect(resolveSettingsTabNotice({ ...base, canView: onlyFees, tabParam: "general" })).toEqual({ kind: "no-access", label: "General" });
+    });
+
+    it("no section of a sectioned page at all: the page itself says no access", () => {
       expect(resolveSettingsTabNotice({ ...base, canView: () => false, tabParam: "general" })).toEqual({ kind: "no-access", label: "General" });
+      expect(resolveSettingsTabNotice({ ...base, canView: () => false, tabParam: "tax-and-deposit" })).toEqual({ kind: "no-access", label: "Tax and deposit" });
     });
 
     it("a link to a page that is back opens it (no notice), or names it to someone without access", () => {

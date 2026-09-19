@@ -3,10 +3,11 @@
 /**
  * v2 Settings (northwind only): the Business-rules sections, with every state.
  *
- *   General › Driver requirements  -> RequirementsPageV2
- *   General › Booking rules        -> DurationPageV2
- *   General › Key handover         -> LockboxPageV2 (the code goes by email; its
- *                                     Templates button opens the lockbox message
+ *   General › Driver requirements  -> RequirementsPageV2 (a tab of General)
+ *   Booking rules                  -> DurationPageV2 (its own page, ?tab=duration)
+ *   Lockbox                        -> LockboxPageV2 (its own page, ?tab=lockbox;
+ *                                     was Key handover. The code goes by email;
+ *                                     its Templates link opens the lockbox message
  *                                     on Customer messages, LockboxTemplatesSectionV2)
  *   Customer messages              -> ReturnReminderPanelV2 (the return reminder panel)
  *
@@ -39,7 +40,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { Button } from "@/components/ui-v2/button";
+import { ArrowUpRight } from "lucide-react";
 import { Input } from "@/components/ui-v2/input";
 import { Switch } from "@/components/ui-v2/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui-v2/select";
@@ -125,6 +126,9 @@ const leaveSave = (invalid: string | null, run: () => Promise<boolean>, what: st
 const digitsOnly = (value: string) => value.replace(/[^0-9]/g, "");
 // Dark v2 --primary is a deep indigo (about 1.8:1 on the card), so links lighten in dark mode.
 const inlineLink = "font-medium text-primary underline-offset-4 hover:underline dark:text-[hsl(var(--v2-link,var(--primary)))]";
+/** Lockbox's Templates: a link to another page, in the brand colour, with an arrow after it. */
+const templatesLink =
+  "inline-flex items-center gap-1 rounded-full text-sm font-medium text-primary underline-offset-4 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/30 dark:text-[hsl(var(--v2-link,var(--primary)))]";
 const warnText = "text-amber-600 dark:text-amber-400";
 /** How the lockbox code is sent. Email only: no text message or WhatsApp option. */
 const LOCKBOX_METHODS = ["email"] as const;
@@ -271,7 +275,7 @@ export function RequirementsPageV2({
             <SelectTrigger id="v2_verification_document_type" className="w-48" title={docLabel}>
               <SelectValue placeholder="Choose a document" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent align="end">
               {docOptions.map((option) => (
                 <SelectItem key={option.value} value={option.value}>
                   {option.label}
@@ -420,7 +424,7 @@ export function DurationPageV2({ form, setForm, saved, canEdit, onSave, register
             <SelectTrigger className="w-24" aria-label="Advance notice unit">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent align="end">
               <SelectItem value="hours">hours</SelectItem>
               <SelectItem value="days">days</SelectItem>
             </SelectContent>
@@ -523,7 +527,7 @@ export function DurationPageV2({ form, setForm, saved, canEdit, onSave, register
 }
 
 /* -------------------------------------------------------------------------- */
-/* Key handover                                                               */
+/* Lockbox (was Key handover)                                                 */
 /* -------------------------------------------------------------------------- */
 
 export function LockboxPageV2({
@@ -564,7 +568,7 @@ export function LockboxPageV2({
       }),
     );
   const discard = () => setForm((prev) => ({ ...prev, ...savedFieldsFor("lockbox", saved) }));
-  useRegisterLeaveSave(canEdit ? registerSave : undefined, "business-lockbox", isDirty, leaveSave(codeError, submit, "your key handover settings"), discard);
+  useRegisterLeaveSave(canEdit ? registerSave : undefined, "business-lockbox", isDirty, leaveSave(codeError, submit, "your lockbox settings"), discard);
   useDiscardOnUnmount(isDirty, discard);
 
   // The switch is part of the form, not a live toggle like the waiver: say so
@@ -663,7 +667,7 @@ export function LockboxPageV2({
                 <SelectTrigger id="v2_lockbox_send_offset" className="w-56">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent align="end">
                   {offsetOptions.map((option) => (
                     <SelectItem key={option.value} value={option.value}>
                       {option.label}
@@ -674,10 +678,15 @@ export function LockboxPageV2({
             </SettingsRow>
 
             <SettingsRow label="Lockbox message" description="The email that carries the code, and the instructions in it.">
-              {/* A link, not a button: a view-only user's disabled fieldset never disables an <a>. */}
-              <Button asChild variant="outline" size="sm">
-                <Link href={templatesHref}>Templates</Link>
-              </Button>
+              {/* A link, not a button: the templates are managed in Customer
+                  messages, and the arrow says it opens another page. A
+                  view-only user's disabled fieldset never disables an <a>,
+                  and the page's leave guard asks first when there are
+                  unsaved edits. */}
+              <Link href={templatesHref} data-lockbox-templates="" className={templatesLink}>
+                Templates
+                <ArrowUpRight className="size-4 shrink-0" aria-hidden="true" />
+              </Link>
             </SettingsRow>
           </>
         )}

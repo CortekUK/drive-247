@@ -22,7 +22,7 @@ vi.mock('next-themes', () => ({
   useTheme: () => ({ resolvedTheme: 'light' }),
 }));
 
-import { useDynamicTheme } from '@/hooks/use-dynamic-theme';
+import { applyV2Favicon, useDynamicTheme, versionedIconHref } from '@/hooks/use-dynamic-theme';
 
 const TEAL = '#0F766E'; // 175 77% 26%, near-black text on the dark-mode primary
 const PALE = '#FDE68A'; // 48 97% 77%, link lightness 28%
@@ -142,5 +142,168 @@ describe('useDynamicTheme — v1 is unchanged', () => {
     // No custom background: the gold-and-forest defaults are written explicitly.
     expect(htmlVar('--background')).toBe('42 30% 96%');
     expect(document.body.getAttribute('style')).toBeNull();
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* The browser tab icon follows a saved (or tried-on) square icon, no reload   */
+/* -------------------------------------------------------------------------- */
+
+/** The <link>s app/layout.tsx renders, in its order. */
+function serverIcons(kind: 'tenant' | 'platform') {
+  const add = (attrs: Record<string, string>) => {
+    const link = document.createElement('link');
+    for (const [name, value] of Object.entries(attrs)) link.setAttribute(name, value);
+    document.head.appendChild(link);
+    return link;
+  };
+  const apple = () => add({ rel: 'apple-touch-icon', href: '/icons/apple-touch-icon.png' });
+  if (kind === 'tenant') {
+    return {
+      icon: add({ rel: 'icon', href: 'https://cdn.test/old.png' }),
+      shortcut: add({ rel: 'shortcut icon', href: 'https://cdn.test/old.png' }),
+      apple: apple(),
+    };
+  }
+  return {
+    light: add({ rel: 'icon', href: '/icons/favicon-light.png', media: '(prefers-color-scheme: light)', type: 'image/png' }),
+    dark: add({ rel: 'icon', href: '/icons/favicon-dark.png', media: '(prefers-color-scheme: dark)', type: 'image/png' }),
+    ico: add({ rel: 'icon', href: '/icons/favicon.ico', sizes: 'any' }),
+    apple: apple(),
+  };
+}
+
+describe('versionedIconHref', () => {
+  it('tags a web URL with a hash of itself (djb2 with xor, base 36), worked by hand for "/a"', () => {
+    // h = 5381. "/" (47): 5381 × 33 = 177573 = 0x2B5A5, xor 0x2F = 0x2B58A = 177546.
+    // "a" (97): 177546 × 33 = 5859018 = 0x5966CA, xor 0x61 = 0x5966AB = 5858987.
+    // 5858987 in base 36 = 3·36⁴ + 17·36³ + 20·36² + 29·36 + 23 -> "3hktn".
+    expect(versionedIconHref('/a')).toBe('/a?v=3hktn');
+  });
+
+  it('is stable for one URL, new for another, joins an existing query, keeps a fragment, and leaves data: alone', () => {
+    const a = versionedIconHref('https://cdn.test/t1/favicon-1.png');
+    expect(versionedIconHref('https://cdn.test/t1/favicon-1.png')).toBe(a);
+    expect(versionedIconHref('https://cdn.test/t1/favicon-2.png')).not.toBe(a);
+    expect(a).toMatch(/^https:\/\/cdn\.test\/t1\/favicon-1\.png\?v=[0-9a-z]+$/);
+    expect(versionedIconHref('https://cdn.test/f.png?token=x')).toMatch(/^https:\/\/cdn\.test\/f\.png\?token=x&v=[0-9a-z]+$/);
+    expect(versionedIconHref('https://cdn.test/f.svg#mark')).toMatch(/^https:\/\/cdn\.test\/f\.svg\?v=[0-9a-z]+#mark$/);
+    expect(versionedIconHref('data:image/png;base64,AAAA')).toBe('data:image/png;base64,AAAA');
+  });
+});
+
+describe('applyV2Favicon', () => {
+  afterEach(() => {
+    document.head.querySelectorAll('link').forEach((link) => link.remove());
+  });
+
+  it("points EVERY icon link at the tenant's icon (the old code moved only the first), and never the apple-touch-icon", () => {
+    const links = serverIcons('tenant');
+    applyV2Favicon(document.head, 'https://cdn.test/new.png');
+    const href = versionedIconHref('https://cdn.test/new.png');
+    expect(links.icon.getAttribute('href')).toBe(href);
+    expect(links.shortcut.getAttribute('href')).toBe(href);
+    expect(links.apple.getAttribute('href')).toBe('/icons/apple-touch-icon.png');
+  });
+
+  it('repoints the light, dark and .ico platform icons, dropping the type and sizes that described them', () => {
+    const links = serverIcons('platform');
+    applyV2Favicon(document.head, 'https://cdn.test/new.png');
+    for (const link of [links.light, links.dark, links.ico]) {
+      expect(link.getAttribute('href')).toBe(versionedIconHref('https://cdn.test/new.png'));
+      expect(link.hasAttribute('type')).toBe(false);
+      expect(link.hasAttribute('sizes')).toBe(false);
+    }
+    expect(links.dark.getAttribute('media')).toBe('(prefers-color-scheme: dark)');
+  });
+
+  it('puts back exactly what the page loaded with when the square icon is removed', () => {
+    const links = serverIcons('platform');
+    applyV2Favicon(document.head, 'https://cdn.test/one.png');
+    applyV2Favicon(document.head, 'https://cdn.test/two.png'); // a second change keeps the first originals
+    applyV2Favicon(document.head, null);
+    expect(links.light.getAttribute('href')).toBe('/icons/favicon-light.png');
+    expect(links.light.getAttribute('type')).toBe('image/png');
+    expect(links.dark.getAttribute('href')).toBe('/icons/favicon-dark.png');
+    expect(links.ico.getAttribute('href')).toBe('/icons/favicon.ico');
+    expect(links.ico.getAttribute('sizes')).toBe('any');
+    expect(links.ico.hasAttribute('type')).toBe(false);
+    expect(document.head.querySelectorAll('link[data-v2-icon-original]')).toHaveLength(0);
+  });
+
+  it("shows the platform icon, not the removed one, when the page loaded with the tenant's own icon", () => {
+    // The server rendered icon + shortcut icon for https://cdn.test/old.png. The
+    // tenant removes the square icon and saves: putting old.png back would keep
+    // the removed icon in the tab until a reload.
+    const links = serverIcons('tenant');
+    applyV2Favicon(document.head, 'https://cdn.test/old.png'); // the real row lands
+    applyV2Favicon(document.head, null); // removed and saved
+    for (const link of [links.icon, links.shortcut]) {
+      expect(link.getAttribute('href')).toBe('/icons/favicon-light.png');
+      expect(link.getAttribute('type')).toBe('image/png');
+      expect(link.hasAttribute('sizes')).toBe(false);
+      expect(link.hasAttribute('data-v2-icon-original')).toBe(false);
+    }
+    expect(links.apple.getAttribute('href')).toBe('/icons/apple-touch-icon.png');
+    // A new icon after that is tagged as usual, and removing it again gives the platform icon back.
+    applyV2Favicon(document.head, 'https://cdn.test/new.png');
+    expect(links.icon.getAttribute('href')).toBe(versionedIconHref('https://cdn.test/new.png'));
+    applyV2Favicon(document.head, null);
+    expect(links.icon.getAttribute('href')).toBe('/icons/favicon-light.png');
+    expect(links.icon.getAttribute('type')).toBe('image/png');
+  });
+
+  it('an unreadable saved original falls back to the platform icon too', () => {
+    const links = serverIcons('tenant');
+    applyV2Favicon(document.head, 'https://cdn.test/new.png');
+    links.icon.setAttribute('data-v2-icon-original', '{not json');
+    applyV2Favicon(document.head, null);
+    expect(links.icon.getAttribute('href')).toBe('/icons/favicon-light.png');
+    expect(links.shortcut.getAttribute('href')).toBe('/icons/favicon-light.png');
+  });
+
+  it('adds one icon link when the page has none, and takes it away again', () => {
+    applyV2Favicon(document.head, 'https://cdn.test/new.png');
+    const added = document.head.querySelectorAll("link[rel~='icon']");
+    expect(added).toHaveLength(1);
+    expect(added[0].getAttribute('href')).toBe(versionedIconHref('https://cdn.test/new.png'));
+    applyV2Favicon(document.head, null);
+    expect(document.head.querySelectorAll("link[rel~='icon']")).toHaveLength(0);
+  });
+
+  it('does not touch the links when there is no icon and nothing was changed', () => {
+    const links = serverIcons('tenant');
+    applyV2Favicon(document.head, null);
+    expect(links.icon.getAttribute('href')).toBe('https://cdn.test/old.png');
+    expect(links.shortcut.getAttribute('href')).toBe('https://cdn.test/old.png');
+  });
+});
+
+describe('useDynamicTheme — the tab icon after a save', () => {
+  afterEach(() => {
+    document.head.querySelectorAll('link').forEach((link) => link.remove());
+  });
+
+  it('v2: a new favicon_url in the branding cache reaches every icon link, no reload', async () => {
+    const links = serverIcons('tenant');
+    mockBranding.mockReturnValue({ branding: branding({ favicon_url: 'https://cdn.test/old.png' }), hasBrandingData: true });
+    const { rerender } = renderHook(() => useDynamicTheme({ v2Theme: true }));
+    await waitFor(() => expect(links.shortcut.getAttribute('href')).toBe(versionedIconHref('https://cdn.test/old.png')));
+
+    // Save (or the Branding try-on) writes the new row into the cache.
+    mockBranding.mockReturnValue({ branding: branding({ favicon_url: 'https://cdn.test/new.png' }), hasBrandingData: true });
+    rerender();
+    await waitFor(() => expect(links.icon.getAttribute('href')).toBe(versionedIconHref('https://cdn.test/new.png')));
+    expect(links.shortcut.getAttribute('href')).toBe(versionedIconHref('https://cdn.test/new.png'));
+  });
+
+  it('v1 is unchanged: only the first icon link moves, untagged', async () => {
+    const links = serverIcons('platform');
+    mockBranding.mockReturnValue({ branding: branding({ primary_color: TEAL, favicon_url: 'https://cdn.test/new.png' }), hasBrandingData: true });
+    renderHook(() => useDynamicTheme());
+    await waitFor(() => expect(links.light.getAttribute('href')).toBe('https://cdn.test/new.png'));
+    expect(links.light.getAttribute('type')).toBe('image/png');
+    expect(links.dark.getAttribute('href')).toBe('/icons/favicon-dark.png');
+    expect(links.ico.getAttribute('href')).toBe('/icons/favicon.ico');
   });
 });

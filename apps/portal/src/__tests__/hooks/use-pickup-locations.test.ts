@@ -211,3 +211,27 @@ describe('usePickupLocations Hook', () => {
     });
   });
 });
+
+describe('v2 location toasts', () => {
+  it('name the location instead of calling every one a "Pickup location" (return locations included)', async () => {
+    const { locationToastV2 } = await import('@/hooks/use-pickup-locations');
+    expect(locationToastV2('added', { name: 'Harbour' })).toEqual({ title: 'Location added', description: 'Harbour was added.' });
+    expect(locationToastV2('updated', { name: ' Harbour ' })).toEqual({ title: 'Location updated', description: 'Harbour was saved.' });
+    expect(locationToastV2('deleted', { name: 'Harbour' })).toEqual({ title: 'Location deleted', description: 'Harbour was removed.' });
+    // No name to hand (a delete whose row already left the list): still no side named.
+    expect(locationToastV2('deleted', undefined)).toEqual({ title: 'Location deleted', description: 'The location was removed.' });
+    for (const kind of ['added', 'updated', 'deleted'] as const) {
+      expect(JSON.stringify(locationToastV2(kind, { name: 'Harbour' }))).not.toMatch(/pickup/i);
+    }
+  });
+
+  it('v1 keeps its toasts word for word, behind the v2 branch', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
+    const src = readFileSync(resolve(__dirname, '../../hooks/use-pickup-locations.ts'), 'utf8');
+    expect(src).toContain('description: "Pickup location has been updated successfully.",');
+    expect(src).toContain('description: "New pickup location has been added successfully.",');
+    expect(src).toContain('description: "Pickup location has been removed.",');
+  });
+});
+

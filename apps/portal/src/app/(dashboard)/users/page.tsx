@@ -65,9 +65,9 @@ export default function UsersManagement() {
   const queryClient = useQueryClient();
   const { logAction } = useAuditLog();
 
-  // v2 chrome (canary tenants only; fails closed to v1). On v2 the Team Members
-  // list is the rentals list's table with no card around it. Up here, above the
-  // access-denied early return, so the hook runs on every render.
+  // v2 chrome (canary tenants only; fails closed to v1). On v2 this is the Team
+  // page: the Vehicles header, no search, and a plain list with no card. Up
+  // here, above the access-denied early return, so the hook runs on every render.
   const v2Chrome = useV2('chrome');
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -86,8 +86,10 @@ export default function UsersManagement() {
   const [editPermissions, setEditPermissions] = useState<PermissionEntry[]>([]);
   const [editPermissionsUser, setEditPermissionsUser] = useState<AppUser | null>(null);
 
-  // Fetch users for this tenant
-  const { data: users, isLoading, refetch } = useQuery({
+  // Fetch users for this tenant. Held whole as well as destructured: the v2
+  // list reads `isError` / `error` / `isFetching` off it inside its own branch,
+  // so v1 never reads (and never subscribes to) those fields.
+  const usersQuery = useQuery({
     queryKey: ['users', tenant?.id],
     queryFn: async () => {
       let query = supabase
@@ -110,6 +112,7 @@ export default function UsersManagement() {
     enabled: !!tenant,
     staleTime: 0, // Always consider data stale so it refetches on invalidation
   });
+  const { data: users, isLoading, refetch } = usersQuery;
 
   // Generate random password
   const generatePassword = () => {
@@ -391,6 +394,18 @@ export default function UsersManagement() {
 
   // Only head_admin can access this page
   if (!appUser || appUser.role !== 'head_admin') {
+    // v2: the same refusal as plain text under the page title, with no alert
+    // box and no icon. Every hook above has already run, as on v1.
+    if (v2Chrome) {
+      return (
+        <div className="container mx-auto p-4 sm:p-6 space-y-1">
+          <h1 className="text-2xl sm:text-3xl font-bold">Team</h1>
+          <p className="text-muted-foreground text-sm sm:text-base">
+            Only head admins can add people or change their access. Ask your head admin if something needs changing.
+          </p>
+        </div>
+      );
+    }
     return (
       <div className="p-6">
         <Alert>
@@ -405,6 +420,29 @@ export default function UsersManagement() {
 
   return (
     <div className="container mx-auto p-4 sm:p-6 space-y-6">
+      {v2Chrome ? (
+        // v2: the Vehicles header (team lead, Settings walkthrough Sep 2026):
+        // the title with no icon, one line under it, and the one labelled
+        // action as the 32px pill centred on that line (HEADER_ACTIONS_V2 /
+        // HEADER_PRIMARY_V2). "Team" is what the Settings index calls it.
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
+          <div className="min-w-0">
+            <h1 className="text-2xl sm:text-3xl font-bold">Team</h1>
+            <p className="text-muted-foreground text-sm sm:text-base">
+              Add people to your portal and choose what each person can see and change.
+            </p>
+          </div>
+          <div className={`flex items-center gap-2 ${HEADER_ACTIONS_V2}`}>
+            <Button
+              onClick={() => setShowAddDialog(true)}
+              className={`bg-gradient-primary text-primary-foreground flex-1 sm:flex-none ${HEADER_PRIMARY_V2}`}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add User
+            </Button>
+          </div>
+        </div>
+      ) : (
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex items-start sm:items-center gap-2 sm:gap-4 min-w-0">
           <div className="min-w-0">
@@ -415,19 +453,6 @@ export default function UsersManagement() {
             <p className="text-muted-foreground text-sm sm:text-base">Create and manage user accounts for your team</p>
           </div>
         </div>
-        {v2Chrome ? (
-          // v2: the 32px Add User pill, centred on the subtitle line (team lead
-          // Sep 16 2026; the subtitle is text-base from sm, HEADER_ACTIONS_V2's box).
-          <div className={`flex items-center gap-2 ${HEADER_ACTIONS_V2}`}>
-            <Button
-              onClick={() => setShowAddDialog(true)}
-              className={`bg-gradient-primary text-primary-foreground w-full sm:w-auto ${HEADER_PRIMARY_V2}`}
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Add User
-            </Button>
-          </div>
-        ) : (
         <Button
           onClick={() => setShowAddDialog(true)}
           className="bg-gradient-primary text-primary-foreground w-full sm:w-auto"
@@ -435,10 +460,11 @@ export default function UsersManagement() {
           <Plus className="mr-2 h-4 w-4" />
           Add User
         </Button>
-        )}
       </div>
+      )}
 
-      {/* Search Bar */}
+      {/* Search Bar. v2 has none: a team is a handful of people. */}
+      {!v2Chrome && (
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
@@ -448,52 +474,40 @@ export default function UsersManagement() {
           className="pl-9 h-9"
         />
       </div>
+      )}
 
       {v2Chrome ? (
-        // v2: no card inside a card. The Team Members header sits above and the
-        // kit's ListTable is the card. The loading and empty messages are v1's,
-        // centred, with no table around them. Each menu handler below is v1's
-        // own inline body, so the dialogs and mutations run exactly as in v1.
-        <div className="space-y-3">
-          <div>
-            <h2 className="font-heading text-base font-medium">Team Members</h2>
-            <p className="text-sm text-muted-foreground">
-              All users with access to this portal. Head admins can create admins, operations staff, and viewers.
-            </p>
-          </div>
-          {isLoading ? (
-            <div className="text-center py-8">Loading users...</div>
-          ) : filteredUsers.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              {searchQuery ? "No users match your search." : 'No users found. Click "Add User" to create one.'}
-            </div>
-          ) : (
-            <UsersTableV2
-              users={filteredUsers}
-              resetKey={`${tenant?.id ?? ''}|${searchQuery}`}
-              currentUserId={appUser?.id}
-              roleLabel={getRoleDisplay}
-              onResetPassword={(user) => {
-                setSelectedUser(user);
-                setResetPassword(generatePassword());
-                setShowResetDialog(true);
-              }}
-              onChangeRole={(user) => {
-                setSelectedUser(user);
-                setSelectedRole(user.role);
-                setRolePermissions([]);
-                setShowRoleDialog(true);
-              }}
-              onEditPermissions={(user) => handleOpenEditPermissions(user)}
-              onToggleActive={(user) =>
-                toggleActiveMutation.mutate({
-                  userId: user.id,
-                  isActive: !user.is_active
-                })
-              }
-            />
-          )}
-        </div>
+        // v2: a plain list straight on the page, with no card, no section
+        // header and no search. The list draws its own loading, empty and error
+        // states. Each menu handler below is v1's own inline body, so the
+        // dialogs and mutations run exactly as in v1.
+        <UsersTableV2
+          users={users}
+          loading={usersQuery.isPending}
+          error={usersQuery.isError ? usersQuery.error : undefined}
+          onRetry={() => refetch()}
+          retrying={usersQuery.isFetching}
+          currentUserId={appUser?.id}
+          roleLabel={getRoleDisplay}
+          onResetPassword={(user) => {
+            setSelectedUser(user);
+            setResetPassword(generatePassword());
+            setShowResetDialog(true);
+          }}
+          onChangeRole={(user) => {
+            setSelectedUser(user);
+            setSelectedRole(user.role);
+            setRolePermissions([]);
+            setShowRoleDialog(true);
+          }}
+          onEditPermissions={(user) => handleOpenEditPermissions(user)}
+          onToggleActive={(user) =>
+            toggleActiveMutation.mutate({
+              userId: user.id,
+              isActive: !user.is_active
+            })
+          }
+        />
       ) : (
       <Card>
         <CardHeader>
@@ -639,6 +653,7 @@ export default function UsersManagement() {
         onOpenChange={setShowAddDialog}
         onSubmit={handleAddUser}
         isLoading={createUserMutation.isPending}
+        v2={v2Chrome}
       />
 
       {/* Credentials Modal */}
@@ -646,6 +661,7 @@ export default function UsersManagement() {
         open={showCredentialsModal}
         onOpenChange={setShowCredentialsModal}
         credentials={newUserCredentials}
+        v2={v2Chrome}
       />
 
       {/* Reset Password Dialog */}

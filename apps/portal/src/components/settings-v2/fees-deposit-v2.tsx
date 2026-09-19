@@ -1,10 +1,13 @@
 "use client";
 
 /**
- * v2 Settings (northwind): the Tax and fees and Security deposit pages, with
- * every state an operator can meet: first load, a failed read, a missing Stripe
+ * v2 Settings (northwind): Tax and fees and Security deposit, the two sections
+ * of the Tax and deposit page (`?tab=tax-and-deposit`; each keeps its own
+ * permission, and `?tab=fees` / `?tab=preauth` still open it), with every
+ * state an operator can meet: first load, a failed read, a missing Stripe
  * connection, unsaved / saving / failed saves, view-only access, and extreme
- * values.
+ * values. On that page every row's control sits at the end of the row and
+ * each dropdown opens under its own box's right edge.
  *
  * The form still lives in `settings/page.tsx` (`rentalForm`, synced from
  * `useRentalSettings`), because other pages share it. These components take it
@@ -187,7 +190,7 @@ export function FeesSettingsV2({ form, setForm, saved, read, canEdit, currencyCo
                     <SelectTrigger className="w-36" aria-label="Service fee type">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent align="end">
                       <SelectItem value="percentage">Percentage</SelectItem>
                       <SelectItem value="fixed_amount">Fixed amount</SelectItem>
                     </SelectContent>

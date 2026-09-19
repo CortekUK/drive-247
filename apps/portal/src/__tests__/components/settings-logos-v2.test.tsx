@@ -1,8 +1,10 @@
 /**
  * Settings › Branding › Logos (`components/settings/appearance/logos-v2.tsx`,
- * v2 only): each card checks a file before anything is uploaded and says why
- * inline, fits a non-square small logo into a square on request, and hands the
- * form the uploaded URL.
+ * v2 only): the Square icon and Full logo cards. Each checks a file before
+ * anything is uploaded and says why inline (type, size, a pixel RANGE with both
+ * ends, shape), fits a non-square icon into a square on request, and hands the
+ * form the uploaded URL. No "small", "large" or "favicon" on screen, and no
+ * "Remove the box".
  *
  * HARNESS: Testing Library. The checks and the help text are the real ones from
  * lib/appearance/logo.ts; only the browser-bound steps (decoding the image,
@@ -13,20 +15,29 @@ import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/integrations/supabase/client", () => ({ supabase: {} }));
+// The sidebar preview draws the real OrgMark, which reads the saved branding;
+// the preview hands it the form's image and name, so the saved ones never show.
+vi.mock("@/hooks/use-tenant-branding", () => ({
+  useTenantBranding: () => ({ branding: { favicon_url: "https://cdn.test/saved.png" }, brandName: "Saved Name" }),
+}));
+vi.mock("next-themes", () => ({ useTheme: () => ({ resolvedTheme: "light" }) }));
 vi.mock("@/lib/appearance/logo", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/appearance/logo")>()),
   loadLogoFile: vi.fn(),
   renderSmallLogo: vi.fn(),
   prepareLargeLogo: vi.fn(),
   uploadLogoBlob: vi.fn(),
-  analyzeLogo: vi.fn(() => Promise.resolve(null)),
+  // A logo with a solid box behind it: the v2 cards must no longer look, or offer to remove it.
+  analyzeLogo: vi.fn(() => Promise.resolve({ hasSolidBackdrop: true })),
   removeLogoBackdrop: vi.fn(),
 }));
 
 import { LogosV2 } from "@/components/settings/appearance/logos-v2";
 import {
+  analyzeLogo,
   loadLogoFile,
   prepareLargeLogo,
+  removeLogoBackdrop,
   renderSmallLogo,
   uploadLogoBlob,
   type LoadedLogo,
@@ -41,6 +52,8 @@ function renderLogos(props: Partial<Parameters<typeof LogosV2>[0]> = {}) {
     <LogosV2
       tenantId="t1"
       portalName="Northwind Rentals"
+      tabTitle="Northwind Rentals - Portal"
+      brandColor="#0F766E"
       faviconUrl={null}
       logoUrl={null}
       onFaviconChange={onFaviconChange}
@@ -81,27 +94,55 @@ beforeEach(() => {
 });
 
 describe("Logos (v2): copy", () => {
-  it("introduces the two versions and says what each card is for", () => {
+  it("introduces the two versions and names each card for what it is", () => {
     renderLogos();
     expect(screen.getByRole("heading", { level: 2, name: "Logos" })).toBeInTheDocument();
     expect(
-      screen.getByText("You need two versions of your logo: a small square icon, and your full logo with its name."),
+      screen.getByText("You need two versions of your logo: a square icon, and your full logo with its name."),
     ).toBeInTheDocument();
-    expect(within(card("small")).getByText("Used for your browser tab and the badge at the top of your sidebar.")).toBeInTheDocument();
-    expect(within(card("large")).getByText("Shown on your sign-in page and your booking website.")).toBeInTheDocument();
+    expect(within(card("small")).getByRole("heading", { level: 3 })).toHaveTextContent("Square icon");
+    expect(within(card("large")).getByRole("heading", { level: 3 })).toHaveTextContent("Full logo");
+    expect(within(card("small")).getByText("Shows in the browser tab and at the top of your sidebar.")).toBeInTheDocument();
+    expect(within(card("large")).getByText("Shows on your sign-in page and your booking website.")).toBeInTheDocument();
   });
 
-  it("builds the help text from the limits: types, 10 MB, and the minimum size", () => {
+  it('never says "small logo", "large logo" or "favicon" on screen, or in a button name', () => {
+    renderLogos({ faviconUrl: "https://cdn.test/fav.png", logoUrl: "https://cdn.test/logo.png" });
+    const visible = document.body.textContent!.toLowerCase();
+    const names = screen.getAllByRole("button").map((b) => (b.getAttribute("aria-label") ?? b.textContent ?? "").toLowerCase());
+    const alts = Array.from(document.querySelectorAll("img")).map((img) => img.alt.toLowerCase());
+    for (const text of [visible, ...names, ...alts]) {
+      expect(text).not.toMatch(/small logo|large logo|favicon/);
+    }
+    expect(screen.getByRole("button", { name: "Replace square icon" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remove full logo" })).toBeInTheDocument();
+  });
+
+  it("opens with one highlighted line saying what works best, built from the limits", () => {
+    renderLogos();
+    const best = document.querySelector("[data-logo-best]")!;
+    // SMALL_LOGO_RECOMMENDED_PX = 512, LARGE_LOGO_RECOMMENDED_WIDTH = 1200.
+    expect(best.textContent).toBe(
+      "Best results: a PNG with a transparent background. Square icon at least 512 × 512 px; full logo at least 1200 px wide.",
+    );
+    // Brand-tinted, in the v2 rounding, and above both cards.
+    expect(best.className).toContain("rounded-xl");
+    expect(best.className).toContain("bg-primary/10");
+    expect(best.className).toContain("dark:text-[hsl(var(--v2-link,var(--primary)))]");
+    expect(best.compareDocumentPosition(card("small")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("builds the help text from the limits: types, 10 MB, and the pixel range", () => {
     renderLogos();
     expect(card("small").querySelector("[data-logo-help]")!.textContent).toBe(
-      "PNG, WebP, JPG, SVG or ICO · up to 10 MB · square, at least 128 × 128 px (512 × 512 px is best)",
+      "PNG, WebP, JPG, SVG or ICO · up to 10 MB · square, 128 to 4096 px a side",
     );
     expect(card("large").querySelector("[data-logo-help]")!.textContent).toBe(
-      "PNG, WebP, JPG or SVG · up to 10 MB · at least 400 × 100 px",
+      "PNG, WebP, JPG or SVG · up to 10 MB · 400 to 6000 px wide, 100 to 3000 px tall",
     );
   });
 
-  it("the file pickers accept ICO for the small logo only", () => {
+  it("the file pickers accept ICO for the square icon only", () => {
     renderLogos();
     const accept = (slot: "small" | "large") => card(slot).querySelector('input[type="file"]')!.getAttribute("accept")!;
     expect(accept("small").split(",")).toEqual(expect.arrayContaining([".png", ".webp", ".jpg", ".svg", ".ico"]));
@@ -136,33 +177,65 @@ describe("Logos (v2): refusing a file before upload", () => {
     expect(uploadLogoBlob).not.toHaveBeenCalled();
   });
 
-  it("rejects a small logo under 128 px a side", async () => {
+  it("rejects a square icon under 128 px a side", async () => {
     const image = loaded(127, 200);
     vi.mocked(loadLogoFile).mockResolvedValue(image);
     renderLogos();
     await pick("small", makeFile("icon.png", "image/png"));
     expect(within(card("small")).getByRole("alert")).toHaveTextContent(
-      "This image is 127 × 200 px. The small logo needs to be at least 128 × 128 px, and 512 × 512 px looks sharpest.",
+      "This image is 127 × 200 px. The square icon needs to be at least 128 × 128 px, and 512 × 512 px looks sharpest.",
     );
     expect(image.release).toHaveBeenCalled();
     expect(uploadLogoBlob).not.toHaveBeenCalled();
   });
 
-  it("rejects a large logo under 400 × 100 px", async () => {
+  it("rejects a square icon over 4096 px a side, even a square one", async () => {
+    const image = loaded(4097, 4097); // square, one pixel past the top of the range
+    vi.mocked(loadLogoFile).mockResolvedValue(image);
+    renderLogos();
+    await pick("small", makeFile("icon.png", "image/png"));
+    expect(within(card("small")).getByRole("alert")).toHaveTextContent(
+      "This image is 4097 × 4097 px. The square icon can be at most 4096 × 4096 px. Save a smaller copy (512 × 512 px is best) and try again.",
+    );
+    expect(within(card("small")).queryByRole("button", { name: "Fit into a square" })).toBeNull();
+    expect(image.release).toHaveBeenCalled();
+    expect(renderSmallLogo).not.toHaveBeenCalled();
+    expect(uploadLogoBlob).not.toHaveBeenCalled();
+  });
+
+  it("rejects a full logo under 400 × 100 px", async () => {
     vi.mocked(loadLogoFile).mockResolvedValue(loaded(399, 120));
     renderLogos();
     await pick("large", makeFile("logo.png", "image/png"));
     expect(within(card("large")).getByRole("alert")).toHaveTextContent(
-      "This image is 399 × 120 px. The large logo needs to be at least 400 px wide and 100 px tall.",
+      "This image is 399 × 120 px. The full logo needs to be at least 400 px wide and 100 px tall.",
     );
     expect(uploadLogoBlob).not.toHaveBeenCalled();
   });
 
-  it("rejects a large logo taller than it is wide, or more than 8:1", async () => {
+  it("rejects a full logo over 6000 px wide or 3000 px tall", async () => {
+    // 6001 × 1000 is 6 : 1, inside the shape range: only the width is out.
+    vi.mocked(loadLogoFile).mockResolvedValueOnce(loaded(6001, 1000));
+    renderLogos();
+    await pick("large", makeFile("logo.png", "image/png"));
+    expect(within(card("large")).getByRole("alert")).toHaveTextContent(
+      "This image is 6001 × 1000 px. The full logo can be at most 6000 px wide and 3000 px tall. Save a smaller copy (1200 px wide is plenty) and try again.",
+    );
+    // 3200 × 3001 is 1.07 : 1: only the height is out.
+    vi.mocked(loadLogoFile).mockResolvedValueOnce(loaded(3200, 3001));
+    await pick("large", makeFile("logo.png", "image/png"));
+    expect(within(card("large")).getByRole("alert")).toHaveTextContent("This image is 3200 × 3001 px. The full logo can be at most 6000 px wide and 3000 px tall.");
+    expect(prepareLargeLogo).not.toHaveBeenCalled();
+    expect(uploadLogoBlob).not.toHaveBeenCalled();
+  });
+
+  it("rejects a full logo taller than it is wide, or more than 8:1", async () => {
     vi.mocked(loadLogoFile).mockResolvedValueOnce(loaded(500, 600)); // 0.83 : 1
     renderLogos();
     await pick("large", makeFile("logo.png", "image/png"));
-    expect(within(card("large")).getByRole("alert")).toHaveTextContent("This image is taller than it is wide (500 × 600 px).");
+    expect(within(card("large")).getByRole("alert")).toHaveTextContent(
+      "This image is taller than it is wide (500 × 600 px). Use your full logo with its name here, and put a square version under Square icon.",
+    );
 
     vi.mocked(loadLogoFile).mockResolvedValueOnce(loaded(3300, 400)); // 8.25 : 1
     await pick("large", makeFile("logo.png", "image/png"));
@@ -174,7 +247,7 @@ describe("Logos (v2): refusing a file before upload", () => {
 });
 
 describe("Logos (v2): accepting a file", () => {
-  it("offers to fit a non-square small logo into a square, and uploads only when asked", async () => {
+  it("offers to fit a non-square icon into a square, and uploads only when asked", async () => {
     const image = loaded(300, 200); // 1.5 : 1, outside 0.9 to 1.1
     vi.mocked(loadLogoFile).mockResolvedValue(image);
     renderLogos();
@@ -194,7 +267,7 @@ describe("Logos (v2): accepting a file", () => {
     expect(within(card("small")).queryByRole("alert")).toBeNull();
   });
 
-  it("takes a roughly square small logo straight away (200 × 220 is 0.91 : 1)", async () => {
+  it("takes a roughly square icon straight away (200 × 220 is 0.91 : 1)", async () => {
     vi.mocked(loadLogoFile).mockResolvedValue(loaded(200, 220));
     renderLogos();
     await pick("small", makeFile("icon.png", "image/png"));
@@ -204,7 +277,7 @@ describe("Logos (v2): accepting a file", () => {
     expect(onLogoChange).not.toHaveBeenCalled();
   });
 
-  it("takes a tiny SVG for the small logo: it is drawn at 512 px, so it has no pixel minimum", async () => {
+  it("takes a tiny SVG for the square icon: it is drawn at 512 px, so it has no pixel minimum", async () => {
     vi.mocked(loadLogoFile).mockResolvedValue(loaded(24, 24, true));
     renderLogos();
     await pick("small", makeFile("icon.svg", "image/svg+xml"));
@@ -212,7 +285,7 @@ describe("Logos (v2): accepting a file", () => {
     expect(renderSmallLogo).toHaveBeenCalled();
   });
 
-  it("prepares and uploads a valid large logo, and reports busy while it works", async () => {
+  it("prepares and uploads a valid full logo, and reports busy while it works", async () => {
     const image = loaded(1600, 400);
     vi.mocked(loadLogoFile).mockResolvedValue(image);
     renderLogos();
@@ -238,7 +311,7 @@ describe("Logos (v2): accepting a file", () => {
 
   it("Remove clears only the form's URL", () => {
     renderLogos({ faviconUrl: "https://cdn.test/fav.png", logoUrl: "https://cdn.test/logo.png" });
-    fireEvent.click(screen.getByRole("button", { name: "Remove small logo" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove square icon" }));
     expect(onFaviconChange).toHaveBeenCalledWith(null);
     expect(onLogoChange).not.toHaveBeenCalled();
     expect(uploadLogoBlob).not.toHaveBeenCalled();
@@ -246,29 +319,70 @@ describe("Logos (v2): accepting a file", () => {
 });
 
 describe("Logos (v2): previews", () => {
-  it("shows the small logo as the sidebar badge and the tab icon, and the large one on light and dark", () => {
+  it("shows the square icon in a browser tab and as the sidebar badge, and the full logo on the sign-in page", () => {
     renderLogos({ faviconUrl: "https://cdn.test/fav.png", logoUrl: "https://cdn.test/logo.png" });
-    expect(screen.getByAltText("Small logo in the sidebar")).toHaveAttribute("src", "https://cdn.test/fav.png");
-    expect(screen.getByAltText("Small logo in the sidebar").className).toContain("h-8 w-8");
-    expect(screen.getByAltText("Small logo in a browser tab").className).toContain("size-4");
-    expect(screen.getByAltText("Large logo on a light background")).toHaveAttribute("src", "https://cdn.test/logo.png");
-    expect(screen.getByAltText("Large logo on a dark background")).toHaveAttribute("src", "https://cdn.test/logo.png");
+    expect(screen.getByAltText("Square icon in a browser tab")).toHaveAttribute("src", "https://cdn.test/fav.png");
+    expect(screen.getByAltText("Square icon in a browser tab").className).toContain("size-4");
+    expect(screen.getByAltText("Square icon in the sidebar")).toHaveAttribute("src", "https://cdn.test/fav.png");
+    expect(screen.getByAltText("Square icon in the sidebar").className).toContain("h-8 w-8");
+    expect(screen.getByAltText("Full logo on the sign-in page")).toHaveAttribute("src", "https://cdn.test/logo.png");
+    // The tab says what the portal sets as the page title.
+    expect(within(card("small")).getByText("Northwind Rentals - Portal")).toBeInTheDocument();
+    // One picture only for the full logo: the old light and dark tiles are gone.
+    expect(screen.queryByAltText(/on a (light|dark) background/)).toBeNull();
   });
 
-  it("the sidebar badge falls back to the large logo, then initials, as the sidebar does", () => {
+  it("puts no tile of ours around a logo: no white box, no muted fill, no padding on the image", () => {
+    renderLogos({ faviconUrl: "https://cdn.test/fav.png", logoUrl: "https://cdn.test/logo.png" });
+    for (const img of Array.from(document.querySelectorAll("[data-logo-card] img"))) {
+      expect(img.className, img.getAttribute("alt")!).not.toMatch(/(^|\s)(bg-white|bg-muted|p-0\.5|p-\d|ring-\d?)(\s|$)/);
+      expect(img.parentElement!.className, img.getAttribute("alt")!).not.toMatch(/(^|\s)bg-white(\s|$)/);
+    }
+    expect(document.querySelector('[class*="bg-[#0B1120]"]')).toBeNull();
+  });
+
+  it("the two previews are the same height, so the cards line up", () => {
+    renderLogos();
+    const small = card("small").querySelector("[data-logo-preview]")!;
+    const large = card("large").querySelector("[data-logo-preview]")!;
+    const height = (el: Element) => el.className.split(/\s+/).filter((c) => /^h-/.test(c));
+    expect(height(small)).toEqual(["h-36"]);
+    expect(height(large)).toEqual(["h-36"]);
+  });
+
+  it("the sidebar badge falls back to the full logo, then initials, as the sidebar does", () => {
     const { rerender } = renderLogos({ logoUrl: "https://cdn.test/logo.png" });
-    expect(screen.getByAltText("Small logo in the sidebar")).toHaveAttribute("src", "https://cdn.test/logo.png");
+    expect(screen.getByAltText("Square icon in the sidebar")).toHaveAttribute("src", "https://cdn.test/logo.png");
+    // With no square icon the tab keeps the platform's own icon.
+    expect(screen.getByAltText("Default icon in a browser tab")).toHaveAttribute("src", "/icons/favicon-light.png");
     rerender(
       <LogosV2
         tenantId="t1"
         portalName="Northwind Rentals"
+        tabTitle="Northwind Rentals - Portal"
+        brandColor="#0F766E"
         faviconUrl={null}
         logoUrl={null}
         onFaviconChange={onFaviconChange}
         onLogoChange={onLogoChange}
       />,
     );
-    expect(screen.queryByAltText("Small logo in the sidebar")).toBeNull();
+    expect(screen.queryByAltText("Square icon in the sidebar")).toBeNull();
     expect(within(card("small")).getByText("NR")).toBeInTheDocument();
+    // No full logo: the sign-in page shows the name, as login-v2 does.
+    expect(within(card("large")).getByText("Northwind Rentals")).toBeInTheDocument();
+  });
+});
+
+describe("Logos (v2): no Remove the box", () => {
+  it("never inspects a stored logo or offers to cut its box out", async () => {
+    renderLogos({ logoUrl: "https://cdn.test/boxed.jpg" });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.queryByRole("button", { name: /Remove the box/ })).toBeNull();
+    expect(document.body.textContent).not.toContain("solid box");
+    expect(analyzeLogo).not.toHaveBeenCalled();
+    expect(removeLogoBackdrop).not.toHaveBeenCalled();
   });
 });

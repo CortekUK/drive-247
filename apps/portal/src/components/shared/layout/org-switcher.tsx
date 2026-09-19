@@ -23,42 +23,60 @@ import { cn } from "@/lib/utils";
  * Deliberately local rather than exported from `brand-logo.tsx`: that file is a
  * v1 file, and v2 does not edit v1 files (V2_PLAN §3).
  *
- * Source order: the small logo (`favicon_url`, the square icon Settings →
- * Branding asks for exactly this slot) first, since a full logo with its name
- * shrinks to an unreadable sliver at 32px. Then `BrandLogo`'s rule for the full
- * logo (`dark_logo_url` wins in dark mode), and a tenant with neither gets a
- * chip of their own initials, never the platform's brand.
+ * Source order: the square icon (`favicon_url`, the image Settings → Branding
+ * asks for exactly this slot) first, since a full logo with its name shrinks
+ * to an unreadable sliver at 32px. Then `BrandLogo`'s rule for the full logo
+ * (`dark_logo_url` wins in dark mode), and a tenant with neither gets a chip
+ * of their own initials, never the platform's brand.
+ *
+ * The image sits straight on the sidebar ground: no tile or padding of ours
+ * around it, so any edge a person sees belongs to their own image (team lead,
+ * Sep 2026: the white edges around the logo were ours, and had to go).
+ *
+ * `preview` is Settings → Branding drawing this same mark from its unsaved
+ * form (the image and name being edited) instead of the saved branding, so the
+ * preview can never drift from the real thing. Exported for that page only.
  */
-function OrgMark({ className }: { className?: string }) {
+export interface OrgMarkPreview {
+  /** The image to show, or null for the initials chip. */
+  src: string | null;
+  /** The name the initials come from. */
+  name: string;
+  alt?: string;
+}
+
+export function OrgMark({ className, preview }: { className?: string; preview?: OrgMarkPreview }) {
   const { resolvedTheme } = useTheme();
   const { branding, brandName } = useTenantBranding();
 
-  const logoUrl =
+  const savedLogoUrl =
     branding?.favicon_url ||
     (resolvedTheme === "dark" && branding?.dark_logo_url
       ? branding.dark_logo_url
       : branding?.logo_url);
+  const logoUrl = preview ? preview.src : savedLogoUrl;
+  const name = preview ? preview.name : brandName;
 
   if (logoUrl) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
         src={logoUrl}
-        alt={brandName}
-        className={cn("h-8 w-8 shrink-0 rounded-lg bg-muted object-contain p-0.5", className)}
+        alt={preview?.alt ?? name}
+        className={cn("h-8 w-8 shrink-0 rounded-lg object-contain", className)}
       />
     );
   }
 
   return (
     <div
-      title={brandName}
+      title={name}
       className={cn(
         "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-[12px] font-semibold text-primary-foreground",
         className
       )}
     >
-      {getBrandInitials(brandName) || "O"}
+      {getBrandInitials(name) || "O"}
     </div>
   );
 }
@@ -188,7 +206,7 @@ export function OrgSwitcher({ collapsed }: { collapsed?: boolean }) {
           href="/settings"
           aria-label="Settings"
           title="Settings"
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-[hsl(var(--v2-link,var(--primary)))]"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-[hsl(var(--v2-link,var(--primary)))]"
         >
           <Settings className="h-4 w-4" />
         </Link>
@@ -198,7 +216,7 @@ export function OrgSwitcher({ collapsed }: { collapsed?: boolean }) {
         <DropdownMenuTrigger asChild>
           <button
             aria-label="Switch organization"
-            className="mr-1 flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-primary/10 hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-[hsl(var(--v2-link,var(--primary)))]"
+            className="mr-1 flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted-foreground outline-none transition-colors hover:bg-primary/10 hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-[hsl(var(--v2-link,var(--primary)))]"
           >
             <ChevronsUpDown className="h-4 w-4" />
           </button>

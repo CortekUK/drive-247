@@ -55,8 +55,11 @@ export default function UsersManagement() {
 
   // v2 (northwind): this route is an orphan (nothing links to it) and its row
   // actions demote or deactivate with one unconfirmed click, including the
-  // operator's own account. /users is the maintained Team page, with confirm
-  // dialogs and a v2 table, so a typed or bookmarked URL goes there instead.
+  // operator's own account. /users is the maintained Team page: a role change
+  // there goes through the Change User Role dialog, a head admin's role cannot
+  // be changed, and nobody can deactivate their own row. (Deactivate itself has
+  // no confirm dialog on /users either, v1 or v2.) So on v2 a typed or
+  // bookmarked URL goes there instead.
   const v2Chrome = useV2('chrome');
   const router = useRouter();
   useEffect(() => {

@@ -1,8 +1,11 @@
 /**
- * v2 Settings structure (team lead review, Sep 2026):
- *   - six small pages merged into General as sections, with `?tab=` deep links
- *     that open General at the section, and a permission per section;
- *   - Key handover sends the code by email only, and its message moved to
+ * v2 Settings structure (team lead reviews, Sep 2026):
+ *   - General is two tabs, Regional and Driver requirements (Sep 19 2026);
+ *     Booking rules, Lockbox (was Key handover), Tax and deposit (Tax and fees
+ *     plus Security deposit), Booking site and Optional modules are pages of
+ *     their own again, and every old `?tab=` value still opens the right place
+ *     under the right permission;
+ *   - Lockbox sends the code by email only, and its message moved to
  *     Customer messages;
  *   - Promo codes, Extras, Installments, Pay as you go and Auto-extension
  *     hidden from Settings (front end only), then brought back (Sep 19 2026):
@@ -81,89 +84,168 @@ beforeEach(() => {
 /* Settings page wiring (source)                                               */
 /* -------------------------------------------------------------------------- */
 
-describe("settings page (v2): General holds six former pages as sections", () => {
+describe("settings page (v2): General is two tabs; five sections left it for pages of their own", () => {
   const page = read("app/(dashboard)/settings/page.tsx");
   const v2Start = page.indexOf("  if (v2Chrome) {\n    const pageMeta =");
   const v2End = page.indexOf("\n  return (", page.indexOf("<LeaveDialogV2", v2Start));
   const v2 = page.slice(v2Start, v2End);
   const pagesDecl = page.slice(page.indexOf("const V2_SETTINGS_PAGES:"), page.indexOf("};", page.indexOf("const V2_SETTINGS_PAGES:")));
-  const general = v2.slice(v2.indexOf("        case 'general': {"), v2.indexOf("        case 'locations':"));
+  const general = v2.slice(v2.indexOf("        case 'general': {"), v2.indexOf("        case 'duration':"));
+  const caseBody = (name: string) => {
+    const at = v2.indexOf(`\n        case '${name}':`);
+    return v2.slice(at, v2.indexOf("\n        case '", at + 10));
+  };
 
-  it("the merged pages have no page entry and no render case of their own any more", () => {
+  it("Booking rules, Lockbox, Tax and deposit, Booking site and Optional modules have a page entry and render case each", () => {
     expect(v2Start).toBeGreaterThan(-1);
-    for (const tab of ["requirements", "duration", "lockbox", "'booking-site'", "fees", "preauth"]) {
-      expect(pagesDecl).not.toMatch(new RegExp(`^\\s*${tab}: \\{`, "m"));
+    for (const [tab, title, perm] of [
+      ["duration", "Booking rules", "duration"],
+      ["lockbox", "Lockbox", "lockbox"],
+      ["'tax-and-deposit'", "Tax and deposit", "fees"],
+      ["'booking-site'", "Booking site", "general"],
+      ["modules", "Optional modules", "general"],
+    ]) {
+      expect(pagesDecl, tab).toMatch(new RegExp(`^\\s*${tab}: \\{ section: 'Business', title: '${title}', description: '[^']+', permTab: '${perm}' \\},`, "m"));
     }
-    for (const tab of ["requirements", "duration", "lockbox", "booking-site", "fees", "preauth"]) {
+    for (const tab of ["duration", "lockbox", "tax-and-deposit", "booking-site", "modules"]) {
+      expect(v2, tab).toMatch(new RegExp(`\\n        case '${tab}':`));
+    }
+    // Driver requirements is a tab of General and the two money halves one
+    // page: none of them has an entry or a case of its own.
+    for (const tab of ["requirements", "fees", "preauth"]) {
+      expect(pagesDecl).not.toMatch(new RegExp(`^\\s*${tab}: \\{`, "m"));
       expect(v2).not.toContain(`\n        case '${tab}':`);
     }
+    // General no longer renders a section list: no Key handover, no stacked sections.
+    expect(v2).not.toContain("case 'key-handover':");
+    expect(v2).not.toContain("case 'optional-modules':");
+    expect(general).not.toContain("<SettingsSection");
   });
 
-  it("General renders every section this user may see, each under its own permission", () => {
-    expect(v2).toContain("const v2GeneralSections = V2_GENERAL_SECTIONS.filter((section) => canViewSettings(section.permTab));");
-    expect(general).toContain("<SettingsSection");
-    expect(general).toContain("anchor={section.anchor}");
-    // A partly editable page says "View only" on the sections it can't change.
-    expect(general).toContain("action={canEditPage && !canEditSettings(section.permTab) ? <SettingsReadOnlyNotice /> : undefined}");
-    for (const [anchor, perm] of [
-      ["driver-requirements", "requirements"],
-      ["booking-rules", "duration"],
-      ["key-handover", "lockbox"],
-      ["tax-and-fees", "fees"],
-      ["security-deposit", "preauth"],
-    ]) {
-      const body = general.slice(general.indexOf(`case '${anchor}':`), general.indexOf("case '", general.indexOf(`case '${anchor}':`) + 6));
-      expect(body, anchor).toContain(`canEdit={canEditSettings('${perm}')}`);
-    }
-    // Regional and Booking site follow General's own permission.
+  it("General is a tab strip of the tabs this user may see, each under its own permission", () => {
+    expect(v2).toContain("const v2Sections = v2PageSections(v2Page).filter((section) => canViewSettings(section.permTab));");
+    expect(general).toContain("<SettingsTabs");
+    expect(general).toContain("tabs={v2Sections.map((section) => ({ value: section.anchor, label: section.title }))}");
+    expect(general).toContain("value={v2OpenSection?.anchor ?? ''}");
+    expect(general).toContain("onValueChange={openV2PageTab}");
+    expect(general).toContain("<SettingsTabPanel key={section.anchor} value={section.anchor}");
+    // A partly editable page says "View only" on the tab it can't change.
+    expect(general).toContain("{canEditPage && !canEditSettings(section.permTab) && <SettingsReadOnlyNotice />}");
+    const requirements = general.slice(general.indexOf("case 'driver-requirements':"));
+    expect(requirements).toContain("canEdit={canEditSettings('requirements')}");
+    // Regional follows General's own permission.
     expect(general).toContain("const canEditGeneral = canEditSettings('general');");
+    expect(general).toContain("canEdit={canEditGeneral}");
     expect(general).not.toContain("canEdit={canEditPage}");
     expect(general).not.toContain("!canEditPage}");
   });
 
-  it("General opens when any of its sections may be viewed; editing it needs any section's editor grant", () => {
+  it("the open tab lives in ?tab= (replace while clean, push while there are unsaved edits), shown at once while the URL catches up", () => {
+    expect(v2).toContain(
+      "v2Sections.find((section) => section.anchor === (v2PickedPageTab ?? v2Route?.anchor)) ?? v2Sections[0] ?? null;",
+    );
+    expect(v2).toContain("const href = `/settings?tab=${section.tab ?? v2Page}`;");
+    expect(v2).toContain("if (v2PageHasEdits) router.push(href, { scroll: false });");
+    expect(v2).toContain("else router.replace(href, { scroll: false });");
+    // The picked tab is state declared before the v1 early returns, and cleared when ?tab= changes.
+    const state = page.indexOf("const [v2PickedPageTab, setV2PickedPageTab] = useState<string | null>(null);");
+    expect(state).toBeGreaterThan(-1);
+    expect(page.indexOf("if (!v2Chrome && error && !settings) {")).toBeGreaterThan(state);
+    expect(page).toContain("useEffect(() => {\n    setV2PickedPageTab(null);\n  }, [v2TabParam]);");
+  });
+
+  it("each moved page keeps its section's permission and gate", () => {
+    expect(caseBody("duration")).toContain("canEdit={canEditSettings('duration')}");
+    expect(caseBody("duration")).toContain('<BusinessRentalGate thing="your booking rules" rows={4}>');
+    expect(caseBody("lockbox")).toContain("canEdit={canEditSettings('lockbox')}");
+    expect(caseBody("lockbox")).toContain('<BusinessRentalGate thing="your lockbox settings" rows={4}>');
+    const tax = caseBody("tax-and-deposit");
+    expect(tax).toContain("<SettingsSection");
+    expect(tax).toContain("canEdit={canEditSettings('fees')}");
+    expect(tax).toContain("canEdit={canEditSettings('preauth')}");
+    expect(tax).toContain("action={canEditPage && !canEditSettings(section.permTab) ? <SettingsReadOnlyNotice /> : undefined}");
+    const site = caseBody("booking-site");
+    expect(site).toContain("const canEditGeneral = canEditSettings('general');");
+    expect(site).toContain('sectionKey="booking-site-colours"');
+    const modules = caseBody("modules");
+    expect(modules).toContain("disabled={savingFleetHealth || !canEditSettings('general') || !v2FleetHealthReady}");
+    // The moved pages draw their switches and buttons with the v2 parts.
+    for (const body of [site, modules]) {
+      expect(body).not.toMatch(/<Switch[\s>]/);
+      expect(body).not.toMatch(/<Button[\s>]/);
+    }
+    expect(site).toContain("<SwitchV2");
+    expect(modules).toContain("<SwitchV2");
+  });
+
+  it("a sectioned page opens when any of its sections may be viewed; editing it needs any section's editor grant", () => {
     expect(page).toContain("const v2Route = v2Chrome ? resolveV2SettingsRoute(v2TabParam, V2_SETTINGS_PAGES) : null;");
     expect(v2).toContain("v2Page && v2Route?.permTab && canViewAny(v2Route.permTab, canViewSettings) ? V2_SETTINGS_PAGES[v2Page] : null;");
-    expect(v2).toContain("? v2GeneralSections.some((section) => canEditSettings(section.permTab))");
+    expect(v2).toContain("? v2Sections.some((section) => canEditSettings(section.permTab))");
     expect(v2).toContain("pages: v2NoticePages(V2_SETTINGS_PAGES),");
   });
 
-  it("no page-level General skeleton: each section loads and fails on its own", () => {
+  it("no page-level General skeleton: each tab loads and fails on its own", () => {
     expect(v2).not.toContain("v2Page === 'general' ? (");
     expect(v2).not.toContain('label="Loading regional settings"');
   });
 
-  it("a deep link scrolls to its section once the data above it is in, wired before the v1 early returns", () => {
+  it("a deep link scrolls to its section (never on General, whose sections are tabs), wired before the v1 early returns", () => {
     const hook = page.indexOf("useScrollToSection(v2ScrollTarget, v2Chrome && v2SectionsReady);");
     const firstEarlyReturn = page.indexOf("if (!v2Chrome && error && !settings) {");
     expect(hook).toBeGreaterThan(-1);
     expect(firstEarlyReturn).toBeGreaterThan(hook);
-    expect(page).toContain("const v2ScrollTarget = v2Route?.anchor ? settingsSectionId(v2Route.anchor) : v2Page ? v2Hash : null;");
+    expect(page).toContain(
+      "v2Route?.anchor && !isTabbedV2Page(v2Page) ? settingsSectionId(v2Route.anchor) : v2Page ? v2Hash : null;",
+    );
     expect(page).toContain("setV2Hash(hash.startsWith('settings-') ? hash : null);");
   });
 
-  it("one save bar on General, Customer messages, Custom pricing, Locations and the three payment-plan forms", () => {
+  it("one save bar on General, the pages that came out of it (not Optional modules), Customer messages, Custom pricing, Locations and the three payment-plan forms", () => {
     expect(page).toContain(
-      "const V2_PAGES_WITH_SAVE_BAR = new Set(['general', 'templates', 'pricing', 'locations', 'installments', 'payg', 'auto-extend']);",
+      "const V2_PAGES_WITH_SAVE_BAR = new Set(['general', 'duration', 'lockbox', 'tax-and-deposit', 'booking-site', 'templates', 'pricing', 'locations', 'installments', 'payg', 'auto-extend']);",
     );
+  });
+
+  it("General and the pages that came out of it put each control at the end of its row; every other page keeps it after the label", () => {
+    expect(page).toContain(
+      "const V2_PAGES_CONTROLS_AT_END = new Set(['general', 'duration', 'lockbox', 'tax-and-deposit', 'booking-site', 'modules']);",
+    );
+    expect(v2).toContain("<SettingsRowAlignProvider align={V2_PAGES_CONTROLS_AT_END.has(v2Page as string) ? 'end' : 'start'}>");
+  });
+
+  it("the moved pages gate their own controls, so a viewer's Try again still works", () => {
+    const set = page.match(/const V2_PAGES_GATING_OWN_CONTROLS = new Set\(\[([^\]]*)\]\);/);
+    expect(set).not.toBeNull();
+    for (const tab of ["general", "duration", "lockbox", "tax-and-deposit", "booking-site", "modules"]) {
+      expect(set![1], tab).toContain(`'${tab}'`);
+    }
+  });
+
+  it("Optional modules is left off the index, and says so on its page, when no module applies", () => {
+    expect(v2).toContain("const v2ShowOptionalModules = turoV2 || !hideVehicleOwnersToggle || !hideFleetHealthRow;");
+    expect(v2).toContain("hiddenHrefs={v2ShowOptionalModules ? undefined : ['/settings?tab=modules']}");
+    expect(caseBody("modules")).toContain("None of the optional modules are available for your workspace.");
   });
 });
 
-describe("settings page (v2): Key handover and the lockbox message", () => {
+describe("settings page (v2): Lockbox and the lockbox message", () => {
   const page = read("app/(dashboard)/settings/page.tsx");
   const v2Start = page.indexOf("  if (v2Chrome) {\n    const pageMeta =");
   const v2 = page.slice(v2Start);
-  const keyHandover = v2.slice(v2.indexOf("case 'key-handover':"), v2.indexOf("case 'tax-and-fees':"));
+  const lockbox = v2.slice(v2.indexOf("        case 'lockbox':"), v2.indexOf("        case 'tax-and-deposit':"));
   const templates = v2.slice(v2.indexOf("        case 'templates': {"), v2.indexOf("        case 'insurance':"));
 
-  it("Key handover gets no Twilio props, and its Templates button targets the lockbox message", () => {
-    expect(keyHandover).not.toContain("smsReady");
-    expect(keyHandover).not.toContain("integrationsHref");
-    expect(keyHandover).toContain("templatesHref={V2_LOCKBOX_MESSAGES_HREF}");
+  it("Lockbox gets no Twilio props, and its Templates link targets the lockbox message", () => {
+    expect(lockbox).toContain("<LockboxPageV2");
+    expect(lockbox).not.toContain("smsReady");
+    expect(lockbox).not.toContain("integrationsHref");
+    expect(lockbox).toContain("templatesHref={V2_LOCKBOX_MESSAGES_HREF}");
     expect(page).toContain("const V2_LOCKBOX_MESSAGES_HREF = `/settings?tab=templates#${settingsSectionId('lockbox-messages')}`;");
+    expect(page).toContain("  lockbox: { section: 'Business', title: 'Lockbox', description:");
   });
 
-  it("Customer messages carries the lockbox message, email only, under Key handover's permission", () => {
+  it("Customer messages carries the lockbox message, email only, under Lockbox's permission", () => {
     expect(templates).toContain("{v2ShowLockboxMessages && (");
     expect(templates).toContain("<div id={settingsSectionId('lockbox-messages')} className=\"scroll-mt-24\">");
     expect(templates).toContain("channels={['email']}");
@@ -174,7 +256,7 @@ describe("settings page (v2): Key handover and the lockbox message", () => {
     expect(v2).toContain("? canEditSettings('templates') || (v2ShowLockboxMessages && canEditSettings('lockbox'))");
   });
 
-  it("the Key handover section no longer mounts the messages editor", () => {
+  it("the Lockbox page no longer mounts the messages editor", () => {
     const pages = read("components/settings-v2/business-rules-pages.tsx");
     expect(pages).not.toContain('from "@/components/settings-v2/lockbox-templates-v2"');
     expect(pages).not.toContain("<LockboxTemplatesSectionV2");

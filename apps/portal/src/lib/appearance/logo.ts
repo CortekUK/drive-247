@@ -263,14 +263,19 @@ export async function uploadLogoBlob(
 }
 
 /* ------------------------------------------------------------------ */
-/* v2 Logos (northwind): what each slot accepts, and how a file is     */
-/* checked and prepared before it is uploaded.                         */
+/* v2 Logos: what each slot accepts, and how a file is checked and     */
+/* prepared before it is uploaded.                                      */
 /*                                                                      */
-/*   small  favicon_url  browser tab + sidebar badge  512 × 512 PNG     */
-/*   large  logo_url     sign-in page + booking site  original, or PNG  */
+/*   slot   name         column       where it shows                    */
+/*   small  Square icon  favicon_url  browser tab + sidebar badge       */
+/*   large  Full logo    logo_url     sign-in page + booking site       */
 /*                                                                      */
-/* Every limit is a constant here so the help text under each card is   */
-/* built from the same numbers the checks use.                          */
+/* The slot ids are internal. People only ever see the names, never     */
+/* "small", "large" or "favicon" (team lead, Sep 2026).                 */
+/*                                                                      */
+/* Every limit is a constant here so the help text under each card, the */
+/* "best results" line and the error messages are built from the same   */
+/* numbers the checks use. Each pixel limit is a range with both ends.  */
 /* ------------------------------------------------------------------ */
 
 /**
@@ -282,6 +287,15 @@ export const LOGO_MAX_BYTES = 10 * 1024 * 1024;
 
 export type LogoSlot = 'small' | 'large';
 export type LogoFormat = 'PNG' | 'WebP' | 'JPG' | 'SVG' | 'ICO';
+
+/** What each slot is called on screen. */
+export const LOGO_SLOT_NAMES: Record<LogoSlot, string> = {
+  small: 'Square icon',
+  large: 'Full logo',
+};
+
+/** The same names mid-sentence ("Replace square icon"). */
+export const logoSlotNoun = (slot: LogoSlot) => LOGO_SLOT_NAMES[slot].toLowerCase();
 
 const LOGO_FORMAT_TYPES: Record<LogoFormat, { mime: string[]; extensions: string[] }> = {
   PNG: { mime: ['image/png'], extensions: ['.png'] },
@@ -301,19 +315,31 @@ const acceptFor = (formats: readonly LogoFormat[]) =>
 export const SMALL_LOGO_ACCEPT = acceptFor(SMALL_LOGO_FORMATS);
 export const LARGE_LOGO_ACCEPT = acceptFor(LARGE_LOGO_FORMATS);
 
-/** Small logo: roughly square (width ÷ height within these), at least this many px a side. */
+/**
+ * Square icon: 128 to 4096 px a side, roughly square (width ÷ height within
+ * 0.9 to 1.1). Always stored as a 512 × 512 PNG, so 512 is also the size that
+ * looks sharpest; anything past 4096 is a photo or a print file, not an icon.
+ */
 export const SMALL_LOGO_MIN_PX = 128;
+export const SMALL_LOGO_MAX_PX = 4096;
 export const SMALL_LOGO_RECOMMENDED_PX = 512;
 export const SMALL_LOGO_OUTPUT_PX = 512;
 export const SMALL_LOGO_MIN_RATIO = 0.9;
 export const SMALL_LOGO_MAX_RATIO = 1.1;
 
-/** Large logo: at least this wide and tall, between 1:1 and 8:1, never stored above 1200 px. */
+/**
+ * Full logo: 400 to 6000 px wide and 100 to 3000 px tall, between 1:1 and
+ * 8:1, never stored above 1200 px on its longest edge (so 1200 px wide is the
+ * size worth sending).
+ */
 export const LARGE_LOGO_MIN_WIDTH = 400;
+export const LARGE_LOGO_MAX_WIDTH = 6000;
 export const LARGE_LOGO_MIN_HEIGHT = 100;
+export const LARGE_LOGO_MAX_HEIGHT = 3000;
 export const LARGE_LOGO_MIN_RATIO = 1;
 export const LARGE_LOGO_MAX_RATIO = 8;
 export const LARGE_LOGO_MAX_EDGE = 1200;
+export const LARGE_LOGO_RECOMMENDED_WIDTH = LARGE_LOGO_MAX_EDGE;
 
 const MB = 1024 * 1024;
 
@@ -326,9 +352,18 @@ export function logoFormatList(formats: readonly LogoFormat[]): string {
 export function logoHelpText(slot: LogoSlot): string {
   const size = `up to ${LOGO_MAX_BYTES / MB} MB`;
   if (slot === 'small') {
-    return `${logoFormatList(SMALL_LOGO_FORMATS)} · ${size} · square, at least ${SMALL_LOGO_MIN_PX} × ${SMALL_LOGO_MIN_PX} px (${SMALL_LOGO_RECOMMENDED_PX} × ${SMALL_LOGO_RECOMMENDED_PX} px is best)`;
+    return `${logoFormatList(SMALL_LOGO_FORMATS)} · ${size} · square, ${SMALL_LOGO_MIN_PX} to ${SMALL_LOGO_MAX_PX} px a side`;
   }
-  return `${logoFormatList(LARGE_LOGO_FORMATS)} · ${size} · at least ${LARGE_LOGO_MIN_WIDTH} × ${LARGE_LOGO_MIN_HEIGHT} px`;
+  return `${logoFormatList(LARGE_LOGO_FORMATS)} · ${size} · ${LARGE_LOGO_MIN_WIDTH} to ${LARGE_LOGO_MAX_WIDTH} px wide, ${LARGE_LOGO_MIN_HEIGHT} to ${LARGE_LOGO_MAX_HEIGHT} px tall`;
+}
+
+/** The one highlighted line at the top of Logos: what works best for both. */
+export function logoBestResultsText(): string {
+  return (
+    `Best results: a PNG with a transparent background. ` +
+    `${LOGO_SLOT_NAMES.small} at least ${SMALL_LOGO_RECOMMENDED_PX} × ${SMALL_LOGO_RECOMMENDED_PX} px; ` +
+    `${logoSlotNoun('large')} at least ${LARGE_LOGO_RECOMMENDED_WIDTH} px wide.`
+  );
 }
 
 /**
@@ -376,13 +411,17 @@ export interface LogoImageSize {
 
 export interface LogoSizeProblem {
   /** `not-square` is the one a person can fix here, with "Fit into a square". */
-  kind: 'too-small' | 'not-square' | 'too-tall' | 'too-wide';
+  kind: 'too-small' | 'too-large' | 'not-square' | 'too-tall' | 'too-wide';
   message: string;
 }
 
 const px = (n: number) => Math.round(n);
 
-/** Pixel size and shape. Null when the image can be used as it is. */
+/**
+ * Pixel size and shape. Null when the image can be used as it is. An SVG has
+ * no pixel size of its own (it is drawn at whatever size we need), so only its
+ * shape is checked.
+ */
 export function logoSizeProblem(slot: LogoSlot, { width, height, vector }: LogoImageSize): LogoSizeProblem | null {
   const ratio = width / height;
   const dims = `${px(width)} × ${px(height)} px`;
@@ -390,7 +429,13 @@ export function logoSizeProblem(slot: LogoSlot, { width, height, vector }: LogoI
     if (!vector && (width < SMALL_LOGO_MIN_PX || height < SMALL_LOGO_MIN_PX)) {
       return {
         kind: 'too-small',
-        message: `This image is ${dims}. The small logo needs to be at least ${SMALL_LOGO_MIN_PX} × ${SMALL_LOGO_MIN_PX} px, and ${SMALL_LOGO_RECOMMENDED_PX} × ${SMALL_LOGO_RECOMMENDED_PX} px looks sharpest.`,
+        message: `This image is ${dims}. The square icon needs to be at least ${SMALL_LOGO_MIN_PX} × ${SMALL_LOGO_MIN_PX} px, and ${SMALL_LOGO_RECOMMENDED_PX} × ${SMALL_LOGO_RECOMMENDED_PX} px looks sharpest.`,
+      };
+    }
+    if (!vector && (width > SMALL_LOGO_MAX_PX || height > SMALL_LOGO_MAX_PX)) {
+      return {
+        kind: 'too-large',
+        message: `This image is ${dims}. The square icon can be at most ${SMALL_LOGO_MAX_PX} × ${SMALL_LOGO_MAX_PX} px. Save a smaller copy (${SMALL_LOGO_RECOMMENDED_PX} × ${SMALL_LOGO_RECOMMENDED_PX} px is best) and try again.`,
       };
     }
     if (ratio < SMALL_LOGO_MIN_RATIO || ratio > SMALL_LOGO_MAX_RATIO) {
@@ -404,13 +449,19 @@ export function logoSizeProblem(slot: LogoSlot, { width, height, vector }: LogoI
   if (!vector && (width < LARGE_LOGO_MIN_WIDTH || height < LARGE_LOGO_MIN_HEIGHT)) {
     return {
       kind: 'too-small',
-      message: `This image is ${dims}. The large logo needs to be at least ${LARGE_LOGO_MIN_WIDTH} px wide and ${LARGE_LOGO_MIN_HEIGHT} px tall.`,
+      message: `This image is ${dims}. The full logo needs to be at least ${LARGE_LOGO_MIN_WIDTH} px wide and ${LARGE_LOGO_MIN_HEIGHT} px tall.`,
+    };
+  }
+  if (!vector && (width > LARGE_LOGO_MAX_WIDTH || height > LARGE_LOGO_MAX_HEIGHT)) {
+    return {
+      kind: 'too-large',
+      message: `This image is ${dims}. The full logo can be at most ${LARGE_LOGO_MAX_WIDTH} px wide and ${LARGE_LOGO_MAX_HEIGHT} px tall. Save a smaller copy (${LARGE_LOGO_RECOMMENDED_WIDTH} px wide is plenty) and try again.`,
     };
   }
   if (ratio < LARGE_LOGO_MIN_RATIO) {
     return {
       kind: 'too-tall',
-      message: `This image is taller than it is wide (${dims}). Use your full logo with its name here, and put a square icon in Small logo.`,
+      message: `This image is taller than it is wide (${dims}). Use your full logo with its name here, and put a square version under Square icon.`,
     };
   }
   if (ratio > LARGE_LOGO_MAX_RATIO) {
@@ -516,7 +567,7 @@ export async function loadLogoFile(file: File): Promise<LoadedLogo | null> {
   return { image, format, width, height, vector: format === 'SVG', release };
 }
 
-/** The small logo: always a 512 × 512 PNG, the image whole and centred on a see-through square. */
+/** The square icon: always a 512 × 512 PNG, the image whole and centred on a see-through square. */
 export async function renderSmallLogo(loaded: LoadedLogo): Promise<Blob | null> {
   const box = SMALL_LOGO_OUTPUT_PX;
   const canvas = document.createElement('canvas');
@@ -532,7 +583,7 @@ export async function renderSmallLogo(loaded: LoadedLogo): Promise<Blob | null> 
 }
 
 /**
- * The large logo. A PNG, WebP or JPG no longer than 1200 px on its longest edge
+ * The full logo. A PNG, WebP or JPG no longer than 1200 px on its longest edge
  * is uploaded exactly as it came; a longer one is scaled down to 1200 px as a
  * PNG, which keeps any transparency. An SVG is drawn as a PNG with its longest
  * edge at 1200 px: it is vector, so drawing it that large costs no sharpness.

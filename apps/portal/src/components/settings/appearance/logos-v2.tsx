@@ -1,21 +1,30 @@
 'use client';
 
 /**
- * Settings → Branding → Logos (v2, northwind only). Replaces LogoStudio and
+ * Settings → Branding → Logos (v2 only). Replaces LogoStudio and
  * FaviconUpload on the v2 page; v1 keeps rendering those two unchanged.
  *
  * Two slots, each for one job, so nobody has to guess which file goes where:
  *
- *   Small logo  `favicon_url`  the browser tab and the sidebar badge (a square icon)
- *   Large logo  `logo_url`     the sign-in page and the booking site (the full logo)
+ *   Square icon  `favicon_url`  the browser tab and the sidebar badge
+ *   Full logo    `logo_url`     the sign-in page and the booking site
+ *
+ * The code calls them `small` and `large` (`LogoSlot`); people only ever see
+ * the names above, never "small", "large" or "favicon".
  *
  * No migration: both columns already exist. The sign-in logo (`auth_logo_url`)
  * and the dark-mode logo (`dark_logo_url`) follow `logo_url` through the sync
  * in `useTenantBranding`'s update, as long as the page does not send them.
  *
- * Every file is checked in the browser before anything is uploaded (type,
- * size, pixel size, shape), with the reason shown inline under the card. The
- * limits live in `lib/appearance/logo.ts` and the help text is built from them.
+ * One highlighted line at the top says what works best, and every file is
+ * checked in the browser before anything is uploaded (type, file size, pixel
+ * size within a range, shape), with the reason shown inline under the card.
+ * The limits live in `lib/appearance/logo.ts` and all the copy is built from
+ * them.
+ *
+ * Each card shows its image where it will really appear (branding-previews),
+ * on that surface and with no tile of ours around it. The two previews are the
+ * same height, so the cards line up.
  *
  * Save semantics match the rest of the page: an accepted file is uploaded at
  * once, but only the form points at it. Nothing reaches the tenant row until
@@ -24,39 +33,43 @@
  */
 
 import { useEffect, useRef, useState, type DragEvent, type ReactNode } from 'react';
-import { AlertTriangle, Globe, Loader2, Scissors, Upload, X } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 import { Button } from '@/components/ui-v2/button';
 import { SettingsSection } from '@/components/settings-v2/settings-kit';
 import { useImageLoadFailed } from '@/components/settings-v2/business-settings-states';
-import { getBrandInitials } from '@/components/shared/layout/brand-logo';
+import { SignInPreview, SquareIconPreview } from '@/components/settings/appearance/branding-previews';
 import {
-  analyzeLogo,
   LARGE_LOGO_ACCEPT,
   loadLogoFile,
+  LOGO_SLOT_NAMES,
+  logoBestResultsText,
   logoFileProblem,
   logoHelpText,
   logoSizeProblem,
+  logoSlotNoun,
   prepareLargeLogo,
-  removeLogoBackdrop,
   renderSmallLogo,
   SMALL_LOGO_ACCEPT,
   uploadLogoBlob,
   type LoadedLogo,
   type LogoSlot,
 } from '@/lib/appearance/logo';
-import { cn } from '@/lib/utils';
 
 export const LOGOS_V2_INTRO =
-  'You need two versions of your logo: a small square icon, and your full logo with its name.';
+  'You need two versions of your logo: a square icon, and your full logo with its name.';
 
 const UNREADABLE = "We couldn't open this image. Save it again as a PNG and try once more.";
 const UPLOAD_FAILED = "We couldn't upload this image. Check your connection and try again.";
 
 export interface LogosV2Props {
   tenantId: string;
-  /** The name shown beside the small logo in its previews. */
+  /** The name shown beside the square icon and on the sign-in page. */
   portalName: string;
+  /** What the browser tab says (see `portalTabTitle`). */
+  tabTitle: string;
+  /** The colour the sign-in page tints its hero with. */
+  brandColor: string | null;
   faviconUrl: string | null;
   logoUrl: string | null;
   onFaviconChange: (url: string | null) => void;
@@ -69,6 +82,8 @@ export interface LogosV2Props {
 export function LogosV2({
   tenantId,
   portalName,
+  tabTitle,
+  brandColor,
   faviconUrl,
   logoUrl,
   onFaviconChange,
@@ -90,18 +105,27 @@ export function LogosV2({
 
   return (
     <SettingsSection anchor="logos" title="Logos" description={LOGOS_V2_INTRO}>
+      <p
+        data-logo-best=""
+        className="rounded-xl bg-primary/10 px-4 py-2.5 text-[13px] font-medium leading-snug text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]"
+      >
+        {logoBestResultsText()}
+      </p>
       <div className="grid gap-4 lg:grid-cols-2">
-        <SmallLogoCard
+        <SquareIconCard
           tenantId={tenantId}
           portalName={portalName}
+          tabTitle={tabTitle}
           url={faviconUrl}
           fallbackUrl={logoUrl}
           onChange={onFaviconChange}
           disabled={disabled}
           onBusyChange={setSmallBusy}
         />
-        <LargeLogoCard
+        <FullLogoCard
           tenantId={tenantId}
+          portalName={portalName}
+          brandColor={brandColor}
           url={logoUrl}
           onChange={onLogoChange}
           disabled={disabled}
@@ -125,7 +149,7 @@ interface UploadOptions {
 
 function useLogoUpload({ slot, tenantId, onChange, onBusyChange }: UploadOptions) {
   const [problem, setProblem] = useState<string | null>(null);
-  // Small logo only: a file that is fine except for its shape, waiting on "Fit into a square".
+  // Square icon only: a file that is fine except for its shape, waiting on "Fit into a square".
   const [notSquare, setNotSquare] = useState<{ loaded: LoadedLogo; message: string } | null>(null);
   const [busy, setBusyState] = useState(false);
   const mounted = useRef(true);
@@ -159,6 +183,7 @@ function useLogoUpload({ slot, tenantId, onChange, onBusyChange }: UploadOptions
         if (mounted.current) setProblem(UNREADABLE);
         return;
       }
+      // Storage file names are unchanged: favicon-… and logo-… under the tenant.
       const url = await uploadLogoBlob(blob, tenantId, slot === 'small' ? 'favicon' : 'logo');
       if (mounted.current) latest.current.onChange(url);
     } catch {
@@ -216,31 +241,12 @@ function useLogoUpload({ slot, tenantId, onChange, onBusyChange }: UploadOptions
     }
   };
 
-  /** A repaired copy made from the stored image (the large logo's "Remove the box"). */
-  const replaceWith = async (make: () => Promise<Blob | null>, suffix: string) => {
-    setProblem(null);
-    setBusy(true);
-    try {
-      const blob = await make();
-      if (!blob) {
-        if (mounted.current) setProblem("We couldn't change this image here. Remove the box in an image editor and upload it again.");
-        return;
-      }
-      const url = await uploadLogoBlob(blob, tenantId, suffix);
-      if (mounted.current) latest.current.onChange(url);
-    } catch {
-      if (mounted.current) setProblem(UPLOAD_FAILED);
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const clear = () => {
     setProblem(null);
     dropNotSquare();
   };
 
-  return { problem, notSquare, busy, pick, fitIntoSquare, replaceWith, clear };
+  return { problem, notSquare, busy, pick, fitIntoSquare, clear };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -249,7 +255,6 @@ function useLogoUpload({ slot, tenantId, onChange, onBusyChange }: UploadOptions
 
 interface LogoCardProps {
   slot: LogoSlot;
-  title: string;
   description: string;
   accept: string;
   url: string | null;
@@ -257,14 +262,12 @@ interface LogoCardProps {
   upload: ReturnType<typeof useLogoUpload>;
   onRemove: () => void;
   preview: ReactNode;
-  /** Advice about the stored image (the large logo's box), under the preview. */
-  advice?: ReactNode;
 }
 
-function LogoCard({ slot, title, description, accept, url, disabled, upload, onRemove, preview, advice }: LogoCardProps) {
+function LogoCard({ slot, description, accept, url, disabled, upload, onRemove, preview }: LogoCardProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const failed = useImageLoadFailed(url);
-  const noun = slot === 'small' ? 'small logo' : 'large logo';
+  const noun = logoSlotNoun(slot);
   const choose = () => inputRef.current?.click();
 
   const onDrop = (event: DragEvent<HTMLDivElement>) => {
@@ -276,12 +279,12 @@ function LogoCard({ slot, title, description, accept, url, disabled, upload, onR
   return (
     <div
       data-logo-card={slot}
-      className="flex min-w-0 flex-col gap-4 rounded-xl border bg-card p-5"
+      className="flex min-w-0 flex-col gap-3 rounded-xl border bg-card p-4"
       onDragOver={(event) => event.preventDefault()}
       onDrop={onDrop}
     >
       <div>
-        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+        <h3 className="text-sm font-semibold text-foreground">{LOGO_SLOT_NAMES[slot]}</h3>
         <p className="mt-0.5 text-[13px] leading-snug text-muted-foreground">{description}</p>
       </div>
 
@@ -293,16 +296,13 @@ function LogoCard({ slot, title, description, accept, url, disabled, upload, onR
         </p>
       )}
 
-      {advice}
-
       <p data-logo-help={slot} className="text-xs text-muted-foreground">
         {logoHelpText(slot)}
       </p>
 
       {upload.problem && (
-        <p role="alert" className="flex items-start gap-1.5 text-[13px] leading-snug text-destructive">
-          <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-          <span className="min-w-0">{upload.problem}</span>
+        <p role="alert" className="text-[13px] leading-snug text-destructive">
+          {upload.problem}
         </p>
       )}
 
@@ -342,11 +342,7 @@ function LogoCard({ slot, title, description, accept, url, disabled, upload, onR
           aria-label={`${url ? 'Replace' : 'Upload'} ${noun}`}
           onClick={choose}
         >
-          {upload.busy ? (
-            <Loader2 className="animate-spin" data-icon="inline-start" />
-          ) : (
-            <Upload data-icon="inline-start" />
-          )}
+          {upload.busy && <Loader2 className="animate-spin" data-icon="inline-start" />}
           {upload.busy ? 'Uploading…' : url ? 'Replace' : 'Upload'}
         </Button>
         {url && (
@@ -383,12 +379,13 @@ function LogoCard({ slot, title, description, accept, url, disabled, upload, onR
 }
 
 /* -------------------------------------------------------------------------- */
-/* Small logo                                                                  */
+/* Square icon                                                                 */
 /* -------------------------------------------------------------------------- */
 
-function SmallLogoCard({
+function SquareIconCard({
   tenantId,
   portalName,
+  tabTitle,
   url,
   fallbackUrl,
   onChange,
@@ -397,86 +394,48 @@ function SmallLogoCard({
 }: {
   tenantId: string;
   portalName: string;
+  tabTitle: string;
   url: string | null;
-  /** The large logo: what the sidebar badge falls back to, as OrgMark does. */
+  /** The full logo: what the sidebar badge falls back to, as OrgMark does. */
   fallbackUrl: string | null;
   onChange: (url: string | null) => void;
   disabled?: boolean;
   onBusyChange: (busy: boolean) => void;
 }) {
   const upload = useLogoUpload({ slot: 'small', tenantId, onChange, onBusyChange });
-  const badgeSrc = url || fallbackUrl;
-
-  const preview = (
-    <div className="grid gap-3 sm:grid-cols-2">
-      <figure className="min-w-0 space-y-1.5">
-        {/* The sidebar's top row: OrgMark's 32px badge beside the portal name. */}
-        <div className="flex h-14 items-center gap-2.5 rounded-xl border bg-background px-3">
-          {badgeSrc ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={badgeSrc}
-              alt="Small logo in the sidebar"
-              className="h-8 w-8 shrink-0 rounded-lg bg-muted object-contain p-0.5"
-            />
-          ) : (
-            <span
-              aria-hidden="true"
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-[12px] font-semibold text-primary-foreground"
-            >
-              {getBrandInitials(portalName) || 'O'}
-            </span>
-          )}
-          <span className="min-w-0 truncate text-[13px] font-semibold text-foreground">{portalName}</span>
-        </div>
-        <figcaption className="text-[11px] text-muted-foreground">Sidebar</figcaption>
-      </figure>
-      <figure className="min-w-0 space-y-1.5">
-        {/* A browser tab: the 16px icon and the page title. */}
-        <div className="flex h-14 items-end overflow-hidden rounded-xl border bg-muted px-2 pt-2">
-          <div className="flex h-9 w-full min-w-0 items-center gap-2 rounded-t-xl bg-background px-3">
-            {url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={url} alt="Small logo in a browser tab" className="size-4 shrink-0 object-contain" />
-            ) : (
-              <Globe className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-            )}
-            <span className="min-w-0 flex-1 truncate text-xs text-foreground">{portalName}</span>
-            <X className="size-3 shrink-0 text-muted-foreground" aria-hidden="true" />
-          </div>
-        </div>
-        <figcaption className="text-[11px] text-muted-foreground">Browser tab</figcaption>
-      </figure>
-    </div>
-  );
 
   return (
     <LogoCard
       slot="small"
-      title="Small logo"
-      description="Used for your browser tab and the badge at the top of your sidebar."
+      description="Shows in the browser tab and at the top of your sidebar."
       accept={SMALL_LOGO_ACCEPT}
       url={url}
       disabled={disabled}
       upload={upload}
       onRemove={() => onChange(null)}
-      preview={preview}
+      preview={
+        <SquareIconPreview name={portalName} iconUrl={url} sidebarIconUrl={url || fallbackUrl} tabTitle={tabTitle} />
+      }
     />
   );
 }
 
 /* -------------------------------------------------------------------------- */
-/* Large logo                                                                  */
+/* Full logo                                                                   */
 /* -------------------------------------------------------------------------- */
 
-function LargeLogoCard({
+function FullLogoCard({
   tenantId,
+  portalName,
+  brandColor,
   url,
   onChange,
   disabled,
   onBusyChange,
 }: {
   tenantId: string;
+  portalName: string;
+  brandColor: string | null;
   url: string | null;
   onChange: (url: string | null) => void;
   disabled?: boolean;
@@ -484,73 +443,16 @@ function LargeLogoCard({
 }) {
   const upload = useLogoUpload({ slot: 'large', tenantId, onChange, onBusyChange });
 
-  // A logo welded into a solid box (the classic JPG) shows as a rectangle on the
-  // dark surface. Found by LogoStudio's corner check; unreadable pixels
-  // (another host without CORS) simply say nothing.
-  const [boxedUrl, setBoxedUrl] = useState<string | null>(null);
-  useEffect(() => {
-    if (!url) return;
-    let cancelled = false;
-    analyzeLogo(url).then((analysis) => {
-      if (!cancelled) setBoxedUrl(analysis?.hasSolidBackdrop ? url : null);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [url]);
-
-  const surfaces = [
-    { label: 'On a light background', className: 'bg-white' },
-    { label: 'On a dark background', className: 'bg-[#0B1120]' },
-  ];
-
-  const preview = (
-    <div className="grid grid-cols-2 gap-3">
-      {surfaces.map((surface) => (
-        <figure key={surface.label} className="min-w-0 space-y-1.5">
-          <div className={cn('flex h-24 items-center justify-center rounded-xl border p-4', surface.className)}>
-            {url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={url} alt={`Large logo ${surface.label.toLowerCase()}`} className="max-h-12 max-w-full object-contain" />
-            ) : (
-              <span className="text-xs text-slate-400">No logo yet</span>
-            )}
-          </div>
-          <figcaption className="text-[11px] text-muted-foreground">{surface.label}</figcaption>
-        </figure>
-      ))}
-    </div>
-  );
-
-  const advice =
-    url && boxedUrl === url ? (
-      <div className="space-y-2.5 rounded-xl bg-amber-500/10 px-3.5 py-3 text-[13px] leading-snug text-amber-800 dark:text-amber-300">
-        <p>Your logo has a solid box behind it, so it shows as a rectangle on dark backgrounds.</p>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={disabled || upload.busy}
-          onClick={() => void upload.replaceWith(() => removeLogoBackdrop(url), 'logo-clean')}
-        >
-          <Scissors data-icon="inline-start" />
-          Remove the box
-        </Button>
-      </div>
-    ) : null;
-
   return (
     <LogoCard
       slot="large"
-      title="Large logo"
-      description="Shown on your sign-in page and your booking website."
+      description="Shows on your sign-in page and your booking website."
       accept={LARGE_LOGO_ACCEPT}
       url={url}
       disabled={disabled}
       upload={upload}
       onRemove={() => onChange(null)}
-      preview={preview}
-      advice={advice}
+      preview={<SignInPreview logoUrl={url} appName={portalName} brandColor={brandColor} />}
     />
   );
 }

@@ -377,13 +377,14 @@ describe("LockboxTemplatesSectionV2 email only (the v2 Customer messages page)",
     expect(text()).not.toContain("and text message");
   });
 
-  it("when lockbox handover is off, points at Key handover in General", () => {
+  it("when lockbox handover is off, points at the Lockbox page (Key handover left General on Sep 19 2026)", () => {
     state.rental = { ...state.rental, settings: { lockbox_enabled: false } };
     mountEmailOnly();
     expect(text()).toContain(
-      "Turn on lockbox handover in General, under Key handover, and save. Then you can edit the email that sends the code.",
+      "Turn on lockbox handover on the Lockbox page and save. Then you can edit the email that sends the code.",
     );
-    expect(container.querySelector('a[href="/settings?tab=lockbox"]')?.textContent).toBe("Open Key handover");
+    expect(text()).not.toContain("Key handover");
+    expect(container.querySelector('a[href="/settings?tab=lockbox"]')?.textContent).toBe("Open Lockbox");
   });
 
   it("the page's Save changes writes the email only", async () => {
