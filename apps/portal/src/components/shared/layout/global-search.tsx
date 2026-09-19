@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import { useGuardedRouter } from "@/lib/leave-guard";
 import {
   Search,
   User,
   Car,
   Calendar,
+  CalendarDays,
   AlertTriangle,
   CreditCard,
   Hash,
@@ -14,15 +15,38 @@ import {
   Loader2,
   Filter,
   FileText,
-  FileSignature
+  FileSignature,
+  LayoutDashboard,
+  Settings,
+  Plug,
+  LifeBuoy,
+  Users,
+  UserPlus,
+  MapPin,
+  Tag,
+  Package,
+  Bell,
+  Newspaper,
+  Sparkles,
+  Compass,
+  Globe,
+  Clock,
+  Receipt,
+  Wrench,
+  Wallet,
+  BarChart3,
+  TrendingUp,
+  Crown,
+  MessageSquare,
+  History,
+  Workflow,
+  Link2,
+  ArrowUpRight,
+  CornerDownLeft,
 } from "lucide-react";
 import {
   Command,
   CommandDialog,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
   CommandList,
   CommandShortcut,
 } from "@/components/ui/command";
@@ -37,37 +61,46 @@ import { Button } from "@/components/ui/button";
 import { useGlobalSearch } from "@/hooks/use-global-search";
 import { SearchResult } from "@/lib/search-service";
 import { useTenant } from "@/contexts/TenantContext";
-import { isInsuranceExemptTenant } from "@/config/tenant-config";
+import { toast } from "@/hooks/use-toast";
 
-// Entity icons - returns empty string (icons handled by Lucide components)
-const getEntityEmoji = (category: string): string => {
-  return "";
+const ICONS: Record<string, typeof Search> = {
+  user: User,
+  users: Users,
+  "user-plus": UserPlus,
+  car: Car,
+  calendar: Calendar,
+  "calendar-days": CalendarDays,
+  "alert-triangle": AlertTriangle,
+  "credit-card": CreditCard,
+  hash: Hash,
+  shield: Shield,
+  "file-text": FileText,
+  "file-signature": FileSignature,
+  dashboard: LayoutDashboard,
+  settings: Settings,
+  plug: Plug,
+  "life-buoy": LifeBuoy,
+  "map-pin": MapPin,
+  tag: Tag,
+  package: Package,
+  bell: Bell,
+  newspaper: Newspaper,
+  sparkles: Sparkles,
+  compass: Compass,
+  globe: Globe,
+  clock: Clock,
+  receipt: Receipt,
+  wrench: Wrench,
+  wallet: Wallet,
+  "bar-chart": BarChart3,
+  "trending-up": TrendingUp,
+  crown: Crown,
+  "message-square": MessageSquare,
+  history: History,
+  workflow: Workflow,
 };
 
-const getIcon = (iconName: string) => {
-  switch (iconName) {
-    case "user":
-      return User;
-    case "car":
-      return Car;
-    case "calendar":
-      return Calendar;
-    case "alert-triangle":
-      return AlertTriangle;
-    case "credit-card":
-      return CreditCard;
-    case "hash":
-      return Hash;
-    case "shield":
-      return Shield;
-    case "file-text":
-      return FileText;
-    case "file-signature":
-      return FileSignature;
-    default:
-      return Search;
-  }
-};
+const getIcon = (iconName: string) => ICONS[iconName] ?? Search;
 
 interface SearchTriggerProps {
   onClick: () => void;
@@ -87,36 +120,85 @@ export const SearchTrigger = ({ onClick }: SearchTriggerProps) => {
   );
 };
 
+/** One keyboard hint in the footer, e.g. "↵ Open". */
+const Hint = ({ keys, label }: { keys: string; label: string }) => (
+  <span className="flex items-center gap-1.5">
+    <kbd className="rounded border border-border/60 bg-muted/70 px-1.5 py-0.5 font-mono text-[10px] leading-none text-muted-foreground">{keys}</kbd>
+    <span>{label}</span>
+  </span>
+);
+
 interface GlobalSearchProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
+/**
+ * The portal's ⌘K search: a list of matches on the left, a preview of the
+ * highlighted one on the right, and the keys you can press along the bottom.
+ *
+ * What it searches, and the rules deciding what a person may see, are in
+ * hooks/use-global-search.ts; this file is the window.
+ */
 export const GlobalSearch = ({ open, onOpenChange }: GlobalSearchProps) => {
   // Asks a v2 page with unsaved edits first; exactly useRouter() everywhere else.
   const router = useGuardedRouter();
   const { tenant } = useTenant();
-  const hideInsurance = isInsuranceExemptTenant(tenant?.id);
+  const tenantName = tenant?.app_name || tenant?.company_name || null;
   const {
     query,
     setQuery,
-    results,
+    groups,
+    filterOptions,
     isLoading,
     totalResults,
     hasQuery,
     entityFilter,
     setEntityFilter,
-    selectedIndex,
+    activeIndex,
+    selectedResult,
+    allResults,
+    remember,
+    setSelectedIndex,
     navigateUp,
     navigateDown,
     getSelectedResult,
   } = useGlobalSearch();
 
-  // Keyboard navigation
+  const absoluteUrl = (url: string) => (typeof window === "undefined" ? url : `${window.location.origin}${url}`);
+
+  const openResult = useCallback(
+    (result: SearchResult) => {
+      remember(result);
+      router.push(result.url);
+      onOpenChange(false);
+    },
+    [remember, router, onOpenChange],
+  );
+
+  const openInNewTab = useCallback(
+    (result: SearchResult) => {
+      remember(result);
+      window.open(result.url, "_blank", "noopener,noreferrer");
+    },
+    [remember],
+  );
+
+  const copyLink = useCallback(async (result: SearchResult) => {
+    try {
+      await navigator.clipboard.writeText(absoluteUrl(result.url));
+      toast({ title: "Link copied", description: result.title });
+    } catch {
+      toast({ title: "Could not copy the link", description: "Your browser did not allow it.", variant: "destructive" });
+    }
+  }, []);
+
+  // Keyboard: the four actions listed in the footer.
   useEffect(() => {
     if (!open) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      const meta = e.metaKey || e.ctrlKey;
       if (e.key === "ArrowUp") {
         e.preventDefault();
         navigateUp();
@@ -126,8 +208,12 @@ export const GlobalSearch = ({ open, onOpenChange }: GlobalSearchProps) => {
       } else if (e.key === "Enter") {
         e.preventDefault();
         const selected = getSelectedResult();
+        if (selected) (meta ? openInNewTab : openResult)(selected);
+      } else if (meta && (e.key === "l" || e.key === "L")) {
+        const selected = getSelectedResult();
         if (selected) {
-          handleSelect(selected);
+          e.preventDefault(); // otherwise the browser jumps to its address bar
+          void copyLink(selected);
         }
       } else if (e.key === "Escape") {
         e.preventDefault();
@@ -137,216 +223,220 @@ export const GlobalSearch = ({ open, onOpenChange }: GlobalSearchProps) => {
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [open, navigateUp, navigateDown, getSelectedResult, onOpenChange]);
+  }, [open, navigateUp, navigateDown, getSelectedResult, onOpenChange, openResult, openInNewTab, copyLink]);
 
-  const handleSelect = (result: SearchResult) => {
-    router.push(result.url);
-    onOpenChange(false);
-  };
-
-  const renderGroup = (title: string, items: SearchResult[], emoji: string) => {
-    if (items.length === 0) return null;
-
-    return (
-      <CommandGroup
-        heading={
-          <div className="flex items-center gap-2 px-2 py-1.5">
-            {emoji && <span className="text-lg">{emoji}</span>}
-            <span className="font-semibold text-xs uppercase tracking-wide text-foreground/70">{title}</span>
-            <span className="ml-auto text-xs text-muted-foreground bg-muted/50 px-2 py-0.5 rounded-full font-medium">
-              {items.length}{items.length === 5 ? '+' : ''}
-            </span>
-          </div>
-        }
-        className="mb-2"
-      >
-        {items.map((item, index) => {
-          const IconComponent = getIcon(item.icon || "search");
-          const globalIndex = Object.values(results)
-            .slice(0, Object.keys(results).indexOf(item.category.toLowerCase()))
-            .flat().length + index;
-
-          const isSelected = globalIndex === selectedIndex;
-
-          return (
-            <CommandItem
-              key={`${item.category}-${item.id}`}
-              onSelect={() => handleSelect(item)}
-              className={`group flex items-center gap-3 p-3 mx-1 mb-1 cursor-pointer rounded-lg transition-all duration-150 border ${
-                isSelected
-                  ? 'bg-accent/50 border-primary/30 shadow-sm'
-                  : 'border-transparent hover:border-border hover:bg-accent/30'
-              }`}
-            >
-              <div className={`p-2 rounded-md transition-all duration-150 ${
-                isSelected ? 'bg-primary/15' : 'bg-muted/60 group-hover:bg-muted'
-              }`}>
-                <IconComponent className={`h-4 w-4 transition-colors duration-150 ${
-                  isSelected ? 'text-primary' : 'text-muted-foreground'
-                }`} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="font-semibold text-sm truncate text-foreground">{item.title}</div>
-                <div className="text-xs text-muted-foreground truncate mt-0.5">{item.subtitle}</div>
-              </div>
-              <div className={`text-xs transition-opacity duration-150 ${
-                isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-60'
-              }`}>
-                <kbd className="font-mono bg-muted/80 px-1.5 py-0.5 rounded text-[10px] border border-border/50">↵</kbd>
-              </div>
-            </CommandItem>
-          );
-        })}
-      </CommandGroup>
-    );
-  };
+  let rowIndex = -1;
 
   return (
-    <CommandDialog open={open} onOpenChange={onOpenChange}>
-      <Command shouldFilter={false} className="rounded-xl shadow-2xl overflow-hidden">
-        <div className="flex items-center gap-2 sm:gap-3 border-b px-3 sm:px-5 py-3 sm:py-4 bg-gradient-to-r from-background via-muted/5 to-background">
-          <div className="p-2 rounded-lg bg-primary/10 flex-shrink-0">
-            <Search className="h-4 w-4 text-primary" />
-          </div>
-          <CommandInput
-            placeholder="Type to search customers, vehicles, rentals, and more..."
+    <CommandDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      contentClassName="max-w-[860px] gap-0 border-border/70"
+      title="Search"
+      description="Type to search your portal. Use the up and down arrows to move, Enter to open."
+    >
+      <Command shouldFilter={false} className="rounded-xl">
+        {/* Search field and filter. The dialog draws its own close button in the corner. */}
+        <div className="flex items-center gap-2 border-b px-4 py-3 pr-12">
+          <Search className="h-4 w-4 shrink-0 text-primary" />
+          {/* A plain input, not cmdk's: that one brings its own icon and border,
+              and this palette filters and highlights rows itself. */}
+          <input
+            autoFocus
             value={query}
-            onValueChange={setQuery}
-            className="flex h-10 w-full bg-transparent text-sm sm:text-base outline-none placeholder:text-muted-foreground/50 disabled:cursor-not-allowed disabled:opacity-50 min-w-0"
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={tenantName ? `Search or ask for anything in ${tenantName}…` : "Search pages, settings, support, customers, vehicles…"}
+            aria-label="Search"
+            className="h-8 w-full min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60"
           />
-          <div className="flex items-center gap-2 flex-shrink-0 border-l pl-2 sm:pl-3">
-            <Select value={entityFilter} onValueChange={setEntityFilter}>
-              <SelectTrigger className="w-24 sm:w-32 h-9 text-xs font-medium border-border/60 hover:border-primary/50 transition-colors bg-background shadow-sm">
-                <Filter className="h-3.5 w-3.5 mr-1 sm:mr-1.5" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="rounded-lg">
-                <SelectItem value="all" className="font-medium">All</SelectItem>
-                <SelectItem value="customers">Customers</SelectItem>
-                <SelectItem value="vehicles">Vehicles</SelectItem>
-                <SelectItem value="rentals">Rentals</SelectItem>
-                <SelectItem value="fines">Fines</SelectItem>
-                <SelectItem value="payments">Payments</SelectItem>
-                {!hideInsurance && <SelectItem value="insurance">Insurance</SelectItem>}
-                <SelectItem value="plates">Plates</SelectItem>
-                <SelectItem value="invoices">Invoices</SelectItem>
-                <SelectItem value="insurances">Insurances</SelectItem>
-                <SelectItem value="agreements">Agreements</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          <Select value={entityFilter} onValueChange={setEntityFilter}>
+            <SelectTrigger className="h-8 w-28 shrink-0 border-border/60 bg-background text-xs font-medium shadow-sm sm:w-36">
+              <Filter className="mr-1.5 h-3.5 w-3.5" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="rounded-lg">
+              {/* Only what this user can search — see use-global-search.ts. */}
+              {filterOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value} className={option.value === "all" ? "font-medium" : undefined}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
-        <CommandList className="max-h-[500px] p-2">
-          {isLoading && hasQuery && (
-            <div className="flex flex-col items-center justify-center p-12 gap-3">
-              <div className="relative">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <div className="absolute inset-0 h-8 w-8 animate-ping text-primary/20">
-                  <Loader2 className="h-8 w-8" />
-                </div>
+        {/* Results, and a preview of the highlighted one */}
+        <div className="flex h-[430px]">
+          <CommandList className="w-full max-h-none overflow-y-auto border-r p-2 md:w-1/2">
+            {isLoading && allResults.length === 0 && (
+              <div className="flex flex-col items-center justify-center gap-3 p-12">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                <span className="text-sm text-muted-foreground">Searching…</span>
               </div>
-              <span className="text-sm font-medium text-muted-foreground">Searching across your data...</span>
-            </div>
-          )}
+            )}
 
-          {!isLoading && hasQuery && totalResults === 0 && (
-            <CommandEmpty>
-              <div className="text-center p-12 space-y-4">
-                <div className="mx-auto w-16 h-16 rounded-full bg-muted/50 flex items-center justify-center">
-                  <Search className="h-8 w-8 text-muted-foreground/50" />
-                </div>
-                <div className="space-y-2">
-                  <p className="text-base font-semibold text-foreground">No results found</p>
-                  <p className="text-sm text-muted-foreground">
-                    We couldn't find anything matching <span className="font-medium text-foreground">"{query}"</span>
-                  </p>
-                </div>
-                <div className="bg-muted/30 rounded-lg p-4 space-y-2">
-                  <p className="text-xs font-semibold text-foreground">Search Tips:</p>
-                  <ul className="text-xs text-muted-foreground space-y-1 text-left max-w-sm mx-auto">
-                    <li>• Try different keywords or shorter terms</li>
-                    <li>• Check for typos (fuzzy matching is enabled)</li>
-                    <li>• Use the filter dropdown to narrow your search</li>
-                  </ul>
-                </div>
-              </div>
-            </CommandEmpty>
-          )}
-
-          {!hasQuery && (
-            <div className="p-8 text-center space-y-6">
-              <div className="mx-auto w-20 h-20 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
-                <Search className="h-10 w-10 text-primary" />
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-lg font-semibold text-foreground">Search Everything</h3>
-                <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                  Instantly find customers, vehicles, rentals, fines, payments{!hideInsurance ? ', insurance,' : ','} invoices, agreements, and plates
+            {!isLoading && hasQuery && allResults.length === 0 && (
+              <div className="space-y-2 p-10 text-center">
+                <p className="text-sm font-semibold">No results</p>
+                <p className="text-xs text-muted-foreground">
+                  Nothing matches <span className="font-medium text-foreground">&quot;{query}&quot;</span>. Try fewer words, or a name, number or address.
                 </p>
               </div>
+            )}
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 max-w-2xl mx-auto">
-                <div className="p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors cursor-default">
-                  <User className="h-5 w-5 text-primary mx-auto mb-1.5" />
-                  <p className="text-xs font-medium">Customers</p>
+            {groups.map((group) => (
+              <div key={group.key} className="mb-2">
+                <div className="px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/80">
+                  {group.title}
                 </div>
-                <div className="p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors cursor-default">
-                  <Car className="h-5 w-5 text-primary mx-auto mb-1.5" />
-                  <p className="text-xs font-medium">Vehicles</p>
-                </div>
-                <div className="p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors cursor-default">
-                  <Calendar className="h-5 w-5 text-primary mx-auto mb-1.5" />
-                  <p className="text-xs font-medium">Rentals</p>
-                </div>
-                <div className="p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors cursor-default">
-                  <CreditCard className="h-5 w-5 text-primary mx-auto mb-1.5" />
-                  <p className="text-xs font-medium">Payments</p>
-                </div>
+                {group.items.map((item) => {
+                  rowIndex += 1;
+                  const index = rowIndex;
+                  const Icon = getIcon(item.icon || "search");
+                  const isSelected = index === activeIndex;
+                  return (
+                    <button
+                      key={`${group.key}-${item.id}`}
+                      type="button"
+                      onMouseEnter={() => setSelectedIndex(index)}
+                      onClick={() => openResult(item)}
+                      className={`group flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors ${
+                        isSelected ? "bg-primary/10 dark:bg-muted" : "hover:bg-muted/60"
+                      }`}
+                    >
+                      <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${isSelected ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"}`}>
+                        <Icon className="h-3.5 w-3.5" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[13px] font-medium text-foreground">{item.title}</span>
+                        <span className="block truncate text-[11px] text-muted-foreground">{item.subtitle}</span>
+                      </span>
+                      {isSelected && (
+                        <CornerDownLeft className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                      )}
+                    </button>
+                  );
+                })}
               </div>
+            ))}
 
-              <div className="bg-muted/20 rounded-lg p-4 space-y-3 max-w-md mx-auto">
-                <p className="text-xs font-semibold text-foreground flex items-center justify-center gap-2">
-                  Keyboard Shortcuts
+            {isLoading && allResults.length > 0 && (
+              <div className="flex items-center justify-center gap-2 py-3 text-[11px] text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Still searching your records…
+              </div>
+            )}
+          </CommandList>
+
+          {/* Preview */}
+          <aside className="hidden w-1/2 flex-col overflow-y-auto p-5 md:flex">
+            {selectedResult ? (
+              <PreviewPanel
+                result={selectedResult}
+                onOpen={() => openResult(selectedResult)}
+                onCopy={() => void copyLink(selectedResult)}
+                onNewTab={() => openInNewTab(selectedResult)}
+              />
+            ) : (
+              <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
+                <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-muted">
+                  <Search className="h-5 w-5 text-muted-foreground" />
+                </span>
+                <p className="text-sm font-medium">Search your whole portal</p>
+                <p className="max-w-[240px] text-xs text-muted-foreground">
+                  Pages, settings, integrations, support tickets, customers, vehicles, rentals, payments and more.
                 </p>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="flex items-center justify-between bg-background/50 rounded px-3 py-2">
-                    <span className="text-muted-foreground">Navigate</span>
-                    <kbd className="font-mono bg-muted px-2 py-1 rounded text-[10px]">↑ ↓</kbd>
-                  </div>
-                  <div className="flex items-center justify-between bg-background/50 rounded px-3 py-2">
-                    <span className="text-muted-foreground">Select</span>
-                    <kbd className="font-mono bg-muted px-2 py-1 rounded text-[10px]">Enter</kbd>
-                  </div>
-                  <div className="flex items-center justify-between bg-background/50 rounded px-3 py-2">
-                    <span className="text-muted-foreground">Close</span>
-                    <kbd className="font-mono bg-muted px-2 py-1 rounded text-[10px]">Esc</kbd>
-                  </div>
-                  <div className="flex items-center justify-between bg-background/50 rounded px-3 py-2">
-                    <span className="text-muted-foreground">Open</span>
-                    <kbd className="font-mono bg-muted px-2 py-1 rounded text-[10px]">⌘K</kbd>
-                  </div>
-                </div>
               </div>
-            </div>
-          )}
+            )}
+          </aside>
+        </div>
 
-          {hasQuery && !isLoading && totalResults > 0 && (
-            <div className="space-y-2">
-              {renderGroup("Customers", results.customers, "")}
-              {renderGroup("Vehicles", results.vehicles, "")}
-              {renderGroup("Rentals", results.rentals, "")}
-              {renderGroup("Fines", results.fines, "")}
-              {renderGroup("Payments", results.payments, "")}
-              {!hideInsurance && renderGroup("Insurance", results.insurance, "")}
-              {renderGroup("Plates", results.plates, "")}
-              {renderGroup("Invoices", results.invoices, "")}
-              {renderGroup("Insurances", results.insurances, "")}
-              {renderGroup("Agreements", results.agreements, "")}
-            </div>
-          )}
-        </CommandList>
+        {/* Keys, and how many matched */}
+        <div className="flex items-center justify-between gap-3 border-t px-4 py-2 text-[11px] text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <Hint keys="↑↓" label="Navigate" />
+            <Hint keys="↵" label="Open" />
+            <span className="hidden sm:flex"><Hint keys="⌘↵" label="Open in new tab" /></span>
+            <span className="hidden sm:flex"><Hint keys="⌘L" label="Copy link" /></span>
+            <Hint keys="Esc" label="Close" />
+          </div>
+          <span className="shrink-0">
+            {hasQuery ? `${totalResults} ${totalResults === 1 ? "result" : "results"}` : "Recent and suggested"}
+          </span>
+        </div>
       </Command>
     </CommandDialog>
+  );
+};
+
+/** The right-hand side: what the highlighted result is, and what to do with it. */
+const PreviewPanel = ({
+  result,
+  onOpen,
+  onCopy,
+  onNewTab,
+}: {
+  result: SearchResult;
+  onOpen: () => void;
+  onCopy: () => void;
+  onNewTab: () => void;
+}) => {
+  const Icon = getIcon(result.icon || "search");
+  const details = result.details ?? [];
+
+  return (
+    <div className="flex h-full flex-col">
+      <div className="flex items-start justify-between">
+        <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+          <Icon className="h-5 w-5" />
+        </span>
+        <div className="flex items-center gap-1">
+          <button type="button" onClick={onCopy} aria-label="Copy link" className="rounded-md border border-border/60 p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+            <Link2 className="h-3.5 w-3.5" />
+          </button>
+          <button type="button" onClick={onNewTab} aria-label="Open in a new tab" className="rounded-md border border-border/60 p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+            <ArrowUpRight className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {result.badges && result.badges.length > 0 && (
+        <div className="mt-4 flex flex-wrap items-center gap-1.5">
+          {result.badges.map((badge, i) => (
+            <span
+              key={`${badge}-${i}`}
+              className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${
+                i === 0 ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+              }`}
+            >
+              {badge}
+            </span>
+          ))}
+        </div>
+      )}
+
+      <h3 className="mt-3 text-lg font-semibold leading-tight text-foreground">{result.title}</h3>
+      <p className="mt-1 text-xs text-muted-foreground">{result.description || result.subtitle}</p>
+
+      {details.length > 0 && (
+        <dl className="mt-5 space-y-0 border-t">
+          {details.map((d, i) => (
+            <div key={`${d.label}-${i}`} className="flex items-start justify-between gap-4 border-b py-2.5">
+              <dt className="text-xs text-muted-foreground">{d.label}</dt>
+              <dd className="max-w-[60%] truncate text-right text-xs font-medium text-foreground">{d.value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+
+      <div className="mt-auto flex items-center gap-2 pt-5">
+        <Button onClick={onOpen} className="flex-1">
+          {result.openLabel || "Open"}
+        </Button>
+        <Button variant="outline" onClick={onCopy}>
+          Copy link
+        </Button>
+      </div>
+    </div>
   );
 };
