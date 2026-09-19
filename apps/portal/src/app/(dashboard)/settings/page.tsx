@@ -88,15 +88,16 @@ import { SettingsIndexV2 } from '@/components/settings-v2/settings-index';
 import * as BusinessV2 from '@/components/settings-v2/business-settings-states';
 import { BusinessRentalGate, DurationPageV2, LockboxPageV2, RequirementsPageV2, ReturnReminderPanelV2, makeBusinessSave } from '@/components/settings-v2/business-rules-pages';
 import { keepUnsavedBusinessEdits, rentalEditsCoveredBySections, rentalFormDiffers } from '@/components/settings-v2/business-rules-logic';
-import { SettingsField, SettingsPageHeader, SettingsPageHeaderSkeleton, SettingsPageSaveProvider, SettingsPanel, SettingsRow, SettingsSection, SettingsStickySaveBar, Unit, useScrollToSection } from '@/components/settings-v2/settings-kit';
+import { SETTINGS_COLUMN_BESIDE_TRAX, SettingsField, SettingsPageHeader, SettingsPageHeaderSkeleton, SettingsPageSaveProvider, SettingsPanel, SettingsRow, SettingsSection, SettingsStickySaveBar, Unit, useScrollToSection } from '@/components/settings-v2/settings-kit';
 import { SectionSaveRegistration } from '@/components/settings-v2/business-section-save';
 import { LeaveDialogV2 } from '@/components/settings-v2/leave-dialog-v2';
 import { useLeaveGuardV2 } from '@/hooks/use-leave-guard-v2';
 import { AgreementTemplateStatusV2, EmailTemplatesStatusV2 } from '@/components/settings-v2/templates-status-v2';
-import { PricingRulesV2 } from '@/components/settings-v2/pricing-rules-v2';
+import { MonthlyRateSectionV2, PricingRulesV2 } from '@/components/settings-v2/pricing-rules-v2';
 import { DepositSettingsV2, FeesSettingsV2 } from '@/components/settings-v2/fees-deposit-v2';
 import { useSettingsReadState, type RegisterSectionSave } from '@/components/settings-v2/pricing-money-parts';
 import { AutoExtendSettingsV2, PayAsYouGoSettingsV2 } from '@/components/settings-v2/payment-modes-v2';
+import dynamic from 'next/dynamic';
 import { PromoCodesSectionV2 } from '@/components/settings-v2/promo-codes-section-v2';
 import { validatePromoDraft, validatePromoEdit, visiblePromoIssues, promoSaveError } from '@/lib/settings-money-states';
 import { parseLocalDate } from '@/lib/date-utils';
@@ -111,6 +112,7 @@ import {
   describeSaveError,
 } from '@/components/settings-v2/section-states';
 import {
+  V2_FEES_SECTIONS,
   V2_GENERAL_SECTIONS,
   canSaveV2Edits,
   canViewAny,
@@ -121,7 +123,19 @@ import {
   settingsTabNoticeCopy,
   v2HasUnsavedEdits,
   v2NoticePages,
+  v2SectionHomePage,
+  type V2PageSection,
 } from '@/components/settings-v2/settings-shell-state';
+
+/**
+ * v2 (northwind) only: the Notifications page, loaded when it is opened, so its
+ * catalog, previews and email layout stay out of the settings page every
+ * tenant loads. The editor inside it is loaded on demand again.
+ */
+const NotificationsPageV2 = dynamic(
+  () => import('@/components/settings-v2/notifications-v2/notifications-page-v2').then((m) => m.NotificationsPageV2),
+  { ssr: false, loading: () => <SettingsSectionSkeleton variant="form" rows={4} label="Loading notifications" /> },
+);
 
 /**
  * The parts the promo code Edit and Delete dialogs are drawn with. v1 keeps
@@ -186,12 +200,16 @@ const MovedToWebsite = ({
  * `/settings` with no tab is the index. Each entry is one compact page; several
  * v1 tabs' cards now share a page where they belong together (General holds
  * the regional settings and, as sections, Driver requirements, Booking rules,
- * Key handover, Tax and fees, Security deposit and Booking site — see
- * V2_GENERAL_SECTIONS in settings-shell-state, whose old `?tab=` values open
- * General at that section; Customer messages holds the return reminder, the
- * lockbox message and the template links). `permTab` is the v1 tab whose
- * manager permission the page follows, so access is unchanged; General opens
- * when any of its sections may be viewed, and each section keeps its own.
+ * the monthly rate, Key handover and Booking site; Tax, fees and deposit holds
+ * Tax and fees and Security deposit — see V2_SECTIONED_PAGES in
+ * settings-shell-state, whose old `?tab=` values open the page holding that
+ * section, scrolled to it; Customer messages holds the return reminder, the
+ * lockbox message and the template links; Notifications holds every
+ * notification, with the email and push setup Team emails and Push
+ * notifications used to be: their tabs open it there, and their entries stay
+ * for the notices and the v1-era cases). `permTab` is the v1 tab whose
+ * manager permission the page follows, so access is unchanged; a page made of
+ * sections opens when any of them may be viewed, and each keeps its own.
  *
  * Tabs an Integrations card owns are absent on purpose — the effect that sends
  * them to /integrations still runs — and `insurance` is here only because the
@@ -201,35 +219,40 @@ const MovedToWebsite = ({
  * V2_HIDDEN_SETTINGS_PAGES, which is empty now).
  */
 const V2_SETTINGS_PAGES: Record<string, { section: string; title: string; description: string; permTab: string }> = {
-  general: { section: 'Business', title: 'General', description: 'Regional settings, driver and booking rules, key handover, fees and deposits, and your booking site.', permTab: 'general' },
+  general: { section: 'Business', title: 'General', description: 'Regional settings, driver and booking rules, the monthly rate, key handover and your booking site.', permTab: 'general' },
   locations: { section: 'Business', title: 'Locations', description: 'Where customers pick up and return cars, and where you deliver.', permTab: 'locations' },
-  pricing: { section: 'Pricing', title: 'Custom pricing', description: 'Weekend and holiday surcharges, and when monthly pricing starts.', permTab: 'pricing' },
+  fees: { section: 'Pricing', title: 'Tax, fees and deposit', description: 'The tax and fees added to what a customer pays, and the refundable deposit taken on online bookings.', permTab: 'fees' },
+  pricing: { section: 'Pricing', title: 'Weekend and holiday pricing', description: 'Charge more for the weekend days and holidays a rental includes.', permTab: 'pricing' },
   promos: { section: 'Pricing', title: 'Promo codes', description: 'Codes customers type at checkout, or discounts that apply by themselves on long rentals.', permTab: 'promos' },
   extras: { section: 'Pricing', title: 'Extras', description: 'Add-ons customers can buy with a rental, such as a child seat or GPS.', permTab: 'extras' },
   installments: { section: 'Payment plans', title: 'Installments', description: 'Let customers pay for a rental in weekly or monthly parts.', permTab: 'installments' },
   payg: { section: 'Payment plans', title: 'Pay as you go', description: 'Bill long rentals day by day instead of all upfront.', permTab: 'payg' },
   'auto-extend': { section: 'Payment plans', title: 'Auto-extension', description: 'Rentals that renew each week or month and are billed in advance.', permTab: 'auto-extend' },
+  notifications: { section: 'Notifications', title: 'Notifications', description: 'Every email, push and in-app message: when it is sent, what it says and who gets it.', permTab: 'notifications' },
   reminders: { section: 'Notifications', title: 'Team emails', description: 'Which emails your team receives.', permTab: 'reminders' },
   push: { section: 'Notifications', title: 'Push notifications', description: "Alerts on your team's phones and browsers.", permTab: 'push' },
-  templates: { section: 'Notifications', title: 'Customer messages', description: 'The reminders, emails and agreement your customers receive, including the lockbox code email.', permTab: 'templates' },
+  templates: { section: 'Templates', title: 'Customer messages', description: 'The reminders, emails and agreement your customers receive, including the lockbox code email.', permTab: 'templates' },
   insurance: { section: 'Bonzah', title: 'Bonzah application', description: 'Apply for Bonzah insurance. Everything else about Bonzah is in its Integrations card.', permTab: 'insurance' },
 };
 
 /**
  * v2 pages that disable their own controls for a viewer, so the page-level
  * read-only fieldset (which would also lock Try again and list search) skips them.
- * General's sections and Customer messages wrap every control in their own
- * fieldset (business-rules-pages, fees-deposit-v2, lockbox-templates-v2), each
+ * General's sections, Tax, fees and deposit's sections and Customer messages
+ * wrap every control in their own fieldset (business-rules-pages,
+ * fees-deposit-v2, pricing-rules-v2's monthly rate, lockbox-templates-v2), each
  * following its own permission; their Try again on a failed or stale read must
- * stay usable. Custom pricing does the same per section (pricing-rules-v2),
- * with Try again outside each fieldset.
+ * stay usable. Weekend and holiday pricing does the same per section
+ * (pricing-rules-v2), with Try again outside each fieldset.
  * Installments, Pay as you go and Auto-extension disable their own switches
  * (InstallmentSettings, payment-modes-v2); Promo codes and Extras render no
  * write control at all for a viewer. Inside the fieldset a viewer could not
  * retry a failed read, copy a promo code, open an installment example or press
- * "Show more" on a phone.
+ * "Show more" on a phone. Notifications disables its own switches, fields and
+ * Send test, so a viewer can still open every notification and switch the
+ * previews between Desktop / Phone and iPhone / Android.
  */
-const V2_PAGES_GATING_OWN_CONTROLS = new Set(['reminders', 'push', 'general', 'locations', 'templates', 'pricing', 'installments', 'payg', 'auto-extend', 'promos', 'extras']);
+const V2_PAGES_GATING_OWN_CONTROLS = new Set(['reminders', 'push', 'general', 'locations', 'templates', 'pricing', 'fees', 'installments', 'payg', 'auto-extend', 'promos', 'extras', 'notifications']);
 
 /**
  * v2 pages whose forms save through ONE sticky bar at the end of the page
@@ -239,11 +262,14 @@ const V2_PAGES_GATING_OWN_CONTROLS = new Set(['reminders', 'push', 'general', 'l
  * and reminder rules stay per item (dialogs and cards), as do Locations'
  * delivery and collection locations (Locations registers the rest under
  * "locations"). Installments, Pay as you go and Auto-extension are forms too
- * and save here ("installments", "payg", "auto-extend"). Promo codes and
- * Extras are lists: each code or extra saves in its own form or dialog, so
- * they have no bar.
+ * and save here ("installments", "payg", "auto-extend"). Tax, fees and deposit
+ * saves its two sections here ("fees", "preauth"), and General its monthly
+ * rate ("pricing-monthly-tier"): the keys `rentalEditsCoveredBySections`
+ * reads. Promo codes and Extras are lists: each code or extra saves in its own
+ * form or dialog, so they have no bar. Notifications saves its drafts
+ * ("notifications") and the email sender ("email-sender") here.
  */
-const V2_PAGES_WITH_SAVE_BAR = new Set(['general', 'templates', 'pricing', 'locations', 'installments', 'payg', 'auto-extend']);
+const V2_PAGES_WITH_SAVE_BAR = new Set(['general', 'templates', 'pricing', 'fees', 'locations', 'installments', 'payg', 'auto-extend', 'notifications']);
 
 /**
  * v2 tabs whose home is another screen: Branding is the Appearance page (the
@@ -260,6 +286,15 @@ const V2_SETTINGS_REDIRECTS: Record<string, string> = {
 
 /** Customer messages, scrolled to the lockbox message (Key handover's Templates button). */
 const V2_LOCKBOX_MESSAGES_HREF = `/settings?tab=templates#${settingsSectionId('lockbox-messages')}`;
+
+/**
+ * The column every v2 settings page (and its permission-wait skeleton) sits in.
+ * md:pt-[26px]: no breadcrumb, so the header starts with the 32px title, which
+ * centres at 50 + 26 + 16 = 92, the sidebar switch's row, as on the index.
+ * While the floating Trax panel is open the column stops short of it, so the
+ * panel never covers a section's controls or the save bar at the column's end.
+ */
+const V2_SETTINGS_PAGE_COLUMN = `w-full max-w-[1160px] space-y-8 pb-16 md:pt-[26px] ${SETTINGS_COLUMN_BESIDE_TRAX}`;
 
 /**
  * Light → dark colour sync.
@@ -1196,8 +1231,9 @@ const Settings = () => {
   }, [searchParams, tenantSlug, router]);
 
   // v2: which compact page `?tab=` opens (null = the index), the section of it
-  // an old tab now points at (`?tab=fees` opens General at Tax and fees), and
-  // the tabs whose v2 home is another screen. v1 never reads any of them.
+  // an old tab now points at (`?tab=preauth` opens Tax, fees and deposit at
+  // Security deposit), and the tabs whose v2 home is another screen. v1 never
+  // reads any of them.
   const v2TabParam = searchParams.get('tab');
   const v2Route = v2Chrome ? resolveV2SettingsRoute(v2TabParam, V2_SETTINGS_PAGES) : null;
   const v2Page = v2Route?.page ?? null;
@@ -1761,8 +1797,8 @@ const Settings = () => {
     if (v2Chrome && !v2PageHasEdits) setV2LeaveSaveError(null);
   }, [v2Chrome, v2PageHasEdits]);
 
-  // v2: a deep link to one section of a page. `?tab=fees` scrolls General to
-  // Tax and fees; a `#settings-…` hash (Key handover's Templates button opens
+  // v2: a deep link to one section of a page. `?tab=preauth` scrolls Tax, fees
+  // and deposit to Security deposit; a `#settings-…` hash (Key handover's Templates button opens
   // Customer messages at its lockbox message) does the same on any page. It
   // waits until the settings the sections above it read are in (or failed),
   // so their skeletons have given way and the section is not pushed down after
@@ -1779,6 +1815,17 @@ const Settings = () => {
     window.addEventListener('hashchange', readHash);
     return () => window.removeEventListener('hashchange', readHash);
   }, [v2Chrome, searchParams]);
+  // v2: an old `#settings-…` link to a section that has since moved to another
+  // page (`?tab=general#settings-tax-and-fees`, from when Tax and fees was part
+  // of General) goes on to the page that holds it now, still scrolled to it.
+  useEffect(() => {
+    if (!v2Chrome || !v2Page || !v2Hash) return;
+    const home = v2SectionHomePage(v2Hash);
+    if (!home || home === v2Page) return;
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('tab', home);
+    router.replace(`/settings?${params.toString()}#${v2Hash}`, { scroll: false });
+  }, [v2Chrome, v2Page, v2Hash, searchParams, router]);
   const v2ScrollTarget = v2Route?.anchor ? settingsSectionId(v2Route.anchor) : v2Page ? v2Hash : null;
   const v2SectionsReady =
     !!tenant &&
@@ -2726,15 +2773,19 @@ const Settings = () => {
       v2Page && v2Route?.permTab && canViewAny(v2Route.permTab, canViewSettings) ? V2_SETTINGS_PAGES[v2Page] : null;
     // General's sections, each under its own permission (only those this user may see).
     const v2GeneralSections = V2_GENERAL_SECTIONS.filter((section) => canViewSettings(section.permTab));
+    // Tax, fees and deposit: Tax and fees and Security deposit, the same way.
+    const v2FeesSections = V2_FEES_SECTIONS.filter((section) => canViewSettings(section.permTab));
     // Customer messages carries the lockbox message, which follows Key handover's permission.
     const v2ShowLockboxMessages = canViewSettings('lockbox');
     const canEditPage = !pageMeta
       ? false
       : v2Page === 'general'
         ? v2GeneralSections.some((section) => canEditSettings(section.permTab))
-        : v2Page === 'templates'
-          ? canEditSettings('templates') || (v2ShowLockboxMessages && canEditSettings('lockbox'))
-          : canEditSettings(pageMeta.permTab);
+        : v2Page === 'fees'
+          ? canEditSettings('fees') || canEditSettings('preauth')
+          : v2Page === 'templates'
+            ? canEditSettings('templates') || (v2ShowLockboxMessages && canEditSettings('lockbox'))
+            : canEditSettings(pageMeta.permTab);
 
     // Why a `?tab=` link opened the index instead of a page: no access, a tab
     // this workspace hides (or Settings no longer shows), or a value that never
@@ -2784,6 +2835,93 @@ const Settings = () => {
 
     const digitsOnly = (value: string) => value.replace(/[^0-9]/g, '');
     const warnText = 'text-amber-600 dark:text-amber-400';
+
+    // The in-app payment reminders and the reminder rules: the Team emails page
+    // (`reminders`) and, since that page's link opens Notifications, the
+    // Notifications page's "What's sent today". Both pages follow the same
+    // permission (settings.reminders), so `canEditPage` is the same gate.
+    // Both of these only feed the reminders list, which the lean product does
+    // not carry — so a lean tenant is not asked to configure a list it cannot open.
+    const renderV2ReminderExtras = () =>
+      hideRemindersRows ? null : (
+        <>
+          <SettingsPanel title="In-app payment reminders" description="Shown in your reminders list. Nothing is sent to customers.">
+            {([
+              ['reminder_due_soon_2d', 'Payment due in 2 days', false],
+              ['reminder_due_today', 'Payment due today', true],
+              ['reminder_overdue_1d', 'Payment 1 day overdue', true],
+              ['reminder_overdue_multi', 'Payment several days overdue', true],
+            ] as const).map(([key, label, fallback]) => (
+              <SettingsRow key={key} label={label}>
+                {/* Every switch waits while one saves (the org-settings save
+                    replaces the whole cached row); the spinner says which. */}
+                <div className="flex items-center gap-2">
+                  {isUpdating && v2ReminderKey === key && (
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-label="Saving" />
+                  )}
+                  <Switch
+                    checked={(settings as any)?.[key] ?? fallback}
+                    onCheckedChange={() => {
+                      setV2ReminderKey(key);
+                      toggleReminder(key);
+                    }}
+                    disabled={isUpdating || !canEditPage}
+                    aria-label={label}
+                  />
+                </div>
+              </SettingsRow>
+            ))}
+          </SettingsPanel>
+          <div className="settings-v2-body">
+            <ReminderRulesConfig />
+          </div>
+        </>
+      );
+
+    // Notifications: the same, but the page itself does not wait for the org
+    // settings (it has reads of its own), so the payment reminder switches wait
+    // here, never showing placeholder defaults as the tenant's own.
+    const renderV2NotificationsToday = () =>
+      hideRemindersRows ? null : BusinessV2.hasRealOrgSettings(settings as any) ? (
+        renderV2ReminderExtras()
+      ) : error ? (
+        <SettingsLoadError thing="your reminder settings" error={error} onRetry={refetchOrgSettings} retrying={v2SettingsFetching} />
+      ) : (
+        <SettingsSectionSkeleton variant="rows" rows={4} label="Loading reminder settings" />
+      );
+
+    // A page made of sections (General, Tax, fees and deposit): each under its
+    // own title and anchor. On a partly editable page the page shows no "View
+    // only", so a section this user may only look at says it beside its title.
+    const renderV2Sections = (sections: readonly V2PageSection[], body: (anchor: string) => React.ReactNode) => (
+      <div className="space-y-10">
+        {sections.map((section) => (
+          <SettingsSection
+            key={section.anchor}
+            anchor={section.anchor}
+            title={section.title}
+            description={section.description}
+            action={canEditPage && !canEditSettings(section.permTab) ? <SettingsReadOnlyNotice /> : undefined}
+          >
+            {body(section.anchor)}
+          </SettingsSection>
+        ))}
+      </div>
+    );
+
+    // "Monthly rate starts at" (`tenants.monthly_tier_days`), a section of
+    // General now: the same payload and tenant refresh as on the pricing page,
+    // and it rejects so a failure shows inline instead of only in the console.
+    const v2MonthlyTier = {
+      value: rentalForm.monthly_tier_days,
+      savedValue: (rentalSettings as any)?.monthly_tier_days,
+      onChange: (days: number) => setRentalForm(prev => ({ ...prev, monthly_tier_days: days })),
+      onSave: async () => {
+        await updateRentalSettings({ monthly_tier_days: rentalForm.monthly_tier_days } as any);
+        await refetchTenant();
+      },
+      read: v2RentalRead,
+    };
 
     const renderBody = (page: string): React.ReactNode => {
       switch (page) {
@@ -2918,6 +3056,17 @@ const Settings = () => {
                   </BusinessRentalGate>
                 );
 
+              case 'monthly-rate':
+                // Moved from the pricing page, under the same permission and
+                // save key ("pricing-monthly-tier"). It gates its own load.
+                return (
+                  <MonthlyRateSectionV2
+                    canEdit={canEditSettings('pricing')}
+                    registerSave={registerV2SectionSave}
+                    monthlyTier={v2MonthlyTier}
+                  />
+                );
+
               case 'key-handover':
                 return (
                   <BusinessRentalGate thing="your key handover settings" rows={4}>
@@ -2932,39 +3081,6 @@ const Settings = () => {
                       templatesHref={V2_LOCKBOX_MESSAGES_HREF}
                     />
                   </BusinessRentalGate>
-                );
-
-              case 'tax-and-fees':
-                return (
-                  <FeesSettingsV2
-                    form={rentalForm}
-                    setForm={setRentalForm}
-                    saved={rentalSettings as any}
-                    read={v2RentalRead}
-                    canEdit={canEditSettings('fees')}
-                    currencyCode={tenant?.currency_code || 'USD'}
-                    onSave={(values) => updateRentalSettings(values as any)}
-                    registerSave={registerV2SectionSave}
-                  />
-                );
-
-              case 'security-deposit':
-                return (
-                  <DepositSettingsV2
-                    form={rentalForm}
-                    setForm={setRentalForm}
-                    saved={rentalSettings as any}
-                    read={v2RentalRead}
-                    holds={v2HoldsRead}
-                    liveHoldCount={liveHoldCount}
-                    canEdit={canEditSettings('preauth')}
-                    currencyCode={tenant?.currency_code || 'USD'}
-                    paymentProvider={tenant?.payment_provider}
-                    connectHref={SETTINGS_TAB_BOARD_ROUTE}
-                    onRequestCharge={() => setShowChargeConfirm(true)}
-                    onSave={(values) => updateRentalSettings(values as any)}
-                    registerSave={registerV2SectionSave}
-                  />
                 );
 
               case 'booking-site':
@@ -3162,50 +3278,60 @@ const Settings = () => {
             }
           };
 
-          return (
-            <div className="space-y-10">
-              {v2GeneralSections
-                .filter((section) => section.anchor !== 'optional-modules' || v2ShowOptionalModules)
-                .map((section) => (
-                  <SettingsSection
-                    key={section.anchor}
-                    anchor={section.anchor}
-                    title={section.title}
-                    description={section.description}
-                    // A partly editable page: the page shows no "View only", so
-                    // a section this user may only look at says it here.
-                    action={canEditPage && !canEditSettings(section.permTab) ? <SettingsReadOnlyNotice /> : undefined}
-                  >
-                    {sectionBody(section.anchor)}
-                  </SettingsSection>
-                ))}
-            </div>
+          return renderV2Sections(
+            v2GeneralSections.filter((section) => section.anchor !== 'optional-modules' || v2ShowOptionalModules),
+            sectionBody,
           );
         }
 
         case 'locations':
           return <LocationSettings onDirtyChangeV2={setLocationsDirty} registerSave={registerV2SectionSave} />;
 
+        case 'fees':
+          // Tax, fees and deposit: two sections that were part of General, each
+          // shown and edited under its own permission, each gating its own load.
+          // Switching the deposit to a charge asks first (depositChargeConfirmDialog).
+          return renderV2Sections(v2FeesSections, (anchor) => {
+            switch (anchor) {
+              case 'tax-and-fees':
+                return (
+                  <FeesSettingsV2
+                    form={rentalForm}
+                    setForm={setRentalForm}
+                    saved={rentalSettings as any}
+                    read={v2RentalRead}
+                    canEdit={canEditSettings('fees')}
+                    currencyCode={tenant?.currency_code || 'USD'}
+                    onSave={(values) => updateRentalSettings(values as any)}
+                    registerSave={registerV2SectionSave}
+                  />
+                );
+              case 'security-deposit':
+                return (
+                  <DepositSettingsV2
+                    form={rentalForm}
+                    setForm={setRentalForm}
+                    saved={rentalSettings as any}
+                    read={v2RentalRead}
+                    holds={v2HoldsRead}
+                    liveHoldCount={liveHoldCount}
+                    canEdit={canEditSettings('preauth')}
+                    currencyCode={tenant?.currency_code || 'USD'}
+                    paymentProvider={tenant?.payment_provider}
+                    connectHref={SETTINGS_TAB_BOARD_ROUTE}
+                    onRequestCharge={() => setShowChargeConfirm(true)}
+                    onSave={(values) => updateRentalSettings(values as any)}
+                    registerSave={registerV2SectionSave}
+                  />
+                );
+              default:
+                return null;
+            }
+          });
+
         case 'pricing':
-          return (
-            <PricingRulesV2
-              canEdit={canEditPage}
-              registerSave={registerV2SectionSave}
-              onDirtyChange={setPricingDirty}
-              monthlyTier={{
-                value: rentalForm.monthly_tier_days,
-                savedValue: (rentalSettings as any)?.monthly_tier_days,
-                onChange: (days) => setRentalForm(prev => ({ ...prev, monthly_tier_days: days })),
-                // The same payload and tenant refresh as before; it rejects now so
-                // a failure shows inline instead of only in the console.
-                onSave: async () => {
-                  await updateRentalSettings({ monthly_tier_days: rentalForm.monthly_tier_days } as any);
-                  await refetchTenant();
-                },
-                read: v2RentalRead,
-              }}
-            />
-          );
+          // Weekend and holiday pricing. The monthly rate moved to General.
+          return <PricingRulesV2 canEdit={canEditPage} registerSave={registerV2SectionSave} onDirtyChange={setPricingDirty} />;
 
         // Forms: each registers its save and discard with the page, whose one
         // save bar (V2_PAGES_WITH_SAVE_BAR) and leave dialog save them.
@@ -3400,43 +3526,7 @@ const Settings = () => {
               <div className="settings-v2-body">
                 <EmailNotificationSettings canEdit={canEditSettings('reminders')} />
               </div>
-              {/* Both of these only feed the reminders list, which the lean
-                  product does not carry — so a lean tenant is not asked to
-                  configure a list it cannot open. */}
-              {!hideRemindersRows && (
-                <>
-                  <SettingsPanel title="In-app payment reminders" description="Shown in your reminders list. Nothing is sent to customers.">
-                    {([
-                      ['reminder_due_soon_2d', 'Payment due in 2 days', false],
-                      ['reminder_due_today', 'Payment due today', true],
-                      ['reminder_overdue_1d', 'Payment 1 day overdue', true],
-                      ['reminder_overdue_multi', 'Payment several days overdue', true],
-                    ] as const).map(([key, label, fallback]) => (
-                      <SettingsRow key={key} label={label}>
-                        {/* Every switch waits while one saves (the org-settings save
-                            replaces the whole cached row); the spinner says which. */}
-                        <div className="flex items-center gap-2">
-                          {isUpdating && v2ReminderKey === key && (
-                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-label="Saving" />
-                          )}
-                          <Switch
-                            checked={(settings as any)?.[key] ?? fallback}
-                            onCheckedChange={() => {
-                              setV2ReminderKey(key);
-                              toggleReminder(key);
-                            }}
-                            disabled={isUpdating || !canEditPage}
-                            aria-label={label}
-                          />
-                        </div>
-                      </SettingsRow>
-                    ))}
-                  </SettingsPanel>
-                  <div className="settings-v2-body">
-                    <ReminderRulesConfig />
-                  </div>
-                </>
-              )}
+              {renderV2ReminderExtras()}
             </div>
           );
 
@@ -3533,6 +3623,22 @@ const Settings = () => {
         case 'insurance':
           return <BonzahOnboardingForm />;
 
+        // One page for every notification (Team emails and Push notifications
+        // are part of it: `?tab=reminders` / `?tab=push` open it at their
+        // setup, V2_NOTIFICATIONS_SECTIONS). It gates its own controls, and
+        // its drafts and the email sender save through the page's bar. Team
+        // emails' reminder settings still decide today's sending, so they sit
+        // at its end ("What's sent today").
+        case 'notifications':
+          return (
+            <NotificationsPageV2
+              canEdit={canEditPage}
+              registerSave={registerV2SectionSave}
+              todaySettings={renderV2NotificationsToday()}
+              scrollTarget={v2ScrollTarget}
+            />
+          );
+
         default:
           return null;
       }
@@ -3544,7 +3650,7 @@ const Settings = () => {
           // A deep link waiting on a manager's permissions: shaped like the
           // detail page it resolves to (same wrapper, a header placeholder),
           // so the panel does not jump ~90px down when the tab appears.
-          <div className="w-full max-w-[1160px] space-y-8 pb-16 md:pt-[26px]">
+          <div className={V2_SETTINGS_PAGE_COLUMN}>
             <SettingsPageHeaderSkeleton />
             <SettingsSectionSkeleton variant="form" rows={4} label="Loading settings" />
           </div>
@@ -3567,7 +3673,7 @@ const Settings = () => {
           // md:pt-[26px]: no breadcrumb any more (Settings in the nav is the way
           // back), so the header starts with the 32px title, which centres at
           // 50 + 26 + 16 = 92, the sidebar switch's row, as on the index.
-          <div className="w-full max-w-[1160px] space-y-8 pb-16 md:pt-[26px]">
+          <div className={V2_SETTINGS_PAGE_COLUMN}>
             <SettingsPageHeader title={pageMeta.title} description={pageMeta.description} />
             {v2PageData.kind === 'loading' ? (
               <SettingsSectionSkeleton variant="form" rows={4} label={`Loading ${pageMeta.title}`} />
@@ -3583,8 +3689,9 @@ const Settings = () => {
                 {!canEditPage && <SettingsReadOnlyNotice />}
                 {/* A native disabled fieldset: keyboard-safe, unlike the old
                     pointer-events wrapper, and values stay selectable.
-                    Team emails, Push, General (each section under its own
-                    permission), Locations, Custom pricing and Customer messages
+                    Team emails, Push, General and Tax, fees and deposit (each
+                    section under its own permission), Locations, Weekend and
+                    holiday pricing and Customer messages
                     gate every control themselves, so they
                     sit outside it: a disabled fieldset would also disable the
                     reading actions a viewer needs there (Try again on a failed

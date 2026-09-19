@@ -86,8 +86,12 @@ describe("settings page (v2): the leave guard", () => {
     expect(v2).not.toContain("rootLabel=");
     expect(v2).not.toContain("onBack=");
     expect(v2).not.toContain("md:pt-8");
-    // The permission-wait skeleton and the page wrapper.
-    expect(v2.match(/className="w-full max-w-\[1160px\] space-y-8 pb-16 md:pt-\[26px\]"/g)).toHaveLength(2);
+    // The permission-wait skeleton and the page wrapper share one column, 26px
+    // from the top, which steps aside for the open Trax panel.
+    expect(v2.match(/<div className=\{V2_SETTINGS_PAGE_COLUMN\}>/g)).toHaveLength(2);
+    expect(page).toContain(
+      "const V2_SETTINGS_PAGE_COLUMN = `w-full max-w-[1160px] space-y-8 pb-16 md:pt-[26px] ${SETTINGS_COLUMN_BESIDE_TRAX}`;",
+    );
   });
 
   it("v1's tab switch handlers are back to their original form", () => {

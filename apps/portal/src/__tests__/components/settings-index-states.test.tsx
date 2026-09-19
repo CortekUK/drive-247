@@ -142,24 +142,62 @@ describe("SettingsIndexV2 structure", () => {
   const entries = () =>
     Array.from(container.querySelectorAll("section a")).map((a) => [a.querySelector("span")?.textContent, a.getAttribute("href")]);
 
-  it("head admin: Business, Pricing (with Promo codes and Extras), Payment plans, Notifications", () => {
+  it("head admin: Business, Pricing (Tax, fees and deposit first, Weekend and holiday pricing last), Payment plans, Notifications, Templates", () => {
     render(<SettingsIndexV2 canView={() => true} tenantSlug="northwind" isHeadAdmin />);
-    expect(sectionTitles()).toEqual(["Business", "Pricing", "Payment plans", "Notifications"]);
+    expect(sectionTitles()).toEqual(["Business", "Pricing", "Payment plans", "Notifications", "Templates"]);
     expect(entries()).toEqual([
       ["General", "/settings?tab=general"],
       ["Branding", "/settings/appearance"],
       ["Locations", "/settings?tab=locations"],
       ["Team", "/users"],
-      ["Custom pricing", "/settings?tab=pricing"],
+      ["Tax, fees and deposit", "/settings?tab=fees"],
       ["Promo codes", "/settings?tab=promos"],
       ["Extras", "/settings?tab=extras"],
+      ["Weekend and holiday pricing", "/settings?tab=pricing"],
       ["Installments", "/settings?tab=installments"],
       ["Pay as you go", "/settings?tab=payg"],
       ["Auto-extension", "/settings?tab=auto-extend"],
-      ["Team emails", "/settings?tab=reminders"],
-      ["Push notifications", "/settings?tab=push"],
+      ["Notifications", "/settings?tab=notifications"],
       ["Customer messages", "/settings?tab=templates"],
+      ["Agreement templates", "/settings/agreement-templates"],
     ]);
+  });
+
+  it("Notifications is one entry (Team emails and Push notifications are part of it); Templates follows it", async () => {
+    const { SETTINGS_INDEX_SECTIONS } = await import("@/components/settings-v2/settings-index");
+    const titles = SETTINGS_INDEX_SECTIONS.map((section) => section.title);
+    expect(titles.indexOf("Templates")).toBe(titles.indexOf("Notifications") + 1);
+    const notifications = SETTINGS_INDEX_SECTIONS.find((section) => section.title === "Notifications")!;
+    expect(notifications.items.map((item) => [item.title, item.href, item.tab])).toEqual([
+      ["Notifications", "/settings?tab=notifications", "notifications"],
+    ]);
+    const templates = SETTINGS_INDEX_SECTIONS.find((section) => section.title === "Templates")!;
+    expect(templates.items.map((item) => [item.title, item.href, item.tab])).toEqual([
+      ["Customer messages", "/settings?tab=templates", "templates"],
+      ["Agreement templates", "/settings/agreement-templates", "templates"],
+    ]);
+    render(<SettingsIndexV2 canView={() => true} tenantSlug="northwind" isHeadAdmin />);
+    const hrefs = entries().map(([, href]) => href);
+    expect(hrefs).not.toContain("/settings?tab=reminders");
+    expect(hrefs).not.toContain("/settings?tab=push");
+  });
+
+  it("finds Notifications by the words of what it now holds", () => {
+    render(<SettingsIndexV2 canView={() => true} tenantSlug="northwind" isHeadAdmin />);
+    for (const words of ["team emails", "push notifications", "reminders", "sender", "from address", "bell", "in-app", "reply to"]) {
+      type(words);
+      expect(entries().map(([title]) => title), words).toContain("Notifications");
+    }
+  });
+
+  it("Notifications and the templates follow their own permissions", () => {
+    render(<SettingsIndexV2 canView={(tab) => tab === "notifications"} tenantSlug="northwind" isHeadAdmin={false} />);
+    expect(entries()).toEqual([["Notifications", "/settings?tab=notifications"]]);
+    act(() => root.unmount());
+    root = createRoot(container);
+    render(<SettingsIndexV2 canView={(tab) => tab === "templates"} tenantSlug="northwind" isHeadAdmin={false} />);
+    expect(sectionTitles()).toEqual(["Templates"]);
+    expect(entries().map(([title]) => title)).toEqual(["Customer messages", "Agreement templates"]);
   });
 
   it("Team is for head admins only", () => {
@@ -181,6 +219,8 @@ describe("SettingsIndexV2 structure", () => {
       "Security deposit",
       "Global blacklist",
       "Pricing rules",
+      "Custom pricing",
+      "Monthly rate",
     ]) {
       expect(titles).not.toContain(gone);
     }
@@ -189,21 +229,68 @@ describe("SettingsIndexV2 structure", () => {
   });
 
   it("General is listed for a manager who may see only one of its sections", () => {
-    // Only the settings.rental grant behind Tax and fees: General (its fees
-    // section) and nothing else.
-    render(<SettingsIndexV2 canView={(tab) => tab === "fees"} tenantSlug="northwind" isHeadAdmin={false} />);
+    // Only the Booking rules permission: General (that section) and nothing else.
+    render(<SettingsIndexV2 canView={(tab) => tab === "duration"} tenantSlug="northwind" isHeadAdmin={false} />);
     expect(entries()).toEqual([["General", "/settings?tab=general"]]);
     expect(container.querySelector('[data-settings-state="empty"]')).toBeNull();
   });
 
-  it("finds General by the words of the sections it now holds", () => {
+  it("Tax, fees and deposit is listed for a manager who may see either of its sections, and General is not", () => {
+    // Tax and fees and Security deposit left General: the fees grant alone
+    // lists the fees page only.
+    render(<SettingsIndexV2 canView={(tab) => tab === "fees"} tenantSlug="northwind" isHeadAdmin={false} />);
+    expect(sectionTitles()).toEqual(["Pricing"]);
+    expect(entries()).toEqual([["Tax, fees and deposit", "/settings?tab=fees"]]);
+    act(() => root.unmount());
+    root = createRoot(container);
+    render(<SettingsIndexV2 canView={(tab) => tab === "preauth"} tenantSlug="northwind" isHeadAdmin={false} />);
+    expect(entries()).toEqual([["Tax, fees and deposit", "/settings?tab=fees"]]);
+  });
+
+  it("the pricing permission lists Weekend and holiday pricing, and General for the monthly rate", () => {
+    render(<SettingsIndexV2 canView={(tab) => tab === "pricing"} tenantSlug="northwind" isHeadAdmin={false} />);
+    expect(entries()).toEqual([
+      ["General", "/settings?tab=general"],
+      ["Weekend and holiday pricing", "/settings?tab=pricing"],
+    ]);
+  });
+
+  it("finds each page by the words of the sections it now holds", () => {
     render(<SettingsIndexV2 canView={() => true} tenantSlug="northwind" isHeadAdmin />);
     type("deposit");
+    expect(entries().map(([title]) => title)).toEqual(["Tax, fees and deposit"]);
+    type("vat");
+    expect(entries().map(([title]) => title)).toEqual(["Tax, fees and deposit"]);
+    type("preauth");
+    expect(entries().map(([title]) => title)).toEqual(["Tax, fees and deposit"]);
+    type("monthly rate");
     expect(entries().map(([title]) => title)).toEqual(["General"]);
     type("buffer");
     expect(entries().map(([title]) => title)).toEqual(["General"]);
     type("lockbox");
     expect(entries().map(([title]) => title)).toEqual(["General", "Customer messages"]);
+    type("holiday");
+    expect(entries().map(([title]) => title)).toEqual(["Weekend and holiday pricing"]);
+    type("surcharge");
+    expect(entries().map(([title]) => title)).toEqual(["Weekend and holiday pricing"]);
+    // The old name still finds the renamed page.
+    type("custom pricing");
+    expect(entries().map(([title]) => title)).toEqual(["Weekend and holiday pricing"]);
+  });
+
+  it("Tax, fees and deposit and Weekend and holiday pricing: titles, links, permissions and descriptions", async () => {
+    const { SETTINGS_INDEX_SECTIONS } = await import("@/components/settings-v2/settings-index");
+    const pricing = SETTINGS_INDEX_SECTIONS.find((section) => section.title === "Pricing")!;
+    expect(pricing.items.map((item) => item.title)).toEqual(["Tax, fees and deposit", "Promo codes", "Extras", "Weekend and holiday pricing"]);
+    const fees = pricing.items[0];
+    expect([fees.href, fees.tab, fees.anyOfTabs]).toEqual(["/settings?tab=fees", "fees", ["fees", "preauth"]]);
+    const weekend = pricing.items[3];
+    expect([weekend.href, weekend.tab, weekend.anyOfTabs]).toEqual(["/settings?tab=pricing", "pricing", undefined]);
+    // General no longer claims tax or deposits, and names the monthly rate.
+    const general = SETTINGS_INDEX_SECTIONS[0].items.find((item) => item.title === "General")!;
+    expect(general.description).toContain("monthly rate");
+    expect(`${general.description} ${general.keywords}`).not.toMatch(/\b(tax|vat|deposit|preauth)\b/i);
+    expect(general.anyOfTabs).toEqual(["general", "requirements", "duration", "pricing", "lockbox"]);
   });
 
   it("a head admin finds Team by 'password'; anyone else gets no match and no hand-off", () => {
@@ -235,7 +322,7 @@ describe("SettingsIndexV2 structure", () => {
       expect(item!.section, title).toBe(section);
       expect(item!.href, title).toBe(href);
       expect(item!.tab, title).toBe(tab);
-      // Only General spans several permissions; none is head-admin only.
+      // Each follows one permission (only the pages of sections span several); none is head-admin only.
       expect(item!.anyOfTabs, title).toBeUndefined();
       expect(item!.headAdminOnly, title).toBeUndefined();
       expect(item!.description.length, title).toBeGreaterThanOrEqual(95);
@@ -249,7 +336,7 @@ describe("SettingsIndexV2 structure", () => {
     expect(sectionTitles()).toEqual(["Pricing"]);
     expect(entries()).toEqual([["Extras", "/settings?tab=extras"]]);
 
-    // Promo codes and the payment plans, without Extras or Custom pricing.
+    // Promo codes and the payment plans, without Extras or the pricing pages.
     act(() => root.unmount());
     root = createRoot(container);
     const granted = new Set(["promos", "installments", "payg", "auto-extend"]);

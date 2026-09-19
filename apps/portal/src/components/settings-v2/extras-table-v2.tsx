@@ -2,9 +2,10 @@
 
 /**
  * v2 (northwind): the Rental Extras table on Settings → Extras, built from the
- * rentals list's kit (`components/shared/list-table-v2`). No pager: rows arrive
- * 25 at a time as the table scrolls, with one line under the card saying how
- * much is shown.
+ * rentals list's kit (`components/shared/list-table-v2`) on its flat settings
+ * surface (`surface="settings"`). No pager: rows arrive 25 at a time as the
+ * table scrolls, with one line under the table saying how much is shown while
+ * more are to come (none once every extra is on screen).
  *
  * Rows open nothing. There is no extra record route and the v1 row opens nothing
  * either: its only control is the ⋯ menu, kept here with the same items, in the
@@ -272,8 +273,8 @@ export function ExtrasTableV2<T extends RentalExtra>({
       </ul>
 
       <div className="hidden sm:block">
-        <ListTable rows={extraRows} minWidth="min-w-[880px]">
-          <ListHeaderRow />
+        <ListTable rows={extraRows} minWidth="min-w-[880px]" surface="settings">
+          <ListHeaderRow withActions={canEdit} />
           <ListBody>
             {extraRows.visible.map((extra) => {
               const lowStock = isLowStock(extra);
@@ -350,16 +351,18 @@ export function ExtrasTableV2<T extends RentalExtra>({
                   </ListCell>
                   {/* The same menu as v1. Clicks on the trigger and on its items
                       (portalled, but still React children of this cell) stop here. */}
-                  <ListCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                    {menu(extra)}
-                  </ListCell>
+                  {canEdit && (
+                    <ListCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                      {menu(extra)}
+                    </ListCell>
+                  )}
                 </ListRow>
               );
             })}
           </ListBody>
         </ListTable>
       </div>
-      <ListFooter rows={extraRows} one="extra" many="extras" />
+      <ListFooter rows={extraRows} one="extra" many="extras" hideWhenAllShown />
     </>
   );
 }
@@ -370,7 +373,7 @@ export function ExtrasTableV2<T extends RentalExtra>({
  * "Quantity", Stock "1000 left" and Status "Inactive". Extra and Description
  * take the rest and truncate with their full text in a tooltip.
  */
-function ListHeaderRow() {
+function ListHeaderRow({ withActions }: { withActions: boolean }) {
   return (
     <ListTableHeader>
       <ListHead className="w-[22%]">Extra</ListHead>
@@ -380,9 +383,13 @@ function ListHeaderRow() {
       <ListHead className="w-[9%]">Type</ListHead>
       <ListHead className="w-[9.5%]">Stock</ListHead>
       <ListHead className="w-[8.5%]">Status</ListHead>
-      <ListHead className="w-[6%] text-right">
-        <span className="sr-only">Actions</span>
-      </ListHead>
+      {/* Only for someone who can use the menu: for a viewer it was a blank
+          column with nothing under its blank heading. */}
+      {withActions && (
+        <ListHead className="w-[6%] text-right">
+          <span className="sr-only">Actions</span>
+        </ListHead>
+      )}
     </ListTableHeader>
   );
 }

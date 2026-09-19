@@ -8,8 +8,10 @@
  * Order of decisions for a `?tab=` deep link, first match wins:
  *   1. no `?tab=`                         -> the index, no notice
  *   2. a v2 page, manager grants loading  -> wait (skeleton, never the index)
- *   3. a v2 page the user may view        -> the page (a General section's
- *                                            old tab: General, scrolled to it)
+ *   3. a v2 page the user may view        -> the page (a section's old tab:
+ *                                            the page that holds it now,
+ *                                            scrolled to it; see
+ *                                            V2_SECTIONED_PAGES)
  *   4. a v2 page the user may NOT view    -> index + "You don't have access"
  *   5. a tab with a home elsewhere        -> none (the page's redirect runs)
  *   6. a hidden tab the board owns        -> none (hand-off to /integrations)
@@ -60,14 +62,19 @@ export const SETTINGS_TAB_LABELS: Record<string, string> = {
  */
 export const V2_HIDDEN_SETTINGS_PAGES: ReadonlySet<string> = new Set<string>([]);
 
-export interface V2GeneralSection {
+/** One titled section of a v2 settings page that holds several (General, Tax, fees and deposit). */
+export interface V2PageSection {
   /** The element id is `settings-<anchor>` (see `settingsSectionId`). */
   anchor: string;
   title: string;
   description: string;
   /** The settings tab whose manager permission this section follows. */
   permTab: string;
-  /** The old `?tab=` value this section answers to, if it had its own page. */
+  /**
+   * The `?tab=` value this section answers to, if it once had a page (or a
+   * place) of its own: that link opens the page holding it now, scrolled to it.
+   * A section whose `tab` is its own page's key is simply the top of the page.
+   */
   tab: string | null;
 }
 
@@ -75,41 +82,103 @@ export interface V2GeneralSection {
  * The General page, top to bottom. Six small pages became sections of it; each
  * keeps its old `?tab=` value (setup guide and bookmark links), which opens
  * General and scrolls to that section, and each keeps its own permission.
+ *
+ * Monthly rate moved here from the pricing page (Sep 19 2026). It keeps the
+ * `pricing` permission, so exactly the people who could change it before can
+ * change it now; `?tab=pricing` still opens Weekend and holiday pricing, so it
+ * has no `tab`. Its title and description are `MONTHLY_RATE_SECTION` in
+ * pricing-rules-v2 (a test keeps the two copies equal). Tax and fees and
+ * Security deposit left for their own page, `V2_FEES_SECTIONS`.
  */
-export const V2_GENERAL_SECTIONS: readonly V2GeneralSection[] = [
+export const V2_GENERAL_SECTIONS: readonly V2PageSection[] = [
   { anchor: "regional", title: "Regional", description: "The currency and distance unit used across prices, invoices and mileage.", permTab: "general", tab: "general" },
   { anchor: "driver-requirements", title: "Driver requirements", description: "Who can rent from you, and the ID they must verify.", permTab: "requirements", tab: "requirements" },
   { anchor: "booking-rules", title: "Booking rules", description: "How far ahead customers book, how long a rental can be, and the gap between rentals.", permTab: "duration", tab: "duration" },
+  { anchor: "monthly-rate", title: "Monthly rate", description: "When a rental is long enough to be priced at your monthly rate instead of the daily or weekly one.", permTab: "pricing", tab: null },
   { anchor: "key-handover", title: "Key handover", description: "Leave the keys in a lockbox and email the code to the customer.", permTab: "lockbox", tab: "lockbox" },
-  { anchor: "tax-and-fees", title: "Tax and fees", description: "Charges added on top of the rental price.", permTab: "fees", tab: "fees" },
-  { anchor: "security-deposit", title: "Security deposit", description: "A refundable amount taken on online bookings.", permTab: "preauth", tab: "preauth" },
   { anchor: "booking-site", title: "Booking site", description: "What customers see when they book on your website.", permTab: "general", tab: "booking-site" },
   { anchor: "optional-modules", title: "Optional modules", description: "Each one adds a page to your sidebar and saves as soon as you flip it. Switching one off hides the page and deletes nothing.", permTab: "general", tab: null },
 ];
 
+/**
+ * The Tax, fees and deposit page (`?tab=fees`), under Pricing. Both sections
+ * were part of General until Sep 19 2026. `?tab=fees` opens the page at the
+ * top (Tax and fees is first) and `?tab=preauth` opens it at Security deposit.
+ * Each section keeps its own permission, as it had on General.
+ */
+export const V2_FEES_SECTIONS: readonly V2PageSection[] = [
+  { anchor: "tax-and-fees", title: "Tax and fees", description: "Charges added on top of the rental price.", permTab: "fees", tab: "fees" },
+  { anchor: "security-deposit", title: "Security deposit", description: "A refundable amount taken on online bookings.", permTab: "preauth", tab: "preauth" },
+];
+
+/**
+ * The Notifications page (`?tab=notifications`), the parts of it an old link
+ * points at. It replaced Team emails and Push notifications on the index (Sep
+ * 19 2026, build-spec D7): `?tab=reminders` opens it at the email setup and
+ * `?tab=push` at "Push on this device". Every part follows the one
+ * Notifications permission (`notifications`, `reminders` and `push` all map to
+ * settings.reminders, lib/permissions), so access is exactly what it was. The
+ * titles are what a "You don't have access to …" notice names; the page draws
+ * its own headings (notifications-page-v2).
+ */
+export const V2_NOTIFICATIONS_SECTIONS: readonly V2PageSection[] = [
+  { anchor: "notifications-email", title: "Email notifications", description: "Who your emails come from, and where your team's alert emails go.", permTab: "notifications", tab: "reminders" },
+  { anchor: "notifications-push", title: "Push notifications", description: "Alerts on your team's phones and computers, and how to turn them on.", permTab: "notifications", tab: "push" },
+];
+
+/**
+ * Every v2 page made of sections, keyed by the page's `?tab=`. The page opens
+ * for anyone who may view ANY of its sections, each section's old `?tab=`
+ * opens the page at that section, and an old `#settings-<anchor>` link lands on
+ * whichever page holds that anchor now (`v2SectionHomePage`). Moving a section
+ * between pages is moving its row. General and Tax, fees and deposit have
+ * sections under their own permissions; Notifications' all follow one.
+ */
+export const V2_SECTIONED_PAGES: Readonly<Record<string, readonly V2PageSection[]>> = {
+  general: V2_GENERAL_SECTIONS,
+  fees: V2_FEES_SECTIONS,
+  notifications: V2_NOTIFICATIONS_SECTIONS,
+};
+
 /** The DOM id of a settings section, the target of a deep link or `#hash`. */
 export const settingsSectionId = (anchor: string) => `settings-${anchor}`;
 
+/** Every permission a page's sections follow, once each, in page order: the page opens when ANY of them is viewable. */
+export function v2SectionPermTabs(sections: readonly V2PageSection[]): readonly string[] {
+  return Array.from(new Set(sections.map((s) => s.permTab)));
+}
+
 /** Every permission a General section follows, once each: General opens when ANY of them is viewable. */
-export const V2_GENERAL_PERM_TABS: readonly string[] = Array.from(new Set(V2_GENERAL_SECTIONS.map((s) => s.permTab)));
+export const V2_GENERAL_PERM_TABS: readonly string[] = v2SectionPermTabs(V2_GENERAL_SECTIONS);
+
+/** Tax and fees, then Security deposit: the fees page opens when either is viewable. */
+export const V2_FEES_PERM_TABS: readonly string[] = v2SectionPermTabs(V2_FEES_SECTIONS);
 
 export interface V2SettingsRoute {
   /** The v2 page to render, or null for the index. Not permission-checked. */
   page: string | null;
-  /** The section to scroll to once the page has loaded (never for `?tab=general`, which is the top). */
+  /** The section to scroll to once the page has loaded (never for the page's own `?tab=`, which is the top). */
   anchor: string | null;
-  /** The permission(s) the route needs: one tab, or any of several (General itself). */
+  /** The permission(s) the route needs: one tab, or any of several (a sectioned page itself). */
   permTab: string | readonly string[] | null;
 }
 
 const NO_ROUTE: V2SettingsRoute = { page: null, anchor: null, permTab: null };
 const hasOwn = (record: object, key: string) => Object.prototype.hasOwnProperty.call(record, key);
 
+/** A sectioned page the route may open: listed in `pages` and not hidden. */
+const isOpenablePage = (page: string, pages: Record<string, unknown>) =>
+  hasOwn(pages, page) && !V2_HIDDEN_SETTINGS_PAGES.has(page);
+
 /**
- * Which v2 page a `?tab=` value opens. A tab that is now a section of General
- * opens General at that section and needs that section's permission; plain
- * `?tab=general` needs any General section's. Hidden pages and unknown values
- * open the index (the notice says why).
+ * Which v2 page a `?tab=` value opens.
+ *  - A sectioned page's own tab (`general`, `fees`, `notifications`) opens it
+ *    at the top, for anyone who may view any of its sections.
+ *  - A tab that is now a section of one of them (`?tab=duration`,
+ *    `?tab=preauth`, `?tab=push`) opens that page at the section, under the
+ *    section's own permission.
+ *  - Any other listed page opens as itself.
+ * Hidden pages and unknown values open the index (the notice says why).
  */
 export function resolveV2SettingsRoute(
   tabParam: string | null,
@@ -117,11 +186,28 @@ export function resolveV2SettingsRoute(
 ): V2SettingsRoute {
   const tab = tabParam?.trim() ?? "";
   if (!tab) return NO_ROUTE;
-  if (tab === "general") return { page: "general", anchor: null, permTab: V2_GENERAL_PERM_TABS };
-  const section = V2_GENERAL_SECTIONS.find((s) => s.tab === tab);
-  if (section) return { page: "general", anchor: section.anchor, permTab: section.permTab };
+  if (hasOwn(V2_SECTIONED_PAGES, tab)) {
+    return isOpenablePage(tab, pages) ? { page: tab, anchor: null, permTab: v2SectionPermTabs(V2_SECTIONED_PAGES[tab]) } : NO_ROUTE;
+  }
+  for (const [page, sections] of Object.entries(V2_SECTIONED_PAGES)) {
+    const section = sections.find((s) => s.tab === tab);
+    if (section && isOpenablePage(page, pages)) return { page, anchor: section.anchor, permTab: section.permTab };
+  }
   if (V2_HIDDEN_SETTINGS_PAGES.has(tab) || !hasOwn(pages, tab)) return NO_ROUTE;
   return { page: tab, anchor: null, permTab: pages[tab].permTab };
+}
+
+/**
+ * The sectioned page that holds the section with this DOM id (`settings-<anchor>`),
+ * or null when no sectioned page has it. An old link such as
+ * `?tab=general#settings-tax-and-fees` is sent on to that page.
+ */
+export function v2SectionHomePage(sectionId: string | null | undefined): string | null {
+  if (!sectionId) return null;
+  for (const [page, sections] of Object.entries(V2_SECTIONED_PAGES)) {
+    if (sections.some((s) => settingsSectionId(s.anchor) === sectionId)) return page;
+  }
+  return null;
 }
 
 /** A route's permission, one tab or any of several. */
@@ -131,9 +217,9 @@ export function canViewAny(permTab: string | readonly string[], canView: (tab: s
 
 /**
  * The pages map `resolveSettingsTabNotice` reads: every page that is not
- * hidden, General with its any-of permission, and each General section under
- * its old tab, so `?tab=fees` without access still says "You don't have
- * access to Tax and fees".
+ * hidden, each sectioned page (General, Tax, fees and deposit) with its any-of
+ * permission, and each of their sections under its old tab, so `?tab=preauth`
+ * without access still says "You don't have access to Security deposit".
  */
 export function v2NoticePages(
   pages: Record<string, { title: string; permTab: string }>,
@@ -143,9 +229,15 @@ export function v2NoticePages(
     if (V2_HIDDEN_SETTINGS_PAGES.has(tab)) continue;
     out[tab] = { title: page.title, permTab: page.permTab };
   }
-  if (out.general) out.general = { ...out.general, permTab: V2_GENERAL_PERM_TABS };
-  for (const section of V2_GENERAL_SECTIONS) {
-    if (section.tab && section.tab !== "general") out[section.tab] = { title: section.title, permTab: section.permTab };
+  for (const [page, sections] of Object.entries(V2_SECTIONED_PAGES)) {
+    // A sectioned page missing from `pages` (or hidden) opens nothing, so its
+    // sections' old tabs fall through to the other notices too.
+    if (!hasOwn(out, page)) continue;
+    out[page] = { ...out[page], permTab: v2SectionPermTabs(sections) };
+    // As in the route, a section's old tab wins over anything else by that name.
+    for (const section of sections) {
+      if (section.tab && section.tab !== page) out[section.tab] = { title: section.title, permTab: section.permTab };
+    }
   }
   return out;
 }
@@ -229,9 +321,10 @@ export const V2_PAGES_READING_ORG_SETTINGS: ReadonlySet<string> = new Set(["remi
  * v2 pages whose controls are filled from the tenants row (`useRentalSettings`)
  * and wait for it at page level.
  *
- * Custom pricing and General also read that row but are not listed: each
- * section gates itself on the cached read (`ReadGate` in pricing-money-parts,
- * `BusinessRentalGate` in business-rules-pages), so a first load shows
+ * Weekend and holiday pricing, Tax, fees and deposit, and General also read
+ * that row but are not listed: each section gates itself on the cached read
+ * (`ReadGate` in pricing-money-parts, `BusinessRentalGate` in
+ * business-rules-pages), so a first load shows
  * skeletons shaped like those sections, and a failed rental read no longer
  * hides the sections that have reads of their own.
  */

@@ -100,7 +100,26 @@ function SectionHeading({ title, description, aside }: { title: string; descript
   );
 }
 
-export function EmailNotificationSettingsV2({ canEdit = true }: { canEdit?: boolean }) {
+/**
+ * `parts="categories"` (the Notifications page's "What's sent today"): only the
+ * six category switches, under their own heading. The master switch and the
+ * recipient are edited in that page's Email card (EmailSenderSettingsV2), so
+ * they are not repeated here. The default (`"all"`) is unchanged.
+ */
+export const EMAIL_CATEGORIES_ONLY_COPY = {
+  title: "Team alert emails by category",
+  description: "Which kinds of alerts your team also gets by email. Each switch saves as soon as you flip it.",
+  masterOff: "Team alert emails are off, under Email above. Turn them on to choose categories.",
+} as const;
+
+export function EmailNotificationSettingsV2({
+  canEdit = true,
+  parts = "all",
+}: {
+  canEdit?: boolean;
+  parts?: "all" | "categories";
+}) {
+  const categoriesOnly = parts === "categories";
   const {
     prefs,
     error,
@@ -124,7 +143,9 @@ export function EmailNotificationSettingsV2({ canEdit = true }: { canEdit?: bool
 
   // No read-only chip here: the settings page that mounts this section already
   // shows one above it, and a second identical chip a few pixels lower is noise.
-  const heading = (
+  const heading = categoriesOnly ? (
+    <SectionHeading title={EMAIL_CATEGORIES_ONLY_COPY.title} description={EMAIL_CATEGORIES_ONLY_COPY.description} />
+  ) : (
     <SectionHeading
       title="Email notifications"
       description="Choose which alerts your team also gets by email, and where they go. The in-app bell stays on for every category."
@@ -138,8 +159,8 @@ export function EmailNotificationSettingsV2({ canEdit = true }: { canEdit?: bool
       <section className="space-y-4" data-settings-section="email-notifications">
         {heading}
         {/* Eight rows, like the loaded section: the master switch, the
-            recipient and the six categories. */}
-        <SettingsSectionSkeleton variant="rows" rows={8} label="Loading email preferences" />
+            recipient and the six categories (six for the categories alone). */}
+        <SettingsSectionSkeleton variant="rows" rows={categoriesOnly ? 6 : 8} label="Loading email preferences" />
       </section>
     );
   }
@@ -211,77 +232,83 @@ export function EmailNotificationSettingsV2({ canEdit = true }: { canEdit?: bool
       )}
 
       <SettingsReadOnlyFieldset readOnly={!canEdit} className="space-y-3">
-        <div className="flex flex-col gap-3 rounded-2xl bg-muted/40 p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0 flex-1 space-y-1">
-            <p className="text-sm font-medium text-foreground">Send alerts by email</p>
-            <p className="text-sm text-muted-foreground">
-              {masterEnabled ? "On. Pick the categories below." : "Off. No alert emails are sent until you turn this on."}
-            </p>
-            {saveError?.target === "master" && (
-              <InlineSaveError lead="Couldn't save, so this is unchanged." error={errorFor("master")} />
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            {setMasterEnabled.isPending && (
-              <Loader2 className="size-4 animate-spin text-muted-foreground" aria-label="Saving" />
-            )}
-            <Switch
-              checked={masterEnabled}
-              onCheckedChange={(checked) => {
-                clearFor("master");
-                setMasterEnabled.mutate(checked, { onError: failFor("master") });
-              }}
-              disabled={setMasterEnabled.isPending}
-              aria-label="Send alerts by email"
-            />
-          </div>
-        </div>
+        {!categoriesOnly && (
+          <>
+            <div className="flex flex-col gap-3 rounded-2xl bg-muted/40 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0 flex-1 space-y-1">
+                <p className="text-sm font-medium text-foreground">Send alerts by email</p>
+                <p className="text-sm text-muted-foreground">
+                  {masterEnabled ? "On. Pick the categories below." : "Off. No alert emails are sent until you turn this on."}
+                </p>
+                {saveError?.target === "master" && (
+                  <InlineSaveError lead="Couldn't save, so this is unchanged." error={errorFor("master")} />
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {setMasterEnabled.isPending && (
+                  <Loader2 className="size-4 animate-spin text-muted-foreground" aria-label="Saving" />
+                )}
+                <Switch
+                  checked={masterEnabled}
+                  onCheckedChange={(checked) => {
+                    clearFor("master");
+                    setMasterEnabled.mutate(checked, { onError: failFor("master") });
+                  }}
+                  disabled={setMasterEnabled.isPending}
+                  aria-label="Send alerts by email"
+                />
+              </div>
+            </div>
 
-        <div className="space-y-2 rounded-2xl bg-muted/40 p-4">
-          <label htmlFor="v2-notification-recipient" className="text-sm font-medium text-foreground">
-            Send alerts to
-          </label>
-          <div className="relative max-w-md">
-            <Input
-              id="v2-notification-recipient"
-              type="email"
-              inputMode="email"
-              autoComplete="email"
-              value={recipientDraft}
-              placeholder={contactEmail || "name@company.com"}
-              onChange={(e) => setRecipientDraft(e.target.value)}
-              onBlur={handleRecipientBlur}
-              disabled={setRecipientEmail.isPending}
-              aria-invalid={showInvalid || undefined}
-              aria-describedby="v2-notification-recipient-help"
-              className={cn(setRecipientEmail.isPending && "pr-9")}
-            />
-            {setRecipientEmail.isPending && (
-              <Loader2
-                className="absolute right-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground"
-                aria-label="Saving"
-              />
-            )}
-          </div>
-          <p
-            id="v2-notification-recipient-help"
-            role={problem ? "alert" : undefined}
-            className={cn("text-xs [overflow-wrap:anywhere]", helper.tone)}
-          >
-            {helper.text}
-          </p>
-          {saveError?.target === "recipient" && (
-            <InlineSaveError
-              lead="Couldn't save this address."
-              after="It's still in the field; move out of the field to try again."
-              error={errorFor("recipient")}
-            />
-          )}
-        </div>
+            <div className="space-y-2 rounded-2xl bg-muted/40 p-4">
+              <label htmlFor="v2-notification-recipient" className="text-sm font-medium text-foreground">
+                Send alerts to
+              </label>
+              <div className="relative max-w-md">
+                <Input
+                  id="v2-notification-recipient"
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  value={recipientDraft}
+                  placeholder={contactEmail || "name@company.com"}
+                  onChange={(e) => setRecipientDraft(e.target.value)}
+                  onBlur={handleRecipientBlur}
+                  disabled={setRecipientEmail.isPending}
+                  aria-invalid={showInvalid || undefined}
+                  aria-describedby="v2-notification-recipient-help"
+                  className={cn(setRecipientEmail.isPending && "pr-9")}
+                />
+                {setRecipientEmail.isPending && (
+                  <Loader2
+                    className="absolute right-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground"
+                    aria-label="Saving"
+                  />
+                )}
+              </div>
+              <p
+                id="v2-notification-recipient-help"
+                role={problem ? "alert" : undefined}
+                className={cn("text-xs [overflow-wrap:anywhere]", helper.tone)}
+              >
+                {helper.text}
+              </p>
+              {saveError?.target === "recipient" && (
+                <InlineSaveError
+                  lead="Couldn't save this address."
+                  after="It's still in the field; move out of the field to try again."
+                  error={errorFor("recipient")}
+                />
+              )}
+            </div>
+          </>
+        )}
 
         <div className="space-y-2">
           {!masterEnabled && (
-            <p className="px-1 text-sm text-muted-foreground">Turn on email alerts above to choose categories.</p>
+            <p className="px-1 text-sm text-muted-foreground">
+              {categoriesOnly ? EMAIL_CATEGORIES_ONLY_COPY.masterOff : "Turn on email alerts above to choose categories."}
+            </p>
           )}
           {EMAIL_NOTIFICATION_CATEGORIES.map((category) => {
             const meta = CATEGORY_META[category];

@@ -35,7 +35,14 @@
  *     a titled part of a longer page, with the id `settings-tax-and-fees`
  *   useScrollToSection(id, ready)
  *     scrolls that section to the top once the page's data is in, for a
- *     `?tab=fees` link or a `#settings-…` hash
+ *     `?tab=preauth` link or a `#settings-…` hash
+ *
+ * BESIDE THE TRAX PANEL
+ *   SETTINGS_COLUMN_BESIDE_TRAX   add to the page column: while the floating
+ *                                 Trax panel is open it stops short of it
+ *   SettingsRow                   stacks (label above control) while the
+ *                                 panel is open on a screen too narrow for
+ *                                 the 420px label column beside it
  */
 
 import { createContext, useContext, useEffect, useRef, type ReactNode } from "react";
@@ -50,6 +57,44 @@ import { cn } from "@/lib/utils";
 export const SETTINGS_PAGE_TITLE = "font-heading text-2xl font-bold tracking-tight text-foreground";
 /** A section title (and a panel title). */
 export const SETTINGS_SECTION_TITLE = "font-heading text-base font-semibold tracking-tight text-foreground";
+
+/* -------------------------------------------------------------------------- */
+/* Beside the Trax panel                                                       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The Trax panel floats over the bottom-right corner of the page
+ * (components/trax/trax-panel.tsx), and a settings column 1160px wide ran
+ * underneath it: the panel and its suggestion chips landed in the middle of a
+ * section, over its controls and over the page's Save changes.
+ *
+ * Added to a settings page's column (`w-full max-w-[1160px] …`), this makes
+ * the column's right edge stop short of the open panel on md and up: never
+ * wider than 1160px, never wider than the space left of the panel, never
+ * narrower than 20rem (below that there is no room for both, and the panel,
+ * which the operator can close, overlaps instead). The page's save bar is the
+ * column's last child, so it steps aside with it. The width animates with the
+ * panel's own 200ms.
+ *
+ * It keys on `data-trax-panel="open"`, which TraxPanel puts on <html>, and uses
+ * the FLOATING width (`--trax-width`, styles/v2-theme.css) even while the panel
+ * is expanded, so the page does not reflow under the expanded overlay's scrim.
+ * With Trax closed, below md, and on every v1 page (which never mounts
+ * TraxPanel) nothing matches and the column is exactly what it was.
+ */
+export const SETTINGS_COLUMN_BESIDE_TRAX =
+  "transition-[max-width] duration-200 ease-linear motion-reduce:transition-none " +
+  "md:[html[data-trax-panel=open]_&]:max-w-[min(1160px,max(20rem,calc(100%-var(--trax-width,440px)-1rem)))]";
+
+/**
+ * A settings row's grid needs ~720px (a 420px label column, the 40px gap and
+ * the panel padding, then the control). While the Trax panel is open on a
+ * screen up to 1440px wide the column is narrower than that, so rows stack as
+ * they do on a phone instead of squeezing the control to a sliver. Nothing
+ * changes with Trax closed.
+ */
+export const SETTINGS_ROW_STACKS_BESIDE_TRAX =
+  "max-[1440px]:[html[data-trax-panel=open]_&]:flex max-[1440px]:[html[data-trax-panel=open]_&]:items-stretch";
 
 export function SettingsPageHeader({
   title,
@@ -104,7 +149,9 @@ export function useSettingsPageSave(): boolean {
 /**
  * The page's Reset and Save changes. The last child of the page wrapper: where
  * the page is short it sits at the end, where it scrolls it floats 16px above
- * the bottom of the window. Both buttons wait for a genuine change.
+ * the bottom of the window. Both buttons wait for a genuine change. It is as
+ * wide as the page column, so a column carrying `SETTINGS_COLUMN_BESIDE_TRAX`
+ * keeps it clear of the open Trax panel.
  */
 export function SettingsStickySaveBar({
   dirty,
@@ -282,7 +329,8 @@ export function SettingsPanel({
 /**
  * One setting: a left-aligned grid. The label column is 420px and the control
  * starts right after it, so it never drifts to the far edge of a wide screen.
- * The whole row stacks on a phone.
+ * The whole row stacks on a phone, and beside an open Trax panel on a screen
+ * up to 1440px wide (`SETTINGS_ROW_STACKS_BESIDE_TRAX`).
  */
 export function SettingsRow({
   label,
@@ -302,7 +350,7 @@ export function SettingsRow({
 }) {
   return (
     <div className={cn("px-5 py-4", className)}>
-      <div className="flex flex-col gap-3 md:grid md:grid-cols-[minmax(0,420px)_minmax(0,1fr)] md:items-center md:gap-x-10">
+      <div className={`flex flex-col gap-3 md:grid md:grid-cols-[minmax(0,420px)_minmax(0,1fr)] md:items-center md:gap-x-10 ${SETTINGS_ROW_STACKS_BESIDE_TRAX}`}>
         <div className="min-w-0">
           {htmlFor ? (
             <label htmlFor={htmlFor} className="text-sm font-medium text-foreground">

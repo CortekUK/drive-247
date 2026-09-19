@@ -19,10 +19,10 @@ Open **Settings → General** for business configuration. Available tabs depend 
 Business configuration ke liye **Settings → General** kholein. Tabs aap ke account aur permissions par depend karte hain. Manager ko Settings aur relevant sub-tab ka grant chahiye. Values existing settings controls se review aur change karein; TRAX configuration save nahi karta.
 <!-- /trax -->
 <!-- trax:templates:en -->
-Open **Settings** and choose **Customer messages** under **Notifications** for communication templates (older layouts label this tab **Templates**). If it is unavailable, ask an account administrator to review your settings permissions. Use the existing template workflow to edit or preview; changing a template does not itself confirm a message was sent.
+Open **Settings** and choose **Customer messages** under **Templates** for communication templates (older layouts label this tab **Templates**). If it is unavailable, ask an account administrator to review your settings permissions. Use the existing template workflow to edit or preview; changing a template does not itself confirm a message was sent.
 <!-- /trax -->
 <!-- trax:templates:ur-Latn -->
-Communication templates ke liye **Settings** kholein aur **Notifications** ke neeche **Customer messages** chunein (purane layout mein is tab ka naam **Templates** hai). Agar ye available nahi hai to account administrator se settings permissions review karwayein. Edit ya preview ke liye existing template workflow use karein; template badalne se message bheja jana confirm nahi hota.
+Communication templates ke liye **Settings** kholein aur **Templates** ke neeche **Customer messages** chunein (purane layout mein is tab ka naam **Templates** hai). Agar ye available nahi hai to account administrator se settings permissions review karwayein. Edit ya preview ke liye existing template workflow use karein; template badalne se message bheja jana confirm nahi hota.
 <!-- /trax -->
 
 ## Sources and tests

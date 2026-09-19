@@ -8,9 +8,12 @@
 import { describe, it, expect } from "vitest";
 import {
   SETTINGS_TAB_LABELS,
+  V2_FEES_PERM_TABS,
+  V2_FEES_SECTIONS,
   V2_GENERAL_PERM_TABS,
   V2_GENERAL_SECTIONS,
   V2_HIDDEN_SETTINGS_PAGES,
+  V2_SECTIONED_PAGES,
   canSaveAllDirty,
   canSaveV2Edits,
   canViewAny,
@@ -26,7 +29,9 @@ import {
   settingsTabNoticeCopy,
   v2HasUnsavedEdits,
   v2NoticePages,
+  v2SectionHomePage,
 } from "@/components/settings-v2/settings-shell-state";
+import { MONTHLY_RATE_SECTION } from "@/components/settings-v2/pricing-rules-v2";
 
 describe("resolveSettingsTabNotice", () => {
   const base = {
@@ -95,22 +100,47 @@ describe("resolveSettingsTabNotice", () => {
 });
 
 describe("v2 General: six pages merged into one, and the five hidden pages back", () => {
-  const ALL_GENERAL_PERMS = ["general", "requirements", "duration", "lockbox", "fees", "preauth"];
+  // General's sections' permissions, in page order, each once. Monthly rate
+  // keeps the pricing page's permission (D3); Tax and fees and Security
+  // deposit left for the Tax, fees and deposit page (D2).
+  const ALL_GENERAL_PERMS = ["general", "requirements", "duration", "pricing", "lockbox"];
+  const FEES_PERMS = ["fees", "preauth"];
 
   it("General's sections run in the agreed order, each with its own id", () => {
     expect(V2_GENERAL_SECTIONS.map((s) => s.anchor)).toEqual([
       "regional",
       "driver-requirements",
       "booking-rules",
+      "monthly-rate",
       "key-handover",
-      "tax-and-fees",
-      "security-deposit",
       "booking-site",
       "optional-modules",
     ]);
-    expect(settingsSectionId("tax-and-fees")).toBe("settings-tax-and-fees");
+    expect(settingsSectionId("monthly-rate")).toBe("settings-monthly-rate");
     // Regional, Booking site and Optional modules all follow General's own permission, so it is listed once.
     expect(V2_GENERAL_PERM_TABS).toEqual(ALL_GENERAL_PERMS);
+  });
+
+  it("Monthly rate sits right after Booking rules, under the pricing permission, with the heading the pricing page used", () => {
+    const anchors = V2_GENERAL_SECTIONS.map((s) => s.anchor);
+    expect(anchors.indexOf("monthly-rate")).toBe(anchors.indexOf("booking-rules") + 1);
+    const monthly = V2_GENERAL_SECTIONS.find((s) => s.anchor === "monthly-rate")!;
+    expect(monthly.permTab).toBe("pricing");
+    // `?tab=pricing` still opens Weekend and holiday pricing, so it answers to no old tab.
+    expect(monthly.tab).toBeNull();
+    expect({ title: monthly.title, description: monthly.description }).toEqual(MONTHLY_RATE_SECTION);
+  });
+
+  it("Tax and fees and Security deposit are the fees page, each under its own permission", () => {
+    expect(V2_FEES_SECTIONS.map((s) => [s.anchor, s.title, s.permTab, s.tab])).toEqual([
+      ["tax-and-fees", "Tax and fees", "fees", "fees"],
+      ["security-deposit", "Security deposit", "preauth", "preauth"],
+    ]);
+    expect(V2_FEES_PERM_TABS).toEqual(FEES_PERMS);
+    expect(Object.keys(V2_SECTIONED_PAGES)).toEqual(["general", "fees", "notifications"]);
+    // No anchor is on two pages, so an old #settings-… link has one home.
+    const anchors = Object.values(V2_SECTIONED_PAGES).flatMap((sections) => sections.map((s) => s.anchor));
+    expect(new Set(anchors).size).toBe(anchors.length);
   });
 
   it("hides nothing now: Promo codes, Extras, Installments, Pay as you go and Auto-extension are back, and keep their notice labels", () => {
@@ -130,6 +160,7 @@ describe("v2 General: six pages merged into one, and the five hidden pages back"
     const pages = {
       general: { permTab: "general" },
       locations: { permTab: "locations" },
+      fees: { permTab: "fees" },
       pricing: { permTab: "pricing" },
       templates: { permTab: "templates" },
       promos: { permTab: "promos" },
@@ -153,9 +184,27 @@ describe("v2 General: six pages merged into one, and the five hidden pages back"
       expect(resolveV2SettingsRoute("requirements", pages)).toEqual({ page: "general", anchor: "driver-requirements", permTab: "requirements" });
       expect(resolveV2SettingsRoute("duration", pages)).toEqual({ page: "general", anchor: "booking-rules", permTab: "duration" });
       expect(resolveV2SettingsRoute("lockbox", pages)).toEqual({ page: "general", anchor: "key-handover", permTab: "lockbox" });
-      expect(resolveV2SettingsRoute("fees", pages)).toEqual({ page: "general", anchor: "tax-and-fees", permTab: "fees" });
-      expect(resolveV2SettingsRoute("preauth", pages)).toEqual({ page: "general", anchor: "security-deposit", permTab: "preauth" });
       expect(resolveV2SettingsRoute("booking-site", pages)).toEqual({ page: "general", anchor: "booking-site", permTab: "general" });
+    });
+
+    it("?tab=fees opens Tax, fees and deposit at the top, for anyone who may see either of its sections", () => {
+      expect(resolveV2SettingsRoute("fees", pages)).toEqual({ page: "fees", anchor: null, permTab: FEES_PERMS });
+    });
+
+    it("?tab=preauth opens Tax, fees and deposit at Security deposit, under the deposit's permission", () => {
+      expect(resolveV2SettingsRoute("preauth", pages)).toEqual({ page: "fees", anchor: "security-deposit", permTab: "preauth" });
+    });
+
+    it("?tab=pricing still opens the pricing page, which keeps its own permission", () => {
+      expect(resolveV2SettingsRoute("pricing", pages)).toEqual({ page: "pricing", anchor: null, permTab: "pricing" });
+    });
+
+    it("a page made of sections, and its sections' old tabs, open nothing without a page entry, or while hidden", () => {
+      const { fees: _fees, ...withoutFees } = pages;
+      expect(resolveV2SettingsRoute("fees", withoutFees)).toEqual(none);
+      expect(resolveV2SettingsRoute("preauth", withoutFees)).toEqual(none);
+      // General still opens: only the fees page is missing.
+      expect(resolveV2SettingsRoute("duration", withoutFees)).toEqual({ page: "general", anchor: "booking-rules", permTab: "duration" });
     });
 
     it("other pages open as themselves", () => {
@@ -188,46 +237,79 @@ describe("v2 General: six pages merged into one, and the five hidden pages back"
     expect(canViewAny([], () => true)).toBe(false);
   });
 
-  it("v2NoticePages: General with its any-of permission, each section under its old tab, and every page (none is hidden)", () => {
+  it("v2NoticePages: each page made of sections with its any-of permission, each section under its old tab, and every page (none is hidden)", () => {
     expect(
       v2NoticePages({
         general: { title: "General", permTab: "general" },
         locations: { title: "Locations", permTab: "locations" },
+        fees: { title: "Tax, fees and deposit", permTab: "fees" },
         promos: { title: "Promo codes", permTab: "promos" },
       }),
     ).toEqual({
       general: { title: "General", permTab: ALL_GENERAL_PERMS },
       locations: { title: "Locations", permTab: "locations" },
+      fees: { title: "Tax, fees and deposit", permTab: FEES_PERMS },
       promos: { title: "Promo codes", permTab: "promos" },
       requirements: { title: "Driver requirements", permTab: "requirements" },
       duration: { title: "Booking rules", permTab: "duration" },
       lockbox: { title: "Key handover", permTab: "lockbox" },
-      fees: { title: "Tax and fees", permTab: "fees" },
       preauth: { title: "Security deposit", permTab: "preauth" },
       "booking-site": { title: "Booking site", permTab: "general" },
     });
+  });
+
+  it("v2NoticePages: without the fees page, ?tab=preauth is not listed either", () => {
+    const out = v2NoticePages({ general: { title: "General", permTab: "general" } });
+    expect(Object.keys(out)).toEqual(["general", "requirements", "duration", "lockbox", "booking-site"]);
+  });
+
+  it("v2SectionHomePage: an old #settings-… link finds the page that holds the section now", () => {
+    expect(v2SectionHomePage("settings-tax-and-fees")).toBe("fees");
+    expect(v2SectionHomePage("settings-security-deposit")).toBe("fees");
+    expect(v2SectionHomePage("settings-monthly-rate")).toBe("general");
+    expect(v2SectionHomePage("settings-key-handover")).toBe("general");
+    // Not a section of a sectioned page (Customer messages' lockbox message), or nothing.
+    expect(v2SectionHomePage("settings-lockbox-messages")).toBeNull();
+    expect(v2SectionHomePage("tax-and-fees")).toBeNull();
+    expect(v2SectionHomePage(null)).toBeNull();
+    expect(v2SectionHomePage("")).toBeNull();
   });
 
   describe("notices for the merged pages, the pages that are back, and the blacklist", () => {
     const base = {
       pages: v2NoticePages({
         general: { title: "General", permTab: "general" },
-        pricing: { title: "Custom pricing", permTab: "pricing" },
+        fees: { title: "Tax, fees and deposit", permTab: "fees" },
+        pricing: { title: "Weekend and holiday pricing", permTab: "pricing" },
         promos: { title: "Promo codes", permTab: "promos" },
         payg: { title: "Pay as you go", permTab: "payg" },
       }),
       redirects: { branding: "/settings/appearance" },
-      allTabs: ["general", "requirements", "lockbox", "fees", "promos", "payg", "blacklist", "pricing"],
+      allTabs: ["general", "requirements", "lockbox", "fees", "preauth", "promos", "payg", "blacklist", "pricing"],
       isHidden: () => false,
       boardCard: () => null,
       permissionsLoading: false,
     };
     // A manager holding only the settings.rental grant behind Tax and fees.
     const onlyFees = (t: string) => t === "fees";
+    // A manager holding only the settings.pricing grant (weekend, holiday and monthly pricing).
+    const onlyPricing = (t: string) => t === "pricing";
 
-    it("General opens for someone who may see only one of its sections", () => {
-      expect(resolveSettingsTabNotice({ ...base, canView: onlyFees, tabParam: "general" })).toEqual({ kind: "none" });
+    it("a page made of sections opens for someone who may see only one of them", () => {
       expect(resolveSettingsTabNotice({ ...base, canView: onlyFees, tabParam: "fees" })).toEqual({ kind: "none" });
+      expect(resolveSettingsTabNotice({ ...base, canView: (t) => t === "preauth", tabParam: "fees" })).toEqual({ kind: "none" });
+      // The monthly rate is on General now, so the pricing grant alone opens General.
+      expect(resolveSettingsTabNotice({ ...base, canView: onlyPricing, tabParam: "general" })).toEqual({ kind: "none" });
+      expect(resolveSettingsTabNotice({ ...base, canView: onlyPricing, tabParam: "pricing" })).toEqual({ kind: "none" });
+    });
+
+    it("Tax and fees is no longer part of General", () => {
+      expect(resolveSettingsTabNotice({ ...base, canView: onlyFees, tabParam: "general" })).toEqual({ kind: "no-access", label: "General" });
+    });
+
+    it("the deposit's old tab without its permission names Security deposit; the fees page without either names the page", () => {
+      expect(resolveSettingsTabNotice({ ...base, canView: onlyFees, tabParam: "preauth" })).toEqual({ kind: "no-access", label: "Security deposit" });
+      expect(resolveSettingsTabNotice({ ...base, canView: onlyPricing, tabParam: "fees" })).toEqual({ kind: "no-access", label: "Tax, fees and deposit" });
     });
 
     it("a section's old tab without that section's permission names the section", () => {
@@ -315,9 +397,9 @@ describe("resolveSettingsPageData", () => {
     });
   });
 
-  it("Custom pricing never waits at page level: each section gates on its own read", () => {
+  it("Weekend and holiday pricing and Tax, fees and deposit never wait at page level: each section gates on its own read", () => {
     const defaults = { tax_enabled: false, max_rental_days: 90 };
-    for (const page of ["pricing"]) {
+    for (const page of ["pricing", "fees"]) {
       expect(resolveSettingsPageData({ page, org: realOrg, rental: { settings: defaults, error: null } })).toEqual({ kind: "ready" });
       expect(resolveSettingsPageData({ page, org: realOrg, rental: { settings: defaults, error: boom } })).toEqual({ kind: "ready" });
     }

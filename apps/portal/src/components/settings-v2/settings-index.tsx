@@ -18,11 +18,16 @@
  *  - Subscription — the sidebar's Billing page is the same screen.
  *  - Portal appearance as a separate entry — it edits the same name, logo,
  *    favicon and colours as Branding, so Branding opens it.
- *  - Driver requirements, Booking rules, Key handover, Booking site, Tax and
- *    fees and Security deposit — sections of General now; their old `?tab=`
- *    links open General at that section.
+ *  - Driver requirements, Booking rules, Monthly rate, Key handover and
+ *    Booking site — sections of General now — and Tax and fees and Security
+ *    deposit — sections of Tax, fees and deposit. Their old `?tab=` links open
+ *    the page that holds them, at that section.
  *  - The global blacklist — out of Settings for now (it is to move to
  *    Customers). A `?tab=blacklist` link says it isn't part of the workspace.
+ *  - Team emails and Push notifications — both are part of the one
+ *    Notifications page now; `?tab=reminders` and `?tab=push` open it at the
+ *    email and push setup. Customer messages moved to a Templates group, with
+ *    the agreement template beside it.
  *
  * Promo codes, Extras, Installments, Pay as you go and Auto-extension were
  * hidden for a while (V2_HIDDEN_SETTINGS_PAGES, now empty) and are listed
@@ -41,7 +46,7 @@ import {
   SettingsEmptyState,
   SettingsNoMatch,
 } from "@/components/settings-v2/section-states";
-import { V2_GENERAL_PERM_TABS, findSettingsSearchHandoff } from "@/components/settings-v2/settings-shell-state";
+import { V2_FEES_PERM_TABS, V2_GENERAL_PERM_TABS, findSettingsSearchHandoff } from "@/components/settings-v2/settings-shell-state";
 import { SETTINGS_PAGE_TITLE, SETTINGS_SECTION_TITLE } from "@/components/settings-v2/settings-kit";
 import { usePageSearch } from "@/components/shared/layout/page-search-slot";
 import { isSettingsTabHiddenForLean } from "@/lib/lean-areas";
@@ -55,8 +60,8 @@ export interface SettingsIndexItem {
   tab: string;
   /**
    * The entry opens a page made of sections with their own permissions
-   * (General): it is listed when ANY of these tabs is viewable. `tab` still
-   * drives the lean gate.
+   * (General, Tax, fees and deposit): it is listed when ANY of these tabs is
+   * viewable. `tab` still drives the lean gate.
    */
   anyOfTabs?: readonly string[];
   /** Listed for head admins only (Team: `/users` refuses everyone else). */
@@ -77,7 +82,7 @@ export const SETTINGS_INDEX_SECTIONS: SettingsIndexSection[] = [
       {
         title: "General",
         description:
-          "Currency, driver and booking rules, key handover, tax, fees and deposits, your booking site and optional modules.",
+          "Currency, driver and booking rules, the monthly rate, key handover, your booking site and optional modules.",
         href: "/settings?tab=general",
         tab: "general",
         anyOfTabs: V2_GENERAL_PERM_TABS,
@@ -85,9 +90,9 @@ export const SETTINGS_INDEX_SECTIONS: SettingsIndexSection[] = [
           "currency distance miles kilometres km modules turo fleet health vehicle owners " +
           "driver requirements age licence license passport id verification waiver " +
           "booking rules notice lead time duration minimum maximum buffer cooldown " +
+          "monthly rate monthly tier monthly pricing 30 31 days " +
           "key handover lockbox keys code delivery " +
-          "booking site gig driver price breakdown average daily plate vin registration header footer colour " +
-          "tax vat service fee security deposit hold pre-authorisation preauth charge",
+          "booking site gig driver price breakdown average daily plate vin registration header footer colour",
       },
       {
         title: "Branding",
@@ -115,15 +120,22 @@ export const SETTINGS_INDEX_SECTIONS: SettingsIndexSection[] = [
     ],
   },
   {
-    // What a customer is charged: surcharges, discounts and add-ons.
+    // What a customer is charged on top of the rental price, and what comes
+    // off it: tax, fees and the deposit, discounts, add-ons, then weekend and
+    // holiday surcharges last.
     title: "Pricing",
     items: [
       {
-        title: "Custom pricing",
-        description: "Charge more on weekends and holidays, and choose the rental length at which your monthly rate starts.",
-        href: "/settings?tab=pricing",
-        tab: "pricing",
-        keywords: "custom pricing dynamic seasonal weekend holiday surcharge monthly tier rate",
+        title: "Tax, fees and deposit",
+        description: "Sales tax and service fees added to what customers pay, and the refundable deposit taken on online bookings.",
+        href: "/settings?tab=fees",
+        // Two sections under their own permissions (Tax and fees, Security
+        // deposit): listed when either is viewable.
+        tab: "fees",
+        anyOfTabs: V2_FEES_PERM_TABS,
+        keywords:
+          "tax vat sales tax service fee booking fee charges " +
+          "security deposit hold pre-authorisation pre-authorization preauth charge refundable",
       },
       {
         title: "Promo codes",
@@ -138,6 +150,15 @@ export const SETTINGS_INDEX_SECTIONS: SettingsIndexSection[] = [
         href: "/settings?tab=extras",
         tab: "extras",
         keywords: "extras add-ons addons add ons child seat baby seat gps stock",
+      },
+      {
+        // Formerly "Custom pricing" (and before that "Pricing rules"); the tab
+        // and its permission are unchanged, and the old names still find it.
+        title: "Weekend and holiday pricing",
+        description: "Charge more for the weekend days and holidays a rental includes, with its own surcharge for each holiday you add.",
+        href: "/settings?tab=pricing",
+        tab: "pricing",
+        keywords: "weekend holiday holidays surcharge seasonal dynamic custom pricing pricing rules",
       },
     ],
   },
@@ -170,28 +191,40 @@ export const SETTINGS_INDEX_SECTIONS: SettingsIndexSection[] = [
     ],
   },
   {
+    // One page for every notification (build-spec D7): it replaced Team emails
+    // and Push notifications, whose old `?tab=reminders` / `?tab=push` links
+    // open it at the email and push setup.
     title: "Notifications",
     items: [
       {
-        title: "Team emails",
-        description: "Choose which emails you and your team receive about new bookings, payments and other activity on your account.",
-        href: "/settings?tab=reminders",
-        tab: "reminders",
-        keywords: "email notifications alerts reminders",
+        title: "Notifications",
+        description: "Every email, push and in-app message you and your customers get: when it is sent, what it says and who gets it.",
+        href: "/settings?tab=notifications",
+        tab: "notifications",
+        keywords:
+          "email push in-app in app bell alerts templates team emails push notifications reminders " +
+          "sender from address reply to send test preview subject variables " +
+          "phone browser install home screen payment reminders reminder rules",
       },
-      {
-        title: "Push notifications",
-        description: "Send instant alerts to your team's phones and browsers when something on your account needs attention.",
-        href: "/settings?tab=push",
-        tab: "push",
-        keywords: "push mobile browser alerts",
-      },
+    ],
+  },
+  {
+    // The wording customers read outside the notifications themselves (D8).
+    title: "Templates",
+    items: [
       {
         title: "Customer messages",
         description: "The return reminder, the emails customers receive, the lockbox code email and the rental agreement they sign.",
         href: "/settings?tab=templates",
         tab: "templates",
         keywords: "templates email agreement contract return reminder sms lockbox code instructions",
+      },
+      {
+        title: "Agreement templates",
+        description: "The rental agreement customers sign before they drive: its wording, the details it fills in, and a preview.",
+        href: "/settings/agreement-templates",
+        tab: "templates",
+        keywords: "agreement contract rental agreement terms signature sign esign document",
       },
     ],
   },

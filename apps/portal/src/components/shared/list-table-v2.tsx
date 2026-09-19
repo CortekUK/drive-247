@@ -92,6 +92,27 @@ export const LIST_TONES: Record<ListTone, string> = {
  */
 export const LIST_ROW_ACTION = "-my-1.5 h-8 w-8 text-muted-foreground hover:text-foreground";
 
+/**
+ * Where a table sits. `card` (every list's default) is the ui-v2 Card, as the
+ * rentals list draws it. `settings` is for a short table inside a settings
+ * page (holidays, promo codes, extras): the flat panel `SettingsPanel` draws,
+ * so the table matches the panels around it.
+ *
+ * Why settings tables need their own: the ui-v2 Card pads 24px above and below
+ * its body (`py-[var(--card-spacing)]`), and the list body has no padding of
+ * its own, so a short table showed a blank 24px band over its header and under
+ * its last row, inside a rounded, shadowed card that sat beside flat, bordered
+ * panels. The settings surface drops both.
+ *
+ * NOT in `LIST_CLASSES`: those strings are kept in lockstep with the rentals
+ * list, which has no settings surface. Never add `text-card-foreground` here:
+ * the v2 theme repaints any div carrying both it and `border` as a shadowed
+ * card with a transparent border (`v2-theme.css`, "Card").
+ */
+export type ListSurface = "card" | "settings";
+
+export const LIST_SETTINGS_SURFACE = "overflow-hidden rounded-xl border bg-card text-sm";
+
 export interface ProgressiveRows<T> {
   /** The rows to render: the first `LIST_ROWS_PER_FILL × fills` of the set. */
   visible: T[];
@@ -308,6 +329,7 @@ export function ListTable({
   rows,
   minWidth = "min-w-[720px]",
   fillViewport = false,
+  surface = "card",
   children,
 }: {
   rows: RowsShell;
@@ -320,40 +342,48 @@ export function ListTable({
    * (vehicles, customers; rentals does the same in its own copy).
    */
   fillViewport?: boolean;
+  /** `settings` for a table on a settings page; see `ListSurface`. Leave it off everywhere else. */
+  surface?: ListSurface;
   children: ReactNode;
 }) {
   // ListTable only renders with its table, so the scroll root is mounted by
   // the time the hook's layout effect first runs.
   const fillCap = useViewportFillCap(rows.scrollRootRef, fillViewport);
-  return (
-    <Card>
-      <CardContent
-        ref={rows.scrollRootRef}
-        className={cn(LIST_CLASSES.scrollRoot, fillViewport && LIST_CLASSES.fillViewport)}
-        style={fillCap !== undefined ? { maxHeight: fillCap } : undefined}
-      >
-        {/* `table-fixed`: columns keep their declared widths instead of auto
-            layout handing every spare pixel to the one unsized column. */}
-        <Table className={cn(minWidth, "table-fixed")}>{children}</Table>
+  const body = (
+    <CardContent
+      ref={rows.scrollRootRef}
+      className={cn(LIST_CLASSES.scrollRoot, fillViewport && LIST_CLASSES.fillViewport)}
+      style={fillCap !== undefined ? { maxHeight: fillCap } : undefined}
+    >
+      {/* `table-fixed`: columns keep their declared widths instead of auto
+          layout handing every spare pixel to the one unsized column. */}
+      <Table className={cn(minWidth, "table-fixed")}>{children}</Table>
 
-        {/* The sentinel, inside the scroll container after the last row. The
-            bars read as "more coming" on a slow frame; `aria-hidden` because
-            the footer line says the same thing in words. */}
-        {rows.hasMore && (
-          <div ref={rows.sentinelRef} aria-hidden="true" className="space-y-3 px-4 py-4">
-            {[0, 1].map((row) => (
-              <div key={row} className="flex items-center gap-4">
-                <div className="h-3 w-20 animate-pulse rounded-full bg-muted" />
-                <div className="h-3 w-28 animate-pulse rounded-full bg-muted" />
-                <div className="h-3 w-16 animate-pulse rounded-full bg-muted" />
-                <div className="h-3 w-24 animate-pulse rounded-full bg-muted" />
-              </div>
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+      {/* The sentinel, inside the scroll container after the last row. The
+          bars read as "more coming" on a slow frame; `aria-hidden` because
+          the footer line says the same thing in words. */}
+      {rows.hasMore && (
+        <div ref={rows.sentinelRef} aria-hidden="true" className="space-y-3 px-4 py-4">
+          {[0, 1].map((row) => (
+            <div key={row} className="flex items-center gap-4">
+              <div className="h-3 w-20 animate-pulse rounded-full bg-muted" />
+              <div className="h-3 w-28 animate-pulse rounded-full bg-muted" />
+              <div className="h-3 w-16 animate-pulse rounded-full bg-muted" />
+              <div className="h-3 w-24 animate-pulse rounded-full bg-muted" />
+            </div>
+          ))}
+        </div>
+      )}
+    </CardContent>
   );
+  if (surface === "settings") {
+    return (
+      <div data-list-surface="settings" className={LIST_SETTINGS_SURFACE}>
+        {body}
+      </div>
+    );
+  }
+  return <Card>{body}</Card>;
 }
 
 /** Sticky while the body scrolls: nearly opaque, blurred behind. */
@@ -430,6 +460,7 @@ export function ListFooter({
   one,
   many,
   serverTotal,
+  hideWhenAllShown = false,
 }: {
   rows: Pick<ProgressiveRows<unknown>, "visible" | "total" | "hasMore" | "showMore">;
   one: string;
@@ -440,8 +471,16 @@ export function ListFooter({
    * list would finish with "All 1000 payments shown" over a set of 1,450.
    */
   serverTotal?: number;
+  /**
+   * Settings tables: render nothing once every row is on screen. "All 3
+   * holidays shown" under three visible rows says nothing the table does not.
+   * While rows are still to come, or a fetch cap left some on the server, the
+   * line shows as usual.
+   */
+  hideWhenAllShown?: boolean;
 }) {
   const total = serverTotal !== undefined && serverTotal > rows.total ? serverTotal : rows.total;
+  if (hideWhenAllShown && !rows.hasMore && total <= rows.total) return null;
   return (
     <div className={LIST_CLASSES.footer}>
       <span>

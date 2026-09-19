@@ -136,7 +136,7 @@ import {
   ruleSummary,
   smsSegments,
 } from "@/components/settings-v2/message-rules";
-import { EmailNotificationSettingsV2, ReminderRulesConfigV2 } from "@/components/settings-v2/notification-states-v2";
+import { EMAIL_CATEGORIES_ONLY_COPY, EmailNotificationSettingsV2, ReminderRulesConfigV2 } from "@/components/settings-v2/notification-states-v2";
 import { EmailTemplateEditorV2, EmailTemplatesListV2 } from "@/components/settings-v2/email-templates-v2";
 import { AgreementTemplateEditorV2, AgreementTemplatesPageV2 } from "@/components/settings-v2/agreement-templates-v2";
 import { PushNotificationSettings } from "@/components/settings/push-notification-settings";
@@ -461,6 +461,28 @@ describe("EmailNotificationSettingsV2", () => {
     // The settings page shows the one "View only" chip above this section; a
     // second copy inside it was noise.
     expect(container.querySelector('[data-settings-state="read-only"]')).toBeNull();
+  });
+
+  it('parts="categories" (Notifications\' What\'s sent today): only the six categories, under their own heading', () => {
+    resetEmailPrefs({ prefs: { masterEnabled: true, recipientEmail: "ops@fleet.io", contactEmail: "", categories: allOff } });
+    render(<EmailNotificationSettingsV2 parts="categories" />);
+    expect(container.querySelector("h2")?.textContent).toBe(EMAIL_CATEGORIES_ONLY_COPY.title);
+    expect(text()).toContain(EMAIL_CATEGORIES_ONLY_COPY.description);
+    // No master switch and no recipient: the page's Email card has them.
+    expect(container.querySelector("#v2-notification-recipient")).toBeNull();
+    expect(container.querySelector('[role="switch"][aria-label="Send alerts by email"]')).toBeNull();
+    expect(container.querySelectorAll('[role="switch"]')).toHaveLength(6);
+    click(container.querySelector('[data-category="fines"] [role="switch"]') as HTMLButtonElement);
+    expect(h.emailPrefs.setCategoryEnabled.mutate).toHaveBeenCalledTimes(1);
+    expect(h.emailPrefs.setCategoryEnabled.mutate.mock.calls[0][0]).toEqual({ category: "fines", enabled: true });
+  });
+
+  it('parts="categories" with team alert emails off points at the Email card', () => {
+    resetEmailPrefs({ prefs: { masterEnabled: false, recipientEmail: "", contactEmail: "", categories: allOff } });
+    render(<EmailNotificationSettingsV2 parts="categories" />);
+    expect(text()).toContain(EMAIL_CATEGORIES_ONLY_COPY.masterOff);
+    expect(text()).not.toContain("Turn on email alerts above to choose categories.");
+    expect((container.querySelector('[data-category="bookings"] [role="switch"]') as HTMLButtonElement).disabled).toBe(true);
   });
 });
 

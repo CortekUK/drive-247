@@ -2,6 +2,10 @@
  * v2 Settings structure (team lead review, Sep 2026):
  *   - six small pages merged into General as sections, with `?tab=` deep links
  *     that open General at the section, and a permission per section;
+ *   - then (Sep 19 2026, D1–D3) Tax and fees and Security deposit moved out of
+ *     General to their own page, Tax, fees and deposit (`?tab=fees`, and
+ *     `?tab=preauth` at the deposit), the monthly rate moved from the pricing
+ *     page into General, and Custom pricing became Weekend and holiday pricing;
  *   - Key handover sends the code by email only, and its message moved to
  *     Customer messages;
  *   - Promo codes, Extras, Installments, Pay as you go and Auto-extension
@@ -66,7 +70,7 @@ vi.mock("next/link", () => ({
 }));
 
 import GlobalBlacklistPage from "@/app/(dashboard)/settings/blacklist/page";
-import { V2_HIDDEN_SETTINGS_PAGES, resolveV2SettingsRoute } from "@/components/settings-v2/settings-shell-state";
+import { V2_FEES_SECTIONS, V2_GENERAL_SECTIONS, V2_HIDDEN_SETTINGS_PAGES, resolveV2SettingsRoute } from "@/components/settings-v2/settings-shell-state";
 import { OrgSwitcher } from "@/components/shared/layout/org-switcher";
 
 beforeEach(() => {
@@ -81,51 +85,125 @@ beforeEach(() => {
 /* Settings page wiring (source)                                               */
 /* -------------------------------------------------------------------------- */
 
-describe("settings page (v2): General holds six former pages as sections", () => {
+/** The members of a `const NAME = new Set([...]);` in the page source, in order. */
+const setMembers = (source: string, name: string): string[] => {
+  const body = source.match(new RegExp(`const ${name} = new Set\\(\\[([^\\]]*)\\]\\);`))?.[1];
+  expect(body, name).toBeDefined();
+  return [...body!.matchAll(/'([^']+)'/g)].map((m) => m[1]);
+};
+
+/** A `V2_SETTINGS_PAGES` entry's fields (single-quoted values only), read from the page source. */
+const pageEntry = (pagesDecl: string, tab: string) => {
+  const line = pagesDecl.split("\n").find((l) => new RegExp(`^\\s*'?${tab}'?: \\{ section:`).test(l));
+  expect(line, tab).toBeDefined();
+  const field = (key: string) => line!.match(new RegExp(`${key}: '([^']*)'`))?.[1];
+  return { section: field("section"), title: field("title"), description: field("description"), permTab: field("permTab") };
+};
+
+describe("settings page (v2): General and Tax, fees and deposit are pages of sections", () => {
   const page = read("app/(dashboard)/settings/page.tsx");
   const v2Start = page.indexOf("  if (v2Chrome) {\n    const pageMeta =");
   const v2End = page.indexOf("\n  return (", page.indexOf("<LeaveDialogV2", v2Start));
   const v2 = page.slice(v2Start, v2End);
   const pagesDecl = page.slice(page.indexOf("const V2_SETTINGS_PAGES:"), page.indexOf("};", page.indexOf("const V2_SETTINGS_PAGES:")));
   const general = v2.slice(v2.indexOf("        case 'general': {"), v2.indexOf("        case 'locations':"));
+  const fees = v2.slice(v2.indexOf("        case 'fees':"), v2.indexOf("        case 'pricing':"));
+  const sections = v2.slice(v2.indexOf("const renderV2Sections ="), v2.indexOf("const renderBody ="));
+  /** The body of `case '<anchor>':` inside a slice, up to the next case (or the slice's end). */
+  const caseBody = (slice: string, anchor: string) => {
+    const at = slice.indexOf(`case '${anchor}':`);
+    expect(at, anchor).toBeGreaterThan(-1);
+    const next = slice.indexOf("case '", at + 6);
+    return slice.slice(at, next === -1 ? undefined : next);
+  };
 
-  it("the merged pages have no page entry and no render case of their own any more", () => {
+  it("the merged pages have no page entry and no render case of their own; Tax, fees and deposit is a page again", () => {
     expect(v2Start).toBeGreaterThan(-1);
-    for (const tab of ["requirements", "duration", "lockbox", "'booking-site'", "fees", "preauth"]) {
+    for (const tab of ["requirements", "duration", "lockbox", "'booking-site'", "preauth"]) {
       expect(pagesDecl).not.toMatch(new RegExp(`^\\s*${tab}: \\{`, "m"));
     }
-    for (const tab of ["requirements", "duration", "lockbox", "booking-site", "fees", "preauth"]) {
+    for (const tab of ["requirements", "duration", "lockbox", "booking-site", "preauth"]) {
       expect(v2).not.toContain(`\n        case '${tab}':`);
     }
+    expect(pageEntry(pagesDecl, "fees")).toEqual({
+      section: "Pricing",
+      title: "Tax, fees and deposit",
+      description: "The tax and fees added to what a customer pays, and the refundable deposit taken on online bookings.",
+      permTab: "fees",
+    });
+    expect(fees).toContain("        case 'fees':");
   });
 
-  it("General renders every section this user may see, each under its own permission", () => {
+  it("both pages render every section this user may see through one helper, each under its own permission", () => {
     expect(v2).toContain("const v2GeneralSections = V2_GENERAL_SECTIONS.filter((section) => canViewSettings(section.permTab));");
-    expect(general).toContain("<SettingsSection");
-    expect(general).toContain("anchor={section.anchor}");
+    expect(v2).toContain("const v2FeesSections = V2_FEES_SECTIONS.filter((section) => canViewSettings(section.permTab));");
+    expect(sections).toContain("<SettingsSection");
+    expect(sections).toContain("anchor={section.anchor}");
     // A partly editable page says "View only" on the sections it can't change.
-    expect(general).toContain("action={canEditPage && !canEditSettings(section.permTab) ? <SettingsReadOnlyNotice /> : undefined}");
+    expect(sections).toContain("action={canEditPage && !canEditSettings(section.permTab) ? <SettingsReadOnlyNotice /> : undefined}");
+    expect(general).toMatch(/return renderV2Sections\(\s*v2GeneralSections/);
+    expect(fees).toContain("return renderV2Sections(v2FeesSections,");
+
+    // Every General section is drawn by General, under its own permission.
     for (const [anchor, perm] of [
       ["driver-requirements", "requirements"],
       ["booking-rules", "duration"],
+      ["monthly-rate", "pricing"],
       ["key-handover", "lockbox"],
+    ]) {
+      expect(V2_GENERAL_SECTIONS.find((s) => s.anchor === anchor)?.permTab, anchor).toBe(perm);
+      expect(caseBody(general, anchor), anchor).toContain(`canEdit={canEditSettings('${perm}')}`);
+    }
+    // …and every fees section by the fees page, never by General.
+    for (const [anchor, perm] of [
       ["tax-and-fees", "fees"],
       ["security-deposit", "preauth"],
     ]) {
-      const body = general.slice(general.indexOf(`case '${anchor}':`), general.indexOf("case '", general.indexOf(`case '${anchor}':`) + 6));
-      expect(body, anchor).toContain(`canEdit={canEditSettings('${perm}')}`);
+      expect(V2_FEES_SECTIONS.find((s) => s.anchor === anchor)?.permTab, anchor).toBe(perm);
+      expect(caseBody(fees, anchor), anchor).toContain(`canEdit={canEditSettings('${perm}')}`);
+      expect(general, anchor).not.toContain(`case '${anchor}':`);
     }
     // Regional and Booking site follow General's own permission.
     expect(general).toContain("const canEditGeneral = canEditSettings('general');");
     expect(general).not.toContain("canEdit={canEditPage}");
     expect(general).not.toContain("!canEditPage}");
+    expect(fees).not.toContain("canEdit={canEditPage}");
   });
 
-  it("General opens when any of its sections may be viewed; editing it needs any section's editor grant", () => {
+  it("the monthly rate on General saves as it did on the pricing page; the pricing page no longer draws it", () => {
+    const monthly = caseBody(general, "monthly-rate");
+    expect(monthly).toContain("<MonthlyRateSectionV2");
+    expect(monthly).toContain("registerSave={registerV2SectionSave}");
+    expect(monthly).toContain("monthlyTier={v2MonthlyTier}");
+    const tier = v2.slice(v2.indexOf("const v2MonthlyTier = {"), v2.indexOf("const renderBody ="));
+    expect(tier).toContain("await updateRentalSettings({ monthly_tier_days: rentalForm.monthly_tier_days } as any);");
+    expect(tier).toContain("await refetchTenant();");
+    expect(tier).toContain("read: v2RentalRead,");
+    const pricing = v2.slice(v2.indexOf("        case 'pricing':"), v2.indexOf("        case 'installments':"));
+    expect(pricing).toContain("<PricingRulesV2 canEdit={canEditPage} registerSave={registerV2SectionSave} onDirtyChange={setPricingDirty} />");
+    expect(pricing).not.toContain("monthlyTier");
+  });
+
+  it("the deposit keeps its charge confirmation on its new page", () => {
+    expect(caseBody(fees, "security-deposit")).toContain("onRequestCharge={() => setShowChargeConfirm(true)}");
+    expect(v2).toContain("{depositChargeConfirmDialog}");
+  });
+
+  it("a page of sections opens when any of them may be viewed; editing it needs any section's editor grant", () => {
     expect(page).toContain("const v2Route = v2Chrome ? resolveV2SettingsRoute(v2TabParam, V2_SETTINGS_PAGES) : null;");
     expect(v2).toContain("v2Page && v2Route?.permTab && canViewAny(v2Route.permTab, canViewSettings) ? V2_SETTINGS_PAGES[v2Page] : null;");
     expect(v2).toContain("? v2GeneralSections.some((section) => canEditSettings(section.permTab))");
+    expect(v2).toContain("? canEditSettings('fees') || canEditSettings('preauth')");
     expect(v2).toContain("pages: v2NoticePages(V2_SETTINGS_PAGES),");
+  });
+
+  it("an old #settings-… link to a section that moved goes on to its new page, before the v1 early returns", () => {
+    const effect = page.indexOf("const home = v2SectionHomePage(v2Hash);");
+    expect(effect).toBeGreaterThan(-1);
+    expect(page.indexOf("if (!v2Chrome && error && !settings) {")).toBeGreaterThan(effect);
+    const body = page.slice(effect, page.indexOf("}, [v2Chrome, v2Page, v2Hash, searchParams, router]);", effect));
+    expect(body).toContain("if (!home || home === v2Page) return;");
+    expect(body).toContain("router.replace(`/settings?${params.toString()}#${v2Hash}`, { scroll: false });");
   });
 
   it("no page-level General skeleton: each section loads and fails on its own", () => {
@@ -142,10 +220,14 @@ describe("settings page (v2): General holds six former pages as sections", () =>
     expect(page).toContain("setV2Hash(hash.startsWith('settings-') ? hash : null);");
   });
 
-  it("one save bar on General, Customer messages, Custom pricing, Locations and the three payment-plan forms", () => {
-    expect(page).toContain(
-      "const V2_PAGES_WITH_SAVE_BAR = new Set(['general', 'templates', 'pricing', 'locations', 'installments', 'payg', 'auto-extend']);",
+  it("one save bar on General, Customer messages, both pricing pages of forms, Locations, the three payment-plan forms and Notifications", () => {
+    expect(new Set(setMembers(page, "V2_PAGES_WITH_SAVE_BAR"))).toEqual(
+      new Set(["general", "templates", "pricing", "fees", "locations", "installments", "payg", "auto-extend", "notifications"]),
     );
+  });
+
+  it("Tax, fees and deposit gates its own controls per section, like General", () => {
+    expect(setMembers(page, "V2_PAGES_GATING_OWN_CONTROLS")).toEqual(expect.arrayContaining(["general", "fees", "pricing"]));
   });
 });
 
@@ -153,7 +235,7 @@ describe("settings page (v2): Key handover and the lockbox message", () => {
   const page = read("app/(dashboard)/settings/page.tsx");
   const v2Start = page.indexOf("  if (v2Chrome) {\n    const pageMeta =");
   const v2 = page.slice(v2Start);
-  const keyHandover = v2.slice(v2.indexOf("case 'key-handover':"), v2.indexOf("case 'tax-and-fees':"));
+  const keyHandover = v2.slice(v2.indexOf("case 'key-handover':"), v2.indexOf("case 'booking-site':"));
   const templates = v2.slice(v2.indexOf("        case 'templates': {"), v2.indexOf("        case 'insurance':"));
 
   it("Key handover gets no Twilio props, and its Templates button targets the lockbox message", () => {
@@ -185,7 +267,7 @@ describe("settings page (v2): Key handover and the lockbox message", () => {
   });
 });
 
-describe("settings page (v2): the pages that are back, blacklist and Custom pricing", () => {
+describe("settings page (v2): the pages that are back, blacklist and Weekend and holiday pricing", () => {
   const page = read("app/(dashboard)/settings/page.tsx");
   const redirects = page.slice(page.indexOf("const V2_SETTINGS_REDIRECTS"), page.indexOf("};", page.indexOf("const V2_SETTINGS_REDIRECTS")));
 
@@ -243,10 +325,19 @@ describe("settings page (v2): the pages that are back, blacklist and Custom pric
     expect(redirects).toContain("subscription: '/subscription',");
   });
 
-  it("Pricing rules is Custom pricing, in the Pricing section, on the same tab and permission", () => {
-    expect(page).toContain(
-      "pricing: { section: 'Pricing', title: 'Custom pricing', description: 'Weekend and holiday surcharges, and when monthly pricing starts.', permTab: 'pricing' },",
-    );
+  it("Custom pricing is Weekend and holiday pricing, in the Pricing section, on the same tab and permission", () => {
+    const pagesDecl = page.slice(page.indexOf("const V2_SETTINGS_PAGES:"), page.indexOf("};", page.indexOf("const V2_SETTINGS_PAGES:")));
+    const entry = pageEntry(pagesDecl, "pricing");
+    expect(entry).toEqual({
+      section: "Pricing",
+      title: "Weekend and holiday pricing",
+      description: "Charge more for the weekend days and holidays a rental includes.",
+      permTab: "pricing",
+    });
+    // Its description no longer promises the monthly rate, which moved to General.
+    expect(entry.description).not.toMatch(/month/i);
+    expect(pageEntry(pagesDecl, "general").description).toContain("monthly rate");
+    expect(pageEntry(pagesDecl, "general").description).not.toMatch(/fee|deposit/i);
   });
 
   it("the index is told who is a head admin (Team)", () => {
@@ -265,6 +356,52 @@ describe("settings page (v2): the pages that are back, blacklist and Custom pric
 /* -------------------------------------------------------------------------- */
 /* /settings/blacklist                                                         */
 /* -------------------------------------------------------------------------- */
+
+describe("settings page (v2): one Notifications page (D7, D8)", () => {
+  const page = read("app/(dashboard)/settings/page.tsx");
+  const v2Start = page.indexOf("  if (v2Chrome) {\n    const pageMeta =");
+  const pagesDecl = page.slice(page.indexOf("const V2_SETTINGS_PAGES:"), page.indexOf("};", page.indexOf("const V2_SETTINGS_PAGES:")));
+  const notifications = page.slice(
+    page.indexOf("        case 'notifications':", v2Start),
+    page.indexOf("        default:", page.indexOf("        case 'notifications':", v2Start)),
+  );
+
+  it("is a page of the Notifications section, under the Notifications permission (settings.reminders)", () => {
+    expect(pageEntry(pagesDecl, "notifications")).toEqual({
+      section: "Notifications",
+      title: "Notifications",
+      description: "Every email, push and in-app message: when it is sent, what it says and who gets it.",
+      permTab: "notifications",
+    });
+    // Customer messages moved to the Templates section.
+    expect(pageEntry(pagesDecl, "templates").section).toBe("Templates");
+    // Team emails and Push keep their entries (the notices name them) and their cases (v1-era).
+    expect(pagesDecl).toMatch(/^\s*reminders: \{ section:/m);
+    expect(pagesDecl).toMatch(/^\s*push: \{ section:/m);
+    expect(page).toContain("        case 'reminders':");
+    expect(page).toContain("        case 'push':");
+  });
+
+  it("is loaded on demand, and gets the page's permission, save bar, today's reminder settings and scroll target", () => {
+    expect(page).toContain("import('@/components/settings-v2/notifications-v2/notifications-page-v2').then((m) => m.NotificationsPageV2)");
+    expect(page).not.toMatch(/^import \{[^}]*NotificationsPageV2[^}]*\} from/m);
+    expect(notifications).toContain("canEdit={canEditPage}");
+    expect(notifications).toContain("registerSave={registerV2SectionSave}");
+    expect(notifications).toContain("todaySettings={renderV2NotificationsToday()}");
+    expect(notifications).toContain("scrollTarget={v2ScrollTarget}");
+    expect(setMembers(page, "V2_PAGES_WITH_SAVE_BAR")).toContain("notifications");
+    expect(setMembers(page, "V2_PAGES_GATING_OWN_CONTROLS")).toContain("notifications");
+  });
+
+  it("today's reminder settings wait for the real org settings, never painting placeholders", () => {
+    const today = page.slice(page.indexOf("const renderV2NotificationsToday = () =>"), page.indexOf("const renderV2Sections ="));
+    expect(today).toContain("BusinessV2.hasRealOrgSettings(settings as any)");
+    expect(today).toContain("renderV2ReminderExtras()");
+    expect(today).toContain("<SettingsLoadError");
+    expect(today).toContain("<SettingsSectionSkeleton");
+    expect(today).toContain("hideRemindersRows ? null");
+  });
+});
 
 describe("/settings/blacklist on v2", () => {
   const mount = () =>
