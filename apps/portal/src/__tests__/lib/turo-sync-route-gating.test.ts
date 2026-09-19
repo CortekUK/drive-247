@@ -3,7 +3,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import ts from 'typescript';
 
-import { ROUTE_TO_TAB, TAB_KEYS, getTabKeyForRoute } from '@/lib/permissions';
+import { ROUTE_TO_TAB, TAB_KEYS, getTabKeyForRoute, getTabKeysForRoute } from '@/lib/permissions';
 import {
   readPortalSource,
   readEdgeSource,
@@ -95,7 +95,7 @@ type Perm = { tab_key: string; access_level: 'viewer' | 'editor' };
 
 /**
  * `canAccessRoute` closes over `isManager`, `permissions` (via `canView`) and
- * the imported `getTabKeyForRoute`. The first two are genuine runtime inputs and
+ * the imported `getTabKeysForRoute`. The first two are genuine runtime inputs and
  * are injected; the third is the REAL function imported from `@/lib/permissions`
  * — not a stand-in — so the route map under test is the shipped one.
  */
@@ -104,16 +104,19 @@ const routeGateFor = (isManager: boolean, permissions: Perm[]) =>
     (
       isManager: boolean,
       permissions: Perm[],
-      getTabKey: (pathname: string) => string | null,
+      getTabKeys: (pathname: string) => string[],
     ) => (pathname: string) => boolean
   >(
-    ['isManager', 'permissions', 'getTabKeyForRoute'],
+    // `canAccessRoute` asks for EVERY grant that opens a route (the plural
+    // `getTabKeysForRoute`, since `/integrations` also opens on
+    // `settings.payments`), so that is the real function it gets here.
+    ['isManager', 'permissions', 'getTabKeysForRoute'],
     [
       liftDeclaration(permissionsHookSource, 'canView'),
       liftDeclaration(permissionsHookSource, 'canAccessRoute'),
     ],
     'canAccessRoute',
-  )(isManager, permissions, getTabKeyForRoute);
+  )(isManager, permissions, getTabKeysForRoute);
 
 const viewerOn = (...tabs: string[]): Perm[] =>
   tabs.map((tab_key) => ({ tab_key, access_level: 'viewer' as const }));

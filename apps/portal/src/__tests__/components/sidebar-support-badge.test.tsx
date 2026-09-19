@@ -34,7 +34,14 @@ vi.mock('@/hooks/use-manager-permissions', () => ({
 }));
 vi.mock('@/hooks/use-cms-pages', () => ({ useCMSPages: () => ({ data: [], isLoading: false }) }));
 vi.mock('@/hooks/use-nav-preferences', () => ({ useNavPreferences: () => ({ preferences: { topLevelOrder: [], groupOrder: [], groupItemOrder: {}, hidden: [], pinned: [] } }) }));
-vi.mock('@/lib/v2-context', () => ({ useV2: () => true }));
+// The lean gates now read the tenant's `portal_experience` through
+// `usePortalExperience` (lib/lean-context.tsx), so the mock has to answer that
+// too. A v2 tenant is also lean: onV2 and lean both true, as for northwind.
+vi.mock('@/lib/v2-context', () => ({
+  useV2: () => true,
+  usePortalExperience: () => ({ onV2: true, lean: true }),
+  usePortalOnV2: () => true,
+}));
 vi.mock('@/components/rentals-v2/rental-detail/use-rental-detail-v2', () => ({ useRentalDetailV2: () => ({}) }));
 vi.mock('@/components/vehicles-v2/use-vehicle-record', () => ({ useVehicleRecord: () => ({}) }));
 vi.mock('@/components/customers-v2/customer-detail/use-customer-detail-v2', () => ({ useCustomerRailHeader: () => ({ title: '', subtitle: '' }) }));
