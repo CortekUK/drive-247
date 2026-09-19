@@ -13,6 +13,30 @@ class ChatFailure extends Error { constructor(message:string,public code:string)
 interface ChatState { key:string; scope:string|null; ready:boolean; messages:ChatMessage[]; conversationId:string|null; error:string|null; capabilities?:TraxCapabilities; issues?:ChatApiResponse['issues'];activeIssueId?:string;recentConversations?:ChatApiResponse['recentConversations'] }
 const empty=(key:string):ChatState=>({key,scope:null,ready:false,messages:[],conversationId:null,error:null});
 
+/**
+ * The `table` values a verified operational answer may cite, and the extra ones a
+ * finance-capable answer may add. This is a client-side guard against a stale or
+ * rogue endpoint returning data TRAX never produces — so it must list every table
+ * the backend's tools actually emit.
+ *
+ * Adding a tool server-side WITHOUT adding its table here makes every answer that
+ * cites it fail as "not available in this environment", which is what happened
+ * when the business query layer shipped. trax-source-tables.test.ts now holds
+ * these lists against the tools themselves.
+ */
+export const OPERATIONAL_SOURCE_TABLES=['application_knowledge','vehicles','rentals','pickup_locations','blocked_dates',
+  'rental_key_handovers','availability_check','account_summary',
+  // Catalog-driven counts, totals, breakdowns and balances. Permission and tenant
+  // scoping are enforced in the backend; this list only says the shape is expected.
+  'business_query',
+  // A generated report's job record, cited when a file has actually been produced.
+  'trax_report_jobs',
+  // Integration connection state, which is stored on the tenant's own row. Reading
+  // it is already permission-checked in the backend; this list only says the shape
+  // is one the client expects, so the answer is not discarded on arrival.
+  'tenants'] as const;
+export const FINANCE_SOURCE_TABLES=['payment_check','stripe_account_summary','payment_evidence'] as const;
+
 export function useTraxSupport(enabled = true, surfaceVisible = true): UseChatReturn {
   const { appUser, user } = useAuthStore();
   const { tenant } = useTenant();
@@ -52,7 +76,7 @@ export function useTraxSupport(enabled = true, surfaceVisible = true): UseChatRe
     // Do not silently consume an old deployed RAG endpoint with live-looking data.
     const guidance=data.provenance?.kind==='application_guidance'&&data.provenance?.liveDataChecked===false;
     const operational=data.provenance?.kind==='operational_support'&&data.provenance?.protocolVersion===2&&data.provenance?.engine==='model'&&typeof data.provenance?.liveDataChecked==='boolean';
-    const allowedTables=operational?['application_knowledge','vehicles','rentals','pickup_locations','blocked_dates','rental_key_handovers','availability_check','account_summary',...(data.capabilities?.finance===true?['payment_check','stripe_account_summary','payment_evidence']:[])]:['application_knowledge'];
+    const allowedTables=operational?[...OPERATIONAL_SOURCE_TABLES,...(data.capabilities?.finance===true?FINANCE_SOURCE_TABLES:[])]:['application_knowledge'];
     if((!guidance&&!operational)||typeof data.contextScope!=='string'
       ||!Array.isArray(data.sources)||data.sources.some((s:{table:string})=>!allowedTables.includes(s.table))||data.chart||data.rentalRequests||data.action){
       throw new ChatFailure('The application-guidance service is not available in this environment.','unsupported_service');

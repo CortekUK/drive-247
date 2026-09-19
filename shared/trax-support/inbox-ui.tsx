@@ -82,16 +82,34 @@ export function TicketRow({ ticket, selected, disabled, onSelect, subtitle }: {
   /** Admin only: whose account this ticket belongs to. */
   subtitle?: string;
 }) {
+  /* The server's per-ticket count of unread incoming MESSAGES when it sends one;
+     otherwise the older ticket-level flag. The subject's weight follows the same
+     answer, so a row is never bold without a count or counted without being bold. */
+  const count = typeof ticket.unreadMessages === 'number' ? ticket.unreadMessages : null;
+  const unread = count !== null ? count > 0 : !!ticket.unread;
   return (
     <button type="button" disabled={disabled} onClick={onSelect} aria-current={selected ? 'true' : undefined}
-      className={`flex w-full flex-col gap-1 rounded-lg px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 ${selected ? 'bg-primary/10' : 'hover:bg-muted/60'}`}>
+      className={`flex w-full flex-col gap-1 rounded-lg px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:bg-primary/10 disabled:opacity-60 ${selected ? 'bg-primary/10' : 'hover:bg-primary/10'}`}>
       <span className="flex items-start gap-2">
-        <span className={`line-clamp-2 min-w-0 flex-1 text-[13px] leading-snug ${ticket.unread ? 'font-semibold' : 'font-medium'}`}>
-          {ticket.summary}{ticket.unread && <span className="sr-only"> · Unread</span>}
+        <span className={`line-clamp-2 min-w-0 flex-1 text-[13px] leading-snug ${unread ? 'font-semibold' : 'font-medium'}`}>
+          {ticket.summary}
+          {count !== null
+            ? count > 0 && <span className="sr-only"> · {count} unread {count === 1 ? 'message' : 'messages'}</span>
+            : unread && <span className="sr-only"> · Unread</span>}
         </span>
         <time dateTime={ticket.updated_at} className="shrink-0 pt-0.5 text-[11px] text-muted-foreground">{listStamp(ticket.updated_at)}</time>
       </span>
-      <span className="truncate text-[11px] text-muted-foreground">{ticket.reference}{subtitle ? ` · ${subtitle}` : ''}</span>
+      <span className="flex min-w-0 items-center gap-2">
+        <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">{ticket.reference}{subtitle ? ` · ${subtitle}` : ''}</span>
+        {/* Unread messages, under the time: a solid accent pill, so it reads on the
+            lavender selected row too and never looks like the tinted status badge. */}
+        {count !== null && count > 0 && (
+          <span data-testid="ticket-unread" aria-hidden
+            className="inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[10.5px] font-semibold leading-none tabular-nums text-primary-foreground">
+            {count > 99 ? '99+' : count}
+          </span>
+        )}
+      </span>
       {ticket.preview && <span className="truncate text-[12px] text-muted-foreground">{ticket.preview}</span>}
       <StatusBadge status={ticket.status} className="mt-0.5 self-start" />
     </button>
@@ -235,39 +253,117 @@ export function Composer({ inbox, placeholder, label, children }: { inbox: Suppo
   );
 }
 
-/** The TRAX handoff, compact and folded away until it is wanted. */
-export function TroubleshootingDetails({ value }: { value: Record<string, unknown> }) {
-  const text = (v: unknown) => (typeof v === 'string' ? v : '');
-  const checks = Array.isArray(value.verifiedChecks) ? (value.verifiedChecks as Record<string, unknown>[]) : [];
-  const reports = Array.isArray(value.reportedByUser) ? (value.reportedByUser as Record<string, unknown>[]) : [];
-  const references = Array.isArray(value.recordReferences) ? (value.recordReferences as Record<string, unknown>[]) : [];
-  const issue = value.issue && typeof value.issue === 'object' ? (value.issue as Record<string, unknown>) : {};
+/* Hover, focus and selection in the Support lists use the portal sidebar's highlight
+   (ui-v2/sidebar.tsx SIDEBAR_HIGHLIGHT_*): bg-primary/10 with primary text. */
+
+/**
+ * The ticket list — search, a status filter and the rows — wherever the app puts
+ * it: the Support rail in the sidebar's slot on a desktop, or the page itself on a
+ * phone or when the rail is collapsed. One component, so both behave the same.
+ */
+export function TicketList({ inbox, admin = false, onChosen, className = '' }: {
+  inbox: SupportInboxState; admin?: boolean;
+  /** After a row is chosen: a phone closes the sheet the list sits in. */
+  onChosen?: () => void;
+  className?: string;
+}) {
+  const { id, tickets, next, search, filter, busy, loading } = inbox;
   return (
-    <details className="shrink-0 rounded-xl border border-border/70 bg-card/40 px-3 py-2 text-[12px]">
-      <summary className="cursor-pointer list-none font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-        TRAX troubleshooting context
-        <span className="ml-2 font-normal text-muted-foreground">Context shared with support from the TRAX conversation</span>
-      </summary>
-      <div className="mt-2 max-h-56 space-y-1.5 overflow-y-auto leading-relaxed text-muted-foreground">
-        <p>{text(value.disclosure) || 'Historical observations; recheck current records before acting.'}</p>
-        {typeof issue.reason === 'string' && <p>Support requested: {issue.reason.replace(/_/g, ' ')}.</p>}
-        {reports.map((r, i) => <p key={`r${i}`}><span className="font-medium text-foreground">Reported:</span> {text(r.content)}</p>)}
-        {checks.map((c, i) => (
-          <div key={`c${i}`}>
-            <p className="font-medium text-foreground">Recorded check · {text(c.observedAt)}</p>
-            {Array.isArray(c.findings) && c.findings.map((f, j) => <p key={j}>{text(f)}</p>)}
-          </div>
-        ))}
-        {Array.isArray(value.unknowns) && value.unknowns.map((u, i) => <p key={`u${i}`}>Unresolved: {text(u)}</p>)}
-        {references.map((r, i) => <p key={`ref${i}`} className="break-all">Record reference · {text(r.kind)}: {text(r.id)}</p>)}
+    <section aria-label="Support tickets" data-testid="support-ticket-list" className={`flex min-h-0 min-w-0 flex-1 flex-col ${className}`}>
+      <div className="flex shrink-0 items-center gap-2 px-2 pb-2">
+        <div className="min-w-0 flex-1"><SearchField value={search} onChange={inbox.setSearch} placeholder={admin ? 'Search tickets or company…' : 'Search your tickets…'} /></div>
+        <StatusFilter value={filter} onChange={inbox.setFilter} />
       </div>
-    </details>
+      <div className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-2">
+        {!tickets.length ? (
+          <p className="px-3 py-8 text-center text-[13px] text-muted-foreground">
+            {loading ? 'Loading tickets…' : search || filter ? 'No tickets match these filters.' : 'No support tickets yet.'}
+          </p>
+        ) : (
+          <ul className="flex flex-col gap-0.5">
+            {tickets.map((ticket) => (
+              <li key={ticket.id}>
+                <TicketRow ticket={ticket} selected={id === ticket.id} disabled={busy}
+                  onSelect={() => { inbox.choose(ticket.id); onChosen?.(); }}
+                  subtitle={admin ? [ticket.tenant_name, ticket.requester].filter(Boolean).join(' · ') : undefined} />
+              </li>
+            ))}
+          </ul>
+        )}
+        {next !== null && (
+          <button type="button" className="mt-1 w-full rounded-lg px-3 py-2 text-[12px] text-muted-foreground hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:bg-primary/10 focus-visible:text-primary" onClick={inbox.loadMore}>Load more</button>
+        )}
+      </div>
+    </section>
   );
 }
 
-/** Consecutive messages from one author, close in time, read as one turn. */
-export function byDay<T extends { seq: number; author_kind: 'tenant' | 'support'; body: string; created_at: string }>(messages: T[]) {
-  const days: { key: string; label: string; turns: { key: string; author: T['author_kind']; items: T[] }[] }[] = [];
+/**
+ * A lifecycle event in the conversation — TRAX opening the ticket — drawn as an
+ * event, not as anybody's message. What TRAX found is in the TRAX Summary tab.
+ *
+ * It keeps the stored message's read marker: acknowledgement is per message, and a
+ * ticket whose only message is this one must still be markable as read.
+ */
+export function SystemEvent({ message, onOpenSummary }: { message: TurnMessage; onOpenSummary?: () => void }) {
+  return (
+    <div data-slot="system-event" className="flex justify-center px-2">
+      <p className="inline-flex max-w-full flex-wrap items-center justify-center gap-x-2 gap-y-0.5 rounded-2xl bg-muted/70 px-3 py-1.5 text-center text-[11.5px] leading-snug text-muted-foreground">
+        <span><span className="font-medium text-foreground">TRAX</span> created this ticket and shared its troubleshooting summary</span>
+        <time dateTime={message.created_at}>{clockStamp(message.created_at)}</time>
+        {onOpenSummary && (
+          <button type="button" onClick={onOpenSummary} className="rounded font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">View TRAX Summary</button>
+        )}
+        <span data-seq={message.seq} aria-hidden className="inline-block h-px w-px" />
+      </p>
+    </div>
+  );
+}
+
+/**
+ * The status control, for platform support only (the Details tab).
+ *
+ * It writes the ticket record through the same authenticated `status` action the
+ * queue already used — the SQL refuses it for anyone without the platform support
+ * grant — and commits the change together with a short note in the conversation,
+ * so the tenant sees both the new badge and why it moved. The tenant's own view
+ * reads that same row: there is no second copy of a status anywhere.
+ *
+ * Nothing is claimed before persistence: the control shows "Saving…" while the
+ * request is in flight, and a failure leaves the stored status showing.
+ */
+export function StatusSelect({ inbox, ticket }: { inbox: SupportInboxState; ticket: HumanTicket }) {
+  const [saving, setSaving] = React.useState<HumanTicket['status'] | null>(null);
+  const [failure, setFailure] = React.useState<string | null>(null);
+  const change = async (next: HumanTicket['status']) => {
+    if (next === ticket.status || saving) return;
+    setSaving(next); setFailure(null);
+    const ok = await inbox.setTicketStatus(next, `Support marked this ticket as ${STATUS_LABEL[next]}.`);
+    setSaving(null);
+    if (!ok) setFailure('That status was not saved. The ticket still shows its stored status.');
+  };
+  return (
+    <div className="flex min-w-0 flex-col items-start gap-1">
+      <select aria-label="Ticket status" disabled={!!saving || inbox.busy} value={saving ?? ticket.status}
+        onChange={(e) => void change(e.target.value as HumanTicket['status'])}
+        className="h-8 rounded-lg border border-input bg-background px-2 text-[12px] text-foreground outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20 disabled:opacity-60">
+        {STATUS_ORDER.map((status) => <option key={status} value={status}>{STATUS_LABEL[status]}</option>)}
+      </select>
+      {saving && <span role="status" className="text-[11px] text-muted-foreground">Saving…</span>}
+      {failure && <span role="alert" className="text-[11px] text-destructive">{failure}</span>}
+    </div>
+  );
+}
+
+/**
+ * Consecutive messages from one author, close in time, read as one turn.
+ *
+ * A message the server marks as TRAX's (`source`) is a `system` turn of its own:
+ * it is never grouped with the requester's words, even though it is stored under
+ * their side of the ticket.
+ */
+export function byDay<T extends { seq: number; author_kind: 'tenant' | 'support'; body: string; created_at: string; source?: string }>(messages: T[]) {
+  const days: { key: string; label: string; turns: { key: string; author: T['author_kind'] | 'system'; items: T[] }[] }[] = [];
   for (const message of messages) {
     const at = new Date(message.created_at);
     const key = Number.isNaN(at.getTime()) ? 'unknown' : at.toDateString();
@@ -276,8 +372,9 @@ export function byDay<T extends { seq: number; author_kind: 'tenant' | 'support'
     const turn = day.turns[day.turns.length - 1];
     const previous = turn?.items[turn.items.length - 1];
     const near = previous && Math.abs(at.getTime() - new Date(previous.created_at).getTime()) < 5 * 60 * 1000;
-    if (turn && turn.author === message.author_kind && near) turn.items.push(message);
-    else day.turns.push({ key: String(message.seq), author: message.author_kind, items: [message] });
+    const author = message.source === 'trax_handoff' ? 'system' : message.author_kind;
+    if (turn && author !== 'system' && turn.author === author && near) turn.items.push(message);
+    else day.turns.push({ key: String(message.seq), author, items: [message] });
   }
   return days;
 }

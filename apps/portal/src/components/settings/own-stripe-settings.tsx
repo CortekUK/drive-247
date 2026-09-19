@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Link2, CheckCircle2, Loader2, ExternalLink, TestTube2, Zap } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useTenant } from '@/contexts/TenantContext';
+import { useAuthStore } from '@/stores/auth-store';
 import { useIsTestModeUiHidden } from '@/lib/lean-context';
 
 interface OwnStripeStatus {
@@ -27,10 +28,14 @@ interface OwnStripeStatus {
  */
 export function OwnStripeSettings() {
   const queryClient = useQueryClient();
-  const { tenant: tenantContext, tenantSlug } = useTenant();
+  const { tenant: tenantContext } = useTenant();
   // Lean tenants have no test modes — the Test/Live chip is a concept they
   // do not have. UI only: stripe_mode itself is untouched.
   const hideTestModeUi = useIsTestModeUiHidden();
+  // Not `!hideTestModeUi`: the lean tenants that hide the Test/Live chip are exactly
+  // the ones a test connection is needed for, so that gate would hide it everywhere
+  // it matters. The edge function applies the real authorization either way.
+  const isSuperAdmin = useAuthStore((s) => s.appUser?.is_super_admin) === true;
   const [connecting, setConnecting] = useState(false);
 
   // Surface the OAuth redirect result (?oauth=ok|incomplete|error) once on mount
@@ -99,12 +104,12 @@ export function OwnStripeSettings() {
   const connectedAccountId = status?.own_stripe_account_id;
   const connectedAt = status?.own_stripe_connected_at;
 
-  const startOAuth = async () => {
+  const startOAuth = async (oauthMode: 'test' | 'live' = mode) => {
     if (!status?.id) return;
     setConnecting(true);
     try {
       const { data, error } = await supabase.functions.invoke('stripe-oauth-start', {
-        body: { tenantId: status.id, mode, returnTo: 'portal', origin: window.location.origin },
+        body: { tenantId: status.id, mode: oauthMode, returnTo: 'portal', origin: window.location.origin },
       });
       if (error) throw error;
       if (!data?.url) throw new Error(data?.error || 'Could not create the connection link');
@@ -169,7 +174,7 @@ export function OwnStripeSettings() {
               No Stripe account connected for {mode} mode yet. Connecting takes about 2 minutes —
               sign in to your existing Stripe account or create one during the process.
             </p>
-            <Button onClick={startOAuth} disabled={connecting}>
+            <Button onClick={() => startOAuth()} disabled={connecting}>
               {connecting ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Redirecting to Stripe…
@@ -178,6 +183,53 @@ export function OwnStripeSettings() {
                 <>
                   <Link2 className="h-4 w-4 mr-2" /> Connect with Stripe
                 </>
+              )}
+            </Button>
+          </div>
+        )}
+
+        {/*
+         * Connecting a TEST account.
+         *
+         * The button above is deliberately hardwired to `live`: an operator connects
+         * the account they get paid into. Test connections were meant to come from
+         * "the admin's explicit test link" — but no such link existed anywhere, so a
+         * test account could not be attached at all without writing the column by
+         * hand. `stripe-oauth-start` already accepts mode:'test' and already limits
+         * the caller to a super admin or this tenant's own admin, so the only piece
+         * missing was the way in.
+         *
+         * Super-admin only, on purpose. An operator who connected a test account
+         * without meaning to would see payments stop reaching their real Stripe
+         * account. It writes own_stripe_test_account_id/_connected_at and nothing
+         * else — the live connection, and stripe_mode, are untouched. Switching the
+         * tenant into test mode remains a separate, deliberate act.
+         */}
+        {isSuperAdmin && (
+          <div className="rounded-lg border border-dashed p-4 space-y-2">
+            <p className="flex items-center gap-2 text-sm font-medium">
+              <TestTube2 className="h-4 w-4" /> Test account
+              <Badge variant="outline" className="text-[10px]">Staff only</Badge>
+            </p>
+            {status?.own_stripe_test_account_id ? (
+              <p className="text-sm text-muted-foreground">
+                Connected <code className="text-xs">{status.own_stripe_test_account_id}</code>
+                {status.own_stripe_test_connected_at &&
+                  ` · linked ${new Date(status.own_stripe_test_connected_at).toLocaleDateString()}`}
+                . This tenant trades in <strong>{tenantMode}</strong> mode.
+              </p>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                No test account is attached. Connecting one stores it separately from the live
+                account above and changes nothing about how this tenant takes payments today.
+              </p>
+            )}
+            <Button variant="outline" size="sm" onClick={() => startOAuth('test')} disabled={connecting}>
+              {connecting ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Redirecting to Stripe…</>
+              ) : (
+                <><TestTube2 className="h-4 w-4 mr-2" />
+                  {status?.own_stripe_test_account_id ? 'Reconnect test account' : 'Connect a test account'}</>
               )}
             </Button>
           </div>

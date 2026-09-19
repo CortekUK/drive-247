@@ -77,7 +77,7 @@ window.renderOffline=(slug='northwind',v2=true)=>{window.offlineSlug=slug;window
   b.onResolve({filter:/.*/},(args)=>{
     if(mocks.has(args.path))return {path:args.path,namespace:'fixture'};
     if(args.path==='react'||args.path==='react-dom/client'||args.path.startsWith('react/'))return {path:resolve(root,'node_modules',args.path==='react'?'react/index.js':args.path==='react-dom/client'?'react-dom/client.js':args.path+'.js')};
-    if(args.path.startsWith('@/'))return {path:resolve(root,'apps/portal/src',args.path.slice(2))+(args.path.endsWith('.json')?'':(args.path.includes('/components/')?'.tsx':'.ts'))};
+    if(args.path.startsWith('@/')){/* `@/x` as the portal resolves it: the file as named, or its .ts/.tsx/index. */const base=resolve(root,'apps/portal/src',args.path.slice(2));const found=[base+'.ts',base+'.tsx',resolve(base,'index.ts'),resolve(base,'index.tsx'),base].find(c=>existsSync(c)&&!c.endsWith(args.path.slice(2)+'/'));return {path:args.path.endsWith('.json')?base:found??base+(args.path.includes('/components/')?'.tsx':'.ts')};}
   });
   b.onLoad({filter:/.*/,namespace:'fixture'},()=>({contents:fixture,loader:'jsx',resolveDir:root}));
 }}],logLevel:'silent'});

@@ -1,17 +1,20 @@
 import { authorize, digest } from './auth.ts';
 import { conversationToken, verifyConversation, type Conversation } from './conversation.ts';
 import { KNOWLEDGE } from './knowledge.generated.ts';
-import { guideAvailable, guideNavigation, isFinanceQuestion, runTool, validateEntity, type Guide } from './registry.ts';
+import { guideAvailable, guideNavigation, isFinanceQuestion, needsProviderEvidence, runTool, validateEntity, type Guide } from './registry.ts';
 import { object, onlyKeys, SupportError, UUID, type Locale, type PageContext, type SupportReads } from './types.ts';
 import { modelConversation } from './orchestrator.ts';
 import { ModelUnavailable, type SupportModel } from './model.ts';
 import type { CalendarClock, OperationalReads } from './operational-types.ts';
 import type { FleetReads } from './fleet-tools.ts';
+import type { BusinessReads } from './business-query.ts';
+import type { ReportStore } from './report-tools.ts';
+import type { IntegrationReads } from './integration-status.ts';
 import { newIssue, issueView, recordIssueEvent, redactSupportText, troubleshootingSummary, DEFAULT_ESCALATION_POLICY, type EscalationPolicy } from './issues.ts';
 import { ticketInput, type TicketStore } from './support-store.ts';
-import { financeScopes, type FinanceServices } from './finance-types.ts';
+import { financeScopes, databaseFinanceScopes, type FinanceServices } from './finance-types.ts';
 
-export interface Dependencies { reads:SupportReads; signingSecret:string; now?:()=>number; model?:SupportModel; operational?:OperationalReads; fleet?:FleetReads; finance?:FinanceServices; store?:TicketStore; escalationPolicy?:EscalationPolicy; clock?:CalendarClock; audit?:(event:{kind:'model'|'tool';name:string;status:string})=>void }
+export interface Dependencies { reads:SupportReads; signingSecret:string; now?:()=>number; model?:SupportModel; operational?:OperationalReads; fleet?:FleetReads; business?:BusinessReads; reports?:ReportStore; integrations?:IntegrationReads; finance?:FinanceServices; store?:TicketStore; escalationPolicy?:EscalationPolicy; clock?:CalendarClock; audit?:(event:{kind:'model'|'tool';name:string;status:string})=>void }
 const disclaimer={en:'This is application guidance. I have not checked live records, vehicle availability or Stripe.','ur-Latn':'Ye application guidance hai. Maine live records, gaari ki availability ya Stripe check nahi kiya.'};
 const unavailable={en:'This prepared fallback cannot run a live diagnostic. Balances and business actions are not available. Ask about Rentals, returns, Vehicles, Customers, Availability, Messages, Reminders, Website Content or Settings. I only show destinations your account can access.','ur-Latn':'Is prepared fallback mein live diagnosis nahi hota. Balance aur business actions available nahi hain. Rentals, return, Vehicles, Customers, Availability, Messages, Reminders, Website Content ya Settings ke bare mein poochein. Sirf aap ke account ke liye allowed destinations dikhaye jate hain.'};
 const provenance={kind:'application_guidance',liveDataChecked:false,knowledgeVersion:KNOWLEDGE.version,sourceCommit:KNOWLEDGE.sourceCommit,verifiedAt:KNOWLEDGE.verifiedAt,productionReleaseVerified:false,conversationStorage:'browser_memory_only'};
@@ -86,6 +89,18 @@ export async function handleSupportRequest(req:Request,deps:Dependencies):Promis
     const reauthorize=async()=>{const fresh=await authorize(deps.reads,token,body.tenantId);fresh.scope=await digest(fresh.scope+authorizationRevision);if(fresh.scope!==auth.scope)throw new SupportError('context_changed','Account access changed. Start a new conversation.',409);};
     const modelReady=!!(deps.model&&deps.operational&&deps.clock);
     const financeReady=modelReady&&financeScopes(auth,deps.finance?.policy).length>0;
+    // A money question used to be diverted away from the model unless the STRIPE
+    // read-only feature was configured, because there was no verified source for a
+    // figure. There is now: the business query layer measures the account's own
+    // records, gated by the staff finance rule. So "export our payments" reaches
+    // the model when this caller may read money, even where Stripe is not set up.
+    // `financeReady` still means the Stripe investigation capability, and still
+    // drives the capability flag the client reads.
+    const moneyAnswerable=modelReady&&databaseFinanceScopes(auth).length>0;
+    // …but only for questions the database can actually settle. "What is my Stripe
+    // balance" and "did the payment arrive" need the provider, so they still go to
+    // a person when the Stripe capability is absent.
+    const answerableHere=moneyAnswerable&&!needsProviderEvidence(body.message);;
     let response:Record<string,unknown>={response:'',sources:[],navigation:[],provenance:{...provenance,engine:'prepared_fallback'},capabilities:{modelReady,operationalChecks:modelReady,finance:financeReady,supportStorage:storageReady,supportAgent:supportAccess.supportAgent,managePolicy:supportAccess.managePolicy,supportSubmission:storageReady&&supportAccess.deliveryReady}};
     const requireStore=()=>{if(!storageReady)throw new SupportError('support_storage_unavailable','Persistent support storage is not available. No ticket was created. Your conversation is preserved for retry.',503);return deps.store!;};
     const activeIssue=()=>{const issue=conversation.issues?.find(i=>i.id===(body.issueId??conversation.activeIssueId));if(!issue)throw new SupportError('issue_unavailable','Select an issue in this conversation.');return issue;};
@@ -153,7 +168,7 @@ export async function handleSupportRequest(req:Request,deps:Dependencies):Promis
       if(!conversation.issues.some(i=>i.id===conversation.activeIssueId)){
         const issue=newIssue(isFinanceQuestion(body.message)?'payments':page?.kind==='vehicle'?'vehicle_availability':'workflow',body.message,page);conversation.issues.push(issue);conversation.activeIssueId=issue.id;
       }
-      if((isFinanceQuestion(body.message)&&!financeReady)||humanRequested){
+      if((isFinanceQuestion(body.message)&&!financeReady&&!answerableHere)||humanRequested){
         const finance=isFinanceQuestion(body.message);
         let issue=finance?conversation.issues.find(i=>i.topic==='payments'&&i.state!=='resolved'&&(!page||i.record?.id===page.id)):conversation.issues.find(i=>i.id===conversation.activeIssueId&&i.state!=='resolved');
         if(!issue){if(conversation.issues.length>=12)throw new SupportError('issue_limit','Start a new conversation for another issue.');issue=newIssue(finance?'payments':'other',body.message,page);conversation.issues.push(issue);}conversation.activeIssueId=issue.id;conversation.diagnostic=issue.diagnostic;conversation.paymentCheck=issue.paymentCheck;
@@ -161,9 +176,9 @@ export async function handleSupportRequest(req:Request,deps:Dependencies):Promis
         issue.excerpts=[...issue.excerpts,{role:'user' as const,content:redactSupportText(body.message),at:new Date(now).toISOString()}].slice(-8);
       }
       let modelAnswer=false;
-      if(modelReady&&(!isFinanceQuestion(body.message)||financeReady)&&!humanRequested) {
+      if(modelReady&&(!isFinanceQuestion(body.message)||financeReady||answerableHere)&&!humanRequested) {
         try {
-          const answer=await modelConversation(body.message,language,conversation,page,{...env,model:deps.model!,operational:deps.operational!,fleet:deps.fleet,finance:deps.finance,escalationPolicy:policy,clock:deps.clock!,now,observe:deps.now,reauthorize,signal:AbortSignal.any([req.signal,AbortSignal.timeout(65_000)]),audit:deps.audit},type==='recheck');
+          const answer=await modelConversation(body.message,language,conversation,page,{...env,model:deps.model!,operational:deps.operational!,fleet:deps.fleet,business:deps.business,reports:deps.reports,integrations:deps.integrations,finance:deps.finance,escalationPolicy:policy,clock:deps.clock!,now,observe:deps.now,reauthorize,signal:AbortSignal.any([req.signal,AbortSignal.timeout(65_000)]),audit:deps.audit},type==='recheck');
           response={...response,...answer,provenance:{...provenance,kind:'operational_support',protocolVersion:2,engine:'model',model:deps.model!.name,liveDataChecked:answer.evidence.some(e=>e.checks.length>0||e.sources.length>0),observedAt:answer.evidence.at(-1)?.observedAt}};
           modelAnswer=true;
           // Cited reviewed guidance keeps its permission-checked destinations when the model resolved none.

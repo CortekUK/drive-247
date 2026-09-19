@@ -46,6 +46,20 @@ export function isFinanceQuestion(query: string): boolean {
   if(howTo&&!investigation)return false;
   return /\b(stripe|balance|balances|payment|payments|refund|refunds|payout|revenue|invoice|invoices|credit|credits|paise|paisa|raqam)\b/i.test(query);
 }
+/**
+ * A money question that only the PROVIDER can settle: whether money arrived, where
+ * it is, what the connected-account balance is. The account's own database cannot
+ * answer these however good the query layer is, so they still route to a person
+ * when the read-only Stripe capability is not configured — even for a staff member
+ * who may otherwise read money.
+ *
+ * "How much did we collect last month", "export our payments", "who owes the most"
+ * are NOT these: they are measurements of the account's own records.
+ */
+export function needsProviderEvidence(query: string): boolean {
+  return /\b(stripe|payout|payouts|balance|balances|arrived|missing|lost|failed|failing|not received|nahi mili|nahi aayi|nahi aaya)\b/i.test(query);
+}
+
 function searchApplicationKnowledge(input:unknown,env:ToolContext):Guide[] {
   const args=object(input); onlyKeys(args,['query']);
   if (typeof args.query!=='string' || args.query.length>4000) throw new SupportError('invalid_input','Ask a shorter application question.');

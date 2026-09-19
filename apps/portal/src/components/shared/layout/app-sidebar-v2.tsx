@@ -53,6 +53,7 @@ import {
   CalendarDays,
   Users,
   BadgeAlert,
+  LifeBuoy,
   BarChart3,
   Settings,
   Globe,
@@ -106,6 +107,9 @@ import { useNavPreferences } from "@/hooks/use-nav-preferences";
 import { applyNavPreferences } from "@/lib/nav-preferences";
 // The Trax conversation rail — the scoped rail this sidebar becomes on /trax.
 import { TraxRail } from "@/components/trax/trax-rail";
+import { SupportRail } from "@/components/support/support-rail";
+import { SUPPORT_ROUTE } from "@/lib/support-route";
+import { useSupportUnreadMessages } from "@/hooks/use-support-messaging";
 // The rental control centre's stage rail. The sidebar becomes it on a rental
 // detail page, the same way it becomes the Settings rail on /settings — see
 // `isRentalDetailPage` below.
@@ -177,6 +181,8 @@ interface NavItem {
   badge?: number;
   /** Defaults to `destructive`. See BADGE_TONE_CLASS. */
   badgeTone?: "destructive" | "amber";
+  /** What the count means, for the row's accessible name: "Support, 2 unread messages". */
+  badgeLabel?: (count: number) => string;
   headAdminOnly?: boolean;
   superAdminOnly?: boolean;
 }
@@ -268,6 +274,10 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   // so this badge is the only standing signal that work has come due.
   const { needsAttention: fleetNeedsAttention } = useFleetHealthStats();
   const { data: pendingBookingsCount } = usePendingBookingsCount();
+  // Unread replies from Drive247 Support — MESSAGES, counted by the server from
+  // stored messages and this operator's own read state. `null` (not yet known, or
+  // unavailable) shows no badge rather than a zero or a guess.
+  const { count: supportUnread } = useSupportUnreadMessages();
   const { appUser } = useAuthStore();
   const {
     isInGracePeriod,
@@ -389,6 +399,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   // flag is needed: this component and the Trax provider both exist only under
   // the v2 chrome gate.
   const isTraxPage = pathname === "/trax" || !!pathname?.startsWith("/trax/");
+  const isSupportPage = pathname === "/support" || !!pathname?.startsWith("/support/");
 
   /* ── rental control centre mode ────────────────────────────────────────
    *
@@ -544,6 +555,17 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
     { name: "Payments", href: "/payments", icon: CreditCard },
     { name: "Invoices", href: "/invoices", icon: Receipt },
     { name: "Fines", href: "/fines", icon: BadgeAlert },
+    // Support — moved here from the profile menu so it is one click away, with its
+    // unread-message badge. Same destination as TRAX's Support control. Not given a
+    // ROUTE_TO_TAB entry: every staff role may reach its own tickets, and the
+    // messaging endpoint enforces the rest.
+    {
+      name: "Support",
+      href: SUPPORT_ROUTE,
+      icon: LifeBuoy,
+      badge: supportUnread ?? 0,
+      badgeLabel: (n: number) => `${n} unread ${n === 1 ? "message" : "messages"}`,
+    },
     // NOTE: Credits is deliberately NOT here. `/credits` reads
     // `tenant_credit_wallets` — platform credit this tenant BUYS FROM US, with
     // its own packages and checkout. It is not renter money like the four
@@ -753,6 +775,12 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   // not from the navigation hooks above — which have all already run, so this
   // early return keeps the hook order identical on every route.
   if (isTraxPage) return <TraxRail />;
+
+  // --- Support Mode ---
+  // The ticket list takes the sidebar's slot (support-rail.tsx), so Support is
+  // tickets | conversation | details rather than four columns. Same early-return
+  // position as Trax, for the same hook-order reason.
+  if (isSupportPage) return <SupportRail />;
 
   if (isRentalDetailPage && rentalDetailId) {
     const heroTitle = rentalDetail
@@ -1634,7 +1662,9 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                             but they are not important enough to dilute the
                             three items above. Same `data-tour` scheme as the
                             top-level items. */}
-                        {moreItems.map((item) => (
+                        {moreItems.map((item) => {
+                          const count = item.badge ?? 0;
+                          return (
                           <SidebarMenuItem
                             key={item.href}
                             className="relative"
@@ -1646,15 +1676,32 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                               tooltip={collapsed ? item.name : undefined}
                               className="h-8 transition-colors"
                             >
-                              <Link href={item.href} onClick={closeMobileOnNav}>
+                              <Link
+                                href={item.href}
+                                onClick={closeMobileOnNav}
+                                aria-label={count > 0 && item.badgeLabel ? `${item.name}, ${item.badgeLabel(count)}` : undefined}
+                              >
                                 <item.icon className="h-4 w-4 shrink-0" />
-                                <span className={`text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>
+                                <span className={`text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "min-w-0 flex-1 truncate opacity-100"}`}>
                                   {item.name}
                                 </span>
+                                {/* Right-aligned inside the row; the label is flex-1 and
+                                    the digits tabular, so a changing count never moves it. */}
+                                {!collapsed && count > 0 && (
+                                  <span aria-hidden className={`ml-auto inline-flex min-w-[18px] shrink-0 items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none tabular-nums animate-in fade-in ${BADGE_TONE_CLASS[item.badgeTone ?? "destructive"]}`}>
+                                    {count > 99 ? "99+" : count}
+                                  </span>
+                                )}
+                                {collapsed && count > 0 && (
+                                  <span aria-hidden className={`absolute -top-1 -right-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-0.5 text-[10px] font-bold leading-none tabular-nums animate-in fade-in ${BADGE_TONE_CLASS[item.badgeTone ?? "destructive"]}`}>
+                                    {count > 9 ? "9+" : count}
+                                  </span>
+                                )}
                               </Link>
                             </SidebarMenuButton>
                           </SidebarMenuItem>
-                        ))}
+                          );
+                        })}
                         {groups.map((group) => {
                           const GroupIcon = group.icon;
                           const hasActive = group.items.some((i) => isActive(i.href));

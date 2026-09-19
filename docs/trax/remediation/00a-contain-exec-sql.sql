@@ -1,0 +1,119 @@
+-- Stage 0a-1 — ONE statement. Close arbitrary SQL execution from the public key.
+--
+-- NOT APPLIED. This file exists to be approved or declined on its own, ahead of
+-- every other remediation stage. It is deliberately the smallest change that
+-- removes the most authority.
+--
+-- Target environment
+--   Supabase project hviqoaokxvlancmftwuo (region eu-west-2), the project every
+--   app in this repository defaults to. Production.
+--
+-- Verified 2026-09-18 by read-only catalogue query. The function was NOT called,
+-- and no row was created, read or modified to produce this evidence.
+--
+-- ── The object ──────────────────────────────────────────────────────────────
+--   public.exec_sql(text)          exactly one overload; no exec_sql(text,...),
+--                                  no execute_sql, run_sql, eval or admin_sql
+--   owner        postgres
+--   security     DEFINER            → runs as postgres, ignores row-level security
+--   search_path  NOT SET            → resolution follows the caller's path
+--   body         BEGIN EXECUTE query; END
+--   acl          {postgres=X/postgres, anon=X/postgres, service_role=X/postgres}
+--
+-- `public` is exposed through PostgREST (db_schema = "public,graphql_public"),
+-- so this is an HTTP endpoint at POST /rest/v1/rpc/exec_sql, callable by anyone
+-- holding the anon key — which is published in the website and portal JavaScript
+-- (apps/booking/src/integrations/supabase/client.ts:19). A function whose body is
+-- `EXECUTE query`, running as the owner, is unrestricted SQL: read any table in
+-- any account, write any row, alter the schema, grant roles.
+--
+-- ── Effective access, before and after ─────────────────────────────────────
+-- Measured with has_function_privilege, which accounts for PUBLIC grants and role
+-- membership, not only grants named `anon`.
+--
+--   role            EXECUTE before   EXECUTE after   note
+--   anon            YES              no              the change
+--   PUBLIC          no               no              never granted; revoked anyway
+--   authenticated   no               no              already had none
+--   service_role    YES              YES             retained, see below
+--   postgres        YES              YES             owner
+--
+-- `authenticated` already cannot execute it, so no signed-in user of any tenant
+-- gains or keeps a path here. There is no role membership that would inherit it:
+-- anon and authenticated are members of nothing (rolinherit=true, rolbypassrls=
+-- false); `authenticator` is a member of all three and switches role per request,
+-- which is the normal Supabase arrangement and confers nothing extra.
+--
+-- ── Affected callers ───────────────────────────────────────────────────────
+-- Every .rpc( call in apps/ and supabase/ was listed. exec_sql has exactly one
+-- caller: supabase/functions/simulate-payg-timelapse/index.ts (lines 117, 125,
+-- 153, 183, 237, 261), an edge function that uses the SERVICE ROLE. Its own error
+-- text says `GRANT EXECUTE ON FUNCTION exec_sql TO service_role`. No other
+-- function's body references exec_sql, so nothing calls it indirectly as owner.
+--
+-- Expected impact of this change: none on any user-facing path. The anonymous
+-- booking site calls exactly two RPCs (generate_first_charge_for_rental and
+-- backfill_rental_charges_first_month_only); neither is this function and neither
+-- is SECURITY DEFINER. The portal and admin apps call RPCs as `authenticated`,
+-- which this file does not touch.
+--
+-- Log evidence: the project retains roughly 24 hours of request logs (192,393
+-- requests in the window read on 2026-09-18). exec_sql appears zero times in that
+-- window. The grant is far older than the window, so this is absence of evidence
+-- over the exposure lifetime, NOT evidence that it was never called.
+--
+-- ── This is a transition, not the destination ──────────────────────────────
+-- service_role keeps EXECUTE only so one simulation tool keeps working during the
+-- transition. A general-purpose "run any SQL" endpoint should not exist at all,
+-- for any role. The follow-up, as its own reviewed change:
+--   1. replace the six exec_sql calls in simulate-payg-timelapse with the narrow
+--      statements it actually needs (pg_cron schedule/unschedule and the specific
+--      updates), each as its own function with fixed arguments;
+--   2. then `drop function public.exec_sql(text);`
+-- docs/CRON_SIMULATION_TESTING_DESIGN.md already lists this as footgun cleanup.
+--
+-- ── TRAX ───────────────────────────────────────────────────────────────────
+-- This function must never be reachable by TRAX. It is not in MODEL_TOOLS, the
+-- registry refuses any tool name it does not declare, and
+-- apps/portal/src/__tests__/lib/trax-support.test.ts asserts that `exec_sql` and
+-- `execute_sql` are both rejected as unavailable tools. TRAX has no SQL interface
+-- of any kind: it composes validated catalog queries only.
+
+begin;
+
+revoke execute on function public.exec_sql(text) from anon;
+
+-- Defensive: PUBLIC holds no grant today, and revoking one that does not exist is
+-- a no-op. This means a later `GRANT ... TO PUBLIC` cannot silently re-open it.
+revoke execute on function public.exec_sql(text) from public;
+
+commit;
+
+-- ── Verify immediately after applying ──────────────────────────────────────
+-- Expect: anon false, public false, authenticated false, service_role true.
+--   select has_function_privilege('anon','public.exec_sql(text)','EXECUTE')          as anon,
+--          has_function_privilege('public','public.exec_sql(text)','EXECUTE')        as public_role,
+--          has_function_privilege('authenticated','public.exec_sql(text)','EXECUTE') as authenticated,
+--          has_function_privilege('service_role','public.exec_sql(text)','EXECUTE')  as service_role;
+--
+-- Expect the ACL to no longer contain `anon=X`:
+--   select proacl::text from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+--    where n.nspname='public' and p.proname='exec_sql';
+--
+-- Confirm from outside, with the PUBLIC anon key, that the endpoint is closed.
+-- This is a permission check, not an exploit: send a harmless statement and
+-- expect HTTP 404 (PostgREST hides functions the role cannot execute) or 403.
+--   curl -s -o /dev/null -w '%{http_code}\n' \
+--     -X POST 'https://hviqoaokxvlancmftwuo.supabase.co/rest/v1/rpc/exec_sql' \
+--     -H "apikey: $ANON_KEY" -H "Authorization: Bearer $ANON_KEY" \
+--     -H 'Content-Type: application/json' --data '{"query":"select 1"}'
+-- Before the change this returns 2xx. After it, it must not.
+--
+-- Confirm the booking checkout still works: place one test booking end to end.
+--
+-- ── If it breaks something ─────────────────────────────────────────────────
+-- Re-grant this one function and record why, rather than running any broader
+-- rollback file:
+--   grant execute on function public.exec_sql(text) to anon;
+-- A break would mean an unlisted browser path depends on arbitrary SQL execution,
+-- which is itself a finding that needs writing up.

@@ -257,7 +257,8 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-export default function Sidebar() {
+/** `desktop={false}`: the phone sheet only — Support's rail has the desktop slot. */
+export default function Sidebar({ desktop = true }: { desktop?: boolean } = {}) {
   const { isMobile, isOpen, close } = useSidebar();
 
   if (isMobile) {
@@ -269,6 +270,8 @@ export default function Sidebar() {
       </Sheet>
     );
   }
+
+  if (!desktop) return null;
 
   return (
     <div className="hidden md:flex flex-col h-screen w-[260px] border-r border-sidebar-border flex-shrink-0">

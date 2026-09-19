@@ -2,6 +2,7 @@
 
 import { ExternalLink, Receipt } from 'lucide-react';
 import type { TraxPaymentCard, TraxPaymentExplanation, TraxPaymentTotal } from '@/types/trax-support';
+import { SIDEBAR_HIGHLIGHT_FOCUS, SIDEBAR_HIGHLIGHT_HOVER } from '@/components/ui-v2/sidebar';
 
 const RESULT_LABEL = {
   verified: 'Verified in Stripe',
@@ -47,7 +48,7 @@ export function PaymentEvidence({ cards, totals, explanations }: { cards: TraxPa
                   target="_blank"
                   rel="noopener noreferrer"
                   title={action.note}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 font-medium hover:bg-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+                  className={`inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${SIDEBAR_HIGHLIGHT_HOVER} ${SIDEBAR_HIGHLIGHT_FOCUS}`}
                 >
                   {action.kind === 'receipt' ? <Receipt className="h-3.5 w-3.5" /> : <ExternalLink className="h-3.5 w-3.5" />}
                   {action.label}

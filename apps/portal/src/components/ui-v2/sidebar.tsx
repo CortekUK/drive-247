@@ -469,6 +469,22 @@ function SidebarMenuItem({ className, ...props }: React.ComponentProps<"li">) {
   )
 }
 
+/**
+ * The sidebar's highlight, exported so the controls that belong to the same
+ * navigation — TRAX's header and history, the Support rail — use one treatment
+ * rather than a white or grey hover.
+ *
+ * The sidebar's own `default` variant below no longer uses HOVER: dark --primary
+ * measures 1.9:1 as text on the dark sidebar, so it swaps in the v2 hover tint and
+ * a light brand label instead. These stay for the surfaces that are not on that
+ * dark sidebar and still want the primary tint; five files import them.
+ */
+export const SIDEBAR_HIGHLIGHT_HOVER =
+  "hover:bg-primary/10 hover:text-primary [&:hover_svg]:text-primary dark:hover:bg-primary/10"
+export const SIDEBAR_HIGHLIGHT_FOCUS =
+  "focus-visible:bg-primary/10 focus-visible:text-primary [&:focus-visible_svg]:text-primary"
+export const SIDEBAR_HIGHLIGHT_ACTIVE = "bg-primary/10 text-primary [&_svg]:text-primary"
+
 const sidebarMenuButtonVariants = cva(
   "peer/menu-button group/menu-button flex w-full cursor-pointer items-center gap-2 overflow-hidden rounded-lg px-3 py-2 text-left text-sm text-sidebar-foreground/70 ring-sidebar-ring outline-none transition-colors group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 group-data-[collapsible=icon]:!size-8 group-data-[collapsible=icon]:!p-2 hover:text-sidebar-foreground focus-visible:ring-2 active:text-sidebar-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[state=open]:hover:text-sidebar-foreground data-[active=true]:bg-primary/10 data-[active=true]:font-medium data-[active=true]:text-primary [&[data-active=true]_svg]:text-primary dark:data-[active=true]:bg-[hsl(var(--v2-hover,var(--muted)))] dark:data-[active=true]:text-[hsl(var(--v2-link,229.66_93.55%_81.76%))] dark:[&[data-active=true]_svg]:text-[hsl(var(--v2-link,229.66_93.55%_81.76%))] [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-sidebar-foreground/60 [&>span:last-child]:truncate",
   {

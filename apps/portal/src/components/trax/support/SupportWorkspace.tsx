@@ -5,6 +5,8 @@ import { ArrowLeft, Clock, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { ChatApiResponse, TraxCapabilities } from '@/types/trax-support';
 import type { TraxSupportView } from './trax-support-context';
+import { SIDEBAR_HIGHLIGHT_ACTIVE, SIDEBAR_HIGHLIGHT_FOCUS, SIDEBAR_HIGHLIGHT_HOVER } from '@/components/ui-v2/sidebar';
+import { cn } from '@/lib/utils';
 
 /**
  * The TRAX workspace around the conversation: the conversation, or its history.
@@ -43,13 +45,13 @@ export function SupportWorkspace({children,request,capabilities,recent=[],busy,o
   return <>
     {/* The standalone dialog keeps a plain row; the panel drives the view from its header. */}
     {!onView&&<div className="flex flex-wrap items-center gap-1 border-b border-border/50 px-3 py-2 sm:px-5" aria-label="TRAX navigation">
-      <Button size="sm" variant={current==='conversation'?'secondary':'ghost'} onClick={()=>show('conversation')}>Conversation</Button>
-      <Button size="sm" variant={current==='history'?'secondary':'ghost'} onClick={()=>show('history')}>History</Button>
-      {onOpenSupport&&<Button size="sm" variant="ghost" onClick={()=>onOpenSupport({})}>Open Support</Button>}
+      <Button size="sm" variant="ghost" aria-pressed={current==='conversation'} className={cn(SIDEBAR_HIGHLIGHT_HOVER,SIDEBAR_HIGHLIGHT_FOCUS,current==='conversation'&&SIDEBAR_HIGHLIGHT_ACTIVE)} onClick={()=>show('conversation')}>Conversation</Button>
+      <Button size="sm" variant="ghost" aria-pressed={current==='history'} className={cn(SIDEBAR_HIGHLIGHT_HOVER,SIDEBAR_HIGHLIGHT_FOCUS,current==='history'&&SIDEBAR_HIGHLIGHT_ACTIVE)} onClick={()=>show('history')}>History</Button>
+      {onOpenSupport&&<Button size="sm" variant="ghost" className={cn(SIDEBAR_HIGHLIGHT_HOVER,SIDEBAR_HIGHLIGHT_FOCUS)} onClick={()=>onOpenSupport({})}>Open Support</Button>}
     </div>}
     {current==='history'?<>
       {onView&&<div className="flex shrink-0 items-center gap-2 border-b border-border/50 px-3 py-2.5 sm:px-4">
-        <Button size="sm" variant="ghost" aria-label="Back to conversation" className="-ml-2 h-8 shrink-0 gap-1.5 px-2 text-xs text-muted-foreground" onClick={()=>show('conversation')}><ArrowLeft className="h-3.5 w-3.5"/>Conversation</Button>
+        <Button size="sm" variant="ghost" aria-label="Back to conversation" className={cn("-ml-2 h-8 shrink-0 gap-1.5 px-2 text-xs text-muted-foreground",SIDEBAR_HIGHLIGHT_HOVER,SIDEBAR_HIGHLIGHT_FOCUS)} onClick={()=>show('conversation')}><ArrowLeft className="h-3.5 w-3.5"/>Conversation</Button>
         <div className="min-w-0 flex-1"><p className="truncate text-[13px] font-semibold tracking-tight">Conversation history</p><p className="truncate text-[11px] text-muted-foreground">Reopening re-checks your access first</p></div>
       </div>}
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3 sm:px-4" aria-label="Previous TRAX conversations">
@@ -62,7 +64,7 @@ export function SupportWorkspace({children,request,capabilities,recent=[],busy,o
           {recent.map(conversation=><li key={conversation.id}>
             <button type="button" disabled={busy||!!resuming} aria-busy={resuming===conversation.id||undefined}
               onClick={()=>void resume(conversation.id)}
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-card/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60">
+              className={cn("flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60",SIDEBAR_HIGHLIGHT_HOVER,SIDEBAR_HIGHLIGHT_FOCUS,resuming===conversation.id&&SIDEBAR_HIGHLIGHT_ACTIVE)}>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[13px] font-medium">{conversation.summary}</span>
                 <span className="mt-0.5 block text-[11px] text-muted-foreground">{stamp(conversation.lastActivityAt)}</span>

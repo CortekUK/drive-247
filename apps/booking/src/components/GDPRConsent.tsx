@@ -1,13 +1,16 @@
 'use client';
 
 import { useState, useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
+import { CbpCookieConsent, type ConsentChoice } from "@/components/custom-booking-page/cookie-consent";
 
 const GDPRConsent = () => {
+  const pathname = usePathname();
   const [showBanner, setShowBanner] = useState(false);
   const [consent, setConsent] = useState({
     necessary: true, // Always required
@@ -16,44 +19,45 @@ const GDPRConsent = () => {
   });
 
   useEffect(() => {
-    const hasConsent = localStorage.getItem("gdpr-consent");
-    if (!hasConsent) {
-      setShowBanner(true);
+    try {
+      const hasConsent = localStorage.getItem("gdpr-consent");
+      if (!hasConsent) {
+        setShowBanner(true);
+      }
+    } catch {
+      // Storage blocked (private mode, or the browser refusing site data). We
+      // cannot record a choice, so asking for one would only ask again on every
+      // page — stay quiet rather than nag.
     }
   }, []);
 
-  const handleAcceptAll = () => {
-    const fullConsent = {
-      necessary: true,
-      analytics: true,
-      marketing: true,
-      timestamp: new Date().toISOString(),
-    };
-    localStorage.setItem("gdpr-consent", JSON.stringify(fullConsent));
+  // One writer for all three answers, so whichever button is pressed — and
+  // whichever skin the visitor is looking at — the stored shape is identical.
+  const decide = (choice: ConsentChoice) => {
+    try {
+      localStorage.setItem(
+        "gdpr-consent",
+        JSON.stringify({ ...choice, timestamp: new Date().toISOString() })
+      );
+    } catch {
+      // The answer cannot be remembered, but honour it for this visit.
+    }
     setShowBanner(false);
   };
 
-  const handleSavePreferences = () => {
-    const preferences = {
-      ...consent,
-      timestamp: new Date().toISOString(),
-    };
-    localStorage.setItem("gdpr-consent", JSON.stringify(preferences));
-    setShowBanner(false);
-  };
-
-  const handleRejectAll = () => {
-    const minimalConsent = {
-      necessary: true,
-      analytics: false,
-      marketing: false,
-      timestamp: new Date().toISOString(),
-    };
-    localStorage.setItem("gdpr-consent", JSON.stringify(minimalConsent));
-    setShowBanner(false);
-  };
+  const handleAcceptAll = () => decide({ necessary: true, analytics: true, marketing: true });
+  const handleSavePreferences = () =>
+    decide({ necessary: true, analytics: consent.analytics, marketing: consent.marketing });
+  const handleRejectAll = () => decide({ necessary: true, analytics: false, marketing: false });
 
   if (!showBanner) return null;
+
+  // The custom booking site has its own fixed palette, which the tenant's brand
+  // colours must not leak into — including here. Same choices, same storage,
+  // different skin.
+  if (pathname?.startsWith("/custom-booking-page")) {
+    return <CbpCookieConsent onDecide={decide} />;
+  }
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 p-4 bg-background/95 backdrop-blur-sm border-t border-border">

@@ -34,13 +34,73 @@ const metadataOf=(value:unknown):Record<string,string>=>{
 /** The existing Supabase secrets, read by name at runtime exactly like _shared/stripe-client.ts. */
 export const PLATFORM_SECRET_NAMES={uk:{live:'STRIPE_LIVE_SECRET_KEY',test:'STRIPE_TEST_SECRET_KEY'},uae:{live:'STRIPE_UAE_LIVE_SECRET_KEY',test:'STRIPE_UAE_TEST_SECRET_KEY'}} as const;
 const restrictedName=(platform:string,mode:string)=>`TRAX_STRIPE_READ_${platform.toUpperCase()}_${mode.toUpperCase()}_KEY`;
-/** A dedicated restricted key wins when configured; otherwise the platform secret for the same
- * platform and mode. A key for the other mode, or a publishable key, is never used. */
+/**
+ * One secret can hold every platform/mode key: `{"uk":{"live":"rk_live_…"}}`.
+ *
+ * A separate variable per platform and mode is clearer, but it costs up to four
+ * slots, and this project is at its secret limit with nothing safe to remove — the
+ * unreferenced names all belong to integrations whose functions are still deployed.
+ * Packing them costs one slot instead of four. The individual names win when both
+ * are set, and a malformed blob yields no key rather than a partial guess.
+ */
+function packedReadKey(env:(key:string)=>string|undefined,platform:string,mode:string):string|undefined {
+  const raw=env('TRAX_STRIPE_READ_KEYS');
+  if(!raw||raw.length>4_000)return undefined;
+  let parsed:unknown;
+  try{parsed=JSON.parse(raw);}catch{return undefined;}
+  if(!parsed||typeof parsed!=='object'||Array.isArray(parsed))return undefined;
+  const byPlatform=(parsed as Record<string,unknown>)[platform];
+  if(!byPlatform||typeof byPlatform!=='object'||Array.isArray(byPlatform))return undefined;
+  const value=(byPlatform as Record<string,unknown>)[mode];
+  return typeof value==='string'?value:undefined;
+}
+/**
+ * Which credential TRAX reads Stripe with, in order of preference.
+ *
+ *   1. `TRAX_STRIPE_READ_{PLATFORM}_{MODE}_KEY` — a restricted `rk_` key.
+ *   2. `TRAX_STRIPE_READ_KEYS` — the same, packed into one secret.
+ *   3. the existing platform secret for that platform and mode — a full-access `sk_`.
+ *
+ * (3) is a deliberate, recorded compromise. A restricted key is the better
+ * credential and stays the documented preference, but this project is at Supabase's
+ * 100-secret cap, no secret can be removed, and the platform keys are already here.
+ *
+ * It means the CREDENTIAL does not enforce read-only, so the CODE must. Read-only is
+ * not "this file happens to contain only GETs" — `get` below refuses any path that
+ * is not one of three exact shapes, before it so much as looks up a key, and the
+ * returned object exposes no other method. A future write path cannot be added by
+ * accident; it would have to defeat that allowlist deliberately.
+ *
+ * A key for the other mode, the other platform, or a publishable key, is never used,
+ * and the restricted slots accept nothing but `rk_`.
+ */
 export function stripeReadKey(env:(key:string)=>string|undefined,platform:'uk'|'uae',mode:'test'|'live'):string|null {
-  const restricted=env(restrictedName(platform,mode));
+  const restricted=env(restrictedName(platform,mode))??packedReadKey(env,platform,mode);
   if(restricted?.startsWith(`rk_${mode}_`))return restricted;
-  const secret=env(PLATFORM_SECRET_NAMES[platform][mode]);
-  return secret&&(secret.startsWith(`sk_${mode}_`)||secret.startsWith(`rk_${mode}_`))?secret:null;
+  const platformSecret=env(PLATFORM_SECRET_NAMES[platform][mode]);
+  return platformSecret?.startsWith(`sk_${mode}_`)?platformSecret:null;
+}
+/** True when the credential in use is restricted at Stripe rather than only here. */
+export function stripeKeyIsRestricted(env:(key:string)=>string|undefined,platform:'uk'|'uae',mode:'test'|'live'):boolean {
+  return stripeReadKey(env,platform,mode)?.startsWith('rk_')===true;
+}
+/**
+ * The only three Stripe endpoints that exist for TRAX. Checked against the fully
+ * built path, so neither a caller nor the model can reach anything else — including
+ * by traversal, by adding a parameter, or by naming a write endpoint.
+ */
+const ENDPOINTS=[
+  /^balance$/,
+  /^payment_intents\/pi_[A-Za-z0-9]+\?expand%5B%5D=latest_charge$/,
+  /^checkout\/sessions\/cs_(?:live|test)_[A-Za-z0-9]+$/,
+] as const;
+/**
+ * Exported so it can be tested as what it is: the boundary that keeps a full-access
+ * key read-only. Testing it through `intent` would prove nothing, because the id
+ * regex there rejects a bad path first — a test that passes for the wrong reason.
+ */
+export function isReadEndpoint(path:string):boolean {
+  return ENDPOINTS.some(shape=>shape.test(path));
 }
 export function hasStripeReadKey(env:(key:string)=>string|undefined):boolean {
   return (['uk','uae'] as const).some(p=>(['live','test'] as const).some(m=>stripeReadKey(env,p,m)!==null));
@@ -50,6 +110,11 @@ export function hasStripeReadKey(env:(key:string)=>string|undefined):boolean {
 export function createReadOnlyStripe(env:(key:string)=>string|undefined,fetcher:typeof fetch=fetch):ReadOnlyStripe {
   async function get(mapping:Pick<StripeMapping,'platform'|'mode'|'accountId'>,path:string,signal:AbortSignal) {
     if(!['uk','uae'].includes(mapping.platform)||!['test','live'].includes(mapping.mode)||!/^acct_[A-Za-z0-9]+$/.test(mapping.accountId))throw failure('stripe_mapping_missing','A verified connected-account mapping is required.');
+    // Before any credential is resolved: this must be one of the three read shapes.
+    // The key may be a full-access platform secret, so this is what makes TRAX
+    // read-only. It is checked here rather than at each call site so there is one
+    // place to defeat, not three to keep in step.
+    if(!isReadEndpoint(path))throw failure('stripe_read_refused','Only TRAX’s three read-only Stripe lookups are permitted.');
     const key=stripeReadKey(env,mapping.platform,mapping.mode);
     if(!key)throw failure('stripe_configuration_required','The Stripe key for this account and mode is not available to TRAX.');
     let response:Response;

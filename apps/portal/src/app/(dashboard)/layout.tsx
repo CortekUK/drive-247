@@ -26,6 +26,7 @@ import { AppSidebarV2 } from "@/components/shared/layout/app-sidebar-v2";
 import { TopBarV2 } from "@/components/shared/layout/top-bar-v2";
 import { TraxV2Provider } from "@/components/trax/support/trax-support-context";
 import { TraxPanel } from "@/components/trax/trax-panel";
+import { SupportRailProvider } from "../../../../../shared/trax-support/support-rail";
 import { PageSearchProvider } from "@/components/shared/layout/page-search-slot";
 import { NotificationBell } from "@/components/shared/layout/notification-bell";
 import { CreditBalance } from "@/components/shared/layout/credit-balance";
@@ -192,10 +193,12 @@ export default function DashboardLayout({
      the first. */
   const isTraxWorkspace = pathname === "/trax" || !!pathname?.startsWith("/trax/");
 
-  /* Support is the third one: a ticket list and a conversation that scroll
-     inside themselves, so the reply box stays on screen instead of sitting at
-     the bottom of a long page. Like Trax it keeps the sidebar, and unlike Trax
-     it keeps the top bar — hence a third flag rather than widening either. */
+  /* Support is the third one: tickets, a conversation and a details panel that
+     scroll inside themselves, so the reply box stays on screen instead of sitting
+     at the bottom of a long page. Like Trax, the sidebar stays and BECOMES the
+     ticket rail (AppSidebarV2 → SupportRail), a little wider than the nav so a
+     ticket row has room; unlike Trax it keeps the top bar — hence a third flag
+     rather than widening either. */
   const isSupportWorkspace = pathname === "/support" || !!pathname?.startsWith("/support/");
 
   /* Routes that bound their own height instead of letting the document scroll. */
@@ -213,6 +216,13 @@ export default function DashboardLayout({
      and `{children}`: the page registers on mount and the bar reads it. v2 only,
      for the same reason as TraxWrap. */
   const SearchSlotWrap = v2Chrome ? PageSearchProvider : Fragment;
+
+  /* Lets the Support page lend its ticket list to the Support rail, which sits in
+     the sidebar's slot (see shared/trax-support/support-rail.tsx). Mounted on every
+     v2 route rather than only on /support, so navigating in or out never swaps the
+     component type above the sidebar and remounts the row; off Support nothing
+     publishes to it and it holds null. */
+  const SupportRailWrap = v2Chrome ? SupportRailProvider : Fragment;
 
   const hasActivePlans = !!plans && plans.length > 0;
 
@@ -523,6 +533,9 @@ export default function DashboardLayout({
             .filter(Boolean)
             .join(" ") || undefined
         }
+        /* The Support rail holds ticket rows (subject, reference, preview, time,
+           status), so it is 19rem there instead of the nav's 16rem. */
+        style={v2Chrome && isSupportWorkspace ? ({ "--sidebar-width": "19rem" } as React.CSSProperties) : undefined}
         /* Marks the bounded-height routes for global.css, which shortens the
            wrapper by the system banner's height while one is showing (otherwise
            Messages and Trax would scroll the document by exactly that much).
@@ -531,6 +544,7 @@ export default function DashboardLayout({
       >
         <TraxWrap>
         <SearchSlotWrap>
+        <SupportRailWrap>
         {isMessagesWorkspace ? null : v2Chrome ? <AppSidebarV2 /> : <AppSidebar />}
 
         {/* The floating left-edge SidebarTrigger that used to live here is gone:
@@ -697,6 +711,7 @@ export default function DashboardLayout({
             from this row and never narrows the page. Nothing about the layout
             changes when it opens. See the header of trax-panel.tsx. */}
         <TraxPanel />
+        </SupportRailWrap>
         </SearchSlotWrap>
         </TraxWrap>
 
