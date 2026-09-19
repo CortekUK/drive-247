@@ -167,11 +167,11 @@ export const AddHoldDialog = ({
 
   // Derive the booking app's origin from the portal origin so local dev hits
   // the local booking app, not production.
-  //   test.portal.localhost:3001  -> test.localhost:4001 (the old booking app; 3000 is the new one)
+  //   test.portal.localhost:3001  -> test.localhost:3000
   //   test.portal.drive-247.com   -> test.drive-247.com
   const getBookingOrigin = (): string => {
     if (typeof window === "undefined") return "";
-    const host = window.location.host.replace(".portal.", ".").replace(":3001", ":4001");
+    const host = window.location.host.replace(".portal.", ".").replace(":3001", ":3000");
     return `${window.location.protocol}//${host}`;
   };
 

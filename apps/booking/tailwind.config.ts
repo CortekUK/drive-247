@@ -8,6 +8,11 @@ const config: Config = {
     './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
     './src/components/**/*.{js,ts,jsx,tsx,mdx}',
     './src/app/**/*.{js,ts,jsx,tsx,mdx}',
+    // The new Northwind design has its own Tailwind 4 stylesheet
+    // (scripts/build-northwind-css.mjs). Excluded so this — the original
+    // design's stylesheet — is built from exactly the files it always was.
+    // ("[(]" is a literal "(": Tailwind rewrites backslashes, so "\\(" would not survive.)
+    '!./src/app/[(]northwind[)]/**',
   ],
   theme: {
     extend: {

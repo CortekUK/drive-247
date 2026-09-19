@@ -446,7 +446,7 @@
           ]
         },
         {
-          "path": "apps/booking/src/app/booking/vehicles/page.tsx",
+          "path": "apps/booking/src/app/(legacy)/booking/vehicles/page.tsx",
           "symbols": [
             "show_on_website"
           ]

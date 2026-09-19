@@ -2,19 +2,16 @@
  * Where the tenant's v2 website (`v2/apps/web`) is served.
  *
  * Separate from `getBookingBaseUrl` on purpose: that resolves the v1 booking
- * app for most tenants, which in dev runs on 4001 (v2 web is on 3000 — see
- * v2/apps/web/package.json). The two must never be confused, because the
- * portal embeds THIS one in an iframe and talks to it by origin; embedding the
- * wrong app is a silent, blank preview.
+ * app, and in dev it hardcodes port 3000, which is not where either app runs
+ * here (v2 web is on 4006 — see the root dev scripts). The two must never be
+ * confused, because the portal embeds THIS one in an iframe and talks to it by
+ * origin; embedding the wrong app is a silent, blank preview.
  *
- * Production: NEXT_PUBLIC_SITE_V2_URL_TEMPLATE if set, else `{slug}.drive-247.com`.
- * Which app answers `{slug}.drive-247.com` is decided by Vercel's domain
- * assignment, not by code. As of 19 Sep 2026 northwind.drive-247.com is still
- * attached to the OLD booking app, so until that domain is moved to the v2
- * project, production needs the template set to the v2 project's address.
+ * Production: `{slug}.drive-247.com`. Which app answers there is decided by
+ * Vercel's domain assignment, not by code — the canary's subdomain is attached
+ * to the v2 project, everyone else's stays on v1.
  */
-/** Must match `next dev --port` in v2/apps/web/package.json. */
-export const SITE_V2_DEV_PORT = 3000;
+export const SITE_V2_DEV_PORT = 4006;
 
 export function getSiteV2BaseUrl(tenantSlug: string | null | undefined): string {
   if (!tenantSlug) return "";

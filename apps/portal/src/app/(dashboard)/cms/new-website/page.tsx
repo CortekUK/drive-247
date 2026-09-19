@@ -16,7 +16,6 @@ import {
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
-import { OLD_BOOKING_APP_DEV_PORT, getBookingBaseUrl, usesNewBookingApp } from "@/lib/booking-url";
 
 /**
  * The tenant's own booking site. Mirrors the platform back-office helper: in
@@ -26,11 +25,7 @@ import { OLD_BOOKING_APP_DEV_PORT, getBookingBaseUrl, usesNewBookingApp } from "
  */
 const IS_DEV = process.env.NODE_ENV === "development";
 const tenantSiteUrl = (slug: string) =>
-  // Northwind's site is the new booking app (localhost:3000 in dev); everyone
-  // else's is the old one (:4001 in dev). See lib/booking-url.ts.
-  usesNewBookingApp(slug)
-    ? getBookingBaseUrl(slug)
-    : IS_DEV ? `http://${slug}.localhost:${OLD_BOOKING_APP_DEV_PORT}` : `https://${slug}.drive-247.com`;
+  IS_DEV ? `http://${slug}.localhost:3000` : `https://${slug}.drive-247.com`;
 
 /* ========================================================================== *
  * New Website Content.

@@ -13,6 +13,9 @@
     "paths": {
       "@/*": [
         "./src/*"
+      ],
+      "@nw/*": [
+        "./src/northwind-site/*"
       ]
     },
     /* Bundler mode */

@@ -1,0 +1,195 @@
+import { cache } from "react";
+import { headers } from "next/headers";
+
+import { supabase } from "@nw/integrations/supabase/client";
+import { CMS_EDIT_HEADER, DEV_FALLBACK_TENANT_SLUG, TENANT_HEADER } from "@nw/lib/constants";
+
+import { getSection } from "./merge";
+import {
+  fetchBlogPost,
+  fetchBlogPosts,
+  fetchFaqs,
+  fetchPageSections,
+  fetchPromotions,
+  fetchTestimonials,
+  type BlogPostFull,
+  type BlogPostSummary,
+  type PromotionsResult,
+} from "./queries";
+import type { CmsPageSlug, FaqItem, PageSections, TestimonialItem } from "./types";
+
+/**
+ * Server-side CMS loading. NOT a client module — it reads `next/headers` and
+ * must only ever be called from a Server Component.
+ *
+ * Why the sections fetch on the server at all, when there are hooks right next
+ * door: marketing copy that only exists after hydration is copy a crawler never
+ * sees and a slow connection shows as a flash of placeholder text. The same
+ * argument `fleet-seed.ts` makes for the vehicle list applies with more force
+ * to the headline of the page.
+ *
+ * Every loader is wrapped in React's `cache()`, which dedupes by argument for
+ * the lifetime of ONE request. The home page renders seven CMS-driven sections
+ * and three of them read the `about` page's keys; without this that is three
+ * identical queries. With it the whole page costs one tenant lookup plus one
+ * query per distinct slug.
+ */
+
+export interface CmsTenant {
+  id: string;
+  currency_code: string | null;
+  /**
+   * Identity, for anything that would otherwise fall back to OUR name. These
+   * ride on the tenant lookup the page already makes rather than a second
+   * query, because `generateMetadata` runs before the tree renders and a
+   * separate round trip there delays the whole document.
+   */
+  company_name: string | null;
+  app_name: string | null;
+  meta_title: string | null;
+  meta_description: string | null;
+  og_image_url: string | null;
+}
+
+/** The slug the middleware resolved for this request. */
+export const getTenantSlug = cache(async (): Promise<string | null> => {
+  const requestHeaders = await headers();
+  return requestHeaders.get(TENANT_HEADER) ?? DEV_FALLBACK_TENANT_SLUG;
+});
+
+/**
+ * Slug -> tenant. Suspended tenants resolve too, matching `TenantContext` and
+ * `fleet-seed`: their site should say "unavailable", not quietly render as an
+ * untenanted shell with placeholder copy.
+ */
+export const resolveTenant = cache(async (): Promise<CmsTenant | null> => {
+  const slug = await getTenantSlug();
+  if (!slug) return null;
+
+  try {
+    const { data, error } = await supabase
+      .from("tenants")
+      .select("id, currency_code, company_name, app_name, meta_title, meta_description, og_image_url")
+      .eq("slug", slug)
+      .in("status", ["active", "suspended"])
+      .maybeSingle()
+      .overrideTypes<CmsTenant, { merge: false }>();
+
+    if (error) {
+      console.error("[cms] tenant lookup failed", {
+        slug,
+        message: error.message,
+        code: error.code,
+      });
+      return null;
+    }
+
+    return data ?? null;
+  } catch (cause) {
+    console.error("[cms] tenant lookup threw", { slug, cause });
+    return null;
+  }
+});
+
+/**
+ * Is this render for the portal's visual editor?
+ *
+ * Decided by the middleware from `?cms-edit=1` and passed as a header, because
+ * a layout-level Server Component has no access to the query string. In edit
+ * mode the loaders below read each section's pending `draft_content` (falling
+ * back to the live `content`) and ignore the page's published flag — the
+ * operator must be able to see and edit a page that is not on the site yet.
+ */
+export const isEditMode = cache(async (): Promise<boolean> => {
+  const requestHeaders = await headers();
+  return requestHeaders.get(CMS_EDIT_HEADER) === "1";
+});
+
+export const loadPageSections = cache(
+  async (slug: CmsPageSlug): Promise<PageSections> => {
+    const tenant = await resolveTenant();
+    if (!tenant) return {};
+    return fetchPageSections(tenant.id, slug, { draft: await isEditMode() });
+  },
+);
+
+/**
+ * One section of one page, already merged over its typed default.
+ *
+ * This is the call almost every section makes. It cannot return null and it
+ * cannot return a half-filled object: whatever happens upstream — no tenant, no
+ * page row, a page the operator left in draft, a section they never touched —
+ * the caller gets a complete `T`.
+ */
+export async function loadSection<T>(
+  slug: CmsPageSlug,
+  key: string,
+  fallback: T,
+): Promise<T> {
+  return getSection(await loadPageSections(slug), key, fallback);
+}
+
+/**
+ * The table-backed loaders return `null`, not `[]`, when there is no tenant to
+ * scope to.
+ *
+ * The distinction is load-bearing downstream: these values are handed to the
+ * client hooks as `initialData`, and React Query treats seeded data as fresh.
+ * Seeding `[]` after a failed server lookup would therefore convince the
+ * browser it already has the answer and suppress the refetch that would have
+ * recovered. `null` seeds nothing and lets the client try again.
+ */
+export const loadTestimonials = cache(async (): Promise<TestimonialItem[] | null> => {
+  const tenant = await resolveTenant();
+  if (!tenant) return null;
+  return fetchTestimonials(tenant.id);
+});
+
+export const loadFaqs = cache(async (): Promise<FaqItem[] | null> => {
+  const tenant = await resolveTenant();
+  if (!tenant) return null;
+  return fetchFaqs(tenant.id);
+});
+
+/** Published posts for this tenant, newest first. */
+export const loadBlogPosts = cache(async (): Promise<BlogPostSummary[]> => {
+  const tenant = await resolveTenant();
+  if (!tenant) return [];
+  return fetchBlogPosts(tenant.id);
+});
+
+/** One published post by slug, or null. */
+export const loadBlogPost = cache(async (slug: string): Promise<BlogPostFull | null> => {
+  const tenant = await resolveTenant();
+  if (!tenant) return null;
+  return fetchBlogPost(tenant.id, slug);
+});
+
+/**
+ * Has the operator switched the blog on?
+ *
+ * `tenants.blog_enabled` is the toggle behind "Show blog on website" in the
+ * portal. It gated nothing on this site, because the site had no blog at all —
+ * so an operator could turn it on, write a post, and there was no page.
+ */
+export const loadBlogEnabled = cache(async (): Promise<boolean> => {
+  const slug = await getTenantSlug();
+  if (!slug) return false;
+  try {
+    const { data } = await supabase
+      .from("tenants")
+      .select("blog_enabled")
+      .eq("slug", slug)
+      .maybeSingle()
+      .overrideTypes<{ blog_enabled: boolean | null }, { merge: false }>();
+    return data?.blog_enabled === true;
+  } catch {
+    return false;
+  }
+});
+
+export const loadPromotions = cache(async (): Promise<PromotionsResult | null> => {
+  const tenant = await resolveTenant();
+  if (!tenant) return null;
+  return fetchPromotions(tenant.id, tenant.currency_code);
+});

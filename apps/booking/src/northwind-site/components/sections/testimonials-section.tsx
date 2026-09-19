@@ -1,0 +1,63 @@
+import { DEFAULT_TESTIMONIALS_HEADER } from "@nw/lib/cms/defaults";
+import { isEditMode, loadSection, loadTestimonials } from "@nw/lib/cms/server";
+
+import { TestimonialQuotes } from "@nw/components/sections/testimonial-quotes";
+import { Editable, cmsSection } from "@nw/lib/cms/editable";
+
+/**
+ * The two-up quote band, shown on home, about and fleet.
+ *
+ * Server half: fetches the tenant's quotes so they are in the HTML, and reads
+ * the optional heading from `home / testimonials_header`. The Figma band has no
+ * heading, so the default is blank and nothing renders until an operator writes
+ * one — configuring the CMS adds a heading, it never silently removes one.
+ *
+ * Client half (`TestimonialQuotes`) takes the same rows as its first render and
+ * then keeps them live. See `hooks/use-testimonials.ts`.
+ */
+export async function TestimonialsSection() {
+  const [header, seed, editing] = await Promise.all([
+    loadSection("home", "testimonials_header", DEFAULT_TESTIMONIALS_HEADER),
+    loadTestimonials(),
+    isEditMode(),
+  ]);
+
+  const title = header.title.trim();
+
+  /**
+   * No quotes means no BAND, heading included.
+   *
+   * `TestimonialQuotes` stopped inventing example testimonials, which was
+   * right — but this wrapper kept rendering the heading above them, so a
+   * tenant with no reviews got "What our customers say" floating over empty
+   * space. A heading is a promise that something follows it.
+   *
+   * Still shown in the EDITOR, where the empty band is the only place an
+   * operator can see and set this heading at all.
+   */
+  if ((seed?.length ?? 0) === 0 && !editing) return null;
+
+  return (
+    <section {...cmsSection("home.testimonials_header", "Reviews")} className="bg-brand-cream">
+      <div className="container-page py-12 lg:py-20">
+        {/* Blank by design — the Figma band has no heading — so on the public
+            site nothing renders. In the editor the empty slot IS the control:
+            without it there is no way to give this band a heading at all. */}
+        {(title !== "" || editing) && (
+          <header className="mx-auto mb-10 max-w-2xl text-center">
+            <h2 className="text-3xl font-semibold leading-tight tracking-tight text-brand-text sm:text-4xl">
+              <Editable
+                path="home.testimonials_header.title"
+                placeholder="Add a heading for this band"
+              >
+                {title}
+              </Editable>
+            </h2>
+          </header>
+        )}
+
+        <TestimonialQuotes seed={seed} />
+      </div>
+    </section>
+  );
+}

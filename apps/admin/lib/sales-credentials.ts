@@ -21,8 +21,6 @@
  * that surfaces it must say so.
  */
 
-import { publicBookingUrl } from './booking-site-url';
-
 /** Uppercase the first char, leave the rest untouched. Mirrors capitalizeFirst() in index.ts. */
 const capitalizeFirst = (s: string): string => (s.length ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
@@ -89,11 +87,8 @@ export const formatAmount = (amountCents: number | null | undefined, currency: s
 /** Portal (staff) subdomain for a tenant. Mirrors index.ts: `https://${slug}.portal.drive-247.com`. */
 export const portalUrlFor = (slug: string): string => `https://${slug}.portal.drive-247.com`;
 
-/**
- * Booking (customer) address for a tenant. Mirrors index.ts: `https://${slug}.drive-247.com`,
- * except for tenants on the new booking app (lib/booking-site-url.ts).
- */
-export const bookingUrlFor = (slug: string): string => publicBookingUrl(slug);
+/** Booking (customer) subdomain for a tenant. Mirrors index.ts: `https://${slug}.drive-247.com`. */
+export const bookingUrlFor = (slug: string): string => `https://${slug}.drive-247.com`;
 
 export interface ClientMessageArgs {
   /** Client's first name; blank/null falls back to "there", as the edge fn does. */

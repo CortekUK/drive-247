@@ -25,18 +25,17 @@ const nextConfig: NextConfig = {
     ],
   },
   experimental: {
-    optimizePackageImports: ['lucide-react', '@radix-ui/react-icons'],
+    // lucide-react-nw: the new Northwind design's icon version (an npm alias).
+    optimizePackageImports: ['lucide-react', 'lucide-react-nw', '@radix-ui/react-icons'],
+    // src/app/global-not-found.tsx: the 404 for unknown addresses. Required now
+    // that the app has two root layouts ((legacy) and (northwind)).
+    globalNotFound: true,
   },
   // The multi-page /booking flow is deprecated — the only booking path is the
-  // home-page widget. Redirect any stray link into that dead flow back home so
-  // customers can never get stranded in it. (Note: /booking-enquiry-submitted is
-  // a separate route and is intentionally NOT matched here.)
-  async redirects() {
-    return [
-      { source: '/booking', destination: '/', permanent: false },
-      { source: '/booking/:path*', destination: '/', permanent: false },
-    ];
-  },
+  // home-page widget — and stray links into it are sent back home. That redirect
+  // now lives in src/lib/booking-design.ts (applied by the middleware): a
+  // redirect here runs before the middleware, so it could not tell tenants
+  // apart, and the new Northwind design's booking flow DOES live at /booking.
   // Standalone output for Vercel deployment
   output: 'standalone',
   // Set workspace root to fix monorepo lockfile detection

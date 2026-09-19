@@ -21,8 +21,8 @@
  *   3. https://{slug}.{NEXT_PUBLIC_BOOKING_BASE_DOMAIN || drive-247.com}.
  */
 
-/** Port the OLD booking app runs on in development. Matches `npm run dev:booking` (apps/booking: --port 4001). 3000 is the new booking app, which has no checkout pages. */
-const LOCAL_BOOKING_PORT = "4001";
+/** Port the booking app runs on in development. Matches `npm run dev:booking`. */
+const LOCAL_BOOKING_PORT = "3000";
 
 export function bookingOriginFor(tenantSlug: string | null | undefined): string {
   const explicit = process.env.NEXT_PUBLIC_BOOKING_BASE_URL?.replace(/\/+$/, "");

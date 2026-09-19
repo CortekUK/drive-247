@@ -11,11 +11,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm run dev
 
 # Development (specific app)
-npm run dev:booking    # port 4001 — old booking app (apps/booking), every tenant except Northwind
-npm run dev:portal     # port 4002
-npm run dev:web        # port 4003
-npm run dev:admin      # port 4004
-npm run dev:site       # port 3000 — new booking app (v2/apps/web); plain localhost:3000 = Northwind
+npm run dev:booking    # port 3000
+npm run dev:portal     # port 3001
+npm run dev:web        # port 3002
+npm run dev:admin      # port 3003
 
 # Build & Lint
 npm run build

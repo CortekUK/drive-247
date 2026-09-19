@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { routeBookingRequest } from '@/lib/booking-design';
+
+/** Set for the new design's visual-editor mode (read by src/app/(northwind)/layout.tsx). */
+const CMS_EDIT_HEADER = 'x-cms-edit';
 
 // Mirrors the fallbacks in src/integrations/supabase/client.ts. That generated
 // client is why every page in this app renders without a workspace-root .env —
@@ -70,6 +74,33 @@ export async function middleware(request: NextRequest) {
   const requestHeaders = new Headers(request.headers);
   if (tenantSlug) {
     requestHeaders.set('x-tenant-slug', tenantSlug);
+  }
+
+  // Which design this tenant gets — see src/lib/booking-design.ts. Every tenant
+  // except Northwind resolves to 'original' and continues exactly as before.
+  const route = routeBookingRequest(tenantSlug, pathname);
+
+  if (route.action === 'new-design') {
+    // The portal's visual editor opens the site with ?cms-edit=1. Stripped
+    // first so a visitor cannot switch edit mode on by sending the header.
+    requestHeaders.delete(CMS_EDIT_HEADER);
+    if (request.nextUrl.searchParams.get('cms-edit') === '1') {
+      requestHeaders.set(CMS_EDIT_HEADER, '1');
+    }
+    const url = request.nextUrl.clone();
+    url.pathname = route.path;
+    return NextResponse.rewrite(url, { request: { headers: requestHeaders } });
+  }
+
+  if (route.action === 'not-found') {
+    // No page answers this, so src/app/global-not-found.tsx renders the original design's 404.
+    const url = request.nextUrl.clone();
+    url.pathname = '/not-found';
+    return NextResponse.rewrite(url, { request: { headers: requestHeaders } });
+  }
+
+  if (route.action === 'redirect-home') {
+    return NextResponse.redirect(new URL('/', request.url), 307);
   }
 
   // Continue with the request
