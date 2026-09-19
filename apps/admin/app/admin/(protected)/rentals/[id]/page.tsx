@@ -54,6 +54,7 @@ import { TenantPaymentsTab } from '@/components/admin/tenant-payments-tab';
 import { FinanceEventsTab } from '@/components/admin/finance-events-tab';
 import { AdminTodosTab } from '@/components/admin-todos/admin-todos-tab';
 import { isLeanTenant } from '@/lib/lean-tenants';
+import { openBookingUrl, publicBookingUrl, usesNewBookingApp } from '@/lib/booking-site-url';
 import {
   ArrowLeft,
   Pencil,
@@ -126,8 +127,8 @@ interface Tenant {
  * handed to a tenant deliberately keep the real production hostnames.
  */
 const IS_DEV = process.env.NODE_ENV === 'development';
-const tenantBookingUrl = (slug: string) =>
-  IS_DEV ? `http://${slug}.localhost:3000` : `https://${slug}.drive-247.com`;
+// Northwind opens the new booking app (localhost:4006 in dev); see lib/booking-site-url.ts.
+const tenantBookingUrl = (slug: string) => openBookingUrl(slug, IS_DEV);
 const tenantPortalUrl = (slug: string) =>
   IS_DEV ? `http://${slug}.portal.localhost:3001` : `https://${slug}.portal.drive-247.com`;
 
@@ -1895,7 +1896,7 @@ export default function TenantDetailsPage() {
                   },
                   {
                     label: 'Booking URL (Customer Facing)',
-                    url: `https://${tenant.slug}.drive-247.com`,
+                    url: publicBookingUrl(tenant.slug),
                   },
                 ].map((item) => (
                   <div key={item.label} className="space-y-1.5">
@@ -2416,7 +2417,13 @@ export default function TenantDetailsPage() {
                     </p>
                     {tenant.slug && (
                       <a
-                        href={`${tenantBookingUrl(tenant.slug)}/custom-booking-page`}
+                        href={
+                          // /custom-booking-page only exists on the old booking app;
+                          // a new-app tenant's preview is the new app itself.
+                          usesNewBookingApp(tenant.slug)
+                            ? tenantBookingUrl(tenant.slug)
+                            : `${tenantBookingUrl(tenant.slug)}/custom-booking-page`
+                        }
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline mt-2"

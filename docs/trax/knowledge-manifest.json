@@ -40,7 +40,7 @@
     "apps/portal/src/app/(dashboard)/cms/contact/page.tsx": "b9c83b0fdf558f57b421984d7d07ccabe12f20659c30e439dbce93fc8cf016ed",
     "apps/portal/src/app/(dashboard)/cms/fleet/page.tsx": "4ccce1faf65b7edccf848a5aeb59eda01e37d64bfee764aedbbc01d1abafbab4",
     "apps/portal/src/app/(dashboard)/cms/home/page.tsx": "28d032f5a2c6c1c5516aa43f09f7386587561df2cb82b64597354124a71e5cea",
-    "apps/portal/src/app/(dashboard)/cms/new-website/page.tsx": "1e3ee72cb265f8c1ac89e2f34dab18d9479239f664a064fea3368c7ac783de4e",
+    "apps/portal/src/app/(dashboard)/cms/new-website/page.tsx": "ff715aacd2d2b138c6820498927e16e22ff24dc0cff1fc5c24188b9258913b90",
     "apps/portal/src/app/(dashboard)/cms/page.tsx": "71daea640e86c6b1b10ffb86809e7db0f9aa80172a383bab2bd2b617de81670d",
     "apps/portal/src/app/(dashboard)/cms/privacy/page.tsx": "fbf0adb1e84fd095a6fc275458fa8733a941c24708d5936fc139307acfef9c9d",
     "apps/portal/src/app/(dashboard)/cms/promotions/page.tsx": "8919d1485c552d579d11d2617669dcdb219e76180e1f082968d9725c9f3705fb",
