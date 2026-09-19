@@ -127,7 +127,7 @@ interface Tenant {
  * handed to a tenant deliberately keep the real production hostnames.
  */
 const IS_DEV = process.env.NODE_ENV === 'development';
-// Northwind opens the new booking app (localhost:4006 in dev); see lib/booking-site-url.ts.
+// Northwind opens the new booking app (localhost:3000 in dev); see lib/booking-site-url.ts.
 const tenantBookingUrl = (slug: string) => openBookingUrl(slug, IS_DEV);
 const tenantPortalUrl = (slug: string) =>
   IS_DEV ? `http://${slug}.portal.localhost:3001` : `https://${slug}.portal.drive-247.com`;

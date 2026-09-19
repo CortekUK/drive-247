@@ -65,7 +65,7 @@ const CANONICAL_BASE = 3000;
  * Directories holding dev servers, in scan order.
  *
  * `v2/apps` is here because the v2 website — the site the portal's CMS editor
- * embeds — lives at `v2/apps/web` on 4006 and is NOT a workspace: the root
+ * embeds — lives at `v2/apps/web` on 3000 and is NOT a workspace: the root
  * `workspaces` array is `["apps/*", "packages/*"]`, so `turbo run dev` never
  * starts it and, until this line, nothing ever freed its port either. Starting
  * it by hand after a crash then failed on EADDRINUSE with no script willing to

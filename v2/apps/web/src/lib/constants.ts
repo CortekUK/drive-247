@@ -47,10 +47,10 @@ export function isPlatformHost(host: string): boolean {
 /**
  * Pull a tenant slug out of a hostname, or null when there is none.
  *
- *   "acme.localhost:4006"  -> "acme"
+ *   "acme.localhost:3000"  -> "acme"
  *   "acme.drive-247.com"   -> "acme"
  *   "www.drive-247.com"    -> null (reserved)
- *   "localhost:4006"       -> null
+ *   "localhost:3000"       -> null
  *   "acme-rentals.com"     -> null (custom domain — needs a DB lookup)
  *
  * Deliberately returns null rather than a fallback: the caller decides whether a
