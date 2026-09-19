@@ -94,7 +94,7 @@ describe("resolveSettingsTabNotice", () => {
   });
 });
 
-describe("v2 General: six pages merged into one, and five pages hidden", () => {
+describe("v2 General: six pages merged into one, and the five hidden pages back", () => {
   const ALL_GENERAL_PERMS = ["general", "requirements", "duration", "lockbox", "fees", "preauth"];
 
   it("General's sections run in the agreed order, each with its own id", () => {
@@ -113,8 +113,12 @@ describe("v2 General: six pages merged into one, and five pages hidden", () => {
     expect(V2_GENERAL_PERM_TABS).toEqual(ALL_GENERAL_PERMS);
   });
 
-  it("hides exactly Promo codes, Extras, Installments, Pay as you go and Auto-extension, each with a notice label", () => {
-    expect([...V2_HIDDEN_SETTINGS_PAGES].sort()).toEqual(["auto-extend", "extras", "installments", "payg", "promos"]);
+  it("hides nothing now: Promo codes, Extras, Installments, Pay as you go and Auto-extension are back, and keep their notice labels", () => {
+    // The set stays (hiding a page again is one line), but it is empty.
+    expect(V2_HIDDEN_SETTINGS_PAGES.size).toBe(0);
+    for (const tab of ["promos", "extras", "installments", "payg", "auto-extend"]) {
+      expect(V2_HIDDEN_SETTINGS_PAGES.has(tab), tab).toBe(false);
+    }
     expect(SETTINGS_TAB_LABELS.promos).toBe("Promo codes");
     expect(SETTINGS_TAB_LABELS.extras).toBe("Extras");
     expect(SETTINGS_TAB_LABELS.installments).toBe("Installments");
@@ -129,6 +133,10 @@ describe("v2 General: six pages merged into one, and five pages hidden", () => {
       pricing: { permTab: "pricing" },
       templates: { permTab: "templates" },
       promos: { permTab: "promos" },
+      extras: { permTab: "extras" },
+      installments: { permTab: "installments" },
+      payg: { permTab: "payg" },
+      "auto-extend": { permTab: "auto-extend" },
     };
     const none = { page: null, anchor: null, permTab: null };
 
@@ -155,9 +163,16 @@ describe("v2 General: six pages merged into one, and five pages hidden", () => {
       expect(resolveV2SettingsRoute(" pricing ", pages)).toEqual({ page: "pricing", anchor: null, permTab: "pricing" });
     });
 
-    it("hidden pages (even with a page entry), the blacklist and unknown values open the index", () => {
-      expect(resolveV2SettingsRoute("promos", pages)).toEqual(none);
-      expect(resolveV2SettingsRoute("installments", pages)).toEqual(none);
+    it("the five pages that were hidden open as themselves again, each under its own permission", () => {
+      expect(resolveV2SettingsRoute("promos", pages)).toEqual({ page: "promos", anchor: null, permTab: "promos" });
+      expect(resolveV2SettingsRoute("extras", pages)).toEqual({ page: "extras", anchor: null, permTab: "extras" });
+      expect(resolveV2SettingsRoute("installments", pages)).toEqual({ page: "installments", anchor: null, permTab: "installments" });
+      expect(resolveV2SettingsRoute("payg", pages)).toEqual({ page: "payg", anchor: null, permTab: "payg" });
+      expect(resolveV2SettingsRoute("auto-extend", pages)).toEqual({ page: "auto-extend", anchor: null, permTab: "auto-extend" });
+    });
+
+    it("the blacklist, a page with no entry and unknown values open the index", () => {
+      expect(resolveV2SettingsRoute("promos", { general: { permTab: "general" } })).toEqual(none);
       expect(resolveV2SettingsRoute("blacklist", pages)).toEqual(none);
       expect(resolveV2SettingsRoute("optional-modules", pages)).toEqual(none);
       expect(resolveV2SettingsRoute("constructor", pages)).toEqual(none);
@@ -173,7 +188,7 @@ describe("v2 General: six pages merged into one, and five pages hidden", () => {
     expect(canViewAny([], () => true)).toBe(false);
   });
 
-  it("v2NoticePages: General with its any-of permission, each section under its old tab, no hidden page", () => {
+  it("v2NoticePages: General with its any-of permission, each section under its old tab, and every page (none is hidden)", () => {
     expect(
       v2NoticePages({
         general: { title: "General", permTab: "general" },
@@ -183,6 +198,7 @@ describe("v2 General: six pages merged into one, and five pages hidden", () => {
     ).toEqual({
       general: { title: "General", permTab: ALL_GENERAL_PERMS },
       locations: { title: "Locations", permTab: "locations" },
+      promos: { title: "Promo codes", permTab: "promos" },
       requirements: { title: "Driver requirements", permTab: "requirements" },
       duration: { title: "Booking rules", permTab: "duration" },
       lockbox: { title: "Key handover", permTab: "lockbox" },
@@ -192,9 +208,14 @@ describe("v2 General: six pages merged into one, and five pages hidden", () => {
     });
   });
 
-  describe("notices for the merged and hidden pages", () => {
+  describe("notices for the merged pages, the pages that are back, and the blacklist", () => {
     const base = {
-      pages: v2NoticePages({ general: { title: "General", permTab: "general" }, pricing: { title: "Custom pricing", permTab: "pricing" } }),
+      pages: v2NoticePages({
+        general: { title: "General", permTab: "general" },
+        pricing: { title: "Custom pricing", permTab: "pricing" },
+        promos: { title: "Promo codes", permTab: "promos" },
+        payg: { title: "Pay as you go", permTab: "payg" },
+      }),
       redirects: { branding: "/settings/appearance" },
       allTabs: ["general", "requirements", "lockbox", "fees", "promos", "payg", "blacklist", "pricing"],
       isHidden: () => false,
@@ -218,10 +239,16 @@ describe("v2 General: six pages merged into one, and five pages hidden", () => {
       expect(resolveSettingsTabNotice({ ...base, canView: () => false, tabParam: "general" })).toEqual({ kind: "no-access", label: "General" });
     });
 
-    it("a hidden page and the global blacklist aren't part of the workspace", () => {
-      expect(resolveSettingsTabNotice({ ...base, canView: () => true, tabParam: "promos" })).toEqual({ kind: "unavailable", label: "Promo codes" });
-      expect(resolveSettingsTabNotice({ ...base, canView: () => true, tabParam: "payg" })).toEqual({ kind: "unavailable", label: "Pay as you go" });
+    it("a link to a page that is back opens it (no notice), or names it to someone without access", () => {
+      expect(resolveSettingsTabNotice({ ...base, canView: () => true, tabParam: "promos" })).toEqual({ kind: "none" });
+      expect(resolveSettingsTabNotice({ ...base, canView: () => true, tabParam: "payg" })).toEqual({ kind: "none" });
+      expect(resolveSettingsTabNotice({ ...base, canView: onlyFees, tabParam: "promos" })).toEqual({ kind: "no-access", label: "Promo codes" });
+      expect(resolveSettingsTabNotice({ ...base, canView: onlyFees, tabParam: "payg" })).toEqual({ kind: "no-access", label: "Pay as you go" });
+    });
+
+    it("the global blacklist still isn't part of the workspace", () => {
       expect(resolveSettingsTabNotice({ ...base, canView: () => true, tabParam: "blacklist" })).toEqual({ kind: "unavailable", label: "Global blacklist" });
+      expect(settingsTabNoticeCopy({ kind: "unavailable", label: "Global blacklist" })?.title).toBe("Global blacklist isn't part of your workspace");
     });
   });
 });

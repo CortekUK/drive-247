@@ -25,6 +25,7 @@ import {
 } from "@/components/settings-v2/section-states";
 import { PromoCodesTableV2, type PromoCodeRowV2 } from "@/components/settings-v2/promo-codes-table-v2";
 import { toast } from "@/hooks/use-toast";
+import { SETTINGS_SECTION_TITLE } from "@/components/settings-v2/settings-kit";
 
 /** Copies to the clipboard and reports what actually happened. */
 export async function copyPromoCode(code: string): Promise<boolean> {
@@ -118,7 +119,7 @@ export function PromoCodesSectionV2<T extends PromoCodeRowV2>({
 
   return (
     <section className="space-y-3" aria-labelledby="v2-promo-list-heading">
-      <h2 id="v2-promo-list-heading" className="font-heading text-base font-medium">
+      <h2 id="v2-promo-list-heading" className={SETTINGS_SECTION_TITLE}>
         All promo codes
       </h2>
       {hasRows && Boolean(error) && (

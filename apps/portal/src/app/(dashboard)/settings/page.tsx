@@ -123,6 +123,23 @@ import {
 } from '@/components/settings-v2/settings-shell-state';
 
 /**
+ * The parts the promo code Edit and Delete dialogs are drawn with. v1 keeps
+ * exactly the components it always used; the v2 canary gets the v2 ones, so a
+ * v2 dropdown or calendar never opens under a v1 dialog (or the reverse). Typed
+ * as v1's: every prop the dialogs pass is one both sets accept.
+ */
+const PROMO_DIALOG_UI_V1 = {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  Button, Input, Label, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Popover, PopoverContent, PopoverTrigger, Calendar,
+};
+const PROMO_DIALOG_UI_V2 = {
+  Dialog: DialogV2, DialogContent: DialogContentV2, DialogDescription: DialogDescriptionV2, DialogFooter: DialogFooterV2, DialogHeader: DialogHeaderV2, DialogTitle: DialogTitleV2,
+  AlertDialog: AlertDialogV2, AlertDialogAction: AlertDialogActionV2, AlertDialogCancel: AlertDialogCancelV2, AlertDialogContent: AlertDialogContentV2, AlertDialogDescription: AlertDialogDescriptionV2, AlertDialogFooter: AlertDialogFooterV2, AlertDialogHeader: AlertDialogHeaderV2, AlertDialogTitle: AlertDialogTitleV2,
+  Button: ButtonV2, Input: InputV2, Label: LabelV2, Select: SelectV2, SelectContent: SelectContentV2, SelectItem: SelectItemV2, SelectTrigger: SelectTriggerV2, SelectValue: SelectValueV2, Popover: PopoverV2, PopoverContent: PopoverContentV2, PopoverTrigger: PopoverTriggerV2, Calendar: CalendarV2,
+} as unknown as typeof PROMO_DIALOG_UI_V1;
+
+/**
  * The pointer left behind by a control that now lives in the Website section.
  *
  * Rendered ONLY for a tenant on the v2 `cms` area. For the other 56 tenants
@@ -2453,23 +2470,25 @@ const Settings = () => {
     handleUpdatePromo();
   };
 
-  // Shared by the v1 tabs and the v2 pages, so both render the same dialogs.
+  // Shared by the v1 tabs and the v2 pages, so both render the same dialogs,
+  // each drawn with its own design's parts (PROMO_DIALOG_UI_V1 / _V2).
+  const PromoUi = v2Chrome ? PROMO_DIALOG_UI_V2 : PROMO_DIALOG_UI_V1;
   const promoDialogs = (
     <>
           {/* Edit Promo Dialog */}
-          <Dialog open={!!editingPromo} onOpenChange={(open) => !open && setEditingPromo(null)}>
-            <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Edit Promo Code</DialogTitle>
-                <DialogDescription>
+          <PromoUi.Dialog open={!!editingPromo} onOpenChange={(open) => !open && setEditingPromo(null)}>
+            <PromoUi.DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+              <PromoUi.DialogHeader>
+                <PromoUi.DialogTitle>Edit Promo Code</PromoUi.DialogTitle>
+                <PromoUi.DialogDescription>
                   Update the details of your promo code.
-                </DialogDescription>
-              </DialogHeader>
+                </PromoUi.DialogDescription>
+              </PromoUi.DialogHeader>
               {editingPromo && (
                 <div className="space-y-6 py-4">
                   <div className="space-y-2">
-                    <Label htmlFor="edit_name">Name</Label>
-                    <Input
+                    <PromoUi.Label htmlFor="edit_name">Name</PromoUi.Label>
+                    <PromoUi.Input
                       id="edit_name"
                       value={editingPromo.name}
                       onChange={(e) => setEditingPromo({ ...editingPromo, name: e.target.value })}
@@ -2479,31 +2498,31 @@ const Settings = () => {
 
                   <div className={v2Chrome ? "flex flex-col gap-4 sm:flex-row" : "flex gap-4"}>
                     <div className={v2Chrome ? "space-y-2 w-full min-w-0 sm:w-1/2" : "space-y-2 w-1/2"}>
-                      <Label>Expiration Date</Label>
-                      <Popover modal={true}>
-                        <PopoverTrigger asChild>
-                          <Button
+                      <PromoUi.Label>Expiration Date</PromoUi.Label>
+                      <PromoUi.Popover modal={true}>
+                        <PromoUi.PopoverTrigger asChild>
+                          <PromoUi.Button
                             variant={"outline"}
                             className="w-full justify-start text-left font-normal"
                           >
                             <CalendarIcon className="mr-2 h-4 w-4" />
                             {editingPromo.expires_at ? format(editingPromo.expires_at, "PPP") : <span>Pick a date</span>}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                          <Calendar
+                          </PromoUi.Button>
+                        </PromoUi.PopoverTrigger>
+                        <PromoUi.PopoverContent className="w-auto p-0" align="start">
+                          <PromoUi.Calendar
                             mode="single"
                             selected={editingPromo.expires_at}
                             onSelect={(date) => date && setEditingPromo({ ...editingPromo, expires_at: date })}
                             initialFocus
                           />
-                        </PopoverContent>
-                      </Popover>
+                        </PromoUi.PopoverContent>
+                      </PromoUi.Popover>
                       {editPromoFieldErrorV2(editPromoIssuesV2.expires_at)}
                     </div>
                     <div className={v2Chrome ? "space-y-2 w-full min-w-0 sm:w-1/2" : "space-y-2 w-1/2"}>
-                      <Label htmlFor="edit_max_users">Max Users</Label>
-                      <Input
+                      <PromoUi.Label htmlFor="edit_max_users">Max Users</PromoUi.Label>
+                      <PromoUi.Input
                         id="edit_max_users"
                         type="text"
                         inputMode="numeric"
@@ -2520,23 +2539,23 @@ const Settings = () => {
 
                   <div className={v2Chrome ? "flex flex-col gap-4 sm:flex-row" : "flex gap-4"}>
                     <div className={v2Chrome ? "space-y-2 w-full min-w-0 sm:w-1/2" : "space-y-2 w-1/2"}>
-                      <Label htmlFor="edit_type">Type</Label>
-                      <Select
+                      <PromoUi.Label htmlFor="edit_type">Type</PromoUi.Label>
+                      <PromoUi.Select
                         value={editingPromo.type}
                         onValueChange={(val) => setEditingPromo({ ...editingPromo, type: val })}
                       >
-                        <SelectTrigger id="edit_type">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="percentage">Percentage</SelectItem>
-                          <SelectItem value="value">Value</SelectItem>
-                        </SelectContent>
-                      </Select>
+                        <PromoUi.SelectTrigger id="edit_type">
+                          <PromoUi.SelectValue />
+                        </PromoUi.SelectTrigger>
+                        <PromoUi.SelectContent>
+                          <PromoUi.SelectItem value="percentage">Percentage</PromoUi.SelectItem>
+                          <PromoUi.SelectItem value="value">Value</PromoUi.SelectItem>
+                        </PromoUi.SelectContent>
+                      </PromoUi.Select>
                     </div>
                     <div className={v2Chrome ? "space-y-2 w-full min-w-0 sm:w-1/2" : "space-y-2 w-1/2"}>
-                      <Label htmlFor="edit_value">Value</Label>
-                      <Input
+                      <PromoUi.Label htmlFor="edit_value">Value</PromoUi.Label>
+                      <PromoUi.Input
                         id="edit_value"
                         type="text"
                         inputMode="decimal"
@@ -2551,8 +2570,8 @@ const Settings = () => {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="edit_min_duration">Auto-apply for rentals of N+ days <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                    <Input
+                    <PromoUi.Label htmlFor="edit_min_duration">Auto-apply for rentals of N+ days <span className="text-muted-foreground font-normal">(optional)</span></PromoUi.Label>
+                    <PromoUi.Input
                       id="edit_min_duration"
                       type="text"
                       inputMode="numeric"
@@ -2570,17 +2589,17 @@ const Settings = () => {
                   </div>
 
                   <div className="space-y-2">
-                    <Label>Promo Code</Label>
+                    <PromoUi.Label>Promo Code</PromoUi.Label>
                     <div className="flex gap-2">
-                      <Input
+                      <PromoUi.Input
                         value={editingPromo.code}
                         onChange={(e) => setEditingPromo({ ...editingPromo, code: e.target.value.toUpperCase().replace(/\s/g, '') })}
                         placeholder="e.g. SUMMER20"
                         className={editPromoCodeError ? "border-destructive" : ""}
                       />
-                      <Button variant="outline" size="icon" onClick={regenerateEditCode} title="Auto-generate Code">
+                      <PromoUi.Button variant="outline" size="icon" onClick={regenerateEditCode} title="Auto-generate Code">
                         <Zap className="h-4 w-4" />
-                      </Button>
+                      </PromoUi.Button>
                     </div>
                     {editPromoCodeError && (
                       <p className="text-sm text-destructive">{editPromoCodeError}</p>
@@ -2603,40 +2622,40 @@ const Settings = () => {
                   onRetry={handleUpdatePromoV2}
                 />
               )}
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setEditingPromo(null)}>Cancel</Button>
-                <Button
+              <PromoUi.DialogFooter>
+                <PromoUi.Button variant="outline" onClick={() => setEditingPromo(null)}>Cancel</PromoUi.Button>
+                <PromoUi.Button
                   onClick={v2Chrome ? handleUpdatePromoV2 : handleUpdatePromo}
                   disabled={updatePromoMutation.isPending || !!editPromoCodeError || (v2Chrome && Object.keys(editPromoIssuesV2).length > 0)}
                 >
                   {updatePromoMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Save Changes
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+                </PromoUi.Button>
+              </PromoUi.DialogFooter>
+            </PromoUi.DialogContent>
+          </PromoUi.Dialog>
 
           {/* Delete Confirmation Dialog */}
-          <AlertDialog open={!!deletingPromo} onOpenChange={(open) => !open && setDeletingPromo(null)}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle className="text-destructive flex items-center gap-2">
+          <PromoUi.AlertDialog open={!!deletingPromo} onOpenChange={(open) => !open && setDeletingPromo(null)}>
+            <PromoUi.AlertDialogContent>
+              <PromoUi.AlertDialogHeader>
+                <PromoUi.AlertDialogTitle className="text-destructive flex items-center gap-2">
                   <AlertTriangle className="h-5 w-5" />
                   Delete Promo Code?
-                </AlertDialogTitle>
-                <AlertDialogDescription>
+                </PromoUi.AlertDialogTitle>
+                <PromoUi.AlertDialogDescription>
                   Are you sure you want to delete the promo code <strong>{deletingPromo?.name}</strong>?
                   This action cannot be undone and may affect active users trying to use this code.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
+                </PromoUi.AlertDialogDescription>
+              </PromoUi.AlertDialogHeader>
               {v2Chrome && deletePromoMutation.isError && (
                 <p role="alert" className="text-sm text-destructive">
                   Couldn&apos;t delete this code. Nothing was deleted. Try again.
                 </p>
               )}
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
+              <PromoUi.AlertDialogFooter>
+                <PromoUi.AlertDialogCancel>Cancel</PromoUi.AlertDialogCancel>
+                <PromoUi.AlertDialogAction
                   className="bg-destructive hover:bg-destructive/90"
                   onClick={v2Chrome
                     ? (e) => {
@@ -2648,10 +2667,10 @@ const Settings = () => {
                   disabled={v2Chrome ? deletePromoMutation.isPending : undefined}
                 >
                   {deletePromoMutation.isPending ? "Deleting..." : "Delete Promo Code"}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+                </PromoUi.AlertDialogAction>
+              </PromoUi.AlertDialogFooter>
+            </PromoUi.AlertDialogContent>
+          </PromoUi.AlertDialog>
     </>
   );
 
@@ -3217,7 +3236,11 @@ const Settings = () => {
           const promoDateField = (value: Date | undefined, onPick: (date: Date) => void, label: string) => (
             <PopoverV2>
               <PopoverTriggerV2 asChild>
-                <ButtonV2 variant="outline" className="w-full justify-start font-normal" aria-label={label}>
+                <ButtonV2
+                  variant="outline"
+                  className="w-full justify-start font-normal"
+                  aria-label={`${label}: ${value ? format(value, "PPP") : "pick a date"}`}
+                >
                   <CalendarIcon data-icon="inline-start" className="text-muted-foreground" />
                   {value ? format(value, "PPP") : <span className="text-muted-foreground">Pick a date</span>}
                 </ButtonV2>

@@ -148,11 +148,14 @@ function useDraftSave(isDirty: boolean): DraftSave {
 function DraftSaveFooter({
   save,
   isDirty,
+  invalid = false,
   onSave,
   onDiscard,
 }: {
   save: DraftSave;
   isDirty: boolean;
+  /** A field is invalid: Save waits; the field says why. */
+  invalid?: boolean;
   onSave: () => Promise<void>;
   onDiscard: () => void;
 }) {
@@ -163,8 +166,8 @@ function DraftSaveFooter({
   }
   return (
     <div className="flex w-full flex-wrap items-center justify-end gap-x-3 gap-y-2">
-      <SettingsSaveState status={save.status} error={save.error} onRetry={trigger} onDiscard={onDiscard} className="mr-auto" />
-      <Button type="button" size="sm" onClick={trigger} disabled={save.isPending || !isDirty} className="min-w-[88px]">
+      <SettingsSaveState status={save.status} error={save.error} onRetry={invalid ? undefined : trigger} onDiscard={onDiscard} className="mr-auto" />
+      <Button type="button" size="sm" onClick={trigger} disabled={save.isPending || !isDirty || invalid} className="min-w-[88px]">
         {save.isPending && <Loader2 className="animate-spin" data-icon="inline-start" />}
         Save
       </Button>
@@ -384,7 +387,11 @@ export function AutoExtendSettingsV2({
       {gate.inlineError}
       <SettingsReadOnlyFieldset readOnly={!canEdit}>
         <SettingsPanel
-          footer={canEdit ? <DraftSaveFooter save={save} isDirty={isDirty} onSave={submit} onDiscard={discard} /> : undefined}
+          footer={
+            canEdit ? (
+              <DraftSaveFooter save={save} isDirty={isDirty} invalid={invalid !== null} onSave={submit} onDiscard={discard} />
+            ) : undefined
+          }
         >
           <SettingsRow
             label="Auto-extension"

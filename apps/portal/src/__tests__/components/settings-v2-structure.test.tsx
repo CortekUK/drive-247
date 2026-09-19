@@ -5,7 +5,9 @@
  *   - Key handover sends the code by email only, and its message moved to
  *     Customer messages;
  *   - Promo codes, Extras, Installments, Pay as you go and Auto-extension
- *     hidden from Settings (front end only);
+ *     hidden from Settings (front end only), then brought back (Sep 19 2026):
+ *     listed, reachable by `?tab=`, the three forms saving through the page's
+ *     save bar;
  *   - the global blacklist out of Settings, `/settings/blacklist` sends v2 to
  *     /settings;
  *   - Team on the index for head admins, and no Manage Users in the org menu.
@@ -64,6 +66,7 @@ vi.mock("next/link", () => ({
 }));
 
 import GlobalBlacklistPage from "@/app/(dashboard)/settings/blacklist/page";
+import { V2_HIDDEN_SETTINGS_PAGES, resolveV2SettingsRoute } from "@/components/settings-v2/settings-shell-state";
 import { OrgSwitcher } from "@/components/shared/layout/org-switcher";
 
 beforeEach(() => {
@@ -139,8 +142,10 @@ describe("settings page (v2): General holds six former pages as sections", () =>
     expect(page).toContain("setV2Hash(hash.startsWith('settings-') ? hash : null);");
   });
 
-  it("one save bar on General, Customer messages, Custom pricing and Locations", () => {
-    expect(page).toContain("const V2_PAGES_WITH_SAVE_BAR = new Set(['general', 'templates', 'pricing', 'locations']);");
+  it("one save bar on General, Customer messages, Custom pricing, Locations and the three payment-plan forms", () => {
+    expect(page).toContain(
+      "const V2_PAGES_WITH_SAVE_BAR = new Set(['general', 'templates', 'pricing', 'locations', 'installments', 'payg', 'auto-extend']);",
+    );
   });
 });
 
@@ -180,16 +185,56 @@ describe("settings page (v2): Key handover and the lockbox message", () => {
   });
 });
 
-describe("settings page (v2): hidden pages, blacklist and Custom pricing", () => {
+describe("settings page (v2): the pages that are back, blacklist and Custom pricing", () => {
   const page = read("app/(dashboard)/settings/page.tsx");
   const redirects = page.slice(page.indexOf("const V2_SETTINGS_REDIRECTS"), page.indexOf("};", page.indexOf("const V2_SETTINGS_REDIRECTS")));
 
-  it("the hidden pages keep their entries and render cases, so bringing one back is one line", () => {
+  it("nothing is hidden: the five pages have their entries and render cases, and ?tab= opens them", () => {
+    expect(V2_HIDDEN_SETTINGS_PAGES.size).toBe(0);
     for (const tab of ["installments", "payg", "'auto-extend'", "promos", "extras"]) {
       expect(page).toMatch(new RegExp(`^\\s*${tab}: \\{ section:`, "m"));
     }
     expect(page).toContain("        case 'promos': {");
     expect(page).toContain("        case 'extras':");
+    // The same pages map the page routes with: each tab opens its own page.
+    const pagesDecl = page.slice(page.indexOf("const V2_SETTINGS_PAGES:"), page.indexOf("};", page.indexOf("const V2_SETTINGS_PAGES:")));
+    for (const tab of ["installments", "payg", "auto-extend", "promos", "extras"]) {
+      const pages = { [tab]: { permTab: tab } };
+      expect(resolveV2SettingsRoute(tab, pages), tab).toEqual({ page: tab, anchor: null, permTab: tab });
+      expect(pagesDecl, tab).toContain(`permTab: '${tab}' }`);
+    }
+  });
+
+  it("Promo codes and Extras are lists that save per item: they register nothing, so leaving them never asks", () => {
+    const v2Start = page.indexOf("  if (v2Chrome) {\n    const pageMeta =");
+    const promos = page.slice(page.indexOf("        case 'promos': {", v2Start), page.indexOf("        case 'extras':", v2Start));
+    const extras = page.slice(page.indexOf("        case 'extras':", v2Start), page.indexOf("        case 'reminders':", v2Start));
+    expect(promos).not.toContain("registerSave");
+    expect(extras).not.toContain("registerSave");
+    expect(extras).toContain("<ExtrasSettings />");
+    expect(read("components/settings/extras-settings.tsx")).not.toContain("registerSave");
+  });
+
+  it("the three payment-plan forms hand the page their save and discard", () => {
+    expect(page).toContain("          return <InstallmentSettings registerSave={registerV2SectionSave} />;");
+    expect(page).toContain("          return <PayAsYouGoSettingsV2 canEdit={canEditPage} registerSave={registerV2SectionSave} />;");
+    expect(page).toContain("          return <AutoExtendSettingsV2 canEdit={canEditPage} registerSave={registerV2SectionSave} />;");
+  });
+
+  it("the v2 promo form and its dialogs use the v2 dropdown, fields and buttons; v1 keeps its own", () => {
+    const v2Start = page.indexOf("  if (v2Chrome) {\n    const pageMeta =");
+    const promos = page.slice(page.indexOf("        case 'promos': {", v2Start), page.indexOf("        case 'extras':", v2Start));
+    expect(promos).toContain("<SelectV2 value={promoForm.type}");
+    expect(promos).toContain("<SelectTriggerV2");
+    expect(promos).not.toMatch(/<Select[ >]/);
+    expect(promos).not.toMatch(/<Input[ >\n]/);
+    expect(promos).not.toMatch(/<Button[ >\n]/);
+    expect(promos).not.toMatch(/<Popover[ >]/);
+    // The shared Edit / Delete dialogs pick their parts by design.
+    expect(page).toContain("const PromoUi = v2Chrome ? PROMO_DIALOG_UI_V2 : PROMO_DIALOG_UI_V1;");
+    expect(page).toContain("<PromoUi.Select");
+    expect(page).toContain("  Dialog: DialogV2, DialogContent: DialogContentV2,");
+    expect(page).toContain("Button, Input, Label, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Popover, PopoverContent, PopoverTrigger, Calendar,");
   });
 
   it("?tab=blacklist is no longer forwarded to /settings/blacklist", () => {
@@ -208,10 +253,12 @@ describe("settings page (v2): hidden pages, blacklist and Custom pricing", () =>
     expect(page).toContain("isHeadAdmin={isHeadAdmin}");
   });
 
-  it("agreements no longer link to the hidden Pay As You Go page", () => {
+  it("agreements link to the Pay As You Go page again, for someone who may open it", () => {
     const agreements = read("components/settings-v2/agreement-templates-v2.tsx");
-    expect(agreements).not.toContain('label: "Open Pay As You Go"');
-    expect(agreements).not.toContain('href: "/settings?tab=payg"');
+    expect(agreements).toContain('const canOpenPayg = canViewSettings("payg");');
+    expect(agreements).toContain(
+      'action={canOpenPayg ? { label: "Open Pay As You Go", href: "/settings?tab=payg" } : undefined}',
+    );
   });
 });
 

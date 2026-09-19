@@ -27,8 +27,10 @@
  *
  * The progressive-rows hook lives HERE, not in ExtrasSettings, so it mounts with
  * its table and its sentinel. The rows come from `useRentalExtras`, which holds
- * every extra in memory in `sort_order`, the order the booking site shows them
- * in, so the table keeps that order and offers no sorting.
+ * every extra in memory in `sort_order`. The table lists the NEWEST first, like
+ * every other v2 list (`newestExtrasFirst`), and offers no sorting. Nothing in
+ * the portal reorders extras: `sort_order` is the count at creation, so the
+ * booking site's order is simply oldest first.
  */
 
 import { AlertTriangle, ImageIcon, Loader2, MoreHorizontal, PackagePlus, Pencil, Power, Trash2 } from "lucide-react";
@@ -60,8 +62,22 @@ import {
   SettingsImage,
   TruncatedText,
 } from "@/components/settings-v2/section-states";
+import { useMemo } from "react";
 import type { RentalExtra } from "@/hooks/use-rental-extras";
 import { cn } from "@/lib/utils";
+
+/**
+ * Newest first: by `created_at`, latest first; an extra without a readable
+ * date goes last; ties fall back to the higher `sort_order` (the later one).
+ * Returns a new array; `extras` is not touched.
+ */
+export function newestExtrasFirst<T extends Pick<RentalExtra, "created_at" | "sort_order">>(extras: readonly T[]): T[] {
+  const time = (extra: T) => {
+    const ms = Date.parse(extra.created_at ?? "");
+    return Number.isNaN(ms) ? -Infinity : ms;
+  };
+  return [...extras].sort((a, b) => time(b) - time(a) || (b.sort_order ?? 0) - (a.sort_order ?? 0));
+}
 
 const Blank = ({ title }: { title?: string }) => (
   <span className="text-muted-foreground" title={title}>
@@ -178,7 +194,7 @@ export function ExtrasTableV2<T extends RentalExtra>({
   onToggleActive,
   onDelete,
 }: {
-  /** Every extra from `useRentalExtras`, in its `sort_order`. */
+  /** Every extra from `useRentalExtras`, in its `sort_order` (shown newest first). */
   extras: T[];
   /** Changes with the result set only (the tenant): see `useProgressiveRows`. */
   resetKey: string;
@@ -195,7 +211,8 @@ export function ExtrasTableV2<T extends RentalExtra>({
   onToggleActive: (extra: T) => void | Promise<void>;
   onDelete: (extra: T) => void;
 }) {
-  const extraRows = useProgressiveRows(extras, resetKey);
+  const ordered = useMemo(() => newestExtrasFirst(extras), [extras]);
+  const extraRows = useProgressiveRows(ordered, resetKey);
   const menu = (extra: T) =>
     canEdit ? (
       <ExtraRowMenu

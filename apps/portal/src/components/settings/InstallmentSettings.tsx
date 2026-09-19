@@ -561,20 +561,24 @@ function SectionRow({ label, sublabel, disabled, children }: { label: string; su
 
 function PillButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   const lockedV2 = useContext(PlanLockV2);
-  // v2 only: a real pill with the purple hover. Every other tenant gets v1's
-  // exact class strings, so nothing they see changes.
+  // v2 only: a real pill with the purple hover, and the chosen one in the
+  // tenant's brand colour (not a fixed indigo), light in dark mode. Every other
+  // tenant gets v1's exact class strings, so nothing they see changes.
   const v2Chrome = useV2("chrome");
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={lockedV2 || undefined}
+      aria-pressed={v2Chrome ? active : undefined}
       className={cn(
         v2Chrome
           ? "px-3 py-1.5 rounded-full text-sm font-medium border transition-colors"
           : "px-3 py-1.5 rounded-md text-sm font-medium border transition-colors",
         active
-          ? "bg-primary/15 border-indigo-500/50 text-indigo-700 dark:text-indigo-300"
+          ? v2Chrome
+            ? "bg-primary/10 border-primary/40 text-primary dark:border-[hsl(var(--v2-link,var(--primary))_/_0.4)] dark:text-[hsl(var(--v2-link,var(--primary)))]"
+            : "bg-primary/15 border-indigo-500/50 text-indigo-700 dark:text-indigo-300"
           : v2Chrome
             ? "bg-card border-border text-muted-foreground hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]"
             : "bg-card border-border text-muted-foreground hover:bg-muted/40",
@@ -616,7 +620,8 @@ function ExampleDialog({ open, onClose, unit, paymentsPerUnit, currencyCode }: {
   return (
     <ui.Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <ui.DialogContent
-        className="max-w-2xl max-h-[85vh] overflow-y-auto"
+        // v2's dialog caps its width at `sm:max-w-md`, so the wider cap is given at `sm:` too.
+        className={v2ChromeDialog ? "max-h-[85vh] overflow-y-auto sm:max-w-2xl" : "max-w-2xl max-h-[85vh] overflow-y-auto"}
         data-settings-v2-body={v2ChromeDialog || undefined}
       >
         <ui.DialogHeader>

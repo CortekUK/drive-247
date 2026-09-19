@@ -1050,7 +1050,9 @@ describe("settings page wiring for the Business-rules pages (v2 branch)", () => 
     expect(source).not.toContain("V2_PAGES_WITH_OWN_SAVE_STATUS");
     // The Business-rules pages, Booking site, Tax and fees and Security deposit
     // are sections of General, so they save through General's bar.
-    expect(source).toContain("const V2_PAGES_WITH_SAVE_BAR = new Set(['general', 'templates', 'pricing', 'locations']);");
+    expect(source).toContain(
+      "const V2_PAGES_WITH_SAVE_BAR = new Set(['general', 'templates', 'pricing', 'locations', 'installments', 'payg', 'auto-extend']);",
+    );
     expect(source).toContain("<SettingsPageSaveProvider enabled={v2PageHasSaveBar}>");
     expect(source).toContain("{canEditPage && v2PageHasSaveBar && (\n                  <SettingsStickySaveBar");
   });

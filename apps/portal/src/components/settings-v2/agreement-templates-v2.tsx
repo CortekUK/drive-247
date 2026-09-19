@@ -357,8 +357,10 @@ function AgreementCategorySectionV2({ category, canEdit }: { category: TemplateC
 export function AgreementTemplatesPageV2() {
   const searchParams = useSearchParams();
   const { settings: rentalSettings, isLoading: rentalLoading } = useRentalSettings();
-  const { canEditSettings } = useManagerPermissions();
+  const { canEditSettings, canViewSettings } = useManagerPermissions();
   const canEdit = canEditSettings("templates");
+  // Only offered to someone who may open the Pay as you go page.
+  const canOpenPayg = canViewSettings("payg");
   const paygEnabled = rentalSettings?.pay_as_you_go_enabled === true;
   const param = searchParams.get("category");
   const resolved = resolveAgreementCategory(param, paygEnabled);
@@ -382,11 +384,12 @@ export function AgreementTemplatesPageV2() {
         </div>
 
         {!picked && !waitingForPayg && resolved.notice === "payg-off" && (
-          // No "Open Pay As You Go": that settings page is hidden for now
-          // (V2_HIDDEN_SETTINGS_PAGES), so the link would only land on a notice.
+          // The way to turn it on: the Pay as you go settings page (a link,
+          // so it works for a viewer too; that page is read-only for them).
           <SettingsDependencyNotice
             title="Pay As You Go is off"
             body="Its agreement is only used once Pay As You Go is on. Showing the standard agreement instead."
+            action={canOpenPayg ? { label: "Open Pay As You Go", href: "/settings?tab=payg" } : undefined}
           />
         )}
         {!picked && resolved.notice === "unknown" && (

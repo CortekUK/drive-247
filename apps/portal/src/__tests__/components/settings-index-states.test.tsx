@@ -142,15 +142,20 @@ describe("SettingsIndexV2 structure", () => {
   const entries = () =>
     Array.from(container.querySelectorAll("section a")).map((a) => [a.querySelector("span")?.textContent, a.getAttribute("href")]);
 
-  it("head admin: Business (General, Branding, Locations, Team), Pricing (Custom pricing), Notifications", () => {
+  it("head admin: Business, Pricing (with Promo codes and Extras), Payment plans, Notifications", () => {
     render(<SettingsIndexV2 canView={() => true} tenantSlug="northwind" isHeadAdmin />);
-    expect(sectionTitles()).toEqual(["Business", "Pricing", "Notifications"]);
+    expect(sectionTitles()).toEqual(["Business", "Pricing", "Payment plans", "Notifications"]);
     expect(entries()).toEqual([
       ["General", "/settings?tab=general"],
       ["Branding", "/settings/appearance"],
       ["Locations", "/settings?tab=locations"],
       ["Team", "/users"],
       ["Custom pricing", "/settings?tab=pricing"],
+      ["Promo codes", "/settings?tab=promos"],
+      ["Extras", "/settings?tab=extras"],
+      ["Installments", "/settings?tab=installments"],
+      ["Pay as you go", "/settings?tab=payg"],
+      ["Auto-extension", "/settings?tab=auto-extend"],
       ["Team emails", "/settings?tab=reminders"],
       ["Push notifications", "/settings?tab=push"],
       ["Customer messages", "/settings?tab=templates"],
@@ -164,7 +169,7 @@ describe("SettingsIndexV2 structure", () => {
     expect(container.querySelector('a[href="/users"]')).toBeNull();
   });
 
-  it("no merged page, hidden page or global blacklist has an entry of its own", () => {
+  it("no merged page or the global blacklist has an entry of its own", () => {
     render(<SettingsIndexV2 canView={() => true} tenantSlug="northwind" isHeadAdmin />);
     const titles = entries().map(([title]) => title);
     for (const gone of [
@@ -174,11 +179,6 @@ describe("SettingsIndexV2 structure", () => {
       "Booking site",
       "Tax and fees",
       "Security deposit",
-      "Promo codes",
-      "Extras",
-      "Installments",
-      "Pay as you go",
-      "Auto-extension",
       "Global blacklist",
       "Pricing rules",
     ]) {
@@ -216,6 +216,73 @@ describe("SettingsIndexV2 structure", () => {
     type("password");
     expect(container.querySelector('[data-settings-state="no-match"]')).not.toBeNull();
     expect(container.querySelector('[data-settings-state="dependency"]')).toBeNull();
+  });
+
+  it("the five pages that were hidden are listed again, each with its title, link and own permission", async () => {
+    const { SETTINGS_INDEX_SECTIONS } = await import("@/components/settings-v2/settings-index");
+    const byTitle = new Map(SETTINGS_INDEX_SECTIONS.flatMap((section) => section.items.map((item) => [item.title, { ...item, section: section.title }])));
+    // Written out by hand: title -> [section, href, permission tab].
+    const expected: Array<[string, string, string, string]> = [
+      ["Promo codes", "Pricing", "/settings?tab=promos", "promos"],
+      ["Extras", "Pricing", "/settings?tab=extras", "extras"],
+      ["Installments", "Payment plans", "/settings?tab=installments", "installments"],
+      ["Pay as you go", "Payment plans", "/settings?tab=payg", "payg"],
+      ["Auto-extension", "Payment plans", "/settings?tab=auto-extend", "auto-extend"],
+    ];
+    for (const [title, section, href, tab] of expected) {
+      const item = byTitle.get(title);
+      expect(item, title).toBeDefined();
+      expect(item!.section, title).toBe(section);
+      expect(item!.href, title).toBe(href);
+      expect(item!.tab, title).toBe(tab);
+      // Only General spans several permissions; none is head-admin only.
+      expect(item!.anyOfTabs, title).toBeUndefined();
+      expect(item!.headAdminOnly, title).toBeUndefined();
+      expect(item!.description.length, title).toBeGreaterThanOrEqual(95);
+      expect(item!.description.length, title).toBeLessThanOrEqual(120);
+    }
+  });
+
+  it("each of them is listed only for someone who may view its tab", () => {
+    // A manager with the Extras grant only: Pricing holds just Extras.
+    render(<SettingsIndexV2 canView={(tab) => tab === "extras"} tenantSlug="northwind" />);
+    expect(sectionTitles()).toEqual(["Pricing"]);
+    expect(entries()).toEqual([["Extras", "/settings?tab=extras"]]);
+
+    // Promo codes and the payment plans, without Extras or Custom pricing.
+    act(() => root.unmount());
+    root = createRoot(container);
+    const granted = new Set(["promos", "installments", "payg", "auto-extend"]);
+    render(<SettingsIndexV2 canView={(tab) => granted.has(tab)} tenantSlug="northwind" />);
+    expect(sectionTitles()).toEqual(["Pricing", "Payment plans"]);
+    expect(entries()).toEqual([
+      ["Promo codes", "/settings?tab=promos"],
+      ["Installments", "/settings?tab=installments"],
+      ["Pay as you go", "/settings?tab=payg"],
+      ["Auto-extension", "/settings?tab=auto-extend"],
+    ]);
+
+    // No grant for any of the five: none of them shows.
+    act(() => root.unmount());
+    root = createRoot(container);
+    render(<SettingsIndexV2 canView={(tab) => tab === "general"} tenantSlug="northwind" />);
+    for (const title of ["Promo codes", "Extras", "Installments", "Pay as you go", "Auto-extension"]) {
+      expect(entries().map(([t]) => t)).not.toContain(title);
+    }
+  });
+
+  it("finds them by the words an operator would type", () => {
+    render(<SettingsIndexV2 canView={() => true} tenantSlug="northwind" isHeadAdmin />);
+    type("coupon");
+    expect(entries().map(([title]) => title)).toEqual(["Promo codes"]);
+    type("child seat");
+    expect(entries().map(([title]) => title)).toEqual(["Extras"]);
+    type("instalment");
+    expect(entries().map(([title]) => title)).toEqual(["Installments"]);
+    type("renew");
+    expect(entries().map(([title]) => title)).toEqual(["Auto-extension"]);
+    type("payg");
+    expect(entries().map(([title]) => title)).toEqual(["Pay as you go"]);
   });
 
   it("every description is 95–120 characters and wraps in a 320px column", async () => {
