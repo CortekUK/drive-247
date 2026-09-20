@@ -26,6 +26,12 @@
  *   registered save, Reset runs every registered discard. Reset DISCARDS unsaved
  *   edits; it never restores defaults.
  *
+ *   settingsSaveIssue(message, fieldId)
+ *     What a save throws when a FIELD is what refused it, rather than the
+ *     server. The save bar scrolls that field into view and focuses it, so a
+ *     reason about something three screens up is not only a toast. The field
+ *     shows the same reason inline; the bar keeps its summary line.
+ *
  * HEADINGS
  *   SETTINGS_PAGE_TITLE     the page's h1, bold
  *   SETTINGS_SECTION_TITLE  a section's h2, semibold, never a line under it
@@ -121,6 +127,11 @@ export function useSettingsPageSave(): boolean {
  * The page's Reset and Save changes. The last child of the page wrapper: where
  * the page is short it sits at the end, where it scrolls it floats 16px above
  * the bottom of the window. Both buttons wait for a genuine change.
+ *
+ * A refused save that names its field (`settingsSaveIssue`) also takes the
+ * operator there — see `focusSettingsSaveIssue` below. That lives here rather
+ * than in each page because every v2 settings page reports its refusals
+ * through this one `error`.
  */
 export function SettingsStickySaveBar({
   dirty,
@@ -139,6 +150,13 @@ export function SettingsStickySaveBar({
   className?: string;
 }) {
   const status = saving ? "saving" : error ? "error" : dirty ? "dirty" : "idle";
+  // Each refusal is a new error object, so two refusals for the same field
+  // still move the view. Does nothing when the failure names no field (a write
+  // that was refused by the server), or while the leave dialog holds the
+  // message instead (the page passes null then).
+  useEffect(() => {
+    focusSettingsSaveIssue(error);
+  }, [error]);
   return (
     <div
       data-settings-save-bar=""
@@ -251,6 +269,71 @@ export function useScrollToSection(targetId: string | null, ready: boolean) {
     frame = window.requestAnimationFrame(attempt);
     return () => window.cancelAnimationFrame(frame);
   }, [targetId, ready]);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Where a refused save takes the operator                                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A refused save that names the field to fix.
+ *
+ * A v2 settings page is one long column of panels, so the reason a save was
+ * refused ("Enter your pickup address") routinely belongs to a field several
+ * screens from the save bar reporting it. A section throws this instead of a
+ * plain Error and the save bar takes the operator to that field. The message is
+ * untouched, so the bar's summary line, the leave dialog and the toast read
+ * exactly as they did.
+ */
+const ISSUE_FIELD_KEY = "settingsIssueField";
+
+export function settingsSaveIssue(message: string, field: string): Error {
+  return Object.assign(new Error(message), { [ISSUE_FIELD_KEY]: field });
+}
+
+/** The `id` of the field a refused save named, or null for any other failure. */
+export function settingsSaveIssueField(error: unknown): string | null {
+  if (!error || typeof error !== "object") return null;
+  const field = (error as Record<string, unknown>)[ISSUE_FIELD_KEY];
+  return typeof field === "string" && field ? field : null;
+}
+
+/** Frames to keep looking for the field, for a row that renders with the note. */
+export const SETTINGS_FOCUS_MAX_FRAMES = 30;
+
+/**
+ * Take the operator to the field a refused save named: focus it, then bring it
+ * into view. Focus first with `preventScroll` and scroll once afterwards, so
+ * the browser's own jump cannot land the field under the 64px sticky top bar.
+ * Instant rather than smooth where the operator has asked for less motion.
+ * Returns whether the error named a field at all.
+ */
+export function focusSettingsSaveIssue(error: unknown): boolean {
+  const field = settingsSaveIssueField(error);
+  if (!field || typeof document === "undefined") return false;
+  let frames = 0;
+  const attempt = () => {
+    const target = document.getElementById(field);
+    if (target) {
+      target.focus?.({ preventScroll: true });
+      target.scrollIntoView?.({ behavior: settingsScrollBehavior(), block: "center" });
+      return;
+    }
+    frames += 1;
+    if (frames < SETTINGS_FOCUS_MAX_FRAMES && typeof window !== "undefined") {
+      window.requestAnimationFrame(attempt);
+    }
+  };
+  attempt();
+  return true;
+}
+
+function settingsScrollBehavior(): ScrollBehavior {
+  const reduced =
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  return reduced ? "auto" : "smooth";
 }
 
 /* -------------------------------------------------------------------------- */

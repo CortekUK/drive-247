@@ -339,6 +339,33 @@ describe("SettingsIndexV2 structure", () => {
     expect(entries().map(([title]) => title)).toEqual(["Pay as you go"]);
   });
 
+  /**
+   * Team lead, Sep 2026, with a screenshot of the index: hovering a card
+   * underlined its title. The whole card is the target and it already tints on
+   * hover, which is the signal he asked for; an underline made the title read as
+   * a word inside a sentence. Keyboard users get a ring instead, which the
+   * hover-only underline never gave them.
+   */
+  it("never underlines a card title on hover, and still reads as clickable", () => {
+    render(<SettingsIndexV2 canView={() => true} tenantSlug="northwind" isHeadAdmin />);
+    const cards = Array.from(container.querySelectorAll<HTMLAnchorElement>("section a"));
+    expect(cards.length).toBeGreaterThan(0);
+    for (const card of cards) {
+      const title = card.querySelectorAll("span")[0];
+      expect(title.className, card.textContent ?? "").not.toContain("underline");
+      // The hover tint (both themes) and the keyboard ring stay on the card.
+      expect(card.className).toContain("hover:bg-primary/10");
+      expect(card.className).toContain("dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]");
+      expect(card.className).toContain("focus-visible:ring-3");
+      expect(card.className).toContain("focus-visible:ring-ring/30");
+    }
+    // The one link that IS inline in a sentence keeps its underline.
+    const inline = Array.from(container.querySelectorAll<HTMLAnchorElement>("p a"));
+    expect(inline.length).toBe(1);
+    expect(inline[0].getAttribute("href")).toBe("/integrations");
+    expect(inline[0].className).toContain("hover:underline");
+  });
+
   it("every description is 95–120 characters and wraps in a 320px column", async () => {
     const { SETTINGS_INDEX_SECTIONS } = await import("@/components/settings-v2/settings-index");
     for (const section of SETTINGS_INDEX_SECTIONS) {

@@ -140,7 +140,13 @@ const PROMO_DIALOG_UI_V1 = {
 const PROMO_DIALOG_UI_V2 = {
   Dialog: DialogV2, DialogContent: DialogContentV2, DialogDescription: DialogDescriptionV2, DialogFooter: DialogFooterV2, DialogHeader: DialogHeaderV2, DialogTitle: DialogTitleV2,
   AlertDialog: AlertDialogV2, AlertDialogAction: AlertDialogActionV2, AlertDialogCancel: AlertDialogCancelV2, AlertDialogContent: AlertDialogContentV2, AlertDialogDescription: AlertDialogDescriptionV2, AlertDialogFooter: AlertDialogFooterV2, AlertDialogHeader: AlertDialogHeaderV2, AlertDialogTitle: AlertDialogTitleV2,
-  Button: ButtonV2, Input: InputV2, Label: LabelV2, Select: SelectV2, SelectContent: SelectContentV2, SelectItem: SelectItemV2, SelectTrigger: SelectTriggerV2, SelectValue: SelectValueV2, Popover: PopoverV2, PopoverContent: PopoverContentV2, PopoverTrigger: PopoverTriggerV2, Calendar: CalendarV2,
+  Button: ButtonV2, Input: InputV2, Label: LabelV2, Select: SelectV2, SelectItem: SelectItemV2, SelectTrigger: SelectTriggerV2, SelectValue: SelectValueV2, Popover: PopoverV2, PopoverContent: PopoverContentV2, PopoverTrigger: PopoverTriggerV2, Calendar: CalendarV2,
+  // The tone is bound here rather than at the call site because
+  // `PromoUi.SelectContent` is shared with v1, which has no such prop: v1's
+  // markup stays byte for byte what it was. Surface = the page's own colours;
+  // the v2 default is a translucent near-black panel, which reads as an OS menu
+  // on this light, text-heavy screen. See components/ui-v2/select.tsx.
+  SelectContent: (props: Parameters<typeof SelectContentV2>[0]) => <SelectContentV2 tone="surface" {...props} />,
 } as unknown as typeof PROMO_DIALOG_UI_V1;
 
 /**
@@ -3377,7 +3383,9 @@ const Settings = () => {
                           <SelectTriggerV2 className="w-32 shrink-0" aria-label="Discount type">
                             <SelectValueV2 />
                           </SelectTriggerV2>
-                          <SelectContentV2>
+                          {/* Surface tone: Settings is a light, text-heavy
+                              screen, where the dark panel reads as an OS menu. */}
+                          <SelectContentV2 tone="surface">
                             <SelectItemV2 value="percentage">Percent</SelectItemV2>
                             <SelectItemV2 value="value">Amount</SelectItemV2>
                           </SelectContentV2>

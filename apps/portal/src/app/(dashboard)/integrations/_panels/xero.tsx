@@ -469,7 +469,7 @@ function Mappings({
                 }
               />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent tone="surface">
               {options.map((a) => (
                 <SelectItem key={a.code} value={a.code} className="text-xs">
                   <span className="font-mono">{a.code}</span> · {a.name}

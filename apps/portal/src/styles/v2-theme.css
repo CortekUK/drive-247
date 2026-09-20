@@ -1089,9 +1089,10 @@ body.v2-theme {
  *   ui-v2/badge.tsx    the same treatment, minus the hover on non-links
  *
  * `:is(button, a, div, span)` covers v1's Button (a `<button>`, or the `<a>`
- * it becomes under `asChild`) and v1's Badge (a `<div>`), and excludes the
- * destructive Toast — an `<li>`, where the solid red IS the design and losing
- * it would make an error toast indistinguishable from an ordinary one. */
+ * it becomes under `asChild`) and v1's Badge (a `<div>`). The destructive Toast
+ * — an `<li>` — is excluded here and toned in React instead: it needs its ink,
+ * its radius and its close button changed together, which a fill rule cannot
+ * do. See `v2Destructive` in ui/toast.tsx and the rule below. */
 .v2-theme :is(button, a, div, span)[class~="bg-destructive"][class~="text-destructive-foreground"] {
   background-color: hsl(var(--destructive) / 0.1);
   color: hsl(var(--destructive));
@@ -1105,6 +1106,22 @@ body.v2-theme {
 }
 .dark .v2-theme :is(button, a, div, span)[class~="bg-destructive"][class~="text-destructive-foreground"]:hover {
   background-color: hsl(var(--destructive) / 0.3);
+}
+
+/* --- The refused-save toast ---------------------------------------------
+ * The `v2Destructive` Toast (ui/toast.tsx) carries `bg-destructive/10`, which
+ * is TRANSLUCENT — and a toast floats over whatever the page happens to have
+ * scrolled under it, so the ink's contrast would be a different number on a
+ * table, a tinted callout or the page wash. Laying the same 10% over the card
+ * colour instead makes it one fixed pair: `panel-ink-danger` on this fill
+ * measures 5.40:1 in light (#b81e26 on #fde6e7) and 6.72:1 in dark (#ff8587 on
+ * #2e1f1f), both clear of 4.5.
+ *
+ * `background-image` over `background-color` rather than one flattened value,
+ * so the tint keeps tracking --destructive and --card. */
+.v2-theme .v2-toast-danger {
+  background-color: hsl(var(--card));
+  background-image: linear-gradient(hsl(var(--destructive) / 0.1), hsl(var(--destructive) / 0.1));
 }
 
 /* --- Button radius ------------------------------------------------------

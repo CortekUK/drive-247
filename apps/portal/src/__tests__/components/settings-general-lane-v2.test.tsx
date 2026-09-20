@@ -463,7 +463,9 @@ describe("Lockbox: Templates is a link to another page, with an arrow", () => {
 
   it("a failed leave-save names the page it is on now", () => {
     const src = read("components/settings-v2/business-rules-pages.tsx");
-    expect(src).toContain('leaveSave(codeError, submit, "your lockbox settings")');
+    // Not the whole call: `leaveSave` also takes the field a refused save
+    // focuses, and this is about the words, not the arity.
+    expect(src).toContain('leaveSave(codeError, submit, "your lockbox settings"');
     expect(src).not.toContain("your key handover settings");
   });
 });

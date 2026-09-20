@@ -67,7 +67,7 @@ import { IconActionButton } from "./template-editor-shell-v2";
 import { renderLockboxSmsExample } from "./business-rules-logic";
 import { useRegisterLeaveSave } from "./business-section-save";
 import type { RegisterSectionSave } from "./pricing-money-parts";
-import { SETTINGS_SECTION_TITLE, useSettingsPageSave } from "./settings-kit";
+import { SETTINGS_SECTION_TITLE, settingsSaveIssue, useSettingsPageSave } from "./settings-kit";
 
 export type LockboxChannel = "email" | "sms";
 
@@ -371,7 +371,9 @@ export function LockboxTemplatesSectionV2({
       throw new Error("Couldn't save the lockbox instructions.");
     }
     if (emailDirty) {
-      if (emailIssues.subjectError || emailIssues.bodyError) throw new Error(emailIssues.subjectError ?? emailIssues.bodyError ?? "");
+      // Names the box, so the page's save bar takes the operator to it.
+      if (emailIssues.subjectError) throw settingsSaveIssue(emailIssues.subjectError, "v2-lockbox-email-subject");
+      if (emailIssues.bodyError) throw settingsSaveIssue(emailIssues.bodyError, "v2-lockbox-email-body");
       if (emailIssues.missingCode) {
         const refusal = missingCodeRefusal("email", emailArmed, () => setEmailArmed(true));
         if (refusal) throw refusal;
@@ -382,7 +384,7 @@ export function LockboxTemplatesSectionV2({
       setEmailArmed(false);
     }
     if (smsDirty) {
-      if (smsIssues.bodyError) throw new Error(smsIssues.bodyError);
+      if (smsIssues.bodyError) throw settingsSaveIssue(smsIssues.bodyError, "v2-lockbox-sms");
       if (smsIssues.missingCode) {
         const refusal = missingCodeRefusal("text message", smsArmed, () => setSmsArmed(true));
         if (refusal) throw refusal;

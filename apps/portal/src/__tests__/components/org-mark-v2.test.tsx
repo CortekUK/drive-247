@@ -1,7 +1,9 @@
 /**
  * The v2 sidebar's tenant mark (OrgMark in components/shared/layout/org-switcher.tsx):
- * the square icon from Settings › Branding first, then the full logo (its dark
- * version in dark mode), then the tenant's initials. The image sits on the
+ * the square icon from Settings › Branding, else the tenant's initials. The
+ * full logo is NOT in between — a wordmark with the company name in it is an
+ * unreadable sliver at 32px, and a tenant who filled only the Full logo slot
+ * found it here in a slot they never chose it for. The image sits on the
  * sidebar with no tile of ours around it, and Branding can draw the same mark
  * from its unsaved form.
  */
@@ -53,17 +55,21 @@ describe("OrgMark (v2 sidebar)", () => {
     expect(mark().querySelector("img")).toHaveAttribute("src", "https://cdn.test/small.png");
   });
 
-  it("falls back to the full logo, and its dark version in dark mode", () => {
+  it("never stands the full logo in for the square icon, in either mode", () => {
     h.branding = { ...h.branding, favicon_url: null };
     const { unmount } = render(<OrgSwitcher collapsed />);
-    expect(mark().querySelector("img")).toHaveAttribute("src", "https://cdn.test/large.png");
+    expect(mark().querySelector("img")).toBeNull();
+    expect(mark()).toHaveTextContent("NR");
+    expect(document.body.innerHTML).not.toContain("cdn.test/large");
     unmount();
     h.theme = "dark";
     render(<OrgSwitcher collapsed />);
-    expect(mark().querySelector("img")).toHaveAttribute("src", "https://cdn.test/large-dark.png");
+    expect(mark().querySelector("img")).toBeNull();
+    expect(mark()).toHaveTextContent("NR");
+    expect(document.body.innerHTML).not.toContain("cdn.test/large");
   });
 
-  it("shows the tenant's initials when there is no logo at all", () => {
+  it("shows the tenant's initials when there is no square icon at all", () => {
     h.branding = { app_name: "Northwind Rentals", favicon_url: null, logo_url: null, dark_logo_url: null };
     render(<OrgSwitcher collapsed />);
     expect(mark().querySelector("img")).toBeNull();

@@ -24,6 +24,12 @@ vi.mock("@/integrations/supabase/client", () => ({
 }));
 
 import {
+  BRAND_MARK_FALLBACK_INITIALS,
+  BRAND_MARK_FONT_STACK,
+  BRAND_MARK_PX,
+  brandMarkDataUrl,
+  brandMarkPaint,
+  clearBrandMarkCache,
   containInSquare,
   fitWithinEdge,
   LARGE_LOGO_ACCEPT,
@@ -36,12 +42,16 @@ import {
   logoSizeProblem,
   logoSlotNoun,
   parseSvgSize,
+  PLATFORM_TAB_ICON,
+  resolveBrandIcon,
   SMALL_LOGO_ACCEPT,
   uploadLogoBlob,
   withSvgSize,
 } from "@/lib/appearance/logo";
 import { V2_BRAND_PRESETS, V2_DEFAULT_BRAND_COLOR, V2_DEFAULT_BRAND_NAME } from "@/lib/appearance/presets";
 import { judgeBrandColor } from "@/lib/appearance/color";
+import { getBrandInitials } from "@/components/shared/layout/brand-logo";
+import { expectedMarkUrl, installCanvas, type CanvasStub } from "../helpers/canvas-stub";
 
 describe("logo limits", () => {
   it("caps a logo at 10 MB (10 × 1024 × 1024 = 10,485,760 bytes)", () => {
@@ -282,5 +292,212 @@ describe("v2 brand colours", () => {
       expect(verdict.foreground).toBe("#FFFFFF");
       expect(verdict.ratio).toBeCloseTo(expected[i], 1);
     });
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* What the browser tab and the sidebar badge show                             */
+/*                                                                             */
+/* One chain, `resolveBrandIcon`, so the picture in Settings › Branding and     */
+/* the real tab cannot disagree:                                               */
+/*                                                                             */
+/*   square icon -> a mark drawn from the name's initials -> the platform icon  */
+/*                                                                             */
+/* The full logo is deliberately NOT a step: the two slots are independent.     */
+/* -------------------------------------------------------------------------- */
+
+describe("the tab icon chain", () => {
+  let canvas: CanvasStub | null = null;
+
+  beforeEach(() => {
+    // The drawn marks are cached for the life of the module: without this a
+    // test that stubs a canvas hands its drawing to the one that stubs none.
+    clearBrandMarkCache();
+  });
+
+  afterEach(() => {
+    canvas?.restore();
+    canvas = null;
+    vi.restoreAllMocks();
+  });
+
+  it("takes the square icon when there is one, trimmed, whatever else exists", () => {
+    expect(resolveBrandIcon("  https://cdn.test/icon.png  ", "Northwind Rentals")).toEqual({
+      kind: "icon",
+      src: "https://cdn.test/icon.png",
+    });
+  });
+
+  it("has no place for a full logo: the chain takes the icon and the name, nothing else", () => {
+    // Two required parameters (`options` has a default and does not count).
+    // A logo_url has nowhere to enter, which is the point: a wordmark with the
+    // company name in it must never stand in for a 16px tab icon.
+    expect(resolveBrandIcon.length).toBe(2);
+    // A blank, whitespace-only or missing icon all mean "no square icon".
+    for (const empty of [null, undefined, "", "   "]) {
+      expect(resolveBrandIcon(empty, "Northwind Rentals", { generate: false }).kind).toBe("initials");
+    }
+  });
+
+  it("falls to the name's initials, by the sidebar badge's own rule", () => {
+    // getBrandInitials: two or more words -> first letters (up to 3); one word
+    // -> its first two letters. "Northwind Rentals" -> NR, "Northwind" -> NO.
+    expect(getBrandInitials("Northwind Rentals")).toBe("NR");
+    expect(resolveBrandIcon(null, "Northwind Rentals", { generate: false }).initials).toBe("NR");
+    expect(resolveBrandIcon(null, "Northwind", { generate: false }).initials).toBe("NO");
+    // A name with no letters at all gets what OrgMark's chip shows.
+    expect(BRAND_MARK_FALLBACK_INITIALS).toBe("O");
+    expect(resolveBrandIcon(null, "   ", { generate: false }).initials).toBe("O");
+    expect(resolveBrandIcon(null, null, { generate: false }).initials).toBe("O");
+  });
+
+  it("draws the mark on a 64px canvas: a quarter-box round, the plate then the letters", () => {
+    canvas = installCanvas();
+    expect(BRAND_MARK_PX).toBe(64);
+    const icon = resolveBrandIcon(null, "Alpha Rentals", { root: null, brandColor: "#0F766E" });
+
+    expect(icon.kind).toBe("initials");
+    expect(icon.src).toBe(
+      expectedMarkUrl({
+        initials: "AR",
+        background: "#0F766E",
+        // #0F766E is dark: white reads on it (5.47:1, from the preset table above).
+        foreground: "#FFFFFF",
+        fontFamily: BRAND_MARK_FONT_STACK,
+      }),
+    );
+
+    const drawn = canvas.drawn.at(-1)!;
+    expect(drawn.size).toBe(64);
+    // `rounded-lg` is 8px on OrgMark's 32px badge: a quarter of the box, so 16 at 64.
+    expect(drawn.rounded).toBe(true);
+    expect(drawn.radius).toBe(16);
+    // `text-[12px] font-semibold` in a 32px badge: 0.375 × 64 = 24px at 600.
+    expect(drawn.fonts).toEqual([`600 24px ${BRAND_MARK_FONT_STACK}`]);
+    expect(drawn.texts).toEqual(["AR"]);
+    expect([drawn.align, drawn.baseline]).toEqual(["center", "middle"]);
+  });
+
+  it("picks the letter colour the brand can carry, light brand or dark", () => {
+    canvas = installCanvas();
+    // #FDE68A is pale: near-black reads on it, white does not.
+    expect(brandMarkPaint(null, "#FDE68A")).toEqual({
+      background: "#FDE68A",
+      foreground: "#0A0A0A",
+      fontFamily: BRAND_MARK_FONT_STACK,
+    });
+    expect(brandMarkPaint(null, "#0F766E").foreground).toBe("#FFFFFF");
+    // No colour to hand: the same default the stylesheet would have fallen back to.
+    expect(brandMarkPaint(null, null).background).toBe(V2_DEFAULT_BRAND_COLOR);
+    expect(brandMarkPaint(null, "not a colour").background).toBe(V2_DEFAULT_BRAND_COLOR);
+  });
+
+  it("prefers the running page's own --primary, which is what the sidebar chip paints with", () => {
+    const root = document.createElement("div");
+    vi.spyOn(window, "getComputedStyle").mockReturnValue({
+      getPropertyValue: (name: string) =>
+        name === "--primary" ? " 175 77% 26% " : name === "--primary-foreground" ? "0 0% 3.9%" : "",
+      fontFamily: "Manrope, sans-serif",
+    } as unknown as CSSStyleDeclaration);
+
+    // hsl(175 77% 26%) by hand: c = (1 − |0.52 − 1|) × 0.77 = 0.52 × 0.77 = 0.4004;
+    // 175/60 = 2.9167, %2 = 0.9167, so x = 0.4004 × (1 − 0.08333) = 0.367033;
+    // m = 0.26 − 0.2002 = 0.0598. Hue 175 is in [120,180): (r,g,b) = (0, c, x).
+    // → 15.249, 117.351, 108.843 → 15, 117, 109 → #0F756D.
+    // hsl(0 0% 3.9%) → 0.039 × 255 = 9.945 → 10 → #0A0A0A.
+    expect(brandMarkPaint(root, "#FDE68A")).toEqual({
+      background: "#0F756D",
+      foreground: "#0A0A0A",
+      fontFamily: "Manrope, sans-serif",
+    });
+  });
+
+  it("hands back the same string for the same mark, so nothing refetches or flickers", () => {
+    canvas = installCanvas();
+    const paint = { background: "#2563EB", foreground: "#FFFFFF", fontFamily: BRAND_MARK_FONT_STACK };
+    const once = brandMarkDataUrl("BL", paint);
+    expect(once).toBe(brandMarkDataUrl("BL", paint));
+    // A different tenant, or a different colour, is a different string.
+    expect(brandMarkDataUrl("BM", paint)).not.toBe(once);
+    expect(brandMarkDataUrl("BL", { ...paint, background: "#BE123C" })).not.toBe(once);
+  });
+
+  it("gives up and lets the platform icon stand where no canvas can be had", () => {
+    // jsdom's own canvas: getContext('2d') is null and toDataURL() is "data:,".
+    expect(resolveBrandIcon(null, "Ghost Rentals", { root: null, brandColor: "#0F766E" })).toEqual({
+      kind: "initials",
+      src: null,
+      initials: "GR",
+    });
+    expect(PLATFORM_TAB_ICON).toBe("/icons/favicon-light.png");
+  });
+
+  it("does not draw before there is a DOM to draw on", () => {
+    canvas = installCanvas();
+    expect(resolveBrandIcon(null, "Alpha Rentals", { generate: false }).src).toBeNull();
+    expect(canvas.drawn).toHaveLength(0);
+  });
+
+  /**
+   * DARK MODE. `styles/v2-theme.css` writes the dark tokens as
+   * `calc(var(--brand-h) - 2) calc(var(--brand-s) - 7%) 42%`, and a custom
+   * property's COMPUTED value keeps the calc() unevaluated — it is resolved only
+   * in the property that consumes it. Reading it as three plain numbers failed,
+   * so every dark page fell back to the saved brand hex and the mark no longer
+   * matched the sidebar chip beside it.
+   */
+  it("reads the dark tokens, whose calc() a computed custom property keeps", () => {
+    const root = document.createElement("div");
+    vi.spyOn(window, "getComputedStyle").mockReturnValue({
+      getPropertyValue: (name: string) =>
+        name === "--primary"
+          ? "calc(248 - 2) calc(68% - 7%) 42%"
+          : name === "--primary-foreground"
+            ? "226 100% 97%"
+            : "",
+      fontFamily: "",
+    } as unknown as CSSStyleDeclaration);
+
+    // hsl(246 61% 42%) by hand: c = (1 − |0.84 − 1|) × 0.61 = 0.84 × 0.61 = 0.5124;
+    // 246/60 = 4.1, %2 = 0.1, so x = 0.5124 × (1 − 0.9) = 0.05124;
+    // m = 0.42 − 0.2562 = 0.1638. Hue 246 is in [240,300): (r,g,b) = (x, 0, c).
+    // → 54.77, 41.769, 172.41 → 55, 42, 172 → #372AAC.
+    // hsl(226 100% 97%) → c = (1 − 0.94) × 1 = 0.06; 226/60 = 3.7667, %2 = 1.7667,
+    // x = 0.06 × (1 − 0.7667) = 0.014; m = 0.97 − 0.03 = 0.94. Hue 226 is in
+    // [180,240): (r,g,b) = (0, x, c) → 239.7, 243.27, 255 → 240, 243, 255 → #F0F3FF.
+    expect(brandMarkPaint(root, "#FDE68A")).toEqual({
+      background: "#372AAC",
+      foreground: "#F0F3FF",
+      fontFamily: BRAND_MARK_FONT_STACK,
+    });
+  });
+
+  it("never pairs the page's letter colour with a fallback plate", () => {
+    // --primary-foreground is the readable text for --primary and for nothing
+    // else. Taking it alone, while the plate fell back to a pale saved brand,
+    // put ivory letters on a pale tile and the initials disappeared.
+    const root = document.createElement("div");
+    vi.spyOn(window, "getComputedStyle").mockReturnValue({
+      getPropertyValue: (name: string) => (name === "--primary-foreground" ? "226 100% 97%" : "not a colour"),
+      fontFamily: "",
+    } as unknown as CSSStyleDeclaration);
+
+    expect(brandMarkPaint(root, "#FDE68A")).toEqual({
+      background: "#FDE68A",
+      // Worked out for the plate actually used, not inherited from a page whose
+      // own plate was rejected.
+      foreground: "#0A0A0A",
+      fontFamily: BRAND_MARK_FONT_STACK,
+    });
+  });
+
+  it("does not mistake a token that carries an alpha for a colour", () => {
+    const root = document.createElement("div");
+    vi.spyOn(window, "getComputedStyle").mockReturnValue({
+      // `--border` in dark v2 is `0 0% 100% / 10%`: four parts, not three.
+      getPropertyValue: () => "0 0% 100% / 10%",
+      fontFamily: "",
+    } as unknown as CSSStyleDeclaration);
+    expect(brandMarkPaint(root, "#0F766E").background).toBe("#0F766E");
   });
 });

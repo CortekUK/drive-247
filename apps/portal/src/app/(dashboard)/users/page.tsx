@@ -52,6 +52,7 @@ import { useAuditLog } from '@/hooks/use-audit-log';
 import { useV2 } from '@/lib/v2-context';
 import { HEADER_ACTIONS_V2, HEADER_PRIMARY_V2 } from '@/components/shared/header-icon-button-v2';
 import { UsersTableV2 } from '@/components/admin-v2/users-table-v2';
+import { SETTINGS_PAGE_TITLE } from '@/components/settings-v2/settings-kit';
 
 interface UserCredentials {
   name: string;
@@ -399,7 +400,7 @@ export default function UsersManagement() {
     if (v2Chrome) {
       return (
         <div className="container mx-auto p-4 sm:p-6 space-y-1">
-          <h1 className="text-2xl sm:text-3xl font-bold">Team</h1>
+          <h1 className={SETTINGS_PAGE_TITLE}>Team</h1>
           <p className="text-muted-foreground text-sm sm:text-base">
             Only head admins can add people or change their access. Ask your head admin if something needs changing.
           </p>
@@ -427,7 +428,11 @@ export default function UsersManagement() {
         // HEADER_PRIMARY_V2). "Team" is what the Settings index calls it.
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
           <div className="min-w-0">
-            <h1 className="text-2xl sm:text-3xl font-bold">Team</h1>
+            {/* The SETTINGS page title, not the list-page one. Team is opened
+                from the Settings index and reads as one of its pages, and the
+                list-page heading (text-3xl from `sm`) sat a step larger than
+                every Settings heading beside it. */}
+            <h1 className={SETTINGS_PAGE_TITLE}>Team</h1>
             <p className="text-muted-foreground text-sm sm:text-base">
               Add people to your portal and choose what each person can see and change.
             </p>

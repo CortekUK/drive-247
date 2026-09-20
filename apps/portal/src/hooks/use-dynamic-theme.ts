@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTheme } from 'next-themes';
 import { useTenantBranding, type TenantBranding } from './use-tenant-branding';
 import { V2_BRAND_VAR_NAMES, v2BrandVars } from '@/lib/appearance/color';
+import { PLATFORM_TAB_ICON, resolveBrandIcon } from '@/lib/appearance/logo';
 
 // Default theme colors - must match index.css
 const DEFAULT_COLORS = {
@@ -134,7 +135,12 @@ export function applyV2BrandVars(body: HTMLElement, hex: string | null | undefin
 }
 
 export function useDynamicTheme({ v2Theme = false }: { v2Theme?: boolean } = {}) {
-  const { branding, hasBrandingData } = useTenantBranding();
+  // `brandName` and not `branding.app_name`: `tenants.app_name` is optional and
+  // is null for most tenants, and the sidebar badge draws its initials from the
+  // resolved display name (app_name -> company_name -> "Portal"). Handing the
+  // raw column to the tab mark gave the badge "NR" and the tab "O" on the same
+  // screen, which is the very disagreement this chain exists to remove.
+  const { branding, brandName, hasBrandingData } = useTenantBranding();
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   // Always false for v1, so the v1 effect below re-runs on exactly what it did.
@@ -158,7 +164,7 @@ export function useDynamicTheme({ v2Theme = false }: { v2Theme?: boolean } = {})
       if (v2Ready) {
         applyV2BrandVars(document.body, branding.light_primary_color || branding.primary_color);
       }
-      applyDocumentMeta(branding, 'v2');
+      applyDocumentMeta(branding, 'v2', v2Ready, brandName);
       return;
     }
 
@@ -305,7 +311,7 @@ export function useDynamicTheme({ v2Theme = false }: { v2Theme?: boolean } = {})
       // localStorage might not be available
     }
 
-  }, [branding, resolvedTheme, mounted, v2Theme, v2Ready]);
+  }, [branding, brandName, resolvedTheme, mounted, v2Theme, v2Ready]);
 
   return { branding, mounted };
 }
@@ -315,7 +321,13 @@ export function useDynamicTheme({ v2Theme = false }: { v2Theme?: boolean } = {})
  * the favicon: v1 keeps its original first-link update, v2 uses
  * `applyV2Favicon` (below), which reaches every icon link the page carries.
  */
-function applyDocumentMeta(branding: TenantBranding, theme: 'v1' | 'v2' = 'v1') {
+function applyDocumentMeta(
+  branding: TenantBranding,
+  theme: 'v1' | 'v2' = 'v1',
+  v2Ready = false,
+  /** The resolved display name the sidebar badge uses, NOT `branding.app_name`. */
+  markName?: string | null
+) {
   // Update document title
   if (branding.meta_title) {
     document.title = branding.meta_title;
@@ -324,7 +336,21 @@ function applyDocumentMeta(branding: TenantBranding, theme: 'v1' | 'v2' = 'v1') 
   }
 
   if (theme === 'v2') {
-    applyV2Favicon(document.head, branding.favicon_url);
+    // The one chain Settings → Branding previews: the square icon, else a mark
+    // drawn from the portal name's initials in the brand colour, else (only
+    // where that cannot be drawn) the platform icon the branch below restores.
+    // `applyV2BrandVars` has already written --brand-* on <body>, so the mark
+    // is painted in exactly what the sidebar badge is.
+    const icon = resolveBrandIcon(branding.favicon_url, markName ?? branding.app_name, {
+      brandColor: branding.light_primary_color || branding.primary_color,
+      // No mark until the real row is in. Until then `branding` is a
+      // placeholder built from the tenant context, which does not select
+      // `favicon_url` — drawing from it would replace a tenant's OWN icon,
+      // already in the tab from the server, with their initials, and put it
+      // back a moment later.
+      generate: v2Ready,
+    });
+    applyV2Favicon(document.head, icon.src);
   } else if (branding.favicon_url) {
     // Update favicon if provided
     const link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
@@ -374,10 +400,11 @@ const V2_ICON_ADDED_ATTR = 'data-v2-icon-added';
 const V2_ICON_ORIGINAL_ATTR = 'data-v2-icon-original';
 
 /**
- * What the tab shows with no square icon: the platform icon the server falls
- * back to (app/layout.tsx `PLATFORM_FAVICONS`, the light one).
+ * What the tab shows with no square icon AND no drawable initials mark: the
+ * platform icon the server falls back to (app/layout.tsx `PLATFORM_FAVICONS`,
+ * the light one).
  */
-const V2_PLATFORM_ICON: Record<string, string | null> = { href: '/icons/favicon-light.png', type: 'image/png', sizes: null };
+const V2_PLATFORM_ICON: Record<string, string | null> = { href: PLATFORM_TAB_ICON, type: 'image/png', sizes: null };
 
 /** One of the platform's own icons (served from /icons/ on this site), not a tenant's upload. */
 function isPlatformIconHref(href: unknown): boolean {
@@ -419,11 +446,15 @@ export function versionedIconHref(url: string): string {
  * what the page loaded with was the tenant's own icon (the one now removed),
  * the platform icon goes back instead, as the server would render it on the
  * next load. `apple-touch-icon` is not an icon link here and is never touched.
+ *
+ * `iconHref` is what `resolveBrandIcon` decided, NOT `favicon_url` itself:
+ * with the square icon removed it is the drawn initials mark, a `data:` URL,
+ * and the null branch below is reached only where that could not be drawn.
  */
-export function applyV2Favicon(head: HTMLElement, faviconUrl: string | null | undefined) {
+export function applyV2Favicon(head: HTMLElement, iconHref: string | null | undefined) {
   const links = Array.from(head.querySelectorAll<HTMLLinkElement>("link[rel~='icon']"));
 
-  if (!faviconUrl) {
+  if (!iconHref) {
     for (const link of links) {
       if (link.hasAttribute(V2_ICON_ADDED_ATTR)) {
         link.remove();
@@ -450,7 +481,7 @@ export function applyV2Favicon(head: HTMLElement, faviconUrl: string | null | un
     return;
   }
 
-  const href = versionedIconHref(faviconUrl);
+  const href = versionedIconHref(iconHref);
   if (links.length === 0) {
     const link = document.createElement('link');
     link.rel = 'icon';

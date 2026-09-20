@@ -33,16 +33,32 @@ function DropdownMenuContent({
   className,
   align = "start",
   sideOffset = 4,
+  /**
+   * Mirrors `SelectContent`'s prop of the same name, so a row menu and a
+   * dropdown sitting on the same screen can be told to match.
+   *
+   * The v2 menu is deliberately a TRANSLUCENT panel over a blur, which reads as
+   * an OS menu on a light, text-heavy screen (Settings) rather than as part of
+   * the page. A surface opts into the page's own opaque colours instead.
+   *
+   * Defaults to the translucent panel, so every existing menu in the app is
+   * what it was.
+   */
+  tone = "dark",
   ...props
-}: React.ComponentProps<typeof DropdownMenuPrimitive.Content>) {
+}: React.ComponentProps<typeof DropdownMenuPrimitive.Content> & {
+  tone?: "dark" | "surface";
+}) {
   return (
     <DropdownMenuPrimitive.Portal>
       <DropdownMenuPrimitive.Content
         data-slot="dropdown-menu-content"
+        data-tone={tone}
         sideOffset={sideOffset}
         align={align}
         className={cn(
-                                  "z-50 max-h-[var(--radix-dropdown-menu-content-available-height)] w-[var(--radix-dropdown-menu-trigger-width)] min-w-48 origin-[var(--radix-dropdown-menu-content-transform-origin)] overflow-x-hidden overflow-y-auto rounded-3xl p-1.5 text-popover-foreground shadow-lg ring-1 ring-foreground/5 duration-100 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:overflow-hidden dark:ring-foreground/10 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 relative bg-popover/70 before:pointer-events-none before:absolute before:inset-0 before:-z-[1] before:rounded-[inherit] before:backdrop-blur-2xl before:backdrop-saturate-150 [&_[data-slot$=-item]:focus]:bg-[hsl(var(--v2-hover,var(--foreground)_/_0.15))] [&_[data-slot$=-item][data-highlighted]]:bg-[hsl(var(--v2-hover,var(--foreground)_/_0.15))] [&_[data-slot$=-separator]]:bg-foreground/5 [&_[data-slot$=-trigger]:focus]:bg-[hsl(var(--v2-hover,var(--foreground)_/_0.15))] [&_[data-slot$=-trigger][aria-expanded=true]]:!bg-[hsl(var(--v2-hover,var(--foreground)_/_0.15))] [&_[data-variant=destructive]:focus]:!bg-[hsl(var(--v2-hover,var(--foreground)_/_0.15))] [&_[data-variant=destructive]]:!text-accent-foreground [&_[data-variant=destructive]_*]:!text-accent-foreground",
+                                  tone === "dark" ? "bg-popover/70" : "border border-border bg-popover",
+                                  "z-50 max-h-[var(--radix-dropdown-menu-content-available-height)] w-[var(--radix-dropdown-menu-trigger-width)] min-w-48 origin-[var(--radix-dropdown-menu-content-transform-origin)] overflow-x-hidden overflow-y-auto rounded-3xl p-1.5 text-popover-foreground shadow-lg ring-1 ring-foreground/5 duration-100 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:overflow-hidden dark:ring-foreground/10 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 relative before:pointer-events-none before:absolute before:inset-0 before:-z-[1] before:rounded-[inherit] data-[tone=dark]:before:backdrop-blur-2xl data-[tone=dark]:before:backdrop-saturate-150 [&_[data-slot$=-item]:focus]:bg-[hsl(var(--v2-hover,var(--foreground)_/_0.15))] [&_[data-slot$=-item][data-highlighted]]:bg-[hsl(var(--v2-hover,var(--foreground)_/_0.15))] [&_[data-slot$=-separator]]:bg-foreground/5 [&_[data-slot$=-trigger]:focus]:bg-[hsl(var(--v2-hover,var(--foreground)_/_0.15))] [&_[data-slot$=-trigger][aria-expanded=true]]:!bg-[hsl(var(--v2-hover,var(--foreground)_/_0.15))] [&_[data-variant=destructive]:focus]:!bg-[hsl(var(--v2-hover,var(--foreground)_/_0.15))] [&_[data-variant=destructive]]:!text-accent-foreground [&_[data-variant=destructive]_*]:!text-accent-foreground",
                                   className
                                 )}
         {...props}

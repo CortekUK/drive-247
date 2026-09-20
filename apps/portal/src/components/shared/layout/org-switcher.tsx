@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useTheme } from "next-themes";
 import { ChevronsUpDown, Settings, CreditCard, History } from "lucide-react";
 import {
   DropdownMenu,
@@ -15,6 +14,7 @@ import {
 import { useTenantBranding } from "@/hooks/use-tenant-branding";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { getBrandInitials } from "@/components/shared/layout/brand-logo";
+import { BRAND_MARK_FALLBACK_INITIALS } from "@/lib/appearance/logo";
 import { cn } from "@/lib/utils";
 
 /**
@@ -23,11 +23,16 @@ import { cn } from "@/lib/utils";
  * Deliberately local rather than exported from `brand-logo.tsx`: that file is a
  * v1 file, and v2 does not edit v1 files (V2_PLAN §3).
  *
- * Source order: the square icon (`favicon_url`, the image Settings → Branding
- * asks for exactly this slot) first, since a full logo with its name shrinks
- * to an unreadable sliver at 32px. Then `BrandLogo`'s rule for the full logo
- * (`dark_logo_url` wins in dark mode), and a tenant with neither gets a chip
- * of their own initials, never the platform's brand.
+ * The square icon (`favicon_url`, the image Settings → Branding asks for
+ * exactly this slot), else a chip of the tenant's own initials — never the
+ * platform's brand.
+ *
+ * The full logo is NOT in that chain, and `dark_logo_url` is not either. It
+ * used to be the middle step, so a tenant who filled only the Full logo slot
+ * found their wordmark here, shrunk to an unreadable sliver at 32px, in a slot
+ * they had never chosen it for (team lead, Sep 2026). The two slots are
+ * independent. `lib/appearance/logo.ts` `resolveBrandIcon` is the same chain
+ * in a form the browser tab and Settings → Branding can use.
  *
  * The image sits straight on the sidebar ground: no tile or padding of ours
  * around it, so any edge a person sees belongs to their own image (team lead,
@@ -46,15 +51,9 @@ export interface OrgMarkPreview {
 }
 
 export function OrgMark({ className, preview }: { className?: string; preview?: OrgMarkPreview }) {
-  const { resolvedTheme } = useTheme();
   const { branding, brandName } = useTenantBranding();
 
-  const savedLogoUrl =
-    branding?.favicon_url ||
-    (resolvedTheme === "dark" && branding?.dark_logo_url
-      ? branding.dark_logo_url
-      : branding?.logo_url);
-  const logoUrl = preview ? preview.src : savedLogoUrl;
+  const logoUrl = preview ? preview.src : branding?.favicon_url;
   const name = preview ? preview.name : brandName;
 
   if (logoUrl) {
@@ -76,7 +75,7 @@ export function OrgMark({ className, preview }: { className?: string; preview?: 
         className
       )}
     >
-      {getBrandInitials(name) || "O"}
+      {getBrandInitials(name) || BRAND_MARK_FALLBACK_INITIALS}
     </div>
   );
 }

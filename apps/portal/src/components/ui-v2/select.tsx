@@ -89,7 +89,17 @@ function SelectContent({
           // default: the brand hue +10° and saturation +22 points, at 66%, so it
           // follows a tenant's colour; with no --brand-* it is violet-500
           // exactly) and makes the highlighted label its own ivory.
-                                  tone === "dark" ? "dark bg-popover/70 [--v2-hover:calc(var(--brand-h,248)_+_10)_calc(var(--brand-s,68%)_+_22%)_66%_/_0.3] [--accent-foreground:var(--popover-foreground)]" : "border border-border bg-popover",
+          // `surface` sets no tokens of its own: it inherits the page's, and
+          // both v2 modes were checked against `styles/v2-theme.css` rather
+          // than assumed. Light — a white `--popover` panel, the 90% grey
+          // `--border`, a light-purple `--v2-hover` bar under near-black
+          // (9%) `--accent-foreground` text. Dark — the 9.1% panel, a 10%
+          // white border, the 17% brand bar under ivory (98%) text. The check
+          // mark follows the label either way (SelectItem paints every child
+          // of a focused item `--accent-foreground`), so neither mode needs an
+          // override here and none is added.
+                                  tone === "dark" ? "dark bg-popover/70 [--v2-hover:calc(var(--brand-h,248)_+_10)_calc(var(--brand-s,68%)_+_22%)_66%_/_0.3] [--accent-foreground:var(--popover-foreground)]"
+                                    : "border border-border bg-popover",
           "z-50 max-h-[var(--radix-select-content-available-height)] min-w-36 origin-[var(--radix-select-content-transform-origin)] overflow-x-hidden overflow-y-auto rounded-3xl text-popover-foreground shadow-lg ring-1 ring-foreground/5 duration-100 data-[align-trigger=true]:animate-none data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 dark:ring-foreground/10 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 !animate-none relative before:pointer-events-none before:absolute before:inset-0 before:-z-[1] before:rounded-[inherit] data-[tone=dark]:before:backdrop-blur-2xl data-[tone=dark]:before:backdrop-saturate-150 [&_[data-slot$=-item]:focus]:bg-[hsl(var(--v2-hover,var(--foreground)_/_0.1))] [&_[data-slot$=-item][data-highlighted]]:bg-[hsl(var(--v2-hover,var(--foreground)_/_0.1))] [&_[data-slot$=-separator]]:bg-foreground/5 [&_[data-variant=destructive]]:!text-accent-foreground [&_[data-variant=destructive]_*]:!text-accent-foreground",
                                   position === "popper" &&
                                     "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",

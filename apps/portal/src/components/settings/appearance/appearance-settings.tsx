@@ -759,6 +759,11 @@ function AppearanceFormV2({
   const tabTitle = portalTabTitle(portalName, metaTitle);
   // What the sign-in page tints its hero with in light mode (login-v2).
   const signInColor = form.light_accent_color || form.accent_color || form.light_primary_color || form.primary_color;
+  // What the sidebar badge and the browser tab draw the initials mark in when
+  // there is no square icon: the primary, which is what OrgMark's chip paints
+  // with. Only a stand-in for the running page's own --primary, which the mark
+  // reads first and which follows an unsaved colour as it is picked.
+  const markColor = form.light_primary_color || form.primary_color;
 
   return (
     <div className={V2_PAGE_CLASS}>
@@ -774,25 +779,33 @@ function AppearanceFormV2({
               description="Shows at the top of your sidebar and in the browser tab. Up to 60 characters."
             >
               <SettingsPanel>
-                <div className="space-y-3 px-5 py-4">
-                  <Input
-                    id="app_name"
-                    aria-labelledby={portalNameTitleId}
-                    value={form.app_name}
-                    maxLength={60}
-                    // --input carries its own alpha in v2 dark, so the field's
-                    // bg-input/50 is invalid there and the box had no fill.
-                    className="max-w-md dark:bg-muted"
-                    // A long name scrolls inside the box; hovering shows it whole.
-                    title={form.app_name || undefined}
-                    placeholder={companyName || 'Your company'}
-                    onChange={(e) => setForm((p) => ({ ...p, app_name: e.target.value }))}
-                  />
+                {/* The field and its pictures are ONE settings row, not two
+                    stacked blocks: the pictures used to hang under the field
+                    with the whole right half of the section empty (team lead,
+                    Sep 2026). `PortalNamePreview` owns the grid, because the
+                    cut-off note that sits under the field is measured off the
+                    sidebar picture. */}
+                <div className="px-5 py-4">
                   <PortalNamePreview
                     name={portalName}
-                    tabIconUrl={form.favicon_url}
-                    sidebarIconUrl={form.favicon_url || form.logo_url}
+                    iconUrl={form.favicon_url}
+                    brandColor={markColor}
                     tabTitle={tabTitle}
+                    field={
+                      <Input
+                        id="app_name"
+                        aria-labelledby={portalNameTitleId}
+                        value={form.app_name}
+                        maxLength={60}
+                        // --input carries its own alpha in v2 dark, so the field's
+                        // bg-input/50 is invalid there and the box had no fill.
+                        className="max-w-md dark:bg-muted"
+                        // A long name scrolls inside the box; hovering shows it whole.
+                        title={form.app_name || undefined}
+                        placeholder={companyName || 'Your company'}
+                        onChange={(e) => setForm((p) => ({ ...p, app_name: e.target.value }))}
+                      />
+                    }
                   />
                 </div>
               </SettingsPanel>
@@ -828,6 +841,7 @@ function AppearanceFormV2({
               portalName={portalName}
               tabTitle={tabTitle}
               brandColor={signInColor}
+              markColor={markColor}
               faviconUrl={form.favicon_url}
               logoUrl={form.logo_url}
               onFaviconChange={(url) => applyLogos({ favicon_url: url })}

@@ -12,6 +12,14 @@
  * The code calls them `small` and `large` (`LogoSlot`); people only ever see
  * the names above, never "small", "large" or "favicon".
  *
+ * The two slots are independent. The full logo never stands in for the square
+ * icon: a wordmark with the company name in it is an unreadable sliver at
+ * 16px, and uploading one used to put it in the tab and the sidebar badge, a
+ * slot the tenant had not chosen it for (team lead, Sep 2026). With no square
+ * icon both places show a mark drawn from the portal name's initials in the
+ * brand colour — `resolveBrandIcon` in lib/appearance/logo.ts, the same chain
+ * that drives the real browser tab.
+ *
  * No migration: both columns already exist. The sign-in logo (`auth_logo_url`)
  * and the dark-mode logo (`dark_logo_url`) follow `logo_url` through the sync
  * in `useTenantBranding`'s update, as long as the page does not send them.
@@ -70,6 +78,8 @@ export interface LogosV2Props {
   tabTitle: string;
   /** The colour the sign-in page tints its hero with. */
   brandColor: string | null;
+  /** The brand colour the sidebar badge and the tab mark are drawn in (the primary). */
+  markColor: string | null;
   faviconUrl: string | null;
   logoUrl: string | null;
   onFaviconChange: (url: string | null) => void;
@@ -84,6 +94,7 @@ export function LogosV2({
   portalName,
   tabTitle,
   brandColor,
+  markColor,
   faviconUrl,
   logoUrl,
   onFaviconChange,
@@ -116,8 +127,8 @@ export function LogosV2({
           tenantId={tenantId}
           portalName={portalName}
           tabTitle={tabTitle}
+          markColor={markColor}
           url={faviconUrl}
-          fallbackUrl={logoUrl}
           onChange={onFaviconChange}
           disabled={disabled}
           onBusyChange={setSmallBusy}
@@ -386,8 +397,8 @@ function SquareIconCard({
   tenantId,
   portalName,
   tabTitle,
+  markColor,
   url,
-  fallbackUrl,
   onChange,
   disabled,
   onBusyChange,
@@ -395,9 +406,8 @@ function SquareIconCard({
   tenantId: string;
   portalName: string;
   tabTitle: string;
+  markColor: string | null;
   url: string | null;
-  /** The full logo: what the sidebar badge falls back to, as OrgMark does. */
-  fallbackUrl: string | null;
   onChange: (url: string | null) => void;
   disabled?: boolean;
   onBusyChange: (busy: boolean) => void;
@@ -413,9 +423,9 @@ function SquareIconCard({
       disabled={disabled}
       upload={upload}
       onRemove={() => onChange(null)}
-      preview={
-        <SquareIconPreview name={portalName} iconUrl={url} sidebarIconUrl={url || fallbackUrl} tabTitle={tabTitle} />
-      }
+      // No full-logo fallback: this card shows the square icon, or the
+      // initials mark that stands in for it everywhere else.
+      preview={<SquareIconPreview name={portalName} iconUrl={url} brandColor={markColor} tabTitle={tabTitle} />}
     />
   );
 }

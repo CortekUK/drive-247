@@ -660,7 +660,7 @@ export default function ZohoPanel({ tenant, onClose }: IntegrationPanelProps) {
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Choose your Zoho data centre" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent tone="surface">
                 {CONNECTABLE_REGIONS.map((r) => (
                   <SelectItem key={r.region} value={r.region}>
                     {r.label}
@@ -854,7 +854,7 @@ export default function ZohoPanel({ tenant, onClose }: IntegrationPanelProps) {
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder="Choose the bank or clearing account" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent tone="surface">
                         {accounts.map((a) => (
                           <SelectItem key={a.code} value={a.code}>
                             {a.name}

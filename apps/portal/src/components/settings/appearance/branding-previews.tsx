@@ -16,20 +16,69 @@
  * sign-in picture is `components/auth-v2/login-v2.tsx` at half size. No white
  * tile or padding of ours sits around a logo: it is shown on the surface it
  * will actually appear on.
+ *
+ * The browser tab and the sidebar badge both take `resolveBrandIcon`
+ * (lib/appearance/logo.ts), the same chain `useDynamicTheme` puts in the real
+ * tab, so the two pictures cannot show different things — which is exactly
+ * what they did: with the square icon removed, the sidebar drew the tenant's
+ * initials and the tab beside it drew the Drive247 platform icon.
  */
 
-import { useEffect, useRef, useState, type Ref } from 'react';
+import { useMemo, useEffect, useRef, useState, type ReactNode, type Ref } from 'react';
 import { ChevronsUpDown, Settings, X } from 'lucide-react';
 
 import { OrgMark } from '@/components/shared/layout/org-switcher';
 import { brandSurface } from '@/components/auth-v2/brand-surface';
+import { PLATFORM_TAB_ICON, resolveBrandIcon, type BrandIcon } from '@/lib/appearance/logo';
 import { cn } from '@/lib/utils';
 
 /**
- * What the browser tab shows while a tenant has no square icon: the server
- * falls back to the platform icon (app/layout.tsx `PLATFORM_FAVICONS`).
+ * What the browser tab shows when there is no square icon AND no mark can be
+ * drawn: the platform icon the server falls back to (app/layout.tsx
+ * `PLATFORM_FAVICONS`). In a browser the mark always draws, so this is the
+ * server-render case only.
  */
-export const DEFAULT_TAB_ICON = '/icons/favicon-light.png';
+export const DEFAULT_TAB_ICON = PLATFORM_TAB_ICON;
+
+/**
+ * What the tab and the sidebar badge show for this square icon and name: the
+ * icon, else a mark drawn from the name's initials in the brand colour.
+ *
+ * Memoised so the drawn mark is one stable string across renders — an `<img>`
+ * whose src keeps changing flickers.
+ */
+export function useBrandIcon(iconUrl: string | null, name: string, brandColor: string | null): BrandIcon {
+  const brandVars = useBrandVarsVersion();
+  // `brandVars` is not read inside: it is here to make the resolve run again
+  // once the portal has actually been repainted. See below.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  return useMemo(() => resolveBrandIcon(iconUrl, name, { brandColor }), [iconUrl, name, brandColor, brandVars]);
+}
+
+/**
+ * Ticks whenever the variables the mark is drawn from could have changed.
+ *
+ * `resolveBrandIcon` prefers the running page's own `--primary`, which is what
+ * `OrgMark`'s chip paints with — but the try-on does not write that variable
+ * here. It writes the candidate palette into the branding query cache, and
+ * `useDynamicTheme` — an ANCESTOR, whose effect therefore runs after this
+ * subtree's — turns it into `--brand-*` on `<body>`. The resolve above happens
+ * during render, so it reads the colour the portal is STILL painted in: without
+ * this the drawn mark sat one colour behind every pick, and behind the dark-mode
+ * switch (`.dark` goes on `<html>`).
+ */
+function useBrandVarsVersion(): number {
+  const [version, setVersion] = useState(0);
+  useEffect(() => {
+    if (typeof MutationObserver !== 'function' || typeof document === 'undefined') return;
+    const observer = new MutationObserver(() => setVersion((v) => v + 1));
+    const watch: MutationObserverInit = { attributes: true, attributeFilter: ['style', 'class'] };
+    if (document.body) observer.observe(document.body, watch);
+    observer.observe(document.documentElement, watch);
+    return () => observer.disconnect();
+  }, []);
+  return version;
+}
 
 /** The two logo previews are exactly this tall, so the cards line up. */
 export const LOGO_PREVIEW_HEIGHT = 'h-36';
@@ -93,19 +142,22 @@ export function useTextTruncated<T extends HTMLElement>(text: string) {
 
 function SidebarRow({
   name,
-  iconUrl,
+  icon,
   iconAlt,
   nameRef,
 }: {
   name: string;
-  iconUrl: string | null;
+  icon: BrandIcon;
   iconAlt: string;
   nameRef?: Ref<HTMLSpanElement>;
 }) {
   return (
     <div className={SIDEBAR_ROW.row} data-preview-sidebar-row="">
       <div className={SIDEBAR_ROW.trigger}>
-        <OrgMark preview={{ src: iconUrl, name, alt: iconAlt }} />
+        {/* `icon.src` is the drawn mark when there is no square icon, and null
+            only where it could not be drawn — OrgMark then paints its own chip
+            from the same initials, which is what the real sidebar does. */}
+        <OrgMark preview={{ src: icon.src, name, alt: iconAlt }} />
         <span ref={nameRef} className={SIDEBAR_ROW.name} data-preview-name="">
           {name}
         </span>
@@ -121,11 +173,11 @@ function SidebarRow({
 }
 
 /** One browser tab: the 16px icon, the title and the close mark, at Chrome's widest (240px). */
-function BrowserTab({ title, iconUrl, iconAlt }: { title: string; iconUrl: string | null; iconAlt: string }) {
+function BrowserTab({ title, icon, iconAlt }: { title: string; icon: BrandIcon; iconAlt: string }) {
   return (
     <div className="flex h-8 w-60 min-w-0 max-w-full items-center gap-2 rounded-t-xl bg-background px-3" data-preview-tab="">
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={iconUrl || DEFAULT_TAB_ICON} alt={iconAlt} className="size-4 shrink-0 object-contain" />
+      <img src={icon.src || DEFAULT_TAB_ICON} alt={iconAlt} className="size-4 shrink-0 object-contain" />
       <span className="min-w-0 flex-1 truncate text-xs text-foreground" title={title}>
         {title}
       </span>
@@ -140,42 +192,81 @@ function BrowserTab({ title, iconUrl, iconAlt }: { title: string; iconUrl: strin
 
 export const PORTAL_NAME_CUT_OFF_NOTE = 'This name is too long to show in full in the sidebar, so it is cut off as shown.';
 
+/**
+ * The row the name field and its pictures share.
+ *
+ * Settings rows are a 420px first column, a 40px gutter and the rest (see
+ * `settings-kit.tsx` `SettingsRow`), and they stack below `md`. This is that
+ * same grid, so the field's left edge and the pictures' left edge line up with
+ * every other row on the page rather than looking bolted on — the pictures used
+ * to hang under the field with the whole right half of the section empty (team
+ * lead, Sep 2026).
+ *
+ * `items-start` and not `items-center`: the field is one 36px box and the
+ * pictures are three times that, and the lead asked for the section not to grow.
+ */
+const PORTAL_NAME_ROW =
+  'flex flex-col gap-3 md:grid md:grid-cols-[minmax(0,420px)_minmax(0,1fr)] md:items-start md:gap-x-10';
+
 export function PortalNamePreview({
   name,
-  tabIconUrl,
-  sidebarIconUrl,
+  iconUrl,
+  brandColor,
   tabTitle,
+  field,
 }: {
   name: string;
-  /** The square icon, or null (the tab then shows the platform icon). */
-  tabIconUrl: string | null;
-  /** What the sidebar badge shows: the square icon, else the full logo, else initials. */
-  sidebarIconUrl: string | null;
+  /** The square icon, or null (both places then show the initials mark). */
+  iconUrl: string | null;
+  /** The brand colour the mark is drawn in, when the page's own cannot be read. */
+  brandColor: string | null;
   tabTitle: string;
+  /**
+   * The name field itself, so it and the pictures are one row rather than two
+   * stacked blocks. The cut-off note belongs to the field and travels with it;
+   * it is measured HERE, off the sidebar row, which is why the field is passed
+   * in rather than the note being lifted out.
+   */
+  field?: ReactNode;
 }) {
   const [nameRef, truncated] = useTextTruncated<HTMLSpanElement>(name);
+  const icon = useBrandIcon(iconUrl, name, brandColor);
   return (
-    <div className="space-y-2" data-portal-name-preview="">
-      <div className="flex flex-wrap items-stretch gap-3">
+    <div className={PORTAL_NAME_ROW} data-portal-name-preview="">
+      <div className="min-w-0 space-y-2" data-portal-name-field="">
+        {field}
+        {truncated && (
+          <p role="status" className="text-[13px] text-muted-foreground">
+            {PORTAL_NAME_CUT_OFF_NOTE}
+          </p>
+        )}
+      </div>
+      <div className="flex min-w-0 flex-wrap items-stretch gap-3" data-portal-name-pictures="">
         <figure
           aria-label="Your name at the top of the sidebar"
           className={cn(SIDEBAR_ROW.framedWithBorder, 'rounded-xl bg-background')}
         >
-          <SidebarRow name={name} iconUrl={sidebarIconUrl} iconAlt="Your logo in the sidebar" nameRef={nameRef} />
+          <SidebarRow
+            name={name}
+            icon={icon}
+            iconAlt={icon.kind === 'icon' ? 'Your square icon in the sidebar' : 'Your initials in the sidebar'}
+            nameRef={nameRef}
+          />
         </figure>
         <figure aria-label="Your name in a browser tab" className="flex w-[258px] max-w-full items-end rounded-xl bg-muted px-2 pt-2">
           <BrowserTab
             title={tabTitle}
-            iconUrl={tabIconUrl}
-            iconAlt={tabIconUrl ? 'Your square icon in a browser tab' : 'Default icon in a browser tab'}
+            icon={icon}
+            iconAlt={
+              icon.kind === 'icon'
+                ? 'Your square icon in a browser tab'
+                : icon.src
+                  ? 'Your initials in a browser tab'
+                  : 'Default icon in a browser tab'
+            }
           />
         </figure>
       </div>
-      {truncated && (
-        <p role="status" className="text-[13px] text-muted-foreground">
-          {PORTAL_NAME_CUT_OFF_NOTE}
-        </p>
-      )}
     </div>
   );
 }
@@ -191,16 +282,17 @@ export function PortalNamePreview({
 export function SquareIconPreview({
   name,
   iconUrl,
-  sidebarIconUrl,
+  brandColor,
   tabTitle,
 }: {
   name: string;
-  /** The square icon, or null (the tab then shows the platform icon). */
+  /** The square icon, or null (both places then show the initials mark). */
   iconUrl: string | null;
-  /** What the sidebar badge shows: the square icon, else the full logo, else initials. */
-  sidebarIconUrl: string | null;
+  /** The brand colour the mark is drawn in, when the page's own cannot be read. */
+  brandColor: string | null;
   tabTitle: string;
 }) {
+  const icon = useBrandIcon(iconUrl, name, brandColor);
   return (
     <figure
       aria-label="Your square icon in a browser tab and at the top of the sidebar"
@@ -210,13 +302,23 @@ export function SquareIconPreview({
       <div className="flex h-10 shrink-0 items-end px-2">
         <BrowserTab
           title={tabTitle}
-          iconUrl={iconUrl}
-          iconAlt={iconUrl ? 'Square icon in a browser tab' : 'Default icon in a browser tab'}
+          icon={icon}
+          iconAlt={
+            icon.kind === 'icon'
+              ? 'Square icon in a browser tab'
+              : icon.src
+                ? 'Your initials in a browser tab'
+                : 'Default icon in a browser tab'
+          }
         />
       </div>
       <div className="flex min-h-0 flex-1 bg-background">
         <div className={cn(SIDEBAR_ROW.frame, 'pt-3')}>
-          <SidebarRow name={name} iconUrl={sidebarIconUrl} iconAlt="Square icon in the sidebar" />
+          <SidebarRow
+            name={name}
+            icon={icon}
+            iconAlt={icon.kind === 'icon' ? 'Square icon in the sidebar' : 'Your initials in the sidebar'}
+          />
         </div>
       </div>
     </figure>

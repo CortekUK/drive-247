@@ -23,6 +23,8 @@ vi.mock('next-themes', () => ({
 }));
 
 import { applyV2Favicon, useDynamicTheme, versionedIconHref } from '@/hooks/use-dynamic-theme';
+import { BRAND_MARK_FONT_STACK, clearBrandMarkCache } from '@/lib/appearance/logo';
+import { expectedMarkUrl, installCanvas, type CanvasStub } from '../helpers/canvas-stub';
 
 const TEAL = '#0F766E'; // 175 77% 26%, near-black text on the dark-mode primary
 const PALE = '#FDE68A'; // 48 97% 77%, link lightness 28%
@@ -305,5 +307,130 @@ describe('useDynamicTheme — the tab icon after a save', () => {
     expect(links.light.getAttribute('type')).toBe('image/png');
     expect(links.dark.getAttribute('href')).toBe('/icons/favicon-dark.png');
     expect(links.ico.getAttribute('href')).toBe('/icons/favicon.ico');
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* With no square icon, the tab shows the tenant's own initials                */
+/*                                                                             */
+/* The reported defect: removing the square icon left the Drive247 platform    */
+/* icon in the tab, while the sidebar beside it showed the tenant's initials.  */
+/* Both now take `resolveBrandIcon` (lib/appearance/logo.ts), so the picture   */
+/* in Settings › Branding and the real tab cannot say different things.        */
+/* -------------------------------------------------------------------------- */
+
+describe('useDynamicTheme — the tab with no square icon', () => {
+  let canvas: CanvasStub | null = null;
+
+  beforeEach(() => {
+    clearBrandMarkCache();
+  });
+
+  afterEach(() => {
+    canvas?.restore();
+    canvas = null;
+    document.head.querySelectorAll('link').forEach((link) => link.remove());
+  });
+
+  /** The mark for this branding: initials from app_name, drawn in the primary. */
+  const markFor = (initials: string, background: string, foreground: string) =>
+    expectedMarkUrl({ initials, background, foreground, fontFamily: BRAND_MARK_FONT_STACK });
+
+  it('v2: removing the square icon puts the initials mark in every icon link, no reload', async () => {
+    canvas = installCanvas();
+    const links = serverIcons('tenant');
+    mockBranding.mockReturnValue({
+      branding: branding({ favicon_url: 'https://cdn.test/old.png', light_primary_color: TEAL }),
+      hasBrandingData: true,
+    });
+    const { rerender } = renderHook(() => useDynamicTheme({ v2Theme: true }));
+    await waitFor(() => expect(links.icon.getAttribute('href')).toBe(versionedIconHref('https://cdn.test/old.png')));
+
+    // Remove and save: the row comes back with no favicon_url.
+    mockBranding.mockReturnValue({ branding: branding({ light_primary_color: TEAL }), hasBrandingData: true });
+    rerender();
+
+    // "Northwind" is one word: its first two letters. TEAL is dark, so white letters.
+    const mark = markFor('NO', TEAL, '#FFFFFF');
+    await waitFor(() => expect(links.icon.getAttribute('href')).toBe(mark));
+    expect(links.shortcut.getAttribute('href')).toBe(mark);
+    // Not the platform icon, and not the removed file. (`old.png` is still on
+    // the link in `data-v2-icon-original`, which is what the page loaded with
+    // and is only ever restored when it was a platform icon — so check hrefs.)
+    const hrefs = Array.from(document.head.querySelectorAll("link[rel~='icon']")).map((l) => l.getAttribute('href'));
+    expect(hrefs).toEqual([mark, mark]);
+    // A data: URL carries no query, so it is never version-tagged.
+    expect(mark).not.toContain('?v=');
+    expect(links.apple.getAttribute('href')).toBe('/icons/apple-touch-icon.png');
+  });
+
+  it('draws the mark in the brand colour the page is painted in, not a fixed one', async () => {
+    canvas = installCanvas();
+    const links = serverIcons('platform');
+    mockBranding.mockReturnValue({ branding: branding({ light_primary_color: PALE }), hasBrandingData: true });
+    renderHook(() => useDynamicTheme({ v2Theme: true }));
+    // PALE (#FDE68A) is too light for white letters: near-black instead.
+    await waitFor(() => expect(links.light.getAttribute('href')).toBe(markFor('NO', PALE, '#0A0A0A')));
+    expect(links.dark.getAttribute('href')).toBe(markFor('NO', PALE, '#0A0A0A'));
+  });
+
+  it("leaves the server's own icon alone until the real branding row is in", async () => {
+    canvas = installCanvas();
+    const links = serverIcons('tenant');
+    // The placeholder built from the tenant context does not carry favicon_url:
+    // a mark drawn from it would push the tenant's own icon out of the tab and
+    // then put it straight back.
+    mockBranding.mockReturnValue({ branding: branding({ light_primary_color: TEAL }), hasBrandingData: false });
+    const { rerender } = renderHook(() => useDynamicTheme({ v2Theme: true }));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(links.icon.getAttribute('href')).toBe('https://cdn.test/old.png');
+    expect(canvas.drawn).toHaveLength(0);
+
+    mockBranding.mockReturnValue({
+      branding: branding({ favicon_url: 'https://cdn.test/old.png', light_primary_color: TEAL }),
+      hasBrandingData: true,
+    });
+    rerender();
+    await waitFor(() => expect(links.icon.getAttribute('href')).toBe(versionedIconHref('https://cdn.test/old.png')));
+  });
+
+  it('leaves the platform icon alone where the mark cannot be drawn at all', async () => {
+    // No canvas stub: this is the server-render case, and the platform icon the
+    // server already rendered is exactly right for it.
+    const links = serverIcons('platform');
+    mockBranding.mockReturnValue({ branding: branding({ light_primary_color: TEAL }), hasBrandingData: true });
+    renderHook(() => useDynamicTheme({ v2Theme: true }));
+    await waitFor(() => expect(document.body.style.getPropertyValue('--brand-h')).toBe('175'));
+    expect(links.light.getAttribute('href')).toBe('/icons/favicon-light.png');
+    expect(links.dark.getAttribute('href')).toBe('/icons/favicon-dark.png');
+    expect(links.ico.getAttribute('href')).toBe('/icons/favicon.ico');
+  });
+
+  it('draws the initials the SIDEBAR badge draws, not the raw app_name column', async () => {
+    canvas = installCanvas();
+    const links = serverIcons('platform');
+    // `tenants.app_name` is optional and is null for most tenants; the badge
+    // falls back to the company name (`useTenantBranding`'s `brandName`).
+    // Reading the column straight gave the badge "NR" and the tab "O".
+    mockBranding.mockReturnValue({
+      branding: branding({ app_name: null, light_primary_color: TEAL }),
+      brandName: 'Northwind Rentals',
+      hasBrandingData: true,
+    });
+    renderHook(() => useDynamicTheme({ v2Theme: true }));
+    await waitFor(() => expect(links.light.getAttribute('href')).toBe(markFor('NR', TEAL, '#FFFFFF')));
+    expect(links.light.getAttribute('href')).not.toBe(markFor('O', TEAL, '#FFFFFF'));
+  });
+
+  it('v1 never gets a mark: with no favicon_url it leaves every link where it was', async () => {
+    canvas = installCanvas();
+    const links = serverIcons('platform');
+    mockBranding.mockReturnValue({ branding: branding({ primary_color: TEAL }), hasBrandingData: true });
+    renderHook(() => useDynamicTheme());
+    await waitFor(() => expect(htmlVar('--primary')).toBe('175 77% 26%'));
+    expect(links.light.getAttribute('href')).toBe('/icons/favicon-light.png');
+    expect(links.dark.getAttribute('href')).toBe('/icons/favicon-dark.png');
+    expect(links.ico.getAttribute('href')).toBe('/icons/favicon.ico');
+    expect(canvas.drawn).toHaveLength(0);
   });
 });

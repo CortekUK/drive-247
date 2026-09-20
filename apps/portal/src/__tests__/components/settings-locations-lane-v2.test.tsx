@@ -941,3 +941,220 @@ describe("v2 markup rules on the Locations files", () => {
     expect(classes).not.toContain("rounded-2xl");
   });
 });
+
+/* -------------------------------------------------------------------------- */
+/* A refused save takes the operator to the field                              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Team lead, Sep 20 2026: Save changes was refused with "Enter your pickup
+ * address" while that field was scrolled far off the top of the page, so the
+ * toast named somewhere he could not see. Every reason `locationSaveIssueV2`
+ * can give now carries the id of its own control; the page's save bar focuses
+ * it, scrolls it into view, and the reason is written beside it as well as in
+ * the bar.
+ *
+ * jsdom has no scrollIntoView, so it is stubbed here and read back.
+ */
+describe("a refused save takes the operator to the field", () => {
+  let scrolled: { id: string; options: unknown }[];
+  const hadScroll = "scrollIntoView" in Element.prototype;
+  const realScroll = Element.prototype.scrollIntoView;
+
+  beforeEach(() => {
+    // Every distance in km, so a message's number is the stored one.
+    tenantState.unit = "km";
+    scrolled = [];
+    Element.prototype.scrollIntoView = function (this: Element, options?: unknown) {
+      scrolled.push({ id: this.id, options });
+    } as typeof realScroll;
+  });
+
+  afterEach(() => {
+    if (hadScroll) Element.prototype.scrollIntoView = realScroll;
+    else delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+  });
+
+  /** A stored return address equal to the pickup one: the Same-as switch is on. */
+  const sameAddress = (over: Record<string, unknown> = {}) =>
+    settingsRow({ fixed_return_address: "1 Depot Way", ...over });
+  /** An area with a saved center point, so only the reason under test is left. */
+  const withCenter = (over: Record<string, unknown> = {}) =>
+    sameAddress({ area_center_lat: 51.47, area_center_lon: -0.45, ...over });
+
+  /** Flips Same as pickup address: an edit that changes nothing else. */
+  const toggleSameAddress = () => act(() => $<HTMLButtonElement>("#v2-return-same-address").click());
+  const flip = (id: string) => () => act(() => $<HTMLButtonElement>(id).click());
+  const typeIn = (id: string, value: string) => () => act(() => typeInto($<HTMLInputElement>(id), value));
+
+  const notes = () =>
+    Array.from(container.querySelectorAll("[data-location-issue], [data-location-notice]")).map(
+      (n) => n.textContent ?? "",
+    );
+
+  const cases: {
+    reason: string;
+    settings: Record<string, unknown>;
+    edit: () => void;
+    /** The control the operator lands on. */
+    field: string;
+    /** What the row beside it says. */
+    note: string;
+  }[] = [
+    {
+      reason: "no pickup option is on",
+      settings: sameAddress({ pickup_fixed_enabled: false, pickup_multiple_locations_enabled: false, pickup_area_enabled: false }),
+      edit: toggleSameAddress,
+      // Every pickup option is off, so "the first one that is off" is the first.
+      field: "v2-pickup-fixed",
+      note: "Turn on a pickup option",
+    },
+    {
+      reason: "no return option is on",
+      settings: settingsRow({ return_fixed_enabled: false, return_multiple_locations_enabled: false, return_area_enabled: false }),
+      edit: flip("#v2-pickup-multiple"),
+      field: "v2-return-fixed",
+      note: "Turn on a return option",
+    },
+    {
+      reason: "the pickup address is missing",
+      settings: settingsRow({ fixed_pickup_address: "" }),
+      edit: toggleSameAddress,
+      field: "v2-pickup-address",
+      note: "Enter your pickup address.",
+    },
+    {
+      reason: "the return address is missing",
+      settings: settingsRow(),
+      edit: toggleSameAddress,
+      field: "v2-return-address",
+      note: "Enter your return address.",
+    },
+    {
+      reason: "the delivery list has nothing customers can choose",
+      settings: sameAddress(),
+      edit: flip("#v2-pickup-multiple"),
+      field: "v2-pickup-add-location",
+      note: "Add a delivery location",
+    },
+    {
+      reason: "the return list has nothing customers can choose",
+      settings: sameAddress(),
+      edit: flip("#v2-return-multiple"),
+      field: "v2-return-add-location",
+      note: "Add a return location",
+    },
+    {
+      reason: "the center point is not set",
+      settings: sameAddress(),
+      edit: flip("#v2-pickup-area"),
+      field: "v2-area-center",
+      note: "Pick a center point from the address suggestions.",
+    },
+    {
+      reason: "the pickup radius is below 1",
+      settings: withCenter({ pickup_area_enabled: true }),
+      edit: typeIn("#v2-pickup-area-radius", "0"),
+      field: "v2-pickup-area-radius",
+      note: "Radius must be at least 1 km.",
+    },
+    {
+      reason: "the return radius is below 1",
+      // Pickup's area is off, so Return owns the center point and the price.
+      settings: withCenter({ return_area_enabled: true }),
+      edit: typeIn("#v2-return-area-radius", "0"),
+      field: "v2-return-area-radius",
+      note: "Radius must be at least 1 km.",
+    },
+    {
+      reason: "the one fee is negative",
+      settings: withCenter({ pickup_area_enabled: true, area_delivery_fee: -5 }),
+      edit: toggleSameAddress,
+      field: "v2-pickup-price-fix",
+      note: "Fee can't be negative.",
+    },
+    {
+      reason: "pricing by distance has no bands left",
+      settings: withCenter({ pickup_area_enabled: true, delivery_tiers_enabled: true, delivery_distance_tiers: [] }),
+      edit: toggleSameAddress,
+      field: "v2-pickup-price-fix",
+      note: "Add at least one price band, or choose One fee.",
+    },
+    {
+      reason: "a price band is negative",
+      settings: withCenter({
+        pickup_area_enabled: true,
+        delivery_tiers_enabled: true,
+        delivery_distance_tiers: [{ up_to_km: 10, fee: -5 }],
+      }),
+      edit: toggleSameAddress,
+      field: "v2-pickup-price-fix",
+      note: 'Price band "Up to 10 km": Fee can\'t be negative.',
+    },
+    {
+      reason: "the maximum distance stops short of the furthest band",
+      settings: withCenter({
+        pickup_area_enabled: true,
+        delivery_tiers_enabled: true,
+        delivery_distance_tiers: [{ up_to_km: 10, fee: 5 }],
+        delivery_max_distance_km: 5,
+      }),
+      edit: toggleSameAddress,
+      field: "v2-pickup-price-fix",
+      // 10 is the furthest band, so 5 is short of it.
+      note: "Must be at least your furthest band (10 km).",
+    },
+  ];
+
+  it.each(cases)("$reason: lands on $field, with the reason beside it", async (c) => {
+    const h = hook({ locationSettings: c.settings });
+    pickup.value = h;
+    renderPage();
+    c.edit();
+    await act(async () => buttonByText("Save changes", saveBar()).click());
+
+    expect(h.updateSettings).not.toHaveBeenCalled();
+    expect(document.activeElement?.id).toBe(c.field);
+    expect(scrolled).toEqual([{ id: c.field, options: { behavior: "smooth", block: "center" } }]);
+    expect(notes().some((text) => text.includes(c.note))).toBe(true);
+  });
+
+  it("the save bar keeps its own summary line", async () => {
+    pickup.value = hook({ locationSettings: settingsRow({ fixed_pickup_address: "" }) });
+    renderPage();
+    toggleSameAddress();
+    await act(async () => buttonByText("Save changes", saveBar()).click());
+    expect(saveBar().querySelector('[data-settings-state="save-error"]')!.textContent).toContain(
+      "Enter your pickup address.",
+    );
+  });
+
+  it("asked for less motion, the jump is instant", async () => {
+    const real = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      ...real(query),
+      matches: query.includes("prefers-reduced-motion"),
+    })) as typeof window.matchMedia;
+    try {
+      pickup.value = hook({ locationSettings: settingsRow({ fixed_pickup_address: "" }) });
+      renderPage();
+      toggleSameAddress();
+      await act(async () => buttonByText("Save changes", saveBar()).click());
+      expect(scrolled).toEqual([{ id: "v2-pickup-address", options: { behavior: "auto", block: "center" } }]);
+    } finally {
+      window.matchMedia = real;
+    }
+  });
+
+  it("a save that goes through moves nothing and focuses nothing", async () => {
+    const h = hook({ locationSettings: settingsRow({ fixed_return_address: "1 Depot Way" }) });
+    pickup.value = h;
+    renderPage();
+    toggleSameAddress();
+    await act(async () => buttonByText("Save changes", saveBar()).click());
+
+    expect(h.updateSettings).toHaveBeenCalledTimes(1);
+    expect(scrolled).toEqual([]);
+    expect(document.activeElement).toBe(document.body);
+  });
+});

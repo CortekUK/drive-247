@@ -12,7 +12,7 @@
  */
 
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/integrations/supabase/client", () => ({ supabase: {} }));
 // The sidebar preview draws the real OrgMark, which reads the saved branding;
@@ -35,6 +35,8 @@ vi.mock("@/lib/appearance/logo", async (importOriginal) => ({
 import { LogosV2 } from "@/components/settings/appearance/logos-v2";
 import {
   analyzeLogo,
+  BRAND_MARK_FONT_STACK,
+  clearBrandMarkCache,
   loadLogoFile,
   prepareLargeLogo,
   removeLogoBackdrop,
@@ -42,6 +44,7 @@ import {
   uploadLogoBlob,
   type LoadedLogo,
 } from "@/lib/appearance/logo";
+import { expectedMarkUrl, installCanvas, type CanvasStub } from "../helpers/canvas-stub";
 
 const onFaviconChange = vi.fn();
 const onLogoChange = vi.fn();
@@ -54,6 +57,7 @@ function renderLogos(props: Partial<Parameters<typeof LogosV2>[0]> = {}) {
       portalName="Northwind Rentals"
       tabTitle="Northwind Rentals - Portal"
       brandColor="#0F766E"
+      markColor="#2563EB"
       faviconUrl={null}
       logoUrl={null}
       onFaviconChange={onFaviconChange}
@@ -350,27 +354,144 @@ describe("Logos (v2): previews", () => {
     expect(height(large)).toEqual(["h-36"]);
   });
 
-  it("the sidebar badge falls back to the full logo, then initials, as the sidebar does", () => {
-    const { rerender } = renderLogos({ logoUrl: "https://cdn.test/logo.png" });
-    expect(screen.getByAltText("Square icon in the sidebar")).toHaveAttribute("src", "https://cdn.test/logo.png");
-    // With no square icon the tab keeps the platform's own icon.
-    expect(screen.getByAltText("Default icon in a browser tab")).toHaveAttribute("src", "/icons/favicon-light.png");
-    rerender(
-      <LogosV2
-        tenantId="t1"
-        portalName="Northwind Rentals"
-        tabTitle="Northwind Rentals - Portal"
-        brandColor="#0F766E"
-        faviconUrl={null}
-        logoUrl={null}
-        onFaviconChange={onFaviconChange}
-        onLogoChange={onLogoChange}
-      />,
-    );
-    expect(screen.queryByAltText("Square icon in the sidebar")).toBeNull();
-    expect(within(card("small")).getByText("NR")).toBeInTheDocument();
-    // No full logo: the sign-in page shows the name, as login-v2 does.
-    expect(within(card("large")).getByText("Northwind Rentals")).toBeInTheDocument();
+  it("never stands the full logo in for the square icon, in either picture", () => {
+    // The reported case: a Full logo uploaded while the Square icon slot is
+    // empty used to appear in this card's sidebar row AND in the real sidebar.
+    renderLogos({ logoUrl: "https://cdn.test/logo.png" });
+    const small = card("small");
+    expect(small.innerHTML).not.toContain("cdn.test/logo.png");
+    expect(within(small).queryByAltText("Square icon in the sidebar")).toBeNull();
+    expect(within(small).queryByAltText("Square icon in a browser tab")).toBeNull();
+    // Both places show the same thing instead: the portal name's initials.
+    expect(within(small).getByText("NR")).toBeInTheDocument();
+    // The full logo still belongs in its own card.
+    expect(screen.getByAltText("Full logo on the sign-in page")).toHaveAttribute("src", "https://cdn.test/logo.png");
+  });
+
+  it("shows the name on the sign-in picture with no full logo, which is what the real page shows", () => {
+    // login-v2's light hero is `logo_url || auth_logo_url`, else the name. The
+    // preview has no auth_logo_url and does not need one: nothing in the
+    // product ever sets that column to anything but a copy of logo_url (the
+    // onboarding functions stamp all three together, `lib/tenant-logo-sync.ts`
+    // keeps it tracking), and v2's Save deliberately leaves it out of the patch
+    // so the sync clears it with the logo. So both fall to the name together.
+    renderLogos({ logoUrl: null });
+    const large = card("large");
+    expect(large.querySelector("img")).toBeNull();
+    expect(within(large).getByText("Northwind Rentals")).toBeInTheDocument();
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* The square icon card's two pictures always agree                            */
+/*                                                                             */
+/* The complaint: with the square icon removed the sidebar row showed the      */
+/* tenant's initials and the browser tab beside it showed the Drive247         */
+/* platform icon, so removing the icon looked like it had half worked. Both    */
+/* now come from `resolveBrandIcon`, the chain the real tab uses.              */
+/* -------------------------------------------------------------------------- */
+
+describe("Logos (v2): the tab and the sidebar show the same thing", () => {
+  let canvas: CanvasStub | null = null;
+
+  beforeEach(() => {
+    // The drawn marks are cached for the life of the module: without this a
+    // test that stubs a canvas hands its drawing to the one that stubs none.
+    clearBrandMarkCache();
+  });
+
+  afterEach(() => {
+    canvas?.restore();
+    canvas = null;
+  });
+
+  /** The <img> in the tab picture and the one in the sidebar row, if any. */
+  const pictures = () => {
+    const small = card("small");
+    return {
+      tab: small.querySelector<HTMLImageElement>("[data-preview-tab] img"),
+      sidebar: small.querySelector<HTMLImageElement>("[data-preview-sidebar-row] img"),
+      sidebarText: small.querySelector("[data-preview-sidebar-row]")!.textContent,
+    };
+  };
+
+  it("with a square icon set, both show that one file", () => {
+    canvas = installCanvas();
+    renderLogos({ faviconUrl: "https://cdn.test/fav.png", logoUrl: "https://cdn.test/logo.png" });
+    const { tab, sidebar } = pictures();
+    expect(tab!.src).toBe("https://cdn.test/fav.png");
+    expect(sidebar!.src).toBe(tab!.src);
+    expect(canvas.drawn).toHaveLength(0); // nothing to draw: there is an icon
+  });
+
+  it("with the icon removed and a full logo present, both show the initials mark — neither shows the logo", () => {
+    canvas = installCanvas();
+    renderLogos({ faviconUrl: null, logoUrl: "https://cdn.test/logo.png", markColor: "#BE123C" });
+    const { tab, sidebar } = pictures();
+    // #BE123C carries white text (6.29:1, from the brand preset table).
+    const expected = expectedMarkUrl({
+      initials: "NR",
+      background: "#BE123C",
+      foreground: "#FFFFFF",
+      fontFamily: BRAND_MARK_FONT_STACK,
+    });
+    expect(tab!.getAttribute("src")).toBe(expected);
+    expect(sidebar!.getAttribute("src")).toBe(expected);
+    expect(card("small").innerHTML).not.toContain("cdn.test/logo.png");
+    expect(card("small").innerHTML).not.toContain("/icons/favicon-light.png");
+  });
+
+  it("with both removed, both still show the initials mark, drawn once", () => {
+    canvas = installCanvas();
+    renderLogos({ faviconUrl: null, logoUrl: null, markColor: "#2563EB" });
+    const { tab, sidebar } = pictures();
+    const expected = expectedMarkUrl({
+      initials: "NR",
+      background: "#2563EB",
+      foreground: "#FFFFFF",
+      fontFamily: BRAND_MARK_FONT_STACK,
+    });
+    expect(tab!.getAttribute("src")).toBe(expected);
+    expect(sidebar!.getAttribute("src")).toBe(expected);
+    // One drawing, reused: two <img> with different srcs would be two pictures.
+    expect(canvas.drawn).toHaveLength(1);
+    expect(canvas.drawn[0].texts).toEqual(["NR"]);
+  });
+
+  it("removing the icon swaps both pictures at once, and putting one back swaps them back", () => {
+    canvas = installCanvas();
+    const { rerender } = renderLogos({ faviconUrl: "https://cdn.test/fav.png", markColor: "#2563EB" });
+    expect(pictures().tab!.src).toBe("https://cdn.test/fav.png");
+
+    const props = {
+      tenantId: "t1",
+      portalName: "Northwind Rentals",
+      tabTitle: "Northwind Rentals - Portal",
+      brandColor: "#0F766E",
+      markColor: "#2563EB",
+      logoUrl: null,
+      onFaviconChange,
+      onLogoChange,
+    };
+    rerender(<LogosV2 {...props} faviconUrl={null} />);
+    const removed = pictures();
+    expect(removed.tab!.getAttribute("src")).toMatch(/^data:image\/png/);
+    expect(removed.sidebar!.getAttribute("src")).toBe(removed.tab!.getAttribute("src"));
+
+    rerender(<LogosV2 {...props} faviconUrl="https://cdn.test/fav2.png" />);
+    expect(pictures().tab!.src).toBe("https://cdn.test/fav2.png");
+    expect(pictures().sidebar!.src).toBe("https://cdn.test/fav2.png");
+  });
+
+  it("without a canvas, the tab shows the platform icon the real tab would, and the sidebar its own chip", () => {
+    // jsdom has no canvas, so this is the server-render case: nothing can be
+    // drawn, and each place falls back to what it really shows in that state.
+    renderLogos({ faviconUrl: null, logoUrl: "https://cdn.test/logo.png" });
+    const { tab, sidebar, sidebarText } = pictures();
+    expect(tab!.getAttribute("src")).toBe("/icons/favicon-light.png");
+    expect(tab!.alt).toBe("Default icon in a browser tab");
+    expect(sidebar).toBeNull();
+    expect(sidebarText).toContain("NR");
   });
 });
 

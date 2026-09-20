@@ -99,7 +99,9 @@ function UserRowMenu<T extends AppUser>({
           <MoreHorizontal className="h-4 w-4" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-auto">
+      {/* Surface tone: the Team table is a light, text-heavy screen, where the
+          default translucent near-black panel reads as an OS menu. */}
+      <DropdownMenuContent tone="surface" align="end" className="w-auto">
         <DropdownMenuItem onClick={() => onResetPassword(user)}>Reset Password</DropdownMenuItem>
         {user.role !== "head_admin" && (
           <DropdownMenuItem onClick={() => onChangeRole(user)}>Change Role</DropdownMenuItem>

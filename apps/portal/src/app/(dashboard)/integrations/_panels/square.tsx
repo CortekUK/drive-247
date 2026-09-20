@@ -369,7 +369,7 @@ function ChooseSquare({
                 <SelectTrigger className="h-8 text-xs">
                   <SelectValue placeholder="Select a country" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent tone="surface">
                   {SQUARE_COUNTRIES.map((c) => (
                     <SelectItem key={c.code} value={c.code} className="text-xs">
                       {c.name} ({c.code})

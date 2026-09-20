@@ -348,9 +348,13 @@ export function SettingsIndexV2({
                   key={item.href}
                   href={item.href}
                   data-tour={item.tourAnchor}
-                  className="group -mx-3 block rounded-xl px-3 py-2.5 transition-colors hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]"
+                  /* The tint IS the hover affordance — the whole card is the
+                     target, and underlining the title made it read as a word
+                     inside a sentence (team lead, Sep 2026). Keyboard users get
+                     the ring, which the title's underline never gave them. */
+                  className="group -mx-3 block rounded-xl px-3 py-2.5 outline-none transition-colors hover:bg-primary/10 focus-visible:ring-3 focus-visible:ring-ring/30 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]"
                 >
-                  <span className="text-[15px] font-medium text-primary group-hover:underline dark:text-[hsl(var(--v2-link,var(--primary)))]">
+                  <span className="text-[15px] font-medium text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
                     {item.title}
                   </span>
                   <span className="mt-1 block max-w-[320px] text-[13px] leading-[1.45] text-muted-foreground">

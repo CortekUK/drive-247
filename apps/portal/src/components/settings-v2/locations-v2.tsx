@@ -61,6 +61,7 @@ import {
   SettingsRowAlignProvider,
   Unit,
   UnitGroup,
+  settingsSaveIssue,
   useSettingsPageSave,
 } from "@/components/settings-v2/settings-kit";
 import {
@@ -82,12 +83,13 @@ import {
   centerCoordinateLabel,
   locationNoun,
   locationOptionIssues,
+  locationSaveIssueV2,
   validateLocationDraft,
-  validateLocationSettingsV2,
   type AreaFieldErrors,
   type LocationDraft,
   type LocationDraftErrors,
   type LocationFormState,
+  type LocationIssueField,
   type LocationSaveContext,
 } from "@/components/settings-v2/business-settings-states";
 import { useRegisterLeaveSave } from "@/components/settings-v2/business-section-save";
@@ -254,6 +256,43 @@ export function wouldTurnOffLastOption(form: LocationFormState, key: LocationOpt
 export function optionToFocus(form: LocationFormState, side: LocationSide): string {
   const key = SIDE_OPTIONS[side].find((k) => !form[OPTION_FIELD[k]]) ?? SIDE_OPTIONS[side][0];
   return OPTION_SWITCH_ID[key];
+}
+
+/**
+ * The control a refused save takes the operator to, for each reason it can
+ * give. Every one of these is already on the page when the save is refused:
+ * the option switches always are, an address or radius box is rendered by the
+ * very option that made it required, and the list and price rows carry their
+ * own fix button while their problem stands.
+ *
+ * The center point and the price are shared between the two sides and are shown
+ * under whichever one has its area option on, Pickup first — the same choice
+ * `AreaRows` makes with `full`.
+ */
+export function locationIssueFieldId(field: LocationIssueField, form: LocationFormState): string {
+  const areaSide: LocationSide = form.pickupAreaEnabled ? "pickup" : "return";
+  switch (field) {
+    case "pickupOptions":
+      return optionToFocus(form, "pickup");
+    case "returnOptions":
+      return optionToFocus(form, "return");
+    case "pickupAddress":
+      return "v2-pickup-address";
+    case "returnAddress":
+      return "v2-return-address";
+    case "pickupList":
+      return "v2-pickup-add-location";
+    case "returnList":
+      return "v2-return-add-location";
+    case "center":
+      return "v2-area-center";
+    case "pickupRadius":
+      return "v2-pickup-area-radius";
+    case "returnRadius":
+      return "v2-return-area-radius";
+    case "price":
+      return `v2-${areaSide}-price-fix`;
+  }
 }
 
 export type PriceBand = { up_to: number | null; fee: number };
@@ -471,11 +510,14 @@ export function LocationsV2({
   const optionIssues = attempted ? locationOptionIssues(form, ctx) : {};
 
   // The page's Save changes. Rejects when nothing was saved, so the bar and the
-  // leave dialog say why and stay put; the fields say where.
+  // leave dialog say why and stay put; the fields say where. A reason that
+  // belongs to a field names it, so the save bar scrolls to it and focuses it —
+  // this page is long enough that the row being talked about is often off
+  // screen when Save is pressed.
   const save = async () => {
     setAttempted(true);
-    const message = validateLocationSettingsV2(form, ctx);
-    if (message) throw new Error(message);
+    const issue = locationSaveIssueV2(form, ctx);
+    if (issue) throw settingsSaveIssue(issue.message, locationIssueFieldId(issue.field, form));
     try {
       await data.updateSettings(buildLocationSettingsPayloadV2(form, distanceUnit, data.locationSettings));
     } catch (error) {
@@ -574,7 +616,15 @@ export function LocationsV2({
 
   const addButton = (side: LocationSide, on: boolean) =>
     on && !readOnly && !listFailed(side) ? (
-      <Button type="button" variant="outline" size="sm" onClick={() => openEdit(side, null)}>
+      // The id is where a refused save sends the operator when this side's list
+      // has nothing customers can choose (`locationIssueFieldId`).
+      <Button
+        type="button"
+        id={`v2-${side}-add-location`}
+        variant="outline"
+        size="sm"
+        onClick={() => openEdit(side, null)}
+      >
         Add location
       </Button>
     ) : null;
@@ -948,11 +998,14 @@ function IssueNote({
   title,
   children,
   actionLabel,
+  actionId,
   onAction,
 }: {
   title: string;
   children?: ReactNode;
   actionLabel?: string;
+  /** Where a refused save lands when the fix is this button, not the row's own control. */
+  actionId?: string;
   onAction?: () => void;
 }) {
   return (
@@ -966,7 +1019,14 @@ function IssueNote({
         {children && <p className="mt-0.5 text-muted-foreground">{children}</p>}
       </div>
       {actionLabel && onAction && (
-        <Button type="button" variant="outline" size="xs" onClick={onAction} className="shrink-0 self-start sm:self-center">
+        <Button
+          type="button"
+          id={actionId}
+          variant="outline"
+          size="xs"
+          onClick={onAction}
+          className="shrink-0 self-start sm:self-center"
+        >
           {actionLabel}
         </Button>
       )}
@@ -1191,6 +1251,7 @@ function AreaRows({
               <IssueNote
                 title={priceIssue}
                 actionLabel={readOnly ? undefined : "Edit price"}
+                actionId={`v2-${side}-price-fix`}
                 onAction={() => onEditPrice(side, mode)}
               />
             ) : undefined

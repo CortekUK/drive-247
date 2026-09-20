@@ -18,6 +18,11 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import { Input } from "@/components/ui-v2/input";
+// Every SelectContent below is `tone="surface"`: Settings is a light,
+// text-heavy screen, and the dropdown's default translucent near-black panel
+// reads there as an OS menu rather than as part of the page. The surface tone
+// uses the page's own popover, border and highlight tokens — see
+// components/ui-v2/select.tsx.
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui-v2/select";
 import { Skeleton } from "@/components/ui-v2/skeleton";
 import {
@@ -481,7 +486,7 @@ export function BusinessRegionalPanel({
             <SelectTrigger id="v2_currency_code" className={REGIONAL_SELECT_WIDTH}>
               <SelectValue placeholder="Choose a currency" />
             </SelectTrigger>
-            <SelectContent align="end">
+            <SelectContent tone="surface" align="end">
               {/* A saved currency the list doesn't offer stays shown and can be
                   picked again after trying US dollar. */}
               {savedCurrency && !isSupportedCurrency(savedCurrency) && (
@@ -509,7 +514,7 @@ export function BusinessRegionalPanel({
             <SelectTrigger id="v2_distance_unit" className={REGIONAL_SELECT_WIDTH}>
               <SelectValue placeholder="Choose a unit" />
             </SelectTrigger>
-            <SelectContent align="end">
+            <SelectContent tone="surface" align="end">
               <SelectItem value="km">Kilometres</SelectItem>
               <SelectItem value="miles">Miles</SelectItem>
             </SelectContent>
@@ -703,7 +708,7 @@ export interface LocationOptionIssues {
   returnList?: string;
 }
 
-/** The option checks `validateLocationSettingsV2` runs before the area checks. */
+/** The option checks `locationSaveIssueV2` runs before the area checks. */
 export function locationOptionIssues(f: LocationFormState, ctx: LocationSaveContext): LocationOptionIssues {
   const out: LocationOptionIssues = {};
   if (!f.pickupFixedEnabled && !f.pickupMultipleEnabled && !f.pickupAreaEnabled) out.pickupOptions = "Turn on at least one pickup option.";
@@ -722,31 +727,63 @@ export function locationOptionIssues(f: LocationFormState, ctx: LocationSaveCont
   return out;
 }
 
+/** Which row a refused save belongs to, so the page can take the operator there. */
+export type LocationIssueField =
+  | "pickupOptions"
+  | "returnOptions"
+  | "pickupAddress"
+  | "returnAddress"
+  | "pickupList"
+  | "returnList"
+  | "center"
+  | "pickupRadius"
+  | "returnRadius"
+  /** The fee, the price bands and the maximum: all edited in the price dialog. */
+  | "price";
+
+export interface LocationSaveIssue {
+  message: string;
+  field: LocationIssueField;
+}
+
+/** The option checks in the order they are reported. */
+const OPTION_ISSUE_ORDER = [
+  "pickupOptions",
+  "returnOptions",
+  "pickupAddress",
+  "returnAddress",
+  "pickupList",
+  "returnList",
+] as const;
+
 /**
- * The first reason the form can't be saved, or null. Mirrors the v1 checks and
- * adds the ones v1 let through: a delivery/collection list with nothing active,
- * a zero/negative/blank radius (v1 silently saved 100) and a negative fee.
- * Active-location counts are `null` while the list is loading or failed.
+ * The first reason the form can't be saved AND the row it belongs to, or null.
+ * Mirrors the v1 checks and adds the ones v1 let through: a delivery/collection
+ * list with nothing active, a zero/negative/blank radius (v1 silently saved 100)
+ * and a negative fee. Active-location counts are `null` while the list is
+ * loading or failed.
  */
-export function validateLocationSettingsV2(f: LocationFormState, ctx: LocationSaveContext): string | null {
+export function locationSaveIssueV2(f: LocationFormState, ctx: LocationSaveContext): LocationSaveIssue | null {
   const options = locationOptionIssues(f, ctx);
-  const option =
-    options.pickupOptions ??
-    options.returnOptions ??
-    options.pickupAddress ??
-    options.returnAddress ??
-    options.pickupList ??
-    options.returnList;
-  if (option) return option;
+  const option = OPTION_ISSUE_ORDER.find((key) => options[key]);
+  if (option) return { message: options[option], field: option };
   const area = areaFieldErrors(f, ctx.unitLabel);
   const firstBand = area.bandRows ? Number(Object.keys(area.bandRows)[0]) : null;
   const bandRow =
     firstBand !== null && area.bandRows
       ? `Price band "${bandLabel(f.tiers[firstBand], ctx.unitLabel)}": ${area.bandRows[firstBand]}`
       : undefined;
-  return (
-    area.center ?? area.radius ?? area.returnRadius ?? area.fee ?? area.bands ?? bandRow ?? area.maxDistance ?? null
-  );
+  if (area.center) return { message: area.center, field: "center" };
+  if (area.radius) return { message: area.radius, field: "pickupRadius" };
+  if (area.returnRadius) return { message: area.returnRadius, field: "returnRadius" };
+  const price = area.fee ?? area.bands ?? bandRow ?? area.maxDistance;
+  if (price) return { message: price, field: "price" };
+  return null;
+}
+
+/** The same first reason, as a sentence. */
+export function validateLocationSettingsV2(f: LocationFormState, ctx: LocationSaveContext): string | null {
+  return locationSaveIssueV2(f, ctx)?.message ?? null;
 }
 
 /* -------------------------------------------------------------------------- */

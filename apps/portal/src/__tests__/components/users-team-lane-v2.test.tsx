@@ -81,6 +81,7 @@ import { AddUserDialog } from '@/components/users/add-user-dialog';
 import { CredentialsModal } from '@/components/users/credentials-modal';
 import { CANT_SIGN_IN_HINT, TEAM_LIST_COPY, UsersTableV2 } from '@/components/admin-v2/users-table-v2';
 import { HEADER_PRIMARY_V2 } from '@/components/shared/header-icon-button-v2';
+import { SETTINGS_PAGE_TITLE } from '@/components/settings-v2/settings-kit';
 import { V2Provider } from '@/lib/v2-context';
 
 afterEach(cleanup);
@@ -337,7 +338,11 @@ describe('/users page: v2 header, no search, no card; v1 unchanged', () => {
     const h1 = container.querySelector('h1')!;
     expect(h1.textContent).toBe('Team');
     expect(h1.querySelector('svg')).toBeNull();
-    expect(h1.className).toBe('text-2xl sm:text-3xl font-bold');
+    // The SETTINGS page title, not the list-page one: Team opens from the
+    // Settings index, and the list-page heading grows to text-3xl from `sm`,
+    // which left it a step larger than every Settings heading beside it.
+    expect(h1.className).toBe(SETTINGS_PAGE_TITLE);
+    expect(h1.className).not.toContain('sm:text-3xl');
     expect(h1.nextElementSibling!.textContent).toBe(
       'Add people to your portal and choose what each person can see and change.',
     );

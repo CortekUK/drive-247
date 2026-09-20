@@ -43,8 +43,21 @@ import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 import { Input } from "@/components/ui-v2/input";
 import { Switch } from "@/components/ui-v2/switch";
+// Every SelectContent below is `tone="surface"`: Settings is a light,
+// text-heavy screen, and the dropdown's default translucent near-black panel
+// reads there as an OS menu rather than as part of the page. The surface tone
+// uses the page's own popover, border and highlight tokens — see
+// components/ui-v2/select.tsx.
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui-v2/select";
-import { SettingsPanel, SettingsRow, Unit, UnitGroup, UnitGroups, useSettingsPageSave } from "@/components/settings-v2/settings-kit";
+import {
+  SettingsPanel,
+  SettingsRow,
+  Unit,
+  UnitGroup,
+  UnitGroups,
+  settingsSaveIssue,
+  useSettingsPageSave,
+} from "@/components/settings-v2/settings-kit";
 import { SettingsReadOnlyFieldset, SettingsSectionBoundary } from "@/components/settings-v2/section-states";
 import {
   SectionSaveBar,
@@ -117,9 +130,13 @@ interface PageProps {
   registerSave?: RegisterSectionSave;
 }
 
-/** A save for the page's leave dialog: rejects when the section is invalid or the write failed. */
-const leaveSave = (invalid: string | null, run: () => Promise<boolean>, what: string) => async () => {
-  if (invalid) throw new Error(invalid);
+/**
+ * A save for the page's leave dialog: rejects when the section is invalid or
+ * the write failed. Given `field`, an invalid section names the box to fix, so
+ * the page's save bar scrolls to it and focuses it.
+ */
+const leaveSave = (invalid: string | null, run: () => Promise<boolean>, what: string, field?: string) => async () => {
+  if (invalid) throw field ? settingsSaveIssue(invalid, field) : new Error(invalid);
   if (!(await run())) throw new Error(`Couldn't save ${what}.`);
 };
 
@@ -220,7 +237,7 @@ export function RequirementsPageV2({
       }),
     );
   const discard = () => setForm((prev) => ({ ...prev, ...savedFieldsFor("requirements", saved) }));
-  useRegisterLeaveSave(canEdit ? registerSave : undefined, "business-requirements", isDirty, leaveSave(ageError, submit, "your driver requirements"), discard);
+  useRegisterLeaveSave(canEdit ? registerSave : undefined, "business-requirements", isDirty, leaveSave(ageError, submit, "your driver requirements", "v2_minimum_rental_age"), discard);
   useDiscardOnUnmount(isDirty, discard);
 
   return (
@@ -275,7 +292,7 @@ export function RequirementsPageV2({
             <SelectTrigger id="v2_verification_document_type" className="w-48" title={docLabel}>
               <SelectValue placeholder="Choose a document" />
             </SelectTrigger>
-            <SelectContent align="end">
+            <SelectContent tone="surface" align="end">
               {docOptions.map((option) => (
                 <SelectItem key={option.value} value={option.value}>
                   {option.label}
@@ -371,7 +388,16 @@ export function DurationPageV2({ form, setForm, saved, canEdit, onSave, register
     setForm((prev) => ({ ...prev, ...savedFieldsFor("duration", saved) }));
   };
   const firstError = errors.lead ?? errors.min ?? errors.max ?? errors.buffer ?? null;
-  useRegisterLeaveSave(canEdit ? registerSave : undefined, "business-duration", isDirty, leaveSave(firstError, submit, "your booking rules"), discard);
+  // The box the first reason belongs to. "Shortest rental" is two boxes; its
+  // days box is the one a refused save lands on.
+  const firstErrorField = errors.lead
+    ? "v2_booking_lead_time_value"
+    : errors.min
+      ? "v2_min_rental_days"
+      : errors.max
+        ? "v2_max_rental_days"
+        : "v2_buffer_time_minutes";
+  useRegisterLeaveSave(canEdit ? registerSave : undefined, "business-duration", isDirty, leaveSave(firstError, submit, "your booking rules", firstErrorField), discard);
   useDiscardOnUnmount(isDirty, discard);
 
   return (
@@ -410,6 +436,7 @@ export function DurationPageV2({ form, setForm, saved, canEdit, onSave, register
             }}
             placeholder={unit === "days" ? "2" : "24"}
             className={cn(numberBoxWidth(form.booking_lead_time_value, "w-20"), "tabular-nums")}
+            id="v2_booking_lead_time_value"
             aria-label="Advance notice"
             aria-invalid={errors.lead ? true : undefined}
           />
@@ -424,7 +451,7 @@ export function DurationPageV2({ form, setForm, saved, canEdit, onSave, register
             <SelectTrigger className="w-24" aria-label="Advance notice unit">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent align="end">
+            <SelectContent tone="surface" align="end">
               <SelectItem value="hours">hours</SelectItem>
               <SelectItem value="days">days</SelectItem>
             </SelectContent>
@@ -447,6 +474,7 @@ export function DurationPageV2({ form, setForm, saved, canEdit, onSave, register
                 onChange={(e) => setNumber("min_rental_days", e.target.value)}
                 placeholder="0"
                 className={cn(numberBoxWidth(form.min_rental_days, "w-16"), "tabular-nums")}
+                id="v2_min_rental_days"
                 aria-label="Shortest rental days"
                 aria-invalid={errors.min ? true : undefined}
               />
@@ -488,6 +516,7 @@ export function DurationPageV2({ form, setForm, saved, canEdit, onSave, register
             onChange={(e) => setNumber("max_rental_days", e.target.value)}
             placeholder="90"
             className={cn(numberBoxWidth(form.max_rental_days, "w-20"), "tabular-nums")}
+            id="v2_max_rental_days"
             aria-label="Longest rental days"
             aria-invalid={errors.max ? true : undefined}
           />
@@ -516,6 +545,7 @@ export function DurationPageV2({ form, setForm, saved, canEdit, onSave, register
             onChange={(e) => setNumber("buffer_time_minutes", e.target.value)}
             placeholder="0"
             className={cn(numberBoxWidth(form.buffer_time_minutes, "w-20"), "tabular-nums")}
+            id="v2_buffer_time_minutes"
             aria-label="Time between rentals in minutes"
             aria-invalid={errors.buffer ? true : undefined}
           />
@@ -568,7 +598,7 @@ export function LockboxPageV2({
       }),
     );
   const discard = () => setForm((prev) => ({ ...prev, ...savedFieldsFor("lockbox", saved) }));
-  useRegisterLeaveSave(canEdit ? registerSave : undefined, "business-lockbox", isDirty, leaveSave(codeError, submit, "your lockbox settings"), discard);
+  useRegisterLeaveSave(canEdit ? registerSave : undefined, "business-lockbox", isDirty, leaveSave(codeError, submit, "your lockbox settings", "v2_lockbox_code_length"), discard);
   useDiscardOnUnmount(isDirty, discard);
 
   // The switch is part of the form, not a live toggle like the waiver: say so
@@ -667,7 +697,7 @@ export function LockboxPageV2({
                 <SelectTrigger id="v2_lockbox_send_offset" className="w-56">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent align="end">
+                <SelectContent tone="surface" align="end">
                   {offsetOptions.map((option) => (
                     <SelectItem key={option.value} value={option.value}>
                       {option.label}
