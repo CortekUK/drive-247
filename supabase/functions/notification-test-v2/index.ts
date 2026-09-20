@@ -7,9 +7,23 @@
 //   push   the caller's OWN active staff devices in this tenant (send-push's
 //          `self` target), never anyone else's.
 //
+// Two scopes share this function (`scope` in the body, default 'tenant'):
+//   'tenant'    the operator set, from the portal's Settings → Notifications.
+//               Everything below describes it, and it is unchanged.
+//   'platform'  the SYSTEM set, from the super admin dashboard (apps/admin;
+//               transcript 07:30–08:30 and 16:39: "exactly the same thing we'll
+//               build for ourselves"). Super admins only. There is no tenant:
+//               the From is Drive247's own sender, the brand is Drive247's own,
+//               push goes to the caller's platform-audience devices, and the
+//               rate-limit row carries tenant_id NULL
+//               (ops/notifications_v2_platform.sql). Both scopes share ONE
+//               budget of 20 tests per user per hour, because the limit is
+//               counted by app_user_id.
+//
 // Request (POST, JSON) — NotificationTestRequest in
-// apps/portal/src/lib/notifications-v2/types.ts, plus `tenantId` / `tenantSlug`
-// which only a super admin's request uses:
+// apps/portal/src/lib/notifications-v2/types.ts (the admin's twin is
+// apps/admin/lib/notifications-v2/types.ts), plus `scope`, plus `tenantId` /
+// `tenantSlug` which only a super admin's tenant-scoped request uses:
 //   { channel: 'email', notificationKey, to, subject, bodyHtml }
 //   { channel: 'push',  notificationKey, title, body, url?, pushOptions? }
 // Response — NotificationTestResponse: { success, sent?, failed?, message?,
@@ -22,6 +36,8 @@
 // one of super admin / head_admin / admin / a manager with editor on
 // settings.reminders. The tenant comes from the caller's app_users row; only a
 // super admin (tenant_id NULL by design) names one, by tenantId or tenantSlug.
+// scope 'platform' needs app_users.is_super_admin on top of that, and resolves
+// no tenant at all: `tenantId` / `tenantSlug` are ignored there.
 //
 // Rate limit: 20 tests per user per rolling hour, counted in
 // notification_test_sends_v2 (ops/notifications_v2.sql), decided by
@@ -34,16 +50,24 @@
 // locked-out user cannot extend their own lockout.
 //
 // The email is built by _shared/notification-email-layout-v2.ts, the
-// byte-identical copy of the module the portal preview uses, from the same
+// byte-identical copy of the module the portal preview uses (and of the admin's
+// own copy, apps/admin/lib/notifications-v2/email-layout.ts), from the same
 // tenant columns (see emailBrandFromTenant), so the preview is what arrives.
 // From is tenant_email_sender when it is valid, else today's sender
 // "{company_name} <{slug}@drive-247.com>" (_shared/resend-service.ts). Resend is
 // called directly: resend-service rewrites every From to the default, which
-// would make the sender settings impossible to test.
+// would make the sender settings impossible to test. A platform test skips all
+// of that: it is from us, so it uses resend-service's own DEFAULT_BRANDING and
+// default sender, which is what the admin preview renders.
 //
 // v2 rules: this is a NEW function; it edits no existing function or helper
 // (it imports cors.ts, web-push.ts and the new layout helper). NOT DEPLOYED.
 // verify_jwt stays at the default (true): no supabase/config.toml entry.
+//
+// The platform scope needs ops/notifications_v2_platform.sql as well: its log
+// row carries tenant_id NULL, which that file allows (one guarded DROP NOT NULL
+// on a table that has never been applied). Without it the send still goes out
+// but is NOT counted against the limit, and says so loudly in the logs.
 //
 // TESTED (Sep 19 2026) with a Deno harness that stubs fetch (GoTrue, PostgREST,
 // Resend, a push service) and drives real requests through handleRequest:
@@ -98,6 +122,34 @@ const URL_MAX = 500;
 const REQUEST_MAX_CHARS = 400_000;
 
 export const EMAIL_SENDER_DOMAIN = 'drive-247.com';
+
+/** Which set of notifications a test belongs to. Absent in the body = 'tenant'. */
+export type TestScope = 'tenant' | 'platform';
+
+/**
+ * Drive247's own sender, today's real one for platform email
+ * (_shared/resend-service.ts:324-325). TS twins:
+ * apps/admin/lib/notifications-v2/settings-model.ts
+ * PLATFORM_SENDER_DEFAULT_NAME / PLATFORM_SENDER_DEFAULT_LOCAL_PART.
+ */
+export const PLATFORM_SENDER_NAME = 'Drive 247';
+export const PLATFORM_SENDER_LOCAL_PART = 'noreply';
+
+/**
+ * Drive247's own brand for a platform email: DEFAULT_BRANDING in
+ * _shared/resend-service.ts:39-47, which is what a system email already looks
+ * like today. TS twin: PLATFORM_EMAIL_BRAND in the admin's settings-model.ts,
+ * which the admin preview renders — keep them in step or the preview stops
+ * matching the test.
+ */
+export const PLATFORM_EMAIL_BRAND: EmailLayoutBrand = {
+  companyName: 'Drive 247',
+  logoUrl: null,
+  primaryColor: '#1a1a1a',
+  accentColor: '#C5A572',
+  contactEmail: 'support@drive-247.com',
+  contactPhone: null,
+};
 /** The DB CHECK on tenant_email_sender.from_local_part (settings-model LOCAL_PART_PATTERN). */
 export const LOCAL_PART_PATTERN = /^[a-z0-9][a-z0-9._-]{0,63}$/;
 /** settings-model isValidEmail: one plausible address, nothing that could smuggle a second. */
@@ -147,7 +199,7 @@ interface SubscriptionRow {
   endpoint: string;
   p256dh: string;
   auth: string;
-  audience: 'customer' | 'staff';
+  audience: 'customer' | 'staff' | 'platform';
   failure_count: number;
 }
 
@@ -227,6 +279,22 @@ export function senderFrom(sender: Partial<SenderRow> | null | undefined, tenant
 }
 
 /**
+ * Who a PLATFORM email is from. Fixed, not read from a table: a system email is
+ * from us, there is nothing per-tenant to look up, and nothing an operator could
+ * make it impersonate. The admin page shows the same line
+ * (settings-model.ts senderAddress() with nothing saved).
+ */
+export function platformSender(): SenderIdentity {
+  const address = `${PLATFORM_SENDER_LOCAL_PART}@${EMAIL_SENDER_DOMAIN}`;
+  return {
+    name: PLATFORM_SENDER_NAME,
+    address,
+    header: `${PLATFORM_SENDER_NAME} <${address}>`,
+    replyTo: null,
+  };
+}
+
+/**
  * The layout brand from a tenants row. The portal preview builds it the same
  * way (apps/portal/src/hooks/use-email-branding-v2.ts emailBrandFromTenantRow);
  * keep the two in step or the preview stops matching the test.
@@ -240,6 +308,62 @@ export function emailBrandFromTenant(row: Partial<TenantRow> | null | undefined)
     accentColor: text(row?.accent_color),
     contactEmail: text(row?.contact_email),
     contactPhone: text(row?.contact_phone) ?? text(row?.phone),
+  };
+}
+
+/**
+ * Everything the two send steps need that differs between the scopes, resolved
+ * once in the handler so each send has ONE code path and no scope branching
+ * beyond the sender. The tenant values are exactly what the tenant path
+ * computed before this scope existed.
+ */
+export interface SendTarget {
+  scope: TestScope;
+  /** NULL for platform: the log row and the push log carry no tenant. */
+  tenantId: string | null;
+  /** The console line's prefix: the tenant slug, or 'platform'. */
+  label: string;
+  /** The brand the email layout renders with. */
+  brand: EmailLayoutBrand;
+  /** The tenant whose tenant_email_sender is read; NULL = the platform sender. */
+  tenant: Pick<TenantRow, 'id' | 'slug' | 'company_name'> | null;
+  /** Which push_subscriptions rows are "the caller's own devices" here. */
+  pushAudience: 'staff' | 'platform';
+  /** Notification icon, https only. */
+  pushIcon: string | null;
+  /**
+   * Whether push may be sent at all. Per tenant this is the feature flag; the
+   * platform audience has no flag — a super admin's own device is enrolled by
+   * save-push-subscription, which checks is_super_admin and no flag either.
+   */
+  pushEnabled: boolean;
+}
+
+export function tenantTarget(tenant: TenantRow): SendTarget {
+  return {
+    scope: 'tenant',
+    tenantId: tenant.id,
+    label: String(tenant.slug ?? ''),
+    brand: emailBrandFromTenant(tenant),
+    tenant,
+    pushAudience: 'staff',
+    pushIcon: tenant.favicon_url,
+    pushEnabled: tenant.push_notifications_enabled === true,
+  };
+}
+
+export function platformTarget(): SendTarget {
+  return {
+    scope: 'platform',
+    tenantId: null,
+    label: 'platform',
+    brand: PLATFORM_EMAIL_BRAND,
+    tenant: null,
+    pushAudience: 'platform',
+    // No tenant favicon to use, and no platform one is stored; the service
+    // worker's own default icon shows instead.
+    pushIcon: null,
+    pushEnabled: true,
   };
 }
 
@@ -397,7 +521,8 @@ type Db = any;
 async function logTestSend(
   supabase: Db,
   row: {
-    tenant_id: string;
+    /** NULL for a platform test (ops/notifications_v2_platform.sql). */
+    tenant_id: string | null;
     app_user_id: string;
     notification_key: string;
     channel: 'email' | 'push';
@@ -413,6 +538,12 @@ async function logTestSend(
     if (error) {
       if (isMissingRelation(error)) {
         console.warn('[NOTIFICATION-TEST-V2] notification_test_sends_v2 is missing (ops/notifications_v2.sql not applied); send not logged');
+      } else if (row.tenant_id === null && String(error.code ?? '') === '23502') {
+        // The column is still NOT NULL, so this platform send was NOT counted
+        // against the limit. Loud, because it is a precondition, not a blip.
+        console.error(
+          '[NOTIFICATION-TEST-V2] notification_test_sends_v2.tenant_id is still NOT NULL (ops/notifications_v2_platform.sql not applied); this platform test was sent but NOT counted',
+        );
       } else {
         console.error('[NOTIFICATION-TEST-V2] Could not log the test send:', error.message);
       }
@@ -452,13 +583,13 @@ async function checkRateLimit(supabase: Db, appUserId: string): Promise<Failure 
 
 async function sendEmailTest(
   supabase: Db,
-  tenant: TenantRow,
+  target: SendTarget,
   appUserId: string,
   input: EmailTestInput,
 ): Promise<Response> {
   const log = (status: 'sent' | 'failed', error?: string | null) =>
     logTestSend(supabase, {
-      tenant_id: tenant.id,
+      tenant_id: target.tenantId,
       app_user_id: appUserId,
       notification_key: input.notificationKey,
       channel: 'email',
@@ -467,27 +598,33 @@ async function sendEmailTest(
       error,
     });
 
-  // Sender settings. Unreadable or missing: today's default sender.
-  let sender: SenderRow | null = null;
-  const { data: senderRow, error: senderError } = await supabase
-    .from('tenant_email_sender')
-    .select('from_name, from_local_part, reply_to')
-    .eq('tenant_id', tenant.id)
-    .maybeSingle();
-  if (senderError) {
-    if (isMissingRelation(senderError)) {
-      console.warn('[NOTIFICATION-TEST-V2] tenant_email_sender is missing; using the default sender');
+  // Sender settings. Unreadable or missing: today's default sender. A platform
+  // test has no table to read — it is always from us.
+  let from: SenderIdentity;
+  if (target.tenant) {
+    let sender: SenderRow | null = null;
+    const { data: senderRow, error: senderError } = await supabase
+      .from('tenant_email_sender')
+      .select('from_name, from_local_part, reply_to')
+      .eq('tenant_id', target.tenant.id)
+      .maybeSingle();
+    if (senderError) {
+      if (isMissingRelation(senderError)) {
+        console.warn('[NOTIFICATION-TEST-V2] tenant_email_sender is missing; using the default sender');
+      } else {
+        console.error('[NOTIFICATION-TEST-V2] Could not read the sender settings; using the default sender:', senderError.message);
+      }
     } else {
-      console.error('[NOTIFICATION-TEST-V2] Could not read the sender settings; using the default sender:', senderError.message);
+      sender = (senderRow ?? null) as SenderRow | null;
     }
+    from = senderFrom(sender, target.tenant);
   } else {
-    sender = (senderRow ?? null) as SenderRow | null;
+    from = platformSender();
   }
-  const from = senderFrom(sender, tenant);
 
-  // The same call the portal preview makes. bodyHtml is passed as received:
+  // The same call the preview makes. bodyHtml is passed as received:
   // renderNotificationEmailHtml sanitises it, exactly as in the browser.
-  const html = renderNotificationEmailHtml({ bodyHtml: input.bodyHtml, brand: emailBrandFromTenant(tenant) });
+  const html = renderNotificationEmailHtml({ bodyHtml: input.bodyHtml, brand: target.brand });
   const text = emailBodyToPlainText(input.bodyHtml);
   const subject = `[Test] ${input.subject}`;
 
@@ -547,17 +684,17 @@ async function sendEmailTest(
   }
 
   await log('sent');
-  console.log(`[NOTIFICATION-TEST-V2] ${tenant.slug} email ${input.notificationKey} sent`);
+  console.log(`[NOTIFICATION-TEST-V2] ${target.label} email ${input.notificationKey} sent`);
   return jsonResponse({ success: true, sent: 1, message: `Sent to ${input.to}.` });
 }
 
 async function sendPushTest(
   supabase: Db,
-  tenant: TenantRow,
+  target: SendTarget,
   appUserId: string,
   input: PushTestInput,
 ): Promise<Response> {
-  if (tenant.push_notifications_enabled !== true) {
+  if (!target.pushEnabled) {
     return errorResponse(fail(403, 'push_disabled', "Push notifications aren't switched on for your account yet."));
   }
 
@@ -569,15 +706,19 @@ async function sendPushTest(
     return errorResponse(fail(500, 'vapid_missing', "Push isn't set up on the server yet."));
   }
 
-  // The caller's own devices only: send-push's `self` target.
-  const { data: subscriptions, error: subsError } = await supabase
+  // The caller's own devices only: send-push's `self` target. Platform devices
+  // carry no tenant by design (push_subscriptions_tenant_scope, migration
+  // 20260820140000), so that scope filters on tenant_id IS NULL instead.
+  const subscriptionQuery = supabase
     .from('push_subscriptions')
     .select('id, endpoint, p256dh, auth, audience, failure_count')
     .eq('is_active', true)
-    .eq('tenant_id', tenant.id)
-    .eq('audience', 'staff')
+    .eq('audience', target.pushAudience)
     .eq('app_user_id', appUserId)
     .limit(50);
+  const { data: subscriptions, error: subsError } = await (
+    target.tenantId ? subscriptionQuery.eq('tenant_id', target.tenantId) : subscriptionQuery.is('tenant_id', null)
+  );
   if (subsError) {
     console.error('[NOTIFICATION-TEST-V2] Could not load subscriptions:', subsError.message);
     return errorResponse(fail(500, 'devices_lookup_failed', "Couldn't load your devices. Try again in a moment."));
@@ -585,7 +726,7 @@ async function sendPushTest(
 
   const log = (status: 'sent' | 'failed' | 'no_devices', error?: string | null) =>
     logTestSend(supabase, {
-      tenant_id: tenant.id,
+      tenant_id: target.tenantId,
       app_user_id: appUserId,
       notification_key: input.notificationKey,
       channel: 'push',
@@ -613,7 +754,7 @@ async function sendPushTest(
     url: input.url,
     notificationKey: input.notificationKey,
     options: input.options,
-    icon: tenant.favicon_url,
+    icon: target.pushIcon,
     uniqueSuffix: Date.now().toString(36),
   });
 
@@ -643,7 +784,7 @@ async function sendPushTest(
   }
 
   const logRows = results.map(({ sub, result }) => ({
-    tenant_id: tenant.id,
+    tenant_id: target.tenantId,
     subscription_id: sub.id,
     endpoint: sub.endpoint,
     audience: sub.audience,
@@ -696,7 +837,7 @@ async function sendPushTest(
 
   const sent = succeededIds.length;
   const failed = recipients.length - sent;
-  console.log(`[NOTIFICATION-TEST-V2] ${tenant.slug} push ${input.notificationKey} sent=${sent} failed=${failures.length} expired=${expiredIds.length}`);
+  console.log(`[NOTIFICATION-TEST-V2] ${target.label} push ${input.notificationKey} sent=${sent} failed=${failures.length} expired=${expiredIds.length}`);
 
   if (sent === 0) {
     const allExpired = expiredIds.length === recipients.length;
@@ -803,37 +944,58 @@ export async function handleRequest(req: Request): Promise<Response> {
     return errorResponse(fail(400, 'invalid_key', "This notification isn't recognised."));
   }
 
+  // Absent means the operator set, so every existing caller keeps its behaviour
+  // without sending anything new. Anything else is a typo, not a third set.
+  const rawScope = body.scope;
+  if (rawScope !== undefined && rawScope !== null && rawScope !== 'tenant' && rawScope !== 'platform') {
+    return errorResponse(fail(400, 'invalid_scope', "We couldn't tell which set of notifications this test is for."));
+  }
+  const scope: TestScope = rawScope === 'platform' ? 'platform' : 'tenant';
+
   // ---- 3. Which tenant? (send-push's rule) ---------------------------------
   // A normal user's tenant is their own app_users row and the body is IGNORED,
   // so nobody can send as another operator by posting a different id. A super
   // admin has tenant_id NULL by design and must name the tenant they are viewing.
-  let tenantQuery = supabase.from('tenants').select(TENANT_COLUMNS);
-  if (isSuperAdmin) {
-    const bodyTenantId = typeof body.tenantId === 'string' && UUID_PATTERN.test(body.tenantId) ? body.tenantId : null;
-    const bodyTenantSlug = typeof body.tenantSlug === 'string' && body.tenantSlug.trim() ? body.tenantSlug.trim() : null;
-    if (bodyTenantId) tenantQuery = tenantQuery.eq('id', bodyTenantId);
-    else if (bodyTenantSlug) tenantQuery = tenantQuery.eq('slug', bodyTenantSlug);
-    else if (appUser.tenant_id) tenantQuery = tenantQuery.eq('id', appUser.tenant_id);
-    else {
-      return errorResponse(fail(
-        400,
-        'tenant_required',
-        "You're signed in as a super admin. Open the portal on the company's own address so we know which company to send as.",
-      ));
+  //
+  // The platform set has no tenant at all: it is Drive247's own notifications,
+  // so tenantId / tenantSlug are ignored and no tenants row is read. Only a
+  // super admin gets here — the role gate above already let head_admins and
+  // some managers through, and they must not reach this scope.
+  let target: SendTarget;
+  if (scope === 'platform') {
+    if (!isSuperAdmin) {
+      return errorResponse(fail(403, 'forbidden_platform', "Only Drive247 staff can send tests for platform notifications."));
     }
+    target = platformTarget();
   } else {
-    if (!appUser.tenant_id) {
-      return errorResponse(fail(403, 'no_tenant', "Your account isn't linked to a company."));
+    let tenantQuery = supabase.from('tenants').select(TENANT_COLUMNS);
+    if (isSuperAdmin) {
+      const bodyTenantId = typeof body.tenantId === 'string' && UUID_PATTERN.test(body.tenantId) ? body.tenantId : null;
+      const bodyTenantSlug = typeof body.tenantSlug === 'string' && body.tenantSlug.trim() ? body.tenantSlug.trim() : null;
+      if (bodyTenantId) tenantQuery = tenantQuery.eq('id', bodyTenantId);
+      else if (bodyTenantSlug) tenantQuery = tenantQuery.eq('slug', bodyTenantSlug);
+      else if (appUser.tenant_id) tenantQuery = tenantQuery.eq('id', appUser.tenant_id);
+      else {
+        return errorResponse(fail(
+          400,
+          'tenant_required',
+          "You're signed in as a super admin. Open the portal on the company's own address so we know which company to send as.",
+        ));
+      }
+    } else {
+      if (!appUser.tenant_id) {
+        return errorResponse(fail(403, 'no_tenant', "Your account isn't linked to a company."));
+      }
+      tenantQuery = tenantQuery.eq('id', appUser.tenant_id);
     }
-    tenantQuery = tenantQuery.eq('id', appUser.tenant_id);
+    const { data: tenantRow, error: tenantError } = await tenantQuery.maybeSingle();
+    if (tenantError) {
+      console.error('[NOTIFICATION-TEST-V2] tenant lookup failed:', tenantError.message);
+      return errorResponse(fail(500, 'tenant_lookup_failed', "Couldn't load your company details. Try again in a moment."));
+    }
+    if (!tenantRow) return errorResponse(fail(404, 'unknown_tenant', "We couldn't find this company."));
+    target = tenantTarget(tenantRow as TenantRow);
   }
-  const { data: tenantRow, error: tenantError } = await tenantQuery.maybeSingle();
-  if (tenantError) {
-    console.error('[NOTIFICATION-TEST-V2] tenant lookup failed:', tenantError.message);
-    return errorResponse(fail(500, 'tenant_lookup_failed', "Couldn't load your company details. Try again in a moment."));
-  }
-  if (!tenantRow) return errorResponse(fail(404, 'unknown_tenant', "We couldn't find this company."));
-  const tenant = tenantRow as TenantRow;
 
   // ---- 4. Validate the channel's fields, then the rate limit ---------------
   const checked = channel === 'email' ? validateEmailTest(body, notificationKey) : validatePushTest(body, notificationKey);
@@ -845,8 +1007,8 @@ export async function handleRequest(req: Request): Promise<Response> {
   // ---- 5. Send -------------------------------------------------------------
   try {
     return channel === 'email'
-      ? await sendEmailTest(supabase, tenant, appUser.id, checked.value as EmailTestInput)
-      : await sendPushTest(supabase, tenant, appUser.id, checked.value as PushTestInput);
+      ? await sendEmailTest(supabase, target, appUser.id, checked.value as EmailTestInput)
+      : await sendPushTest(supabase, target, appUser.id, checked.value as PushTestInput);
   } catch (err) {
     console.error('[NOTIFICATION-TEST-V2] Unexpected error:', err instanceof Error ? err.message : String(err));
     return errorResponse(fail(500, 'unexpected', 'Something went wrong. Try again in a moment.'));
