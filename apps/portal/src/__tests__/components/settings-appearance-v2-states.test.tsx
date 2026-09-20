@@ -256,7 +256,7 @@ describe("Appearance, v2: the page", () => {
 
   describe("a colour the portal cannot be themed from", () => {
     // `isUsableV2Brand`: saturation 15+ and lightness 12–92, worked out here by
-    // hand from the hex. Below those the v2 stylesheet keeps its default indigo,
+    // hand from the hex. Below those the v2 stylesheet keeps its default colour,
     // so the colour saves and nothing on screen changes — hence the note.
     const NOTE = "This colour is too close to black, white or grey to colour the portal";
 
@@ -340,7 +340,7 @@ describe("Appearance, v2: the page", () => {
     type(nameInput(), "Renamed");
     act(() => buttonsNamed("Use new logo")[0].click());
     act(() => resetButton().click());
-    expect(hex().value).toBe("#C6A256"); // the saved colour, not Indigo
+    expect(hex().value).toBe("#C6A256"); // the saved colour, not the Default one
     expect(nameInput().value).toBe("Northwind");
     expect(container.querySelector('[data-testid="logos-v2"]')!.getAttribute("data-logo")).toBe("");
     expect(s.restore).toHaveBeenCalled();

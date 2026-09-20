@@ -253,20 +253,37 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
          Matching v1's 64px keeps that arithmetic true instead of leaving an 8px
          gap on those screens. */
       className={
-        "sticky top-0 z-40 flex h-16 shrink-0 items-center gap-2 px-3 transition-[background-color,box-shadow] duration-200 sm:px-4 " +
-        // The bar has NO ground of its own. The app gradient is painted on the
-        // layout's root, behind the sidebar and this bar alike, and a white
-        // 60-95% fill here cut a band across the top so the page's colour
-        // appeared to start below the bar (team lead's review). At the top of
-        // the page it is fully transparent and the gradient runs from the very
-        // top, as it does in the sidebar. Only once content scrolls underneath
-        // does a light blur and a hairline come in, so the search field stays
-        // readable over the rows passing below it.
-        (scrolled
-          ? "bg-background/60 shadow-[inset_0_-1px_0_hsl(var(--border))] backdrop-blur-xl"
-          : "bg-transparent")
+        "sticky top-0 z-40 flex h-16 shrink-0 items-center gap-2 bg-transparent px-3 sm:px-4"
       }
     >
+      {/* The bar's ground, as a veil rather than a band.
+          The app gradient is painted on the layout's root, behind the sidebar
+          and this bar alike, so any fill here risks looking like a separate
+          strip. It used to be a 60% white fill with a hairline along the
+          bottom, and on a scrolled page that hairline read as a line drawn
+          across the top of the screen (team lead's review).
+          So: no border and no shadow. The ground is its own layer, sitting
+          behind the controls, reaching a little PAST the bar and fading to
+          nothing over that tail, so there is no edge anywhere for the eye to
+          catch. The mask fades the blur with it — masking the header itself
+          would fade the controls too, which is why this is a child.
+          At the very top of the page it is not painted at all, so the gradient
+          runs from the top as it does in the sidebar; it fades in only once
+          rows start passing underneath, to keep the search field readable. */}
+      <div
+        aria-hidden="true"
+        data-slot="top-bar-veil"
+        className={
+          // `-inset-x-3 sm:-inset-x-4` and NOT `inset-x-0`: an absolutely
+          // positioned child is placed against its ancestor's PADDING box, so
+          // `left:0` starts inside this bar's own `px-3 sm:px-4` and left a
+          // crisp, untinted gutter at each end for rows to scroll through —
+          // exactly the visible edge this is meant to remove. The negative
+          // inset is that padding, so the veil reaches the bar's real edges.
+          "pointer-events-none absolute -inset-x-3 top-0 -z-[1] h-[calc(100%+1.5rem)] bg-gradient-to-b from-background/75 via-background/55 to-transparent backdrop-blur-xl transition-opacity duration-200 sm:-inset-x-4 [mask-image:linear-gradient(to_bottom,black_0,black_62%,transparent_100%)] " +
+          (scrolled ? "opacity-100" : "opacity-0")
+        }
+      />
       {/* Phone-only navigation opener. Replaces the floating left-edge handle.
           Suppressed where the layout renders no sidebar at all — the Messages
           workspace does that — because the trigger would still toggle sidebar

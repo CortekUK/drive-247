@@ -145,7 +145,9 @@ function PromoRowMenu<T extends PromoCodeRowV2>({ promo, onEdit, onDelete }: Pro
           <MoreHorizontal className="h-4 w-4" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-auto">
+      {/* Surface tone: this row menu sits on a light Settings table, where the
+          default translucent near-black panel reads as an OS menu. */}
+      <DropdownMenuContent tone="surface" align="end" className="w-auto">
         <DropdownMenuItem onClick={() => onEdit(promo)}>
           <FilePenLine className="h-4 w-4" />
           Edit

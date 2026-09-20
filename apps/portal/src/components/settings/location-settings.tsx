@@ -562,8 +562,10 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2, registerSave 
 
   // v2 (northwind): its own page, on the same state and handlers. It never
   // renders the placeholder defaults (a skeleton, or a retry on a failed read),
-  // and saves through the settings page's save bar. Every other tenant
-  // continues below, unchanged.
+  // and saves through the settings page's save bar. Its price dialogs edit a
+  // copy of the bands and hand the result back through onFormChange, so v1's
+  // band handlers above are v1's alone. Every other tenant continues below,
+  // unchanged.
   if (v2) {
     return (
       <LocationsV2
@@ -595,7 +597,6 @@ export function LocationSettings({ onDirtyChange, onDirtyChangeV2, registerSave 
           returnMultiple: handleReturnMultipleChange,
           returnArea: handleReturnAreaChange,
         }}
-        bands={{ add: addBand, remove: removeBand, update: updateBand, toggleOpen: toggleOpenBand }}
         center={{ address: areaCenterAddress, typed: v2CenterTyped, onChange: handleCenterAddressChange }}
         isDirty={v2Dirty}
         onDiscard={discardV2Edits}

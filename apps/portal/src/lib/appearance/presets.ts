@@ -198,11 +198,14 @@ export const THEME_PRESETS: ThemePreset[] = [
 export const DEFAULT_PRESET_ID = "drive-gold";
 
 /**
- * v2 (northwind) brand colours: one hex each, and the whole palette is worked
- * out from it on the Appearance page. Five rather than v1's twelve, so the row
- * reads as a choice, not a paint chart. Every one carries white text at better
- * than 4.5:1 (Indigo 8.1, Blue 5.2, Teal 5.5, Rose 6.3, Graphite 14.6), so none
- * of them ever shows the low-contrast warning.
+ * v2 brand colours: one hex each, and the whole palette is worked out from it
+ * on the Branding page. Five rather than v1's twelve, so the row reads as a
+ * choice, not a paint chart. Every one carries white text at better than 4.5:1
+ * (Default 8.1, Blue 5.2, Teal 5.5, Rose 6.3, Graphite 14.6), so none of them
+ * ever shows the low-contrast warning.
+ *
+ * The first is called "Default", never by its hue: it is the colour we manage
+ * for a tenant who has not chosen one (team lead, Sep 2026).
  */
 export interface BrandColorPreset {
   id: string;
@@ -213,8 +216,11 @@ export interface BrandColorPreset {
 /** The v2 default: what a new tenant starts on and what "Restore default colour" puts back. */
 export const V2_DEFAULT_BRAND_COLOR = "#442DD7";
 
+/** What the default colour is called everywhere on v2. */
+export const V2_DEFAULT_BRAND_NAME = "Default";
+
 export const V2_BRAND_PRESETS: BrandColorPreset[] = [
-  { id: "indigo", name: "Indigo", hex: V2_DEFAULT_BRAND_COLOR },
+  { id: "default", name: V2_DEFAULT_BRAND_NAME, hex: V2_DEFAULT_BRAND_COLOR },
   { id: "blue", name: "Blue", hex: "#2563EB" },
   { id: "teal", name: "Teal", hex: "#0F766E" },
   { id: "rose", name: "Rose", hex: "#BE123C" },

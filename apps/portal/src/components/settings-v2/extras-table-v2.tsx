@@ -149,7 +149,9 @@ function ExtraRowMenu<T extends RentalExtra>({ extra, busy, onEdit, onUpdateStoc
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreHorizontal className="h-4 w-4" />}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-auto">
+      {/* Surface tone: this row menu sits on a light Settings table, where the
+          default translucent near-black panel reads as an OS menu. */}
+      <DropdownMenuContent tone="surface" align="end" className="w-auto">
         <DropdownMenuItem onClick={() => onEdit(extra)}>
           <Pencil className="h-3.5 w-3.5" />
           Edit

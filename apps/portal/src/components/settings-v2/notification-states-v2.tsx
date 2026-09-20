@@ -24,6 +24,11 @@ import { Button } from "@/components/ui-v2/button";
 import { Input } from "@/components/ui-v2/input";
 import { Switch } from "@/components/ui-v2/switch";
 import { Badge } from "@/components/ui-v2/badge";
+// Every SelectContent below is `tone="surface"`: Settings is a light,
+// text-heavy screen, and the dropdown's default translucent near-black panel
+// reads there as an OS menu rather than as part of the page. The surface tone
+// uses the page's own popover, border and highlight tokens — see
+// components/ui-v2/select.tsx.
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui-v2/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui-v2/tooltip";
 import {
@@ -480,7 +485,7 @@ export function ReminderRuleCardV2({
               <SelectTrigger className="h-8 w-28 text-xs" aria-label={`${rule.rule_type} severity`}>
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent tone="surface">
                 <SelectItem value="info">Info</SelectItem>
                 <SelectItem value="warning">Warning</SelectItem>
                 <SelectItem value="critical">Critical</SelectItem>

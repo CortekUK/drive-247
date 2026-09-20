@@ -404,13 +404,33 @@ describe("settings page (v2): Customer messages entry points", () => {
 
   it("Team emails and Push stay out of the page's read-only fieldset; their switches gate themselves", () => {
     expect(source).toContain("readOnly={!canEditPage && !V2_PAGES_GATING_OWN_CONTROLS.has(v2Page as string)}");
-    // General and Tax, fees and deposit (each of their sections wraps its
-    // controls in its own fieldset) and Locations also gate their own controls
-    // (their Try again and list search stay usable). Weekend and holiday
-    // pricing gates per section too.
+    // General (each of its stacked sections wraps its controls in its own
+    // fieldset), the pages that came out of it (Sep 19 2026) and Locations also
+    // gate their own controls (their Try again and list search stay usable).
+    // Weekend and holiday pricing gates per section too, and Notifications
+    // disables its own switches, fields and Send test. Asserted as a SET: the
+    // order these are written in is not behaviour.
     const gating = source.match(/const V2_PAGES_GATING_OWN_CONTROLS = new Set\(\[([^\]]*)\]\);/)?.[1] ?? "";
     expect(new Set([...gating.matchAll(/'([^']+)'/g)].map((m) => m[1]))).toEqual(
-      new Set(["reminders", "push", "general", "locations", "templates", "pricing", "fees", "installments", "payg", "auto-extend", "promos", "extras", "notifications"]),
+      new Set([
+        "reminders",
+        "push",
+        "general",
+        "duration",
+        "lockbox",
+        "tax-and-deposit",
+        "booking-site",
+        "modules",
+        "locations",
+        "templates",
+        "pricing",
+        "installments",
+        "payg",
+        "auto-extend",
+        "promos",
+        "extras",
+        "notifications",
+      ]),
     );
     const reminders = source.slice(source.indexOf("        case 'reminders':"), source.indexOf("        case 'push':"));
     expect(reminders).toContain("<EmailNotificationSettings canEdit={canEditSettings('reminders')} />");

@@ -142,15 +142,22 @@ describe("SettingsIndexV2 structure", () => {
   const entries = () =>
     Array.from(container.querySelectorAll("section a")).map((a) => [a.querySelector("span")?.textContent, a.getAttribute("href")]);
 
-  it("head admin: Business, Pricing (Tax, fees and deposit first, Weekend and holiday pricing last), Payment plans, Notifications, Templates", () => {
+  it("head admin: Business, Pricing (Tax and deposit first, Weekend and holiday pricing last), Payment plans, Notifications, Templates", () => {
     render(<SettingsIndexV2 canView={() => true} tenantSlug="northwind" isHeadAdmin />);
     expect(sectionTitles()).toEqual(["Business", "Pricing", "Payment plans", "Notifications", "Templates"]);
     expect(entries()).toEqual([
       ["General", "/settings?tab=general"],
       ["Branding", "/settings/appearance"],
       ["Locations", "/settings?tab=locations"],
+      // Out of General into pages of their own (Sep 19 2026).
+      ["Booking rules", "/settings?tab=duration"],
+      ["Lockbox", "/settings?tab=lockbox"],
+      ["Booking site", "/settings?tab=booking-site"],
+      ["Optional modules", "/settings?tab=modules"],
       ["Team", "/users"],
-      ["Tax, fees and deposit", "/settings?tab=fees"],
+      // Tax and deposit's ENTRY moved out of Business into Pricing, first
+      // (ticket item 1). The page and all three of its aliases are unchanged.
+      ["Tax and deposit", "/settings?tab=tax-and-deposit"],
       ["Promo codes", "/settings?tab=promos"],
       ["Extras", "/settings?tab=extras"],
       ["Weekend and holiday pricing", "/settings?tab=pricing"],
@@ -207,20 +214,21 @@ describe("SettingsIndexV2 structure", () => {
     expect(container.querySelector('a[href="/users"]')).toBeNull();
   });
 
-  it("no merged page or the global blacklist has an entry of its own", () => {
+  it("no tab of General, no half of Tax and deposit, and not the global blacklist has an entry of its own", () => {
     render(<SettingsIndexV2 canView={() => true} tenantSlug="northwind" isHeadAdmin />);
     const titles = entries().map(([title]) => title);
     for (const gone of [
+      "Regional",
       "Driver requirements",
-      "Booking rules",
       "Key handover",
-      "Booking site",
       "Tax and fees",
       "Security deposit",
       "Global blacklist",
       "Pricing rules",
       "Custom pricing",
       "Monthly rate",
+      // The parallel entry this ticket briefly had; there is one Tax entry now.
+      "Tax, fees and deposit",
     ]) {
       expect(titles).not.toContain(gone);
     }
@@ -228,47 +236,90 @@ describe("SettingsIndexV2 structure", () => {
     expect(container.querySelector('a[href="/settings/blacklist"]')).toBeNull();
   });
 
-  it("General is listed for a manager who may see only one of its sections", () => {
-    // Only the Booking rules permission: General (that section) and nothing else.
-    render(<SettingsIndexV2 canView={(tab) => tab === "duration"} tenantSlug="northwind" isHeadAdmin={false} />);
-    expect(entries()).toEqual([["General", "/settings?tab=general"]]);
-    expect(container.querySelector('[data-settings-state="empty"]')).toBeNull();
-  });
-
-  it("Tax, fees and deposit is listed for a manager who may see either of its sections, and General is not", () => {
-    // Tax and fees and Security deposit left General: the fees grant alone
-    // lists the fees page only.
+  it("a page made of sections is listed for a manager who may see only one of them", () => {
+    // Only the grant behind Tax and fees: Tax and deposit, and nothing else.
     render(<SettingsIndexV2 canView={(tab) => tab === "fees"} tenantSlug="northwind" isHeadAdmin={false} />);
-    expect(sectionTitles()).toEqual(["Pricing"]);
-    expect(entries()).toEqual([["Tax, fees and deposit", "/settings?tab=fees"]]);
+    expect(entries()).toEqual([["Tax and deposit", "/settings?tab=tax-and-deposit"]]);
+    expect(container.querySelector('[data-settings-state="empty"]')).toBeNull();
+
+    // Only the grant behind Security deposit: the same page.
     act(() => root.unmount());
     root = createRoot(container);
     render(<SettingsIndexV2 canView={(tab) => tab === "preauth"} tenantSlug="northwind" isHeadAdmin={false} />);
-    expect(entries()).toEqual([["Tax, fees and deposit", "/settings?tab=fees"]]);
+    expect(entries()).toEqual([["Tax and deposit", "/settings?tab=tax-and-deposit"]]);
+
+    // Only the grant behind Driver requirements: General (its second tab).
+    act(() => root.unmount());
+    root = createRoot(container);
+    render(<SettingsIndexV2 canView={(tab) => tab === "requirements"} tenantSlug="northwind" isHeadAdmin={false} />);
+    expect(entries()).toEqual([["General", "/settings?tab=general"]]);
+  });
+
+  it("each page that came out of General follows its own permission", () => {
+    // Booking rules and Lockbox only.
+    const granted = new Set(["duration", "lockbox"]);
+    render(<SettingsIndexV2 canView={(tab) => granted.has(tab)} tenantSlug="northwind" isHeadAdmin={false} />);
+    expect(entries()).toEqual([
+      ["Booking rules", "/settings?tab=duration"],
+      ["Lockbox", "/settings?tab=lockbox"],
+    ]);
+
+    // General's own grant: General, Booking site and Optional modules (both
+    // follow it), and none of the others.
+    act(() => root.unmount());
+    root = createRoot(container);
+    render(<SettingsIndexV2 canView={(tab) => tab === "general"} tenantSlug="northwind" isHeadAdmin={false} />);
+    expect(entries()).toEqual([
+      ["General", "/settings?tab=general"],
+      ["Booking site", "/settings?tab=booking-site"],
+      ["Optional modules", "/settings?tab=modules"],
+    ]);
   });
 
   it("the pricing permission lists Weekend and holiday pricing, and General for the monthly rate", () => {
+    // The monthly rate is a section of General under the `pricing` grant, so
+    // that grant alone opens General — and Weekend and holiday pricing, which
+    // it has always opened.
     render(<SettingsIndexV2 canView={(tab) => tab === "pricing"} tenantSlug="northwind" isHeadAdmin={false} />);
     expect(entries()).toEqual([
       ["General", "/settings?tab=general"],
       ["Weekend and holiday pricing", "/settings?tab=pricing"],
     ]);
+    expect(sectionTitles()).toEqual(["Business", "Pricing"]);
   });
 
-  it("finds each page by the words of the sections it now holds", () => {
+
+  it("leaves out an entry the page says has nothing behind it (Optional modules with no module)", () => {
+    render(
+      <SettingsIndexV2 canView={() => true} tenantSlug="northwind" isHeadAdmin hiddenHrefs={["/settings?tab=modules"]} />,
+    );
+    const titles = entries().map(([title]) => title);
+    expect(titles).not.toContain("Optional modules");
+    expect(titles).toContain("Booking site");
+    type("turo");
+    expect(container.querySelector('[data-settings-state="no-match"]')).not.toBeNull();
+  });
+
+  it("finds each page by the words of what it holds", () => {
     render(<SettingsIndexV2 canView={() => true} tenantSlug="northwind" isHeadAdmin />);
     type("deposit");
-    expect(entries().map(([title]) => title)).toEqual(["Tax, fees and deposit"]);
+    expect(entries().map(([title]) => title)).toEqual(["Tax and deposit"]);
     type("vat");
-    expect(entries().map(([title]) => title)).toEqual(["Tax, fees and deposit"]);
+    expect(entries().map(([title]) => title)).toEqual(["Tax and deposit"]);
     type("preauth");
-    expect(entries().map(([title]) => title)).toEqual(["Tax, fees and deposit"]);
+    expect(entries().map(([title]) => title)).toEqual(["Tax and deposit"]);
+    type("buffer");
+    expect(entries().map(([title]) => title)).toEqual(["Booking rules"]);
+    type("lockbox");
+    expect(entries().map(([title]) => title)).toEqual(["Lockbox", "Customer messages"]);
+    type("licence");
+    expect(entries().map(([title]) => title)).toEqual(["General"]);
     type("monthly rate");
     expect(entries().map(([title]) => title)).toEqual(["General"]);
-    type("buffer");
-    expect(entries().map(([title]) => title)).toEqual(["General"]);
-    type("lockbox");
-    expect(entries().map(([title]) => title)).toEqual(["General", "Customer messages"]);
+    type("breakdown");
+    expect(entries().map(([title]) => title)).toEqual(["Booking site"]);
+    type("turo");
+    expect(entries().map(([title]) => title)).toEqual(["Optional modules"]);
     type("holiday");
     expect(entries().map(([title]) => title)).toEqual(["Weekend and holiday pricing"]);
     type("surcharge");
@@ -278,19 +329,32 @@ describe("SettingsIndexV2 structure", () => {
     expect(entries().map(([title]) => title)).toEqual(["Weekend and holiday pricing"]);
   });
 
-  it("Tax, fees and deposit and Weekend and holiday pricing: titles, links, permissions and descriptions", async () => {
+  it("Tax and deposit and Weekend and holiday pricing: titles, links, permissions and descriptions", async () => {
     const { SETTINGS_INDEX_SECTIONS } = await import("@/components/settings-v2/settings-index");
     const pricing = SETTINGS_INDEX_SECTIONS.find((section) => section.title === "Pricing")!;
-    expect(pricing.items.map((item) => item.title)).toEqual(["Tax, fees and deposit", "Promo codes", "Extras", "Weekend and holiday pricing"]);
+    // Tax and deposit is FIRST under Pricing (ticket item 1, "fees, tax and
+    // deposit become a rule inside Pricing, next to custom pricing"), and the
+    // renamed weekend page is last.
+    expect(pricing.items.map((item) => item.title)).toEqual([
+      "Tax and deposit",
+      "Promo codes",
+      "Extras",
+      "Weekend and holiday pricing",
+    ]);
     const fees = pricing.items[0];
-    expect([fees.href, fees.tab, fees.anyOfTabs]).toEqual(["/settings?tab=fees", "fees", ["fees", "preauth"]]);
+    // The page, its key and every alias are unchanged: only the entry moved.
+    expect([fees.href, fees.tab, fees.anyOfTabs]).toEqual(["/settings?tab=tax-and-deposit", "fees", ["fees", "preauth"]]);
     const weekend = pricing.items[3];
     expect([weekend.href, weekend.tab, weekend.anyOfTabs]).toEqual(["/settings?tab=pricing", "pricing", undefined]);
+    // Business no longer lists it.
+    const business = SETTINGS_INDEX_SECTIONS.find((section) => section.title === "Business")!;
+    expect(business.items.map((item) => item.title)).not.toContain("Tax and deposit");
     // General no longer claims tax or deposits, and names the monthly rate.
-    const general = SETTINGS_INDEX_SECTIONS[0].items.find((item) => item.title === "General")!;
+    const general = business.items.find((item) => item.title === "General")!;
     expect(general.description).toContain("monthly rate");
     expect(`${general.description} ${general.keywords}`).not.toMatch(/\b(tax|vat|deposit|preauth)\b/i);
-    expect(general.anyOfTabs).toEqual(["general", "requirements", "duration", "pricing", "lockbox"]);
+    // Regional, Driver requirements and Monthly rate.
+    expect(general.anyOfTabs).toEqual(["general", "requirements", "pricing"]);
   });
 
   it("a head admin finds Team by 'password'; anyone else gets no match and no hand-off", () => {
@@ -322,7 +386,8 @@ describe("SettingsIndexV2 structure", () => {
       expect(item!.section, title).toBe(section);
       expect(item!.href, title).toBe(href);
       expect(item!.tab, title).toBe(tab);
-      // Each follows one permission (only the pages of sections span several); none is head-admin only.
+      // Only the sectioned pages (General, Tax and deposit) span several
+      // permissions; none of these is head-admin only.
       expect(item!.anyOfTabs, title).toBeUndefined();
       expect(item!.headAdminOnly, title).toBeUndefined();
       expect(item!.description.length, title).toBeGreaterThanOrEqual(95);
@@ -370,6 +435,33 @@ describe("SettingsIndexV2 structure", () => {
     expect(entries().map(([title]) => title)).toEqual(["Auto-extension"]);
     type("payg");
     expect(entries().map(([title]) => title)).toEqual(["Pay as you go"]);
+  });
+
+  /**
+   * Team lead, Sep 2026, with a screenshot of the index: hovering a card
+   * underlined its title. The whole card is the target and it already tints on
+   * hover, which is the signal he asked for; an underline made the title read as
+   * a word inside a sentence. Keyboard users get a ring instead, which the
+   * hover-only underline never gave them.
+   */
+  it("never underlines a card title on hover, and still reads as clickable", () => {
+    render(<SettingsIndexV2 canView={() => true} tenantSlug="northwind" isHeadAdmin />);
+    const cards = Array.from(container.querySelectorAll<HTMLAnchorElement>("section a"));
+    expect(cards.length).toBeGreaterThan(0);
+    for (const card of cards) {
+      const title = card.querySelectorAll("span")[0];
+      expect(title.className, card.textContent ?? "").not.toContain("underline");
+      // The hover tint (both themes) and the keyboard ring stay on the card.
+      expect(card.className).toContain("hover:bg-primary/10");
+      expect(card.className).toContain("dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]");
+      expect(card.className).toContain("focus-visible:ring-3");
+      expect(card.className).toContain("focus-visible:ring-ring/30");
+    }
+    // The one link that IS inline in a sentence keeps its underline.
+    const inline = Array.from(container.querySelectorAll<HTMLAnchorElement>("p a"));
+    expect(inline.length).toBe(1);
+    expect(inline[0].getAttribute("href")).toBe("/integrations");
+    expect(inline[0].className).toContain("hover:underline");
   });
 
   it("every description is 95–120 characters and wraps in a 320px column", async () => {

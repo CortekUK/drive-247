@@ -33,6 +33,11 @@ import { CalendarRange, Loader2, Pencil, Plus, Trash2, type LucideIcon } from "l
 import { Button } from "@/components/ui-v2/button";
 import { Input } from "@/components/ui-v2/input";
 import { Switch } from "@/components/ui-v2/switch";
+// Every SelectContent below is `tone="surface"`: Settings is a light,
+// text-heavy screen, and the dropdown's default translucent near-black panel
+// reads there as an OS menu rather than as part of the page. The surface tone
+// uses the page's own popover, border and highlight tokens — see
+// components/ui-v2/select.tsx.
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui-v2/select";
 import {
   Dialog,
@@ -245,7 +250,7 @@ function MonthlyRateBody({
               <SelectTrigger className="w-28" aria-label="Monthly rate starts at">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent tone="surface">
                 {options.map((days) => (
                   <SelectItem key={days} value={String(days)}>
                     {days} days

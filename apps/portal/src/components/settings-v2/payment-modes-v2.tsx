@@ -40,8 +40,13 @@ import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import { Input } from "@/components/ui-v2/input";
 import { Switch } from "@/components/ui-v2/switch";
+// Every SelectContent below is `tone="surface"`: Settings is a light,
+// text-heavy screen, and the dropdown's default translucent near-black panel
+// reads there as an OS menu rather than as part of the page. The surface tone
+// uses the page's own popover, border and highlight tokens — see
+// components/ui-v2/select.tsx.
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui-v2/select";
-import { SettingsPanel, SettingsRow, useSettingsPageSave } from "@/components/settings-v2/settings-kit";
+import { SettingsPanel, SettingsRow, settingsSaveIssue, useSettingsPageSave } from "@/components/settings-v2/settings-kit";
 import { useRegisterLeaveSave } from "@/components/settings-v2/business-section-save";
 import type { RegisterSectionSave } from "@/components/settings-v2/pricing-money-parts";
 import {
@@ -348,7 +353,8 @@ export function AutoExtendSettingsV2({
   const submit = async () => {
     if (invalid) {
       const { label } = AUTO_EXTEND_NUMBER_FIELDS[invalid.key];
-      throw new Error(`${label}: ${invalid.message}.`);
+      // Names the box, so the page's save bar takes the operator to it.
+      throw settingsSaveIssue(`${label}: ${invalid.message}.`, `v2_${invalid.key}`);
     }
     await save.run(async () => {
       if (Object.keys(changes).length === 0) return;
@@ -428,7 +434,7 @@ export function AutoExtendSettingsV2({
                   <SelectTrigger className="w-full max-w-60 sm:w-60" aria-label="How to take payment">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent tone="surface">
                     <SelectItem value="pay_link">Email a payment link</SelectItem>
                     <SelectItem value="auto_charge">Charge the saved card</SelectItem>
                   </SelectContent>
@@ -463,6 +469,7 @@ export function AutoExtendSettingsV2({
                     <label key={key} className="flex items-center gap-1.5 text-sm text-muted-foreground">
                       {before}
                       <Input
+                        id={`v2_${key}`}
                         type="number"
                         inputMode="numeric"
                         min={field.min}
