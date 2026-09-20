@@ -242,7 +242,9 @@ export function EmailNotificationSettingsV2({
             <div className="flex flex-col gap-3 rounded-2xl bg-muted/40 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0 flex-1 space-y-1">
                 <p className="text-sm font-medium text-foreground">Send alerts by email</p>
-                <p className="text-sm text-muted-foreground">
+                {/* The kit's row description: 13px, snug. Same pair as a
+                    `SettingsRow`, so it is set like one. */}
+                <p className="text-[13px] leading-snug text-muted-foreground">
                   {masterEnabled ? "On. Pick the categories below." : "Off. No alert emails are sent until you turn this on."}
                 </p>
                 {saveError?.target === "master" && (
@@ -334,7 +336,11 @@ export function EmailNotificationSettingsV2({
                       In-app: always on
                     </Badge>
                   </div>
-                  <p className="text-sm text-muted-foreground">{meta.description}</p>
+                  {/* The kit's ROW description (settings-kit.tsx `SettingsRow`):
+                      13px with snug leading. The label above already matches
+                      the kit's row label, and a 14px description under it read
+                      a size larger than every settings row on the page. */}
+                  <p className="text-[13px] leading-snug text-muted-foreground">{meta.description}</p>
                   {saveError?.target === category && (
                     <InlineSaveError lead="Couldn't save, so this is unchanged." error={errorFor(category)} />
                   )}

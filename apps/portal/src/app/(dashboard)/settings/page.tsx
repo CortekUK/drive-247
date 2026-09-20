@@ -2722,7 +2722,7 @@ const Settings = () => {
                     {v2Chrome && (() => {
                       const savedPromo: any = promoCodes?.find((p: any) => p.id === editingPromo.id);
                       return savedPromo?.code && savedPromo.code !== editingPromo.code ? (
-                        <p className="text-sm text-amber-600 dark:text-amber-400">
+                        <p className="text-sm panel-ink-warn">
                           Customers using {savedPromo.code} will no longer get this discount.
                         </p>
                       ) : null;
@@ -2921,7 +2921,11 @@ const Settings = () => {
       ) : undefined;
 
     const digitsOnly = (value: string) => value.replace(/[^0-9]/g, '');
-    const warnText = 'text-amber-600 dark:text-amber-400';
+    // The contrast-corrected v2 warning ink (styles/v2-theme.css), the same one
+    // business-rules-pages, locations-v2, lockbox-templates-v2 and the pricing
+    // panels use. Never a hardcoded `text-amber-600`: at the 13px these notes
+    // are set in it measures under 4.5:1 in the light theme.
+    const warnText = 'panel-ink-warn';
 
     // The in-app payment reminders and the reminder rules: the Team emails page
     // (`reminders`) and, since that page's link opens Notifications, the
@@ -2932,6 +2936,14 @@ const Settings = () => {
     const renderV2ReminderExtras = () =>
       hideRemindersRows ? null : (
         <>
+          {/* Controls at the END of the row, the house style. These rows are
+              declared here rather than on a page, so neither the Notifications
+              page nor the Team emails page can list them in
+              V2_PAGES_CONTROLS_AT_END: they carry their own provider, and read
+              the same wherever they are mounted. Without it the four switches
+              sat mid-row under an Email card and an In-app card whose controls
+              are at the row end. */}
+          <SettingsRowAlignProvider align="end">
           <SettingsPanel title="In-app payment reminders" description="Shown in your reminders list. Nothing is sent to customers.">
             {([
               ['reminder_due_soon_2d', 'Payment due in 2 days', false],
@@ -2959,6 +2971,7 @@ const Settings = () => {
               </SettingsRow>
             ))}
           </SettingsPanel>
+          </SettingsRowAlignProvider>
           <div className="settings-v2-body">
             <ReminderRulesConfig />
           </div>

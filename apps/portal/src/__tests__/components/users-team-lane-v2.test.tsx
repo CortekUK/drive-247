@@ -81,7 +81,7 @@ import { AddUserDialog } from '@/components/users/add-user-dialog';
 import { CredentialsModal } from '@/components/users/credentials-modal';
 import { CANT_SIGN_IN_HINT, TEAM_LIST_COPY, UsersTableV2 } from '@/components/admin-v2/users-table-v2';
 import { HEADER_PRIMARY_V2 } from '@/components/shared/header-icon-button-v2';
-import { SETTINGS_PAGE_TITLE } from '@/components/settings-v2/settings-kit';
+import { SETTINGS_PAGE_TITLE, SettingsPageHeader } from '@/components/settings-v2/settings-kit';
 import { V2Provider } from '@/lib/v2-context';
 
 afterEach(cleanup);
@@ -353,6 +353,28 @@ describe('/users page: v2 header, no search, no card; v1 unchanged', () => {
 
     expect(screen.queryByText('Manage Users')).toBeNull();
     expect(screen.queryByText('Team Members')).toBeNull();
+  });
+
+  // Team is the one Settings page whose header carries an action, so it draws
+  // its own header instead of `SettingsPageHeader`. It must still READ as that
+  // header: same gap under the title, same 14px description with the same
+  // measure cap. Hand-rolled, the description grew to 16px from `sm` and had no
+  // cap, so it sat a size larger than every other v2 settings page.
+  it('v2: the header box and its description match the kit\'s SettingsPageHeader', () => {
+    const reference = render(
+      <SettingsPageHeader title="Team" description="Add people to your portal and choose what each person can see and change." />,
+    );
+    const refHeader = reference.container.firstElementChild as HTMLElement;
+    const refDescription = refHeader.querySelector('p')!;
+    reference.unmount();
+
+    const { container } = renderPage(true);
+    const h1 = container.querySelector('h1')!;
+    const box = h1.parentElement as HTMLElement;
+    const description = h1.nextElementSibling as HTMLElement;
+    // The same vertical rhythm as the kit's header, and the same description.
+    for (const cls of refHeader.className.split(/\s+/)) expect(box.className.split(/\s+/), cls).toContain(cls);
+    expect(description.className.split(/\s+/).sort()).toEqual(refDescription.className.split(/\s+/).sort());
   });
 
   it('v2: no search box, no card, and the people are listed', async () => {

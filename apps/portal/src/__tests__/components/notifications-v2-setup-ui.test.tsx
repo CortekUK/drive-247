@@ -41,7 +41,6 @@ import {
   EMAIL_SENDER_SAVE_KEY,
   EMAIL_SENDER_STORAGE_OFF_COPY,
   EmailSenderSettingsV2,
-  SENDER_FIELD_WIDTH,
   normaliseLocalInput,
   senderFieldProblems,
   senderSettingsFromDraft,
@@ -234,14 +233,20 @@ describe("EmailSenderSettingsV2", () => {
     const replyTo = byId("-reply");
     const recipient = byId("-recipient");
     const local = byId("-local");
-    for (const field of [name, replyTo, recipient]) {
+    // Compare the fields with each other rather than with an imported
+    // constant: another suite mocks this module, and a mock that omits the
+    // export made this test fail only in a full run.
+    // The width token only: "min-w-0" and "max-w-full" are not widths.
+    const width = (el: HTMLElement) => el.className.split(/\s+/).find((c) => /^w-/.test(c));
+    expect(width(name)).toBeTruthy();
+    for (const field of [replyTo, recipient]) {
       expect(field).not.toBeNull();
-      expect(field.className).toContain(SENDER_FIELD_WIDTH.split(" ")[0]);
+      expect(width(field)).toBe(width(name));
     }
     // The pair: the group carries the shared width, the box takes what the
     // fixed domain leaves, so the row ends level with the fields above it.
     const group = local.parentElement!;
-    expect(group.className).toContain(SENDER_FIELD_WIDTH.split(" ")[0]);
+    expect(width(group)).toBe(width(name));
     expect(group.textContent).toContain("@drive-247.com");
     expect(local.className).toContain("flex-1");
     expect(local.className).not.toContain("w-48");

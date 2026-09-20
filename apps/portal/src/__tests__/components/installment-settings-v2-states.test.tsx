@@ -52,7 +52,12 @@ vi.mock("next/navigation", () => ({ useRouter: () => nav }));
 
 import { useCallback, useRef, useState } from "react";
 import { InstallmentSettings } from "@/components/settings/InstallmentSettings";
-import { SettingsPageSaveProvider, SettingsStickySaveBar } from "@/components/settings-v2/settings-kit";
+import {
+  SettingsPageSaveProvider,
+  SettingsRow,
+  SettingsRowAlignProvider,
+  SettingsStickySaveBar,
+} from "@/components/settings-v2/settings-kit";
 import { LeaveDialogV2 } from "@/components/settings-v2/leave-dialog-v2";
 import { useLeaveGuardV2 } from "@/hooks/use-leave-guard-v2";
 import { runThroughLeaveGuard } from "@/lib/leave-guard";
@@ -225,6 +230,50 @@ describe("InstallmentSettings v2 states", () => {
 const pillButtons = () =>
   Array.from(container.querySelectorAll<HTMLButtonElement>("button")).filter((b) => /^\d×/.test(b.textContent ?? ""));
 const bothPlansOn = { installment_config: { ...savedConfig, weekly_enabled: true, monthly_enabled: true } };
+
+/**
+ * The kit's own end-aligned row grid, taken by rendering the kit rather than
+ * written out here, so these follow the kit if it changes.
+ */
+function kitRowGrid(align: "start" | "end"): string {
+  const host = document.createElement("div");
+  document.body.appendChild(host);
+  const reference = createRoot(host);
+  act(() =>
+    reference.render(
+      <SettingsRowAlignProvider align={align}>
+        <SettingsRow label="Reference row" description="Reference help">
+          <input data-reference-control="" />
+        </SettingsRow>
+      </SettingsRowAlignProvider>,
+    ),
+  );
+  const className = (host.querySelector("[data-reference-control]")!.parentElement!.parentElement as HTMLElement).className;
+  act(() => reference.unmount());
+  host.remove();
+  return className;
+}
+
+describe("InstallmentSettings v2 row layout", () => {
+  // Installments sits in the Payment plans group beside Pay as you go and
+  // Auto-extension, which both end-align. It is not in the settings page's
+  // V2_PAGES_CONTROLS_AT_END, so it carries the provider itself.
+  it("puts every control at the END of its row, like every other v2 settings page", () => {
+    const end = kitRowGrid("end");
+    const start = kitRowGrid("start");
+    expect(end).not.toBe(start);
+
+    rs.current = api({}, { installment_config: { ...savedConfig, weekly_enabled: true, monthly_enabled: true } });
+    render();
+    const labels = ["Offer installments at checkout", "Weekly plan", "Payments per week", "Monthly plan", "Payments per month"];
+    for (const label of labels) {
+      const hit = Array.from(container.querySelectorAll("p, label")).find((el) => el.textContent?.trim() === label);
+      expect(hit, label).toBeTruthy();
+      const grid = hit!.parentElement!.parentElement as HTMLElement;
+      expect(grid.className, label).toBe(end);
+    }
+  });
+});
 
 describe("InstallmentSettings plan pills", () => {
   it("v2: every pill is rounded-full, and an unselected pill hovers with the purple pair", () => {

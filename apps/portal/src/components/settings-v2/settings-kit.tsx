@@ -34,7 +34,13 @@
  *
  * HEADINGS
  *   SETTINGS_PAGE_TITLE     the page's h1, bold
- *   SETTINGS_SECTION_TITLE  a section's h2, semibold, never a line under it
+ *   SETTINGS_SECTION_TITLE  a section's h2, semibold. `SettingsSection` draws
+ *                           no line under it. Locations is the one page that
+ *                           does (team lead, Sep 19 2026 — its two sides are
+ *                           headed outside their panels and the divider is
+ *                           what separates them); it draws its own heading
+ *                           block and is pinned by
+ *                           __tests__/components/settings-locations-lane-v2.
  *
  * SECTIONS AND DEEP LINKS
  *   <SettingsSection anchor="security-deposit" title=… description=…>

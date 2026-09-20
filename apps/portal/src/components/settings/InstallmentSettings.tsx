@@ -24,7 +24,7 @@ import { cn } from "@/lib/utils";
 import { useV2 } from "@/lib/v2-context";
 import type { RegisterSectionSave } from "@/components/settings-v2/pricing-money-parts";
 import { useRegisterLeaveSave } from "@/components/settings-v2/business-section-save";
-import { SettingsPanel, SettingsRow, useSettingsPageSave } from "@/components/settings-v2/settings-kit";
+import { SettingsPanel, SettingsRow, SettingsRowAlignProvider, useSettingsPageSave } from "@/components/settings-v2/settings-kit";
 import {
   formatSettingsNumber,
   SettingsDependencyNotice,
@@ -328,6 +328,14 @@ export function InstallmentSettings({ registerSave }: { registerSave?: RegisterS
           />
         )}
 
+        {/* LAYOUT. The label and its help take the row and the control sits at
+            its end — the house style for a v2 settings form (settings-kit.tsx).
+            This page is not in the settings page's `V2_PAGES_CONTROLS_AT_END`,
+            so without this its switches sat mid-row while Pay as you go and
+            Auto-extension, the two pages beside it in the Payment plans group,
+            put theirs at the end (payment-modes-v2.tsx carries the same
+            provider for the same reason). */}
+        <SettingsRowAlignProvider align="end">
         <SettingsPanel footer={footer}>
           {/* The checkout switch. A disabled fieldset for a view-only user, so
               the keyboard cannot flip what the mouse cannot. */}
@@ -403,6 +411,7 @@ export function InstallmentSettings({ registerSave }: { registerSave?: RegisterS
             </fieldset>
           </PlanLockV2.Provider>
         </SettingsPanel>
+        </SettingsRowAlignProvider>
 
         {previewOpen && (
           <ExampleDialog

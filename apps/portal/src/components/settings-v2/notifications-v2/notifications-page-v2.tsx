@@ -64,7 +64,7 @@ import { useAuth } from "@/stores/auth-store";
 import { useRegisterLeaveSave } from "../business-section-save";
 import type { RegisterSectionSave } from "../pricing-money-parts";
 import { EmailNotificationSettingsV2 } from "../notification-states-v2";
-import { SettingsLoadError, SettingsSectionSkeleton } from "../section-states";
+import { SettingsLoadError, SettingsSectionSkeleton, useWarnOnUnsavedChanges } from "../section-states";
 import { SETTINGS_SECTION_TITLE, SettingsRow, SettingsRowAlignProvider, SettingsSection } from "../settings-kit";
 import { settingsSectionId } from "../settings-shell-state";
 import { EmailSenderSettingsV2 } from "./email-sender-settings-v2";
@@ -192,6 +192,15 @@ export function NotificationsPageV2({ canEdit, registerSave, todaySettings, scro
 
   useRegisterLeaveSave(canEdit ? registerSave : undefined, NOTIFICATIONS_SAVE_KEY, dirty && canSave, save, discard);
 
+  // While notifications storage is off nothing can be saved, so no save is
+  // registered and the page's leave dialog — which is fed by the registered
+  // sections — has nothing to warn about. Edits are still allowed (they drive
+  // the previews), so at least closing or reloading the tab asks first instead
+  // of dropping them without a word. In-app navigation is still silent: the
+  // page says so in the notice above, and a page that cannot save cannot
+  // honestly offer the leave dialog's Save.
+  useWarnOnUnsavedChanges(dirty && !canSave);
+
   /* ------------------------------- Editing ------------------------------- */
 
   const toggleChannel = useCallback((key: string, channel: NotificationChannel, enabled: boolean) => {
@@ -199,6 +208,12 @@ export function NotificationsPageV2({ canEdit, registerSave, todaySettings, scro
     if (!item || !channelSpec(item, channel)) return;
     const k = settingKey(key, channel);
     setDrafts((prev) => ({ ...prev, [k]: { ...(prev[k] ?? storedEdit(item, channel, rowsRef.current)), enabled } }));
+    // The whiteboard (transcript 10:09, 10:58): switching a channel ON opens
+    // the box, at THAT channel — the operator has just said they want this
+    // message sent, and the next question is what it says. Switching one off
+    // leaves whatever is open alone: nothing new is being set up, and closing
+    // the editor under the operator's hands would lose their place.
+    if (enabled) setOpen({ key, channel });
   }, []);
 
   const changeChannel = useCallback((item: NotificationItem, channel: NotificationChannel, next: ChannelEdit) => {

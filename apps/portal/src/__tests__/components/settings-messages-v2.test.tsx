@@ -137,6 +137,7 @@ import {
   smsSegments,
 } from "@/components/settings-v2/message-rules";
 import { EMAIL_CATEGORIES_ONLY_COPY, EmailNotificationSettingsV2, ReminderRulesConfigV2 } from "@/components/settings-v2/notification-states-v2";
+import { SettingsRow } from "@/components/settings-v2/settings-kit";
 import { EmailTemplateEditorV2, EmailTemplatesListV2 } from "@/components/settings-v2/email-templates-v2";
 import { AgreementTemplateEditorV2, AgreementTemplatesPageV2 } from "@/components/settings-v2/agreement-templates-v2";
 import { PushNotificationSettings } from "@/components/settings/push-notification-settings";
@@ -413,6 +414,37 @@ describe("EmailNotificationSettingsV2", () => {
     render(<EmailNotificationSettingsV2 />);
     expect(text()).toContain("No address to send to.");
     expect(container.querySelectorAll('[role="switch"]')).toHaveLength(7); // master + 6 categories
+  });
+
+  // Each category card is a label + help + switch, the same pair a settings row
+  // is, so it is set like one: the kit's `SettingsRow` description is 13px with
+  // snug leading. At 14px it read a size larger than every settings row beside
+  // it on the Notifications page.
+  it("a category's help is set like the kit's settings-row description", () => {
+    resetEmailPrefs({ prefs: { masterEnabled: true, recipientEmail: "ops@fleet.io", contactEmail: "", categories: allOff } });
+    // The kit's own row, rendered rather than written out here.
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const reference = createRoot(host);
+    act(() =>
+      reference.render(
+        <SettingsRow label="Reference" description="Reference help">
+          <input />
+        </SettingsRow>,
+      ),
+    );
+    const kitDescription = Array.from(host.querySelectorAll("div")).find((d) => d.textContent === "Reference help")!.className;
+    act(() => reference.unmount());
+    host.remove();
+
+    render(<EmailNotificationSettingsV2 />);
+    const card = container.querySelector('[data-category="bookings"]')!;
+    const label = Array.from(card.querySelectorAll("p")).find((p) => p.textContent === "Bookings")!;
+    const help = label.parentElement!.parentElement!.querySelector("p:not(:first-child)") as HTMLElement;
+    expect(help.textContent).not.toBe("Bookings");
+    for (const cls of kitDescription.split(/\s+/).filter((c) => c !== "mt-0.5")) {
+      expect(help.className.split(/\s+/), cls).toContain(cls);
+    }
   });
 
   it("master off: explains why categories are disabled", () => {

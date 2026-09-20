@@ -608,3 +608,36 @@ describe("OrgSwitcher (v2 sidebar): Team lives in Settings, not here", () => {
     expect(document.querySelectorAll('[role="separator"]')).toHaveLength(1);
   });
 });
+
+/**
+ * The warning ink. `text-amber-600` measures under 4.5:1 on a light card at the
+ * size these notes are set in, so every v2 panel uses `panel-ink-warn`
+ * (styles/v2-theme.css), which is the contrast-corrected pair. The v2 branch of
+ * the settings page had two left: the Booking site "Photos are not changed…"
+ * note and the promo-code-changed warning inside `{v2Chrome && …}`.
+ *
+ * Source, not a render: this page is too large to mount (see the file header).
+ * The assertion is a property of the v2 half — no hardcoded amber ink anywhere
+ * in it — not a pin on any one line, so renaming or moving a note does not
+ * break it.
+ */
+describe("settings page (v2): the warning ink", () => {
+  // Everything from here down is the v1 layout, which is not being changed.
+  const V1_LAYOUT = "container mx-auto p-4 sm:p-6 space-y-6";
+
+  it("the v2 half uses panel-ink-warn, never a hardcoded amber", () => {
+    const source = read("app/(dashboard)/settings/page.tsx");
+    const split = source.indexOf(V1_LAYOUT);
+    expect(split, `the v1 layout marker "${V1_LAYOUT}" is gone; re-point this test`).toBeGreaterThan(0);
+
+    const v2Half = source.slice(0, split).split("\n");
+    const offenders = v2Half
+      .map((line, i) => [i + 1, line] as const)
+      .filter(([, line]) => line.includes("className") && /\b(?:text|border|bg)-amber-/.test(line));
+    expect(offenders.map(([n, line]) => `${n}: ${line.trim()}`)).toEqual([]);
+
+    // Not vacuous: the v2 half really does carry warning notes, and they are
+    // the corrected ink.
+    expect(v2Half.filter((line) => line.includes("panel-ink-warn")).length).toBeGreaterThan(0);
+  });
+});

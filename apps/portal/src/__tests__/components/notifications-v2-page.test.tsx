@@ -62,9 +62,17 @@ vi.mock("@/components/settings-v2/notifications-v2/push-setup-v2", async () => {
     },
   };
 });
+// `...actual` like the push-setup stub above: replacing the whole module
+// namespace drops everything else it exports (SENDER_FIELD_WIDTH), and a
+// sibling suite that imports the constant then reads `undefined` if the two
+// ever share a module registry.
 vi.mock("@/components/settings-v2/notifications-v2/email-sender-settings-v2", async () => {
   const React = await import("react");
+  const actual = await vi.importActual<typeof import("@/components/settings-v2/notifications-v2/email-sender-settings-v2")>(
+    "@/components/settings-v2/notifications-v2/email-sender-settings-v2",
+  );
   return {
+    ...actual,
     EmailSenderSettingsV2: (props: any) => {
       h.senderProps = props;
       return React.createElement("div", { "data-sender-stub": "" }, "Email");
@@ -73,7 +81,13 @@ vi.mock("@/components/settings-v2/notifications-v2/email-sender-settings-v2", as
 });
 vi.mock("@/components/settings-v2/notification-states-v2", async () => {
   const React = await import("react");
+  // `...actual` for the same reason as the stub above: this module also exports
+  // EMAIL_CATEGORIES_ONLY_COPY and ReminderRulesConfigV2.
+  const actual = await vi.importActual<typeof import("@/components/settings-v2/notification-states-v2")>(
+    "@/components/settings-v2/notification-states-v2",
+  );
   return {
+    ...actual,
     EmailNotificationSettingsV2: (props: any) => {
       h.categoriesProps = props;
       return React.createElement("div", { "data-categories-stub": "" }, "Team alert emails by category");
@@ -611,6 +625,64 @@ describe("opening an item", () => {
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
   });
 
+  // The whiteboard and the walkthrough (10:09, 10:58): the operator picks a
+  // channel and the big box opens on it. Before this, only the item's NAME
+  // opened the box, and always on Email — so turning Push on and then asking
+  // "what does it say?" took two more clicks and landed on the wrong tab.
+  it("switching a channel on opens the box at that channel", () => {
+    render(<NotificationsPageV2 canEdit registerSave={vi.fn()} />);
+    expect(panel()).toBeNull();
+
+    // Push starts off for this item (nothing sends push yet), so this is an "on".
+    expect(channelSwitch(NEW_BOOKING.key, "push")!.getAttribute("aria-checked")).toBe("false");
+    click(channelSwitch(NEW_BOOKING.key, "push")!);
+
+    const p = panel()!;
+    expect(p.getAttribute("data-notification-panel")).toBe(NEW_BOOKING.key);
+    expect(row(NEW_BOOKING.key).contains(p)).toBe(true);
+    const selected = all("[data-channel-tab]").filter((t) => t.getAttribute("aria-selected") === "true");
+    expect(selected.map((t) => t.getAttribute("data-channel-tab"))).toEqual(["push"]);
+    // The box really is showing Push: the phone mockups, not the Gmail iframe.
+    expect(p.querySelector("[data-push-mockup]")).not.toBeNull();
+    expect(p.querySelector("iframe")).toBeNull();
+    // And the row's own switch is on.
+    expect(channelSwitch(NEW_BOOKING.key, "push")!.getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("an already-open box moves to the channel just switched on, and stays put when one is switched off", () => {
+    render(<NotificationsPageV2 canEdit registerSave={vi.fn()} />);
+    const openTab = () =>
+      all("[data-channel-tab]").find((t) => t.getAttribute("aria-selected") === "true")!.getAttribute("data-channel-tab");
+    openItem(NEW_BOOKING.key);
+    expect(openTab()).toBe("email");
+
+    // In-app is on for this item, so this click turns it OFF: the box is left alone.
+    expect(channelSwitch(NEW_BOOKING.key, "in_app")!.getAttribute("aria-checked")).toBe("true");
+    click(channelSwitch(NEW_BOOKING.key, "in_app")!);
+    expect(openTab()).toBe("email");
+
+    // Back on: now the box moves to In-app.
+    click(channelSwitch(NEW_BOOKING.key, "in_app")!);
+    expect(openTab()).toBe("in_app");
+  });
+
+  it("switching a channel OFF opens nothing, and leaves an open box where it was", () => {
+    render(<NotificationsPageV2 canEdit registerSave={vi.fn()} />);
+    // A channel that starts ON, so this click is an "off".
+    const on = (["email", "push", "in_app"] as const).find((c) => effectiveChannel(NEW_BOOKING, c).enabled)!;
+    click(channelSwitch(NEW_BOOKING.key, on)!);
+    expect(panel()).toBeNull();
+
+    // Push on: the box opens at Push. Push off again: the box is untouched.
+    click(channelSwitch(NEW_BOOKING.key, "push")!);
+    expect(panel()).not.toBeNull();
+    click(channelSwitch(NEW_BOOKING.key, "push")!);
+    expect(panel()).not.toBeNull();
+    expect(all("[data-channel-tab]").find((t) => t.getAttribute("aria-selected") === "true")!.getAttribute("data-channel-tab")).toBe(
+      "push",
+    );
+  });
+
   it("Email: subject, the editor and the Gmail preview filled with examples; Send test goes to the operator", () => {
     render(<NotificationsPageV2 canEdit registerSave={vi.fn()} />);
     openItem(NEW_BOOKING.key);
@@ -719,11 +791,43 @@ describe("when saving can't happen", () => {
     expect(notice.textContent).toContain(COPY.storageOffEdits);
     expect(everRegistered(registerSave)).toBe(false);
 
+    // Switching a channel on opened the box at Push (see "switching a channel
+    // on opens the box at that channel"). Shut it and open it from the name,
+    // which lands on Email.
+    openItem(NEW_BOOKING.key);
+    expect(panel()).toBeNull();
+
     // Previews and Send test still work.
     openItem(NEW_BOOKING.key);
     const trigger = Array.from(panel()!.querySelectorAll<HTMLButtonElement>("[data-send-test] button")).find((b) => b.textContent?.trim() === "Send test")!;
     expect(trigger.disabled).toBe(false);
     expect(panel()!.querySelector("iframe")).not.toBeNull();
+  });
+
+  // Nothing can be saved while storage is off, so no save is registered and the
+  // page's leave dialog (fed by the registered sections) has nothing to warn
+  // about. Closing or reloading the tab must still ask, rather than dropping
+  // what was typed without a word.
+  it("storage off: an edit makes closing the tab ask first", () => {
+    resetSettings({ tableMissing: true });
+    render(<NotificationsPageV2 canEdit registerSave={vi.fn()} />);
+
+    const ask = () => {
+      const event = new Event("beforeunload", { cancelable: true });
+      window.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+    expect(ask()).toBe(false);
+
+    click(channelSwitch(NEW_BOOKING.key, "push")!);
+    expect(ask()).toBe(true);
+  });
+
+  it("nothing typed: closing the tab asks nothing", () => {
+    render(<NotificationsPageV2 canEdit registerSave={vi.fn()} />);
+    const event = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
   });
 
   it("read-only: every switch and field is off, no reset, Send test says why; panels and previews still work", () => {
