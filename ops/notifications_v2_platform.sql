@@ -76,6 +76,21 @@
 -- Nothing sends real notifications from this table yet (build-spec D18): live
 -- sending keeps running exactly as today until the runtime phase is approved.
 --
+-- TESTED (Sep 20 2026), not applied: a PGlite suite (Postgres in WASM) applies a
+-- Supabase-shaped stub, then ops/notifications_v2.sql, then this file TWICE, and
+-- checks 56 cases: the precondition really refuses and leaves nothing behind,
+-- the shape (no tenant_id, the PK, 6 CHECKs, 5 policies, 1 trigger), grants
+-- (anon nothing, no TRUNCATE), who can read and write (active super admin yes;
+-- DEACTIVATED super admin, tenant head_admin and signed-in renter all refused,
+-- for reads and for writes), updated_by stamping including a browser-sent value
+-- being overwritten, every CHECK boundary (13 rejections, 5 acceptances), and
+-- that the tenant file's table is otherwise untouched (its 5 CHECKs, 2 policies,
+-- 3 indexes and grants unchanged, a NULL-tenant log row now inserts, and no
+-- trigger landed on any pre-existing table). It lives in the session scratchpad,
+-- not the repo:
+--   SP=/tmp/claude-1000/-home-haseeb-raza-Desktop-drive-247/2834209e-b75e-4bfa-8bb7-fbfd9c489c55/scratchpad/nv2p
+--   cd $SP && npm i @electric-sql/pglite@0.3 && node run.mjs      # exit 0 = all pass
+--
 -- ─────────────────────────────────────────────────────────────────────────────
 -- ADDITIVE ONLY (V2_PLAN §4, §6) — WITH ONE DELIBERATE EXCEPTION, FLAGGED HERE
 --
