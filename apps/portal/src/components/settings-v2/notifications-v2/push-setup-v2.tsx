@@ -41,6 +41,7 @@
 
 import { useEffect, useId, useLayoutEffect, useState, type ReactNode } from "react";
 import { BellOff, Check, Download, Loader2, PlusSquare, Send, Share } from "lucide-react";
+import { Badge } from "@/components/ui-v2/badge";
 import { Button } from "@/components/ui-v2/button";
 import { Switch } from "@/components/ui-v2/switch";
 import { useTenant } from "@/contexts/TenantContext";
@@ -384,13 +385,14 @@ function PushSetupSteps({ canEdit = true, onSendTest, className }: PushSetupV2Pr
         </Step>
 
         {/* ---- 3. Test --------------------------------------------------- */}
-        <Step n={3} id="test" done={arrived === "yes"} title="Send a test to this device">
-          <p className="text-[13px] text-muted-foreground">
-            {state.canTest
-              ? "Sends a test to your devices that have notifications on, including this one."
-              : "Turn on notifications in step 2 first."}
-          </p>
-          <div>
+        <Step
+          n={3}
+          id="test"
+          done={arrived === "yes"}
+          title="Send a test to this device"
+          // The control at the END of its row, as step 2's switch is and as
+          // every row on this page now is.
+          control={
             <Button
               type="button"
               variant="outline"
@@ -402,7 +404,13 @@ function PushSetupSteps({ canEdit = true, onSendTest, className }: PushSetupV2Pr
               {sending ? <Loader2 className="animate-spin" data-icon="inline-start" /> : <Send data-icon="inline-start" />}
               {sending ? "Sending…" : "Send a test"}
             </Button>
-          </div>
+          }
+        >
+          <p className="text-[13px] text-muted-foreground">
+            {state.canTest
+              ? "Sends a test to your devices that have notifications on, including this one."
+              : "Turn on notifications in step 2 first."}
+          </p>
           <TestResultView
             result={result}
             arrived={arrived}
@@ -482,8 +490,11 @@ function Step({
           <h3 className="flex flex-wrap items-center gap-2 text-sm font-medium text-foreground">
             <span className="sr-only">{done ? "Done: " : `Step ${n}: `}</span>
             {title}
+            {/* The kit's Badge, like every other pill on this page. */}
             {tag && (
-              <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-normal text-muted-foreground">{tag}</span>
+              <Badge variant="secondary" className="font-normal text-muted-foreground">
+                {tag}
+              </Badge>
             )}
           </h3>
           {control}

@@ -729,7 +729,7 @@ export function SettingsDependencyNotice({
           aria-hidden="true"
           className={cn(
             "mt-0.5 size-4 shrink-0",
-            tone === "warning" ? "text-amber-600 dark:text-amber-400" : "text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]",
+            tone === "warning" ? "panel-ink-warn" : "text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]",
           )}
         />
         <div className="min-w-0 [overflow-wrap:anywhere]">

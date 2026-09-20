@@ -55,7 +55,7 @@ import {
   SettingsSaveState,
   SettingsSectionSkeleton,
 } from "../section-states";
-import { SettingsPanel, SettingsRow, Unit, UnitGroup } from "../settings-kit";
+import { SettingsPanel, SettingsRow, SettingsRowAlignProvider, Unit, UnitGroup } from "../settings-kit";
 
 /* -------------------------------------------------------------------------- */
 /* Constants                                                                   */
@@ -164,6 +164,16 @@ export function senderFieldProblems(draft: SenderDraft, slug: string | null | un
 }
 
 /** What a pasted full address or capitals turn into in the "Send from" box. */
+/**
+ * One width for every field in this panel. The three plain inputs and the
+ * "Send from" pair (a short local part beside a fixed @drive-247.com) all
+ * measure the same, so their left and right edges line up down the panel.
+ * Before this, "Send from" was a fixed 12rem box plus the domain, which made
+ * that one row wider than the rest and left the box far too big for a word
+ * like "northwind".
+ */
+export const SENDER_FIELD_WIDTH = "w-[17rem] max-w-full";
+
 export function normaliseLocalInput(value: string): string {
   const v = value.toLowerCase().replace(/\s+/g, "");
   const suffix = "@" + EMAIL_SENDER_DOMAIN;
@@ -336,15 +346,20 @@ export function EmailSenderSettingsV2({ canEdit = true, registerSave, className 
 
   const retrySender = () => senderQuery.refetch();
 
+  // Controls at the END of every row (the house style: Locations, Pricing).
+  // Left-aligned they sat against a fixed 420px label column with the whole
+  // right half of the card empty, which is what the operator's screenshot showed.
   const panel = (children: ReactNode, footer?: ReactNode) => (
     <div data-settings-section="email-sender" className={className}>
-      <SettingsPanel
-        title={EMAIL_SENDER_TITLE}
-        description="Who your emails come from, and where your team's alert emails go."
-        footer={footer}
-      >
-        {children}
-      </SettingsPanel>
+      <SettingsRowAlignProvider align="end">
+        <SettingsPanel
+          title={EMAIL_SENDER_TITLE}
+          description="Who your emails come from, and where your team's alert emails go."
+          footer={footer}
+        >
+          {children}
+        </SettingsPanel>
+      </SettingsRowAlignProvider>
     </div>
   );
 
@@ -396,7 +411,7 @@ export function EmailSenderSettingsV2({ canEdit = true, registerSave, className 
           onBlur={() => touch("name")}
           aria-invalid={nameError ? true : undefined}
           aria-describedby={describedBy(nameError && fieldId("name-error"))}
-          className="max-w-sm"
+          className={SENDER_FIELD_WIDTH}
         />
       </SettingsRow>
 
@@ -410,7 +425,7 @@ export function EmailSenderSettingsV2({ canEdit = true, registerSave, className 
         }
         note={localError && <FieldError id={fieldId("local-error")}>{localError}</FieldError>}
       >
-        <UnitGroup className="min-w-0 max-w-full">
+        <UnitGroup className={cn(SENDER_FIELD_WIDTH, "min-w-0")}>
           <Input
             id={fieldId("local")}
             value={sender.value.local}
@@ -423,7 +438,7 @@ export function EmailSenderSettingsV2({ canEdit = true, registerSave, className 
             onBlur={() => touch("local")}
             aria-invalid={localError ? true : undefined}
             aria-describedby={describedBy(localError && fieldId("local-error"))}
-            className="w-48 min-w-0"
+            className="min-w-0 flex-1"
           />
           <Unit>@{EMAIL_SENDER_DOMAIN}</Unit>
         </UnitGroup>
@@ -446,7 +461,7 @@ export function EmailSenderSettingsV2({ canEdit = true, registerSave, className 
           onBlur={() => touch("replyTo")}
           aria-invalid={replyError ? true : undefined}
           aria-describedby={describedBy(replyError && fieldId("reply-error"))}
-          className="max-w-sm"
+          className={SENDER_FIELD_WIDTH}
         />
       </SettingsRow>
 
@@ -467,7 +482,7 @@ export function EmailSenderSettingsV2({ canEdit = true, registerSave, className 
     ? { tone: "text-destructive", text: "Enter a valid email address, like name@company.com." }
     : recipient === "no-address"
       ? {
-          tone: "text-amber-600 dark:text-amber-400",
+          tone: "text-amber-700 dark:text-amber-400",
           text: "No address to send to. Add one here, or alert emails won't reach anyone.",
         }
       : {
@@ -535,7 +550,7 @@ export function EmailSenderSettingsV2({ canEdit = true, registerSave, className 
           onBlur={() => touch("recipient")}
           aria-invalid={recipientInvalid || undefined}
           aria-describedby={fieldId("recipient-help")}
-          className="max-w-sm"
+          className={SENDER_FIELD_WIDTH}
         />
       </SettingsRow>
     </div>

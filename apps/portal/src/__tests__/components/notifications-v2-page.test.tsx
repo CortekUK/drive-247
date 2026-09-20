@@ -124,6 +124,7 @@ import {
   v2SectionHomePage,
 } from "@/components/settings-v2/settings-shell-state";
 import { SETTINGS_VALUE_TO_KEY } from "@/lib/permissions";
+import { SettingsRow, SettingsRowAlignProvider } from "@/components/settings-v2/settings-kit";
 
 /* -------------------------------------------------------------------------- */
 /* Harness                                                                     */
@@ -833,6 +834,14 @@ describe("a channel with no sender yet is marked on the row, not only inside the
     expect(pairs.filter((p) => p.spec && p.spec.today !== "not_sent").length).toBeGreaterThan(10);
   });
 
+  /**
+   * These two render the whole page (48 items × 3 channels) and then walk every
+   * cell, which lands around 4s on a quiet machine and tipped past the 5s
+   * default under a full parallel suite run. The timeout is generous on purpose:
+   * the assertion is the point, and a flake here reads as a real regression.
+   */
+  const WHOLE_PAGE_WALK_MS = 20_000;
+
   it("exactly the channels the catalog calls not_sent carry the marker", () => {
     render(<NotificationsPageV2 canEdit registerSave={vi.fn()} />);
     for (const item of NOTIFICATION_CATALOG) {
@@ -840,7 +849,7 @@ describe("a channel with no sender yet is marked on the row, not only inside the
         expect(!!marker(item.key, channel), `${item.key} / ${channel}`).toBe(isNotSentYet(item, channel));
       }
     }
-  });
+  }, WHOLE_PAGE_WALK_MS);
 
   it("the marker reads 'Not sent yet' and carries its explanation for a screen reader", () => {
     render(<NotificationsPageV2 canEdit registerSave={vi.fn()} />);
@@ -869,7 +878,7 @@ describe("a channel with no sender yet is marked on the row, not only inside the
         expect(both, `${item.key} / ${channel}`).toBe(false);
       }
     }
-  });
+  }, WHOLE_PAGE_WALK_MS);
 
   it("the row's marker and the panel's Today line say the same thing about the same channel", () => {
     render(<NotificationsPageV2 canEdit registerSave={vi.fn()} />);
@@ -962,5 +971,152 @@ describe("Open in app says on the option that it only reaches test sends", () =>
     openItem(NEW_BOOKING.key);
     selectTab("push");
     expect(panel()!.querySelectorAll("[data-push-option-note]")).toHaveLength(1);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* Layout: where the controls sit, and the two halves of an open item          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The kit's own end-aligned row grid (control at the END of the row), taken by
+ * rendering the kit rather than written out here: these assertions follow the
+ * kit if the kit changes, and fail the day a row on this page goes back to the
+ * default, which puts the control against a fixed 420px label column with the
+ * right half of the panel empty.
+ */
+function kitRowGrid(align: "start" | "end"): string {
+  const host = document.createElement("div");
+  document.body.appendChild(host);
+  const reference = createRoot(host);
+  act(() =>
+    reference.render(
+      <SettingsRowAlignProvider align={align}>
+        <SettingsRow label="Reference row" description="Reference help">
+          <input data-reference-control="" />
+        </SettingsRow>
+      </SettingsRowAlignProvider>,
+    ),
+  );
+  const className = (host.querySelector("[data-reference-control]")!.parentElement!.parentElement as HTMLElement).className;
+  act(() => reference.unmount());
+  host.remove();
+  return className;
+}
+
+/** True when `a` comes before `b` in the document. */
+const before = (a: Element, b: Element) => !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+describe("where the controls sit", () => {
+  it("the In-app rows use the kit's end-aligned row, like every other panel on this page", () => {
+    const end = kitRowGrid("end");
+    const start = kitRowGrid("start");
+    expect(end).not.toBe(start);
+    render(<NotificationsPageV2 canEdit registerSave={vi.fn()} />);
+    const rows = Array.from(one('[data-settings-section="in-app"]').querySelectorAll("p"))
+      .filter((p) => p.textContent === "Your team" || p.textContent === "Customers")
+      .map((p) => p.parentElement!.parentElement as HTMLElement);
+    expect(rows).toHaveLength(2);
+    for (const grid of rows) expect(grid.className).toBe(end);
+  });
+
+  it("an item's three channel switches are the last thing in its row, in one column each", () => {
+    render(<NotificationsPageV2 canEdit registerSave={vi.fn()} />);
+    const r = row(NEW_BOOKING.key);
+    const cells = r.querySelector("[data-channel-cells]")!;
+    expect(Array.from(cells.querySelectorAll("[data-channel-cell]")).map((c) => c.getAttribute("data-channel-cell"))).toEqual([
+      "email",
+      "push",
+      "in_app",
+    ]);
+    // Last in the row, after the name and its plain-English line.
+    expect(cells.parentElement!.lastElementChild).toBe(cells);
+    expect(before(r.querySelector("[data-direction-chip]")!, cells)).toBe(true);
+  });
+
+  it("the switches line up: a cell carrying the Not sent yet marker must not lift its switch", () => {
+    render(<NotificationsPageV2 canEdit registerSave={vi.fn()} />);
+    // A row where one channel carries the marker and another does not: centring
+    // the cells makes the taller one's switch sit above the others.
+    const marked = all("[data-notification-item]").find((r) => {
+      const cells = Array.from(r.querySelectorAll("[data-channel-cell]"));
+      const withSwitch = cells.filter((c) => c.querySelector('[role="switch"]'));
+      return withSwitch.some((c) => c.querySelector("[data-channel-not-sent]")) &&
+        withSwitch.some((c) => !c.querySelector("[data-channel-not-sent]"));
+    });
+    expect(marked, "no row mixes a marked and an unmarked channel").toBeTruthy();
+    const cells = marked!.querySelector("[data-channel-cells]") as HTMLElement;
+    expect(cells.className.split(/\s+/)).toContain("md:items-start");
+    // The switch is the first thing in its cell; the marker sits under it.
+    for (const cell of Array.from(cells.querySelectorAll("[data-channel-cell]"))) {
+      const control = cell.querySelector('[role="switch"], [data-channel-na]');
+      if (!control) continue;
+      const marker = cell.querySelector("[data-channel-not-sent]");
+      if (marker) expect(before(control, marker)).toBe(true);
+    }
+  });
+});
+
+describe("the open item reads as the lead drew it", () => {
+  const halves = () => ({
+    test: panel()!.querySelector("[data-channel-test]") as HTMLElement,
+    fields: panel()!.querySelector("[data-channel-fields]") as HTMLElement,
+    preview: panel()!.querySelector("[data-channel-preview]") as HTMLElement,
+  });
+
+  it("email: the template on the left, the preview on the right, Send test at the top right", () => {
+    render(<NotificationsPageV2 canEdit registerSave={vi.fn()} />);
+    openItem(NEW_BOOKING.key);
+    const { test, fields, preview } = halves();
+    // Send test opens the box, above both halves.
+    const trigger = Array.from(test.querySelectorAll<HTMLButtonElement>("button")).find(
+      (b) => b.textContent?.trim() === "Send test",
+    )!;
+    expect(trigger).toBeTruthy();
+    expect(before(test, fields)).toBe(true);
+    expect(before(fields, preview)).toBe(true);
+    // The editable template is the left half; the rendered email is the right.
+    expect(fields.contains(field(COPY.subject, panel()!))).toBe(true);
+    expect(fields.querySelector("[data-editor-stub]")).not.toBeNull();
+    expect(preview.querySelector("iframe")).not.toBeNull();
+    expect(preview.contains(trigger)).toBe(false);
+    expect(fields.contains(trigger)).toBe(false);
+    // Each half says which it is.
+    expect(fields.textContent).toContain(COPY.templateColumn);
+    expect(preview.textContent).toContain(COPY.previewColumn);
+  });
+
+  it("push: the same three places", () => {
+    render(<NotificationsPageV2 canEdit registerSave={vi.fn()} />);
+    openItem(NEW_BOOKING.key);
+    selectTab("push");
+    const { test, fields, preview } = halves();
+    expect(test.querySelector('[data-send-test="push"]')).not.toBeNull();
+    expect(before(test, fields)).toBe(true);
+    expect(before(fields, preview)).toBe(true);
+    expect(fields.contains(field(COPY.title, panel()!))).toBe(true);
+    expect(preview.querySelector("[data-push-mockup]")).not.toBeNull();
+  });
+
+  it("in-app has no test, so the reason stands where Send test does", () => {
+    render(<NotificationsPageV2 canEdit registerSave={vi.fn()} />);
+    openItem(NEW_BOOKING.key);
+    selectTab("in_app");
+    const { test, fields, preview } = halves();
+    expect(panel()!.querySelector("[data-send-test]")).toBeNull();
+    expect(test.querySelector("[data-inapp-no-test]")?.textContent).toBe(COPY.inAppNoTest);
+    expect(before(test, fields)).toBe(true);
+    expect(before(fields, preview)).toBe(true);
+    expect(preview.querySelector('[data-inapp-mockup="team"]')).not.toBeNull();
+  });
+
+  it("the Today line opens the box, beside Send test and above both halves", () => {
+    render(<NotificationsPageV2 canEdit registerSave={vi.fn()} />);
+    openItem(NEW_BOOKING.key);
+    const today = panel()!.querySelector("[data-today]")!;
+    const { test, fields } = halves();
+    expect(before(today, test)).toBe(true);
+    expect(before(today, fields)).toBe(true);
+    expect(today.textContent).toContain(TODAY_COPY[channelSpec(NEW_BOOKING, "email")!.today]);
   });
 });

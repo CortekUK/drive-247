@@ -66,10 +66,15 @@ import {
   V2_TAX_AND_DEPOSIT_PERM_TABS,
   findSettingsSearchHandoff,
 } from "@/components/settings-v2/settings-shell-state";
-import { SETTINGS_PAGE_TITLE, SETTINGS_SECTION_TITLE } from "@/components/settings-v2/settings-kit";
+import {
+  SETTINGS_COLUMN_BESIDE_TRAX,
+  SETTINGS_PAGE_TITLE,
+  SETTINGS_SECTION_TITLE,
+} from "@/components/settings-v2/settings-kit";
 import { usePageSearch } from "@/components/shared/layout/page-search-slot";
 import { isSettingsTabHiddenForLean } from "@/lib/lean-areas";
 import { useIsLean } from "@/lib/lean-context";
+import { cn } from "@/lib/utils";
 
 export interface SettingsIndexItem {
   title: string;
@@ -352,8 +357,13 @@ export function SettingsIndexV2({
   // Switch row alignment: at md+ <main>'s content starts at y=50 and the h1 is a
   // 32px line, so 26px of top padding centres it at 50 + 26 + 16 = 92, the
   // sidebar Portal / Website switch's row (md:pt-7 left it 2px low, at 94).
+  // SETTINGS_COLUMN_BESIDE_TRAX: the same column the Settings pages use, so the
+  // open Trax panel never sits over the last column of entries.
   return (
-    <div className="w-full max-w-[1160px] space-y-9 pb-16 md:pt-[26px]" data-tour="settings-index">
+    <div
+      className={cn("w-full max-w-[1160px] space-y-9 pb-16 md:pt-[26px]", SETTINGS_COLUMN_BESIDE_TRAX)}
+      data-tour="settings-index"
+    >
       <h1 className={SETTINGS_PAGE_TITLE}>Settings</h1>
 
       {notice}

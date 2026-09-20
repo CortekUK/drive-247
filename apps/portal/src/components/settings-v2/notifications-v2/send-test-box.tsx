@@ -350,7 +350,7 @@ export function SendTestBox({
                 className={cn(
                   "text-[13px] [overflow-wrap:anywhere]",
                   result.kind === "sent" && "text-emerald-600 dark:text-emerald-400",
-                  result.kind === "none" && "text-amber-600 dark:text-amber-400",
+                  result.kind === "none" && "text-amber-700 dark:text-amber-400",
                   result.kind === "error" && "text-destructive",
                 )}
               >

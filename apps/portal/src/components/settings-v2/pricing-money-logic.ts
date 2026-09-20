@@ -54,9 +54,15 @@ export interface FieldIssue {
   blocksSave?: boolean;
 }
 
+/**
+ * One line's colour. `warning` is the contrast-corrected v2 ink
+ * (`panel-ink-warn`, styles/v2-theme.css), which is what locations-v2 and the
+ * business-rules panels use: a hardcoded `text-amber-600` measures under 4.5:1
+ * at the 13px these lines are set in, and left two ambers on one screen.
+ */
 export const ISSUE_TEXT_CLASS: Record<IssueTone, string> = {
   danger: "text-destructive",
-  warning: "text-amber-600 dark:text-amber-400",
+  warning: "panel-ink-warn",
   info: "text-muted-foreground",
 };
 

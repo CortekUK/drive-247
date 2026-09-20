@@ -96,9 +96,9 @@ function InlineSaveError({ error, lead, after }: { error: unknown; lead: string;
 function SectionHeading({ title, description, aside }: { title: string; description: string; aside?: React.ReactNode }) {
   return (
     <div className="flex flex-wrap items-start justify-between gap-3">
-      <div className="min-w-0 space-y-1">
+      <div className="min-w-0">
         <h2 className={SETTINGS_SECTION_TITLE}>{title}</h2>
-        <p className="text-sm text-muted-foreground">{description}</p>
+        <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
       </div>
       {aside && <div className="flex shrink-0 flex-wrap items-center gap-2">{aside}</div>}
     </div>
@@ -161,7 +161,7 @@ export function EmailNotificationSettingsV2({
   // error" is still loading, never "all switches off".
   if (!prefs && !error) {
     return (
-      <section className="space-y-4" data-settings-section="email-notifications">
+      <section className="space-y-3" data-settings-section="email-notifications">
         {heading}
         {/* Eight rows, like the loaded section: the master switch, the
             recipient and the six categories (six for the categories alone). */}
@@ -172,7 +172,7 @@ export function EmailNotificationSettingsV2({
 
   if (!prefs) {
     return (
-      <section className="space-y-4" data-settings-section="email-notifications">
+      <section className="space-y-3" data-settings-section="email-notifications">
         {heading}
         <SettingsLoadError thing="email preferences" error={error} onRetry={() => refetch()} retrying={isFetching} />
       </section>
@@ -221,7 +221,7 @@ export function EmailNotificationSettingsV2({
     ? { tone: "text-destructive", text: "Enter a valid email address, like name@company.com. Nothing was saved." }
     : problem === "no-address"
       ? {
-          tone: "text-amber-600 dark:text-amber-400",
+          tone: "panel-ink-warn",
           text: "No address to send to. Add one here, or alert emails won't reach anyone.",
         }
       : {
@@ -230,7 +230,7 @@ export function EmailNotificationSettingsV2({
         };
 
   return (
-    <section className="space-y-4" data-settings-section="email-notifications">
+    <section className="space-y-3" data-settings-section="email-notifications">
       {heading}
       {error && (
         <SettingsLoadError variant="inline" thing="email preferences" error={error} onRetry={() => refetch()} retrying={isFetching} />
@@ -659,7 +659,7 @@ export function ReminderRulesConfigV2() {
 
   return (
     <TooltipProvider>
-      <section className="space-y-4" data-settings-section="reminder-rules">
+      <section className="space-y-3" data-settings-section="reminder-rules">
         {heading}
         {body}
       </section>

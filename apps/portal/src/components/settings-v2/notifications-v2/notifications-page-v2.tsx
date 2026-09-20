@@ -65,7 +65,7 @@ import { useRegisterLeaveSave } from "../business-section-save";
 import type { RegisterSectionSave } from "../pricing-money-parts";
 import { EmailNotificationSettingsV2 } from "../notification-states-v2";
 import { SettingsLoadError, SettingsSectionSkeleton } from "../section-states";
-import { SettingsRow, SettingsSection } from "../settings-kit";
+import { SETTINGS_SECTION_TITLE, SettingsRow, SettingsRowAlignProvider, SettingsSection } from "../settings-kit";
 import { settingsSectionId } from "../settings-shell-state";
 import { EmailSenderSettingsV2 } from "./email-sender-settings-v2";
 import { NotificationItemPanel, type NotificationPreviewContext } from "./notification-item-panel";
@@ -310,7 +310,7 @@ export function NotificationsPageV2({ canEdit, registerSave, todaySettings, scro
         {categoryGroups(group.direction).map(({ category, items }) => {
           const headingId = `notifications-${group.direction}-${category.id}`;
           return (
-            <section key={category.id} aria-labelledby={headingId} data-notification-category={category.id} className="space-y-2">
+            <section key={category.id} aria-labelledby={headingId} data-notification-category={category.id} className="space-y-3">
               <div>
                 <h3 id={headingId} className={CATEGORY_TITLE}>
                   {category.label}
@@ -441,7 +441,10 @@ export function NotificationsPageV2({ canEdit, registerSave, todaySettings, scro
             live. These still do, so they stay reachable here (they were on the
             Team emails page, which `?tab=reminders` now opens this page for). */}
         <SettingsSection anchor={NOTIFICATIONS_TODAY_ANCHOR} title={COPY.todayTitle} description={COPY.todayDescription}>
-          <div className="space-y-10">
+          {/* One step tighter than the page's own gap between sections
+              (space-y-10), as the direction groups are: what is inside a
+              section must not be spaced like the sections themselves. */}
+          <div className="space-y-6">
             <EmailNotificationSettingsV2 canEdit={canEdit} parts="categories" />
             {todaySettings}
           </div>
@@ -459,15 +462,19 @@ function InAppExplainer() {
   return (
     <section data-settings-section="in-app" className="rounded-xl border bg-card" aria-labelledby="notifications-in-app-title">
       <div className="px-5 pt-4 pb-1">
-        <h2 id="notifications-in-app-title" className="font-heading text-base font-semibold tracking-tight text-foreground">
+        {/* The kit's panel-title recipe, not a copy of it: the Email card and
+            Push on this device beside it use the same constant. */}
+        <h2 id="notifications-in-app-title" className={SETTINGS_SECTION_TITLE}>
           {COPY.inAppTitle}
         </h2>
         <p className="mt-0.5 text-[13px] text-muted-foreground">{COPY.inAppDescription}</p>
       </div>
-      <div className="divide-y">
-        <SettingsRow label="Your team" description={COPY.inAppTeam} />
-        <SettingsRow label="Customers" description={COPY.inAppCustomer} />
-      </div>
+      <SettingsRowAlignProvider align="end">
+        <div className="divide-y">
+          <SettingsRow label="Your team" description={COPY.inAppTeam} />
+          <SettingsRow label="Customers" description={COPY.inAppCustomer} />
+        </div>
+      </SettingsRowAlignProvider>
     </section>
   );
 }
@@ -542,23 +549,21 @@ const NotificationItemRow = memo(function NotificationItemRow({
               {item.tooltip}
             </TooltipContent>
           </Tooltip>
-          <span
-            data-direction-chip=""
-            className="rounded-full border px-2 py-0.5 text-[11px] font-medium leading-none text-muted-foreground"
-          >
+          {/* Every pill on a row is the kit's Badge, so the direction chip,
+              Team action and Edited share one box: hand-rolled 11px pills sat
+              ~5px shorter than the Badge beside them. Colour and weight, not
+              geometry, tell them apart. */}
+          <Badge variant="outline" data-direction-chip="" className="font-normal text-muted-foreground">
             {chip}
-          </span>
+          </Badge>
           {teamAction && (
             <Tooltip>
               <TooltipTrigger asChild>
                 {/* Hover shows why; a screen reader reads it inline. */}
-                <span
-                  data-team-action=""
-                  className="relative z-10 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium leading-none text-muted-foreground"
-                >
+                <Badge variant="secondary" data-team-action="" className="relative z-10 font-normal text-muted-foreground">
                   {COPY.teamAction}
                   <span className="sr-only">. {COPY.teamActionTooltip}</span>
-                </span>
+                </Badge>
               </TooltipTrigger>
               <TooltipContent side="top" className="max-w-xs">
                 {COPY.teamActionTooltip}
@@ -579,7 +584,15 @@ const NotificationItemRow = memo(function NotificationItemRow({
         <p className="mt-0.5 pl-[22px] text-[13px] leading-snug text-muted-foreground">{itemMetaLine(item)}</p>
       </div>
 
-      <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 pl-[22px] md:gap-2 md:pl-0">
+      {/* The three switches, at the end of the row and in one column per
+          channel (the header above the card names them). Cells are aligned to
+          the TOP, not centred: a cell carrying the "Not sent yet" marker is
+          taller than a bare one, and centring pushed its switch ~6px above the
+          switches beside it, so no two rows read as a column. */}
+      <div
+        data-channel-cells=""
+        className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 pl-[22px] md:items-start md:gap-2 md:pl-0"
+      >
         {NOTIFICATION_CHANNELS.map((channel) => (
           <ChannelCell
             key={channel}
@@ -611,7 +624,7 @@ function ChannelCell({
   const label = CHANNEL_LABELS[channel];
   return (
     <div
-      className="flex items-center gap-1.5 md:w-[4.5rem] md:flex-col md:items-center md:justify-center md:gap-0.5"
+      className="flex items-center gap-1.5 md:w-[4.5rem] md:flex-col md:items-center md:justify-start md:gap-0.5"
       data-channel-cell={channel}
     >
       <span aria-hidden="true" className="text-xs text-muted-foreground md:hidden">
@@ -652,7 +665,7 @@ function ChannelCell({
             <span
               data-channel-not-sent={channel}
               title={notSentYetCopy(channel)}
-              className="whitespace-nowrap text-[10px] leading-none text-muted-foreground"
+              className="whitespace-nowrap text-[11px] leading-none text-muted-foreground"
             >
               {COPY.notSentYet}
               <span className="sr-only">. {notSentYetCopy(channel)}</span>

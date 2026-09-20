@@ -41,6 +41,7 @@ import {
   EMAIL_SENDER_SAVE_KEY,
   EMAIL_SENDER_STORAGE_OFF_COPY,
   EmailSenderSettingsV2,
+  SENDER_FIELD_WIDTH,
   normaliseLocalInput,
   senderFieldProblems,
   senderSettingsFromDraft,
@@ -52,6 +53,7 @@ import {
   sendTestResult,
 } from "@/components/settings-v2/notifications-v2/send-test-box";
 import { isValidLocalPart } from "@/lib/notifications-v2/settings-model";
+import { SettingsRow, SettingsRowAlignProvider } from "@/components/settings-v2/settings-kit";
 
 /* -------------------------------------------------------------------------- */
 /* Harness                                                                     */
@@ -222,6 +224,29 @@ describe("sender rules", () => {
 /* -------------------------------------------------------------------------- */
 
 describe("EmailSenderSettingsV2", () => {
+  it("every field in the panel is the same width, and the send-from box shares it with the domain", () => {
+    // The three plain fields and the "Send from" pair used to measure
+    // differently, so their edges did not line up and the local-part box was
+    // far too wide for a short account name.
+    render(<EmailSenderSettingsV2 canEdit registerSave={vi.fn()} />);
+    const byId = (suffix: string) => document.querySelector(`[id$="${suffix}"]`) as HTMLElement;
+    const name = byId("-name");
+    const replyTo = byId("-reply");
+    const recipient = byId("-recipient");
+    const local = byId("-local");
+    for (const field of [name, replyTo, recipient]) {
+      expect(field).not.toBeNull();
+      expect(field.className).toContain(SENDER_FIELD_WIDTH.split(" ")[0]);
+    }
+    // The pair: the group carries the shared width, the box takes what the
+    // fixed domain leaves, so the row ends level with the fields above it.
+    const group = local.parentElement!;
+    expect(group.className).toContain(SENDER_FIELD_WIDTH.split(" ")[0]);
+    expect(group.textContent).toContain("@drive-247.com");
+    expect(local.className).toContain("flex-1");
+    expect(local.className).not.toContain("w-48");
+  });
+
   it("shows today's default in the preview, then follows the fields as they are typed", () => {
     render(<EmailSenderSettingsV2 canEdit registerSave={vi.fn()} />);
     expect(preview()).toContain("Customers see: Northwind Rentals <northwind@drive-247.com>");
@@ -556,5 +581,83 @@ describe("SendTestBox", () => {
     expect(container.querySelector("input")).toBeNull();
     expect(trigger.getAttribute("aria-expanded")).toBe("false");
     expect(document.activeElement).toBe(trigger);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* Where the controls sit                                                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The house style for a v2 settings panel: the label and its help take the
+ * left, the CONTROL sits at the END of the row. Asserted by rendering, against
+ * the kit's own end-aligned row rather than a class string written out here —
+ * so this follows the kit if the kit changes, and still fails the day a row on
+ * this card goes back to the default (control against a fixed 420px label
+ * column, with the whole right half of the card empty).
+ */
+function kitRowGrid(align: "start" | "end"): string {
+  const host = document.createElement("div");
+  document.body.appendChild(host);
+  const reference = createRoot(host);
+  act(() =>
+    reference.render(
+      <SettingsRowAlignProvider align={align}>
+        <SettingsRow label="Reference row" description="Reference help">
+          <input data-reference-control="" />
+        </SettingsRow>
+      </SettingsRowAlignProvider>,
+    ),
+  );
+  const grid = host.querySelector("[data-reference-control]")!.parentElement!.parentElement as HTMLElement;
+  const className = grid.className;
+  act(() => reference.unmount());
+  host.remove();
+  return className;
+}
+
+/** The grid of the row whose label reads exactly `label` (label column → grid). */
+function rowGrid(label: string): HTMLElement {
+  const hit = Array.from(container.querySelectorAll("label, p")).find((n) => n.textContent?.trim() === label);
+  if (!hit) throw new Error(`No row labelled "${label}"`);
+  return hit.parentElement!.parentElement as HTMLElement;
+}
+
+describe("the Email card's layout", () => {
+  const ROWS = ["Sender name", "Send from", "Replies go to", "Team alert emails", "Team alerts go to"];
+
+  it("puts every control at the end of its row, the way the kit's end-aligned row does", () => {
+    const end = kitRowGrid("end");
+    const start = kitRowGrid("start");
+    expect(end).not.toBe(start);
+
+    render(<EmailSenderSettingsV2 canEdit registerSave={vi.fn()} />);
+    for (const label of ROWS) {
+      expect(rowGrid(label).className, label).toBe(end);
+      expect(rowGrid(label).className, label).not.toBe(start);
+    }
+  });
+
+  it("the control is the last thing in its row, after the label and its help", () => {
+    render(<EmailSenderSettingsV2 canEdit registerSave={vi.fn()} />);
+    const controlOf: Record<string, HTMLElement> = {
+      "Sender name": field("Sender name"),
+      "Send from": field("Send from"),
+      "Replies go to": field("Replies go to"),
+      "Team alert emails": teamSwitch(),
+      "Team alerts go to": field("Team alerts go to"),
+    };
+    for (const label of ROWS) {
+      const grid = rowGrid(label);
+      expect(grid.children.length, label).toBe(2);
+      expect(grid.lastElementChild!.contains(controlOf[label]), label).toBe(true);
+    }
+  });
+
+  it("holds the layout when the card is read-only", () => {
+    const end = kitRowGrid("end");
+    render(<EmailSenderSettingsV2 canEdit={false} />);
+    for (const label of ROWS) expect(rowGrid(label).className, label).toBe(end);
+    expect(field("Sender name").matches(":disabled")).toBe(true);
   });
 });

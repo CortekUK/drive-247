@@ -92,6 +92,13 @@ export const NOTIFICATIONS_PAGE_COPY = {
    * and waits for a notification that never comes.
    */
   notSentYet: "Not sent yet",
+  /**
+   * The two halves of an open item, named over each column so the box reads
+   * as the lead drew it: the editable template on the left, its preview on
+   * the right (transcript §3.8, the "default" and "preview" panels).
+   */
+  templateColumn: "Message to send",
+  previewColumn: "Preview",
   subject: "Subject",
   message: "Message",
   title: "Title",

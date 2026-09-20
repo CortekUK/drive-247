@@ -299,10 +299,16 @@ const V2_PAGES_WITH_SAVE_BAR = new Set(['general', 'duration', 'lockbox', 'tax-a
 
 /**
  * v2 pages whose rows put their control at the END of the row (team lead
- * review, Sep 19 2026): General and the pages that came out of it. Every other
- * page keeps the control right after the label column.
+ * review, Sep 19 2026): the house style for a settings form. It started with
+ * General and the pages that came out of it; Customer messages joined so its
+ * two template links sit where the return reminder above them does.
+ *
+ * Only rows declared HERE need listing. A v2 section that owns its own
+ * `SettingsRowAlignProvider` (locations, pricing rules, pay as you go,
+ * auto-extension, tax and deposit, the business-rules panels) reads the same
+ * on any page, listed or not.
  */
-const V2_PAGES_CONTROLS_AT_END = new Set(['general', 'duration', 'lockbox', 'tax-and-deposit', 'booking-site', 'modules']);
+const V2_PAGES_CONTROLS_AT_END = new Set(['general', 'duration', 'lockbox', 'tax-and-deposit', 'booking-site', 'modules', 'templates']);
 
 /**
  * v2 tabs whose home is another screen: Branding is the Appearance page (the

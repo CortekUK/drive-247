@@ -49,12 +49,16 @@
 --   4. Regenerate the Supabase types into all three apps (CLAUDE.md), so the
 --      three tables stop being `any` in the portal.
 --
--- Shipping the code first is safe:
+-- Shipping the page code first is safe; shipping the TEST FUNCTION first is
+-- not, because it refuses to send at all until this file has run:
 --   * the portal hooks treat a missing table (PostgREST PGRST205, Postgres
 --     42P01) as "not switched on yet": the page shows every catalog default and
 --     Save says storage is not on yet, instead of failing;
---   * notification-test-v2 allows the send and logs a warning when
---     notification_test_sends_v2 is missing (no rate limit until this runs).
+--   * notification-test-v2 FAILS CLOSED. While notification_test_sends_v2 is
+--     missing there is no counter, so every Send test is refused with 503
+--     test_sending_off, "Test sending isn't switched on yet."
+--     (notification-test-v2/rate-limit.ts). So this file is a HARD
+--     precondition of deploying that function, not an optional follow-up.
 -- Nothing sends real notifications from these tables yet (D18): live sending
 -- keeps running exactly as today until the runtime phase is approved.
 --

@@ -253,13 +253,46 @@ interface ChannelProps {
   context: NotificationPreviewContext;
 }
 
-/** Fields on the left, the preview on the right; stacked below xl. */
-function ChannelLayout({ fields, preview }: { fields: ReactNode; preview: ReactNode }) {
+/** The caption over each half, in the same recipe as the row's channel header. */
+const COLUMN_CAPTION = "text-[11px] font-medium uppercase tracking-wide text-muted-foreground";
+
+/**
+ * The lead's whiteboard box: the editable template on the LEFT, its preview on
+ * the RIGHT, and Send test at the TOP RIGHT of the box. `today` is the line
+ * that opens it ("Today: sent every time."), so the box's first row reads
+ * "what happens today" on the left and "try it" on the right. Stacked below xl.
+ */
+function ChannelLayout({
+  today,
+  test,
+  fields,
+  preview,
+}: {
+  today: ReactNode;
+  /** Send test, or the one line saying why this channel has none (in-app). */
+  test: ReactNode;
+  fields: ReactNode;
+  preview: ReactNode;
+}) {
   return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
-      <div className="min-w-0 space-y-4">{fields}</div>
-      <div className="min-w-0" data-channel-preview="">
-        {preview}
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
+        {/* `basis-64` so the two drop onto separate lines once the open Send
+            test box would squeeze the line, rather than shrinking it to a sliver. */}
+        <div className="min-w-0 flex-1 basis-64">{today}</div>
+        <div className="flex min-w-0 shrink-0 justify-end" data-channel-test="">
+          {test}
+        </div>
+      </div>
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+        <div className="min-w-0 space-y-4" data-channel-fields="">
+          <p className={COLUMN_CAPTION}>{COPY.templateColumn}</p>
+          {fields}
+        </div>
+        <div className="min-w-0 space-y-4" data-channel-preview="">
+          <p className={COLUMN_CAPTION}>{COPY.previewColumn}</p>
+          {preview}
+        </div>
       </div>
     </div>
   );
@@ -270,7 +303,7 @@ function TodayLine({ item, channel }: { item: NotificationItem; channel: Notific
   const spec = channelSpec(item, channel);
   if (!spec) return null;
   return (
-    <p className="text-xs text-muted-foreground" data-today={spec.today}>
+    <p className="text-[13px] leading-snug text-muted-foreground" data-today={spec.today}>
       {TODAY_COPY[spec.today]}
       {spec.note ? ` ${spec.note}` : ""}
     </p>
@@ -303,8 +336,10 @@ function FieldIssues({ id, validation, field }: { id: string; validation: Templa
 function VariablesHelp({ variables, examples }: { variables: NotificationVariable[]; examples: Record<string, string> }) {
   if (variables.length === 0) return null;
   return (
-    <details className="group rounded-xl bg-muted/40 px-4 py-3" data-variables-help="">
-      <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
+    // The same flat surface as every other box in this panel (the push options
+    // fieldset, Send test, the editor): rounded-xl, 1px border, card, no tint.
+    <details className="group rounded-xl border bg-card px-4 py-3" data-variables-help="">
+      <summary className="cursor-pointer text-[13px] font-medium text-foreground">
         Variables you can use ({variables.length})
       </summary>
       <dl className="mt-2 grid gap-x-4 gap-y-1.5 text-xs sm:grid-cols-[auto_minmax(0,1fr)]">
@@ -400,9 +435,19 @@ function EmailChannel(props: ChannelProps) {
 
   return (
     <ChannelLayout
+      today={<TodayLine item={item} channel="email" />}
+      test={
+        <SendTestBox
+          channel="email"
+          notificationKey={item.key}
+          buildRequest={buildRequest}
+          defaultEmail={context.defaultTestEmail}
+          canSend={gate.canSend}
+          disabledReason={gate.reason}
+        />
+      }
       fields={
         <>
-          <TodayLine item={item} channel="email" />
           <div className="space-y-1.5">
             <FieldLabel htmlFor={`${ids}-subject`}>{COPY.subject}</FieldLabel>
             <VariableTextInput
@@ -440,14 +485,6 @@ function EmailChannel(props: ChannelProps) {
             )}
           </div>
           <VariablesHelp variables={variables} examples={context.examples} />
-          <SendTestBox
-            channel="email"
-            notificationKey={item.key}
-            buildRequest={buildRequest}
-            defaultEmail={context.defaultTestEmail}
-            canSend={gate.canSend}
-            disabledReason={gate.reason}
-          />
         </>
       }
       preview={
@@ -497,9 +534,18 @@ function PushChannel(props: ChannelProps) {
 
   return (
     <ChannelLayout
+      today={<TodayLine item={item} channel="push" />}
+      test={
+        <SendTestBox
+          channel="push"
+          notificationKey={item.key}
+          buildRequest={buildRequest}
+          canSend={gate.canSend}
+          disabledReason={gate.reason}
+        />
+      }
       fields={
         <>
-          <TodayLine item={item} channel="push" />
           <div className="space-y-1.5">
             <FieldLabel htmlFor={`${ids}-title`}>{COPY.title}</FieldLabel>
             <VariableTextInput
@@ -590,13 +636,6 @@ function PushChannel(props: ChannelProps) {
             )}
           </div>
           <VariablesHelp variables={variables} examples={context.examples} />
-          <SendTestBox
-            channel="push"
-            notificationKey={item.key}
-            buildRequest={buildRequest}
-            canSend={gate.canSend}
-            disabledReason={gate.reason}
-          />
         </>
       }
       preview={
@@ -627,9 +666,16 @@ function InAppChannel(props: ChannelProps) {
 
   return (
     <ChannelLayout
+      today={<TodayLine item={item} channel="in_app" />}
+      // In-app has no test send; the reason stands where Send test does on the
+      // other two tabs, so the operator reads it where they look for the button.
+      test={
+        <p className="text-xs text-muted-foreground [overflow-wrap:anywhere]" data-inapp-no-test="">
+          {COPY.inAppNoTest}
+        </p>
+      }
       fields={
         <>
-          <TodayLine item={item} channel="in_app" />
           <div className="space-y-1.5">
             <FieldLabel htmlFor={`${ids}-title`}>{COPY.title}</FieldLabel>
             <VariableTextInput
@@ -670,9 +716,6 @@ function InAppChannel(props: ChannelProps) {
             )}
           </div>
           <VariablesHelp variables={variables} examples={context.examples} />
-          <p className="text-xs text-muted-foreground" data-inapp-no-test="">
-            {COPY.inAppNoTest}
-          </p>
         </>
       }
       preview={

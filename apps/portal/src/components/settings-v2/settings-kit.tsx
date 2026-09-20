@@ -64,6 +64,14 @@
  *   <SettingsRowAlignProvider align="end">  every SettingsRow inside puts its
  *                                           control at the far end of the row
  *   <SettingsRow align="end">               one row. The default is "start".
+ *
+ *   This is the house style for a settings FORM, and a section owns it rather
+ *   than inheriting it: each panel in locations-v2, pricing-rules-v2,
+ *   fees-deposit-v2, payment-modes-v2 and business-rules-pages wraps itself in
+ *   the provider, so it reads the same whichever page mounts it (the return
+ *   reminder panel sits on Customer messages, not on a General-lane page).
+ *   The settings page's own `V2_PAGES_CONTROLS_AT_END` then only has to cover
+ *   the rows written in `settings/page.tsx` itself.
  */
 
 import { createContext, useContext, useEffect, useRef, type ReactNode } from "react";

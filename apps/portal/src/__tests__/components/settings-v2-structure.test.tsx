@@ -345,9 +345,9 @@ describe("settings page (v2): General is three stacked sections; five sections l
     expect(setMembers(page, "V2_PAGES_WITH_SAVE_BAR")).not.toContain("modules");
   });
 
-  it("General and the pages that came out of it put each control at the end of its row; every other page keeps it after the label", () => {
+  it("General, the pages that came out of it and Customer messages put each control at the end of its row", () => {
     expect(new Set(setMembers(page, "V2_PAGES_CONTROLS_AT_END"))).toEqual(
-      new Set(["general", "duration", "lockbox", "tax-and-deposit", "booking-site", "modules"]),
+      new Set(["general", "duration", "lockbox", "tax-and-deposit", "booking-site", "modules", "templates"]),
     );
     expect(v2).toContain("<SettingsRowAlignProvider align={V2_PAGES_CONTROLS_AT_END.has(v2Page as string) ? 'end' : 'start'}>");
   });
