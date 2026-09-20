@@ -134,6 +134,11 @@ export const PAGE_DESTINATIONS: readonly PortalDestination[] = [
   // v2 only: the account section of the v2 rail.
   page("/integrations", "Integrations", "Stripe, Square, Twilio, Bonzah, BoldSign, Tesla, Xero, Zoho, Turo and your custom domain.", "plug", "integrations apps connect connections stripe square twilio bonzah boldsign tesla xero zoho", { integrationsBoard: true }),
   page("/subscription", "Billing", "Your Drive247 plan, its invoices and your credit balance.", "crown", "billing subscription plan drive247 invoice upgrade", { experience: "v2" }),
+  // Off the v2 rail by default and offered in the sidebar customiser — but the
+  // page is live for every v2 tenant (its own gate resolves both the slug list
+  // and `portal_experience`), so the search is the other way in and must know
+  // about it.
+  page("/insights", "Insights", "One screen of honest money: what came in, what is owed, and what it cost.", "trending-up", "insights money revenue profit margin honest reports", { experience: "v2" }),
 
   // The original portal only: pages the v2 rail deliberately does not list.
   page("/blocked-customers", "Blocked Customers", "Customers you have blocked from renting.", "user", "blocked banned blacklist customers", { experience: "v1" }),

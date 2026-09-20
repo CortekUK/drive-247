@@ -9,11 +9,16 @@
  * - ExtrasSettings (v2 branch): loading keeps the header, a failed read is an
  *   error and not "no extras", empty teaches with one action, low stock is an
  *   inline notice instead of a toast, and Save lists every field problem.
+ * - The Sep 20 2026 review: no picture and no Description/Type column in the
+ *   Extras table, the picture on hovering the row, the row's own controls, and
+ *   the promo create form behind an "Add promo code" button as a dialog.
  *
  * HARNESS: `react-dom/client` + `act` (the repo lacks @testing-library/dom).
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { act } from "react";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -175,6 +180,137 @@ describe("ExtrasTableV2 extreme data", () => {
     // No loose "·" item that could dangle at the end of a wrapped line.
     expect(Array.from(phoneRow.querySelectorAll("span")).some((el) => el.textContent === "·")).toBe(false);
     expect(phoneRow.querySelectorAll("[class*=\"before:content-\"]").length).toBeGreaterThanOrEqual(3);
+  });
+});
+
+/**
+ * Team lead, Sep 20 2026: no picture in the table, the picture on hovering the
+ * row instead (as the vehicles list does it), no Description and no Type
+ * column, and Edit / Update stock / Activate / Delete in the row rather than
+ * behind a "..." menu.
+ */
+describe("ExtrasTableV2 (Sep 20 review): the row carries the picture and the controls", () => {
+  /** Radix Popper measures with a constructible ResizeObserver; the shared setup mock is not. */
+  class RO {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  const tableRow = () => container.querySelector("table tbody tr")!;
+  const hover = (row: Element, over: boolean) => {
+    act(() => {
+      row.dispatchEvent(new MouseEvent(over ? "mouseover" : "mouseout", { bubbles: true, relatedTarget: null }));
+      vi.advanceTimersByTime(300);
+    });
+  };
+
+  beforeEach(() => {
+    (globalThis as any).ResizeObserver = RO;
+    vi.useFakeTimers();
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it("puts no image in the table row, and no Description or Type column", () => {
+    render(table([extra({ description: "A rear-facing seat for under-fours", image_urls: ["https://x.test/a.png"] })]));
+    const heads = Array.from(container.querySelectorAll("thead th")).map((th) => th.textContent);
+    expect(heads).toEqual(["Name", "Price", "Pricing", "Stock", "Status", "Actions"]);
+    // The picture is only in the phone list, which is hidden from `sm` up.
+    expect(container.querySelectorAll("table img")).toHaveLength(0);
+    expect(container.querySelector("table")!.textContent).not.toContain("A rear-facing seat");
+    expect(container.querySelector("table")!.textContent).not.toContain("Add-on");
+  });
+
+  it("shows the picture beside the name while the pointer rests on the row, and takes it away on leaving", () => {
+    render(table([extra({ image_urls: ["https://x.test/a.png", "https://x.test/b.png"] })]));
+    expect(document.body.querySelector('[data-slot="hover-card-content"]')).toBeNull();
+
+    hover(tableRow(), true);
+    const card = document.body.querySelector('[data-slot="hover-card-content"]')!;
+    expect(card).not.toBeNull();
+    expect(card.querySelector("img")!.getAttribute("src")).toBe("https://x.test/a.png");
+    // It never covers the row it belongs to: nothing in it takes the pointer.
+    expect(card.className).toContain("pointer-events-none");
+    // Says there are more, so the one shown does not read as the only one.
+    expect(card.textContent).toContain("1 of 2 images");
+
+    hover(tableRow(), false);
+    expect(document.body.querySelector('[data-slot="hover-card-content"]')).toBeNull();
+  });
+
+  it("opens no empty card for an extra with no picture", () => {
+    render(table([extra({ image_urls: [] })]));
+    hover(tableRow(), true);
+    expect(document.body.querySelector('[data-slot="hover-card-content"]')).toBeNull();
+  });
+
+  it("carries Edit, Update stock, Activate/Deactivate and Delete in the row, each calling v1's handler", () => {
+    const calls = { edit: 0, stock: 0, toggle: 0, del: 0 };
+    render(
+      <ExtrasTableV2
+        extras={[extra({ max_quantity: 5, remaining_stock: 5 })]}
+        resetKey="t1"
+        currencyCode="USD"
+        canEdit
+        isLowStock={() => false}
+        onEdit={() => {
+          calls.edit += 1;
+        }}
+        onUpdateStock={() => {
+          calls.stock += 1;
+        }}
+        onToggleActive={() => {
+          calls.toggle += 1;
+        }}
+        onDelete={() => {
+          calls.del += 1;
+        }}
+      />,
+    );
+    const inRow = (label: string) =>
+      container.querySelector<HTMLButtonElement>(`table button[aria-label="${label}"]`)!;
+    for (const [label, key] of [
+      ["Edit Child seat", "edit"],
+      ["Update stock for Child seat", "stock"],
+      ["Deactivate Child seat", "toggle"],
+      ["Delete Child seat", "del"],
+    ] as const) {
+      expect(inRow(label), label).not.toBeNull();
+      act(() => inRow(label).click());
+      expect(calls[key], label).toBe(1);
+    }
+    // Nothing is hidden behind a menu in the table any more.
+    expect(container.querySelector('table [aria-label^="Actions for"]')).toBeNull();
+  });
+
+  it("offers no Update stock where there is no stock to update", () => {
+    render(table([extra({ max_quantity: null })]));
+    expect(container.querySelector('table button[aria-label="Update stock for Child seat"]')).toBeNull();
+    expect(container.querySelector('table button[aria-label="Edit Child seat"]')).not.toBeNull();
+  });
+
+  it("disables only Activate/Deactivate while its own write is in flight", () => {
+    render(
+      <ExtrasTableV2
+        extras={[extra()]}
+        resetKey="t1"
+        currencyCode="USD"
+        canEdit
+        isLowStock={() => false}
+        busyId="e1"
+        onEdit={noop}
+        onUpdateStock={noop}
+        onToggleActive={noop}
+        onDelete={noop}
+      />,
+    );
+    expect(container.querySelector<HTMLButtonElement>('table button[aria-label="Deactivate Child seat"]')!.disabled).toBe(true);
+    expect(container.querySelector<HTMLButtonElement>('table button[aria-label="Edit Child seat"]')!.disabled).toBe(false);
+  });
+
+  it("shows a read-only user no controls at all", () => {
+    render(table([extra({ max_quantity: 5 })], false));
+    expect(container.querySelector('table button[aria-label^="Edit"]')).toBeNull();
+    expect(container.querySelector('table button[aria-label^="Delete"]')).toBeNull();
   });
 });
 
@@ -535,5 +671,77 @@ describe("PromoCodesSectionV2 look", () => {
     const h2 = container.querySelector("#v2-promo-list-heading")!;
     expect(h2.textContent).toBe("All promo codes");
     expect(h2.className).toBe("font-heading text-base font-semibold tracking-tight text-foreground");
+  });
+});
+
+/**
+ * Team lead, Sep 20 2026: "a plain table … with an Add promo code button that
+ * opens a dialog where everything is configured." The Settings page is far too
+ * large to mount, so its wiring is read as source, the way
+ * settings-v2-structure.test.tsx reads the rest of that page.
+ */
+describe("Promo codes (Sep 20 review): Add opens a dialog, the list is just a list", () => {
+  const page = readFileSync(resolve(__dirname, "../..", "app/(dashboard)/settings/page.tsx"), "utf8");
+  const v2Start = page.indexOf("  if (v2Chrome) {\n    const pageMeta =");
+  const promos = page.slice(page.indexOf("        case 'promos': {", v2Start), page.indexOf("        case 'extras':", v2Start));
+
+  it("puts the create form in a dialog behind the button, not in a panel standing open", () => {
+    expect(v2Start).toBeGreaterThan(-1);
+    expect(promos).not.toContain('title="New promo code"');
+    expect(promos).not.toContain("<SettingsPanel");
+    expect(promos).toContain("<DialogV2");
+    expect(promos).toContain("open={newPromoOpenV2}");
+    expect(promos).toContain("<DialogTitleV2>New promo code</DialogTitleV2>");
+    // Every field is still in it: nothing was dropped on the way into the dialog.
+    for (const id of [
+      "v2_promo_name",
+      "v2_promo_value",
+      "v2_promo_code",
+      "v2_promo_max_users",
+      "v2_promo_min_duration",
+    ]) {
+      expect(promos, id).toContain(id);
+    }
+    expect(promos).toContain("'Starts')");
+    expect(promos).toContain("'Expires')");
+  });
+
+  it("hands the list the Add button and the empty state the same opener", () => {
+    expect(promos).toContain("onCreateFirst={openNewPromoV2}");
+    expect(promos).toContain("Add promo code");
+    // It is the editor's button: a view-only manager gets the heading alone.
+    expect(promos).toContain("canEditPage ? (");
+  });
+
+  it("closes only once the code is really in, and holds while the insert is in flight", () => {
+    expect(promos).toContain("createPromoMutation.mutate(promoForm, { onSuccess: () => setNewPromoOpenV2(false) });");
+    expect(promos).toContain("if (!createPromoMutation.isPending) setNewPromoOpenV2(open);");
+    expect(promos).toContain("disabled={createPromoMutation.isPending}");
+  });
+
+  it("still saves per code: nothing here registers with the page save bar", () => {
+    expect(promos).not.toContain("registerSave");
+  });
+});
+
+describe("PromoCodesSectionV2: the Add button beside the heading", () => {
+  const add = <button type="button">Add promo code</button>;
+
+  it("sits beside the heading once there are codes", () => {
+    render(section({ promos: [promo()], action: add }).node);
+    expect(buttonByText("Add promo code")).toBeDefined();
+  });
+
+  it("stays out of the empty state, which has a button of its own", () => {
+    render(section({ promos: [], action: add }).node);
+    expect(text()).toContain("No promo codes yet");
+    expect(buttonByText("Add promo code")).toBeUndefined();
+    expect(buttonByText("Create your first code")).toBeDefined();
+  });
+
+  it("stays out of a failed read, where Try again is the only thing to press", () => {
+    render(section({ error: new Error("Failed to fetch"), action: add }).node);
+    expect(buttonByText("Add promo code")).toBeUndefined();
+    expect(buttonByText("Try again")).toBeDefined();
   });
 });

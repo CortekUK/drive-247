@@ -217,8 +217,10 @@ export const ROUTE_TO_TAB: Record<string, string> = {
   // returns null for an unlisted route and canAccessRoute() treats null as
   // ALLOWED — an unmapped /dev would be open to every manager on the canary.
   // Non-manager roles are unaffected (canAccessRoute short-circuits to true for
-  // them); the page's own NODE_ENV / localhost / slug / notFound() gates decide
-  // the rest.
+  // them); the page's own canary-slug gate and its notFound() decide the rest.
+  // That slug gate is now the ONLY one: the NODE_ENV and localhost gates were
+  // removed on Sep 20 2026 so the developer tool could be reached on live, so
+  // THIS ENTRY is load-bearing in production rather than in development only.
   '/dev': 'dev',
 };
 

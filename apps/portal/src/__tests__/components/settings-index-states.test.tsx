@@ -150,6 +150,10 @@ describe("SettingsIndexV2 structure", () => {
       ["Branding", "/settings/appearance"],
       ["Locations", "/settings?tab=locations"],
       ["Team", "/users"],
+      // Moved here from the v2 org menu on Sep 20 2026, and gated on the same
+      // `audit_logs` manager grant it had there — through `canAccessRoute`,
+      // which this render leaves at its permissive default.
+      ["Audit Logs", "/audit-logs"],
       ["Custom pricing", "/settings?tab=pricing"],
       ["Promo codes", "/settings?tab=promos"],
       ["Extras", "/settings?tab=extras"],

@@ -1,9 +1,7 @@
 "use client";
 
-import { useState, useRef, useCallback } from 'react';
-import { useAuth, useAuthStore } from '@/stores/auth-store';
-import { useTenant } from '@/contexts/TenantContext';
-import { supabase } from '@/integrations/supabase/client';
+import { useState } from 'react';
+import { useAuth } from '@/stores/auth-store';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,10 +12,7 @@ import {
 import { Button } from '@/components/ui-v2/button';
 import { Badge } from '@/components/ui-v2/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui-v2/avatar';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui-v2/dialog';
-import { Input } from '@/components/ui-v2/input';
-import { Label } from '@/components/ui-v2/label';
-import { User, LogOut, Key, Camera, Loader2, Moon, Sun, ChevronsUpDown, Send, SlidersHorizontal, Compass } from 'lucide-react';
+import { User, LogOut, Moon, Sun, ChevronsUpDown, Send, SlidersHorizontal, Compass } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Switch } from '@/components/ui-v2/switch';
 import { useFeedbackStore } from '@/stores/feedback-store';
@@ -26,8 +21,7 @@ import {
   replayFirstRentalTour,
   useFirstRentalTourEligible,
 } from '@/hooks/use-first-rental-tour';
-import { toast } from '@/hooks/use-toast';
-import { AvatarCropDialog } from './avatar-crop-dialog';
+import { ProfileSheetV2 } from './profile-sheet-v2';
 
 /**
  * v2 user menu. New file beside `user-menu.tsx`, never an edit to it — the v1
@@ -37,8 +31,7 @@ import { AvatarCropDialog } from './avatar-crop-dialog';
  * profile row that sits in the v2 sidebar footer).
  */
 export const UserMenuV2 = ({ variant = 'icon' }: { variant?: 'icon' | 'row' } = {}) => {
-  const { appUser, signOut, updatePassword } = useAuth();
-  const { tenant, refetchTenant } = useTenant();
+  const { appUser, signOut } = useAuth();
   const { resolvedTheme, setTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
   const openFeedback = useFeedbackStore((s) => s.open);
@@ -55,59 +48,15 @@ export const UserMenuV2 = ({ variant = 'icon' }: { variant?: 'icon' | 'row' } = 
   // wraps the customise and caret buttons as well as the trigger, and a
   // `data-[state=open]` class only ever reaches the trigger itself.
   const [menuOpen, setMenuOpen] = useState(false);
-  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
-  const [showProfileDialog, setShowProfileDialog] = useState(false);
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [adminName, setAdminName] = useState('');
-  const [isUpdating, setIsUpdating] = useState(false);
-  const [isUpdatingName, setIsUpdatingName] = useState(false);
-  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
-  const [showCropDialog, setShowCropDialog] = useState(false);
-  const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
-  const avatarInputRef = useRef<HTMLInputElement>(null);
-
-  const handleCroppedUpload = useCallback(async (blob: Blob) => {
-    setIsUploadingAvatar(true);
-    try {
-      const filePath = `avatars/${appUser?.id}-${Date.now()}.png`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('cms-media')
-        .upload(filePath, blob, { upsert: true, contentType: 'image/png' });
-
-      if (uploadError) throw uploadError;
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('cms-media')
-        .getPublicUrl(filePath);
-
-      // Scoped by the row's own primary key, which belongs to the signed-in
-      // user — this writes to nobody else's profile.
-      const { error: updateError } = await (supabase as any)
-        .from('app_users')
-        .update({ avatar_url: publicUrl })
-        .eq('id', appUser?.id);
-
-      if (updateError) throw updateError;
-
-      // `useAuth` is a selector wrapper, not the store — `useAuth.setState` is
-      // undefined at runtime and threw here on every avatar upload. The store
-      // itself carries setState.
-      useAuthStore.setState({
-        appUser: appUser ? { ...appUser, avatar_url: publicUrl } : appUser,
-      });
-
-      toast({ title: "Success", description: "Profile photo updated" });
-      setShowCropDialog(false);
-      setCropImageSrc(null);
-    } catch (error: any) {
-      console.error('Avatar upload error:', error);
-      toast({ title: "Error", description: error.message || "Failed to upload photo", variant: "destructive" });
-    } finally {
-      setIsUploadingAvatar(false);
-    }
-  }, [appUser]);
+  /**
+   * The profile lives in its own component now (`profile-sheet-v2.tsx`) and
+   * arrives from the TOP of the window rather than as a centred dialog (team
+   * lead, Sep 20 2026). Everything that used to make this file 600 lines —
+   * the avatar upload, the name write, the password dialog — went with it,
+   * along with the bug where saving a name wrote `tenants.admin_name` and
+   * every screen kept reading `app_users.name`.
+   */
+  const [profileOpen, setProfileOpen] = useState(false);
 
   // Every hook above this guard runs unconditionally — the early return must
   // stay below them so hook order never changes between renders.
@@ -120,146 +69,11 @@ export const UserMenuV2 = ({ variant = 'icon' }: { variant?: 'icon' | 'row' } = 
     .toUpperCase()
     .slice(0, 2);
 
-  const handleFileSelected = (file: File) => {
-    if (!file.type.startsWith('image/')) {
-      toast({ title: "Error", description: "Please upload an image file", variant: "destructive" });
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      toast({ title: "Error", description: "Image must be less than 5MB", variant: "destructive" });
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      setCropImageSrc(reader.result as string);
-      setShowCropDialog(true);
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handlePasswordChange = async () => {
-    if (newPassword !== confirmPassword) {
-      toast({
-        title: "Error",
-        description: "Passwords do not match",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (newPassword.length < 12) {
-      toast({
-        title: "Error",
-        description: "Password must be at least 12 characters long",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Check password complexity
-    const hasUpper = /[A-Z]/.test(newPassword);
-    const hasLower = /[a-z]/.test(newPassword);
-    const hasNumber = /\d/.test(newPassword);
-
-    if (!hasUpper || !hasLower || !hasNumber) {
-      toast({
-        title: "Error",
-        description: "Password must contain uppercase, lowercase, and numeric characters",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsUpdating(true);
-    try {
-      const { error } = await updatePassword(newPassword);
-
-      if (error) {
-        toast({
-          title: "Error",
-          description: error.message || "Failed to update password",
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Success",
-          description: "Password updated successfully",
-        });
-        setShowPasswordDialog(false);
-        setNewPassword('');
-        setConfirmPassword('');
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "An unexpected error occurred",
-        variant: "destructive",
-      });
-    } finally {
-      setIsUpdating(false);
-    }
-  };
-
   const handleSignOut = async () => {
     try {
       await signOut();
     } catch (error) {
       console.error('Sign out error:', error);
-    }
-  };
-
-  const handleOpenProfile = () => {
-    setAdminName(tenant?.admin_name || appUser?.name || '');
-    setShowProfileDialog(true);
-  };
-
-  const handleNameChange = async () => {
-    if (!tenant?.id) {
-      toast({
-        title: "Error",
-        description: "Tenant not found",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!adminName.trim()) {
-      toast({
-        title: "Error",
-        description: "Name cannot be empty",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsUpdatingName(true);
-    try {
-      const { error } = await supabase
-        .from('tenants')
-        .update({ admin_name: adminName.trim() })
-        .eq('id', tenant.id);
-
-      if (error) {
-        toast({
-          title: "Error",
-          description: error.message || "Failed to update name",
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Success",
-          description: "Name updated successfully",
-        });
-        refetchTenant();
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "An unexpected error occurred",
-        variant: "destructive",
-      });
-    } finally {
-      setIsUpdatingName(false);
     }
   };
 
@@ -368,22 +182,12 @@ export const UserMenuV2 = ({ variant = 'icon' }: { variant?: 'icon' | 'row' } = 
 
           {/* Menu items — Profile · Dark Mode */}
           <div className="p-1.5">
-            <input
-              ref={avatarInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleFileSelected(file);
-                e.target.value = '';
-              }}
-            />
-            {/* Billing and Settings are not here by request. Both belong to the
-                organisation rather than the person, and both live on the org
-                switcher — billing in its dropdown, settings as the gear beside
-                it — so nothing became unreachable. */}
-            <DropdownMenuItem onClick={handleOpenProfile} className="cursor-pointer rounded-lg px-2.5 py-1.5 text-[13px]">
+            {/* Billing and Settings are not here by request. Both belong to
+                the organisation rather than the person: Settings is the org
+                row at the top of the rail, which is now a plain link to it
+                (see org-switcher.tsx), and Billing is its own row in the
+                sidebar's top group. Nothing became unreachable. */}
+            <DropdownMenuItem onClick={() => setProfileOpen(true)} className="cursor-pointer rounded-lg px-2.5 py-1.5 text-[13px]">
               <User className="mr-2.5 h-4 w-4 text-muted-foreground" />
               <span>Profile</span>
               {appUser.must_change_password && (
@@ -458,144 +262,7 @@ export const UserMenuV2 = ({ variant = 'icon' }: { variant?: 'icon' | 'row' } = 
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Change Password</DialogTitle>
-            <DialogDescription>
-              Enter a new password. Must be at least 12 characters with uppercase, lowercase, and numeric characters.
-              {appUser.must_change_password && (
-                <div className="mt-2 text-destructive font-medium">
-                  Password change is required before continuing.
-                </div>
-              )}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="new-password">New Password</Label>
-              <Input
-                id="new-password"
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Enter new password"
-                minLength={12}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="confirm-password">Confirm Password</Label>
-              <Input
-                id="confirm-password"
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Confirm new password"
-                minLength={12}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setShowPasswordDialog(false)}
-              disabled={isUpdating}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handlePasswordChange}
-              disabled={!newPassword || !confirmPassword || isUpdating}
-            >
-              {isUpdating ? 'Updating...' : 'Update Password'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={showProfileDialog} onOpenChange={setShowProfileDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Profile</DialogTitle>
-            <DialogDescription>
-              Manage your photo, display name, and password.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-5">
-            {/* Avatar */}
-            <div className="flex items-center gap-4">
-              <Avatar className="h-16 w-16 ring-2 ring-border/50 rounded-full overflow-hidden">
-                <AvatarImage src={appUser.avatar_url || undefined} alt={appUser.name || 'User'} className="object-cover" />
-                <AvatarFallback className="bg-primary/10 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] text-base font-semibold">{userInitials}</AvatarFallback>
-              </Avatar>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => avatarInputRef.current?.click()}
-                disabled={isUploadingAvatar}
-              >
-                {isUploadingAvatar ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <>
-                    <Camera className="mr-2 h-4 w-4" />
-                    Change Photo
-                  </>
-                )}
-              </Button>
-            </div>
-
-            {/* Display name */}
-            <div className="space-y-2">
-              <Label htmlFor="profile-name">Display Name</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="profile-name"
-                  type="text"
-                  value={adminName}
-                  onChange={(e) => setAdminName(e.target.value)}
-                  placeholder="Enter your name"
-                />
-                <Button onClick={handleNameChange} disabled={!adminName.trim() || isUpdatingName}>
-                  {isUpdatingName ? 'Saving…' : 'Save'}
-                </Button>
-              </div>
-            </div>
-
-            {/* Password */}
-            {!appUser.is_super_admin && (
-              <div className="space-y-2">
-                <Label>Password</Label>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start"
-                  onClick={() => {
-                    setShowProfileDialog(false);
-                    setShowPasswordDialog(true);
-                  }}
-                >
-                  <Key className="mr-2 h-4 w-4" />
-                  Change Password
-                  {appUser.must_change_password && (
-                    <Badge variant="destructive" className="ml-auto text-[10px] px-1.5 py-0">Required</Badge>
-                  )}
-                </Button>
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <AvatarCropDialog
-        open={showCropDialog}
-        onOpenChange={(open) => {
-          setShowCropDialog(open);
-          if (!open) setCropImageSrc(null);
-        }}
-        imageSrc={cropImageSrc}
-        onCropComplete={handleCroppedUpload}
-        isUploading={isUploadingAvatar}
-      />
+      <ProfileSheetV2 open={profileOpen} onOpenChange={setProfileOpen} />
     </>
   );
 };

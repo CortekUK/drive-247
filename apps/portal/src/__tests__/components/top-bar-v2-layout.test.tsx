@@ -164,6 +164,37 @@ describe('v2 top bar Help button', () => {
 });
 
 describe('v2 dashboard', () => {
+  /**
+   * The colour fix (team lead, Sep 20 2026: "the background issue, the colour
+   * issue"). At rest the bar has NO ground, so the app gradient runs from the
+   * very top — that was already true. What was not: the moment the page
+   * scrolled, `bg-background/60` (plain white in both v2 trees) laid a 60%
+   * white veil over a brand-tinted gradient and cut exactly the pale band
+   * across the top that the earlier review had asked us to remove. The fill
+   * now comes from `--v2-wash`, the token the gradient itself is painted with,
+   * at 6%, with the blur doing the legibility work.
+   */
+  it('scrolls to a brand-tinted veil, not a white band', () => {
+    render(<TopBarV2 />);
+    const header = document.querySelector('header')!;
+    // Nothing has scrolled yet, so the bar is transparent.
+    expect(header.className).toContain('bg-transparent');
+
+    const source = readFileSync(
+      join(process.cwd(), 'src/components/shared/layout/top-bar-v2.tsx'),
+      'utf8',
+    );
+    expect(source).toContain('bg-[hsl(var(--v2-wash,var(--primary))_/_0.06)]');
+    expect(source).toContain('backdrop-blur-xl');
+    // The hairline keeps `hsl(var(--border))` unmodified: --border carries its
+    // own alpha in dark, so a `/` modifier would expand to an invalid colour.
+    expect(source).toContain('shadow-[inset_0_-1px_0_hsl(var(--border))]');
+    // Dark keeps the fill it had — dark mode was out of scope.
+    expect(source).toContain('dark:bg-background/60');
+    // …and the light-mode white veil it replaced is gone, not merely moved.
+    expect(source).not.toContain('? "bg-background/60');
+  });
+
   it('no longer renders a New Rental button', () => {
     const src = readFileSync(
       join(__dirname, '..', '..', 'components', 'dashboard-v2', 'dashboard-v2.tsx'),

@@ -8,9 +8,11 @@
  *
  * Rows open nothing. There is no promo code record route, and the v1 row opens
  * nothing either. Its three controls are kept with the Settings page's own
- * handlers: Copy becomes the code itself, as a button, and Edit and Delete move
- * into the ⋯ menu, where they still open the page's Edit dialog and its delete
- * confirmation, both shared with v1.
+ * handlers: Copy becomes the code itself, as a button, and Edit and Delete sit
+ * IN the row as labelled icon buttons (team lead, Sep 20 2026 — the same review
+ * that brought the Extras controls out of their menu), still opening the page's
+ * Edit dialog and its delete confirmation, both shared with v1. The ⋯ menu
+ * stays for the phone rows, where a stacked row has no room beside its facts.
  *
  * The progressive-rows hook lives HERE, not on the Settings page: the table sits
  * inside a Radix `TabsContent` that unmounts while another settings tab is open,
@@ -34,7 +36,7 @@
  */
 
 import { format } from "date-fns";
-import { Copy, FilePenLine, MoreHorizontal, Trash2 } from "lucide-react";
+import { Copy, FilePenLine, MoreHorizontal, Trash2, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import {
   DropdownMenu,
@@ -42,6 +44,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui-v2/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui-v2/tooltip";
 import {
   LIST_CLASSES,
   LIST_ROW_ACTION,
@@ -158,6 +161,59 @@ function PromoRowMenu<T extends PromoCodeRowV2>({ promo, onEdit, onDelete }: Pro
   );
 }
 
+/**
+ * One row control: an icon button that says what it does on hover and to a
+ * screen reader. The same shape Extras and Custom pricing use, so the three
+ * Pricing tables read alike.
+ */
+function IconAction({
+  icon: Icon,
+  label,
+  tooltip,
+  onClick,
+  destructive,
+}: {
+  icon: LucideIcon;
+  label: string;
+  tooltip: string;
+  onClick: () => void;
+  destructive?: boolean;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className={cn(LIST_ROW_ACTION, destructive && "hover:text-destructive")}
+          onClick={onClick}
+          aria-label={label}
+        >
+          <Icon className="size-4" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{tooltip}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+/** v1's Edit and Delete, in the row rather than behind the ⋯ menu. */
+function PromoRowActions<T extends PromoCodeRowV2>({ promo, onEdit, onDelete }: PromoMenuProps<T>) {
+  return (
+    <div className="flex justify-end gap-0.5">
+      <IconAction icon={FilePenLine} tooltip="Edit" label={`Edit promo code ${promo.code}`} onClick={() => onEdit(promo)} />
+      <IconAction
+        icon={Trash2}
+        tooltip="Delete"
+        label={`Delete promo code ${promo.code}`}
+        onClick={() => onDelete(promo)}
+        destructive
+      />
+    </div>
+  );
+}
+
 function CopyCode({ code, onCopy, className }: { code: string; onCopy: (code: string) => void; className?: string }) {
   return (
     <button
@@ -236,79 +292,82 @@ export function PromoCodesTableV2<T extends PromoCodeRowV2>({
       </ul>
 
       <div className="hidden sm:block">
-        <ListTable rows={promoRows} minWidth="min-w-[880px]">
-          <ListTableHeader>
-            {/* Widths measured at the 944px card with Manrope. Code holds a
-                17-character code and its copy mark; Value "AED 12,500.00"; each
-                date "May 28, 2026"; Max users and Auto-apply their own headings,
-                which are wider than any value under them. Name takes the rest and
-                truncates with its full text in a tooltip. */}
-            <ListHead className="w-[16%]">Name</ListHead>
-            <ListHead className="w-[19%]">Code</ListHead>
-            <ListHead className="w-[13.5%]">Value</ListHead>
-            <ListHead className="w-[12.5%]">Created</ListHead>
-            <ListHead className="w-[12.5%]">Expires</ListHead>
-            <ListHead className="w-[10%]">Max users</ListHead>
-            <ListHead className="w-[10.5%]">Auto-apply</ListHead>
-            <ListHead className="w-[6%] text-right">
-              <span className="sr-only">Actions</span>
-            </ListHead>
-          </ListTableHeader>
-          <ListBody>
-            {promoRows.visible.map((promo) => (
-              <ListRow key={promo.id}>
-                <ListCell>
-                  <span className={`block truncate ${LIST_CLASSES.identifier}`} title={promo.name}>
-                    {promo.name}
-                  </span>
-                </ListCell>
-                {/* v1's Copy button, now the code itself: one click copies it. */}
-                <ListCell onClick={(e) => e.stopPropagation()}>
-                  {/* A block <button> is only as wide as its content, so it is centred as a box (mx-auto), as the column is. */}
-                  <CopyCode code={promo.code} onCopy={onCopy} className="mx-auto justify-center text-center" />
-                </ListCell>
-                {/* Never truncated: an ellipsis here hides money. A value too wide
-                    for the column wraps inside it instead of overlapping. */}
-                <ListCell className="tabular-nums">
-                  <span
-                    className={cn(
-                      "block [overflow-wrap:anywhere]",
-                      LIST_CLASSES.text,
-                      Number(promo.value) < 0 && "text-red-500 dark:text-red-400",
+        {/* One provider for the whole table: a tooltip per row would mount a
+            provider per row. `delayDuration` matches Custom pricing's. */}
+        <TooltipProvider delayDuration={300}>
+          <ListTable rows={promoRows} minWidth="min-w-[880px]">
+            <ListTableHeader>
+              {/* Widths measured at the 944px card with Manrope. Code holds a
+                  16-character code and its copy mark; Value "AED 12,500.00"; each
+                  date "May 28, 2026"; Max users and Auto-apply their own headings,
+                  which are wider than any value under them; the last column holds
+                  Edit and Delete. Name takes the rest and truncates with its full
+                  text in a tooltip. */}
+              <ListHead className="w-[16%]">Name</ListHead>
+              <ListHead className="w-[17%]">Code</ListHead>
+              <ListHead className="w-[12.5%]">Value</ListHead>
+              <ListHead className="w-[11%]">Created</ListHead>
+              <ListHead className="w-[12.5%]">Expires</ListHead>
+              <ListHead className="w-[10%]">Max users</ListHead>
+              <ListHead className="w-[10.5%]">Auto-apply</ListHead>
+              <ListHead className="w-[10.5%] text-right">
+                <span className="sr-only">Actions</span>
+              </ListHead>
+            </ListTableHeader>
+            <ListBody>
+              {promoRows.visible.map((promo) => (
+                <ListRow key={promo.id}>
+                  <ListCell>
+                    <span className={`block truncate ${LIST_CLASSES.identifier}`} title={promo.name}>
+                      {promo.name}
+                    </span>
+                  </ListCell>
+                  {/* v1's Copy button, now the code itself: one click copies it. */}
+                  <ListCell onClick={(e) => e.stopPropagation()}>
+                    {/* A block <button> is only as wide as its content, so it is centred as a box (mx-auto), as the column is. */}
+                    <CopyCode code={promo.code} onCopy={onCopy} className="mx-auto justify-center text-center" />
+                  </ListCell>
+                  {/* Never truncated: an ellipsis here hides money. A value too wide
+                      for the column wraps inside it instead of overlapping. */}
+                  <ListCell className="tabular-nums">
+                    <span
+                      className={cn(
+                        "block [overflow-wrap:anywhere]",
+                        LIST_CLASSES.text,
+                        Number(promo.value) < 0 && "text-red-500 dark:text-red-400",
+                      )}
+                    >
+                      {promoValueLabel(promo, currencyCode)}
+                    </span>
+                  </ListCell>
+                  <ListCell className="tabular-nums">
+                    <PromoDate value={promo.created_at} />
+                  </ListCell>
+                  <ListCell className="tabular-nums whitespace-normal">
+                    <PromoDate value={promo.expires_at} expiry />
+                  </ListCell>
+                  <ListCell className="tabular-nums">
+                    <span className={`block [overflow-wrap:anywhere] ${LIST_CLASSES.text}`}>
+                      {formatSettingsNumber(promo.max_users)}
+                    </span>
+                  </ListCell>
+                  {/* v1's amber badge for an auto-applied code, as coloured text. */}
+                  <ListCell>
+                    {(promo.min_duration_days ?? 0) > 0 ? (
+                      <ListStatusText tone="info">{formatSettingsNumber(promo.min_duration_days)}+ days</ListStatusText>
+                    ) : (
+                      <ListStatusText tone="muted">Manual</ListStatusText>
                     )}
-                  >
-                    {promoValueLabel(promo, currencyCode)}
-                  </span>
-                </ListCell>
-                <ListCell className="tabular-nums">
-                  <PromoDate value={promo.created_at} />
-                </ListCell>
-                <ListCell className="tabular-nums whitespace-normal">
-                  <PromoDate value={promo.expires_at} expiry />
-                </ListCell>
-                <ListCell className="tabular-nums">
-                  <span className={`block [overflow-wrap:anywhere] ${LIST_CLASSES.text}`}>
-                    {formatSettingsNumber(promo.max_users)}
-                  </span>
-                </ListCell>
-                {/* v1's amber badge for an auto-applied code, as coloured text. */}
-                <ListCell>
-                  {(promo.min_duration_days ?? 0) > 0 ? (
-                    <ListStatusText tone="info">{formatSettingsNumber(promo.min_duration_days)}+ days</ListStatusText>
-                  ) : (
-                    <ListStatusText tone="muted">Manual</ListStatusText>
-                  )}
-                </ListCell>
-                {/* Edit and Delete, v1's two buttons, in the ⋯ menu. Clicks on the
-                    trigger and on its items (portalled, but still React children
-                    of this cell) stop here. */}
-                <ListCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                  {canEdit && <PromoRowMenu promo={promo} onEdit={onEdit} onDelete={onDelete} />}
-                </ListCell>
-              </ListRow>
-            ))}
-          </ListBody>
-        </ListTable>
+                  </ListCell>
+                  {/* Edit and Delete, v1's two buttons, in the row. Clicks stop here. */}
+                  <ListCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                    {canEdit && <PromoRowActions promo={promo} onEdit={onEdit} onDelete={onDelete} />}
+                  </ListCell>
+                </ListRow>
+              ))}
+            </ListBody>
+          </ListTable>
+        </TooltipProvider>
       </div>
       <ListFooter rows={promoRows} one="promo code" many="promo codes" />
     </>

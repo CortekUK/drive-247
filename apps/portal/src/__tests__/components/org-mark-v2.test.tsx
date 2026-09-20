@@ -29,7 +29,9 @@ vi.mock("next/link", () => ({
 
 import { OrgSwitcher } from "@/components/shared/layout/org-switcher";
 
-const mark = () => screen.getByRole("button", { name: "Organization menu" });
+// The collapsed rail used to be the menu's trigger and is now a link straight
+// to Settings — see org-switcher.tsx. The mark itself is unchanged.
+const mark = () => screen.getByRole("link", { name: "Settings" });
 
 beforeEach(() => {
   h.theme = "light";

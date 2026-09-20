@@ -297,41 +297,46 @@ describe("/settings/blacklist on v2", () => {
 /* Org menu                                                                    */
 /* -------------------------------------------------------------------------- */
 
-describe("OrgSwitcher (v2 sidebar): Team lives in Settings, not here", () => {
-  // Radix's popper constructs a ResizeObserver; the shared setup's stub is a
-  // plain function, so give it a class for these renders only.
-  const SetupResizeObserver = globalThis.ResizeObserver;
-  beforeEach(() => {
-    globalThis.ResizeObserver = class {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    } as unknown as typeof ResizeObserver;
-  });
-  afterEach(() => {
-    globalThis.ResizeObserver = SetupResizeObserver;
-  });
-
-  const openMenu = () => {
+describe("OrgSwitcher (v2 sidebar): one row, one destination", () => {
+  /*
+   * This row used to open a dropdown holding Organization settings, Billing &
+   * subscription and Audit Logs. All three were taken out on request — the
+   * first two have their own tab already, and Audit Logs moved onto the
+   * Settings index — which left the menu with nothing in it, so the row is now
+   * a plain link to /settings. These cases pin that: no menu anywhere, in
+   * either the expanded pill or the collapsed rail, and the manager gate that
+   * used to decide whether the menu listed Settings now decides whether the
+   * row links at all.
+   */
+  it("is a link straight to Settings, with no menu behind it", () => {
     render(<OrgSwitcher />);
-    fireEvent.click(screen.getByText("Northwind Rentals"));
-  };
-
-  it("a head admin sees Settings, Billing and Audit Logs, and no Manage Users", () => {
-    openMenu();
-    const items = screen.getAllByRole("menuitem").map((item) => item.textContent?.trim());
-    expect(items).toEqual(["Organization settings", "Billing & subscription", "Audit Logs"]);
-    expect(screen.queryByText("Manage Users")).toBeNull();
+    const link = screen.getByRole("link");
+    expect(link).toHaveAttribute("href", "/settings");
+    expect(link).toHaveTextContent("Northwind Rentals");
+    // Nothing opens. A menu would need a trigger, and there is none.
+    expect(screen.queryByRole("menuitem")).toBeNull();
+    expect(screen.queryByRole("button")).toBeNull();
+    // The two that moved out, by destination rather than by label.
+    expect(document.querySelector('a[href="/subscription"]')).toBeNull();
+    expect(document.querySelector('a[href="/audit-logs"]')).toBeNull();
     expect(document.querySelector('a[href="/users"]')).toBeNull();
   });
 
-  it("with no Audit Logs grant, no separator is left dangling after Billing", () => {
+  it("the collapsed rail is the same link, not a trigger", () => {
+    render(<OrgSwitcher collapsed />);
+    const link = screen.getByRole("link", { name: "Settings" });
+    expect(link).toHaveAttribute("href", "/settings");
+    expect(screen.queryByRole("button")).toBeNull();
+  });
+
+  it("a manager with no Settings grant gets the identity row and no link", () => {
     h.isManager = true;
-    h.canView = (tab) => tab === "settings";
-    openMenu();
-    const items = screen.getAllByRole("menuitem").map((item) => item.textContent?.trim());
-    expect(items).toEqual(["Organization settings", "Billing & subscription"]);
-    // One separator only: the one under the organization's name.
-    expect(document.querySelectorAll('[role="separator"]')).toHaveLength(1);
+    h.canView = () => false;
+    const { unmount } = render(<OrgSwitcher />);
+    expect(screen.queryByRole("link")).toBeNull();
+    expect(screen.getByText("Northwind Rentals")).toBeTruthy();
+    unmount();
+    render(<OrgSwitcher collapsed />);
+    expect(screen.queryByRole("link")).toBeNull();
   });
 });

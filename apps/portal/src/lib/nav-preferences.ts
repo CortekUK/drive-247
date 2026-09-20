@@ -30,6 +30,30 @@ export interface NavPreferences {
   hidden: string[];
   /** Group-item hrefs promoted into the top-level rail. */
   pinned: string[];
+  /**
+   * Ordered hrefs for the flat "More" rows.
+   *
+   * ADDED Sep 20 2026, when those rows became customisable. Rows written
+   * before that date have no `moreOrder` key at all, which is exactly the
+   * "unlisted sorts to the end, visible" case `applyOrder` already handles —
+   * so an old row keeps producing today's sidebar. `parseNavPreferences`
+   * tolerates its absence, and every read below defaults it.
+   */
+  moreOrder: string[];
+  /**
+   * Rows that are OFF by default and the user has switched on.
+   *
+   * The nav carries a few entries that were deliberately taken off the rail
+   * (Insights, Insurances, Agreements) but whose pages are all still live. The
+   * request was that they be offered rather than restored, so they are marked
+   * `optional` where they are declared and listed only once their href appears
+   * here.
+   *
+   * This does NOT widen access. `optional` items are filtered by permission
+   * before this overlay is applied, exactly like every other item, so a stored
+   * href for a page the user may not see still matches nothing.
+   */
+  shown: string[];
 }
 
 export const EMPTY_NAV_PREFERENCES: NavPreferences = {
@@ -38,7 +62,37 @@ export const EMPTY_NAV_PREFERENCES: NavPreferences = {
   groupItemOrder: {},
   hidden: [],
   pinned: [],
+  moreOrder: [],
+  shown: [],
 };
+
+/**
+ * Rows that may never be hidden or taken off the rail.
+ *
+ * "Dashboard, Integrations, Billing, Customers and Rentals are permanent"
+ * (team lead, Sep 20 2026). Two reasons they are enforced HERE rather than
+ * only greyed out in the customiser: a stored preference outlives the UI that
+ * wrote it, and the dialog is not the only thing that could ever write one.
+ *
+ * Note what is NOT in this set. Vehicles sits beside Customers and Rentals in
+ * the rail and was not named, so it stays customisable; if that was an
+ * oversight rather than a decision, adding `/vehicles` here is the whole fix.
+ * Dashboard, Integrations and Billing are rendered as fixed rows by the
+ * sidebar and never reach this overlay at all — they are listed for the day
+ * one of them does, and so that the customiser has one list to read.
+ */
+export const PERMANENT_NAV_HREFS: readonly string[] = [
+  "/",
+  "/integrations",
+  "/subscription",
+  "/customers",
+  "/rentals",
+];
+
+/** May this row be hidden at all? */
+export function isPermanentNavHref(href: string): boolean {
+  return PERMANENT_NAV_HREFS.includes(href);
+}
 
 /** Shapes mirror app-sidebar's own `NavItem` / `NavGroup`, structurally. */
 export interface OverlayNavItem {
@@ -46,6 +100,11 @@ export interface OverlayNavItem {
   href: string;
   icon: any;
   badge?: number;
+  /**
+   * Offered, but off until the user asks for it — see `NavPreferences.shown`.
+   * Absent or false is the normal case: on unless hidden.
+   */
+  optional?: boolean;
   [key: string]: any;
 }
 
@@ -90,8 +149,14 @@ export function parseNavPreferences(raw: unknown): NavPreferences {
     topLevelOrder: strings(value.topLevelOrder),
     groupOrder: strings(value.groupOrder),
     groupItemOrder,
-    hidden: strings(value.hidden),
+    // A permanent row can never be hidden, whatever an older row says. The
+    // customiser does not offer it, but a preference written before an entry
+    // became permanent — or by hand — would otherwise take Customers or
+    // Rentals off the rail with no way back except Reset.
+    hidden: strings(value.hidden).filter((href) => !isPermanentNavHref(href)),
     pinned: strings(value.pinned),
+    moreOrder: strings(value.moreOrder),
+    shown: strings(value.shown),
   };
 }
 
@@ -105,14 +170,30 @@ export function parseNavPreferences(raw: unknown): NavPreferences {
 export function applyNavPreferences({
   topLevel,
   groups,
+  more = [],
   preferences,
 }: {
   topLevel: OverlayNavItem[];
   groups: OverlayNavGroup[];
+  /** The flat "More" rows. Optional so a caller that has none is unchanged. */
+  more?: OverlayNavItem[];
   preferences: NavPreferences;
-}): { topLevel: OverlayNavItem[]; groups: OverlayNavGroup[] } {
-  const hidden = new Set(preferences.hidden);
-  const pinned = new Set(preferences.pinned);
+}): {
+  topLevel: OverlayNavItem[];
+  groups: OverlayNavGroup[];
+  more: OverlayNavItem[];
+} {
+  // `?? []` on both of the Sep 2026 additions: a preferences object built
+  // before they existed — a stored row, or a test double — must behave as it
+  // always did rather than throw on a missing array.
+  const hidden = new Set(
+    (preferences.hidden ?? []).filter((href) => !isPermanentNavHref(href))
+  );
+  const pinned = new Set(preferences.pinned ?? []);
+  const shown = new Set(preferences.shown ?? []);
+  /** An off-by-default row is out unless the user has asked for it. */
+  const offByDefault = (item: OverlayNavItem) =>
+    item.optional === true && !shown.has(item.href);
 
   const promoted: OverlayNavItem[] = [];
   const remainingGroups = groups.map((group) => {
@@ -125,7 +206,7 @@ export function applyNavPreferences({
   });
 
   const visibleTopLevel = [...topLevel, ...promoted].filter(
-    (item) => !hidden.has(item.href)
+    (item) => !hidden.has(item.href) && !offByDefault(item)
   );
 
   const visibleGroups = remainingGroups
@@ -142,19 +223,30 @@ export function applyNavPreferences({
     // open — it would render as a heading with an empty flyout.
     .filter((group) => group.items.length > 0);
 
+  const visibleMore = more.filter(
+    (item) => !hidden.has(item.href) && !offByDefault(item)
+  );
+
   return {
-    topLevel: applyOrder(visibleTopLevel, (item) => item.href, preferences.topLevelOrder),
-    groups: applyOrder(visibleGroups, (group) => group.label, preferences.groupOrder),
+    topLevel: applyOrder(
+      visibleTopLevel,
+      (item) => item.href,
+      preferences.topLevelOrder ?? []
+    ),
+    groups: applyOrder(visibleGroups, (group) => group.label, preferences.groupOrder ?? []),
+    more: applyOrder(visibleMore, (item) => item.href, preferences.moreOrder ?? []),
   };
 }
 
 /** True when the user has customised anything at all — drives the Reset state. */
 export function hasNavCustomisation(preferences: NavPreferences): boolean {
   return (
-    preferences.topLevelOrder.length > 0 ||
-    preferences.groupOrder.length > 0 ||
-    Object.keys(preferences.groupItemOrder).length > 0 ||
-    preferences.hidden.length > 0 ||
-    preferences.pinned.length > 0
+    (preferences.topLevelOrder?.length ?? 0) > 0 ||
+    (preferences.groupOrder?.length ?? 0) > 0 ||
+    Object.keys(preferences.groupItemOrder ?? {}).length > 0 ||
+    (preferences.hidden?.length ?? 0) > 0 ||
+    (preferences.pinned?.length ?? 0) > 0 ||
+    (preferences.moreOrder?.length ?? 0) > 0 ||
+    (preferences.shown?.length ?? 0) > 0
   );
 }

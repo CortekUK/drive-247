@@ -1,16 +1,20 @@
 /**
- * The developer page's FOUR gates, and its three buttons.
+ * The developer page's ONE remaining gate, and its three buttons.
  *
- * The page carries a Supabase DELETE and clears operator-facing state, so "it
- * must never appear for a paying tenant, and it must never reach production"
- * are the only two things about it that actually matter. Four gates guard four
- * different failures:
+ * The page carries a Supabase DELETE (scoped to the open tenant's own
+ * `tenant_first_run` row) and clears operator-facing local state. It used to
+ * have four gates — build, route, host and tenant. The first three were
+ * removed on Sep 20 2026 because the request was to see the developer tool on
+ * the LIVE portal, and they are exactly what made that impossible.
  *
- *   1. BUILD    NODE_ENV — a production build folds the page away entirely
- *   2. ROUTE    the route file calls notFound() outside development, so even a
- *               typed URL has nothing there
- *   3. HOST     the browser must be on localhost
- *   4. TENANT   the northwind canary, by SLUG
+ * So the only thing left between this page and a paying operator is:
+ *
+ *   TENANT   `tenant.slug === 'northwind'` — the canary, by SLUG.
+ *
+ * NOT "is this tenant lean". `tenants.portal_experience` is already `'v2'` for
+ * `nasir` and `squad` in production, and every self-serve signup lands on v2
+ * from now on, so a lean-shaped gate would have opened this page to real
+ * operators the moment the host gate went. Both are asserted below.
  *
  * WHY EVERY REFUSAL IS ASSERTED AS THE RENDERED 404 PATH
  * ------------------------------------------------------
@@ -23,8 +27,8 @@
  * the page was REFUSED, not merely missing.
  *
  * The first case is the probe's own existence test: it asserts the page IS
- * found, with all three buttons, under the one configuration that should
- * produce it. Without that, every "refused" assertion would pass just as
+ * found, with all three buttons, under a configuration that should produce
+ * it. Without that, every "refused" assertion would pass just as
  * happily against a typo in the test id.
  *
  * HARNESS: `react-dom/client` + `act`, matching the other gate tests here
@@ -242,10 +246,10 @@ afterEach(async () => {
   if (realLocation) Object.defineProperty(window, 'location', realLocation);
 });
 
-// ── 1. The canary, on this machine, in a dev build ─────────────────────────
+// ── 1. The canary — now everywhere, not only on this machine ───────────────
 
 describe('Developer page — shows', () => {
-  it('renders for northwind on localhost in a development build, with exactly the three buttons', async () => {
+  it('renders for northwind on localhost, with exactly the three buttons', async () => {
     currentTenant = NORTHWIND;
     await render();
 
@@ -319,45 +323,47 @@ describe('Developer page — the tenant gate', () => {
   });
 });
 
-// ── 3. The hostname gate ───────────────────────────────────────────────────
+// ── 3. The host and the build no longer decide anything ───────────────────
 
-describe('Developer page — the hostname gate', () => {
+describe('Developer page — on live', () => {
   it.each([
     'northwind.portal.drive-247.com',
     'portal.drive-247.com',
     '192.168.1.42',
     'northwind.portal.localhost.evil.com',
-  ])('is refused for the canary on %s', async (hostname) => {
+  ])('renders for the canary on %s — the host gate is gone', async (hostname) => {
     setHostname(hostname);
     currentTenant = NORTHWIND;
     await render();
-    expectRefused();
-  });
-});
 
-// ── 4. The build / route gate ──────────────────────────────────────────────
-
-describe('Developer page — the build gate, at the route', () => {
-  /**
-   * This asserts the RUNTIME half of the build gate: with NODE_ENV set to
-   * production the route file calls notFound() even for the canary on
-   * localhost, i.e. every other condition satisfied. In a real production
-   * bundle the guarantee is stronger than this test can show — the constant
-   * folds and the page body is not in the bundle at all (proved separately
-   * with esbuild; see the commit).
-   */
-  it('is refused in a production build, with every other condition met', async () => {
-    vi.stubEnv('NODE_ENV', 'production');
-    currentTenant = NORTHWIND;
-    await render();
-    expectRefused();
+    expect(sentinel()).not.toBeNull();
+    expect(page()).not.toBeNull();
+    expect(notFoundPage()).toBeNull();
+    expect(crash()).toBeNull();
   });
 
-  it.each(['staging', 'test', ''])(
-    'is refused for NODE_ENV=%j too — the guard is an allowlist, not a denylist',
+  it.each(['production', 'staging', 'test', ''])(
+    'renders for the canary with NODE_ENV=%j — the build gate is gone',
     async (env) => {
       vi.stubEnv('NODE_ENV', env);
+      setHostname('northwind.portal.drive-247.com');
       currentTenant = NORTHWIND;
+      await render();
+
+      expect(sentinel()).not.toBeNull();
+      expect(page()).not.toBeNull();
+      expect(notFoundPage()).toBeNull();
+    },
+  );
+
+  // The gate that now carries the whole weight. Both of these tenants are on
+  // the v2 portal (`portal_experience = 'v2'`) and neither is the canary.
+  it.each(['nasir', 'squad'])(
+    'is still refused for %s on live, a lean tenant that is not the canary',
+    async (slug) => {
+      vi.stubEnv('NODE_ENV', 'production');
+      setHostname(`${slug}.portal.drive-247.com`);
+      currentTenant = { id: `tenant-${slug}`, slug };
       await render();
       expectRefused();
     },

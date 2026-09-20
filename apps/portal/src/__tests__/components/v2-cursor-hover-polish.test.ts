@@ -512,8 +512,17 @@ describe('v2 dark hovers stay visible and readable', () => {
   it('the sidebar back links, org switcher, user menu and integration pin are among them', () => {
     const LIGHT_HOVER_TEXT = new RegExp(String.raw`dark:(\[a&\]:)?hover:text-${DARK_LIGHT_TEXT}`);
     const count = (file: string) => classStrings(read(file)).filter((str) => V2_DARK.test(str) && LIGHT_HOVER_TEXT.test(str)).length;
-    expect(count('components/shared/layout/app-sidebar-v2.tsx')).toBe(6);
-    expect(count('components/shared/layout/org-switcher.tsx')).toBe(2);
+    // 7 since Sep 20 2026: the booking-site row's pencil (hover → Branding)
+    // is the seventh control in this rail that tints and turns primary.
+    expect(count('components/shared/layout/app-sidebar-v2.tsx')).toBe(7);
+    // 0 since Sep 20 2026. The org row stopped being a pill wrapping a gear
+    // and a menu caret — both of which were controls of this shape — and
+    // became ONE link to /settings. Its gear is now decoration inside that
+    // link and follows it on `group-hover`, so there is no `hover:text-primary`
+    // control left in the file for this rule to have an opinion about. The
+    // dark tint on the row itself is still there and still asserted by the
+    // grey-hover rule above.
+    expect(count('components/shared/layout/org-switcher.tsx')).toBe(0);
     expect(count('components/shared/layout/user-menu-v2.tsx')).toBe(2);
     expect(count('app/(dashboard)/integrations/integrations-board.tsx')).toBe(1);
     expect(count('components/ui-v2/badge.tsx')).toBe(2);
@@ -753,8 +762,13 @@ describe('Sep 17 review: grey and white hovers on v2-only surfaces are the purpl
   it('user menu: the initials on every avatar fallback are the light brand in dark', () => {
     // `text-primary` on `bg-primary/10`: in dark v2 that measured 1.91:1, so the
     // initials were all but invisible on the sidebar row, the menu and the
-    // profile dialog. All four fallbacks, or one of them is still unreadable.
-    const src = read('components/shared/layout/user-menu-v2.tsx');
+    // profile panel. Still four fallbacks — but one of them moved: the profile
+    // left this menu for `profile-sheet-v2.tsx` on Sep 20 2026 (it opens from
+    // the top now), taking its avatar with it. Both files are read, so the
+    // rule cannot be escaped by moving markup between them.
+    const src =
+      read('components/shared/layout/user-menu-v2.tsx') +
+      read('components/shared/layout/profile-sheet-v2.tsx');
     const fallbacks = src.match(/<AvatarFallback className="[^"]*"/g) ?? [];
     expect(fallbacks).toHaveLength(4);
     for (const fallback of fallbacks) expect(fallback, fallback).toContain(`dark:text-[${LINK}]`);

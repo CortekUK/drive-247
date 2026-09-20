@@ -594,7 +594,7 @@ export function ExtrasSettings() {
         ) : (
           <>
             <SettingsSectionSkeleton variant="rows" rows={4} thumbnail label="Loading rental extras" className="sm:hidden" />
-            <SettingsSectionSkeleton variant="table" rows={4} columns={7} label="Loading rental extras" className="hidden sm:block" />
+            <SettingsSectionSkeleton variant="table" rows={4} columns={6} label="Loading rental extras" className="hidden sm:block" />
           </>
         )}
       </div>
@@ -618,9 +618,10 @@ export function ExtrasSettings() {
         // ListTable is the card; the empty message is v1's, centred, with no
         // table. `pointer-events-auto` because a view-only manager's tab body is
         // `pointer-events-none`: without it the table could neither scroll nor
-        // show more than its first 25 extras. Add Extra and the row menu render
-        // only for `canEditSettings('extras')`, and every handler is this
-        // component's own, so the dialogs below serve both branches.
+        // show more than its first 25 extras. Add Extra and the row's own Edit,
+        // Update stock, Activate/Deactivate and Delete render only for
+        // `canEditSettings('extras')`, and every handler is this component's
+        // own, so the dialogs below serve both branches.
         <div className="pointer-events-auto space-y-3">
           {extrasHeaderV2}
           {extrasError ? (
@@ -647,7 +648,7 @@ export function ExtrasSettings() {
                 tone="warning"
                 icon={AlertTriangle}
                 title={lowStockSentence(low.map((e) => e.name))}
-                body={canEditExtrasV2 ? 'Use Update Stock in its menu to add more.' : 'Ask an admin to add more stock.'}
+                body={canEditExtrasV2 ? 'Use Update stock on its row to add more.' : 'Ask an admin to add more stock.'}
               />
             ) : null;
           })()}

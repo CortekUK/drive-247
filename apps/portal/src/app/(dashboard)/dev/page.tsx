@@ -1,32 +1,27 @@
 'use client';
 
-import { notFound } from 'next/navigation';
-
 import { DevPageBody } from '@/components/dev/dev-page';
 
 /**
- * `/dev` — the developer page. Local only, northwind only. See
- * `components/dev/dev-page.tsx` for the page and the other three gates.
+ * `/dev` — the developer page. Canary tenant only. See
+ * `components/dev/dev-page.tsx` for the gate that remains and what dropping
+ * the other ones costs.
  *
- * GATE 1 of 4 — the build gate, and nothing else in this file.
+ * This file used to hold a BUILD gate — `process.env.NODE_ENV ===
+ * 'development'`, written in the one shape that actually folds, so a
+ * production build tree-shook `DevPageBody` and its reset actions out of the
+ * bundle entirely. The request (Sep 20 2026) was to see the developer tool on
+ * the LIVE portal, and that gate is precisely what made that impossible, so it
+ * is gone and this route now renders in production like any other.
  *
- * No hooks, no state, no other statements. Next substitutes
- * `process.env.NODE_ENV` with the literal at build time, so in a production
- * bundle this reads `if ("production" === "development") return …;
- * notFound();` — a constant condition. The minifier drops the dead branch,
- * `DevPageBody` is then referenced from nowhere, and it is tree-shaken out
- * along with its reset actions and the Supabase delete. Even a typed URL on
- * production reaches only the not-found page.
- *
- * THE ORDER OF THE TWO LINES IS LOAD-BEARING. The obvious shape —
- * `if (!dev) notFound(); return <DevPageBody />` — does NOT fold: no
- * minifier knows that `notFound()` never returns, so the `return` after it
- * stays reachable and the body stays in the production bundle (proved with
- * esbuild, which is what caught it). Returning the body inside the
- * development branch and falling through to `notFound()` is the shape that
- * actually disappears. Do not "tidy" it back.
+ * What still refuses it:
+ *   - the page itself, on `tenant.slug === NORTHWIND`, which renders the
+ *     not-found page for every other tenant; and
+ *   - `ROUTE_TO_TAB['/dev']` in `lib/permissions.ts`, which maps this route to
+ *     a tab key no manager can hold. `canAccessRoute` treats an UNMAPPED route
+ *     as allowed, so that entry is what stops a manager-role user on the
+ *     canary being granted the page silently.
  */
 export default function DevPage() {
-  if (process.env.NODE_ENV === 'development') return <DevPageBody />;
-  notFound();
+  return <DevPageBody />;
 }

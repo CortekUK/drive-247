@@ -123,7 +123,15 @@ describe("the original portal has its own settings list", () => {
     expect(titles(find("messages", classic))).toContain("Messages");
     expect(titles(find("audit", classic))).toContain("Audit Logs");
     expect(titles(find("messages", northwind))).not.toContain("Messages");
-    expect(titles(find("audit", northwind))).not.toContain("Audit Logs");
+  });
+
+  it("Audit Logs is on BOTH now — as a page there, as a Settings entry on v2", () => {
+    // Sep 20 2026: Audit Logs left the v2 org menu and became an entry on the
+    // Settings index, so v2 has a way in again and the search follows it. The
+    // two surfaces are different destinations on purpose: `/audit-logs` as a
+    // page is still `experience: "v1"`, and the v2 hit is the Settings entry.
+    expect(titles(find("audit", northwind))).toContain("Audit Logs");
+    expect(hrefFor("audit", northwind, "Audit Logs")).toBe("/audit-logs");
   });
 
   it("has no Integrations board, and Support and Help are v2 only", () => {
@@ -307,6 +315,11 @@ describe("the search does not fall behind the navigation", () => {
   const NOT_A_DESTINATION = new Set([
     "/cms/about", "/cms/blog", "/cms/contact", "/cms/fleet", "/cms/home", "/cms/privacy", "/cms/promotions",
     "/cms/reviews", "/cms/terms", // the Website view's page list — "Website content" covers it
+    // The booking-site row's pencil (hover → Branding). It is a settings page,
+    // and the settings half of the search already offers it as "Branding" from
+    // the Settings index — a second PAGE_DESTINATION for the same href would
+    // put the same place in the results twice.
+    "/settings/appearance",
   ]);
 
   it.each(["components/shared/layout/app-sidebar.tsx", "components/shared/layout/app-sidebar-v2.tsx"])(

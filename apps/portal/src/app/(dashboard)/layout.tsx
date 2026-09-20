@@ -49,6 +49,7 @@ import { AppBannerStack } from "@/components/banners/app-banner-stack";
 import { GlobalVoiceCallProvider } from "@/components/voice/global-voice-call-provider";
 import { DevBillingStatePill } from "@/components/dev/dev-billing-escape";
 import { FeedbackDialog } from "@/components/feedback/feedback-dialog";
+import { FeedbackDialogV2 } from "@/components/feedback/feedback-dialog-v2";
 import { FeedbackForcePrompt } from "@/components/feedback/feedback-force-prompt";
 import { WelcomePackPrompt } from "@/components/welcome/welcome-pack-prompt";
 import { FirstRunWizard } from "@/components/onboarding/first-run-wizard";
@@ -773,13 +774,22 @@ export default function DashboardLayout({
             renders on top when both happen to be up. */}
         <MigrationBlockerDialog />
 
-        {/* Staff feedback channel. The dialog is mounted once here and driven
+        {/* Staff feedback channel. One dialog, mounted once here and driven
             from three places (sidebar button, rental-completion follow-up,
             forced prompt) via `useFeedbackStore`. The force prompt is
             suppressed while the paywall owns the screen — a dismissible
             feedback modal stacked on a non-dismissible one leaves the operator
-            unable to act on either. */}
-        <FeedbackDialog />
+            unable to act on either.
+
+            TWO COMPONENTS SINCE Sep 20 2026, and this branch is the whole of
+            it. v2 asks for a rating and a few words; v1 keeps its four
+            categories and its screenshot, because bug reports and screenshots
+            belong to the support ticket system, which the other ~56 tenants do
+            not have yet. Both read the same store, so every entry point works
+            on either. `feedback-dialog.tsx` still carries a v2 branch of its
+            own that nothing reaches any more — it comes out with the v1 file
+            when this area is widened, not before. */}
+        {v2Chrome ? <FeedbackDialogV2 /> : <FeedbackDialog />}
         <FeedbackForcePrompt suppressed={promptsSuppressed} />
 
         {/* First-login nudge toward the welcome pack. Dismissible, and

@@ -262,8 +262,30 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
         // top, as it does in the sidebar. Only once content scrolls underneath
         // does a light blur and a hairline come in, so the search field stays
         // readable over the rows passing below it.
+        //
+        // THE SCROLLED FILL IS BRAND-TINTED, NOT WHITE (Sep 20 2026).
+        // It was `bg-background/60`, and `--background` is plain white in both
+        // v2 trees — so the moment the page scrolled, the exact band the review
+        // asked us to remove came back: a 60% white veil over a brand-tinted
+        // gradient reads as a grey stripe across the top, while the page below
+        // keeps its colour. The fix is not to drop the fill (the field has to
+        // stay readable over rows passing under it) but to take it from the
+        // same token the gradient itself is painted with, at a fraction of the
+        // strength. `--v2-wash` is --primary's lightness in the brand hue, so
+        // the band is now the page's own colour rather than a different one,
+        // and the blur does the legibility work. The fallback keeps this valid
+        // for a tenant on chrome-v2 but not theme-v2, where --v2-wash is
+        // undefined. --primary is a plain HSL triple in both trees, so the
+        // `/ 0.06` is safe here; --border is NOT (it carries its own alpha in
+        // dark), which is why the hairline below stays unmodified.
+        //
+        // Dark keeps the fill it had. Dark mode is out of scope for this
+        // change, and there `--background` is already dark — so the veil never
+        // read as a pale band, and dropping to a 6% tint would only have made
+        // rows passing underneath harder to read. The `dark:` utility is
+        // emitted after the base one, so it wins where it applies.
         (scrolled
-          ? "bg-background/60 shadow-[inset_0_-1px_0_hsl(var(--border))] backdrop-blur-xl"
+          ? "bg-[hsl(var(--v2-wash,var(--primary))_/_0.06)] dark:bg-background/60 shadow-[inset_0_-1px_0_hsl(var(--border))] backdrop-blur-xl"
           : "bg-transparent")
       }
     >
