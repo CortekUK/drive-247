@@ -186,7 +186,9 @@ function findClose(src: string, from: number, name: string): { inner: number; af
   return { inner: src.length, after: src.length };
 }
 
-const BLOCK_PATTERN = /<(p|h1|h2|h3|h4|h5|h6|ul|ol|blockquote)(?=[\s>/])[^>]*>|<(p|h1|h2|h3|h4|h5|h6|ul|ol|blockquote)>|<hr\s*\/?\s*>/gi;
+/** Built per call for the same reason as INLINE_SOURCE: `/g` carries state. */
+const BLOCK_SOURCE =
+  '<(p|h1|h2|h3|h4|h5|h6|ul|ol|blockquote)(?=[\\s>/])[^>]*>|<(p|h1|h2|h3|h4|h5|h6|ul|ol|blockquote)>|<hr\\s*/?\\s*>';
 
 /** `<li>…</li>` items of a list block, in order. */
 function listItems(inner: string): string[] {
@@ -217,8 +219,8 @@ export function htmlToMarkdownLight(html: string | null | undefined): string {
     if (md) blocks.push(md);
   };
 
-  BLOCK_PATTERN.lastIndex = 0;
-  let match = BLOCK_PATTERN.exec(src);
+  const blockPattern = new RegExp(BLOCK_SOURCE, 'gi');
+  let match = blockPattern.exec(src);
   while (match) {
     if (match.index > cursor) loose(src.slice(cursor, match.index));
 
@@ -256,8 +258,8 @@ export function htmlToMarkdownLight(html: string | null | undefined): string {
       }
       cursor = end.after;
     }
-    BLOCK_PATTERN.lastIndex = cursor;
-    match = BLOCK_PATTERN.exec(src);
+    blockPattern.lastIndex = cursor;
+    match = blockPattern.exec(src);
   }
   if (cursor < src.length) loose(src.slice(cursor));
 
@@ -268,18 +270,26 @@ export function htmlToMarkdownLight(html: string | null | undefined): string {
 /* Markdown → HTML                                                             */
 /* -------------------------------------------------------------------------- */
 
-const INLINE_PATTERN =
-  /\\([\\*[\]])|\[\[([^\]\n]*)\]\]\(([^)\s]*)\)|\[([^\]\n]*)\]\(([^)\s]*)\)|\*\*([\s\S]+?)\*\*|\*([^*\n]+)\*/g;
+const INLINE_SOURCE =
+  '\\\\([\\\\*[\\]])|\\[\\[([^\\]\\n]*)\\]\\]\\(([^)\\s]*)\\)|\\[([^\\]\\n]*)\\]\\(([^)\\s]*)\\)|\\*\\*([\\s\\S]+?)\\*\\*|\\*([^*\\n]+)\\*';
 
-/** One line or fragment of markdown as inline HTML. */
+/**
+ * One line or fragment of markdown as inline HTML.
+ *
+ * The pattern is built PER CALL, never shared. This function recurses (a link
+ * label may be bold, a bold run may hold a link), and a `/g` regex carries a
+ * mutable `lastIndex`: one shared instance would have the inner call move the
+ * outer call's cursor, which corrupts the parse and can spin forever when the
+ * cursor moves backwards.
+ */
 export function inlineToHtml(markdown: string, depth = 0): string {
   const src = String(markdown ?? '');
   if (depth > 4) return escapeHtmlText(src);
+  const pattern = new RegExp(INLINE_SOURCE, 'g');
   let out = '';
   let last = 0;
 
-  INLINE_PATTERN.lastIndex = 0;
-  let match = INLINE_PATTERN.exec(src);
+  let match = pattern.exec(src);
   while (match) {
     out += escapeHtmlText(src.slice(last, match.index));
     const [whole, escaped, buttonLabel, buttonHref, linkLabel, linkHref, bold, italic] = match;
@@ -300,7 +310,7 @@ export function inlineToHtml(markdown: string, depth = 0): string {
       out += escapeHtmlText(whole);
     }
     last = match.index + whole.length;
-    match = INLINE_PATTERN.exec(src);
+    match = pattern.exec(src);
   }
   out += escapeHtmlText(src.slice(last));
   return out;
