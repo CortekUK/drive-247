@@ -436,15 +436,17 @@ export function NotificationTemplateEditor({
       ref={surfaceRef}
       data-notification-editor=""
       className={cn(
-        "relative rounded-xl border bg-card transition-[border-color,box-shadow]",
+        // A flex column so the writing area fills the box when the box is
+        // stretched to match the preview beside it (notification-item-panel).
+        "relative flex flex-col rounded-xl border bg-card transition-[border-color,box-shadow]",
         !readOnly && "focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/30",
         className,
       )}
     >
       {editor ? (
-        <EditorContent editor={editor} />
+        <EditorContent editor={editor} className="flex min-h-0 flex-1 flex-col [&>.tiptap]:flex-1" />
       ) : (
-        <div className="min-h-[220px]" aria-busy="true" aria-label={ariaLabel} />
+        <div className="min-h-[220px] flex-1" aria-busy="true" aria-label={ariaLabel} />
       )}
 
       {editable && (

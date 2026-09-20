@@ -267,12 +267,21 @@ function ChannelLayout({
   test,
   fields,
   preview,
+  fill = false,
 }: {
   today: ReactNode;
   /** Send test, or the one line saying why this channel has none (in-app). */
   test: ReactNode;
   fields: ReactNode;
   preview: ReactNode;
+  /**
+   * The template column grows to the height of the preview beside it, as in the
+   * lead's sketch of two boxes of equal height. Only the email tab sets it: its
+   * column ends in an editor that can take the space. Push and in-app end in
+   * short inputs, which would look stretched, so their columns sit at the top
+   * and the row is only as tall as it needs to be.
+   */
+  fill?: boolean;
 }) {
   return (
     <div className="space-y-4">
@@ -284,8 +293,8 @@ function ChannelLayout({
           {test}
         </div>
       </div>
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
-        <div className="min-w-0 space-y-4" data-channel-fields="">
+      <div className={cn("grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]", !fill && "items-start")}>
+        <div className={cn("min-w-0", fill ? "flex flex-col gap-4" : "space-y-4")} data-channel-fields="">
           <p className={COLUMN_CAPTION}>{COPY.templateColumn}</p>
           {fields}
         </div>
@@ -462,7 +471,9 @@ function EmailChannel(props: ChannelProps) {
             />
             <FieldIssues id={`${ids}-subject-issues`} validation={validation} field="subject" />
           </div>
-          <div className="space-y-1.5">
+          {/* The message takes the space the subject, Reset and the variables
+              list leave, so the template box ends level with the preview. */}
+          <div className="flex min-h-0 flex-1 flex-col space-y-1.5">
             <p className="text-[13px] font-medium text-foreground" id={`${ids}-body-label`}>
               {COPY.message}
             </p>
@@ -472,6 +483,7 @@ function EmailChannel(props: ChannelProps) {
               variables={variables}
               readOnly={!canEdit}
               ariaLabel={`Email message for ${item.name}`}
+              className="min-h-0 flex-1"
             />
             <FieldIssues id={`${ids}-body-issues`} validation={validation} field="body" />
           </div>
@@ -487,6 +499,7 @@ function EmailChannel(props: ChannelProps) {
           <VariablesHelp variables={variables} examples={context.examples} />
         </>
       }
+      fill
       preview={
         <EmailPreviewGmail
           subject={subject}

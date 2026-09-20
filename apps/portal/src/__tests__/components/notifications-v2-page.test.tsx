@@ -506,6 +506,27 @@ describe("editing and the page's one save", () => {
     expect(registration(registerSave).save).toBeNull();
   });
 
+  it("the email template box grows to the preview's height; push and in-app sit at the top", () => {
+    // The email column used to end at the variables list while the Gmail
+    // preview beside it ran on, leaving a tall empty gap under the template.
+    render(<NotificationsPageV2 canEdit registerSave={vi.fn()} />);
+    openItem(NEW_BOOKING.key);
+    const box = panel()!;
+    const fields = box.querySelector("[data-channel-fields]") as HTMLElement;
+    const grid = fields.parentElement!;
+    expect(fields.className).toContain("flex");
+    expect(grid.className).not.toContain("items-start");
+    // The message block is what takes the space, not the subject or the buttons.
+    const message = box.querySelector("[data-editor-stub]")!.closest("div.flex-1");
+    expect(message).not.toBeNull();
+    expect(message!.className).toContain("flex-col");
+
+    // Push: short inputs, so the row is only as tall as it needs to be.
+    selectTab("push");
+    const pushFields = box.querySelector("[data-channel-fields]") as HTMLElement;
+    expect(pushFields.parentElement!.className).toContain("items-start");
+  });
+
   it("a template problem blocks Save with the reason, and opens that item at that channel", async () => {
     const registerSave = vi.fn();
     render(<NotificationsPageV2 canEdit registerSave={registerSave} />);
