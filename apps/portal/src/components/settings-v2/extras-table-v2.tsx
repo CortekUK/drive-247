@@ -288,8 +288,8 @@ export function ExtrasTableV2<T extends RentalExtra>({
                       negative margin keeps the row the height of a text row),
                       the image count on it as in v1, the name, and the low-stock
                       triangle, which never gives way to a long name. */}
-                  <ListCell>
-                    <div className="flex min-w-0 items-center justify-center gap-2.5">
+                  <ListCell className="text-left">
+                    <div className="flex min-w-0 items-center justify-start gap-2.5">
                       <span className="relative -my-0.5 shrink-0">
                         <Thumbnail extra={extra} className="size-6 rounded" />
                         {imageCount > 1 && (
@@ -378,7 +378,7 @@ export function ExtrasTableV2<T extends RentalExtra>({
 function ListHeaderRow({ withActions }: { withActions: boolean }) {
   return (
     <ListTableHeader>
-      <ListHead className="w-[22%]">Extra</ListHead>
+      <ListHead className="w-[22%] text-left">Extra</ListHead>
       <ListHead className="w-[16.5%]">Description</ListHead>
       <ListHead className="w-[13.5%]">Price</ListHead>
       <ListHead className="w-[15%]">Pricing</ListHead>

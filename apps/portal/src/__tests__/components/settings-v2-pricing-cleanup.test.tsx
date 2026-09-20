@@ -357,6 +357,39 @@ describe("Holiday pricing, with holidays", () => {
     expect(buttons("Add holiday", section)).toHaveLength(1);
   });
 
+  it("puts the controls at the end of the row, like the other v2 settings pages", () => {
+    // Left-aligned, the input, the day pills and the switch sat just past the
+    // 420px label column with the whole right half of the panel empty.
+    render(<PricingRulesV2 canEdit />);
+    const percent = document.querySelector("#v2-weekend-percent")!;
+    const row = percent.closest("div.px-5")!;
+    // The end layout: label takes the free space, the control column is auto.
+    expect(row.querySelector("div")!.className).toContain("md:grid-cols-[minmax(0,1fr)_auto]");
+    const controls = percent.closest("div.md\\:justify-end");
+    expect(controls).not.toBeNull();
+
+    // Every row of the panel follows, including the switch.
+    const stack = document.querySelector("#v2-stack-surcharges")!;
+    expect(stack.closest("div.md\\:justify-end")).not.toBeNull();
+  });
+
+  it("the name column reads from the left, while dates and numbers stay centred", () => {
+    // A centred name column left a wide empty gap down the left of the table,
+    // because Holiday takes whatever width the other four columns leave.
+    h.holidays.holidays = [holiday(1), holiday(2)];
+    render(<PricingRulesV2 canEdit />);
+    const section = holidaySection();
+    const heads = Array.from(section.querySelectorAll("th"));
+    const nameHead = heads.find((th) => th.textContent?.trim() === "Holiday")!;
+    const datesHead = heads.find((th) => th.textContent?.trim() === "Dates")!;
+    expect(nameHead.className).toContain("text-left");
+    expect(datesHead.className).not.toContain("text-left");
+
+    const firstCell = section.querySelector("tbody tr td")!;
+    expect(firstCell.className).toContain("text-left");
+    expect(firstCell.querySelector("div")!.className).toContain("justify-start");
+  });
+
   it("says nothing under the table when every holiday is on screen, and counts while more are coming", () => {
     h.holidays.holidays = [holiday(1), holiday(2)];
     render(<PricingRulesV2 canEdit />);

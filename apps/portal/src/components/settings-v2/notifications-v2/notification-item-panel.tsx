@@ -36,7 +36,7 @@ import { Skeleton } from "@/components/ui-v2/skeleton";
 import { Switch } from "@/components/ui-v2/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui-v2/tabs";
 import { fillVariables, getVariable } from "@/lib/notifications-v2/variables";
-import { inlineEmailStyles, renderNotificationEmailHtml, sanitizeEmailBodyHtml } from "@/lib/notifications-v2/email-layout";
+import { renderNotificationEmailHtml } from "@/lib/notifications-v2/email-layout";
 import { PUSH_DEVICE_PROFILES, pushLengthWarnings } from "@/lib/notifications-v2/push-display";
 import {
   EMAIL_SUBJECT_MAX,
@@ -358,10 +358,17 @@ const TEST_PUSH_URL = "/settings?tab=notifications";
  * The document the test send delivers (notification-test-v2 renders the same
  * body through the same layout with the tenant's branding), so the preview is
  * what lands in the inbox.
+ *
+ * The filled body goes in RAW, exactly as the edge function passes it
+ * (notification-test-v2/index.ts: "bodyHtml is passed as received"):
+ * renderNotificationEmailHtml sanitises AND inlines it itself. Doing either
+ * here first makes the preview a different document — the first inline pass
+ * turns `<a data-email-button>` into a styled `<table>`, and the layout's own
+ * sanitise then unwraps that table and strips its styles, so the preview showed
+ * a plain link where the real email has a button.
  */
 export function buildEmailPreviewHtml(body: string, examples: Record<string, string>, brand: EmailBrand): string {
-  const filled = fillVariables(body ?? "", examples, { html: true });
-  return renderNotificationEmailHtml({ bodyHtml: inlineEmailStyles(sanitizeEmailBodyHtml(filled), brand), brand });
+  return renderNotificationEmailHtml({ bodyHtml: fillVariables(body ?? "", examples, { html: true }), brand });
 }
 
 function EmailChannel(props: ChannelProps) {
@@ -547,6 +554,14 @@ function PushChannel(props: ChannelProps) {
                       </label>
                       <p id={`${optionId}-help`} className="text-xs text-muted-foreground">
                         {option.description}
+                        {option.note && (
+                          <>
+                            {" "}
+                            <span data-push-option-note={option.key} className="italic">
+                              {option.note}
+                            </span>
+                          </>
+                        )}
                       </p>
                     </div>
                     <Switch

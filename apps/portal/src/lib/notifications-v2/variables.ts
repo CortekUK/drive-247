@@ -162,7 +162,7 @@ export const NOTIFICATION_VARIABLES: NotificationVariable[] = [
   {
     key: "rejection_reason",
     label: "Reason",
-    description: "The reason your team gave when declining a booking or a payment.",
+    description: "The reason your team gave when cancelling or declining a booking, or declining a payment.",
     group: "rental",
     example: "The car isn't available for those dates.",
   },
@@ -227,6 +227,23 @@ export const NOTIFICATION_VARIABLES: NotificationVariable[] = [
     description: "The car's plate. Left blank if you hide plates from customers.",
     group: "vehicle",
     example: "8KXR512",
+  },
+  {
+    // New: the `{{lockbox_code}}` token notify-lockbox-code replaces. The code
+    // lives on the car (vehicles.lockbox_code), not on the booking.
+    key: "lockbox_code",
+    label: "Lockbox code",
+    description: "The code that opens the lockbox holding this car's keys.",
+    group: "vehicle",
+    example: "7401",
+  },
+  {
+    // New: the `{{lockbox_instructions}}` token notify-lockbox-code replaces.
+    key: "lockbox_instructions",
+    label: "Where the lockbox is",
+    description: "Where to find the lockbox on the car, as recorded on the vehicle.",
+    group: "vehicle",
+    example: "On the rear left wheel arch, behind the mudflap",
   },
 
   /* Money ------------------------------------------------------------------- */

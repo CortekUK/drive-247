@@ -246,7 +246,7 @@ export function PromoCodesTableV2<T extends PromoCodeRowV2>({
                 date "May 28, 2026"; Max users and Auto-apply their own headings,
                 which are wider than any value under them. Name takes the rest and
                 truncates with its full text in a tooltip. */}
-            <ListHead className="w-[16%]">Name</ListHead>
+            <ListHead className="w-[16%] text-left">Name</ListHead>
             <ListHead className="w-[19%]">Code</ListHead>
             <ListHead className="w-[13.5%]">Value</ListHead>
             <ListHead className="w-[12.5%]">Created</ListHead>
@@ -264,7 +264,7 @@ export function PromoCodesTableV2<T extends PromoCodeRowV2>({
           <ListBody>
             {promoRows.visible.map((promo) => (
               <ListRow key={promo.id}>
-                <ListCell>
+                <ListCell className="text-left">
                   <span className={`block truncate ${LIST_CLASSES.identifier}`} title={promo.name}>
                     {promo.name}
                   </span>

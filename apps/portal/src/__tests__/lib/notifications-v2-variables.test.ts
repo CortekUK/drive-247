@@ -42,6 +42,17 @@ describe("NOTIFICATION_VARIABLES", () => {
     expect(getVariable("customer_name")?.label).toBeTruthy();
     expect(getVariable("not_a_variable")).toBeUndefined();
   });
+
+  it("carries the lockbox keys, so the Keys notification can hold a real code", () => {
+    // `notify-lockbox-code` substitutes these two tokens; without them the
+    // lockbox item could not offer the one thing its message exists to carry.
+    for (const key of ["lockbox_code", "lockbox_instructions"]) {
+      const variable = getVariable(key);
+      expect(variable, key).toBeDefined();
+      expect(variable!.group, key).toBe("vehicle");
+      expect(variable!.example.trim(), key).not.toBe("");
+    }
+  });
 });
 
 describe("exampleValues", () => {

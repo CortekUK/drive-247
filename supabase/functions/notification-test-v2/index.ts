@@ -24,9 +24,13 @@
 // super admin (tenant_id NULL by design) names one, by tenantId or tenantSlug.
 //
 // Rate limit: 20 tests per user per rolling hour, counted in
-// notification_test_sends_v2 (ops/notifications_v2.sql). Until that table
-// exists the send is allowed and a warning is logged. One row is written per
-// send attempt that passed validation; rejected requests are not logged, so a
+// notification_test_sends_v2 (ops/notifications_v2.sql), decided by
+// ./rate-limit.ts. It FAILS CLOSED: while that table does not exist there is no
+// counter, so every request is refused with 503 test_sending_off ("Test sending
+// isn't switched on yet.") rather than sending uncounted — applying the SQL is
+// therefore a hard precondition of deploying this function. One row is written
+// per send attempt that passed validation (best-effort: a logging failure never
+// fails a send that happened); rejected requests are not logged, so a
 // locked-out user cannot extend their own lockout.
 //
 // The email is built by _shared/notification-email-layout-v2.ts, the
@@ -46,7 +50,9 @@
 // roles, tenant resolution, validation, rate limit, sender fallback, preview
 // parity, push fan-out and bookkeeping. It is not in the repo; it lives in the
 // session scratchpad next to the SQL suite named in ops/notifications_v2.sql
-// (edge_test.ts; `npx -y deno@2 run -A --no-check edge_test.ts`).
+// (edge_test.ts; `npx -y deno@2 run -A --no-check edge_test.ts`). The rate-limit
+// rule has since moved to ./rate-limit.ts and IS covered in the repo, by
+// apps/portal/src/__tests__/lib/notifications-v2-test-send-limit.test.ts.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { handleCors, jsonResponse } from '../_shared/cors.ts';
@@ -57,6 +63,15 @@ import {
   sanitizeEmailBodyHtml,
   type EmailLayoutBrand,
 } from '../_shared/notification-email-layout-v2.ts';
+import {
+  RATE_LIMIT,
+  RATE_WINDOW_MS,
+  TEST_SENDING_OFF_CODE,
+  TEST_SENDING_OFF_MESSAGE,
+  isMissingRelation,
+  plural,
+  rateLimitDecision,
+} from './rate-limit.ts';
 
 /* -------------------------------------------------------------------------- */
 /* Limits (TS twins in apps/portal/src/lib/notifications-v2/*)                  */
@@ -67,8 +82,10 @@ export const FULL_ACCESS_ROLES = new Set(['head_admin', 'admin']);
 /** The manager grant that owns the Notifications page (lib/permissions.ts). */
 export const MANAGER_TAB_KEY = 'settings.reminders';
 
-export const RATE_LIMIT = 20;
-export const RATE_WINDOW_MS = 60 * 60 * 1000;
+// The limit, its window and the two helpers it needs live in ./rate-limit.ts so
+// the portal's vitest suite can drive the rule; re-exported here because this
+// file is the function's public surface.
+export { RATE_LIMIT, RATE_WINDOW_MS, TEST_SENDING_OFF_CODE, TEST_SENDING_OFF_MESSAGE, isMissingRelation };
 
 /** The DB CHECK on notification_key (catalog keys). */
 export const NOTIFICATION_KEY_PATTERN = /^[a-z][a-z0-9_]{2,63}$/;
@@ -148,19 +165,6 @@ function fail(status: number, code: string, error: string): Failure {
 /** {success:false, error, code}: the error shape of send-push, plus `success` for NotificationTestResponse. */
 function errorResponse(f: Failure): Response {
   return jsonResponse({ success: false, error: f.error, message: f.error, code: f.code }, f.status);
-}
-
-/** A missing table (the SQL is not applied yet), from PostgREST or Postgres. */
-export function isMissingRelation(error: { code?: string; message?: string } | null | undefined): boolean {
-  if (!error) return false;
-  const code = String(error.code ?? '');
-  const message = String(error.message ?? '');
-  return (
-    code === 'PGRST205' ||
-    code === '42P01' ||
-    /could not find the table/i.test(message) ||
-    /relation .* does not exist/i.test(message)
-  );
 }
 
 export function isValidEmailAddress(value: unknown): value is string {
@@ -382,10 +386,6 @@ export function validatePushTest(body: Record<string, unknown>, notificationKey:
   };
 }
 
-function plural(n: number, one: string, many: string): string {
-  return `${n} ${n === 1 ? one : many}`;
-}
-
 /* -------------------------------------------------------------------------- */
 /* Side effects                                                                */
 /* -------------------------------------------------------------------------- */
@@ -422,34 +422,32 @@ async function logTestSend(
   }
 }
 
-/** The rolling-hour rate limit. Missing table: allowed (with a warning). Any other read error: refused. */
+/**
+ * The rolling-hour rate limit. The rule is `rateLimitDecision` (./rate-limit.ts,
+ * unit-tested); this only runs the query. A MISSING TABLE REFUSES: with no
+ * counter there is no limit at all, and the send is branded HTML to an
+ * arbitrary address through the platform's shared Resend account. Any other
+ * read error also refuses.
+ */
 async function checkRateLimit(supabase: Db, appUserId: string): Promise<Failure | null> {
   const since = new Date(Date.now() - RATE_WINDOW_MS).toISOString();
-  const { data, error } = await supabase
+  const read = await supabase
     .from('notification_test_sends_v2')
     .select('created_at')
     .eq('app_user_id', appUserId)
     .gte('created_at', since)
     .order('created_at', { ascending: true })
     .limit(RATE_LIMIT);
-  if (error) {
-    if (isMissingRelation(error)) {
-      console.warn('[NOTIFICATION-TEST-V2] notification_test_sends_v2 is missing (ops/notifications_v2.sql not applied); rate limit skipped');
-      return null;
+  if (read?.error) {
+    if (isMissingRelation(read.error)) {
+      console.error(
+        '[NOTIFICATION-TEST-V2] notification_test_sends_v2 is missing (ops/notifications_v2.sql not applied); refusing to send without a rate limit',
+      );
+    } else {
+      console.error('[NOTIFICATION-TEST-V2] Rate-limit read failed:', read.error.message);
     }
-    console.error('[NOTIFICATION-TEST-V2] Rate-limit read failed:', error.message);
-    return fail(500, 'rate_check_failed', "Couldn't check your recent tests. Try again in a moment.");
   }
-  const rows = (data ?? []) as { created_at: string }[];
-  if (rows.length < RATE_LIMIT) return null;
-  const oldest = Date.parse(rows[0].created_at);
-  const waitMs = Number.isFinite(oldest) ? oldest + RATE_WINDOW_MS - Date.now() : RATE_WINDOW_MS;
-  const minutes = Math.max(1, Math.ceil(waitMs / 60_000));
-  return fail(
-    429,
-    'rate_limited',
-    `You can send ${RATE_LIMIT} tests an hour. Try again in ${plural(minutes, 'minute', 'minutes')}.`,
-  );
+  return rateLimitDecision(read ?? {});
 }
 
 async function sendEmailTest(

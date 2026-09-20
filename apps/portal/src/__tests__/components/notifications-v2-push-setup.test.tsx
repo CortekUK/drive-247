@@ -51,12 +51,14 @@ vi.mock("@/hooks/use-manager-permissions", () => ({
 }));
 
 import {
+  PUSH_SETUP_FALLBACK_NOTE,
   PUSH_SETUP_OFF_COPY,
   PUSH_SETUP_TEST_MESSAGE,
   PUSH_SUPPORT_HREF,
   PushSetupV2,
   pushSetupPlatform,
   pushSetupState,
+  testSenderMissing,
 } from "@/components/settings-v2/notifications-v2/push-setup-v2";
 import { ServiceWorkerRegistrar } from "@/components/push/service-worker-registrar";
 
@@ -468,5 +470,125 @@ describe("PushSetupV2: test step", () => {
     render(<PushSetupV2 />);
     expect(buttonByText("Send a test").disabled).toBe(true);
     expect(step("test").textContent).toContain("step 2");
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* Step 3 when the new test sender isn't deployed                              */
+/* -------------------------------------------------------------------------- */
+
+describe("PushSetupV2: step 3 degrades when notification-test-v2 is missing", () => {
+  const enrolled = () => resetPush({ isSubscribed: true, permission: "granted" });
+  const result = (kind: string) => step("test").querySelector(`[data-test-result="${kind}"]`);
+  const fallbackNote = () => step("test").querySelector("[data-test-fallback]");
+
+  /** What useNotificationTestV2 answers for a 404 from the gateway. */
+  const notDeployed = {
+    success: false as const,
+    error: "Sending tests isn't switched on yet. Try again later.",
+    message: "Sending tests isn't switched on yet. Try again later.",
+    code: "not_deployed",
+  };
+
+  it("falls back to the live send-push route and still sends the test", async () => {
+    enrolled();
+    const onSendTest = vi.fn(async () => notDeployed);
+    render(<PushSetupV2 onSendTest={onSendTest} />);
+    await clickAsync(buttonByText("Send a test"));
+
+    expect(onSendTest).toHaveBeenCalledTimes(1);
+    // The step is NOT a dead end: the same message goes out the way it does today.
+    expect(h.push.sendPush.mutateAsync).toHaveBeenCalledWith({ target: "self", ...PUSH_SETUP_TEST_MESSAGE });
+    expect(result("error")).toBeNull();
+    expect(result("sent")!.textContent).toContain("Sent to 1 of your device.");
+  });
+
+  it("says on the result line that Open in app needs the new sender", async () => {
+    enrolled();
+    render(<PushSetupV2 onSendTest={async () => notDeployed} />);
+    await clickAsync(buttonByText("Send a test"));
+    const note = fallbackNote()!;
+    expect(note).not.toBeNull();
+    expect(note.textContent).toBe(PUSH_SETUP_FALLBACK_NOTE);
+    expect(PUSH_SETUP_FALLBACK_NOTE).toMatch(/Open in app/);
+  });
+
+  it("the fallback still reaches the 'Did it show up?' question", async () => {
+    enrolled();
+    render(<PushSetupV2 onSendTest={async () => notDeployed} />);
+    await clickAsync(buttonByText("Send a test"));
+    await clickAsync(buttonByText("Yes"));
+    expect(step("test").getAttribute("data-done")).toBe("true");
+  });
+
+  it("also falls back when the request never reached the function at all", async () => {
+    enrolled();
+    // supabase-js' FunctionsFetchError, as the hook reports it.
+    render(<PushSetupV2 onSendTest={async () => ({ success: false, error: "Couldn't reach the server.", code: "network" })} />);
+    await clickAsync(buttonByText("Send a test"));
+    expect(h.push.sendPush.mutateAsync).toHaveBeenCalledTimes(1);
+    expect(fallbackNote()).not.toBeNull();
+  });
+
+  it("says so too when the fallback itself has no device to send to", async () => {
+    resetPush({
+      isSubscribed: true,
+      permission: "granted",
+      sendPush: { isPending: false, mutateAsync: vi.fn(async () => ({ success: true, sent: 0, failed: 0, expired: 0 })) },
+    });
+    render(<PushSetupV2 onSendTest={async () => notDeployed} />);
+    await clickAsync(buttonByText("Send a test"));
+    expect(result("none")).not.toBeNull();
+    expect(fallbackNote()).not.toBeNull();
+  });
+
+  it("a real refusal is NOT retried: it is the answer", async () => {
+    enrolled();
+    const refusals = [
+      { success: false as const, error: "Your role can't send tests. Ask an admin.", message: "Your role can't send tests. Ask an admin." },
+      { success: false as const, error: "You can send 20 tests an hour. Try again in 9 minutes.", code: "rate_limited" },
+      { success: false as const, error: "Test sending isn't switched on yet.", code: "test_sending_off" },
+      { success: false as const, error: "Your session has ended. Sign in again, then send the test.", code: "invalid_session" },
+    ];
+    for (const refusal of refusals) {
+      resetPush({ isSubscribed: true, permission: "granted" });
+      act(() => root.render(<PushSetupV2 onSendTest={async () => refusal} />));
+      await clickAsync(buttonByText("Send a test"));
+      expect(h.push.sendPush.mutateAsync, refusal.error).not.toHaveBeenCalled();
+      expect(result("error")!.textContent, refusal.error).toContain(refusal.error);
+      expect(fallbackNote()).toBeNull();
+    }
+  });
+
+  it("a working sender is used as it is, with no fallback and no note", async () => {
+    enrolled();
+    const onSendTest = vi.fn(async () => ({ success: true, sent: 2, failed: 0 }));
+    render(<PushSetupV2 onSendTest={onSendTest} />);
+    await clickAsync(buttonByText("Send a test"));
+    expect(h.push.sendPush.mutateAsync).not.toHaveBeenCalled();
+    expect(fallbackNote()).toBeNull();
+    expect(result("sent")!.textContent).toContain("Sent to 2 of your devices");
+  });
+
+  it("the card's own send-push route says nothing about a fallback: it IS the route", async () => {
+    enrolled();
+    render(<PushSetupV2 />);
+    await clickAsync(buttonByText("Send a test"));
+    expect(result("sent")).not.toBeNull();
+    expect(fallbackNote()).toBeNull();
+  });
+
+  it("testSenderMissing: only a missing function, never a real answer", () => {
+    expect(testSenderMissing(undefined)).toBe(true);
+    expect(testSenderMissing(null)).toBe(true);
+    expect(testSenderMissing({ success: false, code: "not_deployed", error: "x" })).toBe(true);
+    expect(testSenderMissing({ success: false, code: "network", error: "x" })).toBe(true);
+    expect(testSenderMissing({ success: false, error: "Requested function was not found" })).toBe(true);
+
+    expect(testSenderMissing({ success: true, sent: 1 })).toBe(false);
+    expect(testSenderMissing({ success: true, sent: 0, message: "no devices" })).toBe(false);
+    expect(testSenderMissing({ success: false, code: "no_devices", error: "None of your devices…" })).toBe(false);
+    expect(testSenderMissing({ success: false, code: "rate_limited", error: "20 an hour" })).toBe(false);
+    expect(testSenderMissing({ success: false, code: "test_sending_off", error: "Test sending isn't switched on yet." })).toBe(false);
   });
 });

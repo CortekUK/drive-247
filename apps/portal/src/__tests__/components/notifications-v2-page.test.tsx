@@ -103,8 +103,13 @@ import {
   PUSH_OPTION_COPY,
   PUSH_SETUP_TEST_KEY,
   TEAM_ACTION_ITEM_KEYS,
+  TODAY_COPY,
   categoryGroups,
+  channelSpec,
+  isNotSentYet,
   itemMetaLine,
+  notApplicableCopy,
+  notSentYetCopy,
   pushSetupTestResponse,
 } from "@/components/settings-v2/notifications-v2/notifications-page-model";
 import { PUSH_SETUP_TEST_MESSAGE } from "@/components/settings-v2/notifications-v2/push-setup-v2";
@@ -810,5 +815,152 @@ describe("?tab=reminders and ?tab=push open Notifications at their setup", () =>
     const { notifications: _gone, ...rest } = pages;
     expect(resolveV2SettingsRoute("push", rest).page).toBe("push");
     expect(resolveV2SettingsRoute("notifications", rest).page).toBeNull();
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* D18 on the row itself: a channel that nothing sends yet                     */
+/* -------------------------------------------------------------------------- */
+
+describe("a channel with no sender yet is marked on the row, not only inside the panel", () => {
+  const CHANNELS = ["email", "push", "in_app"] as const;
+  const marker = (key: string, channel: (typeof CHANNELS)[number]) =>
+    row(key).querySelector(`[data-channel-cell="${channel}"] [data-channel-not-sent="${channel}"]`);
+
+  it("the catalog really does have both kinds, so this suite is not vacuous", () => {
+    const pairs = NOTIFICATION_CATALOG.flatMap((i) => CHANNELS.map((c) => ({ i, c, spec: channelSpec(i, c) })));
+    expect(pairs.filter((p) => p.spec && p.spec.today === "not_sent").length).toBeGreaterThan(10);
+    expect(pairs.filter((p) => p.spec && p.spec.today !== "not_sent").length).toBeGreaterThan(10);
+  });
+
+  it("exactly the channels the catalog calls not_sent carry the marker", () => {
+    render(<NotificationsPageV2 canEdit registerSave={vi.fn()} />);
+    for (const item of NOTIFICATION_CATALOG) {
+      for (const channel of CHANNELS) {
+        expect(!!marker(item.key, channel), `${item.key} / ${channel}`).toBe(isNotSentYet(item, channel));
+      }
+    }
+  });
+
+  it("the marker reads 'Not sent yet' and carries its explanation for a screen reader", () => {
+    render(<NotificationsPageV2 canEdit registerSave={vi.fn()} />);
+    const pushMarker = marker(NEW_BOOKING.key, "push")!;
+    expect(pushMarker).not.toBeNull();
+    expect(pushMarker.textContent).toContain(COPY.notSentYet);
+    expect(COPY.notSentYet).toBe("Not sent yet");
+    // The hover tooltip's words are also in the DOM, so the marker is not a
+    // mouse-only explanation.
+    expect(pushMarker.textContent).toContain(notSentYetCopy("push"));
+    expect(notSentYetCopy("push")).toContain("No push notification is sent for this yet");
+    expect(notSentYetCopy("push")).toContain("saved");
+  });
+
+  it("never marks a channel the item doesn't have: that stays a dash", () => {
+    render(<NotificationsPageV2 canEdit registerSave={vi.fn()} />);
+    // Driver invite is email only.
+    expect(channelSpec(DRIVER_INVITE, "push")).toBeUndefined();
+    expect(marker(DRIVER_INVITE.key, "push")).toBeNull();
+    expect(row(DRIVER_INVITE.key).querySelector('[data-channel-cell="push"] [data-channel-na]')).not.toBeNull();
+    // A dash and a marker are never both in one cell.
+    for (const item of NOTIFICATION_CATALOG) {
+      for (const channel of CHANNELS) {
+        const cell = row(item.key).querySelector(`[data-channel-cell="${channel}"]`)!;
+        const both = !!cell.querySelector("[data-channel-na]") && !!cell.querySelector("[data-channel-not-sent]");
+        expect(both, `${item.key} / ${channel}`).toBe(false);
+      }
+    }
+  });
+
+  it("the row's marker and the panel's Today line say the same thing about the same channel", () => {
+    render(<NotificationsPageV2 canEdit registerSave={vi.fn()} />);
+    expect(marker(NEW_BOOKING.key, "push")).not.toBeNull();
+    openItem(NEW_BOOKING.key);
+    selectTab("push");
+    expect(panel()!.querySelector('[data-today="not_sent"]')?.textContent).toContain(TODAY_COPY.not_sent);
+  });
+
+  it("the marker is there for a view-only user too: it describes sending, not permission", () => {
+    render(<NotificationsPageV2 canEdit={false} registerSave={vi.fn()} />);
+    expect(marker(NEW_BOOKING.key, "push")).not.toBeNull();
+  });
+
+  it("a stored row that switches the channel on does not remove the marker", () => {
+    resetSettings({
+      rows: [
+        {
+          tenant_id: "t1",
+          notification_key: NEW_BOOKING.key,
+          channel: "push",
+          enabled: true,
+          subject: null,
+          title: null,
+          body: null,
+          push_options: {},
+        },
+      ],
+    });
+    render(<NotificationsPageV2 canEdit registerSave={vi.fn()} />);
+    expect(channelSwitch(NEW_BOOKING.key, "push")!.getAttribute("aria-checked")).toBe("true");
+    expect(marker(NEW_BOOKING.key, "push")).not.toBeNull();
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* Copy an operator reads on a dash and on the Open in app option              */
+/* -------------------------------------------------------------------------- */
+
+describe("the words on a channel an item doesn't have", () => {
+  it("are a grammatical sentence for every item and channel", () => {
+    for (const item of NOTIFICATION_CATALOG) {
+      for (const channel of ["email", "push", "in_app"] as const) {
+        const copy = notApplicableCopy(item, channel);
+        expect(copy.startsWith(item.name), copy).toBe(true);
+        expect(copy.endsWith(".")).toBe(true);
+        // The old wording produced "has no a push notification".
+        expect(copy).not.toMatch(/\bno an? \b/);
+        expect(copy).not.toMatch(/\ba an?\b/);
+      }
+    }
+  });
+
+  it("names the channel the dash stands for", () => {
+    expect(notApplicableCopy(DRIVER_INVITE, "push")).toBe(`${DRIVER_INVITE.name} is never sent as a push notification.`);
+    expect(notApplicableCopy(DRIVER_INVITE, "in_app")).toBe(`${DRIVER_INVITE.name} is never sent as an in-app message.`);
+    expect(notApplicableCopy(NEW_BOOKING, "email")).toBe(`${NEW_BOOKING.name} is never sent as an email.`);
+  });
+});
+
+describe("Open in app says on the option that it only reaches test sends", () => {
+  const openInApp = () => PUSH_OPTION_COPY.find((o) => o.key === "openInApp")!;
+
+  it("is the only option that needs the caveat", () => {
+    expect(openInApp().note).toBeTruthy();
+    expect(PUSH_OPTION_COPY.filter((o) => o.note)).toHaveLength(1);
+    expect(openInApp().note).toMatch(/test/i);
+  });
+
+  it("is rendered beside the toggle, and described to it", () => {
+    render(<NotificationsPageV2 canEdit registerSave={vi.fn()} />);
+    openItem(NEW_BOOKING.key);
+    selectTab("push");
+    const p = panel()!;
+    const note = p.querySelector('[data-push-option-note="openInApp"]')!;
+    expect(note).not.toBeNull();
+    expect(note.textContent).toBe(openInApp().note);
+
+    // The note sits in the same help text the switch points at with
+    // aria-describedby, so it is read out with the option.
+    const toggle = document.getElementById(
+      Array.from(p.querySelectorAll("label")).find((l) => l.textContent === openInApp().label)!.htmlFor,
+    )!;
+    const describedBy = toggle.getAttribute("aria-describedby")!;
+    expect(document.getElementById(describedBy)!.contains(note)).toBe(true);
+  });
+
+  it("no other display option carries one", () => {
+    render(<NotificationsPageV2 canEdit registerSave={vi.fn()} />);
+    openItem(NEW_BOOKING.key);
+    selectTab("push");
+    expect(panel()!.querySelectorAll("[data-push-option-note]")).toHaveLength(1);
   });
 });

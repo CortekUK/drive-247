@@ -15,7 +15,11 @@
  *   2. Allow notifications: the existing enrol switch, with the unsupported,
  *      needs-install and blocked (how to unblock) states.
  *   3. Send a test to this device, with the result inline, then "Did it show
- *      up?" — the "final check on the phone".
+ *      up?" — the "final check on the phone". The page's `onSendTest` goes
+ *      through notification-test-v2 so the test carries the Open in app button;
+ *      that function is NOT deployed yet, so when it answers "not deployed" the
+ *      card sends through the live send-push route instead and says so. The
+ *      step never dead-ends on a function that hasn't shipped.
  * Then one line on what this page can't choose: banner vs lock screen is set on
  * the phone.
  *
@@ -63,12 +67,40 @@ export const PUSH_SETUP_OFF_COPY = {
   action: "Contact support",
 } as const;
 
-/** What the default test sends (through send-push, to "Just my devices"). */
+/**
+ * The test message itself. The page hands the card an `onSendTest` that goes
+ * through notification-test-v2 (so the test carries the Open in app button);
+ * when that function isn't deployed the card falls back to `usePushNotifications`'
+ * own send-push call with "Just my devices", which is live, and sends exactly
+ * this message either way.
+ */
 export const PUSH_SETUP_TEST_MESSAGE = {
   title: "Test notification",
   body: "If you can see this, push works on this device.",
   url: "/settings?tab=notifications",
 } as const;
+
+/** Said on the result line when the test went out the old way (see `testSenderMissing`). */
+export const PUSH_SETUP_FALLBACK_NOTE =
+  "Sent the way notifications go out today. The Open in app button only shows once the new test sender is deployed.";
+
+/**
+ * True when `onSendTest` failed because notification-test-v2 isn't there —
+ * a 404 from the gateway (`not_deployed`) or a fetch that never reached it
+ * (`network`, supabase-js' FunctionsFetchError). Step 3 is the "final check on
+ * the phone" (transcript 20:18–20:46): it must not be the one step that breaks
+ * because a NEW function hasn't shipped, so the card retries the live sender.
+ * Any other failure (no devices, a role the function refuses, a bad session) is
+ * a real answer and is shown as it is.
+ */
+export function testSenderMissing(response: NotificationTestResponse | null | undefined): boolean {
+  if (!response) return true;
+  if (response.success !== false && !response.error) return false;
+  const code = typeof response.code === "string" ? response.code : "";
+  if (code === "not_deployed" || code === "network") return true;
+  const text = `${response.error ?? ""} ${response.message ?? ""}`.toLowerCase();
+  return text.includes("not deployed") || text.includes("was not found");
+}
 
 /* -------------------------------------------------------------------------- */
 /* Pure state                                                                  */
@@ -130,8 +162,9 @@ export interface PushSetupV2Props {
   /** Same gate as the existing push screen: the switch and the test need edit rights. */
   canEdit?: boolean;
   /**
-   * Send the test another way (e.g. notification-test-v2). Without it the card
-   * uses the existing send-push with "Just my devices".
+   * Send the test another way (e.g. notification-test-v2). Without it — or when
+   * that function answers "not deployed" (`testSenderMissing`) — the card uses
+   * the existing send-push with "Just my devices".
    */
   onSendTest?: () => Promise<NotificationTestResponse>;
   className?: string;
@@ -176,8 +209,8 @@ export function PushSetupV2(props: PushSetupV2Props) {
 const useIsoLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 type TestResult =
-  | { kind: "sent"; sent: number | null; failed: number }
-  | { kind: "none"; message: string }
+  | { kind: "sent"; sent: number | null; failed: number; fellBack?: boolean }
+  | { kind: "none"; message: string; fellBack?: boolean }
   | { kind: "error"; message: string };
 
 function PushSetupSteps({ canEdit = true, onSendTest, className }: PushSetupV2Props) {
@@ -232,22 +265,38 @@ function PushSetupSteps({ canEdit = true, onSendTest, className }: PushSetupV2Pr
     setResult(null);
     setArrived(null);
     try {
+      // The new sender first, when the page gave us one. If it simply isn't
+      // deployed, fall through to the live send-push route rather than leaving
+      // the operator with an invoke error on the one step that proves push works.
+      let fellBack = !onSendTest;
       if (onSendTest) {
         const response = await onSendTest();
-        if (!response || response.success === false || response.error) {
-          setResult({ kind: "error", message: response?.error || response?.message || "The test wasn't sent." });
+        if (testSenderMissing(response)) {
+          fellBack = true;
+        } else if (response.success === false || response.error) {
+          setResult({ kind: "error", message: response.error || response.message || "The test wasn't sent." });
+          return;
         } else if (response.sent === 0) {
           setResult({ kind: "none", message: response.message || "" });
+          return;
         } else {
-          setResult({ kind: "sent", sent: typeof response.sent === "number" ? response.sent : null, failed: response.failed ?? 0 });
+          setResult({
+            kind: "sent",
+            sent: typeof response.sent === "number" ? response.sent : null,
+            failed: response.failed ?? 0,
+          });
+          return;
         }
+      }
+
+      const response = await push.sendPush.mutateAsync({ target: "self", ...PUSH_SETUP_TEST_MESSAGE });
+      // `fellBack` is only worth saying when the new sender was meant to run:
+      // without `onSendTest` this route IS the card's normal one.
+      const note = fellBack && !!onSendTest;
+      if (!response || response.sent === 0) {
+        setResult({ kind: "none", message: response?.message || "", fellBack: note });
       } else {
-        const response = await push.sendPush.mutateAsync({ target: "self", ...PUSH_SETUP_TEST_MESSAGE });
-        if (!response || response.sent === 0) {
-          setResult({ kind: "none", message: response?.message || "" });
-        } else {
-          setResult({ kind: "sent", sent: response.sent, failed: response.failed ?? 0 });
-        }
+        setResult({ kind: "sent", sent: response.sent, failed: response.failed ?? 0, fellBack: note });
       }
     } catch (err) {
       setResult({ kind: "error", message: err instanceof Error && err.message ? err.message : "The test wasn't sent." });
@@ -574,6 +623,15 @@ function AllowCopy({
   }
 }
 
+/** One muted line when step 3 had to use the live sender instead of the new one. */
+function FallbackNote() {
+  return (
+    <p data-test-fallback="" className="text-[13px] text-muted-foreground">
+      {PUSH_SETUP_FALLBACK_NOTE}
+    </p>
+  );
+}
+
 function TestResultView({
   result,
   arrived,
@@ -597,9 +655,10 @@ function TestResultView({
 
   if (result.kind === "none") {
     return (
-      <p role="status" data-test-result="none" className="text-[13px] text-muted-foreground">
-        Nothing was sent: none of your devices have notifications on yet. Finish step 2, then try again.
-      </p>
+      <div role="status" data-test-result="none" className="space-y-1 text-[13px] text-muted-foreground">
+        <p>Nothing was sent: none of your devices have notifications on yet. Finish step 2, then try again.</p>
+        {result.fellBack && <FallbackNote />}
+      </div>
     );
   }
 
@@ -615,6 +674,7 @@ function TestResultView({
       <p className="text-muted-foreground">
         {reached} It should show up within a few seconds.
       </p>
+      {result.fellBack && <FallbackNote />}
       {arrived === null && (
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-foreground">Did it show up on this device?</span>

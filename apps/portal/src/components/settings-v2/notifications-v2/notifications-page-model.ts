@@ -85,6 +85,13 @@ export const NOTIFICATIONS_PAGE_COPY = {
   reset: "Reset to default",
   edited: "Edited",
   unsaved: "Unsaved",
+  /**
+   * D18 on the row itself, not only inside the panel: a channel whose
+   * `today` is "not_sent" has no sender at all yet, so its switch changes
+   * nothing live. Without this an operator turns Push on, saves, sees "Saved"
+   * and waits for a notification that never comes.
+   */
+  notSentYet: "Not sent yet",
   subject: "Subject",
   message: "Message",
   title: "Title",
@@ -142,8 +149,12 @@ export const NOTIFICATIONS_TODAY_ANCHOR = "notifications-today";
  */
 export const TEAM_ACTION_ITEM_KEYS: ReadonlySet<string> = new Set([
   "booking_added_team",
+  "booking_approved_team",
+  "booking_declined_team",
+  "booking_cancelled_team",
   "rental_started_team",
   "rental_extended_team",
+  "rental_renewed_team",
   "rental_completed_team",
   "refund_processed_team",
   "fine_recorded_team",
@@ -223,7 +234,21 @@ export function channelSpec(item: NotificationItem, channel: NotificationChannel
 /** Why a channel shows a dash instead of a switch. */
 export function notApplicableCopy(item: NotificationItem, channel: NotificationChannel): string {
   const what = channel === "email" ? "an email" : channel === "push" ? "a push notification" : "an in-app message";
-  return `${item.name} has no ${what}. Nothing is sent this way.`;
+  return `${item.name} is never sent as ${what}.`;
+}
+
+/**
+ * True when this channel of this item has no sender today, so its switch is
+ * saved but changes nothing live (D18). The row shows COPY.notSentYet for it.
+ */
+export function isNotSentYet(item: NotificationItem, channel: NotificationChannel): boolean {
+  return channelSpec(item, channel)?.today === "not_sent";
+}
+
+/** The tooltip behind the row's "Not sent yet" marker. */
+export function notSentYetCopy(channel: NotificationChannel): string {
+  const what = channel === "email" ? "No email" : channel === "push" ? "No push notification" : "No in-app message";
+  return `${what} is sent for this yet. What you set here is saved, and is used once sending switches over.`;
 }
 
 /** What today's code does, for the line above each channel's editor. */
@@ -233,7 +258,13 @@ export const TODAY_COPY: Record<ChannelTodayStatus, string> = {
   not_sent: "Today: not sent.",
 };
 
-export const PUSH_OPTION_COPY: readonly { key: PushOptionKey; label: string; description: string }[] = [
+export const PUSH_OPTION_COPY: readonly {
+  key: PushOptionKey;
+  label: string;
+  description: string;
+  /** An extra muted line under the description, for an option that doesn't reach live sends yet. */
+  note?: string;
+}[] = [
   {
     key: "requireInteraction",
     label: "Stay on screen until dismissed",
@@ -249,6 +280,14 @@ export const PUSH_OPTION_COPY: readonly { key: PushOptionKey; label: string; des
     key: "openInApp",
     label: "Open in app button",
     description: "Adds an Open in app button on Android and computers. Tapping the notification always opens it.",
+    /**
+     * D18 again, but this option needs saying twice: the button is built by
+     * the sender, and only notification-test-v2 reads these options today
+     * (send-push, which sends every real push, has no `actions`). So an
+     * operator who switches this on, sends a test and sees the button would
+     * otherwise expect it on the real push too.
+     */
+    note: "Test sends only for now — real notifications get it once sending switches over.",
   },
 ];
 

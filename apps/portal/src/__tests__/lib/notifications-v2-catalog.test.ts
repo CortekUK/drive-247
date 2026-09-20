@@ -276,6 +276,93 @@ describe("categories", () => {
       expect(NOTIFICATION_CATALOG.some((i) => i.category === c.id), c.id).toBe(true);
     }
   });
+
+  /**
+   * The count per category, pinned on purpose. An item is only ever added or
+   * removed with the lead's evidence rule in mind, so a change here has to be a
+   * deliberate edit of this list — never a silent drift. Booking carries the
+   * lead's own target of "roughly 8-10 cases" (transcript 14:24).
+   */
+  it("holds the agreed number of items in each category", () => {
+    const counts: Record<NotificationCategoryId, number> = {
+      booking: 10,
+      rental: 14,
+      payments: 11,
+      agreements: 3,
+      verification: 3,
+      keys: 1,
+      fines: 2,
+      insurance: 2,
+      enquiries: 2,
+    };
+    for (const [category, expected] of Object.entries(counts)) {
+      expect(NOTIFICATION_CATALOG.filter((i) => i.category === category).length, category).toBe(expected);
+    }
+    expect(NOTIFICATION_CATALOG.length).toBe(Object.values(counts).reduce((a, b) => a + b, 0));
+    // The lead's target for Booking, kept as its own assertion so a change to it is obvious.
+    expect(counts.booking).toBeGreaterThanOrEqual(8);
+    expect(counts.booking).toBeLessThanOrEqual(10);
+  });
+
+  /**
+   * Every category the types declare is offered. `keys` was once dropped for
+   * being unreachable from the v2 screens, which hid the message that opens the
+   * box holding the car keys — so the page must list every declared category.
+   */
+  it("offers every category the contract declares", () => {
+    expect(NOTIFICATION_CATEGORIES.map((c) => c.id)).toEqual(CATEGORY_ORDER);
+  });
+});
+
+describe("notifications that only the classic screens can trigger", () => {
+  /** Real sends that the v2 screens cannot start. They are LISTED, not dropped. */
+  const CLASSIC_ONLY_KEYS = [
+    "booking_approved_team",
+    "booking_declined_team",
+    "booking_cancelled_customer",
+    "booking_cancelled_team",
+    "rental_renewed_team",
+    "rental_renewed_customer",
+    "lockbox_code_customer",
+    "insurance_document_needed_customer",
+  ];
+
+  it("lists each one rather than leaving the operator to guess", () => {
+    for (const key of CLASSIC_ONLY_KEYS) expect(getNotificationItem(key), key).toBeDefined();
+  });
+
+  it("names the screen that still triggers it, on a channel that really sends", () => {
+    for (const key of CLASSIC_ONLY_KEYS) {
+      const item = getNotificationItem(key)!;
+      const sending = channelsOf(item).filter(([, spec]) => spec.today !== "not_sent");
+      expect(sending.length, key).toBeGreaterThan(0);
+      // At least one sending channel explains where it comes from today.
+      const explained = sending.filter(([, spec]) => (spec.note ?? "").trim().length > 0);
+      expect(explained.length, key).toBeGreaterThan(0);
+    }
+  });
+
+  it("keeps the lockbox code in Keys, with a code the operator can actually put in it", () => {
+    const item = getNotificationItem("lockbox_code_customer")!;
+    expect(item.category).toBe("keys");
+    expect(item.variables).toContain("lockbox_code");
+    expect(item.channels.email!.defaultTemplate.body).toContain("{{lockbox_code}}");
+    expect(item.channels.email!.today).not.toBe("not_sent");
+  });
+
+  it("never puts the lockbox code in a push or a bell, which show on a locked screen", () => {
+    const item = getNotificationItem("lockbox_code_customer")!;
+    for (const channel of ["push", "in_app"] as const) {
+      const template = item.channels[channel]?.defaultTemplate;
+      if (!template) continue;
+      expect(`${template.title} ${template.body}`, channel).not.toContain("{{lockbox_code}}");
+    }
+  });
+
+  it("tells both sides whenever a booking is cancelled", () => {
+    const cancelled = NOTIFICATION_CATALOG.filter((i) => i.key.startsWith("booking_cancelled_"));
+    expect(cancelled.map((i) => i.direction).sort()).toEqual(["customer_to_team", "team_to_customer"]);
+  });
 });
 
 describe("lookups", () => {

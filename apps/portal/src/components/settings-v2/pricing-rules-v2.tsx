@@ -70,7 +70,7 @@ import {
   ListTableHeader,
   useProgressiveRows,
 } from "@/components/shared/list-table-v2";
-import { SettingsField, SettingsPanel, SettingsRow, Unit, useSettingsPageSave } from "@/components/settings-v2/settings-kit";
+import { SettingsField, SettingsPanel, SettingsRow, SettingsRowAlignProvider, Unit, useSettingsPageSave } from "@/components/settings-v2/settings-kit";
 import {
   SettingsDependencyNotice,
   SettingsEmptyState,
@@ -230,6 +230,9 @@ function MonthlyRateBody({
   return (
     <ReadGate read={read} thing="monthly pricing" rows={1}>
       <SettingsReadOnlyFieldset readOnly={!canEdit}>
+        {/* Controls at the end of the row, as on Locations: left-aligned they
+            sat mid-row with the whole right half of the panel empty. */}
+        <SettingsRowAlignProvider align="end">
         <SettingsPanel>
           <SettingsRow
             label="Monthly rate starts at"
@@ -273,6 +276,7 @@ function MonthlyRateBody({
             )}
           </SettingsRow>
         </SettingsPanel>
+        </SettingsRowAlignProvider>
       </SettingsReadOnlyFieldset>
     </ReadGate>
   );
@@ -363,6 +367,8 @@ function WeekendPricingSection({
       />
       <ReadGate read={read} thing="weekend pricing" rows={3}>
         <SettingsReadOnlyFieldset readOnly={!canEdit}>
+          {/* Controls at the end of the row, like the monthly rate above. */}
+          <SettingsRowAlignProvider align="end">
           <SettingsPanel
             footer={canEdit ? <SaveFooter save={save} disabled={!dirty || blocked} onDiscard={discard} /> : undefined}
           >
@@ -433,6 +439,7 @@ function WeekendPricingSection({
               </Unit>
             </SettingsRow>
           </SettingsPanel>
+          </SettingsRowAlignProvider>
         </SettingsReadOnlyFieldset>
       </ReadGate>
     </section>
@@ -571,7 +578,7 @@ function HolidayPricingSection({ canEdit }: { canEdit: boolean }) {
           <TooltipProvider delayDuration={300}>
             <ListTable rows={rows} minWidth="min-w-0" surface="settings">
               <ListTableHeader>
-                <ListHead>Holiday</ListHead>
+                <ListHead className="text-left">Holiday</ListHead>
                 <ListHead className="hidden w-[30%] sm:table-cell">Dates</ListHead>
                 <ListHead className="w-[8rem] sm:w-[16%]">Surcharge</ListHead>
                 <ListHead className="hidden w-[12%] md:table-cell">Repeats</ListHead>
@@ -587,9 +594,10 @@ function HolidayPricingSection({ canEdit }: { canEdit: boolean }) {
                   const dates = formatHolidayDates(holiday.start_date, holiday.end_date);
                   return (
                     <ListRow key={holiday.id}>
-                      <ListCell>
-                        {/* Centred like every other v2 cell: a flex row ignores the cell's text-center. */}
-                        <div className="flex min-w-0 items-center justify-center gap-2">
+                      <ListCell className="text-left">
+                        {/* The name column reads left, like a list of names: centred in a
+                            wide column it floated mid-cell with a gap down its left side. */}
+                        <div className="flex min-w-0 items-center justify-start gap-2">
                           <TruncatedText
                             text={holiday.name}
                             className={cn(LIST_CLASSES.identifier, "min-w-0", past && "text-muted-foreground")}

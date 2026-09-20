@@ -22,29 +22,37 @@
  *     the reachable one and the channel `note` says what differs.
  *
  * ---------------------------------------------------------------------------
- * LEFT OUT, and why (for the lead to review)
+ * CLASSIC-ONLY, and LISTED anyway
  * ---------------------------------------------------------------------------
- * Not reachable from the v2 screens (classic-only today):
+ * A message the platform really sends is never dropped from this list just
+ * because the v2 screens cannot trigger it yet. An operator who cannot find
+ * "Booking cancelled" on this page assumes it is not sent at all, which is the
+ * opposite of the truth. So each one below is a normal item whose channel
+ * `today` and `note` say which screen still triggers it:
  *   - Booking cancelled (customer email + bell, team bell + email):
  *     notify-booking-cancelled is only called from CancelRentalDialog
- *     (hooks/use-cancel-rental.ts:65). v2 rental detail has no cancel action,
- *     and the dialog mounted on Pending bookings (pending-bookings/page.tsx:507)
- *     is never opened: nothing calls setShowCancelDialog(true).
- *   - Booking renewed (customer + team bells): the Renew button exists only on
- *     the classic rental page (rentals/[id]/page.tsx:3015 → ?renew_from=).
+ *     (hooks/use-cancel-rental.ts:65), reached only from the classic rental
+ *     page (rentals/[id]/page.tsx:2981); the dialog mounted on Pending bookings
+ *     (pending-bookings/page.tsx:507) is never opened. The CUSTOMER bell is
+ *     wider than that: the rentals status trigger fires on every cancellation.
+ *   - Rental renewed (customer + team bells): the Renew button exists only on
+ *     the classic rental page (rentals/[id]/page.tsx:3015 → ?renew_from=), but
+ *     the bells fire from the rentals INSERT trigger, so any renewal rings them.
  *   - Team heads-up for "booking approved" / "booking declined": written only
  *     inside notify-booking-approved / notify-booking-rejected, which only the
  *     classic rental page calls (rentals/[id]/page.tsx:7868,
- *     components/rentals/rejection-dialog.tsx:323). The customer halves ARE
- *     listed, because Pending bookings still tells the customer by bell.
- *   - Lockbox code (email + SMS): the manual send is in the classic key
- *     handover section (key-handover-section.tsx:278), and the scheduled send
- *     (send-lockbox-scheduled) waits for rentals.approved_at, which only the
- *     classic Approve button writes (rentals/[id]/page.tsx:7853; Turo imports
- *     also set it). So the Keys category is empty and dropped. Its wording is
- *     still edited on the existing lockbox templates screen.
+ *     components/rentals/rejection-dialog.tsx:323).
+ *   - Lockbox code (Keys): the manual send is in the classic key handover
+ *     section (key-handover-section.tsx:278) and the v2 handover stage shows a
+ *     deliberately disabled button (stage-handover.tsx:605), but the scheduled
+ *     send (send-lockbox-scheduled, cron every minute) needs no screen at all.
+ *     Its wording is still edited on the existing lockbox templates screen.
  *   - Insurance re-upload request (customer bell): classic rental page only
- *     (rentals/[id]/page.tsx:2096).
+ *     (rentals/[id]/page.tsx:2090).
+ *
+ * ---------------------------------------------------------------------------
+ * LEFT OUT, and why (for the lead to review)
+ * ---------------------------------------------------------------------------
  * Senders with no caller (dead code):
  *   - notify-payment-failed, notify-fine-recorded, notify-identity-verified,
  *     notify-signing-completed (customer emails for those events), and
@@ -85,7 +93,9 @@
  * Channels this page does not have: SMS copies (booking received, cancelled,
  *   rental started/completed/extended, refunds, return reminders, lockbox) and
  *   WhatsApp (the agreement WhatsApp call targets send-signing-whatsapp, which
- *   does not exist in the repo).
+ *   does not exist in the repo). Where an item's text message is the one that
+ *   matters — the lockbox code — its email channel's note says so, and points
+ *   at the screen that still edits it.
  *
  * No React and no Supabase here. v2 only: nothing in v1 imports this file.
  */
@@ -108,15 +118,20 @@ import type {
 /* Categories                                                                  */
 /* -------------------------------------------------------------------------- */
 
-/** Display order. Keys is left out: nothing in it is reachable yet (see above). */
+/** Display order. Every category here holds at least one item (see the tests). */
 export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
   { id: "booking", label: "Booking", description: "New bookings, and your answer to the customer." },
   { id: "rental", label: "Rental", description: "Key handover, extensions, returns and renewals." },
   { id: "payments", label: "Payments", description: "Money in, refunds, payment links and reminders." },
   { id: "agreements", label: "Agreements", description: "Rental agreements sent for signing, and signed." },
   { id: "verification", label: "Verification", description: "ID and licence checks for customers and extra drivers." },
+  { id: "keys", label: "Keys", description: "Lockbox codes for customers who collect the keys themselves." },
   { id: "fines", label: "Fines", description: "Fines and tolls on a rental." },
-  { id: "insurance", label: "Insurance", description: "Insurance that could not be switched on." },
+  {
+    id: "insurance",
+    label: "Insurance",
+    description: "Cover that couldn't be switched on, and insurance documents from the customer.",
+  },
   { id: "enquiries", label: "Enquiries", description: "Questions and messages from your booking site." },
 ];
 
@@ -127,6 +142,19 @@ export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
 const PUSH_TEAM_NOTE = "Goes to staff devices that have push turned on.";
 const PUSH_CUSTOMER_NOTE = "Customers only get push after turning it on in their customer portal.";
 const IN_APP_CUSTOMER_NOTE = "Shows in the customer portal bell, so the customer needs an account on your booking site.";
+
+/**
+ * Some actions still live only on the classic (v1) screens, so the message they
+ * send is real but not reachable from the new screens. These say which screen,
+ * in the operator's words — never "not reachable from v2".
+ */
+const CLASSIC_ONLY = {
+  cancel: "Sent from the classic rental screen today; the new rental screens have no Cancel button yet.",
+  approve: "Only sent when a booking is approved on the classic rental screen; approving in Pending bookings sends nothing to your team yet.",
+  decline: "Only sent when a booking is declined on the classic rental screen; declining in Pending bookings sends nothing to your team yet.",
+  renew: "Starting a renewal is only on the classic rental screen today; the new rental screens have no Renew button yet.",
+  insuranceDocument: "Asking for a new insurance document is only on the classic rental screen today.",
+} as const;
 
 const OPEN_IN_APP: PushDisplayOptions = { openInApp: true };
 const NEEDS_ACTION: PushDisplayOptions = { openInApp: true, requireInteraction: true };
@@ -460,6 +488,49 @@ export const NOTIFICATION_CATALOG: NotificationItem[] = [
     ],
   },
   {
+    key: "booking_approved_team",
+    category: "booking",
+    direction: "customer_to_team",
+    name: "Booking approved",
+    tooltip: "A heads-up to the rest of your team when a booking is approved, so everyone knows the car is committed.",
+    when: "When someone on your team approves a booking.",
+    side: "portal",
+    recipient: "Your team",
+    variables: unique(TEAM_VARS, BOOKING_VARS, ["rental_amount"]),
+    link: TEAM_RENTAL_LINK,
+    channels: {
+      email: spec(
+        "sends_some_paths",
+        teamEmail(
+          "Booking approved: {{rental_number}}, {{customer_name}}",
+          p("Booking <strong>{{rental_number}}</strong> for {{customer_name}} has been approved."),
+          ul(
+            "Car: {{vehicle_make}} {{vehicle_model}}",
+            "Dates: {{rental_start_date}} to {{rental_end_date}}",
+            "Total: {{rental_amount}}",
+          ),
+          button("portal_url", "Open booking"),
+        ),
+        teamEmailNote("Bookings", CLASSIC_ONLY.approve),
+      ),
+      push: pushSpec(
+        push("Booking approved: {{rental_number}}", "{{customer_name}}'s {{vehicle_make}} {{vehicle_model}} booking is approved."),
+        "team",
+      ),
+      in_app: spec(
+        "sends_some_paths",
+        inApp("Booking approved", "Booking {{rental_number}} for {{customer_name}} ({{vehicle_make}} {{vehicle_model}}) has been approved."),
+        CLASSIC_ONLY.approve,
+      ),
+    },
+    evidence: [
+      "bell sender: supabase/functions/notify-booking-approved/index.ts:231",
+      "email: supabase/migrations/20260718050300_add_operator_email_dispatch_trigger.sql:32-37 → supabase/functions/notify-operator-email/index.ts:35 (Bookings)",
+      "trigger (classic page only): apps/portal/src/app/(dashboard)/rentals/[id]/page.tsx:7868",
+      "nothing on the v2 path: apps/portal/src/hooks/use-booking-approval.ts:36 never calls notify-booking-approved",
+    ],
+  },
+  {
     key: "booking_declined_customer",
     category: "booking",
     direction: "team_to_customer",
@@ -501,6 +572,131 @@ export const NOTIFICATION_CATALOG: NotificationItem[] = [
       "trigger: apps/portal/src/app/(dashboard)/pending-bookings/page.tsx:243-252 (v2 table onReject) → apps/portal/src/hooks/use-booking-approval.ts:110 → supabase/functions/cancel-booking-preauth/index.ts:227-230 (rental → Cancelled)",
       "bell sender: supabase/migrations/20260317170000_add_cancel_customer_notification.sql:82-93 (worded 'Booking Cancelled' on this path), :58-69 ('Booking Rejected' on the classic path)",
       "email sender (classic page only): apps/portal/src/components/rentals/rejection-dialog.tsx:322-323 → supabase/functions/notify-booking-rejected/index.ts:201",
+    ],
+  },
+  {
+    key: "booking_declined_team",
+    category: "booking",
+    direction: "customer_to_team",
+    name: "Booking declined",
+    tooltip: "A heads-up to the rest of your team when a booking is turned down, with the reason that was given.",
+    when: "When someone on your team declines a booking.",
+    side: "portal",
+    recipient: "Your team",
+    variables: unique(TEAM_VARS, BOOKING_VARS, ["rejection_reason"]),
+    link: TEAM_RENTAL_LINK,
+    channels: {
+      email: spec(
+        "sends_some_paths",
+        teamEmail(
+          "Booking declined: {{rental_number}}, {{customer_name}}",
+          p("Booking <strong>{{rental_number}}</strong> for {{customer_name}} ({{vehicle_make}} {{vehicle_model}}) was declined."),
+          ul("Reason: {{rejection_reason}}", "Dates: {{rental_start_date}} to {{rental_end_date}}"),
+          button("portal_url", "Open booking"),
+        ),
+        teamEmailNote("Bookings", CLASSIC_ONLY.decline),
+      ),
+      push: pushSpec(
+        push("Booking declined: {{rental_number}}", "{{customer_name}}'s {{vehicle_make}} {{vehicle_model}} booking was declined."),
+        "team",
+      ),
+      in_app: spec(
+        "sends_some_paths",
+        inApp("Booking declined", "Booking {{rental_number}} for {{customer_name}} ({{vehicle_make}} {{vehicle_model}}) was declined."),
+        CLASSIC_ONLY.decline,
+      ),
+    },
+    evidence: [
+      "bell sender: supabase/functions/notify-booking-rejected/index.ts:224",
+      "email: supabase/migrations/20260718050300_add_operator_email_dispatch_trigger.sql:32-37 → supabase/functions/notify-operator-email/index.ts:36 (Bookings)",
+      "trigger (classic page only): apps/portal/src/components/rentals/rejection-dialog.tsx:323",
+      "nothing on the v2 path: apps/portal/src/hooks/use-booking-approval.ts:110 never calls notify-booking-rejected",
+    ],
+  },
+  {
+    key: "booking_cancelled_customer",
+    category: "booking",
+    direction: "team_to_customer",
+    name: "Booking cancelled",
+    tooltip: "Tells the customer their booking has been cancelled, and what happens to anything they paid.",
+    when: "When your team cancels a customer's booking.",
+    side: "portal",
+    recipient: "The customer",
+    variables: unique(CUSTOMER_VARS, BOOKING_VARS, ["refund_amount", "rejection_reason"]),
+    link: "/portal/bookings",
+    channels: {
+      email: spec(
+        "sends_some_paths",
+        customerEmail(
+          "Your booking {{rental_number}} has been cancelled",
+          p("Your booking with {{company_name}} has been cancelled."),
+          ul(
+            "Reference: {{rental_number}}",
+            "Car: {{vehicle_make}} {{vehicle_model}}",
+            "Dates: {{rental_start_date}} to {{rental_end_date}}",
+          ),
+          p("Any refund due goes back to the card you paid with. Your bank usually shows it within 5 to 10 working days."),
+          CONTACT,
+        ),
+        CLASSIC_ONLY.cancel,
+      ),
+      push: pushSpec(
+        push("Booking cancelled", "Booking {{rental_number}} for the {{vehicle_make}} {{vehicle_model}} has been cancelled."),
+        "customer",
+      ),
+      in_app: spec(
+        "sends",
+        inApp("Booking cancelled", "Your booking {{rental_number}} for the {{vehicle_make}} {{vehicle_model}} has been cancelled."),
+        `${IN_APP_CUSTOMER_NOTE} This bell rings on every cancellation, including a booking rejected from Pending bookings.`,
+      ),
+    },
+    evidence: [
+      "email sender: supabase/functions/notify-booking-cancelled/index.ts:227",
+      "bell sender: supabase/migrations/20260317170000_add_cancel_customer_notification.sql:83,87 (rentals UPDATE trigger, supabase/migrations/20260317160000_add_rental_status_customer_notification.sql:89)",
+      "trigger (email, classic page only): apps/portal/src/app/(dashboard)/rentals/[id]/page.tsx:2981 → apps/portal/src/components/shared/dialogs/cancel-rental-dialog.tsx:112 → apps/portal/src/hooks/use-cancel-rental.ts:65",
+      "trigger (bell, every path): supabase/functions/cancel-rental-refund/index.ts:274; supabase/functions/cancel-booking-preauth/index.ts:227-230",
+    ],
+  },
+  {
+    key: "booking_cancelled_team",
+    category: "booking",
+    direction: "customer_to_team",
+    name: "Booking cancelled",
+    tooltip: "Tells your team when a booking is cancelled, with the reason and any refund that was raised.",
+    when: "When someone on your team cancels a booking.",
+    side: "portal",
+    recipient: "Your team",
+    variables: unique(TEAM_VARS, BOOKING_VARS, ["refund_amount", "rejection_reason"]),
+    link: TEAM_RENTAL_LINK,
+    channels: {
+      email: spec(
+        "sends_some_paths",
+        teamEmail(
+          "Booking cancelled: {{rental_number}}, {{customer_name}}",
+          p("Booking <strong>{{rental_number}}</strong> for {{customer_name}} ({{vehicle_make}} {{vehicle_model}}) has been cancelled."),
+          ul(
+            "Reason: {{rejection_reason}}",
+            "Refund raised: {{refund_amount}}",
+            "Dates: {{rental_start_date}} to {{rental_end_date}}",
+          ),
+          button("portal_url", "Open booking"),
+        ),
+        teamEmailNote("Bookings", CLASSIC_ONLY.cancel),
+      ),
+      push: pushSpec(
+        push("Booking cancelled: {{rental_number}}", "{{customer_name}}'s {{vehicle_make}} {{vehicle_model}} booking was cancelled."),
+        "team",
+      ),
+      in_app: spec(
+        "sends_some_paths",
+        inApp("Booking cancelled", "Booking {{rental_number}} for {{customer_name}} ({{vehicle_make}} {{vehicle_model}}) has been cancelled."),
+        CLASSIC_ONLY.cancel,
+      ),
+    },
+    evidence: [
+      "bell sender: supabase/functions/notify-booking-cancelled/index.ts:261",
+      "email: supabase/migrations/20260718050300_add_operator_email_dispatch_trigger.sql:32-37 → supabase/functions/notify-operator-email/index.ts:37 (Bookings)",
+      "trigger (classic page only): apps/portal/src/app/(dashboard)/rentals/[id]/page.tsx:2981 → apps/portal/src/hooks/use-cancel-rental.ts:65",
     ],
   },
 
@@ -950,6 +1146,86 @@ export const NOTIFICATION_CATALOG: NotificationItem[] = [
     evidence: [
       "trigger: supabase/migrations/20260603120100_auto_extension_reminder_cron.sql:8 → supabase/functions/send-auto-extension-reminder/index.ts:407 (rental switch)",
       "email sender: supabase/functions/send-auto-extension-reminder/index.ts:318",
+    ],
+  },
+  {
+    key: "rental_renewed_team",
+    category: "rental",
+    direction: "customer_to_team",
+    name: "Rental renewed",
+    tooltip: "Tells your team when a rental is renewed into a new booking, so nobody expects the car back.",
+    when: "When a rental is renewed into a new booking.",
+    side: "portal",
+    recipient: "Your team",
+    variables: unique(TEAM_VARS, BOOKING_VARS),
+    link: TEAM_RENTAL_LINK,
+    channels: {
+      email: spec(
+        "not_sent",
+        teamEmail(
+          "Rental renewed: {{customer_name}}, {{vehicle_make}} {{vehicle_model}}",
+          p("<strong>{{customer_name}}</strong> has renewed their booking for the {{vehicle_make}} {{vehicle_model}}."),
+          ul("New booking: {{rental_number}}", "Dates: {{rental_start_date}} to {{rental_end_date}}"),
+          button("portal_url", "Open booking"),
+        ),
+      ),
+      push: pushSpec(
+        push("Rental renewed: {{customer_name}}", "{{vehicle_make}} {{vehicle_model}}, new booking {{rental_number}}."),
+        "team",
+      ),
+      in_app: spec(
+        "sends",
+        inApp("Rental renewed", "{{customer_name}} has renewed their booking for the {{vehicle_make}} {{vehicle_model}}."),
+        CLASSIC_ONLY.renew,
+      ),
+    },
+    evidence: [
+      "bell sender: supabase/migrations/20260317180000_add_renewal_customer_notification.sql:23,27,33 (rentals INSERT trigger, supabase/migrations/20260317131000_add_rental_notification_trigger.sql:55)",
+      "trigger: apps/portal/src/app/(dashboard)/rentals/[id]/page.tsx:3015 (classic Renew button) → apps/portal/src/components/rentals-v2/rental-create-v2.tsx:1809 (renewed_from_rental_id)",
+      "no team email: booking_renewed is left out of supabase/migrations/20260718050300_add_operator_email_dispatch_trigger.sql:32-37",
+    ],
+  },
+  {
+    key: "rental_renewed_customer",
+    category: "rental",
+    direction: "team_to_customer",
+    name: "Rental renewed",
+    tooltip: "Tells the customer their rental carries on, and gives them the new booking reference.",
+    when: "When your team renews a customer's rental into a new booking.",
+    side: "portal",
+    recipient: "The customer",
+    variables: unique(CUSTOMER_VARS, BOOKING_VARS, ["rental_amount"]),
+    link: "/portal/bookings",
+    channels: {
+      email: spec(
+        "not_sent",
+        customerEmail(
+          "Your rental has been renewed: {{rental_number}}",
+          p("Your rental with {{company_name}} has been renewed, so you can keep the car."),
+          ul(
+            "New reference: {{rental_number}}",
+            "Car: {{vehicle_make}} {{vehicle_model}}",
+            "Dates: {{rental_start_date}} to {{rental_end_date}}",
+            "Total: {{rental_amount}}",
+          ),
+          button("customer_portal_url", "View your booking"),
+          CONTACT,
+        ),
+      ),
+      push: pushSpec(
+        push("Rental renewed", "Your {{vehicle_make}} {{vehicle_model}} is renewed. New reference {{rental_number}}."),
+        "customer",
+      ),
+      in_app: spec(
+        "sends",
+        inApp("Rental renewed", "Your rental of the {{vehicle_make}} {{vehicle_model}} has been renewed. New reference {{rental_number}}."),
+        `${IN_APP_CUSTOMER_NOTE} ${CLASSIC_ONLY.renew}`,
+      ),
+    },
+    evidence: [
+      "bell sender: supabase/migrations/20260317180000_add_renewal_customer_notification.sql:57,61 (rentals INSERT trigger)",
+      "trigger: apps/portal/src/app/(dashboard)/rentals/[id]/page.tsx:3015 → apps/portal/src/components/rentals-v2/rental-create-v2.tsx:1809",
+      "no renewal email: the new booking's own confirmation is the only email (apps/portal/src/lib/notifications.ts:141)",
     ],
   },
 
@@ -1512,6 +1788,54 @@ export const NOTIFICATION_CATALOG: NotificationItem[] = [
   },
 
   /* ======================================================================== */
+  /* Keys                                                                      */
+  /* ======================================================================== */
+  {
+    key: "lockbox_code_customer",
+    category: "keys",
+    direction: "team_to_customer",
+    name: "Lockbox code",
+    tooltip: "Gives the customer the code that opens the lockbox holding the car keys, and tells them where the lockbox is.",
+    when: "When the code for a lockbox collection goes out to the customer.",
+    side: "automatic",
+    recipient: "The customer",
+    variables: unique(CUSTOMER_VARS, BOOKING_VARS, ["pickup_location", "lockbox_code", "lockbox_instructions"]),
+    link: "/portal/bookings",
+    channels: {
+      email: spec(
+        "sends_some_paths",
+        customerEmail(
+          "Collecting your {{vehicle_make}} {{vehicle_model}}: booking {{rental_number}}",
+          p("Your {{vehicle_make}} {{vehicle_model}} ({{vehicle_reg}}) is ready to collect on {{rental_start_date}}. The keys are in a lockbox on the car."),
+          h3("Your code"),
+          p("<strong>{{lockbox_code}}</strong>"),
+          ul("Where the lockbox is: {{lockbox_instructions}}", "Where the car is: {{pickup_location}}"),
+          p("Please keep this code to yourself, and put the keys back in the lockbox when you return the car."),
+          CONTACT,
+        ),
+        "Goes out on its own once a lockbox booking is approved. Sending the code by hand is only on the classic rental screen today. The wording, and the text-message copy that carries the same code, are set under Settings → Lockbox.",
+      ),
+      push: pushSpec(
+        push("Your collection details", "Your code for the {{vehicle_make}} {{vehicle_model}} is in your email. Keep it to yourself."),
+        "customer",
+      ),
+      in_app: spec(
+        "not_sent",
+        inApp("Your collection details", "We've emailed the code that opens the lockbox on your {{vehicle_make}} {{vehicle_model}}."),
+        IN_APP_CUSTOMER_NOTE,
+      ),
+    },
+    evidence: [
+      "email sender: supabase/functions/notify-lockbox-code/index.ts:536",
+      "text-message sender (no channel on this page yet): supabase/functions/notify-lockbox-code/index.ts:553",
+      "trigger (scheduled): supabase/functions/send-lockbox-scheduled/index.ts:121 (cron every minute, supabase/migrations/20260407120001_add_lockbox_cron_job.sql:21)",
+      "trigger (by hand, classic screen only): apps/portal/src/components/rentals/key-handover-section.tsx:278",
+      "not on the new screens: apps/portal/src/components/rentals-v2/rental-detail/stage-handover.tsx:605 (send button deliberately disabled)",
+      "wording lives elsewhere: lockbox_templates, edited in Settings → Lockbox (apps/portal/src/components/settings-v2/message-rules.ts:169)",
+    ],
+  },
+
+  /* ======================================================================== */
   /* Fines                                                                     */
   /* ======================================================================== */
   {
@@ -1616,6 +1940,47 @@ export const NOTIFICATION_CATALOG: NotificationItem[] = [
       "bell sender: supabase/functions/bonzah-confirm-payment/index.ts:420 (admins and head admins)",
       "email sender: supabase/functions/bonzah-confirm-payment/index.ts:473",
       "trigger: apps/booking/src/app/booking-success/page.tsx:545; apps/portal/src/components/rentals-v2/rental-create-v2.tsx:2092",
+    ],
+  },
+  {
+    key: "insurance_document_needed_customer",
+    category: "insurance",
+    direction: "team_to_customer",
+    name: "New insurance document needed",
+    tooltip: "Asks the customer for a new insurance document when the one they sent can't be accepted.",
+    when: "When you ask a customer for a new insurance document.",
+    side: "portal",
+    recipient: "The customer",
+    variables: unique(CUSTOMER_VARS, BOOKING_VARS),
+    link: "/portal/bookings",
+    channels: {
+      email: spec(
+        "not_sent",
+        customerEmail(
+          "We need a new insurance document for {{rental_number}}",
+          p("The insurance document you sent {{company_name}} for your {{vehicle_make}} {{vehicle_model}} booking couldn't be accepted."),
+          p("Please upload a new one before you collect the car, so we can get you on the road."),
+          button("customer_portal_url", "Upload a new document"),
+          CONTACT,
+        ),
+      ),
+      push: pushSpec(
+        push("New insurance document needed", "Please upload a new insurance document for booking {{rental_number}}."),
+        "customer",
+        NEEDS_ACTION,
+      ),
+      in_app: spec(
+        "sends_some_paths",
+        inApp(
+          "New insurance document needed",
+          "Your insurance document for the {{vehicle_make}} {{vehicle_model}} couldn't be accepted. Please upload a new one.",
+        ),
+        `${IN_APP_CUSTOMER_NOTE} ${CLASSIC_ONLY.insuranceDocument}`,
+      ),
+    },
+    evidence: [
+      "bell sender: apps/portal/src/app/(dashboard)/rentals/[id]/page.tsx:2090 (customer_notifications insert, type at :2096)",
+      "trigger (classic page only): apps/portal/src/app/(dashboard)/rentals/[id]/page.tsx:6187",
     ],
   },
 

@@ -86,10 +86,12 @@ import {
   firstDraftProblem,
   indexRows,
   isCustomised,
+  isNotSentYet,
   isTeamActionItem,
   itemChannels,
   itemMetaLine,
   notApplicableCopy,
+  notSentYetCopy,
   pageDiff,
   pendingItemKeys,
   pushSetupTestRequest,
@@ -321,7 +323,7 @@ export function NotificationsPageV2({ canEdit, registerSave, todaySettings, scro
                   className="hidden items-center justify-end gap-2 border-b px-5 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground md:flex"
                 >
                   {NOTIFICATION_CHANNELS.map((channel) => (
-                    <span key={channel} className="w-14 text-center">
+                    <span key={channel} className="w-[4.5rem] text-center">
                       {CHANNEL_LABELS[channel]}
                     </span>
                   ))}
@@ -608,7 +610,10 @@ function ChannelCell({
 }) {
   const label = CHANNEL_LABELS[channel];
   return (
-    <div className="flex items-center gap-1.5 md:w-14 md:justify-center" data-channel-cell={channel}>
+    <div
+      className="flex items-center gap-1.5 md:w-[4.5rem] md:flex-col md:items-center md:justify-center md:gap-0.5"
+      data-channel-cell={channel}
+    >
       <span aria-hidden="true" className="text-xs text-muted-foreground md:hidden">
         {label}
       </span>
@@ -629,13 +634,31 @@ function ChannelCell({
           </TooltipContent>
         </Tooltip>
       ) : (
-        <Switch
-          size="sm"
-          checked={value}
-          disabled={!canEdit}
-          aria-label={`${label} for ${item.name}`}
-          onCheckedChange={(checked) => onToggleChannel(item.key, channel, checked)}
-        />
+        <>
+          <Switch
+            size="sm"
+            checked={value}
+            disabled={!canEdit}
+            aria-label={`${label} for ${item.name}`}
+            onCheckedChange={(checked) => onToggleChannel(item.key, channel, checked)}
+          />
+          {/* D18 on the row: this channel has no sender yet, so the switch is
+              saved but changes nothing live. Small and muted — one marker, not
+              a banner. The full sentence is `title` (hover) and sr-only (screen
+              readers) rather than a Radix tooltip: this fires on most cells of
+              most rows, and ~60 more tooltip instances is real weight on a page
+              that already mounts one per item and one per dash. */}
+          {isNotSentYet(item, channel) && (
+            <span
+              data-channel-not-sent={channel}
+              title={notSentYetCopy(channel)}
+              className="whitespace-nowrap text-[10px] leading-none text-muted-foreground"
+            >
+              {COPY.notSentYet}
+              <span className="sr-only">. {notSentYetCopy(channel)}</span>
+            </span>
+          )}
+        </>
       )}
     </div>
   );
