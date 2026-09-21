@@ -296,6 +296,17 @@ const MultiStepBookingWidget = ({ stayInBookingAfterVerify = false }: MultiStepB
       }
     }, 1000);
   }, [isAuthenticated, customerUser?.customer_id, customerUser?.customer?.phone]);
+  // A signed-in customer sees their details read-only, but step 4 requires a
+  // phone number their account may not have — and with no field on screen the
+  // "Continue to Review" button failed silently. Once that is noticed, a phone
+  // field stays open for this step; it must not vanish mid-typing when the
+  // number autosaves to their profile and flows back into formData.
+  const [accountPhoneMissing, setAccountPhoneMissing] = useState(false);
+  useEffect(() => {
+    if (currentStep === 4 && isAuthenticated && isCustomerDataPopulated && !formData.customerPhone) {
+      setAccountPhoneMissing(true);
+    }
+  }, [currentStep, isAuthenticated, isCustomerDataPopulated, formData.customerPhone]);
   const [expandedDescriptions, setExpandedDescriptions] = useState<Set<string>>(new Set());
   const [vehicleImageIndex, setVehicleImageIndex] = useState<Record<string, number>>({});
   // Vehicle photo lightbox (full-screen gallery)
@@ -3198,6 +3209,19 @@ const MultiStepBookingWidget = ({ stayInBookingAfterVerify = false }: MultiStepB
     }
 
     setErrors(newErrors);
+    // Signed-in customers see name, email and phone read-only, so an error on
+    // one of those has no field to appear under. Say it out loud instead of
+    // leaving the button looking dead.
+    const hiddenError = isAuthenticated && isCustomerDataPopulated
+      ? (['customerName', 'customerEmail', 'customerPhone'] as const).map(k => newErrors[k]).find(Boolean)
+      : undefined;
+    if (hiddenError) {
+      // The phone field above takes a missing number directly; the rest are
+      // changed in the account page behind the card's Edit button.
+      toast.error(hiddenError === newErrors.customerPhone && accountPhoneMissing
+        ? hiddenError
+        : `${hiddenError} — you can update it in your account (Edit).`);
+    }
     return Object.keys(newErrors).length === 0;
   };
 
@@ -5202,6 +5226,30 @@ const MultiStepBookingWidget = ({ stayInBookingAfterVerify = false }: MultiStepB
                     </div>
                   </div>
                 </div>
+
+                {accountPhoneMissing && (
+                  <div className="space-y-2 mt-4 md:max-w-md">
+                    <Label htmlFor="customerPhone" className="font-medium">Phone Number *</Label>
+                    <PhoneInput
+                      id="customerPhone"
+                      value={formData.customerPhone}
+                      defaultCountry="US"
+                      onChange={value => {
+                        setFormData({
+                          ...formData,
+                          customerPhone: value
+                        });
+                        validateField('customerPhone', value);
+                        savePhoneToProfile(value);
+                      }}
+                      error={!!errors.customerPhone}
+                      className="h-12"
+                    />
+                    {errors.customerPhone
+                      ? <p className="text-sm text-destructive">{errors.customerPhone}</p>
+                      : <p className="text-xs text-muted-foreground">Your account has no phone number yet — it will be saved to your profile.</p>}
+                  </div>
+                )}
               </div>
             </div>
           ) : (
