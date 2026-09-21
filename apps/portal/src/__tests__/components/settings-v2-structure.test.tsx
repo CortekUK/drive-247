@@ -39,8 +39,13 @@ const h = vi.hoisted(() => ({
   from: vi.fn(),
   isManager: false,
   canView: ((_tab: string) => true) as (tab: string) => boolean,
+  /** The resolved tenant's slug, or null before the tenant row has loaded. */
+  slug: null as string | null,
 }));
 
+vi.mock("@/contexts/TenantContext", () => ({
+  useTenant: () => ({ tenant: h.slug ? { id: "t1", slug: h.slug } : null, tenantSlug: h.slug }),
+}));
 vi.mock("@/lib/v2-context", () => ({
   useV2: () => h.v2,
   // The provider now carries the tenant-level half of the same answer
@@ -89,6 +94,7 @@ beforeEach(() => {
   h.from.mockReset();
   h.isManager = false;
   h.canView = () => true;
+  h.slug = null;
 });
 
 /* -------------------------------------------------------------------------- */
@@ -570,47 +576,68 @@ describe("/settings/blacklist on v2", () => {
 /* Org menu                                                                    */
 /* -------------------------------------------------------------------------- */
 
-describe("OrgSwitcher (v2 sidebar): one row, one destination", () => {
+describe("OrgSwitcher (v2 sidebar): never a way into Settings", () => {
   /*
    * This row used to open a dropdown holding Organization settings, Billing &
-   * subscription and Audit Logs. All three were taken out on request — the
-   * first two have their own tab already, and Audit Logs moved onto the
-   * Settings index — which left the menu with nothing in it, so the row is now
-   * a plain link to /settings. These cases pin that: no menu anywhere, in
-   * either the expanded pill or the collapsed rail, and the manager gate that
-   * used to decide whether the menu listed Settings now decides whether the
-   * row links at all.
+   * subscription and Audit Logs. The review emptied it (Sep 20 2026): the first
+   * two have their own tab, Audit Logs moved onto the Settings index, and the
+   * row became one link to /settings with a gear inside it.
+   *
+   * On Sep 21 the gear moved down to the profile row (`SettingsLinkV2`, pinned
+   * in sidebar-settings-gear-v2.test.tsx), and the row became the tenant's
+   * booking site instead: the site link, and a Branding pencil beside it
+   * (pinned in sidebar-booking-site-row.test.tsx). What these cases hold is
+   * what must stay true through all of that — no menu, no Settings, none of the
+   * old menu's destinations — before the tenant row loads and after.
    */
-  it("is a link straight to Settings, with no menu behind it", () => {
+  const hrefs = () =>
+    Array.from(document.querySelectorAll<HTMLElement>('[data-slot="org-row"], [data-slot="org-row"] a')).map((el) =>
+      el.getAttribute("href"),
+    );
+
+  it.each([
+    ["before the tenant row has loaded", null],
+    ["once the tenant row has loaded", "northwind"],
+  ])("%s: the mark and name, no menu, and nothing that leads to Settings", (_when, slug) => {
+    h.slug = slug;
+    for (const collapsed of [false, true]) {
+      const { unmount } = render(<OrgSwitcher collapsed={collapsed} />);
+      expect(screen.queryByRole("button")).toBeNull();
+      expect(screen.queryByRole("menuitem")).toBeNull();
+      // By destination: Settings went to the footer, and none of what the menu
+      // once held has come back.
+      for (const href of ["/settings", "/subscription", "/audit-logs", "/users"]) {
+        expect(hrefs(), `${href} (collapsed: ${collapsed})`).not.toContain(href);
+      }
+      unmount();
+    }
+  });
+
+  it("before the tenant row has loaded there is no link at all: no slug, no booking site", () => {
     render(<OrgSwitcher />);
-    const link = screen.getByRole("link");
-    expect(link).toHaveAttribute("href", "/settings");
-    expect(link).toHaveTextContent("Northwind Rentals");
-    // Nothing opens. A menu would need a trigger, and there is none.
-    expect(screen.queryByRole("menuitem")).toBeNull();
-    expect(screen.queryByRole("button")).toBeNull();
-    // The two that moved out, by destination rather than by label.
-    expect(document.querySelector('a[href="/subscription"]')).toBeNull();
-    expect(document.querySelector('a[href="/audit-logs"]')).toBeNull();
-    expect(document.querySelector('a[href="/users"]')).toBeNull();
-  });
-
-  it("the collapsed rail is the same link, not a trigger", () => {
-    render(<OrgSwitcher collapsed />);
-    const link = screen.getByRole("link", { name: "Settings" });
-    expect(link).toHaveAttribute("href", "/settings");
-    expect(screen.queryByRole("button")).toBeNull();
-  });
-
-  it("a manager with no Settings grant gets the identity row and no link", () => {
-    h.isManager = true;
-    h.canView = () => false;
-    const { unmount } = render(<OrgSwitcher />);
-    expect(screen.queryByRole("link")).toBeNull();
     expect(screen.getByText("Northwind Rentals")).toBeTruthy();
-    unmount();
-    render(<OrgSwitcher collapsed />);
     expect(screen.queryByRole("link")).toBeNull();
+  });
+
+  it("the collapsed rail keeps the tenant's name on hover, since it cannot print it", () => {
+    render(<OrgSwitcher collapsed />);
+    expect(document.querySelector('[data-slot="org-row"]')).toHaveAttribute("title", "Northwind Rentals");
+  });
+
+  it("for a manager with or without the Settings grant, still no menu and no way into Settings", () => {
+    // What a grant changes here is only the Branding pencil (pinned in
+    // sidebar-booking-site-row.test.tsx). Settings itself is the footer gear's
+    // to gate; this row never offers it, to anyone.
+    h.slug = "northwind";
+    for (const canView of [() => false, () => true]) {
+      h.isManager = true;
+      h.canView = canView;
+      const { unmount } = render(<OrgSwitcher />);
+      expect(screen.queryByRole("button")).toBeNull();
+      expect(hrefs()).not.toContain("/settings");
+      expect(screen.getByText("Northwind Rentals")).toBeTruthy();
+      unmount();
+    }
   });
 });
 

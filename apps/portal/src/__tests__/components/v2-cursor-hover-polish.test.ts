@@ -512,18 +512,21 @@ describe('v2 dark hovers stay visible and readable', () => {
   it('the sidebar back links, org switcher, user menu and integration pin are among them', () => {
     const LIGHT_HOVER_TEXT = new RegExp(String.raw`dark:(\[a&\]:)?hover:text-${DARK_LIGHT_TEXT}`);
     const count = (file: string) => classStrings(read(file)).filter((str) => V2_DARK.test(str) && LIGHT_HOVER_TEXT.test(str)).length;
-    // 7 since Sep 20 2026: the booking-site row's pencil (hover → Branding)
-    // is the seventh control in this rail that tints and turns primary.
-    expect(count('components/shared/layout/app-sidebar-v2.tsx')).toBe(7);
-    // 0 since Sep 20 2026. The org row stopped being a pill wrapping a gear
-    // and a menu caret — both of which were controls of this shape — and
-    // became ONE link to /settings. Its gear is now decoration inside that
-    // link and follows it on `group-hover`, so there is no `hover:text-primary`
-    // control left in the file for this rule to have an opinion about. The
-    // dark tint on the row itself is still there and still asserted by the
-    // grey-hover rule above.
-    expect(count('components/shared/layout/org-switcher.tsx')).toBe(0);
-    expect(count('components/shared/layout/user-menu-v2.tsx')).toBe(2);
+    // 6 since Sep 21 2026. It was 7 on Sep 20, when the booking-site row's
+    // pencil (hover → Branding) joined this rail; that row then moved onto the
+    // org row at the top, pencil and all, so the count went with it.
+    expect(count('components/shared/layout/app-sidebar-v2.tsx')).toBe(6);
+    // 1 since Sep 21 2026: the Branding pencil, which arrived with the booking
+    // site. The org row was a pill wrapping a gear and a menu caret (two
+    // controls of this shape), then one link to /settings (0), and is now the
+    // booking-site link — which only tints — plus that pencil. Its gear moved
+    // down to the profile row, counted below.
+    expect(count('components/shared/layout/org-switcher.tsx')).toBe(1);
+    // 4 since Sep 21 2026: Customise sidebar and the account-menu caret, plus
+    // the Settings gear that moved here from the org row — once as the row's
+    // first icon and once stacked above the avatar in the collapsed rail
+    // (`SettingsLinkV2`). All four tint and turn primary alike.
+    expect(count('components/shared/layout/user-menu-v2.tsx')).toBe(4);
     expect(count('app/(dashboard)/integrations/integrations-board.tsx')).toBe(1);
     expect(count('components/ui-v2/badge.tsx')).toBe(2);
     const rc = classStrings(read('components/rentals-v2/rental-create-v2.tsx')).filter((str) => /hover:border-primary\/40/.test(str) && V2_DARK.test(str));

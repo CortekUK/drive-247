@@ -184,8 +184,9 @@ export const SETTINGS_INDEX_SECTIONS: SettingsIndexSection[] = [
       {
         // Moved here from the org menu at the top of the sidebar (Sep 20 2026,
         // team lead): that menu held Organization settings, Billing and Audit
-        // Logs, all three left it, and the row it hung off is now a plain link
-        // to this page. `/audit-logs` is unchanged — only the way in moved —
+        // Logs, and all three left it. (The row it hung off is the booking site
+        // now, and Settings is the gear in the profile row, since Sep 21.)
+        // `/audit-logs` is unchanged — only the way in moved —
         // and the `audit_logs` manager grant still decides, through
         // `requiresRoute`, exactly as it did in the menu.
         title: "Audit Logs",

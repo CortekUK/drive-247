@@ -25,7 +25,7 @@
  */
 
 import { useMemo, useEffect, useRef, useState, type ReactNode, type Ref } from 'react';
-import { ChevronsUpDown, Settings, X } from 'lucide-react';
+import { ExternalLink, X } from 'lucide-react';
 
 import { OrgMark } from '@/components/shared/layout/org-switcher';
 import { brandSurface } from '@/components/auth-v2/brand-surface';
@@ -91,8 +91,18 @@ export function portalTabTitle(name: string, metaTitle?: string | null): string 
 /**
  * The expanded `OrgSwitcher` row, not interactive. The sidebar is 16rem wide
  * and its header pads 6px a side, so the row is 244px, the name gets what the
- * mark, the gear and the menu button leave, and it truncates exactly where the
+ * mark and the controls after it leave, and it truncates exactly where the
  * real one does.
+ *
+ * The picture follows the real row slot for slot, because a slot drawn here
+ * that the sidebar does not have (or the reverse) moves the name's cut-off
+ * point, and the note below the field then fires for the wrong names:
+ *   - Sep 20 2026: the "Switch organization" chevron and its menu went.
+ *   - Sep 21 2026: the Settings gear moved down to the profile row, and the
+ *     org row became the booking-site entry instead — the "opens in a new tab"
+ *     arrow after the name, always shown, and the Branding pencil's slot after
+ *     that. The pencil only appears on hover, but its room is kept at rest, so
+ *     the picture keeps that room too, empty.
  */
 export const SIDEBAR_ROW = {
   frame: 'w-64 max-w-full shrink-0 p-1.5',
@@ -103,10 +113,13 @@ export const SIDEBAR_ROW = {
    */
   framedWithBorder: 'w-[258px] max-w-full shrink-0 border p-1.5',
   row: 'flex items-center rounded-lg',
+  /** The mark, the name and the arrow: the real row's booking-site link. */
   trigger: 'flex min-w-0 flex-1 items-center gap-2.5 rounded-lg p-1.5 text-left',
   name: 'min-w-0 flex-1 truncate text-[13px] font-semibold leading-tight',
-  gear: 'flex h-7 w-7 shrink-0 items-center justify-center text-muted-foreground',
-  menu: 'mr-1 flex h-7 w-7 shrink-0 items-center justify-center text-muted-foreground',
+  /** "Opens in a new tab", always shown, after the name. */
+  external: 'h-3.5 w-3.5 shrink-0 opacity-60',
+  /** The Branding pencil's slot, after the link: invisible at rest, but it keeps its room. */
+  pencil: 'mr-1 flex h-7 w-7 shrink-0 items-center justify-center',
 } as const;
 
 /** True once the element's text no longer fits its box (re-checked as it changes size). */
@@ -161,13 +174,9 @@ function SidebarRow({
         <span ref={nameRef} className={SIDEBAR_ROW.name} data-preview-name="">
           {name}
         </span>
+        <ExternalLink className={SIDEBAR_ROW.external} aria-hidden="true" />
       </div>
-      <span aria-hidden="true" className={SIDEBAR_ROW.gear}>
-        <Settings className="h-4 w-4" />
-      </span>
-      <span aria-hidden="true" className={SIDEBAR_ROW.menu}>
-        <ChevronsUpDown className="h-4 w-4" />
-      </span>
+      <span aria-hidden="true" className={SIDEBAR_ROW.pencil} />
     </div>
   );
 }

@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/stores/auth-store';
+import { useManagerPermissions } from '@/hooks/use-manager-permissions';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,7 +14,7 @@ import {
 import { Button } from '@/components/ui-v2/button';
 import { Badge } from '@/components/ui-v2/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui-v2/avatar';
-import { User, LogOut, Moon, Sun, ChevronsUpDown, Send, SlidersHorizontal, Compass } from 'lucide-react';
+import { User, LogOut, Moon, Sun, ChevronsUpDown, Send, SlidersHorizontal, Compass, Settings } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Switch } from '@/components/ui-v2/switch';
 import { useFeedbackStore } from '@/stores/feedback-store';
@@ -24,13 +26,87 @@ import {
 import { ProfileSheetV2 } from './profile-sheet-v2';
 
 /**
+ * The way into Settings from the sidebar footer (team lead, Sep 21 2026: the
+ * gear moves down to the profile row). It used to sit in the org row at the top
+ * of the rail, which is the tenant's booking site now (see org-switcher.tsx).
+ *
+ * `row` is the gear in the expanded profile row: first of the three icons at
+ * its right end (Settings, Customise sidebar, account menu), which the review
+ * asked to read as ONE group, right-aligned, apart from the name on the left.
+ * They are adjacent with no gap between them, and the trigger's own right
+ * padding is the space that keeps the group off the name.
+ *
+ * `rail` is the collapsed sidebar's: the rail shows the avatar alone, so the
+ * gear is stacked above it. Above rather than below keeps the avatar at the
+ * very bottom in both states, so collapsing the sidebar moves nothing.
+ *
+ * A link, never a button: it goes somewhere, and it is a sibling of the menu
+ * trigger, never a child — a control nested in a button is invalid markup and
+ * the trigger would swallow the click.
+ *
+ * The gate is v1's footer Settings rule, carried across verbatim from the org
+ * row: `!isManager || canView('settings')`. A manager without the grant gets no
+ * gear rather than a link to a page that would refuse them.
+ */
+export function SettingsLinkV2({
+  variant,
+  onNavigate,
+}: {
+  variant: 'row' | 'rail';
+  /** Closes the phone sidebar sheet, as every other link in the rail does. */
+  onNavigate?: () => void;
+}) {
+  const { isManager, canView } = useManagerPermissions();
+  if (isManager && !canView('settings')) return null;
+
+  if (variant === 'rail') {
+    return (
+      <Link
+        href="/settings"
+        onClick={onNavigate}
+        aria-label="Settings"
+        title="Settings"
+        className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground outline-none transition-colors cursor-pointer hover:bg-primary/10 hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-[hsl(var(--v2-link,var(--primary)))]"
+      >
+        <Settings className="h-4 w-4" />
+      </Link>
+    );
+  }
+  return (
+    <Link
+      href="/settings"
+      onClick={onNavigate}
+      aria-label="Settings"
+      title="Settings"
+      className="shrink-0 rounded-lg p-1.5 text-muted-foreground outline-none transition-colors cursor-pointer hover:bg-primary/10 hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-[hsl(var(--v2-link,var(--primary)))]"
+    >
+      <Settings className="h-4 w-4" />
+    </Link>
+  );
+}
+
+/**
  * v2 user menu. New file beside `user-menu.tsx`, never an edit to it — the v1
  * menu keeps serving every tenant not on the `chrome` gate (V2_PLAN §3).
  *
  * Two shapes: `icon` (the compact avatar button, as v1) and `row` (the full
  * profile row that sits in the v2 sidebar footer).
  */
-export const UserMenuV2 = ({ variant = 'icon' }: { variant?: 'icon' | 'row' } = {}) => {
+export const UserMenuV2 = ({
+  variant = 'icon',
+  settings = false,
+  onNavigate,
+}: {
+  variant?: 'icon' | 'row';
+  /**
+   * Draw the Settings gear in the row (`row` only). Opt-in: the main sidebar
+   * passes it; the Support rail, which mounts this same row, does not, so its
+   * footer is unchanged.
+   */
+  settings?: boolean;
+  /** Passed to the row's Settings gear; see `SettingsLinkV2`. */
+  onNavigate?: () => void;
+} = {}) => {
   const { appUser, signOut } = useAuth();
   const { resolvedTheme, setTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
@@ -116,6 +192,7 @@ export const UserMenuV2 = ({ variant = 'icon' }: { variant?: 'icon' | 'row' } = 
                 )}
               </button>
             </DropdownMenuTrigger>
+            {settings && <SettingsLinkV2 variant="row" onNavigate={onNavigate} />}
             {/* The customiser dialog needs the nav the sidebar computed, so it
                 is mounted there and opened from here by event — the same
                 pattern `open-global-search` already uses. */}
@@ -183,10 +260,10 @@ export const UserMenuV2 = ({ variant = 'icon' }: { variant?: 'icon' | 'row' } = 
           {/* Menu items — Profile · Dark Mode */}
           <div className="p-1.5">
             {/* Billing and Settings are not here by request. Both belong to
-                the organisation rather than the person: Settings is the org
-                row at the top of the rail, which is now a plain link to it
-                (see org-switcher.tsx), and Billing is its own row in the
-                sidebar's top group. Nothing became unreachable. */}
+                the organisation rather than the person: Settings is the gear
+                beside this row (`SettingsLinkV2`, since Sep 21 2026; it used to
+                be the org row at the top of the rail), and Billing is its own
+                row in the sidebar's top group. Nothing became unreachable. */}
             <DropdownMenuItem onClick={() => setProfileOpen(true)} className="cursor-pointer rounded-lg px-2.5 py-1.5 text-[13px]">
               <User className="mr-2.5 h-4 w-4 text-muted-foreground" />
               <span>Profile</span>

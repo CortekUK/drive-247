@@ -153,6 +153,19 @@ describe('v2 top bar Help button', () => {
     expect(help.querySelector('svg.lucide-sparkles')).not.toBeNull();
     expect(help.querySelector('svg.lucide-bot')).toBeNull();
 
+    // The sparkle is Trax's own round gradient mark, not a line icon (team
+    // lead, Sep 20 2026: "a bit bolder, a bit more 3D — not too prominent").
+    // The badge is the one at `xs`, and the glyph sits INSIDE it.
+    const mark = help.querySelector<HTMLElement>('[data-slot="trax-mark"]');
+    expect(mark).not.toBeNull();
+    expect(mark!.className.split(/\s+/)).toContain('size-5');
+    expect(mark!.querySelector('svg.lucide-sparkles')).not.toBeNull();
+    // Its lift is the small one; the 14px bloom belongs to the larger marks.
+    expect(mark!.innerHTML).toContain('shadow-[0_2px_6px_-2px_hsl(var(--primary)/0.5)]');
+    expect(mark!.innerHTML).not.toContain('0_4px_14px');
+    // The badge sits in the pill like an avatar in a chip: left inset = top inset.
+    expect(help.className.split(/\s+/)).toEqual(expect.arrayContaining(['pl-1.5', 'pr-2.5']));
+
     // The tooltip is stubbed out in this harness, so pin its copy at the source.
     const src = readFileSync(
       join(__dirname, '..', '..', 'components', 'shared', 'layout', 'top-bar-v2.tsx'),

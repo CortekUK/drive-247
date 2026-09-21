@@ -600,7 +600,19 @@ export function ExtrasSettings() {
         ) : (
           <>
             <SettingsSectionSkeleton variant="rows" rows={4} thumbnail label="Loading rental extras" className="sm:hidden" />
-            <SettingsSectionSkeleton variant="table" rows={4} columns={6} label="Loading rental extras" className="hidden sm:block" />
+            {/* The shape the rows land in, or the list jumps when they arrive:
+                ExtrasTableV2's flat settings surface (not the v2 Card, whose
+                24px bands above and below the rows are gone once it loads), and
+                one bar per real column — Name, Price, Pricing, Stock, Status,
+                plus the in-row controls only for someone who can use them. */}
+            <SettingsSectionSkeleton
+              variant="table"
+              rows={4}
+              columns={canEditExtrasV2 ? 6 : 5}
+              surface="settings"
+              label="Loading rental extras"
+              className="hidden sm:block"
+            />
           </>
         )}
       </div>

@@ -489,6 +489,25 @@ describe("ExtrasSettings (v2) states", () => {
     expect(buttonByText("Add Extra")).toBeUndefined();
   });
 
+  it("loads in the shape the rows land in: the flat settings panel, one bar per real column", () => {
+    ex.current = extrasApi({ hasLoaded: false, isLoading: true });
+    render(<ExtrasSettings />);
+    const skeleton = container.querySelector('[data-settings-state="loading"].hidden')!;
+    // `surface="settings"`, as ExtrasTableV2 draws itself — not the v2 Card,
+    // whose 24px bands above and below the rows are gone once the table lands,
+    // so the list would jump when it arrived.
+    const panel = skeleton.querySelector("[data-list-surface]")!;
+    expect(panel.getAttribute("data-list-surface")).toBe("settings");
+    // Name, Price, Pricing, Stock, Status and the in-row controls: 6 for an
+    // editor. A read-only manager's table has no controls column, so 5, and its
+    // skeleton must not promise one more.
+    expect(panel.firstElementChild!.children).toHaveLength(6);
+    perms.edit = false;
+    render(<ExtrasSettings />);
+    const readOnly = container.querySelector('[data-settings-state="loading"].hidden [data-list-surface]')!;
+    expect(readOnly.firstElementChild!.children).toHaveLength(5);
+  });
+
   it("keeps the Edit dialog open with the failure written in it when the save fails", async () => {
     const failure = new Error("The extra was saved, but its vehicle prices couldn't be updated. Try saving again.");
     ex.current = extrasApi({
@@ -682,6 +701,110 @@ describe("PromoCodesSectionV2 look", () => {
     const h2 = container.querySelector("#v2-promo-list-heading")!;
     expect(h2.textContent).toBe("All promo codes");
     expect(h2.className).toBe("font-heading text-base font-semibold tracking-tight text-foreground");
+  });
+});
+
+/**
+ * Team lead, Sep 21 2026, on the live Promo codes screen: "for edit and delete
+ * use the same icons and things as used in extras."
+ *
+ * The two tables are compared WITH EACH OTHER rather than each pinned to a
+ * literal class string or an icon name. The pair can still be restyled
+ * together, but neither can drift away from the other again — which is what had
+ * happened: promo Edit was `FilePenLine`, a page-with-a-pencil, where Extras and
+ * Custom pricing both draw a plain `Pencil`.
+ */
+describe("Promo rows carry the Extras table's Edit and Delete", () => {
+  /**
+   * What a row's Edit and Delete actually are: the control's own classes (the
+   * ghost `LIST_ROW_ACTION` button, and Delete's destructive hover), the glyph
+   * it draws (lucide's own class plus the paths), and the box holding the pair
+   * (`flex justify-end gap-0.5`, or the menu panel).
+   */
+  function rowControls(scope: "table" | "menu") {
+    if (scope === "menu") {
+      // A stale portal from the previous render would be read as this one's.
+      expect(document.body.querySelectorAll('[role="menu"]')).toHaveLength(1);
+    }
+    const out: Record<string, string[]> = {};
+    for (const verb of ["Edit", "Delete"] as const) {
+      const el =
+        scope === "table"
+          ? container.querySelector<HTMLElement>(`table button[aria-label^="${verb} "]`)
+          : Array.from(document.body.querySelectorAll<HTMLElement>('[role="menuitem"]')).find(
+              (m) => m.textContent?.trim() === verb,
+            ) ?? null;
+      expect(el, `${scope} ${verb}`).not.toBeNull();
+      const icon = el!.querySelector("svg")!;
+      out[verb] = [
+        el!.className,
+        `${icon.getAttribute("class")} :: ${icon.innerHTML}`,
+        (el!.parentElement as HTMLElement).className,
+      ];
+    }
+    return out;
+  }
+
+  const openPhoneMenu = (label: string) => {
+    (globalThis as any).ResizeObserver = ResizeObserverStub;
+    const trigger = document.body.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!;
+    act(() => {
+      trigger.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0, pointerType: "mouse" }));
+    });
+  };
+
+  it("draws the same two controls in the table row: same glyph, same button, same hover, same gap", () => {
+    render(table([extra()]));
+    const extras = rowControls("table");
+    render(section({ promos: [promo()] }).node);
+    expect(rowControls("table")).toEqual(extras);
+  });
+
+  it("draws the same two glyphs in the phone row menu, so the two widths do not disagree", () => {
+    render(table([extra()]));
+    openPhoneMenu("Actions for Child seat");
+    const extras = rowControls("menu");
+    render(section({ promos: [promo()] }).node);
+    openPhoneMenu("Actions for promo code WINTER10");
+    expect(rowControls("menu")).toEqual(extras);
+  });
+
+  it("agrees with its own header on every column's alignment, the way Extras does", () => {
+    const align = (el: Element) => {
+      const cls = (el.getAttribute("class") ?? "").split(/\s+/);
+      return cls.find((c) => c === "text-left" || c === "text-right") ?? "text-center";
+    };
+    const columns = () => ({
+      head: Array.from(container.querySelectorAll("thead th")).map(align),
+      body: Array.from(container.querySelectorAll("tbody tr:first-child td")).map(align),
+    });
+
+    // Extras, the reference: the name reads left, the controls right, the facts
+    // between them centred — and the head and the body say the same thing.
+    render(table([extra()]));
+    const extras = columns();
+    expect(extras.head).toEqual(extras.body);
+    expect(extras.head).toEqual(["text-left", "text-center", "text-center", "text-center", "text-center", "text-right"]);
+
+    render(section({ promos: [promo()] }).node);
+    const promos = columns();
+    expect(promos.head).toEqual(promos.body);
+    expect(promos.head).toEqual(["text-left", ...Array(6).fill("text-center"), "text-right"]);
+  });
+
+  it("loads in the shape the rows land in: the flat settings panel, one bar per real column", () => {
+    render(section({ isLoading: true }).node);
+    const skeleton = container.querySelector('[data-settings-state="loading"].hidden')!;
+    // `surface="settings"`, not the v2 Card, whose 24px bands above and below
+    // the rows are not there once PromoCodesTableV2 has replaced it.
+    const panel = skeleton.querySelector("[data-list-surface]")!;
+    expect(panel.getAttribute("data-list-surface")).toBe("settings");
+    // An editor's table is 8 columns wide (the trailing Edit/Delete column); a
+    // read-only manager's is 7, and its skeleton must not promise one more.
+    expect(panel.firstElementChild!.children).toHaveLength(8);
+    render(section({ isLoading: true, canEdit: false }).node);
+    const readOnly = container.querySelector('[data-settings-state="loading"].hidden [data-list-surface]')!;
+    expect(readOnly.firstElementChild!.children).toHaveLength(7);
   });
 });
 

@@ -15,6 +15,13 @@
  * Edit dialog and its delete confirmation, both shared with v1. The ⋯ menu
  * stays for the phone rows, where a stacked row has no room beside its facts.
  *
+ * Those two buttons are the EXTRAS table's, down to the glyph (team lead,
+ * Sep 21 2026): a plain `Pencil` and `Trash2` at `size-4` inside a ghost
+ * `LIST_ROW_ACTION` button, `gap-0.5` apart in a right-aligned row, each with a
+ * one-word tooltip and a `${verb} promo code ${code}` label, and only Delete
+ * taking the destructive hover. `settings-v2-extras-promos-states.test.tsx`
+ * compares the two tables' buttons directly, so the pair cannot drift again.
+ *
  * The progressive-rows hook lives HERE, not on the Settings page: the table sits
  * inside a Radix `TabsContent` that unmounts while another settings tab is open,
  * below the page's early returns. Mounting the hook with its table mounts it with
@@ -37,7 +44,7 @@
  */
 
 import { format } from "date-fns";
-import { Copy, FilePenLine, MoreHorizontal, Trash2, type LucideIcon } from "lucide-react";
+import { Copy, MoreHorizontal, Pencil, Trash2, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import {
   DropdownMenu,
@@ -151,12 +158,14 @@ function PromoRowMenu<T extends PromoCodeRowV2>({ promo, onEdit, onDelete }: Pro
       {/* Surface tone: this row menu sits on a light Settings table, where the
           default translucent near-black panel reads as an OS menu. */}
       <DropdownMenuContent tone="surface" align="end" className="w-auto">
+        {/* The same glyphs and the same 14px size the Extras row menu uses, so
+            the phone rows do not disagree with the table above them either. */}
         <DropdownMenuItem onClick={() => onEdit(promo)}>
-          <FilePenLine className="h-4 w-4" />
+          <Pencil className="h-3.5 w-3.5" />
           Edit
         </DropdownMenuItem>
         <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onDelete(promo)}>
-          <Trash2 className="h-4 w-4" />
+          <Trash2 className="h-3.5 w-3.5" />
           Delete
         </DropdownMenuItem>
       </DropdownMenuContent>
@@ -201,11 +210,20 @@ function IconAction({
   );
 }
 
-/** v1's Edit and Delete, in the row rather than behind the ⋯ menu. */
+/**
+ * v1's Edit and Delete, in the row rather than behind the ⋯ menu.
+ *
+ * `Pencil`, not `FilePenLine` (team lead, Sep 21 2026: "for edit and delete use
+ * the same icons and things as used in extras"). Every other v2 row Edit —
+ * Extras' `ExtraRowActions`, Custom pricing's holiday rows — is a plain pencil;
+ * this table was the only one drawing a page-with-a-pencil, which read as
+ * "open a document" rather than "edit this row". Everything else about the two
+ * buttons is already the same `IconAction` shape, so the icon was the drift.
+ */
 function PromoRowActions<T extends PromoCodeRowV2>({ promo, onEdit, onDelete }: PromoMenuProps<T>) {
   return (
     <div className="flex justify-end gap-0.5">
-      <IconAction icon={FilePenLine} tooltip="Edit" label={`Edit promo code ${promo.code}`} onClick={() => onEdit(promo)} />
+      <IconAction icon={Pencil} tooltip="Edit" label={`Edit promo code ${promo.code}`} onClick={() => onEdit(promo)} />
       <IconAction
         icon={Trash2}
         tooltip="Delete"

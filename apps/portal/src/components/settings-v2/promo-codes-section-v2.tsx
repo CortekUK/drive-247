@@ -94,7 +94,20 @@ export function PromoCodesSectionV2<T extends PromoCodeRowV2>({
     body = (
       <>
         <SettingsSectionSkeleton variant="rows" rows={4} label="Loading promo codes" className="sm:hidden" />
-        <SettingsSectionSkeleton variant="table" rows={4} columns={7} label="Loading promo codes" className="hidden sm:block" />
+        {/* The shape the rows actually land in, or the table jumps under the
+            operator as they arrive: the flat settings panel `PromoCodesTableV2`
+            draws (`surface="settings"`), not the v2 Card, whose 24px bands
+            above and below the rows are not there afterwards; and one bar per
+            real column — an editor gets the trailing Edit/Delete column, a
+            read-only manager does not. */}
+        <SettingsSectionSkeleton
+          variant="table"
+          rows={4}
+          columns={canEdit ? 8 : 7}
+          surface="settings"
+          label="Loading promo codes"
+          className="hidden sm:block"
+        />
       </>
     );
   } else if (!hasRows) {

@@ -3613,7 +3613,7 @@ const Settings = () => {
                             <SelectTriggerV2 className="w-32 shrink-0" aria-label="Discount type">
                               <SelectValueV2 />
                             </SelectTriggerV2>
-                            <SelectContentV2>
+                            <SelectContentV2 tone="surface">
                               <SelectItemV2 value="percentage">Percent</SelectItemV2>
                               <SelectItemV2 value="value">Amount</SelectItemV2>
                             </SelectContentV2>

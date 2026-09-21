@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { CircleDollarSign, MessageCircle, Search, SlidersHorizontal, Sparkles, X } from "lucide-react";
+import { CircleDollarSign, MessageCircle, Search, SlidersHorizontal, X } from "lucide-react";
+import { TraxMark } from "@/components/trax/trax-greeting";
 
 import { Button } from "@/components/ui-v2/button";
 import { Separator } from "@/components/ui-v2/separator";
@@ -421,7 +422,17 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
 
           Labelled "Help", not "Trax" (team lead, Sep 2026): operators read
           "Help" and know what it is for, and Trax introduces itself on hover.
-          The generic AI sparkle replaces the robot for now. */}
+          The generic AI sparkle replaces the robot for now.
+
+          Its sparkle is TRAX'S OWN MARK, not a line icon (team lead, Sep 20
+          2026: "a bit bolder, a bit more 3D — but not so it gets too
+          prominent"). The outline glyph was the one thing in this bar that
+          looked like every other icon, while the thing it opens greets you
+          with a round gradient badge. Now the button and the panel carry the
+          same mark, at `xs`: one step past the old 16px glyph so it reads as a
+          badge, and small enough to sit beside 13px text without outweighing
+          it. The left padding matches the badge's top and bottom inset, so it
+          sits in the hover pill like an avatar in a chip. */}
       {trax && (
         <Tooltip>
           <TooltipTrigger asChild>
@@ -432,14 +443,14 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
               aria-expanded={trax.sheetOpen}
               onClick={trax.sheetOpen ? trax.closeSheet : trax.openSheet}
               className={
-                "h-8 gap-1.5 px-2.5 text-[13px] font-medium text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] hover:bg-primary/10 hover:text-primary dark:hover:text-[hsl(var(--v2-link,var(--primary)))] aria-expanded:bg-primary/10 " +
+                "h-8 gap-1.5 pl-1.5 pr-2.5 text-[13px] font-medium text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] hover:bg-primary/10 hover:text-primary dark:hover:text-[hsl(var(--v2-link,var(--primary)))] aria-expanded:bg-primary/10 " +
                 "dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:aria-expanded:bg-[hsl(var(--v2-hover,var(--muted)))] " +
                 (trax.sheetOpen ? "bg-primary/10 dark:bg-[hsl(var(--v2-hover,var(--muted)))]" : "") +
                 // On a phone the open page field takes the row (see phoneField).
                 (phoneField ? " max-sm:hidden" : "")
               }
             >
-              <Sparkles className="size-4" aria-hidden />
+              <TraxMark size="xs" />
               Help
             </Button>
           </TooltipTrigger>

@@ -64,8 +64,6 @@ import {
   Mail,
   Newspaper,
   Plug,
-  ExternalLink,
-  Pencil,
 } from "lucide-react";
 // CRITICAL: `ui/sidebar` and `ui-v2/sidebar` each define their OWN React
 // context. The dashboard layout pairs this component with ui-v2's
@@ -100,14 +98,13 @@ import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useCMSPages } from "@/hooks/use-cms-pages";
 import { useCmsOutline } from "@/stores/cms-outline-store";
 import { ROUTE_TO_TAB } from "@/lib/permissions";
-import { UserMenuV2 } from "@/components/shared/layout/user-menu-v2";
+import { UserMenuV2, SettingsLinkV2 } from "@/components/shared/layout/user-menu-v2";
 import { OrgSwitcher } from "@/components/shared/layout/org-switcher";
 import { SidebarPromo } from "@/components/shared/layout/sidebar-promo";
 import { DevSection } from "@/components/shared/layout/dev-section";
 import { SidebarCustomizerDialog } from "@/components/shared/layout/sidebar-customizer-dialog";
 import { useNavPreferences } from "@/hooks/use-nav-preferences";
 import { applyNavPreferences } from "@/lib/nav-preferences";
-import { bookingOriginFor } from "@/lib/booking-origin";
 // The Trax conversation rail — the scoped rail this sidebar becomes on /trax.
 import { TraxRail } from "@/components/trax/trax-rail";
 import { SupportRail } from "@/components/support/support-rail";
@@ -1270,7 +1267,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
     <Sidebar collapsible="icon" className="transition-all duration-300 ease-in-out">
       {/* Organization switcher at the very top */}
       <SidebarHeader className="p-1.5 pt-4">
-        <OrgSwitcher collapsed={collapsed} />
+        <OrgSwitcher collapsed={collapsed} onNavigate={closeMobileOnNav} />
       </SidebarHeader>
 
       {/* Navigation — fingertip items + drill-in groups */}
@@ -1604,78 +1601,11 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                   </SidebarMenuItem>
                   )}
 
-                  {/* The tenant's own booking site — the customer-facing one,
-                      opened in a new tab, with its branding one click away.
-
-                      SHAPE (team lead, Sep 20 2026): the external-link icon is
-                      ALWAYS visible, so the row says up front that it leaves
-                      the portal. The pencil appears on hover, immediately
-                      beside it, with a hover state of its own, and goes to
-                      BRANDING. Clicking anywhere else on the row opens the
-                      site.
-
-                      Two links, siblings inside one container, never nested:
-                      an <a> inside an <a> is invalid markup and the outer one
-                      swallows the inner click, which is the whole of the
-                      pencil's job. The container carries the hover highlight
-                      so it covers the pencil too, the same arrangement the
-                      user row and the org row use.
-
-                      `opacity-0` + `group-hover` hides the pencil from the eye
-                      but NOT from the keyboard, so `focus-visible:opacity-100`
-                      brings it back for a tab user — otherwise it would be a
-                      control that can be focused and cannot be seen.
-
-                      The URL comes from `bookingOriginFor`, never
-                      `https://${slug}.drive-247.com`: that formula is right in
-                      production and wrong everywhere else, and it opened a
-                      PRODUCTION tab from a local portal (see lib/booking-origin.ts).
-                      Rendered only once the tenant row has resolved, so the
-                      server render and the first client render agree. */}
-                  {tenant?.slug && (
-                    <SidebarMenuItem>
-                      {collapsed ? (
-                        <SidebarMenuButton
-                          asChild
-                          tooltip="Booking site"
-                          className={NAV_ROW}
-                        >
-                          <a
-                            href={bookingOriginFor(tenant.slug)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={closeMobileOnNav}
-                          >
-                            <Globe className="h-4 w-4 shrink-0" />
-                            <span className="sr-only">Booking site</span>
-                          </a>
-                        </SidebarMenuButton>
-                      ) : (
-                        <div className="group/site flex items-center rounded-lg text-sidebar-foreground/70 transition-colors hover:bg-primary/10 hover:text-sidebar-foreground dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]">
-                          <a
-                            href={bookingOriginFor(tenant.slug)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={closeMobileOnNav}
-                            className="flex h-8 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-lg px-3 text-left text-[13px] font-medium outline-none"
-                          >
-                            <Globe className="h-4 w-4 shrink-0 text-sidebar-foreground/60" />
-                            <span className="min-w-0 flex-1 truncate">Booking site</span>
-                            <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-60" aria-hidden />
-                          </a>
-                          <Link
-                            href="/settings/appearance"
-                            onClick={closeMobileOnNav}
-                            aria-label="Edit your booking site's branding"
-                            title="Edit branding"
-                            className="mr-1 flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground opacity-0 outline-none transition-colors focus-visible:opacity-100 group-hover/site:opacity-100 hover:bg-primary/10 hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-[hsl(var(--v2-link,var(--primary)))]"
-                          >
-                            <Pencil className="h-3.5 w-3.5" aria-hidden />
-                          </Link>
-                        </div>
-                      )}
-                    </SidebarMenuItem>
-                  )}
+                  {/* No "Booking site" row here any more (Sep 21 2026). Its
+                      behaviour — open the site in a new tab, the arrow always
+                      showing, a Branding pencil on hover — moved onto the org
+                      row at the top of this rail, under the tenant's own name
+                      instead of a "Booking site" title. See org-switcher.tsx. */}
 
                   {/* Ask AI — only when the caller owns a Trax instance to open. */}
                   {onAskAI && (
@@ -1961,15 +1891,20 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
         {!collapsed && <DevSection />}
 
         <SidebarMenu>
-          {/* Profile row — whole row opens the user menu, and carries the
-              customiser trigger beside it. */}
+          {/* Profile row — the name opens the user menu, and the row carries
+              Settings, the customiser and the menu caret at its right end as
+              one group (team lead, Sep 21 2026: Settings moved down here from
+              the org row at the top, which is the booking site now). Collapsed,
+              the rail shows the avatar alone, so the Settings gear is stacked
+              above it rather than lost. See `SettingsLinkV2` in user-menu-v2.tsx. */}
           <SidebarMenuItem>
             {collapsed ? (
-              <div className="flex justify-center py-1">
+              <div className="flex flex-col items-center gap-1 py-1">
+                <SettingsLinkV2 variant="rail" onNavigate={closeMobileOnNav} />
                 <UserMenuV2 />
               </div>
             ) : (
-              <UserMenuV2 variant="row" />
+              <UserMenuV2 variant="row" settings onNavigate={closeMobileOnNav} />
             )}
           </SidebarMenuItem>
         </SidebarMenu>

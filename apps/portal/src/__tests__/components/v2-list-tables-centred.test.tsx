@@ -192,11 +192,18 @@ describe('promo codes: the code button centres in the table and stays left on th
 
 describe('extras: the name column reads left, everything else still centres', () => {
   /**
-   * Sep 20 2026: the Extra name column was deliberately turned back to the left
-   * ("a list of names", matching Locations), so the Sep 17 "every cell centres"
-   * rule now has one documented exception. This pins BOTH halves — the name
-   * reads left, and no other heading or cell drifted with it — instead of the
-   * source-text needle that used to stand here, which only said "centred".
+   * Sep 20 2026 (team lead): the name column was deliberately turned back to the
+   * left ("a list of names", matching Locations), so the Sep 17 "every cell
+   * centres" rule now has one documented exception. This pins BOTH halves — the
+   * name reads left, and no other heading or cell drifted with it — instead of
+   * the source-text needle that used to stand here, which only said "centred".
+   *
+   * The SAME review cut the table down to Name, Price, Pricing, Stock, Status
+   * (plus the trailing actions column, which only someone who can edit gets):
+   * Image, Description and Type were removed on purpose — the picture is the
+   * row's hover card, the description is in the Edit dialog, and Stock already
+   * says what Type said. The heading list is compared exactly so a removed
+   * column cannot creep back, and the header reads "Name", not "Extra".
    */
   const extra = {
     id: 'e1',
@@ -213,7 +220,7 @@ describe('extras: the name column reads left, everything else still centres', ()
     image_urls: [],
   } as any;
 
-  it('left-aligns only the Extra heading and its cell', () => {
+  it('left-aligns only the Name heading and its cell, and lists no column that was cut', () => {
     const { container } = render(
       <ExtrasTableV2
         extras={[extra]}
@@ -230,11 +237,9 @@ describe('extras: the name column reads left, everything else still centres', ()
 
     const heads = headings(container);
     expect(heads.map((h) => h.textContent)).toEqual([
-      'Extra',
-      'Description',
+      'Name',
       'Price',
       'Pricing',
-      'Type',
       'Stock',
       'Status',
       'Actions',
@@ -242,15 +247,15 @@ describe('extras: the name column reads left, everything else still centres', ()
     // The name column, and only it, reads left.
     expect(classes(heads[0])).toContain('text-left');
     expect(classes(heads[0])).not.toContain('text-center');
-    heads.slice(1, 7).forEach((h) => {
+    heads.slice(1, 5).forEach((h) => {
       expect(classes(h)).toContain('text-center');
       expect(classes(h)).not.toContain('text-left');
     });
     // The trailing sr-only actions column stays right, as everywhere else.
-    expect(classes(heads[7])).toContain('text-right');
+    expect(classes(heads[5])).toContain('text-right');
 
     const cells = Array.from(container.querySelectorAll('tbody tr:first-child td'));
-    expect(cells).toHaveLength(8);
+    expect(cells).toHaveLength(6);
     expect(cells[0].textContent).toContain('Child seat');
     expect(classes(cells[0])).toContain('text-left');
     expect(classes(cells[0])).not.toContain('text-center');
@@ -258,7 +263,7 @@ describe('extras: the name column reads left, everything else still centres', ()
     const nameRow = cells[0].querySelector('div')!;
     expect(classes(nameRow)).toContain('justify-start');
     expect(classes(nameRow)).not.toContain('justify-center');
-    cells.slice(1, 7).forEach((td) => {
+    cells.slice(1, 5).forEach((td) => {
       expect(classes(td)).toContain('text-center');
       expect(classes(td)).not.toContain('text-left');
     });
