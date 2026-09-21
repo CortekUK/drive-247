@@ -46,6 +46,8 @@ import { useCustomerAuthStore } from "@/stores/customer-auth-store";
 import { useBookingStore } from "@/stores/booking-store";
 import { useCustomerVerification } from "@/hooks/use-customer-verification";
 import { AuthPromptDialog } from "@/components/booking/AuthPromptDialog";
+import { CbpBookStepper } from "@/components/custom-booking-page/book-stepper";
+import { CbpVehicleStep, type CbpCar, type CbpVehicleStepProps } from "@/components/custom-booking-page/vehicle-step";
 import { BlockedAccountDialog } from "@/components/BlockedAccountDialog";
 import { getTimezonesByRegion, findTimezone, getDetectedTimezone } from "@/lib/timezones";
 import { useCustomerDocuments, getDocumentStatus } from "@/hooks/use-customer-documents";
@@ -142,9 +144,23 @@ function LiveClock({ timezone }: { timezone: string }) {
 interface MultiStepBookingWidgetProps {
   /** Keep the customer in this booking after they verify their email (custom site). */
   stayInBookingAfterVerify?: boolean;
+  /**
+   * "custom-site" draws the step bar and vehicle step in the custom site's
+   * design (custom-booking-page/book-stepper.tsx, vehicle-step.tsx). Only the
+   * presentation changes: fleet, pricing, validation and checkout are this
+   * component's, exactly as on the legacy site.
+   */
+  variant?: "legacy" | "custom-site";
+  /** Vehicle type the customer picked on the custom site's search bar. */
+  initialVehicleType?: string;
 }
 
-const MultiStepBookingWidget = ({ stayInBookingAfterVerify = false }: MultiStepBookingWidgetProps = {}) => {
+const MultiStepBookingWidget = ({
+  stayInBookingAfterVerify = false,
+  variant = "legacy",
+  initialVehicleType,
+}: MultiStepBookingWidgetProps = {}) => {
+  const isCustomSite = variant === "custom-site";
   // Safari-safe date parser for YYYY-MM-DD strings
   // Safari doesn't support new Date("YYYY-MM-DD") format
   const parseDateString = (dateStr: string): Date => {
@@ -677,6 +693,12 @@ const MultiStepBookingWidget = ({ stayInBookingAfterVerify = false }: MultiStepB
 
   // Scroll to step container when step changes
   useEffect(() => {
+    // The custom site's booking page is only the booking: its top holds the
+    // step bar, which scrolling to the container would tuck under the header.
+    if (isCustomSite) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
     if (stepContainerRef.current) {
       const element = stepContainerRef.current;
       const elementTop = element.getBoundingClientRect().top + window.scrollY;
@@ -686,7 +708,7 @@ const MultiStepBookingWidget = ({ stayInBookingAfterVerify = false }: MultiStepB
         behavior: 'smooth'
       });
     }
-  }, [currentStep]);
+  }, [currentStep, isCustomSite]);
 
   // Auto-calculate distance when both locations are selected or changed
   useEffect(() => {
@@ -2632,6 +2654,220 @@ const MultiStepBookingWidget = ({ stayInBookingAfterVerify = false }: MultiStepB
   const hasActiveFilters = searchTerm || selectedCategories.length > 0 || sortBy !== "recommended";
   const selectedVehicle = vehicles.find(v => v.id === formData.vehicleId);
   const estimatedBooking = selectedVehicle ? calculateEstimatedTotal(selectedVehicle) : null;
+
+  /** What a vehicle card shows for price: shared by the legacy cards and the custom site's. */
+  const getVehicleCardPricing = (vehicle: Vehicle) => {
+    const estimation = calculateEstimatedTotal(vehicle);
+    // #1 (per-tenant show_effective_daily_rate): show the effective AVERAGE $/day
+    // (trip rental total ÷ days) instead of the base tier rate, which misleads once
+    // weekend/length pricing applies. Only when dates are chosen (estimation present).
+    const avgDailyRate = estimation && estimation.days > 0 && estimation.vehicleTotal > 0
+      ? estimation.vehicleTotal / estimation.days
+      : 0;
+    const avgDailyOn = !!tenant?.show_effective_daily_rate && avgDailyRate > 0;
+    // Promo Logic for Display
+    let displayPrice = estimation?.total || 0;
+    const originalPrice = displayPrice;
+    let hasDiscount = false;
+    let promoErrorMsg: string | null = null;
+
+    if (promoDetails && estimation) {
+      if (promoDetails.type === 'fixed_amount') {
+        if (estimation.total > promoDetails.value) {
+          displayPrice = estimation.total - promoDetails.value;
+          hasDiscount = true;
+        } else {
+          promoErrorMsg = "Promo code cannot be applied on this vehicle price";
+        }
+      } else if (promoDetails.type === 'percentage') {
+        const discount = (estimation.total * promoDetails.value) / 100;
+        displayPrice = estimation.total - discount;
+        hasDiscount = true;
+      }
+    }
+    return { estimation, avgDailyRate, avgDailyOn, displayPrice, originalPrice, hasDiscount, promoErrorMsg };
+  };
+
+  /** The price filter's Reset: back to daily prices across the whole fleet. */
+  const resetPriceFilters = () => {
+    setPriceFilterMode("daily"); // Reset to daily mode
+    // Recalculate range for daily prices
+    const prices = vehicles.map(v => v.daily_rent || 0).filter(p => p > 0);
+    const newRange: [number, number] = prices.length > 0
+      ? [Math.min(...prices), Math.max(...prices)]
+      : [0, 1000];
+    setOriginalPriceRange(newRange);
+    setFilters({
+      transmission: [],
+      fuel: [],
+      seats: [2, 7],
+      priceRange: newRange
+    });
+  };
+
+  /**
+   * Everything the custom site's vehicle step shows, as plain formatted values,
+   * and every action it can take, pointing back at this component. The figures
+   * come from the same helpers the legacy cards and sidebar use.
+   */
+  const buildCbpVehicleStepProps = (): CbpVehicleStepProps => {
+    const money0 = (n: number) => formatCurrency(n, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    const place = (loc: string) => (loc || "").split(',').slice(0, 2).join(',').trim();
+    const when = (d: string, t: string) =>
+      d ? `${format(parseDateString(d), "EEE, MMM d")}${t ? ` · ${formatTimeWithPeriod(t)}` : ""}` : "—";
+    const duration = calculateRentalDuration();
+    const durationLabel = !duration
+      ? "—"
+      : duration.formatted.includes("day")
+        ? duration.formatted
+        : `${duration.formatted} · ${duration.days} ${duration.days === 1 ? "day" : "days"}`;
+
+    const toCar = (vehicle: Vehicle): CbpCar => {
+      // Loaded by vehiclePublicColumns but not declared on the local type.
+      const extra = vehicle as Vehicle & { year?: number | string | null; fuel_type?: string | null; category?: string | null };
+      const card = getVehicleCardPricing(vehicle);
+      const rate = getDynamicPriceDisplay(vehicle);
+      const photos = vehicle.vehicle_photos ?? [];
+      const src = customerPhotoUrl(photos[getVehicleImageIndex(vehicle.id)], tenant)
+        || customerPhotoUrl(photos[0], tenant)
+        || vehicle.photo_url
+        || null;
+      const fuel = extra.fuel_type ? String(extra.fuel_type) : "";
+      return {
+        id: vehicle.id,
+        name: vehicleDisplayName(vehicle, tenant),
+        meta: [extra.year, fuel ? fuel.charAt(0).toUpperCase() + fuel.slice(1) : null].filter(Boolean).join(" · "),
+        colour: vehicle.colour || null,
+        category: extra.category || null,
+        mileage: getVehicleMileageDisplay(vehicle),
+        unlimited: isUnlimitedMileage(vehicle),
+        photo: src ? optimizedImageUrl(src, { width: 800, quality: 65, resize: "cover" }) : null,
+        hasPhotos: photos.length > 0 || !!vehicle.photo_url,
+        // When a promo applies the figure is the discounted trip total, as on
+        // the legacy card; otherwise it is the period rate.
+        pricing: card.hasDiscount
+          ? { price: money0(card.displayPrice), was: money0(card.originalPrice), unit: "for your trip", rank: card.displayPrice }
+          : {
+              price: money0(card.avgDailyOn ? card.avgDailyRate : rate.price),
+              unit: card.avgDailyOn ? "per day" : rate.label.replace("/", "per").trim(),
+              aside: card.avgDailyOn ? undefined : (rate.secondaryPrices.find(s => s.endsWith("/ day")) ?? rate.secondaryPrices[0]),
+              promoError: card.promoErrorMsg,
+              rank: card.estimation?.total ?? rate.price,
+            },
+      };
+    };
+
+    // The trip summary mirrors the legacy sidebar, figure for figure.
+    const sel = selectedVehicle ?? null;
+    const selCard = sel ? getVehicleCardPricing(sel) : null;
+    const showTotal = !!(sel && estimatedBooking && formData.pickupLocation);
+    const lines: { label: string; value: string }[] = [];
+    let note: string | null = null;
+    if (sel && estimatedBooking && showTotal) {
+      if (estimatedBooking.deliveryFees > 0) {
+        lines.push({ label: "Vehicle rental", value: money0(estimatedBooking.vehicleTotal) });
+        if (formData.pickupDeliveryFee > 0) lines.push({ label: "Pickup delivery", value: `+${money0(formData.pickupDeliveryFee)}` });
+        if (formData.returnDeliveryFee > 0) lines.push({ label: "Return collection", value: `+${money0(formData.returnDeliveryFee)}` });
+      }
+      const days = estimatedBooking.days || 0;
+      if (days <= 0 || isUnlimitedMileage(sel)) {
+        lines.push({ label: "Mileage", value: "Unlimited" });
+      } else {
+        const allowance = calculateTotalMileageAllowance(sel, days, tenant?.monthly_tier_days ?? 30);
+        if (allowance !== null) {
+          lines.push({ label: "Mileage allowance", value: formatDistance(allowance, distanceUnit) });
+          if (sel.excess_mileage_rate != null && sel.excess_mileage_rate > 0) {
+            lines.push({
+              label: "Excess rate",
+              value: `${formatCurrency(sel.excess_mileage_rate, currencyCode, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/${getDistanceUnitShort(distanceUnit)}`,
+            });
+          }
+          const hint = getUnlimitedMileageOption(sel as any, days, tenant?.monthly_tier_days ?? 30);
+          if (hint.available) note = `Unlimited mileage available at checkout · ${money0(hint.flatAmount)} flat`;
+        }
+      }
+    }
+
+    return {
+      cars: filteredVehicles.map(toCar),
+      categories: Array.from(new Set(
+        vehicles.map(v => (v as Vehicle & { category?: string | null }).category).filter((c): c is string => !!c),
+      )).sort(),
+      anyUnlimited: vehicles.some(v => isUnlimitedMileage(v)),
+      initialType: initialVehicleType,
+      selectedId: formData.vehicleId,
+      onSelect: (id, toggle) => {
+        const deselect = toggle && formData.vehicleId === id;
+        setFormData({ ...formData, vehicleId: deselect ? '' : id });
+        if (errors.vehicleId) setErrors({ ...errors, vehicleId: "" });
+        if ((window as any).gtag) {
+          if (!toggle) {
+            (window as any).gtag('event', 'vehicle_card_viewed', { vehicle_id: id });
+          } else if (!deselect) {
+            const v = vehicles.find(x => x.id === id);
+            (window as any).gtag('event', 'vehicle_selected', { vehicle_id: id, est_total: (v && calculateEstimatedTotal(v)?.total) || 0 });
+          }
+        }
+      },
+      onOpenPhotos: (id) => {
+        setLightboxIndex(getVehicleImageIndex(id));
+        setLightboxVehicleId(id);
+      },
+      trip: {
+        dates: formData.pickupDate && formData.dropoffDate
+          ? `${format(parseDateString(formData.pickupDate), "MMM d")} → ${format(parseDateString(formData.dropoffDate), "MMM d, yyyy")}`
+          : "Choose your dates",
+        location: place(formData.pickupLocation),
+        duration: durationLabel,
+        pickup: {
+          when: when(formData.pickupDate, formData.pickupTime),
+          where: place(formData.pickupLocation) || "—",
+          fee: formData.pickupDeliveryFee > 0 ? `+${money0(formData.pickupDeliveryFee)} delivery` : undefined,
+        },
+        dropoff: {
+          when: when(formData.dropoffDate, formData.dropoffTime),
+          where: place(formData.dropoffLocation) || "—",
+          fee: formData.returnDeliveryFee > 0 ? `+${money0(formData.returnDeliveryFee)} collection` : undefined,
+        },
+      },
+      summary: {
+        vehicle: sel ? vehicleDisplayName(sel, tenant) : null,
+        total: showTotal && selCard && estimatedBooking ? money0(selCard.hasDiscount ? selCard.displayPrice : estimatedBooking.total) : null,
+        was: showTotal && selCard?.hasDiscount && estimatedBooking ? money0(estimatedBooking.total) : null,
+        lines,
+        note,
+      },
+      onBack: () => transitionToStep(1),
+      onStartOver: handleClearForm,
+      onContinue: handleStep2Continue,
+      search: searchTerm,
+      onSearch: handleSearchChange,
+      sort: sortBy,
+      onSort: (value) => {
+        setSortBy(value);
+        if ((window as any).gtag) (window as any).gtag('event', 'fleet_sort_changed', { sortKey: value });
+      },
+      view: viewMode,
+      onView: handleViewModeChange,
+      priceFilter: {
+        mode: priceFilterMode,
+        onMode: handlePriceFilterModeChange,
+        range: filters.priceRange as [number, number],
+        bounds: originalPriceRange,
+        onRange: (range) => setFilters(prev => ({ ...prev, priceRange: range })),
+        onReset: resetPriceFilters,
+        active: filters.priceRange[0] > originalPriceRange[0] || filters.priceRange[1] < originalPriceRange[1],
+        format: money0,
+      },
+      onClearFilters: clearAllFilters,
+      error: errors.vehicleId || undefined,
+      help: {
+        phone: tenant?.contact_phone || tenant?.phone || null,
+        email: tenant?.contact_email || null,
+        hours: tenant?.business_hours || null,
+      },
+    };
+  };
   const priceBreakdown = calculatePriceBreakdown();
 
   // Validate individual field in real-time
@@ -3253,8 +3489,8 @@ const MultiStepBookingWidget = ({ stayInBookingAfterVerify = false }: MultiStepB
     }
   };
   return <>
-    {/* Booking Hero Header */}
-    <section className="bk-hero">
+    {/* Booking Hero Header — the custom site's booking page has its own page head per step. */}
+    {!isCustomSite && <section className="bk-hero">
       <div className="bk-hero__inner">
         <h1 className="bk-hero__title">{getStepTitle()}</h1>
         <div className="flex items-center justify-center mt-4">
@@ -3266,12 +3502,34 @@ const MultiStepBookingWidget = ({ stayInBookingAfterVerify = false }: MultiStepB
 
         <p className="bk-hero__meta">{(cmsContent.booking_header?.trust_points || ["Serving Your Area", "Transparent Rates", "24/7 Support"]).join(" · ")}</p>
       </div>
-    </section>
+    </section>}
 
-    <Card ref={stepContainerRef} className="p-4 md:p-8 bg-card backdrop-blur-sm border-border shadow-[0_8px_30px_rgba(0,0,0,0.12)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.4)]">
+    {isCustomSite && (
+      <CbpBookStepper
+        steps={skipInsurance ? [
+          { step: 1, label: "Trip details" },
+          { step: 2, label: "Choose vehicle" },
+          { step: 4, label: "Your details" },
+          { step: 5, label: "Review & confirm" },
+        ] : [
+          { step: 1, label: "Trip details" },
+          { step: 2, label: "Choose vehicle" },
+          { step: 3, label: "Insurance" },
+          { step: 4, label: "Your details" },
+          { step: 5, label: "Review & confirm" },
+        ]}
+        current={currentStep}
+        highest={highestStepReached}
+        onGo={step => setCurrentStep(step)}
+      />
+    )}
+
+    <Card ref={stepContainerRef} className={isCustomSite
+      ? "border-0 bg-transparent p-0 shadow-none"
+      : "p-4 md:p-8 bg-card backdrop-blur-sm border-border shadow-[0_8px_30px_rgba(0,0,0,0.12)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.4)]"}>
       <div className="space-y-8 bk-steps">
         {/* Enhanced Progress Indicator */}
-        <div className="w-full overflow-x-auto py-4">
+        {!isCustomSite && <div className="w-full overflow-x-auto py-4">
           <div className="flex items-center justify-between relative min-w-[280px]">
             {/* Dynamic steps based on whether tenant is insurance exempt */}
             {(skipInsurance ? [
@@ -3312,7 +3570,7 @@ const MultiStepBookingWidget = ({ stayInBookingAfterVerify = false }: MultiStepB
               </div>;
             })}
           </div>
-        </div>
+        </div>}
 
         {/* Step content wrapper with transition */}
         <div className="relative min-h-[200px]">
@@ -3618,8 +3876,9 @@ const MultiStepBookingWidget = ({ stayInBookingAfterVerify = false }: MultiStepB
           </Button>
         </div>}
 
-        {/* Step 2: Vehicle Selection */}
-        {currentStep === 2 && <div className="space-y-6">
+        {/* Step 2: Vehicle Selection — the custom site's own design, same engine */}
+        {currentStep === 2 && isCustomSite && <CbpVehicleStep {...buildCbpVehicleStepProps()} />}
+        {currentStep === 2 && !isCustomSite && <div className="space-y-6">
           {/* Back Button */}
           <Button onClick={() => transitionToStep(1)} variant="ghost" className="text-muted-foreground hover:text-foreground -ml-2">
             <ChevronLeft className="mr-1 w-5 h-5" /> Back to Trip Details
@@ -3715,21 +3974,7 @@ const MultiStepBookingWidget = ({ stayInBookingAfterVerify = false }: MultiStepB
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
                         <h4 className="font-semibold">Filters</h4>
-                        <Button variant="ghost" size="sm" onClick={() => {
-                          setPriceFilterMode("daily"); // Reset to daily mode
-                          // Recalculate range for daily prices
-                          const prices = vehicles.map(v => v.daily_rent || 0).filter(p => p > 0);
-                          const newRange: [number, number] = prices.length > 0
-                            ? [Math.min(...prices), Math.max(...prices)]
-                            : [0, 1000];
-                          setOriginalPriceRange(newRange);
-                          setFilters({
-                            transmission: [],
-                            fuel: [],
-                            seats: [2, 7],
-                            priceRange: newRange
-                          });
-                        }}>
+                        <Button variant="ghost" size="sm" onClick={resetPriceFilters}>
                           Reset
                         </Button>
                       </div>
@@ -3897,34 +4142,7 @@ const MultiStepBookingWidget = ({ stayInBookingAfterVerify = false }: MultiStepB
                     const vehicleName = vehicleDisplayName(vehicle, tenant);
                     const isRollsRoyce = (vehicle.make || '').toLowerCase().includes("rolls") || (vehicle.model || '').toLowerCase().includes("phantom");
                     const isSelected = formData.vehicleId === vehicle.id;
-                    const estimation = calculateEstimatedTotal(vehicle);
-                    // #1 (per-tenant show_effective_daily_rate): show the effective AVERAGE $/day
-                    // (trip rental total ÷ days) instead of the base tier rate, which misleads once
-                    // weekend/length pricing applies. Only when dates are chosen (estimation present).
-                    const avgDailyRate = estimation && estimation.days > 0 && estimation.vehicleTotal > 0
-                      ? estimation.vehicleTotal / estimation.days
-                      : 0;
-                    const avgDailyOn = !!tenant?.show_effective_daily_rate && avgDailyRate > 0;
-                    // Promo Logic for Display
-                    let displayPrice = estimation?.total || 0;
-                    let originalPrice = displayPrice;
-                    let hasDiscount = false;
-                    let promoErrorMsg: string | null = null;
-
-                    if (promoDetails && estimation) {
-                      if (promoDetails.type === 'fixed_amount') {
-                        if (estimation.total > promoDetails.value) {
-                          displayPrice = estimation.total - promoDetails.value;
-                          hasDiscount = true;
-                        } else {
-                          promoErrorMsg = "Promo code cannot be applied on this vehicle price";
-                        }
-                      } else if (promoDetails.type === 'percentage') {
-                        const discount = (estimation.total * promoDetails.value) / 100;
-                        displayPrice = estimation.total - discount;
-                        hasDiscount = true;
-                      }
-                    }
+                    const { estimation, avgDailyRate, avgDailyOn, displayPrice, originalPrice, hasDiscount, promoErrorMsg } = getVehicleCardPricing(vehicle);
 
                     if (viewMode === "list") {
                       // List View Card
@@ -4555,7 +4773,7 @@ const MultiStepBookingWidget = ({ stayInBookingAfterVerify = false }: MultiStepB
         </div>}
 
         {/* Step 3: Insurance Verification (skipped for insurance-exempt tenants) */}
-        {currentStep === 3 && !skipInsurance && <div className="space-y-8">
+        {currentStep === 3 && !skipInsurance && <div className={cn("space-y-8", isCustomSite && "cbp-bk-panel")}>
           {/* Header */}
           <div className="flex justify-end">
             <AlertDialog>
@@ -5129,7 +5347,7 @@ const MultiStepBookingWidget = ({ stayInBookingAfterVerify = false }: MultiStepB
         </div>}
 
         {/* Step 4: Customer Details */}
-        {currentStep === 4 && <div className="space-y-8">
+        {currentStep === 4 && <div className={cn("space-y-8", isCustomSite && "cbp-bk-panel")}>
           {/* Header with underline */}
           <div className="flex items-center justify-between pb-2 border-b-2 border-primary/30">
             <h3 className="text-2xl md:text-3xl font-display font-semibold text-foreground">
@@ -5967,7 +6185,7 @@ const MultiStepBookingWidget = ({ stayInBookingAfterVerify = false }: MultiStepB
         </div>}
 
         {/* Step 5: Review & Payment */}
-        {currentStep === 5 && <div className="space-y-6">
+        {currentStep === 5 && <div className={cn("space-y-6", isCustomSite && "cbp-bk-panel")}>
           {/* Header */}
           <div className="flex items-center justify-between pb-2 border-b-2 border-primary/30">
             <h3 className="text-2xl md:text-3xl font-display font-semibold text-foreground">

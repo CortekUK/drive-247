@@ -22,7 +22,7 @@ import { CBP } from "./use-site-content";
  * so a guest who refreshes is sent back to the bar, as on the old site.
  * ========================================================================== */
 
-export function BookView() {
+export function BookView({ initialType }: { initialType?: string }) {
   const router = useRouter();
   const currentStep = useBookingStore(s => s.currentStep);
 
@@ -47,7 +47,7 @@ export function BookView() {
 
   return (
     <div className="cbp-wrap pb-16">
-      <MultiStepBookingWidget stayInBookingAfterVerify />
+      <MultiStepBookingWidget stayInBookingAfterVerify variant="custom-site" initialVehicleType={initialType} />
     </div>
   );
 }

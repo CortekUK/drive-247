@@ -176,7 +176,8 @@ export function BookingPanel({ c }: { c: CbpContent }) {
 
     setHighestStepReached(2);
     setCurrentStep(2);
-    router.push(`${CBP}/book`);
+    // The bar's vehicle type rides along so the booking page opens on it.
+    router.push(`${CBP}/book${category ? `?type=${encodeURIComponent(category)}` : ""}`);
   };
 
   return (

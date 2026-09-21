@@ -100,7 +100,7 @@ describe("wiring", () => {
 
   it("a custom-site booking stays in the booking after the email code, the old site is unchanged", () => {
     expect(readRepoSource("apps/booking/src/components/custom-booking-page/book-view.tsx")).toContain(
-      "<MultiStepBookingWidget stayInBookingAfterVerify />",
+      "<MultiStepBookingWidget stayInBookingAfterVerify variant=\"custom-site\"",
     );
     expect(readRepoSource("apps/booking/src/components/home/legacy-home.tsx")).toContain("<MultiStepBookingWidget />");
     const dialog = readRepoSource("apps/booking/src/components/booking/AuthPromptDialog.tsx");
@@ -109,9 +109,9 @@ describe("wiring", () => {
 
   it("Find My Ride opens the booking on its own page instead of unfolding it under the home page", () => {
     const bar = readRepoSource("apps/booking/src/components/custom-booking-page/booking-bar.tsx");
-    expect(bar).toContain("router.push(`${CBP}/book`);");
+    expect(bar).toContain("router.push(`${CBP}/book${category ? `?type=${encodeURIComponent(category)}` : \"\"}`);");
     expect(bar).not.toContain("<MultiStepBookingWidget");
-    expect(readRepoSource(`apps/booking/src/app/(legacy)${CUSTOM_SITE_PREFIX}/book/page.tsx`)).toContain("<BookView />");
+    expect(readRepoSource(`apps/booking/src/app/(legacy)${CUSTOM_SITE_PREFIX}/book/page.tsx`)).toContain("<BookView initialType={initialType} />");
     // /book is the custom site's own page, never an old-site page to move.
     expect(customSitePathFor(`${CUSTOM_SITE_PREFIX}/book`)).toBeNull();
   });
@@ -121,6 +121,22 @@ describe("wiring", () => {
     expect(view).toContain("useBookingStore.persist");
     expect(view).toMatch(/if \(hydrated && !hasTrip\) router\.replace\(`\$\{CBP\}#booking`\)/);
     expect(view).toContain("const hasTrip = currentStep >= 2;");
+  });
+
+  it("the booking page draws the steps in the custom site's design, and only there", () => {
+    expect(readRepoSource("apps/booking/src/components/custom-booking-page/book-view.tsx")).toContain(
+      'variant="custom-site" initialVehicleType={initialType}',
+    );
+    const widget = readRepoSource("apps/booking/src/components/MultiStepBookingWidget.tsx");
+    expect(widget).toContain('variant = "legacy"');
+    expect(widget).toContain("{currentStep === 2 && isCustomSite && <CbpVehicleStep {...buildCbpVehicleStepProps()} />}");
+    expect(widget).toContain("{currentStep === 2 && !isCustomSite && <div");
+    expect(widget).toContain("{!isCustomSite && <section className=\"bk-hero\">");
+    // One price calculation for both designs — the new cards cannot drift from the legacy ones.
+    expect(widget).toContain("} = getVehicleCardPricing(vehicle);");
+    expect(widget).toContain("const card = getVehicleCardPricing(vehicle);");
+    // The legacy home page is untouched.
+    expect(readRepoSource("apps/booking/src/components/home/legacy-home.tsx")).toContain("<MultiStepBookingWidget />");
   });
 
   it("the Test tenant is made eligible for the switch, and nothing else is changed", () => {
