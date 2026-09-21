@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { routeBookingRequest } from '@/lib/booking-design';
+import { customSitePathFor, isCustomSiteOn } from '@/lib/custom-site-routing';
 
 /** Set for the new design's visual-editor mode (read by src/app/(northwind)/layout.tsx). */
 const CMS_EDIT_HEADER = 'x-cms-edit';
@@ -103,6 +104,17 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/', request.url), 307);
   }
 
+  // A tenant on the custom site has no old site beside it: each old-site page
+  // moves to the custom site's — see src/lib/custom-site-routing.ts. Looked up
+  // only for those page paths, so checkout, payment pages and the customer
+  // portal never wait on it. 307, not permanent: Super Admin can switch back.
+  const customSitePath = tenantSlug ? customSitePathFor(pathname) : null;
+  if (tenantSlug && customSitePath && (await isTenantOnCustomSite(tenantSlug))) {
+    const url = request.nextUrl.clone();
+    url.pathname = customSitePath;
+    return NextResponse.redirect(url, 307);
+  }
+
   // Continue with the request
   return NextResponse.next({
     request: {
@@ -147,6 +159,31 @@ function extractSubdomain(hostname: string): string | null {
   }
 
   return null;
+}
+
+// The custom-site switch per tenant, held briefly: this runs on every old-site
+// page request, and a Super Admin change only needs to land within seconds.
+const CUSTOM_SITE_TTL_MS = 30_000;
+const customSiteCache = new Map<string, { on: boolean; at: number }>();
+
+async function isTenantOnCustomSite(tenantSlug: string): Promise<boolean> {
+  const hit = customSiteCache.get(tenantSlug);
+  if (hit && Date.now() - hit.at < CUSTOM_SITE_TTL_MS) return hit.on;
+  try {
+    const { data, error } = await supabase
+      .from('tenants')
+      .select('booking_v2_enabled, custom_site_eligible')
+      .eq('slug', tenantSlug)
+      .maybeSingle();
+    // The old site is the safe answer, as in custom-booking-page/tenant-site.ts:
+    // never send a visitor away because the switch could not be read.
+    if (error) return false;
+    const on = isCustomSiteOn(data);
+    customSiteCache.set(tenantSlug, { on, at: Date.now() });
+    return on;
+  } catch {
+    return false;
+  }
 }
 
 /**

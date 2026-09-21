@@ -49,6 +49,12 @@ interface AuthPromptDialogProps {
   customerPhone?: string;
   onSkip: () => void;
   onSuccess: () => void;
+  /**
+   * After the emailed code is accepted, carry on with the booking instead of
+   * opening the customer portal. The custom site sets this: leaving for
+   * /portal mid-booking dropped its customers onto the old site's layout.
+   */
+  stayInBookingAfterVerify?: boolean;
 }
 
 const benefits = [
@@ -83,6 +89,7 @@ export function AuthPromptDialog({
   customerPhone,
   onSkip,
   onSuccess,
+  stayInBookingAfterVerify = false,
 }: AuthPromptDialogProps) {
   const [mode, setMode] = useState<AuthMode>('prompt');
   const [showPassword, setShowPassword] = useState(false);
@@ -314,6 +321,12 @@ export function AuthPromptDialog({
         return;
       }
       toast.success('Account verified successfully!');
+      // verifyOTP has already signed the customer in, so the booking can pick
+      // up their account exactly as it does after a login.
+      if (stayInBookingAfterVerify) {
+        onSuccess();
+        return;
+      }
       window.location.href = '/portal';
     } catch (error) {
       toast.error('An unexpected error occurred');

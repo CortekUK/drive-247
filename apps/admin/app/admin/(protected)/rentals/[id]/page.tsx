@@ -1098,9 +1098,10 @@ export default function TenantDetailsPage() {
   };
 
   // Per-tenant booking-site design switch. When on, this tenant's booking
-  // home page (`/`) serves the booking-v2 landing instead of the legacy home.
-  // Scoped to that one page — /fleet, /booking and the customer portal are
-  // unaffected, so the booking funnel keeps working either way.
+  // home page (`/`) serves their custom site, and the booking app's middleware
+  // sends every old-site page (/fleet, /about, /contact, …) to the custom
+  // site's version. The booking funnel, payment pages and customer portal are
+  // shared by both sites and keep working either way.
   //
   // Which design renders is resolved server-side per request, so an already-open
   // booking tab does NOT swap on its own — it needs a reload. (TenantContext's
@@ -1117,7 +1118,7 @@ export default function TenantDetailsPage() {
       if (error) throw error;
       setTenant({ ...tenant, booking_v2_enabled: next });
       toast.success(next
-        ? 'Custom site enabled — this tenant\'s home page now serves their custom website'
+        ? 'Custom site enabled — this tenant\'s booking website now serves their custom site'
         : 'Reverted to the legacy booking website');
     } catch (error: any) {
       toast.error(`Failed to update booking design: ${error.message}`);

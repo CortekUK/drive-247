@@ -139,7 +139,12 @@ function LiveClock({ timezone }: { timezone: string }) {
   );
 }
 
-const MultiStepBookingWidget = () => {
+interface MultiStepBookingWidgetProps {
+  /** Keep the customer in this booking after they verify their email (custom site). */
+  stayInBookingAfterVerify?: boolean;
+}
+
+const MultiStepBookingWidget = ({ stayInBookingAfterVerify = false }: MultiStepBookingWidgetProps = {}) => {
   // Safari-safe date parser for YYYY-MM-DD strings
   // Safari doesn't support new Date("YYYY-MM-DD") format
   const parseDateString = (dateStr: string): Date => {
@@ -6037,6 +6042,7 @@ const MultiStepBookingWidget = () => {
       open={showAuthDialog}
       onOpenChange={setShowAuthDialog}
       prefillEmail={formData.customerEmail}
+      stayInBookingAfterVerify={stayInBookingAfterVerify}
       onSkip={() => {
         setShowAuthDialog(false);
         // User chose to continue as guest

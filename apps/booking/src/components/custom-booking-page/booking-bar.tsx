@@ -297,7 +297,7 @@ export function BookingPanel({ c }: { c: CbpContent }) {
       {/* ------------------------------------------------ the real engine */}
       {searched && (
         <div className="cbp-rise mt-8">
-          <MultiStepBookingWidget />
+          <MultiStepBookingWidget stayInBookingAfterVerify />
         </div>
       )}
     </section>
