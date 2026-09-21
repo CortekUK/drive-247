@@ -258,7 +258,7 @@ export function SquareSettings({ canEdit: canEditProp }: Props = {}) {
               connection={conn}
               canEdit={canEdit}
               connecting={sq.isConnecting}
-              onReconnect={sq.connect}
+              onReconnect={() => sq.connect()}
               refreshing={refreshing}
               onRefresh={() => void handleRefresh()}
             />
@@ -268,7 +268,7 @@ export function SquareSettings({ canEdit: canEditProp }: Props = {}) {
               expired={sq.isExpired}
               canEdit={canEdit}
               connecting={sq.isConnecting}
-              onReconnect={sq.connect}
+              onReconnect={() => sq.connect()}
             />
           ) : sq.isConnected && conn ? (
             <ConnectedDetail
@@ -289,7 +289,7 @@ export function SquareSettings({ canEdit: canEditProp }: Props = {}) {
               modeIsLive={modeIsLive}
               canEdit={canEdit}
               connecting={sq.isConnecting}
-              onConnect={sq.connect}
+              onConnect={() => sq.connect()}
             />
           )}
         </CardContent>

@@ -477,7 +477,11 @@ export function useSquareConnection() {
     daysUntilExpiry,
 
     // actions
-    connect: (connectMode?: SquareMode) => connectMutation.mutate(connectMode),
+    // Only a real mode gets through. Wired straight to an onClick, this was
+    // handed the click event as `connectMode`, which then went into the
+    // request body and failed with "Converting circular structure to JSON".
+    connect: (connectMode?: SquareMode) =>
+      connectMutation.mutate(connectMode === "live" || connectMode === "test" ? connectMode : undefined),
     isConnecting: connectMutation.isPending,
     setSquareMode: (nextMode: SquareMode) => setModeMutation.mutate(nextMode),
     isSettingMode: setModeMutation.isPending,
