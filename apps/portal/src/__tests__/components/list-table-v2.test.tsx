@@ -10,10 +10,12 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Card } from '@/components/ui-v2/card';
 import {
   LIST_CLASSES,
   LIST_FILL_MIN_HEIGHT,
   LIST_ROWS_PER_FILL,
+  LIST_SETTINGS_SURFACE,
   LIST_TONES,
   ListBody,
   ListCell,
@@ -420,5 +422,100 @@ describe('ListFooter', () => {
   it('counts against the server total while still filling', () => {
     footer(25, 1000, true, 1450);
     expect(screen.getByText('Showing 25 of 1450 fines')).toBeInTheDocument();
+  });
+});
+
+describe('ListFooter hideWhenAllShown (settings tables)', () => {
+  const footer = (visible: number, total: number, hasMore: boolean, serverTotal?: number) =>
+    render(
+      <ListFooter
+        rows={{ visible: Array.from({ length: visible }), total, hasMore, showMore: () => {} }}
+        one="holiday"
+        many="holidays"
+        serverTotal={serverTotal}
+        hideWhenAllShown
+      />,
+    );
+
+  it('renders nothing once every row is on screen', () => {
+    const { container } = footer(3, 3, false);
+    expect(container.innerHTML).toBe('');
+  });
+
+  it('still counts, with Show more, while rows are to come', () => {
+    footer(25, 30, true);
+    expect(screen.getByText('Showing 25 of 30 holidays')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Show more' })).toBeInTheDocument();
+  });
+
+  it('still says so when a fetch cap left rows on the server', () => {
+    footer(1000, 1000, false, 1450);
+    expect(
+      screen.getByText('Showing the first 1000 of 1450 holidays. Search or filter to narrow them down.'),
+    ).toBeInTheDocument();
+  });
+});
+
+describe('ListTable surface', () => {
+  function Table({ surface }: { surface?: 'card' | 'settings' }) {
+    const rows = useProgressiveRows([1, 2], 'k');
+    return (
+      <ListTable rows={rows} surface={surface}>
+        <ListTableHeader>
+          <ListHead>Name</ListHead>
+        </ListTableHeader>
+        <ListBody>
+          {rows.visible.map((row) => (
+            <ListRow key={row}>
+              <ListCell>{row}</ListCell>
+            </ListRow>
+          ))}
+        </ListBody>
+      </ListTable>
+    );
+  }
+
+  it('a default caller renders exactly what it did: a bare ui-v2 Card around the kit scroll root', () => {
+    const { container } = render(<Table />);
+    const card = container.firstElementChild as HTMLElement;
+    // The same classes a Card with no className gets: ListTable adds none.
+    const bare = render(<Card />).container.firstElementChild as HTMLElement;
+    expect(card.getAttribute('data-slot')).toBe('card');
+    expect(card.className).toBe(bare.className);
+    expect(card.hasAttribute('data-list-surface')).toBe(false);
+    const scroll = card.firstElementChild as HTMLElement;
+    expect(scroll.getAttribute('data-slot')).toBe('card-content');
+    expect(scroll.className).toBe(LIST_CLASSES.scrollRoot);
+    expect(card.children).toHaveLength(1);
+  });
+
+  it("surface='card' is the default, spelled out", () => {
+    const a = render(<Table />).container.innerHTML;
+    const b = render(<Table surface="card" />).container.innerHTML;
+    expect(b).toBe(a);
+  });
+
+  it("surface='settings': the flat settings panel, with the same scroll root inside", () => {
+    const { container } = render(<Table surface="settings" />);
+    const surface = container.firstElementChild as HTMLElement;
+    expect(surface.getAttribute('data-list-surface')).toBe('settings');
+    expect(surface.className).toBe(LIST_SETTINGS_SURFACE);
+    const cls = surface.className.split(/\s+/);
+    expect(cls).toEqual(expect.arrayContaining(['rounded-xl', 'border', 'bg-card', 'overflow-hidden']));
+    // No card padding bands, no shadow or ring, no card radius.
+    for (const gone of ['py-[var(--card-spacing)]', 'gap-[var(--card-spacing)]', 'shadow-md', 'ring-1', 'rounded-4xl']) {
+      expect(cls).not.toContain(gone);
+    }
+    // With `border`, this would make the v2 theme repaint it as a shadowed card.
+    expect(cls).not.toContain('text-card-foreground');
+    expect(container.querySelector('[data-slot="card"]')).toBeNull();
+    const scroll = surface.firstElementChild as HTMLElement;
+    expect(scroll.getAttribute('data-slot')).toBe('card-content');
+    expect(scroll.className).toBe(LIST_CLASSES.scrollRoot);
+    expect(scroll.querySelector('table')).not.toBeNull();
+  });
+
+  it('keeps the settings surface out of the rentals lockstep set', () => {
+    expect(Object.values(LIST_CLASSES)).not.toContain(LIST_SETTINGS_SURFACE);
   });
 });

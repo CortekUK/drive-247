@@ -32,7 +32,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui-v2/alert-dialog";
 import { TipTapEditor } from "@/components/settings/tiptap-editor";
-import { SettingsPageHeader } from "@/components/settings-v2/settings-kit";
+import { SETTINGS_COLUMN_BESIDE_TRAX, SettingsPageHeader } from "@/components/settings-v2/settings-kit";
 import { UnsavedChangesDialog } from "@/components/shared/unsaved-changes-dialog";
 import { useTenant } from "@/contexts/TenantContext";
 import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
@@ -373,8 +373,10 @@ export function AgreementTemplatesPageV2() {
   return (
     <TooltipProvider>
       {/* md:pt-[26px]: the header's first line is the 32px title, so it centres
-          at 50 + 26 + 16 = 92, the sidebar switch's row (as on the Settings index). */}
-      <div className="w-full max-w-[1160px] space-y-8 pb-16 md:pt-[26px]">
+          at 50 + 26 + 16 = 92, the sidebar switch's row (as on the Settings index).
+          SETTINGS_COLUMN_BESIDE_TRAX: the same column the Settings page uses, so
+          the open Trax panel never lands over the agreement options. */}
+      <div className={cn("w-full max-w-[1160px] space-y-8 pb-16 md:pt-[26px]", SETTINGS_COLUMN_BESIDE_TRAX)}>
         <div className="flex flex-wrap items-end justify-between gap-3">
           <SettingsPageHeader
             title="Rental agreement"

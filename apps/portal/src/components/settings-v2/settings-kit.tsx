@@ -26,22 +26,65 @@
  *   registered save, Reset runs every registered discard. Reset DISCARDS unsaved
  *   edits; it never restores defaults.
  *
+ *   settingsSaveIssue(message, fieldId)
+ *     What a save throws when a FIELD is what refused it, rather than the
+ *     server. The save bar scrolls that field into view and focuses it, so a
+ *     reason about something three screens up is not only a toast. The field
+ *     shows the same reason inline; the bar keeps its summary line.
+ *
  * HEADINGS
  *   SETTINGS_PAGE_TITLE     the page's h1, bold
- *   SETTINGS_SECTION_TITLE  a section's h2, semibold, never a line under it
+ *   SETTINGS_SECTION_TITLE  a section's h2, semibold. `SettingsSection` draws
+ *                           no line under it. Locations is the one page that
+ *                           does (team lead, Sep 19 2026 — its two sides are
+ *                           headed outside their panels and the divider is
+ *                           what separates them); it draws its own heading
+ *                           block and is pinned by
+ *                           __tests__/components/settings-locations-lane-v2.
  *
  * SECTIONS AND DEEP LINKS
- *   <SettingsSection anchor="tax-and-fees" title=… description=…>
- *     a titled part of a longer page, with the id `settings-tax-and-fees`
+ *   <SettingsSection anchor="security-deposit" title=… description=…>
+ *     a titled part of a longer page, with the id `settings-security-deposit`
  *   useScrollToSection(id, ready)
  *     scrolls that section to the top once the page's data is in, for a
- *     `?tab=fees` link or a `#settings-…` hash
+ *     `?tab=preauth` link or a `#settings-…` hash
+ *
+ * BESIDE THE TRAX PANEL
+ *   SETTINGS_COLUMN_BESIDE_TRAX   add to the page column: while the floating
+ *                                 Trax panel is open it stops short of it
+ *   SettingsRow                   stacks (label above control) while the
+ *                                 panel is open on a screen too narrow for
+ *                                 the 420px label column beside it
+ *
+ * TABS INSIDE A PAGE (reusable)
+ *   <SettingsTabs label="General" tabs={[{ value, label }]} value onValueChange>
+ *     <SettingsTabPanel value="regional">…</SettingsTabPanel>
+ *   </SettingsTabs>
+ *     One level of navigation: the index lists pages, a page opens, and tabs
+ *     split it. Pills in the brand colour, the v2 hover pair. Every panel
+ *     stays mounted while hidden, so switching tabs keeps unsaved edits and
+ *     their registered saves (the page's one save bar covers every tab). The
+ *     page owns `value` (General keeps it in `?tab=`).
+ *
+ * CONTROLS AT THE END OF THE ROW (opt-in)
+ *   <SettingsRowAlignProvider align="end">  every SettingsRow inside puts its
+ *                                           control at the far end of the row
+ *   <SettingsRow align="end">               one row. The default is "start".
+ *
+ *   This is the house style for a settings FORM, and a section owns it rather
+ *   than inheriting it: each panel in locations-v2, pricing-rules-v2,
+ *   fees-deposit-v2, payment-modes-v2 and business-rules-pages wraps itself in
+ *   the provider, so it reads the same whichever page mounts it (the return
+ *   reminder panel sits on Customer messages, not on a General-lane page).
+ *   The settings page's own `V2_PAGES_CONTROLS_AT_END` then only has to cover
+ *   the rows written in `settings/page.tsx` itself.
  */
 
 import { createContext, useContext, useEffect, useRef, type ReactNode } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import { Skeleton } from "@/components/ui-v2/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui-v2/tabs";
 import { SettingsSaveState } from "@/components/settings-v2/section-states";
 import { settingsSectionId } from "@/components/settings-v2/settings-shell-state";
 import { cn } from "@/lib/utils";
@@ -50,6 +93,44 @@ import { cn } from "@/lib/utils";
 export const SETTINGS_PAGE_TITLE = "font-heading text-2xl font-bold tracking-tight text-foreground";
 /** A section title (and a panel title). */
 export const SETTINGS_SECTION_TITLE = "font-heading text-base font-semibold tracking-tight text-foreground";
+
+/* -------------------------------------------------------------------------- */
+/* Beside the Trax panel                                                       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The Trax panel floats over the bottom-right corner of the page
+ * (components/trax/trax-panel.tsx), and a settings column 1160px wide ran
+ * underneath it: the panel and its suggestion chips landed in the middle of a
+ * section, over its controls and over the page's Save changes.
+ *
+ * Added to a settings page's column (`w-full max-w-[1160px] …`), this makes
+ * the column's right edge stop short of the open panel on md and up: never
+ * wider than 1160px, never wider than the space left of the panel, never
+ * narrower than 20rem (below that there is no room for both, and the panel,
+ * which the operator can close, overlaps instead). The page's save bar is the
+ * column's last child, so it steps aside with it. The width animates with the
+ * panel's own 200ms.
+ *
+ * It keys on `data-trax-panel="open"`, which TraxPanel puts on <html>, and uses
+ * the FLOATING width (`--trax-width`, styles/v2-theme.css) even while the panel
+ * is expanded, so the page does not reflow under the expanded overlay's scrim.
+ * With Trax closed, below md, and on every v1 page (which never mounts
+ * TraxPanel) nothing matches and the column is exactly what it was.
+ */
+export const SETTINGS_COLUMN_BESIDE_TRAX =
+  "transition-[max-width] duration-200 ease-linear motion-reduce:transition-none " +
+  "md:[html[data-trax-panel=open]_&]:max-w-[min(1160px,max(20rem,calc(100%-var(--trax-width,440px)-1rem)))]";
+
+/**
+ * A settings row's grid needs ~720px (a 420px label column, the 40px gap and
+ * the panel padding, then the control). While the Trax panel is open on a
+ * screen up to 1440px wide the column is narrower than that, so rows stack as
+ * they do on a phone instead of squeezing the control to a sliver. Nothing
+ * changes with Trax closed.
+ */
+export const SETTINGS_ROW_STACKS_BESIDE_TRAX =
+  "max-[1440px]:[html[data-trax-panel=open]_&]:flex max-[1440px]:[html[data-trax-panel=open]_&]:items-stretch";
 
 export function SettingsPageHeader({
   title,
@@ -104,7 +185,14 @@ export function useSettingsPageSave(): boolean {
 /**
  * The page's Reset and Save changes. The last child of the page wrapper: where
  * the page is short it sits at the end, where it scrolls it floats 16px above
- * the bottom of the window. Both buttons wait for a genuine change.
+ * the bottom of the window. Both buttons wait for a genuine change. It is as
+ * wide as the page column, so a column carrying `SETTINGS_COLUMN_BESIDE_TRAX`
+ * keeps it clear of the open Trax panel.
+ *
+ * A refused save that names its field (`settingsSaveIssue`) also takes the
+ * operator there — see `focusSettingsSaveIssue` below. That lives here rather
+ * than in each page because every v2 settings page reports its refusals
+ * through this one `error`.
  */
 export function SettingsStickySaveBar({
   dirty,
@@ -123,6 +211,13 @@ export function SettingsStickySaveBar({
   className?: string;
 }) {
   const status = saving ? "saving" : error ? "error" : dirty ? "dirty" : "idle";
+  // Each refusal is a new error object, so two refusals for the same field
+  // still move the view. Does nothing when the failure names no field (a write
+  // that was refused by the server), or while the leave dialog holds the
+  // message instead (the page passes null then).
+  useEffect(() => {
+    focusSettingsSaveIssue(error);
+  }, [error]);
   return (
     <div
       data-settings-save-bar=""
@@ -161,7 +256,7 @@ export function SettingsStickySaveBar({
 /* -------------------------------------------------------------------------- */
 
 /**
- * One titled part of a page that holds several (General). The id is
+ * One titled part of a page that holds several (Tax and deposit). The id is
  * `settings-<anchor>`, the target of a deep link; `scroll-mt-24` keeps its
  * title clear of the 64px sticky top bar when it is scrolled to. `action` sits
  * beside the title (a section's own "View only" on a partly editable page).
@@ -238,6 +333,71 @@ export function useScrollToSection(targetId: string | null, ready: boolean) {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Where a refused save takes the operator                                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A refused save that names the field to fix.
+ *
+ * A v2 settings page is one long column of panels, so the reason a save was
+ * refused ("Enter your pickup address") routinely belongs to a field several
+ * screens from the save bar reporting it. A section throws this instead of a
+ * plain Error and the save bar takes the operator to that field. The message is
+ * untouched, so the bar's summary line, the leave dialog and the toast read
+ * exactly as they did.
+ */
+const ISSUE_FIELD_KEY = "settingsIssueField";
+
+export function settingsSaveIssue(message: string, field: string): Error {
+  return Object.assign(new Error(message), { [ISSUE_FIELD_KEY]: field });
+}
+
+/** The `id` of the field a refused save named, or null for any other failure. */
+export function settingsSaveIssueField(error: unknown): string | null {
+  if (!error || typeof error !== "object") return null;
+  const field = (error as Record<string, unknown>)[ISSUE_FIELD_KEY];
+  return typeof field === "string" && field ? field : null;
+}
+
+/** Frames to keep looking for the field, for a row that renders with the note. */
+export const SETTINGS_FOCUS_MAX_FRAMES = 30;
+
+/**
+ * Take the operator to the field a refused save named: focus it, then bring it
+ * into view. Focus first with `preventScroll` and scroll once afterwards, so
+ * the browser's own jump cannot land the field under the 64px sticky top bar.
+ * Instant rather than smooth where the operator has asked for less motion.
+ * Returns whether the error named a field at all.
+ */
+export function focusSettingsSaveIssue(error: unknown): boolean {
+  const field = settingsSaveIssueField(error);
+  if (!field || typeof document === "undefined") return false;
+  let frames = 0;
+  const attempt = () => {
+    const target = document.getElementById(field);
+    if (target) {
+      target.focus?.({ preventScroll: true });
+      target.scrollIntoView?.({ behavior: settingsScrollBehavior(), block: "center" });
+      return;
+    }
+    frames += 1;
+    if (frames < SETTINGS_FOCUS_MAX_FRAMES && typeof window !== "undefined") {
+      window.requestAnimationFrame(attempt);
+    }
+  };
+  attempt();
+  return true;
+}
+
+function settingsScrollBehavior(): ScrollBehavior {
+  const reduced =
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  return reduced ? "auto" : "smooth";
+}
+
+/* -------------------------------------------------------------------------- */
 /* Panels and rows                                                             */
 /* -------------------------------------------------------------------------- */
 
@@ -280,9 +440,34 @@ export function SettingsPanel({
 }
 
 /**
+ * Where a row's control sits: "start" (right after the 420px label column,
+ * the default) or "end" (at the far end of the row, the label and its help
+ * taking the rest). A page sets it once for all its rows with
+ * `SettingsRowAlignProvider`; a row's own `align` wins.
+ */
+export type SettingsRowAlign = "start" | "end";
+
+const SettingsRowAlignContext = createContext<SettingsRowAlign>("start");
+
+export function SettingsRowAlignProvider({ align, children }: { align: SettingsRowAlign; children: ReactNode }) {
+  return <SettingsRowAlignContext.Provider value={align}>{children}</SettingsRowAlignContext.Provider>;
+}
+
+/** Row grid when the control sits at the end: the label takes the rest, capped so help text stays readable. */
+const ROW_GRID_END = "flex flex-col gap-3 md:grid md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:gap-x-10";
+const ROW_LABEL_END = "min-w-0 md:max-w-2xl";
+const ROW_CONTROLS_END = "flex min-w-0 flex-wrap items-center justify-start gap-2 md:justify-end";
+
+/**
  * One setting: a left-aligned grid. The label column is 420px and the control
  * starts right after it, so it never drifts to the far edge of a wide screen.
- * The whole row stacks on a phone.
+ * The whole row stacks on a phone, and beside an open Trax panel on a screen
+ * up to 1440px wide (`SETTINGS_ROW_STACKS_BESIDE_TRAX`). With `align="end"`
+ * (or inside a `SettingsRowAlignProvider align="end"`) the control sits at the
+ * end of the row instead; the DOM is the same two columns either way. Only the
+ * default layout takes the Trax stacking rule: it is the fixed 420px label
+ * column that squeezes the control beside the panel, and an "end" row's label
+ * column is elastic, so it narrows on its own without the control losing room.
  */
 export function SettingsRow({
   label,
@@ -290,6 +475,7 @@ export function SettingsRow({
   htmlFor,
   children,
   note,
+  align,
   className,
 }: {
   label: ReactNode;
@@ -298,12 +484,22 @@ export function SettingsRow({
   children?: ReactNode;
   /** A warning or consequence that belongs to this row, shown under it. */
   note?: ReactNode;
+  /** Where the control sits. Defaults to the nearest `SettingsRowAlignProvider`, else "start". */
+  align?: SettingsRowAlign;
   className?: string;
 }) {
+  const inherited = useContext(SettingsRowAlignContext);
+  const end = (align ?? inherited) === "end";
   return (
     <div className={cn("px-5 py-4", className)}>
-      <div className="flex flex-col gap-3 md:grid md:grid-cols-[minmax(0,420px)_minmax(0,1fr)] md:items-center md:gap-x-10">
-        <div className="min-w-0">
+      <div
+        className={
+          end
+            ? ROW_GRID_END
+            : `flex flex-col gap-3 md:grid md:grid-cols-[minmax(0,420px)_minmax(0,1fr)] md:items-center md:gap-x-10 ${SETTINGS_ROW_STACKS_BESIDE_TRAX}`
+        }
+      >
+        <div className={end ? ROW_LABEL_END : "min-w-0"}>
           {htmlFor ? (
             <label htmlFor={htmlFor} className="text-sm font-medium text-foreground">
               {label}
@@ -316,11 +512,100 @@ export function SettingsRow({
           )}
         </div>
         {children && (
-          <div className="flex min-w-0 flex-wrap items-center justify-start gap-2">{children}</div>
+          <div className={end ? ROW_CONTROLS_END : "flex min-w-0 flex-wrap items-center justify-start gap-2"}>{children}</div>
         )}
       </div>
       {note && <div className="mt-1.5 text-[13px] leading-snug">{note}</div>}
     </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Tabs inside a page                                                          */
+/* -------------------------------------------------------------------------- */
+
+export interface SettingsTabItem {
+  value: string;
+  label: string;
+}
+
+/**
+ * The strip: no track, pills side by side, wrapping onto a second line on a
+ * narrow phone (a scrolling strip would clip each pill's focus ring).
+ */
+export const SETTINGS_TAB_LIST =
+  "h-auto max-w-full flex-wrap justify-start gap-1 bg-transparent p-0 group-data-[orientation=horizontal]/tabs:h-auto";
+
+/**
+ * One pill. The selected one is the brand tint with brand text (lightened in
+ * dark mode, where the deep brand colour is too dark to read); the others are
+ * muted and take the v2 hover pair. Overrides the ui-v2 trigger's white
+ * "raised" look, which is for segmented controls, not page tabs.
+ */
+export const SETTINGS_TAB_TRIGGER =
+  "h-8 flex-none px-3 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-foreground dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] data-[state=active]:bg-primary/10 data-[state=active]:text-primary dark:data-[state=active]:bg-primary/10 dark:data-[state=active]:text-[hsl(var(--v2-link,var(--primary)))]";
+
+/**
+ * Tabs that split one settings page. `value` and `onValueChange` belong to the
+ * page, so it can keep the open tab in the URL. Put one `SettingsTabPanel` per
+ * tab inside.
+ */
+export function SettingsTabs({
+  label,
+  tabs,
+  value,
+  onValueChange,
+  children,
+  className,
+}: {
+  /** Names the tab strip for screen readers ("General"). */
+  label: string;
+  tabs: readonly SettingsTabItem[];
+  value: string;
+  onValueChange: (value: string) => void;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <Tabs value={value} onValueChange={onValueChange} className={cn("gap-4", className)}>
+      <TabsList aria-label={label} className={SETTINGS_TAB_LIST}>
+        {tabs.map((tab) => (
+          <TabsTrigger key={tab.value} value={tab.value} className={SETTINGS_TAB_TRIGGER}>
+            {tab.label}
+          </TabsTrigger>
+        ))}
+      </TabsList>
+      {/* A fragment: Radix's children type comes from a second copy of the React types. */}
+      <>{children}</>
+    </Tabs>
+  );
+}
+
+/**
+ * One tab's content. Stays mounted while another tab is open (hidden, not
+ * unmounted), so its unsaved edits and the save it registered with the page
+ * survive a tab switch.
+ */
+export function SettingsTabPanel({
+  value,
+  children,
+  className,
+}: {
+  value: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <TabsContent
+      value={value}
+      forceMount
+      className={cn(
+        "rounded-xl focus-visible:ring-3 focus-visible:ring-ring/30 data-[state=inactive]:hidden",
+        className,
+      )}
+    >
+      <>{children}</>
+    </TabsContent>
   );
 }
 

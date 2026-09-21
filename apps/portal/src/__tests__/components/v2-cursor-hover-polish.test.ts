@@ -917,8 +917,11 @@ describe('Sep 17 review: v2 row menus, chart picker and overview link follow the
     expect(src).toContain('} from "@/components/ui-v2/dropdown-menu";');
     expect(src).not.toContain('@/components/ui/dropdown-menu');
     // ui-v2 content is trigger-wide (min 12rem); `w-auto` lets a long label keep one line.
-    expect(src).not.toMatch(/<DropdownMenuContent align="end">/);
-    expect(src).toMatch(/<DropdownMenuContent align="end" className="w-auto">/);
+    // The menus on the light, text-heavy screens (Settings' Extras and Promo
+    // codes tables, the Team table) also carry `tone="surface"`, so the tone is
+    // optional here — see components/ui-v2/dropdown-menu.tsx.
+    expect(src).not.toMatch(/<DropdownMenuContent(?: tone="surface")? align="end">/);
+    expect(src).toMatch(/<DropdownMenuContent(?: tone="surface")? align="end" className="w-auto">/);
     // ui-v2 items already space the icon (gap-2.5).
     expect(src).not.toMatch(/\bmr-2\b/);
   });

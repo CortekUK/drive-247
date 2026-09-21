@@ -2,9 +2,10 @@
 
 /**
  * v2 (northwind): the "All Promo Codes" table on Settings → Promo Codes, built
- * from the rentals list's kit (`components/shared/list-table-v2`). No pager:
- * rows arrive 25 at a time as the table scrolls, with one line under the card
- * saying how much is shown.
+ * from the rentals list's kit (`components/shared/list-table-v2`) on its flat
+ * settings surface (`surface="settings"`). No pager: rows arrive 25 at a time
+ * as the table scrolls, with one line under the table saying how much is shown
+ * while more are to come (none once every code is on screen).
  *
  * Rows open nothing. There is no promo code record route, and the v1 row opens
  * nothing either. Its three controls are kept with the Settings page's own
@@ -147,7 +148,9 @@ function PromoRowMenu<T extends PromoCodeRowV2>({ promo, onEdit, onDelete }: Pro
           <MoreHorizontal className="h-4 w-4" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-auto">
+      {/* Surface tone: this row menu sits on a light Settings table, where the
+          default translucent near-black panel reads as an OS menu. */}
+      <DropdownMenuContent tone="surface" align="end" className="w-auto">
         <DropdownMenuItem onClick={() => onEdit(promo)}>
           <FilePenLine className="h-4 w-4" />
           Edit
@@ -295,7 +298,7 @@ export function PromoCodesTableV2<T extends PromoCodeRowV2>({
         {/* One provider for the whole table: a tooltip per row would mount a
             provider per row. `delayDuration` matches Custom pricing's. */}
         <TooltipProvider delayDuration={300}>
-          <ListTable rows={promoRows} minWidth="min-w-[880px]">
+          <ListTable rows={promoRows} minWidth="min-w-[880px]" surface="settings">
             <ListTableHeader>
               {/* Widths measured at the 944px card with Manrope. Code holds a
                   16-character code and its copy mark; Value "AED 12,500.00"; each
@@ -303,21 +306,26 @@ export function PromoCodesTableV2<T extends PromoCodeRowV2>({
                   which are wider than any value under them; the last column holds
                   Edit and Delete. Name takes the rest and truncates with its full
                   text in a tooltip. */}
-              <ListHead className="w-[16%]">Name</ListHead>
+              <ListHead className="w-[16%] text-left">Name</ListHead>
               <ListHead className="w-[17%]">Code</ListHead>
               <ListHead className="w-[12.5%]">Value</ListHead>
               <ListHead className="w-[11%]">Created</ListHead>
               <ListHead className="w-[12.5%]">Expires</ListHead>
               <ListHead className="w-[10%]">Max users</ListHead>
               <ListHead className="w-[10.5%]">Auto-apply</ListHead>
-              <ListHead className="w-[10.5%] text-right">
-                <span className="sr-only">Actions</span>
-              </ListHead>
+              {/* The actions column only for someone who can use it: for a
+                  viewer it was a blank column with nothing under its blank
+                  heading. */}
+              {canEdit && (
+                <ListHead className="w-[10.5%] text-right">
+                  <span className="sr-only">Actions</span>
+                </ListHead>
+              )}
             </ListTableHeader>
             <ListBody>
               {promoRows.visible.map((promo) => (
                 <ListRow key={promo.id}>
-                  <ListCell>
+                  <ListCell className="text-left">
                     <span className={`block truncate ${LIST_CLASSES.identifier}`} title={promo.name}>
                       {promo.name}
                     </span>
@@ -360,16 +368,18 @@ export function PromoCodesTableV2<T extends PromoCodeRowV2>({
                     )}
                   </ListCell>
                   {/* Edit and Delete, v1's two buttons, in the row. Clicks stop here. */}
-                  <ListCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                    {canEdit && <PromoRowActions promo={promo} onEdit={onEdit} onDelete={onDelete} />}
-                  </ListCell>
+                  {canEdit && (
+                    <ListCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                      <PromoRowActions promo={promo} onEdit={onEdit} onDelete={onDelete} />
+                    </ListCell>
+                  )}
                 </ListRow>
               ))}
             </ListBody>
           </ListTable>
         </TooltipProvider>
       </div>
-      <ListFooter rows={promoRows} one="promo code" many="promo codes" />
+      <ListFooter rows={promoRows} one="promo code" many="promo codes" hideWhenAllShown />
     </>
   );
 }

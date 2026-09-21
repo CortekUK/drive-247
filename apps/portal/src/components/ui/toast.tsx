@@ -29,6 +29,17 @@ const toastVariants = cva(
       variant: {
         default: "border-border bg-card text-card-foreground",
         destructive: "destructive group border-destructive bg-destructive text-destructive-foreground",
+        // v2 (northwind) only, chosen by the Toaster for what v1 sends as
+        // `destructive`: the same faded red as the inline field notes and the
+        // save bar, at the v2 radius. A refused save is said, not shouted.
+        //
+        // No `destructive` marker class on purpose — it is what drives the
+        // close button's red-300 ink, which is for white-on-solid-red and
+        // disappears on this tint. Without it the close button keeps its
+        // readable foreground ink. `.v2-theme` lays the tint over the card
+        // colour so the ink reads the same whatever the toast floats over
+        // (v2-theme.css, "The refused-save toast").
+        v2Destructive: "v2-toast-danger rounded-2xl border-transparent bg-destructive/10 text-destructive panel-ink-danger",
       },
     },
     defaultVariants: {

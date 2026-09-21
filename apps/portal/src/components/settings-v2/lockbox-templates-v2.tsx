@@ -67,7 +67,7 @@ import { IconActionButton } from "./template-editor-shell-v2";
 import { renderLockboxSmsExample } from "./business-rules-logic";
 import { useRegisterLeaveSave } from "./business-section-save";
 import type { RegisterSectionSave } from "./pricing-money-parts";
-import { SETTINGS_SECTION_TITLE, useSettingsPageSave } from "./settings-kit";
+import { SETTINGS_SECTION_TITLE, settingsSaveIssue, useSettingsPageSave } from "./settings-kit";
 
 export type LockboxChannel = "email" | "sms";
 
@@ -236,9 +236,9 @@ export function LockboxTemplatesSectionV2({
 
   const heading = (
     <div className="flex flex-wrap items-start justify-between gap-3">
-      <div className="min-w-0 space-y-1">
+      <div className="min-w-0">
         <h2 className={SETTINGS_SECTION_TITLE}>Lockbox messages</h2>
-        <p className="text-sm text-muted-foreground">
+        <p className="mt-0.5 text-sm text-muted-foreground">
           {withSms ? "What customers receive with their lockbox code." : "The email customers receive with their lockbox code."}
         </p>
       </div>
@@ -255,7 +255,7 @@ export function LockboxTemplatesSectionV2({
 
   const wrap = (body: ReactNode) => (
     <TooltipProvider>
-      <section className="space-y-4" data-settings-section="lockbox-messages">
+      <section className="space-y-3" data-settings-section="lockbox-messages">
         {heading}
         {body}
       </section>
@@ -277,10 +277,10 @@ export function LockboxTemplatesSectionV2({
         title="Lockbox handover is off"
         body={
           keyHandoverHref
-            ? `Turn on lockbox handover in General, under Key handover, and save. Then you can edit ${messages}.`
+            ? `Turn on lockbox handover on the Lockbox page and save. Then you can edit ${messages}.`
             : `Turn on lockbox handover above and save. Then you can edit ${messages}.`
         }
-        action={keyHandoverHref ? { label: "Open Key handover", href: keyHandoverHref } : undefined}
+        action={keyHandoverHref ? { label: "Open Lockbox", href: keyHandoverHref } : undefined}
       />,
     );
   }
@@ -371,7 +371,9 @@ export function LockboxTemplatesSectionV2({
       throw new Error("Couldn't save the lockbox instructions.");
     }
     if (emailDirty) {
-      if (emailIssues.subjectError || emailIssues.bodyError) throw new Error(emailIssues.subjectError ?? emailIssues.bodyError ?? "");
+      // Names the box, so the page's save bar takes the operator to it.
+      if (emailIssues.subjectError) throw settingsSaveIssue(emailIssues.subjectError, "v2-lockbox-email-subject");
+      if (emailIssues.bodyError) throw settingsSaveIssue(emailIssues.bodyError, "v2-lockbox-email-body");
       if (emailIssues.missingCode) {
         const refusal = missingCodeRefusal("email", emailArmed, () => setEmailArmed(true));
         if (refusal) throw refusal;
@@ -382,7 +384,7 @@ export function LockboxTemplatesSectionV2({
       setEmailArmed(false);
     }
     if (smsDirty) {
-      if (smsIssues.bodyError) throw new Error(smsIssues.bodyError);
+      if (smsIssues.bodyError) throw settingsSaveIssue(smsIssues.bodyError, "v2-lockbox-sms");
       if (smsIssues.missingCode) {
         const refusal = missingCodeRefusal("text message", smsArmed, () => setSmsArmed(true));
         if (refusal) throw refusal;
@@ -440,7 +442,7 @@ export function LockboxTemplatesSectionV2({
     );
 
   const missingCodeCopy = (armed: boolean) => (
-    <p className="text-xs text-amber-700 dark:text-amber-400" role="alert">
+    <p className="text-xs panel-ink-warn" role="alert">
       This message doesn&apos;t include <code className="font-mono">{LOCKBOX_CODE_VARIABLE}</code>, so the customer won&apos;t get
       the code to open the box.{armed ? (pageSave ? " Press Save changes again to keep it anyway." : " Press Save again to keep it anyway.") : ""}
     </p>
@@ -578,7 +580,7 @@ export function LockboxTemplatesSectionV2({
             {smsIssues.bodyError && <p className="text-xs text-destructive">{smsIssues.bodyError}</p>}
             {smsIssues.missingCode && missingCodeCopy(smsArmed)}
             {!smsReady && (
-              <p className="text-xs text-amber-700 dark:text-amber-400">
+              <p className="text-xs panel-ink-warn">
                 Text messages aren&apos;t set up, so this message isn&apos;t sent yet.{" "}
                 <Link href={integrationsHref} className="pointer-events-auto font-medium underline underline-offset-4">
                   Connect Twilio
@@ -586,7 +588,7 @@ export function LockboxTemplatesSectionV2({
               </p>
             )}
             {segments > 1 ? (
-              <p className="text-xs text-amber-700 dark:text-amber-400">
+              <p className="text-xs panel-ink-warn">
                 Likely sent as {segments} texts: with the details filled in it comes to about {smsLength} characters, and one
                 text holds {SMS_SINGLE_LIMIT}.
               </p>

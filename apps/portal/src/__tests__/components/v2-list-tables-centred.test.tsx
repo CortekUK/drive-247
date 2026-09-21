@@ -24,6 +24,7 @@ import { BlogCategoriesTableV2 } from '@/components/cms-v2/blog-categories-table
 import { CreditTransactionsTableV2 } from '@/components/credits-v2/credit-transactions-table-v2';
 import { BlockedCustomersTableV2 } from '@/components/customers-v2/blocked-customers-tables-v2';
 import { PlatesTableV2 } from '@/components/fleet-v2/plates-table-v2';
+import { ExtrasTableV2 } from '@/components/settings-v2/extras-table-v2';
 import { PromoCodesTableV2 } from '@/components/settings-v2/promo-codes-table-v2';
 
 afterEach(cleanup);
@@ -189,6 +190,81 @@ describe('promo codes: the code button centres in the table and stays left on th
   });
 });
 
+describe('extras: the name column reads left, everything else still centres', () => {
+  /**
+   * Sep 20 2026: the Extra name column was deliberately turned back to the left
+   * ("a list of names", matching Locations), so the Sep 17 "every cell centres"
+   * rule now has one documented exception. This pins BOTH halves — the name
+   * reads left, and no other heading or cell drifted with it — instead of the
+   * source-text needle that used to stand here, which only said "centred".
+   */
+  const extra = {
+    id: 'e1',
+    tenant_id: 't1',
+    name: 'Child seat',
+    description: 'Group 1 seat',
+    price: 15,
+    pricing_type: 'per_day',
+    extra_type: 'countable',
+    stock_quantity: 4,
+    is_active: true,
+    sort_order: 1,
+    created_at: '2026-09-01T10:00:00Z',
+    image_urls: [],
+  } as any;
+
+  it('left-aligns only the Extra heading and its cell', () => {
+    const { container } = render(
+      <ExtrasTableV2
+        extras={[extra]}
+        resetKey="t1"
+        currencyCode="USD"
+        canEdit
+        isLowStock={() => false}
+        onEdit={noop}
+        onUpdateStock={noop}
+        onToggleActive={noop}
+        onDelete={noop}
+      />,
+    );
+
+    const heads = headings(container);
+    expect(heads.map((h) => h.textContent)).toEqual([
+      'Extra',
+      'Description',
+      'Price',
+      'Pricing',
+      'Type',
+      'Stock',
+      'Status',
+      'Actions',
+    ]);
+    // The name column, and only it, reads left.
+    expect(classes(heads[0])).toContain('text-left');
+    expect(classes(heads[0])).not.toContain('text-center');
+    heads.slice(1, 7).forEach((h) => {
+      expect(classes(h)).toContain('text-center');
+      expect(classes(h)).not.toContain('text-left');
+    });
+    // The trailing sr-only actions column stays right, as everywhere else.
+    expect(classes(heads[7])).toContain('text-right');
+
+    const cells = Array.from(container.querySelectorAll('tbody tr:first-child td'));
+    expect(cells).toHaveLength(8);
+    expect(cells[0].textContent).toContain('Child seat');
+    expect(classes(cells[0])).toContain('text-left');
+    expect(classes(cells[0])).not.toContain('text-center');
+    // The name's own flex row has to start too: a centred flex row ignores text-left.
+    const nameRow = cells[0].querySelector('div')!;
+    expect(classes(nameRow)).toContain('justify-start');
+    expect(classes(nameRow)).not.toContain('justify-center');
+    cells.slice(1, 7).forEach((td) => {
+      expect(classes(td)).toContain('text-center');
+      expect(classes(td)).not.toContain('text-left');
+    });
+  });
+});
+
 describe('blocked customers: the name button is centred as a box', () => {
   it('uses mx-auto and text-center', () => {
     const customer = {
@@ -249,10 +325,13 @@ describe('the other v2 tables: content that does not inherit text-align is centr
 
   it.each([
     ['components/cms-v2/blog-posts-table-v2.tsx', ['<div className="flex min-w-0 items-center justify-center gap-1.5">', '${LIST_CLASSES.identifier} truncate text-center hover:underline']],
-    ['components/admin-v2/users-table-v2.tsx', ['className="flex items-center justify-center gap-1 text-[11px] font-medium text-red-600 dark:text-red-400"', '<div className="flex h-5 items-center justify-center gap-2">']],
+    // Team (Settings walkthrough, Sep 2026): the status stack (Active plus its
+    // flag lines) is a flex column centred on its cross axis, and the row menu
+    // is a block button centred under the visible Actions heading. The rendered
+    // check is in users-team-lane-v2.test.tsx.
+    ['components/admin-v2/users-table-v2.tsx', ['<UserStatus user={user} className="items-center" />', '<UserRowMenu user={user} {...actions} className="mx-auto flex" />']],
     ['components/admin-v2/audit-logs-table-v2.tsx', ['<div className="flex h-5 min-w-0 items-center justify-center gap-2">']],
     ['components/fleet-v2/pending-bookings-table-v2.tsx', ['<span className="flex max-w-full items-center justify-center gap-1.5" title={`${reg} • ${makeModel}`}>']],
-    ['components/settings-v2/extras-table-v2.tsx', ['<div className="flex min-w-0 items-center justify-center gap-2.5">']],
     [
       'components/insurance-v2/insurance-policies-table-v2.tsx',
       [

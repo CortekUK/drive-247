@@ -15,9 +15,14 @@
  */
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Loader2, Search } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import { Input } from "@/components/ui-v2/input";
+// Every SelectContent below is `tone="surface"`: Settings is a light,
+// text-heavy screen, and the dropdown's default translucent near-black panel
+// reads there as an OS menu rather than as part of the page. The surface tone
+// uses the page's own popover, border and highlight tokens — see
+// components/ui-v2/select.tsx.
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui-v2/select";
 import { Skeleton } from "@/components/ui-v2/skeleton";
 import {
@@ -30,7 +35,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui-v2/alert-dialog";
-import { SettingsPanel, SettingsRow, useSettingsPageSave } from "@/components/settings-v2/settings-kit";
+import {
+  SettingsPanel,
+  SettingsRow,
+  SettingsRowAlignProvider,
+  useSettingsPageSave,
+} from "@/components/settings-v2/settings-kit";
 import type { RegisterSectionSave } from "@/components/settings-v2/pricing-money-parts";
 import {
   SettingsLoadError,
@@ -46,6 +56,18 @@ import {
 import type { LocationSettings, PickupLocation } from "@/hooks/use-pickup-locations";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+// Locations: the delivery / return locations table.
+import { Table } from "@/components/ui-v2/table";
+import {
+  LIST_CLASSES,
+  LIST_SETTINGS_SURFACE,
+  ListBody,
+  ListCell,
+  ListHead,
+  ListRow,
+  ListStatusText,
+  ListTableHeader,
+} from "@/components/shared/list-table-v2";
 
 /* -------------------------------------------------------------------------- */
 /* Shared                                                                      */
@@ -102,6 +124,12 @@ export function useImageLoadFailed(src: string | null | undefined): boolean {
  * Loading placeholder with the exact frame of a `SettingsPanel` of `SettingsRow`s
  * (bordered, a title bar when `title`, one ~64px row per setting), so the page
  * does not jump when the real panel replaces it.
+ *
+ * Its rows mirror an `align="end"` row — an elastic label column and the
+ * control at the end — because every panel it stands in for (regional, the
+ * location options, optional modules) lays its rows out that way. With the
+ * 420px label column it used, each control box jumped from the middle of the
+ * row to its end the moment the real panel arrived.
  */
 export function SettingsPanelSkeleton({
   rows = 2,
@@ -139,9 +167,9 @@ export function SettingsPanelSkeleton({
         {Array.from({ length: Math.max(1, rows) }).map((_, i) => (
           <div
             key={i}
-            className="flex flex-col gap-3 px-5 py-4 md:grid md:grid-cols-[minmax(0,420px)_minmax(0,1fr)] md:items-center md:gap-x-10"
+            className="flex flex-col gap-3 px-5 py-4 md:grid md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:gap-x-10"
           >
-            <div className="min-w-0 space-y-1.5">
+            <div className="min-w-0 space-y-1.5 md:max-w-2xl">
               <Skeleton className="h-3.5 w-24 rounded-full" />
               <Skeleton className="h-3 w-56 max-w-full rounded-full" />
               {descriptionLines === 2 && <Skeleton className="h-3 w-40 max-w-full rounded-full" />}
@@ -169,6 +197,29 @@ export function isSupportedCurrency(code: string | null | undefined): boolean {
   return !!code && (SUPPORTED_CURRENCIES as readonly string[]).includes(code);
 }
 
+/** How each currency reads in the picker: the plain name and its symbol. */
+export const CURRENCY_OPTION_LABELS: Readonly<Record<(typeof SUPPORTED_CURRENCIES)[number], string>> = {
+  USD: "US dollar ($)",
+  GBP: "British pound (£)",
+  EUR: "Euro (€)",
+};
+
+/** The one currency a tenant can switch TO for now (team lead review, Sep 19 2026). */
+export const SELECTABLE_CURRENCY = "USD";
+
+/**
+ * Can this currency be picked? US dollar always; any other only when it is the
+ * tenant's SAVED currency, so the picker never forces a saved GBP or EUR (or a
+ * currency the list does not offer) off the page, and a tenant who tried US
+ * dollar can pick their own currency again. Every other option shows, disabled.
+ */
+export function isCurrencySelectable(code: string, savedCurrency: string | null | undefined): boolean {
+  return code === SELECTABLE_CURRENCY || (!!savedCurrency && code === savedCurrency);
+}
+
+/** The regional pickers share one width, so their boxes line up at the end of the rows. */
+const REGIONAL_SELECT_WIDTH = "w-44 max-w-full";
+
 /** `useOrgSettings` shows a hard-coded USD / miles placeholder until the edge function answers. */
 export function hasRealOrgSettings(settings: { org_id?: string } | null | undefined): boolean {
   return !!settings && settings.org_id !== "placeholder";
@@ -190,18 +241,43 @@ export interface GeneralSaveValues {
   terms_version: string;
 }
 
-export interface GeneralSaveDeps {
-  tenantId: string | null | undefined;
-  values: GeneralSaveValues;
-  policyVersionChanged: boolean;
-  /** `tenants` update ending in `.select('id')`, so a zero-row (RLS) write is not read as success. */
-  writeTenant: (patch: Record<string, unknown>) => PromiseLike<{ data: unknown[] | null; error: unknown }>;
-  /** The org-settings edge function. Its hook toasts its own failure. */
-  writeOrg: (patch: { currency_code: string; distance_unit: "km" | "miles" }) => Promise<unknown>;
+/** The two regional values the v2 General page shows and saves. */
+export type RegionalValues = Pick<GeneralSaveValues, "currency_code" | "distance_unit">;
+
+/**
+ * What the v2 Regional panel shows as saved: the tenant's own row first
+ * (`tenants.currency_code` / `tenants.distance_unit`, what Locations, rentals
+ * and every other screen read), then the org settings, then USD / miles.
+ *
+ * The org settings come from the `settings` edge function, which reads ONE
+ * `org_settings` row with no tenant filter. Read first, as v1 does, a tenant
+ * who picked Kilometres saw Kilometres here while every other screen said
+ * miles, and General never looked unsaved, so the tenant row could not be
+ * fixed from this page. v1 keeps its own order.
+ */
+export function savedRegionalV2(
+  tenant: { currency_code?: string | null; distance_unit?: string | null } | null | undefined,
+  settings: { currency_code?: string | null; distance_unit?: string | null } | null | undefined,
+): RegionalValues {
+  return {
+    currency_code: tenant?.currency_code || settings?.currency_code || "USD",
+    distance_unit: ((tenant?.distance_unit || settings?.distance_unit) as RegionalValues["distance_unit"]) || "miles",
+  };
 }
 
-export const PARTIAL_GENERAL_SAVE_MESSAGE =
-  "Only part of this change was saved, so some screens may still show the old setting. Retry to finish saving it.";
+/**
+ * Cached reads of the `tenants` row that carry its currency or distance unit,
+ * besides TenantContext (which the save refetches itself). Invalidated after a
+ * v2 General save so nothing keeps showing the old value.
+ */
+export const TENANT_REGIONAL_QUERY_KEYS: readonly (readonly string[])[] = [["rental-settings"], ["tenant-provider-choice"]];
+
+export interface GeneralSaveDeps {
+  tenantId: string | null | undefined;
+  values: RegionalValues;
+  /** `tenants` update ending in `.select('id')`, so a zero-row (RLS) write is not read as success. */
+  writeTenant: (patch: RegionalValues) => PromiseLike<{ data: unknown[] | null; error: unknown }>;
+}
 
 /** Marks an error whose toast has already been shown by a hook. */
 export function isAlreadyToasted(error: unknown): boolean {
@@ -209,39 +285,25 @@ export function isAlreadyToasted(error: unknown): boolean {
 }
 
 /**
- * The v2 General save. The `tenants` row (what TenantContext and every screen
- * read) is written FIRST and checked, so a failed or zero-row write throws
- * before anything reports success. v1 wrote the org settings first, whose hook
- * toasts "Settings Updated", and then only logged a failed tenants write.
+ * The v2 General save: the tenant's own row, and only its currency and
+ * distance unit. Checked, so a refused or zero-row write throws before
+ * anything reports success (supabase-js reports it in `error`, never throws).
+ *
+ * v2 never calls the `settings` edge function for these two: it updates ONE
+ * `org_settings` row with no tenant filter, so a save there could change what
+ * other tenants see. v1 still writes both, org settings first.
  */
-export async function saveGeneralSettingsV2({
-  tenantId,
-  values,
-  policyVersionChanged,
-  writeTenant,
-  writeOrg,
-}: GeneralSaveDeps): Promise<void> {
+export async function saveGeneralSettingsV2({ tenantId, values, writeTenant }: GeneralSaveDeps): Promise<void> {
   if (!tenantId) {
     throw new Error("Your business details haven't loaded yet. Reload the page and try again.");
   }
   const { data, error } = await writeTenant({
-    distance_unit: values.distance_unit,
     currency_code: values.currency_code,
-    privacy_policy_version: values.privacy_policy_version,
-    terms_version: values.terms_version,
-    ...(policyVersionChanged ? { policies_accepted_at: null } : {}),
+    distance_unit: values.distance_unit,
   });
   if (error) throw error;
   if (!data || data.length === 0) {
     throw new Error("You don't have permission to change these settings.");
-  }
-  try {
-    await writeOrg({ currency_code: values.currency_code, distance_unit: values.distance_unit });
-  } catch (orgError) {
-    // The tenants row is already written, so say it was a partial save: a Retry
-    // writes both again (the tenants write is idempotent) and finishes the job.
-    // The org hook has toasted the transport failure itself.
-    throw Object.assign(new Error(PARTIAL_GENERAL_SAVE_MESSAGE), { alreadyToasted: true, cause: orgError });
   }
 }
 
@@ -386,81 +448,92 @@ export function BusinessRegionalPanel({
 
   return (
     <>
-      <SettingsPanel
-        footer={
-          canEdit && pageSave ? (
-            status === "error" ? <SettingsSaveState status="error" error={saveError} /> : null
-          ) : canEdit ? (
-            <>
-              <SettingsSaveState
-                status={status}
-                error={saveError}
-                onRetry={status === "error" ? requestSave : undefined}
-                onDiscard={status === "dirty" ? onDiscard : undefined}
-                className="mr-auto"
-              />
-              <Button size="sm" onClick={requestSave} disabled={saving || !isDirty} className="min-w-[88px]">
-                {saving && <Loader2 className="animate-spin" data-icon="inline-start" />}
-                {saving ? "Saving…" : "Save"}
-              </Button>
-            </>
-          ) : undefined
-        }
-      >
-        <SettingsRow
-          label="Currency"
-          description="The symbol on prices, invoices and reports."
-          htmlFor="v2_currency_code"
-          note={
-            unsupported ? (
-              <p className="text-muted-foreground">
-                Your currency is{" "}
-                <span className="font-medium text-foreground">{form.currency_code || "not set"}</span>. It isn&apos;t
-                one of the options here, so contact support if it needs to change.
-              </p>
-            ) : currencyChanged ? (
-              <p className="text-amber-700 dark:text-amber-400">
-                Changing currency relabels your prices. It doesn&apos;t convert them.
-              </p>
+      <SettingsRowAlignProvider align="end">
+        <SettingsPanel
+          footer={
+            canEdit && pageSave ? (
+              status === "error" ? <SettingsSaveState status="error" error={saveError} /> : null
+            ) : canEdit ? (
+              <>
+                <SettingsSaveState
+                  status={status}
+                  error={saveError}
+                  onRetry={status === "error" ? requestSave : undefined}
+                  onDiscard={status === "dirty" ? onDiscard : undefined}
+                  className="mr-auto"
+                />
+                <Button size="sm" onClick={requestSave} disabled={saving || !isDirty} className="min-w-[88px]">
+                  {saving && <Loader2 className="animate-spin" data-icon="inline-start" />}
+                  {saving ? "Saving…" : "Save"}
+                </Button>
+              </>
             ) : undefined
           }
         >
-          <Select
-            value={form.currency_code}
-            onValueChange={(value) => onFormChange({ currency_code: value })}
-            disabled={!canEdit || saving}
+          {/* Both controls at the end of their row (the panel's align
+              provider), the same width, each menu opening under its own box's
+              right edge. */}
+          <SettingsRow
+            label="Currency"
+            description="The symbol on prices, invoices and reports. Only US dollar can be chosen for now."
+            htmlFor="v2_currency_code"
+            note={
+              unsupported ? (
+                <p className="text-muted-foreground">
+                  Your currency is{" "}
+                  <span className="font-medium text-foreground">{form.currency_code || "not set"}</span>. It stays as it
+                  is unless you pick US dollar. Contact support for any other currency.
+                </p>
+              ) : currencyChanged ? (
+                <p className="panel-ink-warn">
+                  Changing currency relabels your prices. It doesn&apos;t convert them.
+                </p>
+              ) : undefined
+            }
           >
-            <SelectTrigger id="v2_currency_code" className="w-56 max-w-full">
-              <SelectValue placeholder="Choose a currency" />
-            </SelectTrigger>
-            <SelectContent>
-              {unsupported && form.currency_code && (
-                <SelectItem value={form.currency_code} disabled>
-                  {form.currency_code} (current)
-                </SelectItem>
-              )}
-              <SelectItem value="USD">USD - US Dollar ($)</SelectItem>
-              <SelectItem value="GBP">GBP - British Pound (£)</SelectItem>
-              <SelectItem value="EUR">EUR - Euro (€)</SelectItem>
-            </SelectContent>
-          </Select>
-        </SettingsRow>
-        <SettingsRow label="Distance unit" description="Used for mileage and delivery distances." htmlFor="v2_distance_unit">
-          <Select
-            value={form.distance_unit}
-            onValueChange={(value: "km" | "miles") => onFormChange({ distance_unit: value })}
-            disabled={!canEdit || saving}
+            <Select
+              value={form.currency_code}
+              onValueChange={(value) => onFormChange({ currency_code: value })}
+              disabled={!canEdit || saving}
+            >
+              <SelectTrigger id="v2_currency_code" className={REGIONAL_SELECT_WIDTH}>
+                <SelectValue placeholder="Choose a currency" />
+              </SelectTrigger>
+              <SelectContent tone="surface" align="end">
+                {/* A saved currency the list doesn't offer stays shown and can be
+                    picked again after trying US dollar. */}
+                {savedCurrency && !isSupportedCurrency(savedCurrency) && (
+                  <SelectItem value={savedCurrency}>{savedCurrency} (current)</SelectItem>
+                )}
+                {SUPPORTED_CURRENCIES.map((code) => (
+                  <SelectItem key={code} value={code} disabled={!isCurrencySelectable(code, savedCurrency)}>
+                    {CURRENCY_OPTION_LABELS[code]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </SettingsRow>
+          <SettingsRow
+            label="Distance unit"
+            description="Used for mileage and delivery distances."
+            htmlFor="v2_distance_unit"
           >
-            <SelectTrigger id="v2_distance_unit" className="w-56 max-w-full">
-              <SelectValue placeholder="Choose a unit" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="miles">Miles</SelectItem>
-              <SelectItem value="km">Kilometres</SelectItem>
-            </SelectContent>
-          </Select>
-        </SettingsRow>
-      </SettingsPanel>
+            <Select
+              value={form.distance_unit}
+              onValueChange={(value: "km" | "miles") => onFormChange({ distance_unit: value })}
+              disabled={!canEdit || saving}
+            >
+              <SelectTrigger id="v2_distance_unit" className={REGIONAL_SELECT_WIDTH}>
+                <SelectValue placeholder="Choose a unit" />
+              </SelectTrigger>
+              <SelectContent tone="surface" align="end">
+                <SelectItem value="km">Kilometres</SelectItem>
+                <SelectItem value="miles">Miles</SelectItem>
+              </SelectContent>
+            </Select>
+          </SettingsRow>
+        </SettingsPanel>
+      </SettingsRowAlignProvider>
 
       <AlertDialog open={confirmOpen} onOpenChange={onConfirmOpenChange}>
         <AlertDialogContent>
@@ -648,47 +721,82 @@ export interface LocationOptionIssues {
   returnList?: string;
 }
 
-/** The option checks `validateLocationSettingsV2` runs before the area checks. */
+/** The option checks `locationSaveIssueV2` runs before the area checks. */
 export function locationOptionIssues(f: LocationFormState, ctx: LocationSaveContext): LocationOptionIssues {
   const out: LocationOptionIssues = {};
   if (!f.pickupFixedEnabled && !f.pickupMultipleEnabled && !f.pickupAreaEnabled) out.pickupOptions = "Turn on at least one pickup option.";
   if (!f.returnFixedEnabled && !f.returnMultipleEnabled && !f.returnAreaEnabled) out.returnOptions = "Turn on at least one return option.";
   if (f.pickupFixedEnabled && !f.fixedPickupAddress.trim()) out.pickupAddress = "Enter your pickup address.";
   if (f.returnFixedEnabled && !f.sameReturnAddress && !f.fixedReturnAddress.trim()) out.returnAddress = "Enter your return address.";
+  // A location is "active" when Available to customers is on (its Edit dialog).
   if (f.pickupMultipleEnabled && ctx.pickupActiveLocations === 0) {
-    out.pickupList = "Delivery locations is on but none are active. Add or switch on a location, or turn it off.";
+    out.pickupList =
+      "Delivery locations is on but none are available to customers. Add a location or make one available, or turn the option off.";
   }
   if (f.returnMultipleEnabled && ctx.returnActiveLocations === 0) {
-    out.returnList = "Collection locations is on but none are active. Add or switch on a location, or turn it off.";
+    out.returnList =
+      "Return locations is on but none are available to customers. Add a location or make one available, or turn the option off.";
   }
   return out;
 }
 
+/** Which row a refused save belongs to, so the page can take the operator there. */
+export type LocationIssueField =
+  | "pickupOptions"
+  | "returnOptions"
+  | "pickupAddress"
+  | "returnAddress"
+  | "pickupList"
+  | "returnList"
+  | "center"
+  | "pickupRadius"
+  | "returnRadius"
+  /** The fee, the price bands and the maximum: all edited in the price dialog. */
+  | "price";
+
+export interface LocationSaveIssue {
+  message: string;
+  field: LocationIssueField;
+}
+
+/** The option checks in the order they are reported. */
+const OPTION_ISSUE_ORDER = [
+  "pickupOptions",
+  "returnOptions",
+  "pickupAddress",
+  "returnAddress",
+  "pickupList",
+  "returnList",
+] as const;
+
 /**
- * The first reason the form can't be saved, or null. Mirrors the v1 checks and
- * adds the ones v1 let through: a delivery/collection list with nothing active,
- * a zero/negative/blank radius (v1 silently saved 100) and a negative fee.
- * Active-location counts are `null` while the list is loading or failed.
+ * The first reason the form can't be saved AND the row it belongs to, or null.
+ * Mirrors the v1 checks and adds the ones v1 let through: a delivery/collection
+ * list with nothing active, a zero/negative/blank radius (v1 silently saved 100)
+ * and a negative fee. Active-location counts are `null` while the list is
+ * loading or failed.
  */
-export function validateLocationSettingsV2(f: LocationFormState, ctx: LocationSaveContext): string | null {
+export function locationSaveIssueV2(f: LocationFormState, ctx: LocationSaveContext): LocationSaveIssue | null {
   const options = locationOptionIssues(f, ctx);
-  const option =
-    options.pickupOptions ??
-    options.returnOptions ??
-    options.pickupAddress ??
-    options.returnAddress ??
-    options.pickupList ??
-    options.returnList;
-  if (option) return option;
+  const option = OPTION_ISSUE_ORDER.find((key) => options[key]);
+  if (option) return { message: options[option], field: option };
   const area = areaFieldErrors(f, ctx.unitLabel);
   const firstBand = area.bandRows ? Number(Object.keys(area.bandRows)[0]) : null;
   const bandRow =
     firstBand !== null && area.bandRows
       ? `Price band "${bandLabel(f.tiers[firstBand], ctx.unitLabel)}": ${area.bandRows[firstBand]}`
       : undefined;
-  return (
-    area.center ?? area.radius ?? area.returnRadius ?? area.fee ?? area.bands ?? bandRow ?? area.maxDistance ?? null
-  );
+  if (area.center) return { message: area.center, field: "center" };
+  if (area.radius) return { message: area.radius, field: "pickupRadius" };
+  if (area.returnRadius) return { message: area.returnRadius, field: "returnRadius" };
+  const price = area.fee ?? area.bands ?? bandRow ?? area.maxDistance;
+  if (price) return { message: price, field: "price" };
+  return null;
+}
+
+/** The same first reason, as a sentence. */
+export function validateLocationSettingsV2(f: LocationFormState, ctx: LocationSaveContext): string | null {
+  return locationSaveIssueV2(f, ctx)?.message ?? null;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -772,21 +880,56 @@ export interface LocationsListV2Props {
   error: unknown;
   onRetry: () => unknown;
   retrying?: boolean;
-  onAdd: () => void;
-  /** Opens the location's dialog, which holds its fields, on/off and delete. */
-  onOpen: (location: PickupLocation) => void;
+  /** Opens the location's Edit dialog (name, address, fee, Available to customers). */
+  onEdit: (location: PickupLocation) => void;
+  /** Asks to delete it. The page shows the confirm step before anything is deleted. */
+  onDelete: (location: PickupLocation) => void;
+  /**
+   * No fee: opens the location's Edit dialog with the fee at 0. Nothing is
+   * written until Save is pressed there (it moves money, so never on one click).
+   */
+  onNoFee: (location: PickupLocation) => void;
+  /** A location write, or the list's read after one, is in flight: No fee waits for it. */
+  writing?: boolean;
   currencyCode: string;
   readOnly: boolean;
 }
 
-/** The v2 hover pair: a light primary tint, never a grey or white fill. */
-const LOCATION_ROW_HOVER = "hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]";
+/** What the list calls its locations: "delivery" and "return" (v2 renamed collection to return). */
+export function locationNoun(side: "pickup" | "return"): "delivery" | "return" {
+  return side === "pickup" ? "delivery" : "return";
+}
+
+/** A location's fee as the list shows it: "No fee" for 0 (or an unreadable value). */
+export function locationFeeLabel(fee: number | string | null | undefined, currencyCode: string): string {
+  const n = Number(fee);
+  return !Number.isFinite(n) || n === 0 ? "No fee" : formatSettingsMoney(n, currencyCode);
+}
 
 /**
- * One side's delivery or collection locations. Each location is ONE row: its
- * name, address, fee, and a muted "Off" when customers can't pick it. There is
- * no switch or icon button in a row; pressing it opens the location's dialog.
- * A viewer sees the same rows without the press.
+ * The v2 hover pair on a row action: a light brand tint, never a grey or white
+ * fill. `xs` buttons, pulled in so a row is no taller than a plain one.
+ */
+const LOCATION_ACTION = "-my-1 hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]";
+/** Delete reads in the toned-down red, on a faded red hover. */
+const LOCATION_ACTION_DANGER =
+  "-my-1 text-destructive panel-ink-danger hover:bg-destructive/10 dark:hover:bg-destructive/20";
+/**
+ * The list's scroll box. The shared one hides its scrollbar, which on a narrow
+ * screen cut Delete off with nothing to say the row scrolls; this one keeps a
+ * thin bar.
+ */
+const LOCATION_SCROLL_ROOT = cn(
+  LIST_CLASSES.scrollRoot.replace(/\bno-scrollbar\b/, ""),
+  "[scrollbar-width:thin] max-h-[24rem] overscroll-contain",
+);
+
+/**
+ * One side's delivery or return locations, as a table: Name, Address, Fee,
+ * Available and (for anyone who can edit) Actions, whose Edit, No fee and
+ * Delete sit in every row. Add location lives in the option's own row on the
+ * page, so the list has no button of its own. A viewer gets the same table
+ * without the Actions column.
  */
 export function LocationsListV2({
   side,
@@ -795,16 +938,22 @@ export function LocationsListV2({
   error,
   onRetry,
   retrying,
-  onAdd,
-  onOpen,
+  onEdit,
+  onDelete,
+  onNoFee,
+  writing = false,
   currencyCode,
   readOnly,
 }: LocationsListV2Props) {
   const [query, setQuery] = useState("");
-  const noun = side === "pickup" ? "delivery" : "collection";
+  const noun = locationNoun(side);
+  const listName = side === "pickup" ? "Delivery locations" : "Return locations";
 
   if (isLoading && locations.length === 0) {
-    return <SettingsSectionSkeleton variant="table" rows={2} columns={2} label={`Loading ${noun} locations`} />;
+    // The loaded table's columns: Name, Address, Fee, Available, and Actions for an editor.
+    return (
+      <SettingsSectionSkeleton variant="table" rows={2} columns={readOnly ? 4 : 5} label={`Loading ${noun} locations`} />
+    );
   }
   if (error && locations.length === 0) {
     return (
@@ -818,23 +967,15 @@ export function LocationsListV2({
     );
   }
 
-  const addButton = readOnly ? null : (
-    <Button type="button" variant="outline" size="sm" onClick={onAdd}>
-      Add location
-    </Button>
-  );
-
   if (locations.length === 0) {
     return (
-      <div className="space-y-3" data-settings-state="empty">
-        <p className="text-[13px] leading-snug text-muted-foreground">
-          No {noun} locations yet.{" "}
-          {side === "pickup"
-            ? "Add places customers can choose for delivery, like an airport terminal or a hotel."
-            : "Add places customers can choose for returning the car, like an airport terminal or a hotel."}
-        </p>
-        {addButton}
-      </div>
+      <p className="text-[13px] leading-snug text-muted-foreground" data-settings-state="empty">
+        No {noun} locations yet.
+        {!readOnly &&
+          (side === "pickup"
+            ? " Use Add location to add places customers can choose for delivery, like an airport terminal or a hotel."
+            : " Use Add location to add places customers can choose for returning the car, like an airport terminal or a hotel.")}
+      </p>
     );
   }
 
@@ -851,20 +992,16 @@ export function LocationsListV2({
       {showSearch && (
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-xs text-muted-foreground tabular-nums">
-            {formatSettingsNumber(locations.length)} locations · {formatSettingsNumber(activeCount)} active
+            {formatSettingsNumber(locations.length)} locations · {formatSettingsNumber(activeCount)} available
           </p>
-          <div className="relative w-full sm:w-56">
-            <Search
-              className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
-              aria-hidden="true"
-            />
+          <div className="w-full sm:w-56">
             <Input
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={`Search ${noun} locations`}
               aria-label={`Search ${noun} locations`}
-              className="h-8 rounded-xl pl-8 text-sm"
+              className="h-8 rounded-xl text-sm"
             />
           </div>
         </div>
@@ -873,52 +1010,90 @@ export function LocationsListV2({
       {visible.length === 0 ? (
         <SettingsNoMatch size="compact" query={query} noun={`${noun} locations`} onClear={() => setQuery("")} />
       ) : (
-        <ul
-          aria-label={`${side === "pickup" ? "Delivery" : "Collection"} locations`}
-          className="-mx-3 max-h-[22rem] space-y-0.5 overflow-y-auto overscroll-contain"
-        >
-          {visible.map((location) => {
-            const fee = Number(location.delivery_fee);
-            const content = (
-              <>
-                <span className="min-w-0 flex-1">
-                  <span title={location.name} className="block truncate text-sm font-medium text-foreground">
-                    {location.name}
-                  </span>
-                  <span title={location.address} className="block truncate text-xs text-muted-foreground">
-                    {location.address}
-                  </span>
-                </span>
-                <TabularValue negative={fee < 0} className="shrink-0 text-sm">
-                  {!Number.isFinite(fee) || fee === 0 ? "No fee" : formatSettingsMoney(fee, currencyCode)}
-                </TabularValue>
-                {!location.is_active && <span className="w-7 shrink-0 text-right text-xs text-muted-foreground">Off</span>}
-              </>
-            );
-            return (
-              <li key={location.id}>
-                {readOnly ? (
-                  <div className="flex min-w-0 items-center gap-3 rounded-xl px-3 py-2.5">{content}</div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => onOpen(location)}
-                    className={cn(
-                      // Inset ring: the scrolling list would clip one drawn outside the row.
-                      "flex w-full min-w-0 items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors outline-none focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-ring/30",
-                      LOCATION_ROW_HOVER,
-                    )}
-                  >
-                    {content}
-                  </button>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+        // The settings table surface every other v2 settings list uses
+        // (promo codes, extras, holidays): a flat bordered box, no card
+        // shadow inside a settings panel. Spelled out here rather than
+        // rendered through `ListTable` because the body scrolls under the
+        // sticky header past ~8 rows, which `ListTable` does not do.
+        <div data-list-surface="settings" className={LIST_SETTINGS_SURFACE}>
+          <div className={LOCATION_SCROLL_ROOT}>
+            <Table aria-label={listName} className={cn("table-fixed", readOnly ? "min-w-[520px]" : "min-w-[680px]")}>
+              <ListTableHeader>
+                <ListHead className="w-[20%]">Name</ListHead>
+                <ListHead>Address</ListHead>
+                <ListHead className="w-[13%]">Fee</ListHead>
+                <ListHead className="w-[13%]">Available</ListHead>
+                {!readOnly && <ListHead className="w-[12.5rem]">Actions</ListHead>}
+              </ListTableHeader>
+              <ListBody>
+                {visible.map((location) => {
+                  const fee = Number(location.delivery_fee);
+                  const free = !Number.isFinite(fee) || fee === 0;
+                  return (
+                    <ListRow key={location.id} data-location-row={location.id}>
+                      <ListCell>
+                        <span title={location.name} className={cn("block truncate", LIST_CLASSES.text)}>
+                          {location.name}
+                        </span>
+                      </ListCell>
+                      <ListCell>
+                        <span title={location.address} className="block truncate text-muted-foreground">
+                          {location.address}
+                        </span>
+                      </ListCell>
+                      <ListCell>
+                        <TabularValue negative={fee < 0}>{locationFeeLabel(location.delivery_fee, currencyCode)}</TabularValue>
+                      </ListCell>
+                      <ListCell>
+                        <ListStatusText tone={location.is_active ? "success" : "muted"}>
+                          {location.is_active ? "Available" : "Off"}
+                        </ListStatusText>
+                      </ListCell>
+                      {!readOnly && (
+                        <ListCell>
+                          <div className="flex items-center justify-center gap-1">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="xs"
+                              onClick={() => onEdit(location)}
+                              aria-label={`Edit ${location.name}`}
+                              className={LOCATION_ACTION}
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="xs"
+                              onClick={() => onNoFee(location)}
+                              disabled={free || writing}
+                              aria-label={`Set no fee for ${location.name}`}
+                              className={LOCATION_ACTION}
+                            >
+                              No fee
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="xs"
+                              onClick={() => onDelete(location)}
+                              aria-label={`Delete ${location.name}`}
+                              className={LOCATION_ACTION_DANGER}
+                            >
+                              Delete
+                            </Button>
+                          </div>
+                        </ListCell>
+                      )}
+                    </ListRow>
+                  );
+                })}
+              </ListBody>
+            </Table>
+          </div>
+        </div>
       )}
-
-      {addButton}
     </div>
   );
 }

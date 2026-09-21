@@ -71,7 +71,7 @@ import { Button } from "@/components/ui-v2/button";
 import { Card, CardContent } from "@/components/ui-v2/card";
 import { Skeleton } from "@/components/ui-v2/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui-v2/tooltip";
-import { LIST_CLASSES } from "@/components/shared/list-table-v2";
+import { LIST_CLASSES, LIST_SETTINGS_SURFACE, type ListSurface } from "@/components/shared/list-table-v2";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { formatCurrency } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
@@ -146,6 +146,12 @@ export interface SettingsSectionSkeletonProps {
   header?: boolean;
   /** Screen-reader label, e.g. "Loading extras". */
   label?: string;
+  /**
+   * `table` only: the surface of the `ListTable` it stands in for. A settings
+   * table (`surface="settings"`) loads in the same flat panel, so nothing
+   * jumps by the card's 24px padding bands when the rows arrive.
+   */
+  surface?: ListSurface;
   className?: string;
 }
 
@@ -159,9 +165,33 @@ export function SettingsSectionSkeleton({
   header = false,
   label = "Loading",
   thumbnail = false,
+  surface = "card",
   className,
 }: SettingsSectionSkeletonProps) {
   const count = Math.max(1, rows);
+  const tableRows = (
+    <>
+      <div className="flex h-10 items-center gap-6 border-b px-3">
+        {Array.from({ length: columns }).map((_, c) => (
+          <div key={c} className="min-w-0 flex-1">
+            <Skeleton className={cn("h-2.5 rounded-full", c === 0 ? "w-24 max-w-full" : "w-16 max-w-full")} />
+          </div>
+        ))}
+      </div>
+      {Array.from({ length: count }).map((_, r) => (
+        <div
+          key={r}
+          className={cn("flex h-[45px] items-center gap-6 px-3", r < count - 1 && "border-b")}
+        >
+          {Array.from({ length: columns }).map((_, c) => (
+            <div key={c} className="min-w-0 flex-1">
+              <Skeleton className={cn("h-3.5 rounded-full", BAR_WIDTHS[(r + c) % BAR_WIDTHS.length])} />
+            </div>
+          ))}
+        </div>
+      ))}
+    </>
+  );
   return (
     <div
       role="status"
@@ -180,35 +210,20 @@ export function SettingsSectionSkeleton({
         </div>
       )}
 
-      {variant === "table" && (
+      {variant === "table" &&
         // Same shell as `ListTable`: the v2 Card with a p-0 body, a 40px head
         // row and 45px body rows (py-3 cell + 20px line + 1px row border).
         // `min-w-0` on every column: the fixed-width header bars otherwise set
         // a minimum that pushed the last one past the card edge on a phone.
-        <Card aria-hidden="true">
-          <CardContent className="p-0">
-            <div className="flex h-10 items-center gap-6 border-b px-3">
-              {Array.from({ length: columns }).map((_, c) => (
-                <div key={c} className="min-w-0 flex-1">
-                  <Skeleton className={cn("h-2.5 rounded-full", c === 0 ? "w-24 max-w-full" : "w-16 max-w-full")} />
-                </div>
-              ))}
-            </div>
-            {Array.from({ length: count }).map((_, r) => (
-              <div
-                key={r}
-                className={cn("flex h-[45px] items-center gap-6 px-3", r < count - 1 && "border-b")}
-              >
-                {Array.from({ length: columns }).map((_, c) => (
-                  <div key={c} className="min-w-0 flex-1">
-                    <Skeleton className={cn("h-3.5 rounded-full", BAR_WIDTHS[(r + c) % BAR_WIDTHS.length])} />
-                  </div>
-                ))}
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
+        (surface === "settings" ? (
+          <div aria-hidden="true" data-list-surface="settings" className={LIST_SETTINGS_SURFACE}>
+            {tableRows}
+          </div>
+        ) : (
+          <Card aria-hidden="true">
+            <CardContent className="p-0">{tableRows}</CardContent>
+          </Card>
+        ))}
 
       {variant === "rows" && (
         <div aria-hidden="true" className="space-y-2">
@@ -300,10 +315,18 @@ export interface SettingsEmptyStateProps {
   /**
    * `card` (default): its own soft card, for a section with nothing else.
    * `compact`: no surface, tighter, for inside a table card or a sub-panel.
+   * `inline`: ONE line in the settings panel look (bordered, flat), for a short
+   * list whose section header already carries the Add button, so the empty
+   * state does not take a table's worth of height. The headline and body read
+   * as one sentence pair; `points` and `footnote` are not shown.
    */
-  variant?: "card" | "compact";
+  variant?: "card" | "compact" | "inline";
   className?: string;
 }
+
+/** The inline empty state's surface: the same flat panel `SettingsPanel` draws. */
+export const SETTINGS_EMPTY_INLINE_CLASS =
+  "flex flex-col gap-3 rounded-xl border bg-card px-5 py-4 sm:flex-row sm:items-center sm:justify-between";
 
 /**
  * Same job and anatomy as `empty-states/teaching-empty-state.tsx` (icon tile,
@@ -321,6 +344,26 @@ export function SettingsEmptyState({
   variant = "card",
   className,
 }: SettingsEmptyStateProps) {
+  if (variant === "inline") {
+    const lead = /[.!?]$/.test(headline) ? headline : `${headline}.`;
+    return (
+      <div data-settings-state="empty" data-variant="inline" className={cn(SETTINGS_EMPTY_INLINE_CLASS, className)}>
+        <div className="flex min-w-0 items-start gap-3">
+          <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <p className="min-w-0 text-sm text-muted-foreground [overflow-wrap:anywhere]">
+            <span className="font-medium text-foreground">{lead}</span> {body}
+          </p>
+        </div>
+        {(primaryAction || secondaryAction) && (
+          <div className="flex shrink-0 flex-wrap items-center gap-2 pl-7 sm:pl-0">
+            {primaryAction && <ActionButton action={primaryAction} variant="outline" />}
+            {secondaryAction && <ActionButton action={secondaryAction} variant="ghost" />}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   const compact = variant === "compact";
   return (
     <div
@@ -686,7 +729,7 @@ export function SettingsDependencyNotice({
           aria-hidden="true"
           className={cn(
             "mt-0.5 size-4 shrink-0",
-            tone === "warning" ? "text-amber-600 dark:text-amber-400" : "text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]",
+            tone === "warning" ? "panel-ink-warn" : "text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]",
           )}
         />
         <div className="min-w-0 [overflow-wrap:anywhere]">
@@ -762,8 +805,8 @@ export function SettingsSaveState({ status, error, onRetry, onDiscard, className
       )}
       {status === "error" && (
         <>
-          <span className="inline-flex min-w-0 items-start gap-1.5 text-destructive">
-            <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+          {/* The toned-down red and no icon: a refused save is said, not shouted. */}
+          <span className="inline-flex min-w-0 items-start gap-1.5 text-destructive panel-ink-danger">
             <span className="min-w-0 [overflow-wrap:anywhere]">
               <span className="font-medium">Couldn&apos;t save.</span> {describeSaveError(error)}
             </span>

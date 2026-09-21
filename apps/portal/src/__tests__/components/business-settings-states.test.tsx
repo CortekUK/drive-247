@@ -8,9 +8,12 @@
  *   - radius / fee / name limits, and the "nothing active" dependency,
  *   - the Locations page does not report unsaved changes on mount (the v1 bug),
  *     and v1 renders exactly as before when the chrome flag is off,
- *   - v2 Locations stacks Pickup above Return with one switch per option, saves
- *     each side's radius on its own through the page's save bar, and keeps a
- *     location's on/off and delete in its dialog.
+ *   - v2 Locations stacks "Pickup and delivery" above "Return" with one switch
+ *     per option, saves each side's radius on its own through the page's save
+ *     bar, keeps a location's on/off in its Edit dialog, and puts Edit, No fee
+ *     and Delete (with its confirm step) in the location's table row.
+ *     The team lead's Sep 19 2026 review has its own file:
+ *     settings-locations-lane-v2.test.tsx.
  *
  * HARNESS: `react-dom/client` + `act`, same as settings-section-states.test.tsx
  * (the repo lacks @testing-library/dom).
@@ -67,8 +70,9 @@ import {
   isLocationFormDirty,
   isSupportedCurrency,
   locationFormFromSettings,
-  PARTIAL_GENERAL_SAVE_MESSAGE,
   saveGeneralSettingsV2,
+  savedRegionalV2,
+  TENANT_REGIONAL_QUERY_KEYS,
   useImageLoadFailed,
   validateLocationDraft,
   validateLocationSettingsV2,
@@ -203,93 +207,93 @@ describe("saveGeneralSettingsV2", () => {
     terms_version: "1.0",
   };
 
-  it("writes the tenants row first, then org settings", async () => {
-    const calls: string[] = [];
-    const writeTenant = vi.fn(async (patch: Record<string, unknown>) => {
-      calls.push("tenant");
-      return { data: [{ id: "t1" }], error: null };
-    });
-    const writeOrg = vi.fn(async () => {
-      calls.push("org");
-    });
-    await saveGeneralSettingsV2({ tenantId: "t1", values, policyVersionChanged: false, writeTenant, writeOrg });
-    expect(calls).toEqual(["tenant", "org"]);
-    expect(writeTenant).toHaveBeenCalledWith({
-      distance_unit: "km",
-      currency_code: "GBP",
-      privacy_policy_version: "1.0",
-      terms_version: "1.0",
-    });
-    expect(writeOrg).toHaveBeenCalledWith({ currency_code: "GBP", distance_unit: "km" });
-  });
+  /** A supabase-shaped client: `from().update().eq().select()` and `functions.invoke`. */
+  const fakeClient = (reply: { data: unknown[] | null; error: unknown }) => {
+    const select = vi.fn(async (_columns: string) => reply);
+    const eq = vi.fn((_column: string, _value: string) => ({ select }));
+    const update = vi.fn((_patch: Record<string, unknown>) => ({ eq }));
+    const from = vi.fn((_table: string) => ({ update }));
+    const invoke = vi.fn();
+    return { from, update, eq, select, functions: { invoke } };
+  };
 
-  it("clears policy acceptance only when a policy version changed", async () => {
-    const writeTenant = vi.fn(async (_patch: Record<string, unknown>) => ({ data: [{ id: "t1" }], error: null }));
-    await saveGeneralSettingsV2({ tenantId: "t1", values, policyVersionChanged: true, writeTenant, writeOrg: vi.fn(async () => {}) });
-    expect(writeTenant.mock.calls[0][0]).toMatchObject({ policies_accepted_at: null });
+  it("writes exactly the currency and distance unit to the tenant's own row, and never calls the settings edge function", async () => {
+    const client = fakeClient({ data: [{ id: "t1" }], error: null });
+    await saveGeneralSettingsV2({
+      tenantId: "t1",
+      values,
+      // The page's writer, as settings/page.tsx passes it.
+      writeTenant: async (patch) => await client.from("tenants").update(patch as never).eq("id", "t1").select("id"),
+    });
+    expect(client.from).toHaveBeenCalledTimes(1);
+    expect(client.from).toHaveBeenCalledWith("tenants");
+    // Exactly these two keys: no policy versions, no policies_accepted_at.
+    expect(client.update.mock.calls[0][0]).toStrictEqual({ currency_code: "GBP", distance_unit: "km" });
+    expect(client.eq).toHaveBeenCalledWith("id", "t1");
+    expect(client.select).toHaveBeenCalledWith("id");
+    // The unscoped org_settings row is never written from v2.
+    expect(client.functions.invoke).not.toHaveBeenCalled();
   });
 
   it("refuses without a tenant and writes nothing", async () => {
     const writeTenant = vi.fn();
-    await expect(
-      saveGeneralSettingsV2({ tenantId: undefined, values, policyVersionChanged: false, writeTenant, writeOrg: vi.fn() }),
-    ).rejects.toThrow("Your business details haven't loaded yet. Reload the page and try again.");
+    await expect(saveGeneralSettingsV2({ tenantId: undefined, values, writeTenant })).rejects.toThrow(
+      "Your business details haven't loaded yet. Reload the page and try again.",
+    );
     expect(writeTenant).not.toHaveBeenCalled();
   });
 
-  it("treats a zero-row update as a failure and never reaches org settings", async () => {
-    const writeOrg = vi.fn();
+  it("treats a zero-row update as a failure (supabase-js never throws for it)", async () => {
     await expect(
-      saveGeneralSettingsV2({
-        tenantId: "t1",
-        values,
-        policyVersionChanged: false,
-        writeTenant: async () => ({ data: [], error: null }),
-        writeOrg,
-      }),
+      saveGeneralSettingsV2({ tenantId: "t1", values, writeTenant: async () => ({ data: [], error: null }) }),
     ).rejects.toThrow("You don't have permission to change these settings.");
-    expect(writeOrg).not.toHaveBeenCalled();
+    await expect(
+      saveGeneralSettingsV2({ tenantId: "t1", values, writeTenant: async () => ({ data: null, error: null }) }),
+    ).rejects.toThrow("You don't have permission to change these settings.");
   });
 
-  it("rethrows a tenants error as-is, and flags an org failure as already toasted", async () => {
+  it("rethrows a tenants error as-is, not flagged as already toasted", async () => {
     const dbError = { message: "permission denied for table tenants", code: "42501" };
-    await expect(
-      saveGeneralSettingsV2({
-        tenantId: "t1",
-        values,
-        policyVersionChanged: false,
-        writeTenant: async () => ({ data: null, error: dbError }),
-        writeOrg: vi.fn(),
-      }),
-    ).rejects.toBe(dbError);
-
     let caught: unknown;
     try {
-      await saveGeneralSettingsV2({
-        tenantId: "t1",
-        values,
-        policyVersionChanged: false,
-        writeTenant: async () => ({ data: [{ id: "t1" }], error: null }),
-        writeOrg: async () => {
-          throw new Error("Failed to update settings: 500");
-        },
-      });
+      await saveGeneralSettingsV2({ tenantId: "t1", values, writeTenant: async () => ({ data: null, error: dbError }) });
     } catch (e) {
       caught = e;
     }
-    expect(isAlreadyToasted(caught)).toBe(true);
-    expect(isAlreadyToasted(new Error("x"))).toBe(false);
-    // The tenants row is already written, so the reason says the save was partial.
-    expect((caught as Error).message).toBe(PARTIAL_GENERAL_SAVE_MESSAGE);
-    expect(describeSaveError(caught)).toBe(
-      "Only part of this change was saved, so some screens may still show the old setting. Retry to finish saving it.",
-    );
+    expect(caught).toBe(dbError);
+    expect(isAlreadyToasted(caught)).toBe(false);
+    expect(isAlreadyToasted(Object.assign(new Error("x"), { alreadyToasted: true }))).toBe(true);
   });
 
   it("describes an edge-function transport failure in plain words", () => {
     expect(describeSaveError(new Error("Failed to update settings: Edge Function returned a non-2xx status code"))).toBe(
       "The server couldn't save this right now. Your changes are still here. Try again.",
     );
+  });
+});
+
+describe("savedRegionalV2: what v2 Regional shows as saved", () => {
+  it("reads the tenant's own row first when the org settings disagree", () => {
+    // The lead's case: Kilometres saved on the tenant, the shared org row says miles.
+    expect(
+      savedRegionalV2({ currency_code: "GBP", distance_unit: "km" }, { currency_code: "USD", distance_unit: "miles" }),
+    ).toEqual({ currency_code: "GBP", distance_unit: "km" });
+  });
+
+  it("falls back to the org settings, then USD and miles", () => {
+    expect(savedRegionalV2({ currency_code: null, distance_unit: null }, { currency_code: "EUR", distance_unit: "km" })).toEqual({
+      currency_code: "EUR",
+      distance_unit: "km",
+    });
+    expect(savedRegionalV2(null, undefined)).toEqual({ currency_code: "USD", distance_unit: "miles" });
+    expect(savedRegionalV2({ currency_code: "", distance_unit: "" }, { currency_code: "", distance_unit: "" })).toEqual({
+      currency_code: "USD",
+      distance_unit: "miles",
+    });
+  });
+
+  it("names the cached tenant reads a save refreshes", () => {
+    expect(TENANT_REGIONAL_QUERY_KEYS).toEqual([["rental-settings"], ["tenant-provider-choice"]]);
   });
 });
 
@@ -411,7 +415,18 @@ describe("area and save validation", () => {
     const withList = { ...base, pickupMultipleEnabled: true };
     expect(
       validateLocationSettingsV2(withList, { unitLabel: "mi", pickupActiveLocations: 0, returnActiveLocations: null }),
-    ).toBe("Delivery locations is on but none are active. Add or switch on a location, or turn it off.");
+    ).toBe(
+      "Delivery locations is on but none are available to customers. Add a location or make one available, or turn the option off.",
+    );
+    // v2 calls collection locations "Return locations" (copy only; the column is the same).
+    expect(
+      validateLocationSettingsV2(
+        { ...base, returnMultipleEnabled: true },
+        { unitLabel: "mi", pickupActiveLocations: null, returnActiveLocations: 0 },
+      ),
+    ).toBe(
+      "Return locations is on but none are available to customers. Add a location or make one available, or turn the option off.",
+    );
     expect(
       validateLocationSettingsV2(withList, { unitLabel: "mi", pickupActiveLocations: null, returnActiveLocations: null }),
     ).toBeNull();
@@ -838,17 +853,25 @@ describe("LocationsListV2", () => {
     isLoading: false,
     error: null,
     onRetry: vi.fn(),
-    onAdd: vi.fn(),
-    onOpen: vi.fn(),
+    onEdit: vi.fn(),
+    onDelete: vi.fn(),
+    onNoFee: vi.fn(),
     currencyCode: "USD",
     readOnly: false,
     ...over,
   });
 
-  it("loading shows a skeleton instead of 'no locations'", () => {
+  it("loading shows a skeleton instead of 'no locations', with the loaded table's columns", () => {
     render(<LocationsListV2 {...listProps({ isLoading: true })} />);
-    expect(container.querySelector('[data-settings-state="loading"]')?.textContent).toContain("Loading delivery locations");
+    const loading = container.querySelector('[data-settings-state="loading"]') as HTMLElement;
+    expect(loading.textContent).toContain("Loading delivery locations");
     expect(container.textContent).not.toContain("No delivery locations yet");
+    // Name, Address, Fee, Available, Actions = 5 header bars for an editor.
+    expect(loading.querySelector(".h-10")!.children).toHaveLength(5);
+
+    // A viewer's table has no Actions: 4.
+    render(<LocationsListV2 {...listProps({ isLoading: true, readOnly: true })} />);
+    expect(container.querySelector('[data-settings-state="loading"] .h-10')!.children).toHaveLength(4);
   });
 
   it("a failed read is not an empty list", () => {
@@ -860,16 +883,16 @@ describe("LocationsListV2", () => {
     expect(p.onRetry).toHaveBeenCalledTimes(1);
   });
 
-  it("empty says what a location is and offers Add location (not to viewers)", () => {
-    const p = listProps();
-    render(<LocationsListV2 {...p} />);
-    expect(container.textContent).toContain("No delivery locations yet.");
-    act(() => buttonByText("Add location", container).click());
-    expect(p.onAdd).toHaveBeenCalledTimes(1);
+  it("empty says what a location is and points to Add location, which lives in the option's row (not for viewers)", () => {
+    render(<LocationsListV2 {...listProps()} />);
+    expect(container.textContent).toBe(
+      "No delivery locations yet. Use Add location to add places customers can choose for delivery, like an airport terminal or a hotel.",
+    );
+    // The button itself is the option row's, not the list's.
+    expect(container.querySelectorAll("button")).toHaveLength(0);
 
     render(<LocationsListV2 {...listProps({ side: "return", readOnly: true })} />);
-    expect(container.textContent).toContain("No collection locations yet.");
-    expect(container.textContent).not.toContain("Add location");
+    expect(container.textContent).toBe("No return locations yet.");
   });
 
   it("counts, searches past 8 rows, echoes a query with no match, and clears it", () => {
@@ -877,39 +900,99 @@ describe("LocationsListV2", () => {
       location({ id: `l${i}`, name: `Stop ${i}`, description: null, is_active: i !== 0 }),
     );
     render(<LocationsListV2 {...listProps({ locations: many })} />);
-    expect(container.textContent).toContain("9 locations · 8 active");
+    expect(container.textContent).toContain("9 locations · 8 available");
     const search = container.querySelector('input[type="search"]') as HTMLInputElement;
+    // No search icon in the box, so no room kept for one.
+    expect(search.parentElement!.querySelector("svg")).toBeNull();
+    expect(search.className.split(/\s+/)).not.toContain("pl-8");
     act(() => typeInto(search, "zzz"));
     expect(container.querySelector('[data-settings-state="no-match"]')?.textContent).toContain("“zzz”");
     act(() => buttonByText("Clear search", container).click());
-    expect(container.querySelectorAll("li")).toHaveLength(9);
+    expect(container.querySelectorAll("tbody tr")).toHaveLength(9);
   });
 
-  it("each location is ONE row: name, address, fee and a muted Off; pressing it opens the location", () => {
+  it("each location is one table row: name, address, fee, available, and Edit / No fee / Delete in Actions", () => {
     const rows = [
       location({ id: "a", name: "Free spot", address: "2 Quay St", delivery_fee: 0, is_active: false }),
       location({ id: "b", name: "Airport", delivery_fee: 12.5 }),
     ];
     const p = listProps({ locations: rows });
     render(<LocationsListV2 {...p} />);
-    const items = container.querySelectorAll("li");
-    expect(items[0].textContent).toBe("Free spot2 Quay StNo feeOff");
-    expect(items[1].textContent).toContain("$12.50");
-    expect(items[1].textContent).not.toContain("Off");
-    items.forEach((item) => {
-      expect(item.querySelectorAll("button")).toHaveLength(1);
-      expect(item.querySelector('[role="switch"]')).toBeNull();
-      expect(item.querySelector("svg")).toBeNull();
+    const table = container.querySelector('table[aria-label="Delivery locations"]') as HTMLTableElement;
+    const heads = Array.from(table.querySelectorAll("thead th"));
+    expect(heads.map((th) => th.textContent)).toEqual(["Name", "Address", "Fee", "Available", "Actions"]);
+    // Centred like every v2 table heading; no sort control.
+    heads.forEach((th) => {
+      expect(th.className).toContain("text-center");
+      expect(th.querySelector("button")).toBeNull();
     });
-    act(() => (items[1].querySelector("button") as HTMLButtonElement).click());
-    expect(p.onOpen).toHaveBeenCalledWith(rows[1]);
+    const trs = Array.from(table.querySelectorAll("tbody tr"));
+    const cells = (tr: Element) => Array.from(tr.querySelectorAll("td")).map((td) => td.textContent);
+    expect(cells(trs[0])).toEqual(["Free spot", "2 Quay St", "No fee", "Off", "EditNo feeDelete"]);
+    expect(cells(trs[1])).toEqual(["Airport", "Wallis Rd, Hounslow TW6 2GA", "$12.50", "Available", "EditNo feeDelete"]);
+    trs.forEach((tr) => {
+      expect(tr.querySelector('[role="switch"]')).toBeNull();
+      expect(tr.querySelector("svg")).toBeNull();
+    });
+    const inRow = (tr: Element, label: string) =>
+      tr.querySelector(`button[aria-label="${label}"]`) as HTMLButtonElement;
+    // Already free: No fee has nothing to do. (No tooltip: a disabled button never shows one.)
+    expect(inRow(trs[0], "Set no fee for Free spot").disabled).toBe(true);
+    expect(inRow(trs[0], "Set no fee for Free spot").hasAttribute("title")).toBe(false);
+    act(() => inRow(trs[1], "Edit Airport").click());
+    expect(p.onEdit).toHaveBeenCalledWith(rows[1]);
+    act(() => inRow(trs[1], "Set no fee for Airport").click());
+    expect(p.onNoFee).toHaveBeenCalledWith(rows[1]);
+    act(() => inRow(trs[1], "Delete Airport").click());
+    expect(p.onDelete).toHaveBeenCalledWith(rows[1]);
+    // The row itself opens nothing: only its actions do.
+    expect(p.onEdit).toHaveBeenCalledTimes(1);
   });
 
-  it("view-only: the same rows, with nothing to press and no Add location", () => {
+  it("No fee waits while a location write or the list's read is in flight", () => {
+    const rows = [location({ id: "b", name: "Airport", delivery_fee: 12.5 })];
+    const p = listProps({ locations: rows, writing: true });
+    render(<LocationsListV2 {...p} />);
+    const noFee = container.querySelector('button[aria-label="Set no fee for Airport"]') as HTMLButtonElement;
+    expect(noFee.disabled).toBe(true);
+    act(() => noFee.click());
+    expect(p.onNoFee).not.toHaveBeenCalled();
+    // Edit and Delete are not held up.
+    expect((container.querySelector('button[aria-label="Edit Airport"]') as HTMLButtonElement).disabled).toBe(false);
+
+    render(<LocationsListV2 {...listProps({ locations: rows, writing: false })} />);
+    expect((container.querySelector('button[aria-label="Set no fee for Airport"]') as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("fits a narrow screen: xs actions in a 12.5rem column, Name at 20%, and a visible thin scrollbar", () => {
+    render(<LocationsListV2 {...listProps({ locations: [location({ name: "Airport" })] })} />);
+    const heads = Array.from(container.querySelectorAll("thead th"));
+    expect(heads[0].className.split(/\s+/)).toContain("w-[20%]");
+    expect(heads[4].className.split(/\s+/)).toContain("w-[12.5rem]");
+    const actions = Array.from(container.querySelectorAll("tbody td:last-child button"));
+    expect(actions.map((b) => b.textContent)).toEqual(["Edit", "No fee", "Delete"]);
+    // The ui-v2 xs button: 24px tall, 12px text.
+    actions.forEach((b) => expect(b.className.split(/\s+/)).toEqual(expect.arrayContaining(["h-6", "text-xs"])));
+    // Delete's red never changes on hover (no dead hover:text-destructive).
+    expect(actions[2].className.split(/\s+/)).not.toContain("hover:text-destructive");
+    // The scroll box keeps its scrollbar (the shared one hides it, cutting Delete off unannounced).
+    const scroll = container.querySelector("table")!.closest(".overscroll-contain") as HTMLElement;
+    const cls = scroll.className.split(/\s+/);
+    expect(cls).not.toContain("no-scrollbar");
+    expect(cls).toContain("[scrollbar-width:thin]");
+  });
+
+  it("view-only: the same rows, with no Actions column and nothing to press", () => {
     render(<LocationsListV2 {...listProps({ locations: [location()], readOnly: true })} />);
-    expect(container.querySelector("li")?.textContent).toContain("Heathrow Terminal 5");
+    const table = container.querySelector("table") as HTMLTableElement;
+    expect(Array.from(table.querySelectorAll("thead th")).map((th) => th.textContent)).toEqual([
+      "Name",
+      "Address",
+      "Fee",
+      "Available",
+    ]);
+    expect(table.querySelector("tbody tr")?.textContent).toContain("Heathrow Terminal 5");
     expect(container.querySelectorAll("button")).toHaveLength(0);
-    expect(container.textContent).not.toContain("Add location");
   });
 });
 
@@ -1030,26 +1113,29 @@ describe("LocationSettings", () => {
     expect(h.refetchSettings).toHaveBeenCalledTimes(1);
   });
 
-  it("v2: Pickup sits above Return, one switch per option, no icon tiles, pills or row switches", () => {
+  it("v2: Pickup and delivery sits above Return, one switch per option, no icon tiles, pills or row switches", () => {
     pickup.value = hook({
       locationSettings: settingsRow({ pickup_multiple_locations_enabled: true, return_multiple_locations_enabled: true }),
       locations: [location({ id: "a", name: "Airport", delivery_fee: 0, is_active: false }), location({ id: "b", name: "Harbour" })],
     });
     renderV2Page();
     const titles = Array.from(container.querySelectorAll("h2"));
-    expect(titles.map((h) => h.textContent)).toEqual(["Pickup", "Return"]);
+    expect(titles.map((h) => h.textContent)).toEqual(["Pickup and delivery", "Return"]);
     expect(titles[0].compareDocumentPosition(titles[1]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(container.innerHTML).not.toContain("grid-cols-2");
-    // Three options a side, each with ONE switch; none inside a location row.
-    expect(container.querySelectorAll('[role="switch"]')).toHaveLength(6);
-    expect(container.querySelectorAll("li")).toHaveLength(4);
-    container.querySelectorAll("li").forEach((li) => {
-      expect(li.querySelectorAll("button")).toHaveLength(1);
-      expect(li.querySelector('[role="switch"]')).toBeNull();
+    // Three options a side, each with ONE switch, plus Return's "Same as pickup
+    // address" (on while Return to your address is on); none inside a location row.
+    expect(container.querySelectorAll('[role="switch"]')).toHaveLength(7);
+    expect(container.querySelector("#v2-return-same-address")).not.toBeNull();
+    // Both locations are on both sides, so each table has two rows.
+    const rows = container.querySelectorAll("tbody tr");
+    expect(rows).toHaveLength(4);
+    rows.forEach((tr) => {
+      expect(Array.from(tr.querySelectorAll("button")).map((b) => b.textContent)).toEqual(["Edit", "No fee", "Delete"]);
+      expect(tr.querySelector('[role="switch"]')).toBeNull();
     });
-    // No decorative icons: the only one on screen is the tick inside the checkbox.
-    const svgs = Array.from(container.querySelectorAll("svg"));
-    expect(svgs.every((svg) => svg.closest('button[role="checkbox"]'))).toBe(true);
+    // No decorative icons anywhere on the page.
+    expect(container.querySelectorAll("svg")).toHaveLength(0);
     // No Free / Paid / Active / Inactive pills; an unavailable location says Off.
     const words = Array.from(container.querySelectorAll("span")).map((el) => el.textContent?.trim() ?? "");
     expect(words.filter((w) => ["Free", "Paid", "Active", "Inactive"].includes(w))).toEqual([]);
@@ -1165,7 +1251,7 @@ describe("LocationSettings", () => {
     });
     renderV2Page();
     const returnArea = container.querySelector('[data-location-option="v2-return-area"]') as HTMLElement;
-    expect(returnArea.textContent).toContain("Uses the same center point and delivery prices as Pickup.");
+    expect(returnArea.textContent).toContain("Uses the center point and price set under Pickup and delivery.");
     expect(returnArea.querySelector("#v2-return-area-radius")).not.toBeNull();
     expect(returnArea.querySelector("#v2-area-center")).toBeNull();
     expect(container.querySelectorAll("#v2-area-center")).toHaveLength(1);
@@ -1173,32 +1259,44 @@ describe("LocationSettings", () => {
     act(() => (container.querySelector("#v2-pickup-area") as HTMLButtonElement).click());
     expect(returnArea.querySelector("#v2-area-center")).not.toBeNull();
     expect(returnArea.querySelector('[role="radiogroup"]')).not.toBeNull();
-    expect(returnArea.textContent).not.toContain("Uses the same center point");
+    expect(returnArea.textContent).not.toContain("Uses the center point");
   });
 
-  it("v2: pricing is a two-option control, and the first switch to distance starts two bands", () => {
+  it("v2: the price is one row of One fee / Price by distance radios; each opens its dialog, and the first switch to distance starts two bands", async () => {
     pickup.value = hook({
       locationSettings: settingsRow({ pickup_area_enabled: true, area_center_lat: 51.47, area_center_lon: -0.45, area_delivery_fee: 12 }),
     });
     renderV2Page();
     const group = container.querySelector('[role="radiogroup"]') as HTMLElement;
-    expect(group.className).toContain("rounded-full");
-    const options = Array.from(group.querySelectorAll('[role="radio"]')) as HTMLButtonElement[];
-    expect(options.map((o) => [o.textContent, o.getAttribute("aria-checked")])).toEqual([
+    expect(group.getAttribute("aria-label")).toBe("Delivery price");
+    const radios = Array.from(group.querySelectorAll('[role="radio"]')) as HTMLButtonElement[];
+    const labelOf = (radio: HTMLElement) => container.querySelector(`label[for="${radio.id}"]`)?.textContent;
+    expect(radios.map((r) => [labelOf(r), r.getAttribute("aria-checked")])).toEqual([
       ["One fee", "true"],
       ["Price by distance", "false"],
     ]);
-    expect(input("#v2-area-fee").value).toBe("12");
-
-    act(() => options[1].click());
+    // No fee box on the page any more: the row says what is set.
     expect(container.querySelector("#v2-area-fee")).toBeNull();
-    const bands = container.querySelector('ul[aria-label="Price bands"]') as HTMLElement;
+    const summary = () => container.querySelector("[data-area-price-summary]")?.textContent;
+    expect(summary()).toBe("One fee: $12.00");
+
+    act(() => radios[1].click());
+    const dialog = document.querySelector('[role="dialog"]') as HTMLElement;
+    expect(dialog.querySelector("h2")?.textContent).toBe("Price by distance");
+    const bands = dialog.querySelector('ul[aria-label="Price bands"]') as HTMLElement;
     expect((bands.querySelector('input[aria-label="Band 1 distance"]') as HTMLInputElement).value).toBe("20");
     // The flat 12 seeds both: up to 20 mi at 12, anywhere further at 12 + 25 = 37.
     const fees = Array.from(bands.querySelectorAll('input[aria-label$=" fee"]')).map((el) => (el as HTMLInputElement).value);
     expect(fees).toEqual(["12", "37"]);
     expect(bands.textContent).toContain("Anywhere further");
-    expect(group.querySelector('[aria-checked="true"]')?.textContent).toBe("Price by distance");
+    // Nothing reaches the form until Done.
+    expect(radios[0].getAttribute("aria-checked")).toBe("true");
+
+    await act(async () => buttonByText("Done", dialog).click());
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(radios[1].getAttribute("aria-checked")).toBe("true");
+    expect(summary()).toBe("2 price bands, no distance limit");
+    expect(saveBar().textContent).toContain("Unsaved changes");
   });
 
   it("v2: warns when Delivery locations is on but none are available", () => {
@@ -1207,30 +1305,42 @@ describe("LocationSettings", () => {
       locations: [location({ is_active: false, is_return_enabled: false })],
     });
     renderV2Page();
-    expect(container.textContent).toContain("None of these are available to customers, so they see an empty list.");
+    const notice = container.querySelector("[data-location-notice]") as HTMLElement;
+    expect(notice.textContent).toContain("No delivery location is available to customers");
+    expect(notice.textContent).toContain("Customers see an empty list.");
+    // A heads-up until a save is tried, not an alert.
+    expect(notice.getAttribute("role")).toBe("status");
   });
 
-  it("v2: a location opens its dialog, which holds Available to customers and Delete with a confirm step", async () => {
+  it("v2: a row's Edit opens its dialog with Available to customers; the row's Delete has a confirm step", async () => {
     const h = hook({
       locationSettings: settingsRow({ pickup_multiple_locations_enabled: true }),
       locations: [location({ name: "Airport", is_return_enabled: false })],
     });
     pickup.value = h;
     renderV2Page();
-    act(() => (container.querySelector('ul[aria-label="Delivery locations"] button') as HTMLButtonElement).click());
-    const dialog = () => document.querySelector('[role="dialog"]') as HTMLElement;
-    expect(dialog().querySelector("h2")?.textContent).toBe("Edit delivery location");
-    expect(dialog().querySelector("h2 svg")).toBeNull();
-    expect(dialog().querySelector("#v2-location-active")?.getAttribute("aria-checked")).toBe("true");
+    const rowButton = (label: string) =>
+      container.querySelector(`table[aria-label="Delivery locations"] button[aria-label="${label}"]`) as HTMLButtonElement;
+    const dialog = () => document.querySelector('[role="dialog"]') as HTMLElement | null;
 
-    act(() => buttonByText("Delete location", dialog()).click());
+    act(() => rowButton("Edit Airport").click());
+    expect(dialog()!.querySelector("h2")?.textContent).toBe("Edit delivery location");
+    expect(dialog()!.querySelector("h2 svg")).toBeNull();
+    expect(dialog()!.querySelector("#v2-location-active")?.getAttribute("aria-checked")).toBe("true");
+    // Delete moved to the row.
+    expect(dialog()!.textContent).not.toContain("Delete location");
+    act(() => buttonByText("Cancel", dialog()!).click());
+    expect(dialog()).toBeNull();
+
+    act(() => rowButton("Delete Airport").click());
     expect(h.deleteLocation).not.toHaveBeenCalled();
-    expect(dialog().textContent).toContain("Delete “Airport”?");
-    act(() => buttonByText("Keep location", dialog()).click());
-    expect(dialog().querySelector("#v2-location-active")).not.toBeNull();
+    expect(dialog()!.textContent).toContain("Delete “Airport”?");
+    act(() => buttonByText("Keep location", dialog()!).click());
+    expect(dialog()).toBeNull();
+    expect(h.deleteLocation).not.toHaveBeenCalled();
 
-    act(() => buttonByText("Delete location", dialog()).click());
-    await act(async () => buttonByText("Delete location", dialog()).click());
+    act(() => rowButton("Delete Airport").click());
+    await act(async () => buttonByText("Delete location", dialog()!).click());
     expect(h.deleteLocation).toHaveBeenCalledWith("l1");
     expect(h.refetchLocations).toHaveBeenCalledTimes(1);
     expect(h.updateSettings).not.toHaveBeenCalled();
@@ -1243,7 +1353,7 @@ describe("LocationSettings", () => {
     });
     pickup.value = h;
     renderV2Page();
-    act(() => (container.querySelector('ul[aria-label="Delivery locations"] button') as HTMLButtonElement).click());
+    act(() => (container.querySelector('table[aria-label="Delivery locations"] button[aria-label="Edit Airport"]') as HTMLButtonElement).click());
     const dialog = document.querySelector('[role="dialog"]') as HTMLElement;
     expect(dialog).not.toBeNull();
     await act(async () => buttonByText("Save", dialog).click());
@@ -1264,7 +1374,7 @@ describe("LocationSettings", () => {
     pickup.value = h;
     const onDirtyChangeV2 = vi.fn();
     renderV2Page({ onDirtyChangeV2 });
-    act(() => (container.querySelector('ul[aria-label="Delivery locations"] button') as HTMLButtonElement).click());
+    act(() => (container.querySelector('table[aria-label="Delivery locations"] button[aria-label="Edit Airport"]') as HTMLButtonElement).click());
     const dialog = document.querySelector('[role="dialog"]') as HTMLElement;
     act(() => (dialog.querySelector("#v2-location-active") as HTMLButtonElement).click());
     expect(h.updateLocation).not.toHaveBeenCalled();
@@ -1308,10 +1418,12 @@ describe("LocationSettings", () => {
     act(() => retry.click());
     expect(h.refetchSettings).toHaveBeenCalledTimes(1);
     expect(input("#v2-pickup-address").disabled).toBe(true);
+    // Six options and Return's "Same as pickup address", all locked.
     const switches = Array.from(container.querySelectorAll('[role="switch"]')) as HTMLButtonElement[];
-    expect(switches).toHaveLength(6);
+    expect(switches).toHaveLength(7);
     expect(switches.every((el) => el.disabled)).toBe(true);
-    expect(container.querySelectorAll("li button")).toHaveLength(0);
+    expect(container.querySelectorAll("table button")).toHaveLength(0);
+    expect(container.textContent).not.toContain("Actions");
     expect(container.textContent).not.toContain("Add location");
     expect(registerSave).not.toHaveBeenCalledWith("locations", expect.any(Function), expect.anything());
 

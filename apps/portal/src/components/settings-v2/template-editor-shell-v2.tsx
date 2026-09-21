@@ -178,7 +178,8 @@ export function TemplateEditorShellV2({
             <p className="flex items-center gap-2 px-4 pb-2 pt-3 text-sm font-medium text-muted-foreground">
               <Eye className="size-4" aria-hidden="true" />
               Preview
-              <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-normal">Sample data</span>
+              {/* The same chip the header uses, not a second one spelled out here. */}
+              <EditorChip>Sample data</EditorChip>
             </p>
             <div className="template-preview-v2 min-h-0 flex-1 overflow-auto px-5 pb-5 [overflow-wrap:anywhere]" data-kind={previewKind}>
               {preview}

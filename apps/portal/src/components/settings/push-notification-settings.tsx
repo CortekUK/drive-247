@@ -395,7 +395,9 @@ export function PushNotificationSettings({ canEdit = true }: Props) {
                 <SelectTriggerV2 id="push-target" className="w-full sm:w-72">
                   <SelectValueV2 />
                 </SelectTriggerV2>
-                <SelectContentV2>
+                {/* Surface tone: Settings is a light, text-heavy screen, where
+                    the v2 dropdown's default dark panel reads as an OS menu. */}
+                <SelectContentV2 tone="surface">
                   {(Object.keys(TARGET_LABELS) as SendPushInput['target'][]).map((key) => (
                     <SelectItemV2 key={key} value={key}>
                       {TARGET_LABELS[key]}

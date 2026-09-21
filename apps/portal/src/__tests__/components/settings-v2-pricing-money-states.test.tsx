@@ -75,7 +75,7 @@ import {
   EMPTY_HOLIDAY_FORM,
 } from "@/components/settings-v2/pricing-money-logic";
 import { DepositSettingsV2, FeesSettingsV2 } from "@/components/settings-v2/fees-deposit-v2";
-import { PricingRulesV2 } from "@/components/settings-v2/pricing-rules-v2";
+import { MonthlyRateSectionV2, PricingRulesV2 } from "@/components/settings-v2/pricing-rules-v2";
 import { SettingsPageSaveProvider } from "@/components/settings-v2/settings-kit";
 
 /* -------------------------------------------------------------------------- */
@@ -639,7 +639,8 @@ describe("PricingRulesV2", () => {
     expect(container.querySelector(`[title="${longName}"]`)).not.toBeNull();
     expect(text().match(/Past/g)).toHaveLength(1);
     expect(text()).toContain("+1,234,567%");
-    expect(text()).toContain("All 2 holidays shown");
+    // Both rows are on screen, so a settings table says nothing under them.
+    expect(text()).not.toContain("holidays shown");
     expect(findButton(`Edit ${longName}`)).toBeDefined();
     expect(findButton("Delete Christmas")).toBeDefined();
   });
@@ -722,11 +723,9 @@ describe("PricingRulesV2", () => {
     expect(text()).toContain("You don't have permission to change this. Ask an admin.");
   });
 
-  it("monthly rate: loading shows a skeleton, not a 30-day default", () => {
-    h.reads["weekend-pricing"] = readState();
-    h.reads["tenant-holidays"] = readState();
+  it("monthly rate (now its own section, for General): loading shows a skeleton, not a 30-day default", () => {
     render(
-      <PricingRulesV2
+      <MonthlyRateSectionV2
         canEdit
         monthlyTier={{ value: 30, savedValue: 30, onChange: vi.fn(), onSave: vi.fn(async () => undefined), read: loadingState() as any }}
       />,
@@ -742,14 +741,15 @@ describe("inside the page's one save bar", () => {
     return calls[calls.length - 1] as [string, () => Promise<unknown>, () => void];
   };
 
-  it("Pricing rules: no Save anywhere; the monthly rate and weekend pricing register a save and a discard", async () => {
+  it("Weekend and holiday pricing and the monthly rate: no Save anywhere; each registers a save and a discard", async () => {
     h.reads["weekend-pricing"] = readState();
     h.reads["tenant-holidays"] = readState();
     const registerSave = vi.fn();
     const monthlyTier = { value: 31, savedValue: 30, onChange: vi.fn(), onSave: vi.fn(async () => undefined), read: readState() as any };
     render(
       <SettingsPageSaveProvider>
-        <PricingRulesV2 canEdit registerSave={registerSave} monthlyTier={monthlyTier} />
+        <MonthlyRateSectionV2 canEdit registerSave={registerSave} monthlyTier={monthlyTier} />
+        <PricingRulesV2 canEdit registerSave={registerSave} />
       </SettingsPageSaveProvider>,
     );
     typeInto(document.getElementById("v2-weekend-percent") as HTMLInputElement, "25");
@@ -974,9 +974,15 @@ describe("settings page wiring (source)", () => {
   const v2End = page.indexOf("\n  return (", page.indexOf("<LeaveDialogV2", v2Start));
   const v2 = page.slice(v2Start, v2End);
 
-  it("Custom pricing and General (which holds Tax and fees and Security deposit) sit outside the page's read-only fieldset", () => {
-    expect(page).toMatch(/const V2_PAGES_GATING_OWN_CONTROLS = new Set\(\[[^\]]*'general'[^\]]*\]\);/);
-    expect(page).toMatch(/const V2_PAGES_GATING_OWN_CONTROLS = new Set\(\[[^\]]*'pricing'[^\]]*\]\);/);
+  it("Weekend and holiday pricing, General and Tax and deposit (Tax and fees, Security deposit) sit outside the page's read-only fieldset", () => {
+    // Read as a set: the two money sections live on the `tax-and-deposit` page
+    // and the monthly rate on `general`, and each wraps its controls in its own
+    // fieldset, so neither page may be locked wholesale.
+    const gating = page.match(/const V2_PAGES_GATING_OWN_CONTROLS = new Set\(\[([^\]]*)\]\);/)?.[1] ?? "";
+    const gates = new Set([...gating.matchAll(/'([^']+)'/g)].map((m) => m[1]));
+    expect(gates).toContain("general");
+    expect(gates).toContain("tax-and-deposit");
+    expect(gates).toContain("pricing");
     // Each money section takes its own permission, not the page's.
     expect(v2).toContain("canEdit={canEditSettings('fees')}");
     expect(v2).toContain("canEdit={canEditSettings('preauth')}");
@@ -993,8 +999,13 @@ describe("settings page wiring (source)", () => {
     const bar = page.match(/const V2_PAGES_WITH_SAVE_BAR = new Set\(\[([^\]]*)\]\);/);
     expect(bar).not.toBeNull();
     expect(bar![1]).toContain("'installments', 'payg', 'auto-extend'");
-    // Tax and fees and Security deposit save through General's bar.
-    expect(bar![1]).toContain("'general', 'templates', 'pricing'");
+    // Tax and fees and Security deposit save through Tax and deposit's own
+    // bar; the monthly rate through General's ("pricing-monthly-tier").
+    const barPages = new Set([...bar![1].matchAll(/'([^']+)'/g)].map((m) => m[1]));
+    expect(barPages).toContain("tax-and-deposit");
+    expect(barPages).toContain("general");
+    expect(barPages).toContain("templates");
+    expect(barPages).toContain("pricing");
     // Promo codes and Extras are lists that save per item: no bar.
     expect(bar![1]).not.toContain("'promos'");
     expect(bar![1]).not.toContain("'extras'");

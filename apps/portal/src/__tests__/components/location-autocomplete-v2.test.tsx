@@ -67,8 +67,8 @@ afterEach(() => {
 });
 
 /** Focus the field with an address already in it: that asks for suggestions without the 300ms debounce. */
-async function openSuggestions(v2: boolean) {
-  const field = <LocationAutocomplete value="12 King" onChange={() => {}} />;
+async function openSuggestions(v2: boolean, v2States = false) {
+  const field = <LocationAutocomplete value="12 King" onChange={() => {}} v2States={v2States} />;
   act(() => root.render(v2 ? <V2Provider flags={{ chrome: true }}>{field}</V2Provider> : field));
   const input = container.querySelector("input")!;
   await act(async () => {
@@ -112,5 +112,17 @@ describe("the address suggestions menu", () => {
     // Same two suggestions, same text: only the dressing changed.
     expect(items).toHaveLength(2);
     expect(items[1].textContent).toContain("12 King Road");
+  });
+
+  it("v2 settings (v2States) list each address without the map pin", async () => {
+    const { items } = await openSuggestions(true, true);
+    expect(items).toHaveLength(2);
+    items.forEach((item) => expect(item.querySelector("svg")).toBeNull());
+    expect(items[0].textContent).toBe("12 King StreetLeeds, UK");
+  });
+
+  it("v2 rental screens (chrome, no v2States) keep the pin", async () => {
+    const { items } = await openSuggestions(true, false);
+    expect(items[0].querySelector("svg")!.getAttribute("class")).toBe("lucide lucide-map-pin w-4 h-4 mt-0.5 text-muted-foreground flex-shrink-0");
   });
 });

@@ -107,6 +107,21 @@ const DEFAULT_LOCATION_SETTINGS: LocationSettings = {
 };
 
 /**
+ * v2 (northwind): what a location's success toast says. The v1 copy says
+ * "Pickup location" for every location, return locations included; v2 names
+ * the location instead.
+ */
+export function locationToastV2(
+  kind: 'added' | 'updated' | 'deleted',
+  location?: { name?: string | null } | null,
+): { title: string; description: string } {
+  const name = location?.name?.trim();
+  if (kind === 'added') return { title: 'Location added', description: name ? `${name} was added.` : 'The location was added.' };
+  if (kind === 'updated') return { title: 'Location updated', description: name ? `${name} was saved.` : 'The location was saved.' };
+  return { title: 'Location deleted', description: name ? `${name} was removed.` : 'The location was removed.' };
+}
+
+/**
  * Hook to manage pickup/return locations for a tenant
  *
  * This hook provides:
@@ -383,10 +398,14 @@ export const usePickupLocations = () => {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['pickup-locations', tenant?.id] });
-      toast({
-        title: "Location Added",
-        description: "New pickup location has been added successfully.",
-      });
+      if (v2) {
+        toast(locationToastV2('added', data));
+      } else {
+        toast({
+          title: "Location Added",
+          description: "New pickup location has been added successfully.",
+        });
+      }
       logAction({ action: "location_created", entityType: "location", entityId: data.id, details: { name: data.name } });
     },
     onError: (error: Error) => {
@@ -427,10 +446,14 @@ export const usePickupLocations = () => {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['pickup-locations', tenant?.id] });
-      toast({
-        title: "Location Updated",
-        description: "Pickup location has been updated successfully.",
-      });
+      if (v2) {
+        toast(locationToastV2('updated', data));
+      } else {
+        toast({
+          title: "Location Updated",
+          description: "Pickup location has been updated successfully.",
+        });
+      }
       logAction({ action: "location_updated", entityType: "location", entityId: data.id, details: {} });
     },
     onError: (error: Error) => {
@@ -466,10 +489,14 @@ export const usePickupLocations = () => {
     },
     onSuccess: (id) => {
       queryClient.invalidateQueries({ queryKey: ['pickup-locations', tenant?.id] });
-      toast({
-        title: "Location Deleted",
-        description: "Pickup location has been removed.",
-      });
+      if (v2) {
+        toast(locationToastV2('deleted', locations?.find((l) => l.id === id)));
+      } else {
+        toast({
+          title: "Location Deleted",
+          description: "Pickup location has been removed.",
+        });
+      }
       logAction({ action: "location_deleted", entityType: "location", entityId: id, details: {} });
     },
     onError: (error: Error) => {

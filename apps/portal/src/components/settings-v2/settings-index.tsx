@@ -18,11 +18,31 @@
  *  - Subscription — the sidebar's Billing page is the same screen.
  *  - Portal appearance as a separate entry — it edits the same name, logo,
  *    favicon and colours as Branding, so Branding opens it.
- *  - Driver requirements, Booking rules, Key handover, Booking site, Tax and
- *    fees and Security deposit — sections of General now; their old `?tab=`
- *    links open General at that section.
+ *  - Driver requirements and Monthly rate — sections of General
+ *    (`?tab=requirements` scrolls to one; the monthly rate has no tab of its
+ *    own, `?tab=pricing` still opens Weekend and holiday pricing).
+ *  - Tax and fees and Security deposit as two entries — one page, Tax and
+ *    deposit (`?tab=fees` and `?tab=preauth` still open it).
  *  - The global blacklist — out of Settings for now (it is to move to
  *    Customers). A `?tab=blacklist` link says it isn't part of the workspace.
+ *  - Team emails and Push notifications — both are part of the one
+ *    Notifications page now; `?tab=reminders` and `?tab=push` open it at the
+ *    email and push setup. Customer messages moved to a Templates group, with
+ *    the agreement template beside it.
+ *
+ * Business reads as who you are (General, Branding, Locations), how a rental
+ * runs (Booking rules, Lockbox), then the rest (Booking site, Optional
+ * modules, Team). Booking rules, Lockbox (was Key handover), Booking site and
+ * Optional modules were sections of General for a while (Sep 17 to 19 2026)
+ * and are pages again.
+ *
+ * Tax and deposit is the one page whose ENTRY is not in the group its subject
+ * suggests: it is the first entry under Pricing, because tax, fees and the
+ * deposit are what a customer is charged (ticket item 1, "fees, tax and
+ * deposit become a rule inside Pricing, next to custom pricing"). The page
+ * itself is unchanged — `?tab=tax-and-deposit`, `?tab=fees` and
+ * `?tab=preauth` all open it — and `V2_PAGES` in settings/page.tsx carries the
+ * matching `section: 'Pricing'`, so the index and the page agree.
  *
  * Promo codes, Extras, Installments, Pay as you go and Auto-extension were
  * hidden for a while (V2_HIDDEN_SETTINGS_PAGES, now empty) and are listed
@@ -41,11 +61,20 @@ import {
   SettingsEmptyState,
   SettingsNoMatch,
 } from "@/components/settings-v2/section-states";
-import { V2_GENERAL_PERM_TABS, findSettingsSearchHandoff } from "@/components/settings-v2/settings-shell-state";
-import { SETTINGS_PAGE_TITLE, SETTINGS_SECTION_TITLE } from "@/components/settings-v2/settings-kit";
+import {
+  V2_GENERAL_PERM_TABS,
+  V2_TAX_AND_DEPOSIT_PERM_TABS,
+  findSettingsSearchHandoff,
+} from "@/components/settings-v2/settings-shell-state";
+import {
+  SETTINGS_COLUMN_BESIDE_TRAX,
+  SETTINGS_PAGE_TITLE,
+  SETTINGS_SECTION_TITLE,
+} from "@/components/settings-v2/settings-kit";
 import { usePageSearch } from "@/components/shared/layout/page-search-slot";
 import { isSettingsTabHiddenForLean } from "@/lib/lean-areas";
 import { useIsLean } from "@/lib/lean-context";
+import { cn } from "@/lib/utils";
 
 export interface SettingsIndexItem {
   title: string;
@@ -55,8 +84,8 @@ export interface SettingsIndexItem {
   tab: string;
   /**
    * The entry opens a page made of sections with their own permissions
-   * (General): it is listed when ANY of these tabs is viewable. `tab` still
-   * drives the lean gate.
+   * (General, Tax and deposit): it is listed when ANY of these tabs is
+   * viewable. `tab` still drives the lean gate.
    */
   anyOfTabs?: readonly string[];
   /** Listed for head admins only (Team: `/users` refuses everyone else). */
@@ -88,25 +117,25 @@ export const SETTINGS_INDEX_SECTIONS: SettingsIndexSection[] = [
     items: [
       {
         title: "General",
+        // Three stacked sections: Regional, Driver requirements, Monthly rate.
         description:
-          "Currency, driver and booking rules, key handover, tax, fees and deposits, your booking site and optional modules.",
+          "Your currency and distance unit, the minimum driver age and ID checks, and when your monthly rate starts.",
         href: "/settings?tab=general",
         tab: "general",
         anyOfTabs: V2_GENERAL_PERM_TABS,
         keywords:
-          "currency distance miles kilometres km modules turo fleet health vehicle owners " +
+          "regional currency dollar distance miles kilometres km " +
           "driver requirements age licence license passport id verification waiver " +
-          "booking rules notice lead time duration minimum maximum buffer cooldown " +
-          "key handover lockbox keys code delivery " +
-          "booking site gig driver price breakdown average daily plate vin registration header footer colour " +
-          "tax vat service fee security deposit hold pre-authorisation preauth charge",
+          "monthly rate monthly tier monthly pricing 30 31 days",
       },
       {
         title: "Branding",
-        description: "Your business name, logo, favicon and brand colour, shown in this portal and on your customer booking site.",
+        // The Branding page calls them "Square icon" and "Full logo"; "favicon"
+        // stays in the keywords only, so a search for it still finds this page.
+        description: "Your portal name, square icon, full logo and brand colour, shown in this portal and on your customer booking site.",
         href: "/settings/appearance",
         tab: "branding",
-        keywords: "logo colour color theme appearance name favicon",
+        keywords: "logo full logo square icon colour color theme appearance name favicon",
         tourAnchor: "settings-tab-branding",
       },
       {
@@ -115,6 +144,34 @@ export const SETTINGS_INDEX_SECTIONS: SettingsIndexSection[] = [
         href: "/settings?tab=locations",
         tab: "locations",
         keywords: "pickup return delivery address collection",
+      },
+      {
+        title: "Booking rules",
+        description: "How far ahead customers must book, the shortest and longest rental, and the time a car rests between rentals.",
+        href: "/settings?tab=duration",
+        tab: "duration",
+        keywords: "booking rules advance notice lead time duration minimum maximum shortest longest buffer cooldown gap",
+      },
+      {
+        title: "Lockbox",
+        description: "Leave the keys in a lockbox for delivery rentals, choose the code length, and email the code to the customer.",
+        href: "/settings?tab=lockbox",
+        tab: "lockbox",
+        keywords: "lockbox key handover keys code length delivery email",
+      },
+      {
+        title: "Booking site",
+        description: "What customers see on your booking site: daily prices, the checkout breakdown, plate numbers and header colours.",
+        href: "/settings?tab=booking-site",
+        tab: "general",
+        keywords: "booking site website gig driver price breakdown average daily plate vin registration header footer colour",
+      },
+      {
+        title: "Optional modules",
+        description: "Add extra pages to your sidebar, such as vehicle owners and payouts, fleet health checks or Turo Sync.",
+        href: "/settings?tab=modules",
+        tab: "general",
+        keywords: "optional modules turo fleet health vehicle owners payouts",
       },
       {
         title: "Team",
@@ -141,15 +198,26 @@ export const SETTINGS_INDEX_SECTIONS: SettingsIndexSection[] = [
     ],
   },
   {
-    // What a customer is charged: surcharges, discounts and add-ons.
+    // What a customer is charged on top of the rental price, and what comes
+    // off it: tax, fees and the deposit, discounts, add-ons, then weekend and
+    // holiday surcharges last.
     title: "Pricing",
     items: [
       {
-        title: "Custom pricing",
-        description: "Charge more on weekends and holidays, and choose the rental length at which your monthly rate starts.",
-        href: "/settings?tab=pricing",
-        tab: "pricing",
-        keywords: "custom pricing dynamic seasonal weekend holiday surcharge monthly tier rate",
+        // Under Pricing rather than Business (ticket item 1): tax, fees and the
+        // deposit are part of what a customer is charged. The page is the one
+        // the Business group used to list, unchanged — `?tab=fees` and
+        // `?tab=preauth` still open it at the matching section.
+        title: "Tax and deposit",
+        description: "Sales tax and service fees added to every booking, and the security deposit held or charged on online bookings.",
+        href: "/settings?tab=tax-and-deposit",
+        // Two sections under their own permissions (Tax and fees, Security
+        // deposit): listed when either is viewable.
+        tab: "fees",
+        anyOfTabs: V2_TAX_AND_DEPOSIT_PERM_TABS,
+        keywords:
+          "tax vat sales tax service fee booking fee fees charges " +
+          "security deposit hold pre-authorisation pre-authorization preauth charge refundable",
       },
       {
         title: "Promo codes",
@@ -164,6 +232,15 @@ export const SETTINGS_INDEX_SECTIONS: SettingsIndexSection[] = [
         href: "/settings?tab=extras",
         tab: "extras",
         keywords: "extras add-ons addons add ons child seat baby seat gps stock",
+      },
+      {
+        // Formerly "Custom pricing" (and before that "Pricing rules"); the tab
+        // and its permission are unchanged, and the old names still find it.
+        title: "Weekend and holiday pricing",
+        description: "Charge more for the weekend days and holidays a rental includes, with its own surcharge for each holiday you add.",
+        href: "/settings?tab=pricing",
+        tab: "pricing",
+        keywords: "weekend holiday holidays surcharge seasonal dynamic custom pricing pricing rules",
       },
     ],
   },
@@ -196,28 +273,40 @@ export const SETTINGS_INDEX_SECTIONS: SettingsIndexSection[] = [
     ],
   },
   {
+    // One page for every notification (build-spec D7): it replaced Team emails
+    // and Push notifications, whose old `?tab=reminders` / `?tab=push` links
+    // open it at the email and push setup.
     title: "Notifications",
     items: [
       {
-        title: "Team emails",
-        description: "Choose which emails you and your team receive about new bookings, payments and other activity on your account.",
-        href: "/settings?tab=reminders",
-        tab: "reminders",
-        keywords: "email notifications alerts reminders",
+        title: "Notifications",
+        description: "Every email, push and in-app message you and your customers get: when it is sent, what it says and who gets it.",
+        href: "/settings?tab=notifications",
+        tab: "notifications",
+        keywords:
+          "email push in-app in app bell alerts templates team emails push notifications reminders " +
+          "sender from address reply to send test preview subject variables " +
+          "phone browser install home screen payment reminders reminder rules",
       },
-      {
-        title: "Push notifications",
-        description: "Send instant alerts to your team's phones and browsers when something on your account needs attention.",
-        href: "/settings?tab=push",
-        tab: "push",
-        keywords: "push mobile browser alerts",
-      },
+    ],
+  },
+  {
+    // The wording customers read outside the notifications themselves (D8).
+    title: "Templates",
+    items: [
       {
         title: "Customer messages",
         description: "The return reminder, the emails customers receive, the lockbox code email and the rental agreement they sign.",
         href: "/settings?tab=templates",
         tab: "templates",
         keywords: "templates email agreement contract return reminder sms lockbox code instructions",
+      },
+      {
+        title: "Agreement templates",
+        description: "The rental agreement customers sign before they drive: its wording, the details it fills in, and a preview.",
+        href: "/settings/agreement-templates",
+        tab: "templates",
+        keywords: "agreement contract rental agreement terms signature sign esign document",
       },
     ],
   },
@@ -229,6 +318,7 @@ export function SettingsIndexV2({
   tenantSlug,
   isHeadAdmin = false,
   notice,
+  hiddenHrefs,
 }: {
   canView: (tab: string) => boolean;
   /**
@@ -247,6 +337,11 @@ export function SettingsIndexV2({
   isHeadAdmin?: boolean;
   /** Shown under the title: why a `?tab=` link landed here instead of a page. */
   notice?: ReactNode;
+  /**
+   * Entries (by `href`) this workspace has nothing behind: Optional modules
+   * when no module applies to it. An empty page is worse than no entry.
+   */
+  hiddenHrefs?: readonly string[];
 }) {
   const [query, setQuery] = useState("");
 
@@ -262,13 +357,16 @@ export function SettingsIndexV2({
   // `useIsLean` is a hook, so it is read here and CLOSED OVER by the
   // predicate rather than called inside it.
   const leanTenant = useIsLean();
+  // A string, so a new array with the same entries each render is not a change.
+  const hiddenKey = (hiddenHrefs ?? []).join("\n");
   const allowed = useCallback(
     (item: SettingsIndexItem) =>
       (item.anyOfTabs ?? [item.tab]).some(canView) &&
       (!item.headAdminOnly || isHeadAdmin) &&
       (!item.requiresRoute || canAccessRoute(item.requiresRoute)) &&
-      !isSettingsTabHiddenForLean(item.tab, leanTenant),
-    [canView, isHeadAdmin, leanTenant, canAccessRoute]
+      !isSettingsTabHiddenForLean(item.tab, leanTenant) &&
+      !(hiddenKey ? hiddenKey.split("\n") : []).includes(item.href),
+    [canView, isHeadAdmin, leanTenant, canAccessRoute, hiddenKey]
   );
 
   const sections = useMemo(() => {
@@ -298,8 +396,13 @@ export function SettingsIndexV2({
   // Switch row alignment: at md+ <main>'s content starts at y=50 and the h1 is a
   // 32px line, so 26px of top padding centres it at 50 + 26 + 16 = 92, the
   // sidebar Portal / Website switch's row (md:pt-7 left it 2px low, at 94).
+  // SETTINGS_COLUMN_BESIDE_TRAX: the same column the Settings pages use, so the
+  // open Trax panel never sits over the last column of entries.
   return (
-    <div className="w-full max-w-[1160px] space-y-9 pb-16 md:pt-[26px]" data-tour="settings-index">
+    <div
+      className={cn("w-full max-w-[1160px] space-y-9 pb-16 md:pt-[26px]", SETTINGS_COLUMN_BESIDE_TRAX)}
+      data-tour="settings-index"
+    >
       <h1 className={SETTINGS_PAGE_TITLE}>Settings</h1>
 
       {notice}
@@ -334,9 +437,13 @@ export function SettingsIndexV2({
                   key={item.href}
                   href={item.href}
                   data-tour={item.tourAnchor}
-                  className="group -mx-3 block rounded-xl px-3 py-2.5 transition-colors hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]"
+                  /* The tint IS the hover affordance — the whole card is the
+                     target, and underlining the title made it read as a word
+                     inside a sentence (team lead, Sep 2026). Keyboard users get
+                     the ring, which the title's underline never gave them. */
+                  className="group -mx-3 block rounded-xl px-3 py-2.5 outline-none transition-colors hover:bg-primary/10 focus-visible:ring-3 focus-visible:ring-ring/30 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]"
                 >
-                  <span className="text-[15px] font-medium text-primary group-hover:underline dark:text-[hsl(var(--v2-link,var(--primary)))]">
+                  <span className="text-[15px] font-medium text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
                     {item.title}
                   </span>
                   <span className="mt-1 block max-w-[320px] text-[13px] leading-[1.45] text-muted-foreground">

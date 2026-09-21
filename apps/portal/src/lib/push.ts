@@ -128,6 +128,54 @@ export function registerServiceWorker(): Promise<ServiceWorkerRegistration | nul
   return registrationPromise;
 }
 
+// ---------------------------------------------------------------------------
+// The v2 worker (northwind canary; see public/service-worker-v2.js)
+// ---------------------------------------------------------------------------
+
+/** The v2 worker: v1 plus "Open in app", silent, renotify and a safer click handler. */
+export const SERVICE_WORKER_V2_URL = '/service-worker-v2.js';
+
+let registeredV2 = false;
+
+/**
+ * `registerServiceWorker`, for a tenant on v2 chrome. Only v2 code calls it
+ * (the registrar behind `useV2('chrome')`, and the v2 push setup card), so
+ * every other tenant keeps `/service-worker.js` exactly as before.
+ *
+ * Same scope, different script: the browser replaces the v1 worker with this
+ * one for this origin, and the push subscription (which belongs to the
+ * registration) carries over. Its promise becomes the shared one above, so
+ * every later `registerServiceWorker()` in this page load — the push hook's
+ * reconcile, enable and disable — resolves to the v2 registration instead of
+ * registering the v1 script again and swapping the workers back.
+ *
+ * If the v2 script cannot be registered, the v1 worker is registered instead,
+ * so push keeps working on the canary.
+ */
+export function registerServiceWorkerV2(): Promise<ServiceWorkerRegistration | null> {
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
+    return Promise.resolve(null);
+  }
+  if (registeredV2 && registrationPromise) return registrationPromise;
+  registeredV2 = true;
+
+  registrationPromise = navigator.serviceWorker
+    .register(SERVICE_WORKER_V2_URL, { scope: '/' })
+    .then(() => navigator.serviceWorker.ready)
+    .catch((error) => {
+      console.error('[push] v2 service worker registration failed, using the v1 worker:', error);
+      return navigator.serviceWorker
+        .register('/service-worker.js', { scope: '/' })
+        .then(() => navigator.serviceWorker.ready)
+        .catch((fallbackError) => {
+          console.error('[push] Service worker registration failed:', fallbackError);
+          return null;
+        });
+    });
+
+  return registrationPromise;
+}
+
 /**
  * Recover the real error message from a failed `supabase.functions.invoke`.
  *

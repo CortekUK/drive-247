@@ -2,7 +2,8 @@
 
 import { useEffect } from "react";
 import { useTenant } from "@/contexts/TenantContext";
-import { capturePwaInstallPrompt, registerServiceWorker } from "@/lib/push";
+import { capturePwaInstallPrompt, registerServiceWorker, registerServiceWorkerV2 } from "@/lib/push";
+import { useV2 } from "@/lib/v2-context";
 
 /**
  * Registers the portal's push service worker.
@@ -19,6 +20,10 @@ export function ServiceWorkerRegistrar() {
   // handling for the ENTIRE origin, so installing one on an operator who has the
   // feature switched off is real risk for zero benefit.
   const pushEnabled = tenant?.push_notifications_enabled === true;
+  // v2 chrome (northwind) gets public/service-worker-v2.js at the same scope,
+  // which replaces the v1 worker for that tenant only; everyone else keeps
+  // /service-worker.js.
+  const v2Chrome = useV2("chrome");
 
   useEffect(() => {
     if (!pushEnabled) return;
@@ -33,10 +38,10 @@ export function ServiceWorkerRegistrar() {
     // Off the critical path — the worker does no caching here, so it brings no
     // first-paint benefit and should not compete with the dashboard's requests.
     const timer = window.setTimeout(() => {
-      void registerServiceWorker();
+      void (v2Chrome ? registerServiceWorkerV2() : registerServiceWorker());
     }, 1500);
     return () => window.clearTimeout(timer);
-  }, [pushEnabled]);
+  }, [pushEnabled, v2Chrome]);
 
   return null;
 }

@@ -253,42 +253,56 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
          Matching v1's 64px keeps that arithmetic true instead of leaving an 8px
          gap on those screens. */
       className={
-        "sticky top-0 z-40 flex h-16 shrink-0 items-center gap-2 px-3 transition-[background-color,box-shadow] duration-200 sm:px-4 " +
-        // The bar has NO ground of its own. The app gradient is painted on the
-        // layout's root, behind the sidebar and this bar alike, and a white
-        // 60-95% fill here cut a band across the top so the page's colour
-        // appeared to start below the bar (team lead's review). At the top of
-        // the page it is fully transparent and the gradient runs from the very
-        // top, as it does in the sidebar. Only once content scrolls underneath
-        // does a light blur and a hairline come in, so the search field stays
-        // readable over the rows passing below it.
-        //
-        // THE SCROLLED FILL IS BRAND-TINTED, NOT WHITE (Sep 20 2026).
-        // It was `bg-background/60`, and `--background` is plain white in both
-        // v2 trees — so the moment the page scrolled, the exact band the review
-        // asked us to remove came back: a 60% white veil over a brand-tinted
-        // gradient reads as a grey stripe across the top, while the page below
-        // keeps its colour. The fix is not to drop the fill (the field has to
-        // stay readable over rows passing under it) but to take it from the
-        // same token the gradient itself is painted with, at a fraction of the
-        // strength. `--v2-wash` is --primary's lightness in the brand hue, so
-        // the band is now the page's own colour rather than a different one,
-        // and the blur does the legibility work. The fallback keeps this valid
-        // for a tenant on chrome-v2 but not theme-v2, where --v2-wash is
-        // undefined. --primary is a plain HSL triple in both trees, so the
-        // `/ 0.06` is safe here; --border is NOT (it carries its own alpha in
-        // dark), which is why the hairline below stays unmodified.
-        //
-        // Dark keeps the fill it had. Dark mode is out of scope for this
-        // change, and there `--background` is already dark — so the veil never
-        // read as a pale band, and dropping to a 6% tint would only have made
-        // rows passing underneath harder to read. The `dark:` utility is
-        // emitted after the base one, so it wins where it applies.
-        (scrolled
-          ? "bg-[hsl(var(--v2-wash,var(--primary))_/_0.06)] dark:bg-background/60 shadow-[inset_0_-1px_0_hsl(var(--border))] backdrop-blur-xl"
-          : "bg-transparent")
+        "sticky top-0 z-40 flex h-16 shrink-0 items-center gap-2 bg-transparent px-3 sm:px-4"
       }
     >
+      {/* The bar's ground, as a veil rather than a band.
+          The app gradient is painted on the layout's root, behind the sidebar
+          and this bar alike, so any fill here risks looking like a separate
+          strip. It used to be a 60% white fill with a hairline along the
+          bottom, and on a scrolled page that hairline read as a line drawn
+          across the top of the screen (team lead's review).
+          So: no border and no shadow. The ground is its own layer, sitting
+          behind the controls, reaching a little PAST the bar and fading to
+          nothing over that tail, so there is no edge anywhere for the eye to
+          catch. The mask fades the blur with it — masking the header itself
+          would fade the controls too, which is why this is a child.
+          At the very top of the page it is not painted at all, so the gradient
+          runs from the top as it does in the sidebar; it fades in only once
+          rows start passing underneath, to keep the search field readable.
+
+          AND IT IS BRAND-TINTED, NOT WHITE (Sep 20 2026).
+          Two changes were made to this bar on the same day, on two branches,
+          against the same complaint ("the background issue, the colour issue").
+          One rebuilt the ground as this masked veil, so no hairline or edge is
+          drawn across the top. The other found that the fill was `--background`
+          — plain white in both v2 trees — so a white wash over a brand-tinted
+          gradient reads as a pale band while the page below keeps its colour.
+          Both are right and neither is enough alone: the veil removes the EDGE,
+          the tint removes the COLOUR. So the veil keeps its mask and takes its
+          colour from `--v2-wash`, the token the app gradient itself is painted
+          with, at a fraction of the strength. `--primary` is a plain HSL triple
+          in both trees, so the `/ 0.10` is safe; `--border` would NOT be (it
+          carries its own alpha in dark), which is one more reason no hairline
+          comes back here.
+          Dark is unchanged and stays on `--background`: dark mode is out of
+          scope, `--background` is already dark there so nothing read as a pale
+          band, and a 6% tint would only make rows passing underneath harder to
+          read. The `dark:` utilities are emitted after the base ones. */}
+      <div
+        aria-hidden="true"
+        data-slot="top-bar-veil"
+        className={
+          // `-inset-x-3 sm:-inset-x-4` and NOT `inset-x-0`: an absolutely
+          // positioned child is placed against its ancestor's PADDING box, so
+          // `left:0` starts inside this bar's own `px-3 sm:px-4` and left a
+          // crisp, untinted gutter at each end for rows to scroll through —
+          // exactly the visible edge this is meant to remove. The negative
+          // inset is that padding, so the veil reaches the bar's real edges.
+          "pointer-events-none absolute -inset-x-3 top-0 -z-[1] h-[calc(100%+1.5rem)] bg-gradient-to-b from-[hsl(var(--v2-wash,var(--primary))_/_0.10)] via-[hsl(var(--v2-wash,var(--primary))_/_0.06)] to-transparent dark:from-background/75 dark:via-background/55 backdrop-blur-xl transition-opacity duration-200 sm:-inset-x-4 [mask-image:linear-gradient(to_bottom,black_0,black_62%,transparent_100%)] " +
+          (scrolled ? "opacity-100" : "opacity-0")
+        }
+      />
       {/* Phone-only navigation opener. Replaces the floating left-edge handle.
           Suppressed where the layout renders no sidebar at all — the Messages
           workspace does that — because the trigger would still toggle sidebar

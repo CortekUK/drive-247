@@ -923,6 +923,30 @@
           "symbols": [
             "branding: 'settings.branding'"
           ]
+        },
+        {
+          "path": "apps/portal/src/components/settings/appearance/logos-v2.tsx",
+          "symbols": [
+            "Shows in the browser tab and at the top of your sidebar.",
+            "Shows on your sign-in page and your booking website.",
+            "Fit into a square"
+          ]
+        },
+        {
+          "path": "apps/portal/src/components/settings/appearance/branding-previews.tsx",
+          "symbols": [
+            "PORTAL_NAME_CUT_OFF_NOTE",
+            "resolveBrandIcon"
+          ]
+        },
+        {
+          "path": "apps/portal/src/lib/appearance/logo.ts",
+          "symbols": [
+            "LOGO_MAX_BYTES = 10 * 1024 * 1024",
+            "small: 'Square icon'",
+            "large: 'Full logo'",
+            "export function resolveBrandIcon"
+          ]
         }
       ],
       "tests": [

@@ -141,7 +141,8 @@ describe("ExtrasTableV2 extreme data", () => {
     expect(text()).toContain("999,999,999.99 / day");
     expect(text()).toContain("Sold out");
     expect(text()).toContain("0 left");
-    expect(text()).toContain("All 1 extra shown");
+    // Every extra is on screen: a settings table adds no "All 1 extra shown" line.
+    expect(text()).not.toContain("extra shown");
   });
 
   it("swaps a broken thumbnail for the image tile", () => {
@@ -167,9 +168,18 @@ describe("ExtrasTableV2 extreme data", () => {
     expect(text()).not.toContain("Sold out");
   });
 
-  it("shows no row menu to a read-only user", () => {
+  it("shows no row menu to a read-only user, and no blank actions column either", () => {
     render(table([extra()], false));
     expect(container.querySelector('[aria-label^="Actions for"]')).toBeNull();
+    // Name, Price, Pricing, Stock, Status: 5, not 6. Description and Type came
+    // out with the row's images (team lead, Sep 20 2026), so this is 5 where it
+    // used to be 7 — the point of the test is still that the read-only user
+    // gets no trailing column, and that head and body agree on the count.
+    expect(container.querySelectorAll("thead th")).toHaveLength(5);
+    expect(container.querySelectorAll("tbody tr:first-child td")).toHaveLength(5);
+    render(table([extra()], true));
+    expect(container.querySelectorAll("thead th")).toHaveLength(6);
+    expect(container.querySelectorAll("tbody tr:first-child td")).toHaveLength(6);
   });
 
   it("tints a negative price in the phone rows, and puts each dot with the fact after it", () => {
@@ -397,7 +407,8 @@ describe("PromoCodesSectionV2 states", () => {
     expect(text()).toContain("12.5%");
     expect(text()).toContain("100,000,000");
     expect(text()).toContain("Expired");
-    expect(text()).toContain("All 2 promo codes shown");
+    // Both codes are on screen: a settings table adds no "All 2 promo codes shown" line.
+    expect(text()).not.toContain("promo codes shown");
   });
 
   it("gives a long code its full text in the title while it truncates", () => {

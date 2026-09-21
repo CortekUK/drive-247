@@ -2,9 +2,10 @@
 
 /**
  * v2 (northwind): the Rental Extras table on Settings → Extras, built from the
- * rentals list's kit (`components/shared/list-table-v2`). No pager: rows arrive
- * 25 at a time as the table scrolls, with one line under the card saying how
- * much is shown.
+ * rentals list's kit (`components/shared/list-table-v2`) on its flat settings
+ * surface (`surface="settings"`). No pager: rows arrive 25 at a time as the
+ * table scrolls, with one line under the table saying how much is shown while
+ * more are to come (none once every extra is on screen).
  *
  * Rows open nothing: there is no extra record route, and the v1 row opens
  * nothing either.
@@ -186,7 +187,9 @@ function ExtraRowMenu<T extends RentalExtra>({ extra, busy, onEdit, onUpdateStoc
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreHorizontal className="h-4 w-4" />}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-auto">
+      {/* Surface tone: this row menu sits on a light Settings table, where the
+          default translucent near-black panel reads as an OS menu. */}
+      <DropdownMenuContent tone="surface" align="end" className="w-auto">
         <DropdownMenuItem onClick={() => onEdit(extra)}>
           <Pencil className="h-3.5 w-3.5" />
           Edit
@@ -396,8 +399,8 @@ function ExtraRow<T extends RentalExtra>({
       {/* The name, and the extra's picture while the row is hovered. No
           thumbnail: the indent it left before every name is what the review
           called "this gap". */}
-      <ListCell>
-        <div className="flex min-w-0 items-center justify-center gap-2.5">
+      <ListCell className="text-left">
+        <div className="flex min-w-0 items-center justify-start gap-2.5">
           <ExtraName extra={extra} open={hover.open} />
           {lowStock && extra.is_active && (
             <span className="shrink-0" title="Below 20% stock">
@@ -434,9 +437,12 @@ function ExtraRow<T extends RentalExtra>({
       <ListCell>
         <StatusText extra={extra} />
       </ListCell>
-      {/* v1's menu items, as controls in the row. Clicks stop here. */}
-      <ListCell className="text-right" onClick={(e) => e.stopPropagation()}>
-        {canEdit && (
+      {/* v1's menu items, as controls in the row. Clicks stop here.
+          The whole CELL is gated, not just its contents: the header drops the
+          actions column for a read-only user, so a cell left behind here would
+          leave the body one column wider than the head and shift every row. */}
+      {canEdit && (
+        <ListCell className="text-right" onClick={(e) => e.stopPropagation()}>
           <ExtraRowActions
             extra={extra}
             busy={busy}
@@ -445,8 +451,8 @@ function ExtraRow<T extends RentalExtra>({
             onToggleActive={onToggleActive}
             onDelete={onDelete}
           />
-        )}
-      </ListCell>
+        </ListCell>
+      )}
     </ListRow>
   );
 }
@@ -544,8 +550,8 @@ export function ExtrasTableV2<T extends RentalExtra>({
         {/* One provider for the whole table: a tooltip per row would mount a
             provider per row. `delayDuration` matches Custom pricing's. */}
         <TooltipProvider delayDuration={300}>
-          <ListTable rows={extraRows} minWidth="min-w-[820px]">
-            <ListHeaderRow />
+          <ListTable rows={extraRows} minWidth="min-w-[820px]" surface="settings">
+            <ListHeaderRow withActions={canEdit} />
             <ListBody>
               {extraRows.visible.map((extra) => (
                 <ExtraRow
@@ -565,7 +571,7 @@ export function ExtrasTableV2<T extends RentalExtra>({
           </ListTable>
         </TooltipProvider>
       </div>
-      <ListFooter rows={extraRows} one="extra" many="extras" />
+      <ListFooter rows={extraRows} one="extra" many="extras" hideWhenAllShown />
     </>
   );
 }
@@ -576,17 +582,21 @@ export function ExtrasTableV2<T extends RentalExtra>({
  * "1000 left" and Status "Inactive". Actions holds four 32px buttons. Name
  * takes the rest and truncates with its full text in a tooltip.
  */
-function ListHeaderRow() {
+function ListHeaderRow({ withActions }: { withActions: boolean }) {
   return (
     <ListTableHeader>
-      <ListHead className="w-[28%]">Name</ListHead>
+      <ListHead className="w-[28%] text-left">Name</ListHead>
       <ListHead className="w-[17%]">Price</ListHead>
       <ListHead className="w-[16%]">Pricing</ListHead>
       <ListHead className="w-[11%]">Stock</ListHead>
       <ListHead className="w-[10%]">Status</ListHead>
-      <ListHead className="w-[18%] text-right">
-        <span className="sr-only">Actions</span>
-      </ListHead>
+      {/* Only for someone who can use the controls: for a viewer it was a
+          blank column with nothing under its blank heading. */}
+      {withActions && (
+        <ListHead className="w-[18%] text-right">
+          <span className="sr-only">Actions</span>
+        </ListHead>
+      )}
     </ListTableHeader>
   );
 }

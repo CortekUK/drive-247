@@ -1,10 +1,15 @@
 "use client";
 
 /**
- * v2 Settings (northwind): the Tax and fees and Security deposit pages, with
- * every state an operator can meet: first load, a failed read, a missing Stripe
+ * v2 Settings (northwind): Tax and fees and Security deposit, the two sections
+ * of the Tax and deposit page (`?tab=tax-and-deposit`; each keeps its own
+ * permission, and `?tab=fees` / `?tab=preauth` still open it), with every
+ * state an operator can meet: first load, a failed read, a missing Stripe
  * connection, unsaved / saving / failed saves, view-only access, and extreme
- * values.
+ * values. On that page every row's control sits at the end of the row and
+ * each dropdown opens under its own box's right edge: each panel carries its
+ * own `SettingsRowAlignProvider align="end"` rather than leaning on the page's
+ * `V2_PAGES_CONTROLS_AT_END`, so it reads the same wherever it is mounted.
  *
  * The form still lives in `settings/page.tsx` (`rentalForm`, synced from
  * `useRentalSettings`), because other pages share it. These components take it
@@ -17,8 +22,20 @@ import { Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import { Input } from "@/components/ui-v2/input";
 import { Switch } from "@/components/ui-v2/switch";
+// Every SelectContent below is `tone="surface"`: Settings is a light,
+// text-heavy screen, and the dropdown's default translucent near-black panel
+// reads there as an OS menu rather than as part of the page. The surface tone
+// uses the page's own popover, border and highlight tokens — see
+// components/ui-v2/select.tsx.
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui-v2/select";
-import { SettingsPanel, SettingsRow, Unit, UnitGroup, UnitGroups } from "@/components/settings-v2/settings-kit";
+import {
+  SettingsPanel,
+  SettingsRow,
+  SettingsRowAlignProvider,
+  Unit,
+  UnitGroup,
+  UnitGroups,
+} from "@/components/settings-v2/settings-kit";
 import { SettingsDependencyNotice, SettingsReadOnlyFieldset } from "@/components/settings-v2/section-states";
 import {
   IssueLine,
@@ -114,135 +131,137 @@ export function FeesSettingsV2({ form, setForm, saved, read, canEdit, currencyCo
   return (
     <ReadGate read={read} thing="tax and fee settings" rows={2}>
       <SettingsReadOnlyFieldset readOnly={!canEdit}>
-        <SettingsPanel footer={canEdit ? <SaveFooter save={save} disabled={!dirty || blocked} onDiscard={discard} /> : undefined}>
-          <SettingsRow
-            label="Sales tax"
-            description="Added on top of the rental as its own line on invoices."
-            note={tax ? <IssueLine issue={tax} /> : undefined}
-          >
-            <UnitGroups>
-              {form.tax_enabled && (
-                <UnitGroup>
-                  <Input
-                    type="text"
-                    inputMode="decimal"
-                    value={form.tax_percentage ?? ""}
-                    onChange={(e) => {
-                      let rawValue = e.target.value.replace(/[^0-9.]/g, "");
-                      const firstDot = rawValue.indexOf(".");
-                      if (firstDot !== -1) {
-                        rawValue = rawValue.slice(0, firstDot + 1) + rawValue.slice(firstDot + 1).replace(/\./g, "");
-                      }
-                      const [whole, decimals] = rawValue.split(".");
-                      if (decimals !== undefined) {
-                        rawValue = `${whole}.${decimals.slice(0, 2)}`;
-                      }
-                      const numValue = parseFloat(rawValue);
-                      if (!isNaN(numValue) && numValue > 100) {
-                        rawValue = "100";
-                      }
-                      setForm((prev) => ({ ...prev, tax_percentage: rawValue }));
-                    }}
-                    onBlur={(e) => {
-                      const value = parseFloat(e.target.value);
-                      setForm((prev) => ({ ...prev, tax_percentage: isNaN(value) ? 0 : Math.max(0, Math.min(100, value)) }));
-                    }}
-                    className="w-20 tabular-nums"
-                    aria-label="Tax rate"
-                  />
-                  <Unit>%</Unit>
-                </UnitGroup>
-              )}
-              <Switch
-                checked={form.tax_enabled ?? false}
-                onCheckedChange={(checked) => setForm((prev) => ({ ...prev, tax_enabled: checked }))}
-                aria-label="Enable tax"
-              />
-            </UnitGroups>
-          </SettingsRow>
-
-          <SettingsRow
-            label="Service fee"
-            description="Added to every booking, as a percentage of the rental or a fixed amount."
-            note={Notes({
-              children: [
-                fee ? <IssueLine key="issue" issue={fee} /> : null,
-                form.service_fee_enabled && !isPercent && feeValue >= ECHO_FROM ? (
-                  <p key="echo" className="tabular-nums text-muted-foreground">
-                    {formatCurrency(feeValue, currencyCode)} on every booking.
-                  </p>
-                ) : null,
-              ],
-            })}
-          >
-            <UnitGroups>
-              {form.service_fee_enabled && (
-                <UnitGroup className="gap-2">
-                  <Select
-                    value={form.service_fee_type}
-                    onValueChange={(value) =>
-                      setForm((prev) => ({ ...prev, service_fee_type: value as FeesFormFields["service_fee_type"] }))
-                    }
-                  >
-                    <SelectTrigger className="w-36" aria-label="Service fee type">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="percentage">Percentage</SelectItem>
-                      <SelectItem value="fixed_amount">Fixed amount</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <div className="relative">
-                    {!isPercent && (
-                      <span
-                        aria-hidden="true"
-                        className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground"
-                      >
-                        {symbol}
-                      </span>
-                    )}
+        <SettingsRowAlignProvider align="end">
+          <SettingsPanel footer={canEdit ? <SaveFooter save={save} disabled={!dirty || blocked} onDiscard={discard} /> : undefined}>
+            <SettingsRow
+              label="Sales tax"
+              description="Added on top of the rental as its own line on invoices."
+              note={tax ? <IssueLine issue={tax} /> : undefined}
+            >
+              <UnitGroups>
+                {form.tax_enabled && (
+                  <UnitGroup>
                     <Input
                       type="text"
                       inputMode="decimal"
-                      value={form.service_fee_value ?? ""}
+                      value={form.tax_percentage ?? ""}
                       onChange={(e) => {
-                        const rawValue = e.target.value.replace(/[^0-9.]/g, "");
-                        if (rawValue === "" || rawValue === ".") {
-                          setForm((prev) => ({ ...prev, service_fee_value: rawValue, service_fee_amount: rawValue }));
-                        } else {
-                          let value = parseFloat(rawValue) || 0;
-                          if (form.service_fee_type === "percentage" && value > 100) value = 100;
-                          setForm((prev) => ({ ...prev, service_fee_value: Math.max(0, value), service_fee_amount: Math.max(0, value) }));
+                        let rawValue = e.target.value.replace(/[^0-9.]/g, "");
+                        const firstDot = rawValue.indexOf(".");
+                        if (firstDot !== -1) {
+                          rawValue = rawValue.slice(0, firstDot + 1) + rawValue.slice(firstDot + 1).replace(/\./g, "");
                         }
+                        const [whole, decimals] = rawValue.split(".");
+                        if (decimals !== undefined) {
+                          rawValue = `${whole}.${decimals.slice(0, 2)}`;
+                        }
+                        const numValue = parseFloat(rawValue);
+                        if (!isNaN(numValue) && numValue > 100) {
+                          rawValue = "100";
+                        }
+                        setForm((prev) => ({ ...prev, tax_percentage: rawValue }));
                       }}
                       onBlur={(e) => {
                         const value = parseFloat(e.target.value);
-                        const finalValue = isNaN(value) ? 0 : Math.max(0, value);
-                        setForm((prev) => ({ ...prev, service_fee_value: finalValue, service_fee_amount: finalValue }));
+                        setForm((prev) => ({ ...prev, tax_percentage: isNaN(value) ? 0 : Math.max(0, Math.min(100, value)) }));
                       }}
-                      className={cn("w-28 tabular-nums", isPercent ? "pr-7" : prefixPadding(symbol))}
-                      aria-label={isPercent ? "Service fee percentage" : `Service fee amount in ${currencyCode}`}
-                      aria-invalid={fee?.blocksSave || undefined}
+                      className="w-20 tabular-nums"
+                      aria-label="Tax rate"
                     />
-                    {isPercent && (
-                      <span
-                        aria-hidden="true"
-                        className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground"
-                      >
-                        %
-                      </span>
-                    )}
-                  </div>
-                </UnitGroup>
-              )}
-              <Switch
-                checked={form.service_fee_enabled ?? false}
-                onCheckedChange={(checked) => setForm((prev) => ({ ...prev, service_fee_enabled: checked }))}
-                aria-label="Enable service fee"
-              />
-            </UnitGroups>
-          </SettingsRow>
-        </SettingsPanel>
+                    <Unit>%</Unit>
+                  </UnitGroup>
+                )}
+                <Switch
+                  checked={form.tax_enabled ?? false}
+                  onCheckedChange={(checked) => setForm((prev) => ({ ...prev, tax_enabled: checked }))}
+                  aria-label="Enable tax"
+                />
+              </UnitGroups>
+            </SettingsRow>
+
+            <SettingsRow
+              label="Service fee"
+              description="Added to every booking, as a percentage of the rental or a fixed amount."
+              note={Notes({
+                children: [
+                  fee ? <IssueLine key="issue" issue={fee} /> : null,
+                  form.service_fee_enabled && !isPercent && feeValue >= ECHO_FROM ? (
+                    <p key="echo" className="tabular-nums text-muted-foreground">
+                      {formatCurrency(feeValue, currencyCode)} on every booking.
+                    </p>
+                  ) : null,
+                ],
+              })}
+            >
+              <UnitGroups>
+                {form.service_fee_enabled && (
+                  <UnitGroup className="gap-2">
+                    <Select
+                      value={form.service_fee_type}
+                      onValueChange={(value) =>
+                        setForm((prev) => ({ ...prev, service_fee_type: value as FeesFormFields["service_fee_type"] }))
+                      }
+                    >
+                      <SelectTrigger className="w-36" aria-label="Service fee type">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent tone="surface" align="end">
+                        <SelectItem value="percentage">Percentage</SelectItem>
+                        <SelectItem value="fixed_amount">Fixed amount</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <div className="relative">
+                      {!isPercent && (
+                        <span
+                          aria-hidden="true"
+                          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground"
+                        >
+                          {symbol}
+                        </span>
+                      )}
+                      <Input
+                        type="text"
+                        inputMode="decimal"
+                        value={form.service_fee_value ?? ""}
+                        onChange={(e) => {
+                          const rawValue = e.target.value.replace(/[^0-9.]/g, "");
+                          if (rawValue === "" || rawValue === ".") {
+                            setForm((prev) => ({ ...prev, service_fee_value: rawValue, service_fee_amount: rawValue }));
+                          } else {
+                            let value = parseFloat(rawValue) || 0;
+                            if (form.service_fee_type === "percentage" && value > 100) value = 100;
+                            setForm((prev) => ({ ...prev, service_fee_value: Math.max(0, value), service_fee_amount: Math.max(0, value) }));
+                          }
+                        }}
+                        onBlur={(e) => {
+                          const value = parseFloat(e.target.value);
+                          const finalValue = isNaN(value) ? 0 : Math.max(0, value);
+                          setForm((prev) => ({ ...prev, service_fee_value: finalValue, service_fee_amount: finalValue }));
+                        }}
+                        className={cn("w-28 tabular-nums", isPercent ? "pr-7" : prefixPadding(symbol))}
+                        aria-label={isPercent ? "Service fee percentage" : `Service fee amount in ${currencyCode}`}
+                        aria-invalid={fee?.blocksSave || undefined}
+                      />
+                      {isPercent && (
+                        <span
+                          aria-hidden="true"
+                          className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground"
+                        >
+                          %
+                        </span>
+                      )}
+                    </div>
+                  </UnitGroup>
+                )}
+                <Switch
+                  checked={form.service_fee_enabled ?? false}
+                  onCheckedChange={(checked) => setForm((prev) => ({ ...prev, service_fee_enabled: checked }))}
+                  aria-label="Enable service fee"
+                />
+              </UnitGroups>
+            </SettingsRow>
+          </SettingsPanel>
+        </SettingsRowAlignProvider>
       </SettingsReadOnlyFieldset>
     </ReadGate>
   );
@@ -326,141 +345,143 @@ export function DepositSettingsV2({
         />
       )}
       <SettingsReadOnlyFieldset readOnly={!canEdit}>
-        <SettingsPanel footer={canEdit ? <SaveFooter save={save} disabled={!dirty} onDiscard={discard} /> : undefined}>
-          <SettingsRow
-            label="Deposit on online bookings"
-            description="When off, customers booking online are not asked for one. You can still take a deposit on a rental you create."
-          >
-            <Switch
-              checked={!!form.security_deposit_enabled}
-              onCheckedChange={(checked) => setForm((prev) => ({ ...prev, security_deposit_enabled: checked }))}
-              aria-label="Take a security deposit on online bookings"
-            />
-          </SettingsRow>
-          {form.security_deposit_enabled && (
-            <>
-              <SettingsRow
-                label="Amount"
-                description={
-                  form.deposit_charge_enabled
-                    ? "Charged on every booking. Refund it from the rental page when the car comes back."
-                    : "Held on the card at pickup and released after the car is returned."
-                }
-                note={Notes({
-                  children: [
-                    form.deposit_mode === "per_vehicle" ? (
-                      <p key="per-vehicle" className={warn}>
-                        Your deposits are set per vehicle. This amount is only used for vehicles without their own.
-                      </p>
-                    ) : null,
-                    amountIssue ? <IssueLine key="amount" issue={amountIssue} /> : null,
-                    amount >= ECHO_FROM ? (
-                      <p key="echo" className="tabular-nums text-muted-foreground">
-                        {formatCurrency(amount, currencyCode)} per booking.
-                      </p>
-                    ) : null,
-                  ],
-                })}
-              >
-                <div className="relative">
-                  <span
-                    aria-hidden="true"
-                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground"
-                  >
-                    {symbol}
-                  </span>
-                  <Input
-                    type="text"
-                    inputMode="decimal"
-                    value={form.global_deposit_amount ?? ""}
-                    onChange={(e) => {
-                      const rawValue = e.target.value.replace(/[^0-9.]/g, "");
-                      if (rawValue === "" || rawValue === ".") {
-                        setForm((prev) => ({ ...prev, global_deposit_amount: rawValue }));
-                      } else {
-                        setForm((prev) => ({ ...prev, global_deposit_amount: Math.max(0, parseFloat(rawValue) || 0) }));
+        <SettingsRowAlignProvider align="end">
+          <SettingsPanel footer={canEdit ? <SaveFooter save={save} disabled={!dirty} onDiscard={discard} /> : undefined}>
+            <SettingsRow
+              label="Deposit on online bookings"
+              description="When off, customers booking online are not asked for one. You can still take a deposit on a rental you create."
+            >
+              <Switch
+                checked={!!form.security_deposit_enabled}
+                onCheckedChange={(checked) => setForm((prev) => ({ ...prev, security_deposit_enabled: checked }))}
+                aria-label="Take a security deposit on online bookings"
+              />
+            </SettingsRow>
+            {form.security_deposit_enabled && (
+              <>
+                <SettingsRow
+                  label="Amount"
+                  description={
+                    form.deposit_charge_enabled
+                      ? "Charged on every booking. Refund it from the rental page when the car comes back."
+                      : "Held on the card at pickup and released after the car is returned."
+                  }
+                  note={Notes({
+                    children: [
+                      form.deposit_mode === "per_vehicle" ? (
+                        <p key="per-vehicle" className={warn}>
+                          Your deposits are set per vehicle. This amount is only used for vehicles without their own.
+                        </p>
+                      ) : null,
+                      amountIssue ? <IssueLine key="amount" issue={amountIssue} /> : null,
+                      amount >= ECHO_FROM ? (
+                        <p key="echo" className="tabular-nums text-muted-foreground">
+                          {formatCurrency(amount, currencyCode)} per booking.
+                        </p>
+                      ) : null,
+                    ],
+                  })}
+                >
+                  <div className="relative">
+                    <span
+                      aria-hidden="true"
+                      className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground"
+                    >
+                      {symbol}
+                    </span>
+                    <Input
+                      type="text"
+                      inputMode="decimal"
+                      value={form.global_deposit_amount ?? ""}
+                      onChange={(e) => {
+                        const rawValue = e.target.value.replace(/[^0-9.]/g, "");
+                        if (rawValue === "" || rawValue === ".") {
+                          setForm((prev) => ({ ...prev, global_deposit_amount: rawValue }));
+                        } else {
+                          setForm((prev) => ({ ...prev, global_deposit_amount: Math.max(0, parseFloat(rawValue) || 0) }));
+                        }
+                      }}
+                      onBlur={(e) => {
+                        const value = parseFloat(e.target.value);
+                        setForm((prev) => ({ ...prev, global_deposit_amount: isNaN(value) ? 0 : Math.max(0, value) }));
+                      }}
+                      className={cn("w-32 tabular-nums", prefixPadding(symbol))}
+                      aria-label={`Deposit amount in ${currencyCode}`}
+                    />
+                  </div>
+                </SettingsRow>
+                <SettingsRow
+                  label="Charge the card instead of holding it"
+                  description={
+                    form.deposit_charge_enabled
+                      ? "The money reaches your account. Nothing is refunded automatically when a rental closes."
+                      : "A temporary hold is placed and released. No money moves unless you charge against it."
+                  }
+                  note={Notes({
+                    // The live-holds lines explain why switching to charges is locked.
+                    // A view-only user can't switch either way, so they are not shown
+                    // (and the check's Try again would sit inside the disabled fieldset).
+                    children: [
+                      canEdit && guard === "blocked" ? (
+                        <p key="blocked" className="text-destructive">
+                          {liveHoldsMessage(liveHoldCount)}
+                        </p>
+                      ) : null,
+                      canEdit && guard === "checking" ? (
+                        <p key="checking" className="inline-flex items-center gap-1.5 text-muted-foreground">
+                          <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+                          Checking for live deposit holds…
+                        </p>
+                      ) : null,
+                      canEdit && guard === "unknown" ? (
+                        <div key="unknown" role="alert" className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <span className="text-destructive">
+                            Couldn&apos;t check for live deposit holds, so switching to charges is locked for now.
+                          </span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="xs"
+                            onClick={() => void holds.refetch()}
+                            disabled={holds.isFetching}
+                          >
+                            {holds.isFetching ? (
+                              <Loader2 className="animate-spin" data-icon="inline-start" />
+                            ) : (
+                              <RefreshCw data-icon="inline-start" />
+                            )}
+                            Try again
+                          </Button>
+                        </div>
+                      ) : null,
+                      chargeNotSaved && canEdit ? (
+                        <p key="not-saved" className={warn}>
+                          Not saved yet. Save to start charging the deposit on new bookings.
+                        </p>
+                      ) : null,
+                    ],
+                  })}
+                >
+                  <Unit>{form.deposit_charge_enabled ? "Charge" : "Hold"}</Unit>
+                  <Switch
+                    checked={!!form.deposit_charge_enabled}
+                    onCheckedChange={(checked) => {
+                      // Switching ON changes what real customers are charged, so it
+                      // confirms. Switching OFF is the safe direction and does not.
+                      if (checked) {
+                        onRequestCharge();
+                        return;
                       }
+                      setForm((prev) => ({ ...prev, deposit_charge_enabled: false }));
                     }}
-                    onBlur={(e) => {
-                      const value = parseFloat(e.target.value);
-                      setForm((prev) => ({ ...prev, global_deposit_amount: isNaN(value) ? 0 : Math.max(0, value) }));
-                    }}
-                    className={cn("w-32 tabular-nums", prefixPadding(symbol))}
-                    aria-label={`Deposit amount in ${currencyCode}`}
+                    disabled={guard !== "allowed"}
+                    aria-label="Collect the deposit as a real charge"
                   />
-                </div>
-              </SettingsRow>
-              <SettingsRow
-                label="Charge the card instead of holding it"
-                description={
-                  form.deposit_charge_enabled
-                    ? "The money reaches your account. Nothing is refunded automatically when a rental closes."
-                    : "A temporary hold is placed and released. No money moves unless you charge against it."
-                }
-                note={Notes({
-                  // The live-holds lines explain why switching to charges is locked.
-                  // A view-only user can't switch either way, so they are not shown
-                  // (and the check's Try again would sit inside the disabled fieldset).
-                  children: [
-                    canEdit && guard === "blocked" ? (
-                      <p key="blocked" className="text-destructive">
-                        {liveHoldsMessage(liveHoldCount)}
-                      </p>
-                    ) : null,
-                    canEdit && guard === "checking" ? (
-                      <p key="checking" className="inline-flex items-center gap-1.5 text-muted-foreground">
-                        <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
-                        Checking for live deposit holds…
-                      </p>
-                    ) : null,
-                    canEdit && guard === "unknown" ? (
-                      <div key="unknown" role="alert" className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                        <span className="text-destructive">
-                          Couldn&apos;t check for live deposit holds, so switching to charges is locked for now.
-                        </span>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="xs"
-                          onClick={() => void holds.refetch()}
-                          disabled={holds.isFetching}
-                        >
-                          {holds.isFetching ? (
-                            <Loader2 className="animate-spin" data-icon="inline-start" />
-                          ) : (
-                            <RefreshCw data-icon="inline-start" />
-                          )}
-                          Try again
-                        </Button>
-                      </div>
-                    ) : null,
-                    chargeNotSaved && canEdit ? (
-                      <p key="not-saved" className={warn}>
-                        Not saved yet. Save to start charging the deposit on new bookings.
-                      </p>
-                    ) : null,
-                  ],
-                })}
-              >
-                <Unit>{form.deposit_charge_enabled ? "Charge" : "Hold"}</Unit>
-                <Switch
-                  checked={!!form.deposit_charge_enabled}
-                  onCheckedChange={(checked) => {
-                    // Switching ON changes what real customers are charged, so it
-                    // confirms. Switching OFF is the safe direction and does not.
-                    if (checked) {
-                      onRequestCharge();
-                      return;
-                    }
-                    setForm((prev) => ({ ...prev, deposit_charge_enabled: false }));
-                  }}
-                  disabled={guard !== "allowed"}
-                  aria-label="Collect the deposit as a real charge"
-                />
-              </SettingsRow>
-            </>
-          )}
-        </SettingsPanel>
+                </SettingsRow>
+              </>
+            )}
+          </SettingsPanel>
+        </SettingsRowAlignProvider>
       </SettingsReadOnlyFieldset>
     </ReadGate>
   );
