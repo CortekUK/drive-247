@@ -99,12 +99,28 @@ describe("wiring", () => {
   });
 
   it("a custom-site booking stays in the booking after the email code, the old site is unchanged", () => {
-    expect(readRepoSource("apps/booking/src/components/custom-booking-page/booking-bar.tsx")).toContain(
+    expect(readRepoSource("apps/booking/src/components/custom-booking-page/book-view.tsx")).toContain(
       "<MultiStepBookingWidget stayInBookingAfterVerify />",
     );
     expect(readRepoSource("apps/booking/src/components/home/legacy-home.tsx")).toContain("<MultiStepBookingWidget />");
     const dialog = readRepoSource("apps/booking/src/components/booking/AuthPromptDialog.tsx");
     expect(dialog).toMatch(/if \(stayInBookingAfterVerify\) \{\s*onSuccess\(\);\s*return;\s*\}\s*window\.location\.href = '\/portal';/);
+  });
+
+  it("Find My Ride opens the booking on its own page instead of unfolding it under the home page", () => {
+    const bar = readRepoSource("apps/booking/src/components/custom-booking-page/booking-bar.tsx");
+    expect(bar).toContain("router.push(`${CBP}/book`);");
+    expect(bar).not.toContain("<MultiStepBookingWidget");
+    expect(readRepoSource(`apps/booking/src/app/(legacy)${CUSTOM_SITE_PREFIX}/book/page.tsx`)).toContain("<BookView />");
+    // /book is the custom site's own page, never an old-site page to move.
+    expect(customSitePathFor(`${CUSTOM_SITE_PREFIX}/book`)).toBeNull();
+  });
+
+  it("the booking page waits for the stored trip, and sends a customer with none back to the bar", () => {
+    const view = readRepoSource("apps/booking/src/components/custom-booking-page/book-view.tsx");
+    expect(view).toContain("useBookingStore.persist");
+    expect(view).toMatch(/if \(hydrated && !hasTrip\) router\.replace\(`\$\{CBP\}#booking`\)/);
+    expect(view).toContain("const hasTrip = currentStep >= 2;");
   });
 
   it("the Test tenant is made eligible for the switch, and nothing else is changed", () => {

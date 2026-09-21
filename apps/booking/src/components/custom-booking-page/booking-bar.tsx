@@ -1,14 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import MultiStepBookingWidget from "@/components/MultiStepBookingWidget";
 import { useTenant } from "@/contexts/TenantContext";
 import { useBookingStore } from "@/stores/booking-store";
 import { CbpDatePicker, CbpSelect, FieldShell } from "./field-ui";
 import { Icon } from "./icons";
 import { Reveal } from "./reveal";
-import type { CbpContent, CbpLocationOption } from "./use-site-content";
+import { CBP, type CbpContent, type CbpLocationOption } from "./use-site-content";
 
 /* ========================================================================== *
  * The booking panel.
@@ -20,13 +20,14 @@ import type { CbpContent, CbpLocationOption } from "./use-site-content";
  * insurance, identity checks, pricing and Stripe checkout all run exactly
  * where they already do. None of that is reimplemented here.
  *
- * The engine stays unmounted until the customer searches, so the page shows
- * one trip-details form rather than two, and the tab rail gives way to the
- * engine's own progress UI once it takes over.
+ * The engine runs on its own page, `${CBP}/book` (book-view.tsx), not under
+ * the home page: "Find My Ride" stores the trip and goes there. Walking back
+ * to step one returns the customer here, so the bar starts from the trip they
+ * already chose.
  *
  * It deliberately does not navigate to `/booking`: `next.config.ts` 307s that
- * route and everything under it to `/`, so the standalone booking page is
- * retired and the embedded widget IS this app's booking flow.
+ * route and everything under it to `/`, so the standalone legacy booking page
+ * is retired.
  * ========================================================================== */
 
 const TABS = [
@@ -57,10 +58,10 @@ function isoDate(days: number): string {
 
 export function BookingPanel({ c }: { c: CbpContent }) {
   const { tenant } = useTenant();
+  const router = useRouter();
   const setFormData = useBookingStore(s => s.setFormData);
   const setCurrentStep = useBookingStore(s => s.setCurrentStep);
   const setHighestStepReached = useBookingStore(s => s.setHighestStepReached);
-  const currentStep = useBookingStore(s => s.currentStep);
 
   const pickupOptions = c.pickupOptions;
   const returnOptions = c.returnOptions;
@@ -79,19 +80,26 @@ export function BookingPanel({ c }: { c: CbpContent }) {
   const [returnTime, setReturnTime] = useState("10:30");
   const [category, setCategory] = useState("");
   const [today, setToday] = useState("");
-  const [searched, setSearched] = useState(false);
 
   // Seeded after mount, never during render: the server and the browser sit in
   // different timezones, so computing "tomorrow" inline would put a different
   // date in the HTML than in the first client render and trip hydration.
+  // A customer sent back from the booking page starts from the trip they had
+  // already chosen, as long as it has not slipped into the past.
   useEffect(() => {
-    setToday(isoDate(0));
-    setPickupDate(isoDate(1));
-    setReturnDate(isoDate(3));
+    const now = isoDate(0);
+    setToday(now);
+    const trip = useBookingStore.getState().formData;
+    const keep = !!trip.pickupDate && trip.pickupDate >= now && !!trip.dropoffDate && trip.dropoffDate >= trip.pickupDate;
+    setPickupDate(keep ? trip.pickupDate : isoDate(1));
+    setReturnDate(keep ? trip.dropoffDate : isoDate(3));
+    if (keep && trip.pickupTime) setPickupTime(trip.pickupTime);
+    if (keep && trip.dropoffTime) setReturnTime(trip.dropoffTime);
+    if (keep && trip.pickupLocationId && pickupOptions.some(o => o.id === trip.pickupLocationId)) {
+      setPickupId(trip.pickupLocationId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // If the customer walks the engine back to step one, hand the bar back too.
-  useEffect(() => { if (currentStep <= 1) setSearched(false); }, [currentStep]);
 
   /** The address to book against, plus the delivery point when there is one. */
   const resolve = (id: string, text: string, opts: CbpLocationOption[]) => {
@@ -168,10 +176,7 @@ export function BookingPanel({ c }: { c: CbpContent }) {
 
     setHighestStepReached(2);
     setCurrentStep(2);
-    setSearched(true);
-    requestAnimationFrame(() => {
-      document.getElementById("booking")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
+    router.push(`${CBP}/book`);
   };
 
   return (
@@ -282,7 +287,7 @@ export function BookingPanel({ c }: { c: CbpContent }) {
           )}
         </form>
 
-        {c.booking.trustPoints.length > 0 && !searched && (
+        {c.booking.trustPoints.length > 0 && (
           <ul className="flex flex-wrap gap-x-6 gap-y-2 border-t border-[var(--line-2)] px-5 py-3.5">
             {c.booking.trustPoints.map(p => (
               <li key={p} className="flex items-center gap-2 text-[12.5px] font-medium text-[var(--body)]">
@@ -293,13 +298,6 @@ export function BookingPanel({ c }: { c: CbpContent }) {
           </ul>
         )}
       </Reveal>
-
-      {/* ------------------------------------------------ the real engine */}
-      {searched && (
-        <div className="cbp-rise mt-8">
-          <MultiStepBookingWidget stayInBookingAfterVerify />
-        </div>
-      )}
     </section>
   );
 }
