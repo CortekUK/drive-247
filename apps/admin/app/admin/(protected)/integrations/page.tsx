@@ -95,6 +95,8 @@ const day = (iso: string | null) =>
 
 export default function IntegrationsAdminPage() {
   const [rows, setRows] = useState<CatalogDraft[]>(ADMIN_INTEGRATIONS.map(blankDraft));
+  /** The rows as last loaded or saved; what "unsaved changes" is measured against. */
+  const [saved, setSaved] = useState<CatalogDraft[]>(ADMIN_INTEGRATIONS.map(blankDraft));
   const [subscribers, setSubscribers] = useState<SubscriberRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -125,6 +127,7 @@ export default function IntegrationsAdminPage() {
 
     if (catalogRes.error) {
       setRows(ADMIN_INTEGRATIONS.map(blankDraft));
+      setSaved(ADMIN_INTEGRATIONS.map(blankDraft));
       setNotice(
         isMissingTable(catalogRes.error)
           ? {
@@ -142,8 +145,7 @@ export default function IntegrationsAdminPage() {
     const byKey = new Map(
       (catalogRes.data ?? []).map((r: Record<string, unknown>) => [String(r.integration_key), r]),
     );
-    setRows(
-      ADMIN_INTEGRATIONS.map((i) => {
+    const loaded = ADMIN_INTEGRATIONS.map((i) => {
         const r = byKey.get(i.key);
         if (!r) return blankDraft(i);
         return {
@@ -155,8 +157,9 @@ export default function IntegrationsAdminPage() {
           is_unavailable: r.is_unavailable === true,
           is_hidden: r.is_hidden === true,
         };
-      }),
-    );
+    });
+    setRows(loaded);
+    setSaved(loaded);
     setSubscribers(subsRes.error ? [] : ((subsRes.data ?? []) as unknown as SubscriberRow[]));
     // Without the subscriber list, Save could make a paid integration free
     // while someone is still billed for it; so it is locked here too.
@@ -232,7 +235,11 @@ export default function IntegrationsAdminPage() {
       );
       return;
     }
-    setNotice({ tone: 'ok', text: 'Saved. Operators see the change the next time they open Integrations.' });
+    setSaved(rows.map((r) => ({ ...r })));
+    setNotice({
+      tone: 'ok',
+      text: 'Saved. Operators see the change the next time they open their Integrations page (a reload shows it at once).',
+    });
     void load();
   };
 
@@ -267,6 +274,12 @@ export default function IntegrationsAdminPage() {
     setNotice({ tone: 'ok', text: `${name} was removed from ${company}'s bill.` });
     void load();
   };
+
+  // What is on screen but not in the database yet. The Save button used to sit
+  // below a 13-row table, off the bottom of the screen, so switches read as
+  // doing nothing at all.
+  const changed = rows.filter((r, i) => JSON.stringify(r) !== JSON.stringify(saved[i]));
+  const dirty = changed.length > 0;
 
   const live = subscribers.filter((s) => s.status === 'pending' || s.status === 'active');
   const failed = subscribers.filter((s) => s.status === 'failed');
@@ -308,6 +321,28 @@ export default function IntegrationsAdminPage() {
         </p>
       ) : (
         <>
+          {/* Sticky, so Save is on screen whichever row is being changed. */}
+          <div className="sticky top-0 z-20 -mx-6 flex flex-wrap items-center justify-between gap-3 border-b border-border bg-background/95 px-6 py-3 backdrop-blur">
+            <p className="text-sm text-muted-foreground">
+              {dirty ? (
+                <span className="font-medium text-amber-700 dark:text-amber-400">
+                  {changed.length} unsaved change{changed.length === 1 ? '' : 's'} — nothing reaches operators until you save.
+                </span>
+              ) : (
+                'Every change is saved.'
+              )}
+            </p>
+            <button
+              type="button"
+              onClick={() => void saveAll()}
+              disabled={saving || loadFailed || !dirty}
+              title={loadFailed ? 'Reload the page first: the saved integrations did not load' : undefined}
+              className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+            >
+              {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
           <div className="overflow-x-auto rounded-xl border border-border bg-card">
             <table className="w-full min-w-[860px] text-sm">
               <thead>
@@ -417,12 +452,11 @@ export default function IntegrationsAdminPage() {
             <button
               type="button"
               onClick={() => void saveAll()}
-              disabled={saving || loadFailed}
-              title={loadFailed ? 'Reload the page first: the saved integrations did not load' : undefined}
+              disabled={saving || loadFailed || !dirty}
               className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
             >
               {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-              Save
+              {saving ? 'Saving…' : dirty ? 'Save' : 'Saved'}
             </button>
           </div>
 

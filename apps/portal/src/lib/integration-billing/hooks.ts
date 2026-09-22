@@ -42,7 +42,11 @@ export function useIntegrationCatalog(): { catalog: Record<string, CatalogEntry>
   const query = useQuery({
     queryKey: [CATALOG_QUERY_KEY],
     enabled,
-    staleTime: 60_000,
+    // Short, and refreshed when the operator comes back to the tab: a super
+    // admin who has just changed these expects to see it on this screen, not in
+    // a minute. Overrides the global refetchOnWindowFocus:false.
+    staleTime: 15_000,
+    refetchOnWindowFocus: true,
     queryFn: async (): Promise<CatalogRow[]> => {
       const { data, error } = await supabaseUntyped
         .from('integration_catalog_v2')
@@ -113,6 +117,8 @@ export function useIntegrationSubscriptions(): {
   const query = useQuery({
     queryKey: [SUBSCRIPTIONS_QUERY_KEY, tenant?.id],
     enabled: enabled && !!tenant?.id,
+    staleTime: 15_000,
+    refetchOnWindowFocus: true,
     queryFn: async (): Promise<IntegrationSubscriptionRow[]> => {
       const { data, error } = await supabaseUntyped
         .from('tenant_integration_subscriptions_v2')
