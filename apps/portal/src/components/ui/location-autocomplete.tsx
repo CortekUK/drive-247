@@ -207,13 +207,17 @@ export function LocationAutocomplete({
               className={v2Chrome ? ITEM_V2 : ITEM_V1}
               onClick={() => handleSelectSuggestion(suggestion)}
             >
-              <MapPin
-                className={
-                  v2Chrome
-                    ? "w-4 h-4 mt-0.5 text-muted-foreground flex-shrink-0"
-                    : "w-4 h-4 mt-0.5 text-muted-foreground group-hover:text-accent-foreground/70 flex-shrink-0"
-                }
-              />
+              {/* v2 settings (v2States) list addresses without the pin; v1 and the
+                  v2 rental screens keep it. */}
+              {!v2States && (
+                <MapPin
+                  className={
+                    v2Chrome
+                      ? "w-4 h-4 mt-0.5 text-muted-foreground flex-shrink-0"
+                      : "w-4 h-4 mt-0.5 text-muted-foreground group-hover:text-accent-foreground/70 flex-shrink-0"
+                  }
+                />
+              )}
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium">{suggestion.mainText}</div>
                 {suggestion.secondaryText && (
@@ -236,7 +240,7 @@ export function LocationAutocomplete({
         value.trim().length >= 3 && (v2SearchDown || v2EmptyFor === value) && (
         <div
           role="status"
-          className="absolute z-50 mt-1 w-full rounded-2xl bg-popover px-3 py-2 text-xs text-muted-foreground shadow-lg [overflow-wrap:anywhere]"
+          className="absolute z-50 mt-1 w-full rounded-xl border border-border bg-popover px-3 py-2 text-xs text-muted-foreground shadow-lg [overflow-wrap:anywhere]"
         >
           {v2SearchDown ? (
             "Address suggestions aren't available right now. Type the full address."

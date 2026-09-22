@@ -26,9 +26,15 @@ interface CredentialsModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   credentials: UserCredentials | null;
+  /**
+   * v2 (the Team page on v2 tenants): the title and the warning without their
+   * icons. Omitted or false, the modal renders exactly as v1 always has. The
+   * copy buttons keep their icons: they are the controls.
+   */
+  v2?: boolean;
 }
 
-export function CredentialsModal({ open, onOpenChange, credentials }: CredentialsModalProps) {
+export function CredentialsModal({ open, onOpenChange, credentials, v2 = false }: CredentialsModalProps) {
   const [copiedEmail, setCopiedEmail] = useState(false);
   const [copiedPassword, setCopiedPassword] = useState(false);
 
@@ -67,10 +73,14 @@ export function CredentialsModal({ open, onOpenChange, credentials }: Credential
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent className="sm:max-w-[500px]">
         <AlertDialogHeader>
+          {v2 ? (
+            <AlertDialogTitle className="text-emerald-600 dark:text-emerald-400">User Created Successfully</AlertDialogTitle>
+          ) : (
           <AlertDialogTitle className="flex items-center gap-2 text-green-600">
             <Check className="h-5 w-5" />
             User Created Successfully
           </AlertDialogTitle>
+          )}
           <AlertDialogDescription asChild>
             <div className="space-y-4">
               <p>
@@ -78,8 +88,8 @@ export function CredentialsModal({ open, onOpenChange, credentials }: Credential
                 the password cannot be retrieved later.
               </p>
 
-              <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg p-3 flex items-start gap-2">
-                <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div className={v2 ? "rounded-xl bg-amber-50 p-3 dark:bg-amber-950" : "bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg p-3 flex items-start gap-2"}>
+                {!v2 && <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />}
                 <p className="text-sm text-amber-800 dark:text-amber-200">
                   Make sure to save these credentials before closing. The password is shown only once and cannot be recovered.
                 </p>

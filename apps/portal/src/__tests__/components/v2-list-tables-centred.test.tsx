@@ -249,7 +249,11 @@ describe('the other v2 tables: content that does not inherit text-align is centr
 
   it.each([
     ['components/cms-v2/blog-posts-table-v2.tsx', ['<div className="flex min-w-0 items-center justify-center gap-1.5">', '${LIST_CLASSES.identifier} truncate text-center hover:underline']],
-    ['components/admin-v2/users-table-v2.tsx', ['className="flex items-center justify-center gap-1 text-[11px] font-medium text-red-600 dark:text-red-400"', '<div className="flex h-5 items-center justify-center gap-2">']],
+    // Team (Settings walkthrough, Sep 2026): the status stack (Active plus its
+    // flag lines) is a flex column centred on its cross axis, and the row menu
+    // is a block button centred under the visible Actions heading. The rendered
+    // check is in users-team-lane-v2.test.tsx.
+    ['components/admin-v2/users-table-v2.tsx', ['<UserStatus user={user} className="items-center" />', '<UserRowMenu user={user} {...actions} className="mx-auto flex" />']],
     ['components/admin-v2/audit-logs-table-v2.tsx', ['<div className="flex h-5 min-w-0 items-center justify-center gap-2">']],
     ['components/fleet-v2/pending-bookings-table-v2.tsx', ['<span className="flex max-w-full items-center justify-center gap-1.5" title={`${reg} • ${makeModel}`}>']],
     ['components/settings-v2/extras-table-v2.tsx', ['<div className="flex min-w-0 items-center justify-center gap-2.5">']],

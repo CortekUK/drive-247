@@ -1,7 +1,8 @@
 /**
  * v2 Settings (northwind only): the pure state logic behind the Business-rules
- * pages: Driver requirements, Booking rules, Key handover (with its lockbox
- * messages) and the Return reminder panel.
+ * pages: Driver requirements (a tab of General), Booking rules, Lockbox (was
+ * Key handover; its messages live on Customer messages) and the Return
+ * reminder panel.
  *
  * No React and no Supabase, so every edge case here is unit-tested by hand in
  * `__tests__/components/settings-business-rules-logic.test.ts`. The pages that
@@ -192,7 +193,7 @@ export function describeBuffer(minutes: number): string {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Key handover (lockbox)                                                     */
+/* Lockbox (was Key handover)                                                 */
 /* -------------------------------------------------------------------------- */
 
 export const CODE_LENGTH_MIN = 1;

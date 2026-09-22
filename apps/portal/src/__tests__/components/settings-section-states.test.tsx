@@ -346,6 +346,16 @@ describe("SettingsSaveState", () => {
     expect(discard).toHaveBeenCalledTimes(1);
   });
 
+  it("a refused save reads in the toned-down red with no icon (only Retry keeps its icon)", () => {
+    render(<SettingsSaveState status="error" error={new Error("You don't have permission to change this.")} />);
+    const state = container.querySelector('[data-settings-state="save-error"]') as HTMLElement;
+    expect(state.getAttribute("role")).toBe("alert");
+    const message = state.firstElementChild as HTMLElement;
+    expect(message.className.split(/\s+/)).toContain("panel-ink-danger");
+    expect(state.querySelector("svg")).toBeNull();
+    expect(state.textContent).toContain("Couldn't save.");
+  });
+
   it("useSettingsSaveStatus: dirty -> saving -> saved -> idle", () => {
     vi.useFakeTimers();
     let set: (s: { isDirty: boolean; isPending: boolean; error?: unknown }) => void = () => {};

@@ -149,6 +149,12 @@ describe("SettingsIndexV2 structure", () => {
       ["General", "/settings?tab=general"],
       ["Branding", "/settings/appearance"],
       ["Locations", "/settings?tab=locations"],
+      // Out of General into pages of their own (Sep 19 2026).
+      ["Booking rules", "/settings?tab=duration"],
+      ["Lockbox", "/settings?tab=lockbox"],
+      ["Tax and deposit", "/settings?tab=tax-and-deposit"],
+      ["Booking site", "/settings?tab=booking-site"],
+      ["Optional modules", "/settings?tab=modules"],
       ["Team", "/users"],
       ["Custom pricing", "/settings?tab=pricing"],
       ["Promo codes", "/settings?tab=promos"],
@@ -169,14 +175,13 @@ describe("SettingsIndexV2 structure", () => {
     expect(container.querySelector('a[href="/users"]')).toBeNull();
   });
 
-  it("no merged page or the global blacklist has an entry of its own", () => {
+  it("no tab of General, no half of Tax and deposit, and not the global blacklist has an entry of its own", () => {
     render(<SettingsIndexV2 canView={() => true} tenantSlug="northwind" isHeadAdmin />);
     const titles = entries().map(([title]) => title);
     for (const gone of [
+      "Regional",
       "Driver requirements",
-      "Booking rules",
       "Key handover",
-      "Booking site",
       "Tax and fees",
       "Security deposit",
       "Global blacklist",
@@ -188,22 +193,71 @@ describe("SettingsIndexV2 structure", () => {
     expect(container.querySelector('a[href="/settings/blacklist"]')).toBeNull();
   });
 
-  it("General is listed for a manager who may see only one of its sections", () => {
-    // Only the settings.rental grant behind Tax and fees: General (its fees
-    // section) and nothing else.
+  it("a page made of sections is listed for a manager who may see only one of them", () => {
+    // Only the grant behind Tax and fees: Tax and deposit, and nothing else.
     render(<SettingsIndexV2 canView={(tab) => tab === "fees"} tenantSlug="northwind" isHeadAdmin={false} />);
-    expect(entries()).toEqual([["General", "/settings?tab=general"]]);
+    expect(entries()).toEqual([["Tax and deposit", "/settings?tab=tax-and-deposit"]]);
     expect(container.querySelector('[data-settings-state="empty"]')).toBeNull();
+
+    // Only the grant behind Security deposit: the same page.
+    act(() => root.unmount());
+    root = createRoot(container);
+    render(<SettingsIndexV2 canView={(tab) => tab === "preauth"} tenantSlug="northwind" isHeadAdmin={false} />);
+    expect(entries()).toEqual([["Tax and deposit", "/settings?tab=tax-and-deposit"]]);
+
+    // Only the grant behind Driver requirements: General (its second tab).
+    act(() => root.unmount());
+    root = createRoot(container);
+    render(<SettingsIndexV2 canView={(tab) => tab === "requirements"} tenantSlug="northwind" isHeadAdmin={false} />);
+    expect(entries()).toEqual([["General", "/settings?tab=general"]]);
   });
 
-  it("finds General by the words of the sections it now holds", () => {
+  it("each page that came out of General follows its own permission", () => {
+    // Booking rules and Lockbox only.
+    const granted = new Set(["duration", "lockbox"]);
+    render(<SettingsIndexV2 canView={(tab) => granted.has(tab)} tenantSlug="northwind" isHeadAdmin={false} />);
+    expect(entries()).toEqual([
+      ["Booking rules", "/settings?tab=duration"],
+      ["Lockbox", "/settings?tab=lockbox"],
+    ]);
+
+    // General's own grant: General, Booking site and Optional modules (both
+    // follow it), and none of the others.
+    act(() => root.unmount());
+    root = createRoot(container);
+    render(<SettingsIndexV2 canView={(tab) => tab === "general"} tenantSlug="northwind" isHeadAdmin={false} />);
+    expect(entries()).toEqual([
+      ["General", "/settings?tab=general"],
+      ["Booking site", "/settings?tab=booking-site"],
+      ["Optional modules", "/settings?tab=modules"],
+    ]);
+  });
+
+  it("leaves out an entry the page says has nothing behind it (Optional modules with no module)", () => {
+    render(
+      <SettingsIndexV2 canView={() => true} tenantSlug="northwind" isHeadAdmin hiddenHrefs={["/settings?tab=modules"]} />,
+    );
+    const titles = entries().map(([title]) => title);
+    expect(titles).not.toContain("Optional modules");
+    expect(titles).toContain("Booking site");
+    type("turo");
+    expect(container.querySelector('[data-settings-state="no-match"]')).not.toBeNull();
+  });
+
+  it("finds each page by the words of what it holds", () => {
     render(<SettingsIndexV2 canView={() => true} tenantSlug="northwind" isHeadAdmin />);
     type("deposit");
-    expect(entries().map(([title]) => title)).toEqual(["General"]);
+    expect(entries().map(([title]) => title)).toEqual(["Tax and deposit"]);
     type("buffer");
-    expect(entries().map(([title]) => title)).toEqual(["General"]);
+    expect(entries().map(([title]) => title)).toEqual(["Booking rules"]);
     type("lockbox");
-    expect(entries().map(([title]) => title)).toEqual(["General", "Customer messages"]);
+    expect(entries().map(([title]) => title)).toEqual(["Lockbox", "Customer messages"]);
+    type("licence");
+    expect(entries().map(([title]) => title)).toEqual(["General"]);
+    type("breakdown");
+    expect(entries().map(([title]) => title)).toEqual(["Booking site"]);
+    type("turo");
+    expect(entries().map(([title]) => title)).toEqual(["Optional modules"]);
   });
 
   it("a head admin finds Team by 'password'; anyone else gets no match and no hand-off", () => {
@@ -235,7 +289,7 @@ describe("SettingsIndexV2 structure", () => {
       expect(item!.section, title).toBe(section);
       expect(item!.href, title).toBe(href);
       expect(item!.tab, title).toBe(tab);
-      // Only General spans several permissions; none is head-admin only.
+      // Only General and Tax and deposit span several permissions; none is head-admin only.
       expect(item!.anyOfTabs, title).toBeUndefined();
       expect(item!.headAdminOnly, title).toBeUndefined();
       expect(item!.description.length, title).toBeGreaterThanOrEqual(95);
@@ -283,6 +337,33 @@ describe("SettingsIndexV2 structure", () => {
     expect(entries().map(([title]) => title)).toEqual(["Auto-extension"]);
     type("payg");
     expect(entries().map(([title]) => title)).toEqual(["Pay as you go"]);
+  });
+
+  /**
+   * Team lead, Sep 2026, with a screenshot of the index: hovering a card
+   * underlined its title. The whole card is the target and it already tints on
+   * hover, which is the signal he asked for; an underline made the title read as
+   * a word inside a sentence. Keyboard users get a ring instead, which the
+   * hover-only underline never gave them.
+   */
+  it("never underlines a card title on hover, and still reads as clickable", () => {
+    render(<SettingsIndexV2 canView={() => true} tenantSlug="northwind" isHeadAdmin />);
+    const cards = Array.from(container.querySelectorAll<HTMLAnchorElement>("section a"));
+    expect(cards.length).toBeGreaterThan(0);
+    for (const card of cards) {
+      const title = card.querySelectorAll("span")[0];
+      expect(title.className, card.textContent ?? "").not.toContain("underline");
+      // The hover tint (both themes) and the keyboard ring stay on the card.
+      expect(card.className).toContain("hover:bg-primary/10");
+      expect(card.className).toContain("dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]");
+      expect(card.className).toContain("focus-visible:ring-3");
+      expect(card.className).toContain("focus-visible:ring-ring/30");
+    }
+    // The one link that IS inline in a sentence keeps its underline.
+    const inline = Array.from(container.querySelectorAll<HTMLAnchorElement>("p a"));
+    expect(inline.length).toBe(1);
+    expect(inline[0].getAttribute("href")).toBe("/integrations");
+    expect(inline[0].className).toContain("hover:underline");
   });
 
   it("every description is 95–120 characters and wraps in a 320px column", async () => {

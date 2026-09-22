@@ -762,8 +762,8 @@ export function SettingsSaveState({ status, error, onRetry, onDiscard, className
       )}
       {status === "error" && (
         <>
-          <span className="inline-flex min-w-0 items-start gap-1.5 text-destructive">
-            <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+          {/* The toned-down red and no icon: a refused save is said, not shouted. */}
+          <span className="inline-flex min-w-0 items-start gap-1.5 text-destructive panel-ink-danger">
             <span className="min-w-0 [overflow-wrap:anywhere]">
               <span className="font-medium">Couldn&apos;t save.</span> {describeSaveError(error)}
             </span>

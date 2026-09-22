@@ -404,11 +404,12 @@ describe("settings page (v2): Customer messages entry points", () => {
 
   it("Team emails and Push stay out of the page's read-only fieldset; their switches gate themselves", () => {
     expect(source).toContain("readOnly={!canEditPage && !V2_PAGES_GATING_OWN_CONTROLS.has(v2Page as string)}");
-    // General (each of its sections wraps its controls in its own fieldset) and
-    // Locations also gate their own controls (their Try again and list search
-    // stay usable). Custom pricing gates per section too.
+    // General (each of its tabs wraps its controls in its own fieldset), the
+    // pages that came out of it (Sep 19 2026) and Locations also gate their own
+    // controls (their Try again and list search stay usable). Custom pricing
+    // gates per section too.
     expect(source).toContain(
-      "const V2_PAGES_GATING_OWN_CONTROLS = new Set(['reminders', 'push', 'general', 'locations', 'templates', 'pricing', 'installments', 'payg', 'auto-extend', 'promos', 'extras']);",
+      "const V2_PAGES_GATING_OWN_CONTROLS = new Set(['reminders', 'push', 'general', 'duration', 'lockbox', 'tax-and-deposit', 'booking-site', 'modules', 'locations', 'templates', 'pricing', 'installments', 'payg', 'auto-extend', 'promos', 'extras']);",
     );
     const reminders = source.slice(source.indexOf("        case 'reminders':"), source.indexOf("        case 'push':"));
     expect(reminders).toContain("disabled={isUpdating || !canEditPage}");

@@ -211,9 +211,14 @@ function TuroSyncResolving() {
  * handed a screen confirming a stop that never happened. The only thing that
  * actually stops the reading is removing or unpairing the extension, so that is
  * what the third paragraph says.
+ *
+ * On v2 chrome the switch is on Settings → Optional modules
+ * (`/settings?tab=modules`), not under General, so the words and the button
+ * say that there. v1 keeps General → Features and `?tab=general`.
  */
 function TuroSyncOff() {
   const router = useRouter();
+  const v2Chrome = useV2("chrome");
   return (
     <div className="northwind mx-auto w-full max-w-[1200px] space-y-6 px-1 pb-6 pt-6">
       <div>
@@ -232,9 +237,13 @@ function TuroSyncOff() {
             </p>
             <p className="mt-3">
               A head admin or admin can switch it back on in{" "}
+              {v2Chrome ? (
+                <span className="font-medium text-foreground">Settings → Optional modules</span>
+              ) : (
               <span className="font-medium text-foreground">
                 Settings → General → Features
               </span>
+              )}
               . It reappears in your Fleet &amp; Bookings sidebar straight away.
             </p>
             <p className="mt-3 text-xs">
@@ -255,7 +264,7 @@ function TuroSyncOff() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => router.push("/settings?tab=general")}
+            onClick={() => router.push(v2Chrome ? "/settings?tab=modules" : "/settings?tab=general")}
           >
             <Settings className="mr-2 h-4 w-4" />
             Open settings

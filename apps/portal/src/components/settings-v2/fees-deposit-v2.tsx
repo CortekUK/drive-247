@@ -1,10 +1,13 @@
 "use client";
 
 /**
- * v2 Settings (northwind): the Tax and fees and Security deposit pages, with
- * every state an operator can meet: first load, a failed read, a missing Stripe
+ * v2 Settings (northwind): Tax and fees and Security deposit, the two sections
+ * of the Tax and deposit page (`?tab=tax-and-deposit`; each keeps its own
+ * permission, and `?tab=fees` / `?tab=preauth` still open it), with every
+ * state an operator can meet: first load, a failed read, a missing Stripe
  * connection, unsaved / saving / failed saves, view-only access, and extreme
- * values.
+ * values. On that page every row's control sits at the end of the row and
+ * each dropdown opens under its own box's right edge.
  *
  * The form still lives in `settings/page.tsx` (`rentalForm`, synced from
  * `useRentalSettings`), because other pages share it. These components take it
@@ -17,6 +20,11 @@ import { Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import { Input } from "@/components/ui-v2/input";
 import { Switch } from "@/components/ui-v2/switch";
+// Every SelectContent below is `tone="surface"`: Settings is a light,
+// text-heavy screen, and the dropdown's default translucent near-black panel
+// reads there as an OS menu rather than as part of the page. The surface tone
+// uses the page's own popover, border and highlight tokens — see
+// components/ui-v2/select.tsx.
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui-v2/select";
 import { SettingsPanel, SettingsRow, Unit, UnitGroup, UnitGroups } from "@/components/settings-v2/settings-kit";
 import { SettingsDependencyNotice, SettingsReadOnlyFieldset } from "@/components/settings-v2/section-states";
@@ -187,7 +195,7 @@ export function FeesSettingsV2({ form, setForm, saved, read, canEdit, currencyCo
                     <SelectTrigger className="w-36" aria-label="Service fee type">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent tone="surface" align="end">
                       <SelectItem value="percentage">Percentage</SelectItem>
                       <SelectItem value="fixed_amount">Fixed amount</SelectItem>
                     </SelectContent>

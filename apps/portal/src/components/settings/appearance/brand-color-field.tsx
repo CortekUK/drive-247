@@ -49,11 +49,13 @@ export function BrandColorField({ value, onChange, disabled }: BrandColorFieldPr
             : 'border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-400'
       )}
     >
-      {verdict.grade === 'excellent' ? (
-        <Check className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-      ) : (
-        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-      )}
+      {/* v2 settings carry no icons; v1 keeps its check and warning marks. */}
+      {!v2Chrome &&
+        (verdict.grade === 'excellent' ? (
+          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        ) : (
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        ))}
       <div className="flex-1 space-y-1.5">
         <p className="leading-snug">{verdict.message}</p>
         {/* v2 also offers the fix for 'good': its line already suggests a deeper shade. */}
@@ -66,7 +68,7 @@ export function BrandColorField({ value, onChange, disabled }: BrandColorFieldPr
             onClick={() => onChange(deepenUntilReadable(value))}
             className="h-7 gap-1.5 text-xs"
           >
-            <Wand2 className="h-3 w-3" />
+            {!v2Chrome && <Wand2 className="h-3 w-3" />}
             Fix it for me
           </Button>
         )}

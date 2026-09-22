@@ -8,8 +8,9 @@
  * Order of decisions for a `?tab=` deep link, first match wins:
  *   1. no `?tab=`                         -> the index, no notice
  *   2. a v2 page, manager grants loading  -> wait (skeleton, never the index)
- *   3. a v2 page the user may view        -> the page (a General section's
- *                                            old tab: General, scrolled to it)
+ *   3. a v2 page the user may view        -> the page (a section's old tab:
+ *                                            its page, at that section; on
+ *                                            General, that tab)
  *   4. a v2 page the user may NOT view    -> index + "You don't have access"
  *   5. a tab with a home elsewhere        -> none (the page's redirect runs)
  *   6. a hidden tab the board owns        -> none (hand-off to /integrations)
@@ -60,7 +61,7 @@ export const SETTINGS_TAB_LABELS: Record<string, string> = {
  */
 export const V2_HIDDEN_SETTINGS_PAGES: ReadonlySet<string> = new Set<string>([]);
 
-export interface V2GeneralSection {
+export interface V2PageSection {
   /** The element id is `settings-<anchor>` (see `settingsSectionId`). */
   anchor: string;
   title: string;
@@ -71,45 +72,91 @@ export interface V2GeneralSection {
   tab: string | null;
 }
 
+/** The name General's sections had first; every section of a sectioned page has this shape. */
+export type V2GeneralSection = V2PageSection;
+
 /**
- * The General page, top to bottom. Six small pages became sections of it; each
- * keeps its old `?tab=` value (setup guide and bookmark links), which opens
- * General and scrolls to that section, and each keeps its own permission.
+ * The General page's two tabs (team lead review, Sep 19 2026): Regional
+ * (currency, distance unit) and Driver requirements. `?tab=general` opens
+ * Regional and `?tab=requirements` opens Driver requirements (the setup guide
+ * and the platform checklist link there); each tab keeps its own permission.
+ *
+ * Booking rules, Lockbox (was Key handover), Tax and deposit (Tax and fees plus
+ * Security deposit), Booking site and Optional modules were sections of
+ * General from Sep 17 and are pages of their own on the index now. Their old
+ * `?tab=` values (duration, lockbox, fees, preauth, booking-site) still work.
  */
-export const V2_GENERAL_SECTIONS: readonly V2GeneralSection[] = [
+export const V2_GENERAL_SECTIONS: readonly V2PageSection[] = [
   { anchor: "regional", title: "Regional", description: "The currency and distance unit used across prices, invoices and mileage.", permTab: "general", tab: "general" },
   { anchor: "driver-requirements", title: "Driver requirements", description: "Who can rent from you, and the ID they must verify.", permTab: "requirements", tab: "requirements" },
-  { anchor: "booking-rules", title: "Booking rules", description: "How far ahead customers book, how long a rental can be, and the gap between rentals.", permTab: "duration", tab: "duration" },
-  { anchor: "key-handover", title: "Key handover", description: "Leave the keys in a lockbox and email the code to the customer.", permTab: "lockbox", tab: "lockbox" },
+];
+
+/**
+ * The Tax and deposit page, top to bottom: the two former pages, each under
+ * its own permission. `?tab=fees` opens the page at the top and `?tab=preauth`
+ * scrolls to the deposit.
+ */
+export const V2_TAX_AND_DEPOSIT_SECTIONS: readonly V2PageSection[] = [
   { anchor: "tax-and-fees", title: "Tax and fees", description: "Charges added on top of the rental price.", permTab: "fees", tab: "fees" },
   { anchor: "security-deposit", title: "Security deposit", description: "A refundable amount taken on online bookings.", permTab: "preauth", tab: "preauth" },
-  { anchor: "booking-site", title: "Booking site", description: "What customers see when they book on your website.", permTab: "general", tab: "booking-site" },
-  { anchor: "optional-modules", title: "Optional modules", description: "Each one adds a page to your sidebar and saves as soon as you flip it. Switching one off hides the page and deletes nothing.", permTab: "general", tab: null },
 ];
+
+function hasOwn(record: object, key: string) {
+  return Object.prototype.hasOwnProperty.call(record, key);
+}
+
+/**
+ * Pages made of sections that each follow their own permission, keyed by the
+ * page's own `?tab=`. `tabs`: one section at a time behind a tab strip (the
+ * link to a section picks its tab). `stack`: every section on the page, one
+ * under another (the link to a section scrolls to it).
+ */
+export const V2_SECTIONED_PAGES: Readonly<Record<string, { layout: "tabs" | "stack"; sections: readonly V2PageSection[] }>> = {
+  general: { layout: "tabs", sections: V2_GENERAL_SECTIONS },
+  "tax-and-deposit": { layout: "stack", sections: V2_TAX_AND_DEPOSIT_SECTIONS },
+};
+
+/** The sections of a sectioned page, or none. */
+export function v2PageSections(page: string | null | undefined): readonly V2PageSection[] {
+  return page && hasOwn(V2_SECTIONED_PAGES, page) ? V2_SECTIONED_PAGES[page].sections : [];
+}
+
+/** A page whose sections are tabs (General): a link to a section opens its tab instead of scrolling. */
+export function isTabbedV2Page(page: string | null | undefined): boolean {
+  return !!page && hasOwn(V2_SECTIONED_PAGES, page) && V2_SECTIONED_PAGES[page].layout === "tabs";
+}
 
 /** The DOM id of a settings section, the target of a deep link or `#hash`. */
 export const settingsSectionId = (anchor: string) => `settings-${anchor}`;
 
-/** Every permission a General section follows, once each: General opens when ANY of them is viewable. */
-export const V2_GENERAL_PERM_TABS: readonly string[] = Array.from(new Set(V2_GENERAL_SECTIONS.map((s) => s.permTab)));
+const permTabsOf = (sections: readonly V2PageSection[]) => Array.from(new Set(sections.map((s) => s.permTab)));
+
+/** Every permission a General tab follows, once each: General opens when ANY of them is viewable. */
+export const V2_GENERAL_PERM_TABS: readonly string[] = permTabsOf(V2_GENERAL_SECTIONS);
+
+/** Tax and deposit opens when either half is viewable. */
+export const V2_TAX_AND_DEPOSIT_PERM_TABS: readonly string[] = permTabsOf(V2_TAX_AND_DEPOSIT_SECTIONS);
 
 export interface V2SettingsRoute {
   /** The v2 page to render, or null for the index. Not permission-checked. */
   page: string | null;
-  /** The section to scroll to once the page has loaded (never for `?tab=general`, which is the top). */
+  /**
+   * The section the link points at, or null for the top of the page (the
+   * page's own tab, and a link to its first section). On a stacked page the
+   * page scrolls to it; on General it picks the tab.
+   */
   anchor: string | null;
-  /** The permission(s) the route needs: one tab, or any of several (General itself). */
+  /** The permission(s) the route needs: one tab, or any of several (a sectioned page itself). */
   permTab: string | readonly string[] | null;
 }
 
 const NO_ROUTE: V2SettingsRoute = { page: null, anchor: null, permTab: null };
-const hasOwn = (record: object, key: string) => Object.prototype.hasOwnProperty.call(record, key);
 
 /**
- * Which v2 page a `?tab=` value opens. A tab that is now a section of General
- * opens General at that section and needs that section's permission; plain
- * `?tab=general` needs any General section's. Hidden pages and unknown values
- * open the index (the notice says why).
+ * Which v2 page a `?tab=` value opens. A sectioned page's own tab needs any of
+ * its sections' permissions; a section's old tab opens that page at the
+ * section and needs that section's permission. Hidden pages and unknown
+ * values open the index (the notice says why).
  */
 export function resolveV2SettingsRoute(
   tabParam: string | null,
@@ -117,9 +164,14 @@ export function resolveV2SettingsRoute(
 ): V2SettingsRoute {
   const tab = tabParam?.trim() ?? "";
   if (!tab) return NO_ROUTE;
-  if (tab === "general") return { page: "general", anchor: null, permTab: V2_GENERAL_PERM_TABS };
-  const section = V2_GENERAL_SECTIONS.find((s) => s.tab === tab);
-  if (section) return { page: "general", anchor: section.anchor, permTab: section.permTab };
+  for (const [page, { sections }] of Object.entries(V2_SECTIONED_PAGES)) {
+    if (V2_HIDDEN_SETTINGS_PAGES.has(page)) continue;
+    if (tab === page) return { page, anchor: null, permTab: permTabsOf(sections) };
+    const index = sections.findIndex((s) => s.tab === tab);
+    if (index >= 0) {
+      return { page, anchor: index === 0 ? null : sections[index].anchor, permTab: sections[index].permTab };
+    }
+  }
   if (V2_HIDDEN_SETTINGS_PAGES.has(tab) || !hasOwn(pages, tab)) return NO_ROUTE;
   return { page: tab, anchor: null, permTab: pages[tab].permTab };
 }
@@ -131,9 +183,9 @@ export function canViewAny(permTab: string | readonly string[], canView: (tab: s
 
 /**
  * The pages map `resolveSettingsTabNotice` reads: every page that is not
- * hidden, General with its any-of permission, and each General section under
- * its old tab, so `?tab=fees` without access still says "You don't have
- * access to Tax and fees".
+ * hidden, each sectioned page (General, Tax and deposit) with its any-of
+ * permission, and each of their sections under its old tab, so `?tab=fees`
+ * without access still says "You don't have access to Tax and fees".
  */
 export function v2NoticePages(
   pages: Record<string, { title: string; permTab: string }>,
@@ -143,9 +195,12 @@ export function v2NoticePages(
     if (V2_HIDDEN_SETTINGS_PAGES.has(tab)) continue;
     out[tab] = { title: page.title, permTab: page.permTab };
   }
-  if (out.general) out.general = { ...out.general, permTab: V2_GENERAL_PERM_TABS };
-  for (const section of V2_GENERAL_SECTIONS) {
-    if (section.tab && section.tab !== "general") out[section.tab] = { title: section.title, permTab: section.permTab };
+  for (const [page, { sections }] of Object.entries(V2_SECTIONED_PAGES)) {
+    if (V2_HIDDEN_SETTINGS_PAGES.has(page)) continue;
+    if (hasOwn(out, page)) out[page] = { ...out[page], permTab: permTabsOf(sections) };
+    for (const section of sections) {
+      if (section.tab && section.tab !== page) out[section.tab] = { title: section.title, permTab: section.permTab };
+    }
   }
   return out;
 }
@@ -218,10 +273,10 @@ export function settingsTabNoticeCopy(notice: SettingsTabNotice): { title: strin
 /**
  * v2 pages whose controls are filled from the org settings edge function.
  *
- * General is not listed: it reads the org settings, the rental settings and
- * the branding, and each of its sections gates itself (the regional panel, the
- * rental sections' `BusinessRentalGate` / `ReadGate`), so a failed org read no
- * longer hides Driver requirements, Tax and fees and the rest.
+ * General is not listed: it reads the org settings and the rental settings,
+ * and each of its tabs gates itself (the regional panel, Driver requirements'
+ * `BusinessRentalGate`), so a failed org read no longer hides Driver
+ * requirements.
  */
 export const V2_PAGES_READING_ORG_SETTINGS: ReadonlySet<string> = new Set(["reminders"]);
 
@@ -229,11 +284,12 @@ export const V2_PAGES_READING_ORG_SETTINGS: ReadonlySet<string> = new Set(["remi
  * v2 pages whose controls are filled from the tenants row (`useRentalSettings`)
  * and wait for it at page level.
  *
- * Custom pricing and General also read that row but are not listed: each
- * section gates itself on the cached read (`ReadGate` in pricing-money-parts,
- * `BusinessRentalGate` in business-rules-pages), so a first load shows
- * skeletons shaped like those sections, and a failed rental read no longer
- * hides the sections that have reads of their own.
+ * Custom pricing, General, Booking rules, Lockbox and Tax and deposit also read
+ * that row but are not listed: each section gates itself on the cached read
+ * (`ReadGate` in pricing-money-parts, `BusinessRentalGate` in
+ * business-rules-pages), so a first load shows skeletons shaped like those
+ * sections, and a failed rental read no longer hides the sections that have
+ * reads of their own.
  */
 export const V2_PAGES_READING_RENTAL_SETTINGS: ReadonlySet<string> = new Set([
   "payg",

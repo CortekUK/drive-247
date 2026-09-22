@@ -3,10 +3,11 @@
 /**
  * v2 Settings (northwind only): the Business-rules sections, with every state.
  *
- *   General › Driver requirements  -> RequirementsPageV2
- *   General › Booking rules        -> DurationPageV2
- *   General › Key handover         -> LockboxPageV2 (the code goes by email; its
- *                                     Templates button opens the lockbox message
+ *   General › Driver requirements  -> RequirementsPageV2 (a tab of General)
+ *   Booking rules                  -> DurationPageV2 (its own page, ?tab=duration)
+ *   Lockbox                        -> LockboxPageV2 (its own page, ?tab=lockbox;
+ *                                     was Key handover. The code goes by email;
+ *                                     its Templates link opens the lockbox message
  *                                     on Customer messages, LockboxTemplatesSectionV2)
  *   Customer messages              -> ReturnReminderPanelV2 (the return reminder panel)
  *
@@ -39,11 +40,24 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { Button } from "@/components/ui-v2/button";
+import { ArrowUpRight } from "lucide-react";
 import { Input } from "@/components/ui-v2/input";
 import { Switch } from "@/components/ui-v2/switch";
+// Every SelectContent below is `tone="surface"`: Settings is a light,
+// text-heavy screen, and the dropdown's default translucent near-black panel
+// reads there as an OS menu rather than as part of the page. The surface tone
+// uses the page's own popover, border and highlight tokens — see
+// components/ui-v2/select.tsx.
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui-v2/select";
-import { SettingsPanel, SettingsRow, Unit, UnitGroup, UnitGroups, useSettingsPageSave } from "@/components/settings-v2/settings-kit";
+import {
+  SettingsPanel,
+  SettingsRow,
+  Unit,
+  UnitGroup,
+  UnitGroups,
+  settingsSaveIssue,
+  useSettingsPageSave,
+} from "@/components/settings-v2/settings-kit";
 import { SettingsReadOnlyFieldset, SettingsSectionBoundary } from "@/components/settings-v2/section-states";
 import {
   SectionSaveBar,
@@ -116,15 +130,22 @@ interface PageProps {
   registerSave?: RegisterSectionSave;
 }
 
-/** A save for the page's leave dialog: rejects when the section is invalid or the write failed. */
-const leaveSave = (invalid: string | null, run: () => Promise<boolean>, what: string) => async () => {
-  if (invalid) throw new Error(invalid);
+/**
+ * A save for the page's leave dialog: rejects when the section is invalid or
+ * the write failed. Given `field`, an invalid section names the box to fix, so
+ * the page's save bar scrolls to it and focuses it.
+ */
+const leaveSave = (invalid: string | null, run: () => Promise<boolean>, what: string, field?: string) => async () => {
+  if (invalid) throw field ? settingsSaveIssue(invalid, field) : new Error(invalid);
   if (!(await run())) throw new Error(`Couldn't save ${what}.`);
 };
 
 const digitsOnly = (value: string) => value.replace(/[^0-9]/g, "");
 // Dark v2 --primary is a deep indigo (about 1.8:1 on the card), so links lighten in dark mode.
 const inlineLink = "font-medium text-primary underline-offset-4 hover:underline dark:text-[hsl(var(--v2-link,var(--primary)))]";
+/** Lockbox's Templates: a link to another page, in the brand colour, with an arrow after it. */
+const templatesLink =
+  "inline-flex items-center gap-1 rounded-full text-sm font-medium text-primary underline-offset-4 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/30 dark:text-[hsl(var(--v2-link,var(--primary)))]";
 const warnText = "text-amber-600 dark:text-amber-400";
 /** How the lockbox code is sent. Email only: no text message or WhatsApp option. */
 const LOCKBOX_METHODS = ["email"] as const;
@@ -216,7 +237,7 @@ export function RequirementsPageV2({
       }),
     );
   const discard = () => setForm((prev) => ({ ...prev, ...savedFieldsFor("requirements", saved) }));
-  useRegisterLeaveSave(canEdit ? registerSave : undefined, "business-requirements", isDirty, leaveSave(ageError, submit, "your driver requirements"), discard);
+  useRegisterLeaveSave(canEdit ? registerSave : undefined, "business-requirements", isDirty, leaveSave(ageError, submit, "your driver requirements", "v2_minimum_rental_age"), discard);
   useDiscardOnUnmount(isDirty, discard);
 
   return (
@@ -271,7 +292,7 @@ export function RequirementsPageV2({
             <SelectTrigger id="v2_verification_document_type" className="w-48" title={docLabel}>
               <SelectValue placeholder="Choose a document" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent tone="surface" align="end">
               {docOptions.map((option) => (
                 <SelectItem key={option.value} value={option.value}>
                   {option.label}
@@ -367,7 +388,16 @@ export function DurationPageV2({ form, setForm, saved, canEdit, onSave, register
     setForm((prev) => ({ ...prev, ...savedFieldsFor("duration", saved) }));
   };
   const firstError = errors.lead ?? errors.min ?? errors.max ?? errors.buffer ?? null;
-  useRegisterLeaveSave(canEdit ? registerSave : undefined, "business-duration", isDirty, leaveSave(firstError, submit, "your booking rules"), discard);
+  // The box the first reason belongs to. "Shortest rental" is two boxes; its
+  // days box is the one a refused save lands on.
+  const firstErrorField = errors.lead
+    ? "v2_booking_lead_time_value"
+    : errors.min
+      ? "v2_min_rental_days"
+      : errors.max
+        ? "v2_max_rental_days"
+        : "v2_buffer_time_minutes";
+  useRegisterLeaveSave(canEdit ? registerSave : undefined, "business-duration", isDirty, leaveSave(firstError, submit, "your booking rules", firstErrorField), discard);
   useDiscardOnUnmount(isDirty, discard);
 
   return (
@@ -406,6 +436,7 @@ export function DurationPageV2({ form, setForm, saved, canEdit, onSave, register
             }}
             placeholder={unit === "days" ? "2" : "24"}
             className={cn(numberBoxWidth(form.booking_lead_time_value, "w-20"), "tabular-nums")}
+            id="v2_booking_lead_time_value"
             aria-label="Advance notice"
             aria-invalid={errors.lead ? true : undefined}
           />
@@ -420,7 +451,7 @@ export function DurationPageV2({ form, setForm, saved, canEdit, onSave, register
             <SelectTrigger className="w-24" aria-label="Advance notice unit">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent tone="surface" align="end">
               <SelectItem value="hours">hours</SelectItem>
               <SelectItem value="days">days</SelectItem>
             </SelectContent>
@@ -443,6 +474,7 @@ export function DurationPageV2({ form, setForm, saved, canEdit, onSave, register
                 onChange={(e) => setNumber("min_rental_days", e.target.value)}
                 placeholder="0"
                 className={cn(numberBoxWidth(form.min_rental_days, "w-16"), "tabular-nums")}
+                id="v2_min_rental_days"
                 aria-label="Shortest rental days"
                 aria-invalid={errors.min ? true : undefined}
               />
@@ -484,6 +516,7 @@ export function DurationPageV2({ form, setForm, saved, canEdit, onSave, register
             onChange={(e) => setNumber("max_rental_days", e.target.value)}
             placeholder="90"
             className={cn(numberBoxWidth(form.max_rental_days, "w-20"), "tabular-nums")}
+            id="v2_max_rental_days"
             aria-label="Longest rental days"
             aria-invalid={errors.max ? true : undefined}
           />
@@ -512,6 +545,7 @@ export function DurationPageV2({ form, setForm, saved, canEdit, onSave, register
             onChange={(e) => setNumber("buffer_time_minutes", e.target.value)}
             placeholder="0"
             className={cn(numberBoxWidth(form.buffer_time_minutes, "w-20"), "tabular-nums")}
+            id="v2_buffer_time_minutes"
             aria-label="Time between rentals in minutes"
             aria-invalid={errors.buffer ? true : undefined}
           />
@@ -523,7 +557,7 @@ export function DurationPageV2({ form, setForm, saved, canEdit, onSave, register
 }
 
 /* -------------------------------------------------------------------------- */
-/* Key handover                                                               */
+/* Lockbox (was Key handover)                                                 */
 /* -------------------------------------------------------------------------- */
 
 export function LockboxPageV2({
@@ -564,7 +598,7 @@ export function LockboxPageV2({
       }),
     );
   const discard = () => setForm((prev) => ({ ...prev, ...savedFieldsFor("lockbox", saved) }));
-  useRegisterLeaveSave(canEdit ? registerSave : undefined, "business-lockbox", isDirty, leaveSave(codeError, submit, "your key handover settings"), discard);
+  useRegisterLeaveSave(canEdit ? registerSave : undefined, "business-lockbox", isDirty, leaveSave(codeError, submit, "your lockbox settings", "v2_lockbox_code_length"), discard);
   useDiscardOnUnmount(isDirty, discard);
 
   // The switch is part of the form, not a live toggle like the waiver: say so
@@ -663,7 +697,7 @@ export function LockboxPageV2({
                 <SelectTrigger id="v2_lockbox_send_offset" className="w-56">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent tone="surface" align="end">
                   {offsetOptions.map((option) => (
                     <SelectItem key={option.value} value={option.value}>
                       {option.label}
@@ -674,10 +708,15 @@ export function LockboxPageV2({
             </SettingsRow>
 
             <SettingsRow label="Lockbox message" description="The email that carries the code, and the instructions in it.">
-              {/* A link, not a button: a view-only user's disabled fieldset never disables an <a>. */}
-              <Button asChild variant="outline" size="sm">
-                <Link href={templatesHref}>Templates</Link>
-              </Button>
+              {/* A link, not a button: the templates are managed in Customer
+                  messages, and the arrow says it opens another page. A
+                  view-only user's disabled fieldset never disables an <a>,
+                  and the page's leave guard asks first when there are
+                  unsaved edits. */}
+              <Link href={templatesHref} data-lockbox-templates="" className={templatesLink}>
+                Templates
+                <ArrowUpRight className="size-4 shrink-0" aria-hidden="true" />
+              </Link>
             </SettingsRow>
           </>
         )}

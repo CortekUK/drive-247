@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTheme } from 'next-themes';
 import { useTenantBranding, type TenantBranding } from './use-tenant-branding';
 import { V2_BRAND_VAR_NAMES, v2BrandVars } from '@/lib/appearance/color';
+import { PLATFORM_TAB_ICON, resolveBrandIcon } from '@/lib/appearance/logo';
 
 // Default theme colors - must match index.css
 const DEFAULT_COLORS = {
@@ -134,7 +135,12 @@ export function applyV2BrandVars(body: HTMLElement, hex: string | null | undefin
 }
 
 export function useDynamicTheme({ v2Theme = false }: { v2Theme?: boolean } = {}) {
-  const { branding, hasBrandingData } = useTenantBranding();
+  // `brandName` and not `branding.app_name`: `tenants.app_name` is optional and
+  // is null for most tenants, and the sidebar badge draws its initials from the
+  // resolved display name (app_name -> company_name -> "Portal"). Handing the
+  // raw column to the tab mark gave the badge "NR" and the tab "O" on the same
+  // screen, which is the very disagreement this chain exists to remove.
+  const { branding, brandName, hasBrandingData } = useTenantBranding();
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   // Always false for v1, so the v1 effect below re-runs on exactly what it did.
@@ -158,7 +164,7 @@ export function useDynamicTheme({ v2Theme = false }: { v2Theme?: boolean } = {})
       if (v2Ready) {
         applyV2BrandVars(document.body, branding.light_primary_color || branding.primary_color);
       }
-      applyDocumentMeta(branding);
+      applyDocumentMeta(branding, 'v2', v2Ready, brandName);
       return;
     }
 
@@ -305,13 +311,23 @@ export function useDynamicTheme({ v2Theme = false }: { v2Theme?: boolean } = {})
       // localStorage might not be available
     }
 
-  }, [branding, resolvedTheme, mounted, v2Theme, v2Ready]);
+  }, [branding, brandName, resolvedTheme, mounted, v2Theme, v2Ready]);
 
   return { branding, mounted };
 }
 
-/** Title, favicon, description and share tags — the same for both themes. */
-function applyDocumentMeta(branding: TenantBranding) {
+/**
+ * Title, favicon, description and share tags. The same for both themes except
+ * the favicon: v1 keeps its original first-link update, v2 uses
+ * `applyV2Favicon` (below), which reaches every icon link the page carries.
+ */
+function applyDocumentMeta(
+  branding: TenantBranding,
+  theme: 'v1' | 'v2' = 'v1',
+  v2Ready = false,
+  /** The resolved display name the sidebar badge uses, NOT `branding.app_name`. */
+  markName?: string | null
+) {
   // Update document title
   if (branding.meta_title) {
     document.title = branding.meta_title;
@@ -319,8 +335,24 @@ function applyDocumentMeta(branding: TenantBranding) {
     document.title = `${branding.app_name} - Portal`;
   }
 
-  // Update favicon if provided
-  if (branding.favicon_url) {
+  if (theme === 'v2') {
+    // The one chain Settings → Branding previews: the square icon, else a mark
+    // drawn from the portal name's initials in the brand colour, else (only
+    // where that cannot be drawn) the platform icon the branch below restores.
+    // `applyV2BrandVars` has already written --brand-* on <body>, so the mark
+    // is painted in exactly what the sidebar badge is.
+    const icon = resolveBrandIcon(branding.favicon_url, markName ?? branding.app_name, {
+      brandColor: branding.light_primary_color || branding.primary_color,
+      // No mark until the real row is in. Until then `branding` is a
+      // placeholder built from the tenant context, which does not select
+      // `favicon_url` — drawing from it would replace a tenant's OWN icon,
+      // already in the tab from the server, with their initials, and put it
+      // back a moment later.
+      generate: v2Ready,
+    });
+    applyV2Favicon(document.head, icon.src);
+  } else if (branding.favicon_url) {
+    // Update favicon if provided
     const link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
     if (link) {
       link.href = branding.favicon_url;
@@ -359,6 +391,119 @@ function applyDocumentMeta(branding: TenantBranding) {
   if (branding.og_image_url) {
     updateMetaTag('og:image', branding.og_image_url);
     updateMetaTag('twitter:image', branding.og_image_url);
+  }
+}
+
+/** Marks an icon link this code added because the page had none. */
+const V2_ICON_ADDED_ATTR = 'data-v2-icon-added';
+/** On a server-rendered icon link: its own href, type and sizes, to put back later. */
+const V2_ICON_ORIGINAL_ATTR = 'data-v2-icon-original';
+
+/**
+ * What the tab shows with no square icon AND no drawable initials mark: the
+ * platform icon the server falls back to (app/layout.tsx `PLATFORM_FAVICONS`,
+ * the light one).
+ */
+const V2_PLATFORM_ICON: Record<string, string | null> = { href: PLATFORM_TAB_ICON, type: 'image/png', sizes: null };
+
+/** One of the platform's own icons (served from /icons/ on this site), not a tenant's upload. */
+function isPlatformIconHref(href: unknown): boolean {
+  if (typeof href !== 'string') return false;
+  try {
+    const url = new URL(href, window.location.origin);
+    return url.origin === window.location.origin && url.pathname.startsWith('/icons/');
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The tenant's icon URL with a short version tag, so a browser that cached
+ * the tab icon fetches the new one. The tag is a hash of the URL, so the same
+ * icon keeps the same href (no refetch, no flicker) and a new one always gets
+ * a new href. Only for web URLs: a `data:` or `blob:` URL cannot carry a query.
+ */
+export function versionedIconHref(url: string): string {
+  if (!/^(https?:)?\/\//i.test(url) && !url.startsWith('/')) return url;
+  let hash = 5381;
+  for (let i = 0; i < url.length; i++) hash = ((hash * 33) ^ url.charCodeAt(i)) >>> 0;
+  const [base, fragment] = url.split('#', 2);
+  const tagged = `${base}${base.includes('?') ? '&' : '?'}v=${hash.toString(36)}`;
+  return fragment === undefined ? tagged : `${tagged}#${fragment}`;
+}
+
+/**
+ * v2: the browser tab icon follows the tenant's square icon without a reload.
+ *
+ * The server renders SEVERAL icon links: with a tenant icon, `icon` and
+ * `shortcut icon`; without one, a light and a dark platform icon plus an .ico.
+ * Browsers pick among all of them (Chrome takes the last, and a dark tab strip
+ * takes the dark one), so v1's update of only the FIRST link left the tab on
+ * the old icon after a save. Every `rel~="icon"` link is pointed at the new
+ * icon instead, with its `type` and `sizes` lifted (they described the old
+ * file). What the page loaded with is kept on the link, and put back when the
+ * square icon is removed; a link this code had to add is removed again. When
+ * what the page loaded with was the tenant's own icon (the one now removed),
+ * the platform icon goes back instead, as the server would render it on the
+ * next load. `apple-touch-icon` is not an icon link here and is never touched.
+ *
+ * `iconHref` is what `resolveBrandIcon` decided, NOT `favicon_url` itself:
+ * with the square icon removed it is the drawn initials mark, a `data:` URL,
+ * and the null branch below is reached only where that could not be drawn.
+ */
+export function applyV2Favicon(head: HTMLElement, iconHref: string | null | undefined) {
+  const links = Array.from(head.querySelectorAll<HTMLLinkElement>("link[rel~='icon']"));
+
+  if (!iconHref) {
+    for (const link of links) {
+      if (link.hasAttribute(V2_ICON_ADDED_ATTR)) {
+        link.remove();
+        continue;
+      }
+      const saved = link.getAttribute(V2_ICON_ORIGINAL_ATTR);
+      if (saved === null) continue;
+      let original: Record<string, string | null> | null = null;
+      try {
+        original = JSON.parse(saved);
+      } catch {
+        // Unreadable: the platform icon below, the same as with no square icon on a fresh load.
+      }
+      // The page loaded with the tenant's own icon, which is exactly what was
+      // just removed: putting that back would keep it in the tab until a reload.
+      const restore = original && isPlatformIconHref(original.href) ? original : V2_PLATFORM_ICON;
+      for (const name of ['href', 'type', 'sizes']) {
+        const value = restore[name];
+        if (typeof value === 'string') link.setAttribute(name, value);
+        else if (name !== 'href') link.removeAttribute(name);
+      }
+      link.removeAttribute(V2_ICON_ORIGINAL_ATTR);
+    }
+    return;
+  }
+
+  const href = versionedIconHref(iconHref);
+  if (links.length === 0) {
+    const link = document.createElement('link');
+    link.rel = 'icon';
+    link.setAttribute(V2_ICON_ADDED_ATTR, '');
+    head.appendChild(link);
+    links.push(link);
+  }
+  for (const link of links) {
+    if (!link.hasAttribute(V2_ICON_ADDED_ATTR) && !link.hasAttribute(V2_ICON_ORIGINAL_ATTR)) {
+      link.setAttribute(
+        V2_ICON_ORIGINAL_ATTR,
+        JSON.stringify({
+          href: link.getAttribute('href'),
+          type: link.getAttribute('type'),
+          sizes: link.getAttribute('sizes'),
+        })
+      );
+    }
+    link.removeAttribute('type');
+    link.removeAttribute('sizes');
+    // Only on a change: re-setting the same href can make a browser refetch.
+    if (link.getAttribute('href') !== href) link.setAttribute('href', href);
   }
 }
 

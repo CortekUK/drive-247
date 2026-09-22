@@ -163,6 +163,88 @@ describe('v2 top bar Help button', () => {
   });
 });
 
+/**
+ * Team lead, Sep 2026, with a screenshot of the seam: "when scrolling, the top
+ * bar shows a line; we want it to blend, not a transparency effect."
+ *
+ * The bar used to paint `bg-background/60` with an inset hairline along its
+ * bottom while the page was scrolled, and that hairline read as a line drawn
+ * across the top of the screen. It is now a veil BEHIND the controls, reaching
+ * past the bar and masked away over that tail, so there is no edge anywhere.
+ */
+describe('v2 top bar: the scrolled ground blends', () => {
+  const header = () => document.querySelector('header')!;
+  const veil = () => document.querySelector<HTMLElement>('[data-slot="top-bar-veil"]')!;
+
+  it('carries no border, hairline or shadow of its own, in any state', () => {
+    render(<TopBarV2 />);
+    const cls = header().className;
+    expect(cls).not.toMatch(/\bborder(-[btlrxy])?\b/);
+    expect(cls).not.toMatch(/\bshadow-/);
+    expect(cls).not.toContain('inset_0_-1px_0');
+    expect(cls).toContain('bg-transparent');
+
+    // Nor in the class strings the source can swap to on scroll.
+    const src = readFileSync(
+      join(__dirname, '..', '..', 'components', 'shared', 'layout', 'top-bar-v2.tsx'),
+      'utf8',
+    );
+    const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\{\/\*[\s\S]*?\*\/\}/g, '');
+    expect(code).not.toContain('shadow-[inset_0_-1px_0_hsl(var(--border))]');
+    expect(code).not.toContain('bg-background/60');
+  });
+
+  it('paints the ground as a masked veil behind the controls, which never takes a click', () => {
+    render(<TopBarV2 />);
+    const v = veil();
+    expect(v).not.toBeNull();
+    expect(v.parentElement).toBe(header());
+    expect(v.getAttribute('aria-hidden')).toBe('true');
+
+    const cls = v.className;
+    // Behind the controls: the header is `sticky z-40`, which is its own
+    // stacking context, so a negative z-index stays inside the bar.
+    expect(cls).toContain('-z-[1]');
+    expect(cls).toContain('pointer-events-none');
+    // Reaches the bar's real edges. An absolutely positioned child is placed
+    // against its ancestor's PADDING box, so `inset-x-0` would stop inside the
+    // bar's own `px-3 sm:px-4` and leave a crisp gutter at each end.
+    expect(cls).toContain('-inset-x-3');
+    expect(cls).toContain('sm:-inset-x-4');
+    expect(cls).not.toContain('inset-x-0');
+    // Every horizontal padding the bar carries has its matching negative inset,
+    // so adding one later without widening the veil fails here.
+    const pads = (header().className.match(/(?:^|\s)(?:sm:)?px-\d+/g) ?? []).map((p) => p.trim());
+    expect(pads.length).toBeGreaterThan(0);
+    for (const pad of pads) {
+      const expected = pad.startsWith('sm:') ? `sm:-inset-x-${pad.slice(6)}` : `-inset-x-${pad.slice(3)}`;
+      expect(cls, pad).toContain(expected);
+    }
+    // Past the bar, then faded to nothing over that tail — blur and all, which
+    // is why the mask is on this child and not on the header.
+    expect(cls).toContain('h-[calc(100%+1.5rem)]');
+    expect(cls).toContain('to-transparent');
+    expect(cls).toContain('backdrop-blur-xl');
+    expect(cls).toMatch(/\[mask-image:linear-gradient\(to_bottom,[^\]]*transparent[^\]]*\)\]/);
+    // Nothing on it that would draw an edge.
+    expect(cls).not.toMatch(/\bborder(-[btlrxy])?\b/);
+    expect(cls).not.toMatch(/\bshadow-/);
+  });
+
+  it('is invisible until the page scrolls, and no control is inside it', () => {
+    render(<TopBarV2 />);
+    // Not scrolled: nothing painted at all, so the app gradient runs from the top.
+    expect(veil().className).toContain('opacity-0');
+
+    for (const name of ['Help, ask Trax', 'Messages', 'Notifications'] as const) {
+      expect(veil().contains(screen.getByRole('button', { name }))).toBe(false);
+    }
+    expect(veil().contains(screen.getByRole('link', { name: /Credits/ }))).toBe(false);
+    const [searchField] = screen.getAllByRole('button', { name: 'Search' });
+    expect(veil().contains(searchField)).toBe(false);
+  });
+});
+
 describe('v2 dashboard', () => {
   it('no longer renders a New Rental button', () => {
     const src = readFileSync(

@@ -17,7 +17,9 @@
  */
 
 import { supabase } from '@/integrations/supabase/client';
-import { relativeLuminance, type Rgb } from './color';
+import { getBrandInitials } from '@/components/shared/layout/brand-logo';
+import { hexToRgb, hslToHex, readableForegroundOn, relativeLuminance, rgbToHex, type Rgb } from './color';
+import { V2_DEFAULT_BRAND_COLOR } from './presets';
 
 const LOGO_BUCKET = 'company-logos';
 
@@ -263,14 +265,19 @@ export async function uploadLogoBlob(
 }
 
 /* ------------------------------------------------------------------ */
-/* v2 Logos (northwind): what each slot accepts, and how a file is     */
-/* checked and prepared before it is uploaded.                         */
+/* v2 Logos: what each slot accepts, and how a file is checked and     */
+/* prepared before it is uploaded.                                      */
 /*                                                                      */
-/*   small  favicon_url  browser tab + sidebar badge  512 × 512 PNG     */
-/*   large  logo_url     sign-in page + booking site  original, or PNG  */
+/*   slot   name         column       where it shows                    */
+/*   small  Square icon  favicon_url  browser tab + sidebar badge       */
+/*   large  Full logo    logo_url     sign-in page + booking site       */
 /*                                                                      */
-/* Every limit is a constant here so the help text under each card is   */
-/* built from the same numbers the checks use.                          */
+/* The slot ids are internal. People only ever see the names, never     */
+/* "small", "large" or "favicon" (team lead, Sep 2026).                 */
+/*                                                                      */
+/* Every limit is a constant here so the help text under each card, the */
+/* "best results" line and the error messages are built from the same   */
+/* numbers the checks use. Each pixel limit is a range with both ends.  */
 /* ------------------------------------------------------------------ */
 
 /**
@@ -282,6 +289,15 @@ export const LOGO_MAX_BYTES = 10 * 1024 * 1024;
 
 export type LogoSlot = 'small' | 'large';
 export type LogoFormat = 'PNG' | 'WebP' | 'JPG' | 'SVG' | 'ICO';
+
+/** What each slot is called on screen. */
+export const LOGO_SLOT_NAMES: Record<LogoSlot, string> = {
+  small: 'Square icon',
+  large: 'Full logo',
+};
+
+/** The same names mid-sentence ("Replace square icon"). */
+export const logoSlotNoun = (slot: LogoSlot) => LOGO_SLOT_NAMES[slot].toLowerCase();
 
 const LOGO_FORMAT_TYPES: Record<LogoFormat, { mime: string[]; extensions: string[] }> = {
   PNG: { mime: ['image/png'], extensions: ['.png'] },
@@ -301,19 +317,31 @@ const acceptFor = (formats: readonly LogoFormat[]) =>
 export const SMALL_LOGO_ACCEPT = acceptFor(SMALL_LOGO_FORMATS);
 export const LARGE_LOGO_ACCEPT = acceptFor(LARGE_LOGO_FORMATS);
 
-/** Small logo: roughly square (width ÷ height within these), at least this many px a side. */
+/**
+ * Square icon: 128 to 4096 px a side, roughly square (width ÷ height within
+ * 0.9 to 1.1). Always stored as a 512 × 512 PNG, so 512 is also the size that
+ * looks sharpest; anything past 4096 is a photo or a print file, not an icon.
+ */
 export const SMALL_LOGO_MIN_PX = 128;
+export const SMALL_LOGO_MAX_PX = 4096;
 export const SMALL_LOGO_RECOMMENDED_PX = 512;
 export const SMALL_LOGO_OUTPUT_PX = 512;
 export const SMALL_LOGO_MIN_RATIO = 0.9;
 export const SMALL_LOGO_MAX_RATIO = 1.1;
 
-/** Large logo: at least this wide and tall, between 1:1 and 8:1, never stored above 1200 px. */
+/**
+ * Full logo: 400 to 6000 px wide and 100 to 3000 px tall, between 1:1 and
+ * 8:1, never stored above 1200 px on its longest edge (so 1200 px wide is the
+ * size worth sending).
+ */
 export const LARGE_LOGO_MIN_WIDTH = 400;
+export const LARGE_LOGO_MAX_WIDTH = 6000;
 export const LARGE_LOGO_MIN_HEIGHT = 100;
+export const LARGE_LOGO_MAX_HEIGHT = 3000;
 export const LARGE_LOGO_MIN_RATIO = 1;
 export const LARGE_LOGO_MAX_RATIO = 8;
 export const LARGE_LOGO_MAX_EDGE = 1200;
+export const LARGE_LOGO_RECOMMENDED_WIDTH = LARGE_LOGO_MAX_EDGE;
 
 const MB = 1024 * 1024;
 
@@ -326,9 +354,18 @@ export function logoFormatList(formats: readonly LogoFormat[]): string {
 export function logoHelpText(slot: LogoSlot): string {
   const size = `up to ${LOGO_MAX_BYTES / MB} MB`;
   if (slot === 'small') {
-    return `${logoFormatList(SMALL_LOGO_FORMATS)} · ${size} · square, at least ${SMALL_LOGO_MIN_PX} × ${SMALL_LOGO_MIN_PX} px (${SMALL_LOGO_RECOMMENDED_PX} × ${SMALL_LOGO_RECOMMENDED_PX} px is best)`;
+    return `${logoFormatList(SMALL_LOGO_FORMATS)} · ${size} · square, ${SMALL_LOGO_MIN_PX} to ${SMALL_LOGO_MAX_PX} px a side`;
   }
-  return `${logoFormatList(LARGE_LOGO_FORMATS)} · ${size} · at least ${LARGE_LOGO_MIN_WIDTH} × ${LARGE_LOGO_MIN_HEIGHT} px`;
+  return `${logoFormatList(LARGE_LOGO_FORMATS)} · ${size} · ${LARGE_LOGO_MIN_WIDTH} to ${LARGE_LOGO_MAX_WIDTH} px wide, ${LARGE_LOGO_MIN_HEIGHT} to ${LARGE_LOGO_MAX_HEIGHT} px tall`;
+}
+
+/** The one highlighted line at the top of Logos: what works best for both. */
+export function logoBestResultsText(): string {
+  return (
+    `Best results: a PNG with a transparent background. ` +
+    `${LOGO_SLOT_NAMES.small} at least ${SMALL_LOGO_RECOMMENDED_PX} × ${SMALL_LOGO_RECOMMENDED_PX} px; ` +
+    `${logoSlotNoun('large')} at least ${LARGE_LOGO_RECOMMENDED_WIDTH} px wide.`
+  );
 }
 
 /**
@@ -376,13 +413,17 @@ export interface LogoImageSize {
 
 export interface LogoSizeProblem {
   /** `not-square` is the one a person can fix here, with "Fit into a square". */
-  kind: 'too-small' | 'not-square' | 'too-tall' | 'too-wide';
+  kind: 'too-small' | 'too-large' | 'not-square' | 'too-tall' | 'too-wide';
   message: string;
 }
 
 const px = (n: number) => Math.round(n);
 
-/** Pixel size and shape. Null when the image can be used as it is. */
+/**
+ * Pixel size and shape. Null when the image can be used as it is. An SVG has
+ * no pixel size of its own (it is drawn at whatever size we need), so only its
+ * shape is checked.
+ */
 export function logoSizeProblem(slot: LogoSlot, { width, height, vector }: LogoImageSize): LogoSizeProblem | null {
   const ratio = width / height;
   const dims = `${px(width)} × ${px(height)} px`;
@@ -390,7 +431,13 @@ export function logoSizeProblem(slot: LogoSlot, { width, height, vector }: LogoI
     if (!vector && (width < SMALL_LOGO_MIN_PX || height < SMALL_LOGO_MIN_PX)) {
       return {
         kind: 'too-small',
-        message: `This image is ${dims}. The small logo needs to be at least ${SMALL_LOGO_MIN_PX} × ${SMALL_LOGO_MIN_PX} px, and ${SMALL_LOGO_RECOMMENDED_PX} × ${SMALL_LOGO_RECOMMENDED_PX} px looks sharpest.`,
+        message: `This image is ${dims}. The square icon needs to be at least ${SMALL_LOGO_MIN_PX} × ${SMALL_LOGO_MIN_PX} px, and ${SMALL_LOGO_RECOMMENDED_PX} × ${SMALL_LOGO_RECOMMENDED_PX} px looks sharpest.`,
+      };
+    }
+    if (!vector && (width > SMALL_LOGO_MAX_PX || height > SMALL_LOGO_MAX_PX)) {
+      return {
+        kind: 'too-large',
+        message: `This image is ${dims}. The square icon can be at most ${SMALL_LOGO_MAX_PX} × ${SMALL_LOGO_MAX_PX} px. Save a smaller copy (${SMALL_LOGO_RECOMMENDED_PX} × ${SMALL_LOGO_RECOMMENDED_PX} px is best) and try again.`,
       };
     }
     if (ratio < SMALL_LOGO_MIN_RATIO || ratio > SMALL_LOGO_MAX_RATIO) {
@@ -404,13 +451,19 @@ export function logoSizeProblem(slot: LogoSlot, { width, height, vector }: LogoI
   if (!vector && (width < LARGE_LOGO_MIN_WIDTH || height < LARGE_LOGO_MIN_HEIGHT)) {
     return {
       kind: 'too-small',
-      message: `This image is ${dims}. The large logo needs to be at least ${LARGE_LOGO_MIN_WIDTH} px wide and ${LARGE_LOGO_MIN_HEIGHT} px tall.`,
+      message: `This image is ${dims}. The full logo needs to be at least ${LARGE_LOGO_MIN_WIDTH} px wide and ${LARGE_LOGO_MIN_HEIGHT} px tall.`,
+    };
+  }
+  if (!vector && (width > LARGE_LOGO_MAX_WIDTH || height > LARGE_LOGO_MAX_HEIGHT)) {
+    return {
+      kind: 'too-large',
+      message: `This image is ${dims}. The full logo can be at most ${LARGE_LOGO_MAX_WIDTH} px wide and ${LARGE_LOGO_MAX_HEIGHT} px tall. Save a smaller copy (${LARGE_LOGO_RECOMMENDED_WIDTH} px wide is plenty) and try again.`,
     };
   }
   if (ratio < LARGE_LOGO_MIN_RATIO) {
     return {
       kind: 'too-tall',
-      message: `This image is taller than it is wide (${dims}). Use your full logo with its name here, and put a square icon in Small logo.`,
+      message: `This image is taller than it is wide (${dims}). Use your full logo with its name here, and put a square version under Square icon.`,
     };
   }
   if (ratio > LARGE_LOGO_MAX_RATIO) {
@@ -516,7 +569,7 @@ export async function loadLogoFile(file: File): Promise<LoadedLogo | null> {
   return { image, format, width, height, vector: format === 'SVG', release };
 }
 
-/** The small logo: always a 512 × 512 PNG, the image whole and centred on a see-through square. */
+/** The square icon: always a 512 × 512 PNG, the image whole and centred on a see-through square. */
 export async function renderSmallLogo(loaded: LoadedLogo): Promise<Blob | null> {
   const box = SMALL_LOGO_OUTPUT_PX;
   const canvas = document.createElement('canvas');
@@ -532,7 +585,7 @@ export async function renderSmallLogo(loaded: LoadedLogo): Promise<Blob | null> 
 }
 
 /**
- * The large logo. A PNG, WebP or JPG no longer than 1200 px on its longest edge
+ * The full logo. A PNG, WebP or JPG no longer than 1200 px on its longest edge
  * is uploaded exactly as it came; a longer one is scaled down to 1200 px as a
  * PNG, which keeps any transparency. An SVG is drawn as a PNG with its longest
  * edge at 1200 px: it is vector, so drawing it that large costs no sharpness.
@@ -556,6 +609,266 @@ export async function prepareLargeLogo(file: File, loaded: LoadedLogo): Promise<
   ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(loaded.image, 0, 0, target.width, target.height);
   return canvasToBlob(canvas);
+}
+
+/* ------------------------------------------------------------------ */
+/* What the browser tab and the sidebar badge show                      */
+/*                                                                      */
+/*   square icon (favicon_url)                                          */
+/*     -> a mark drawn from the portal name's initials, in the tenant's */
+/*        brand colour                                                  */
+/*     -> the platform icon, only where the mark cannot be drawn        */
+/*                                                                      */
+/* One chain, in one place, because two copies of it drifted: Settings  */
+/* -> Branding -> Logos drew the sidebar badge from the initials while  */
+/* the browser-tab picture beside it drew the Drive247 platform icon,   */
+/* so removing the square icon looked like it had only half worked      */
+/* (team lead, Sep 2026).                                               */
+/*                                                                      */
+/* The full logo is NOT in this chain. The two slots are independent:   */
+/* a wordmark with the company name in it shrinks to an unreadable      */
+/* sliver at 16px, and a tenant who uploads one must not find it        */
+/* standing in for an icon they never chose.                            */
+/* ------------------------------------------------------------------ */
+
+/** The platform's own tab icon: the light one of app/layout.tsx's `PLATFORM_FAVICONS`. */
+export const PLATFORM_TAB_ICON = '/icons/favicon-light.png';
+
+/** The mark is drawn this big. A tab shows it at 16px, the sidebar badge at 32. */
+export const BRAND_MARK_PX = 64;
+
+/** What `OrgMark` shows for a tenant whose name yields no initials at all. */
+export const BRAND_MARK_FALLBACK_INITIALS = 'O';
+
+/** The v2 typeface, for a canvas (which takes a font stack, not a class). */
+export const BRAND_MARK_FONT_STACK = "Manrope, system-ui, -apple-system, 'Segoe UI', Roboto, Arial";
+
+/** What to show, and which of the two it is. `src` is null only when the mark could not be drawn. */
+export type BrandIcon =
+  | { kind: 'icon'; src: string; initials?: undefined }
+  | { kind: 'initials'; src: string | null; initials: string };
+
+/** The colours and typeface the mark is drawn with — the sidebar badge's own. */
+export interface BrandMarkPaint {
+  background: string;
+  foreground: string;
+  fontFamily: string;
+}
+
+export interface BrandIconOptions {
+  /**
+   * The brand colour to draw the mark in when the running page's `--primary`
+   * cannot be read (a server render, or a test with no stylesheet).
+   */
+  brandColor?: string | null;
+  /**
+   * Where the v2 brand variables live — `<body>`. Pass null to skip reading
+   * them. Left out, `document.body` when there is one.
+   */
+  root?: HTMLElement | null;
+  /** False on a render that cannot draw (no DOM yet); the mark is then null. */
+  generate?: boolean;
+}
+
+/**
+ * The one chain. Returns what to draw for a tenant's tab icon and sidebar
+ * badge, so a preview of either cannot disagree with the real thing.
+ */
+export function resolveBrandIcon(
+  iconUrl: string | null | undefined,
+  name: string | null | undefined,
+  options: BrandIconOptions = {}
+): BrandIcon {
+  const icon = typeof iconUrl === 'string' ? iconUrl.trim() : '';
+  if (icon) return { kind: 'icon', src: icon };
+
+  const initials = getBrandInitials(name ?? '') || BRAND_MARK_FALLBACK_INITIALS;
+  if (options.generate === false) return { kind: 'initials', src: null, initials };
+
+  const root =
+    options.root !== undefined ? options.root : typeof document === 'undefined' ? null : document.body;
+  return { kind: 'initials', src: brandMarkDataUrl(initials, brandMarkPaint(root, options.brandColor)), initials };
+}
+
+/**
+ * The colours the mark is drawn in.
+ *
+ * First choice is the page's own `--primary` and `--primary-foreground`, which
+ * is literally what `OrgMark`'s `bg-primary` chip paints with: styles/v2-theme.css
+ * derives them from `--brand-h/s/l`, and the Branding try-on writes those on
+ * `<body>` as the colour is picked. So the drawn mark and the live chip are the
+ * same colour, and both follow an unsaved colour straight away.
+ *
+ * Where there is no stylesheet to read (a server render, a test), the brand hex
+ * the caller holds stands in, and failing that the default brand colour — the
+ * same one the stylesheet would have fallen back to.
+ */
+export function brandMarkPaint(
+  root: HTMLElement | null | undefined,
+  brandColor?: string | null
+): BrandMarkPaint {
+  let background: string | null = null;
+  let foreground: string | null = null;
+  let fontFamily = '';
+
+  if (root && typeof window !== 'undefined' && typeof window.getComputedStyle === 'function') {
+    try {
+      const style = window.getComputedStyle(root);
+      background = hslTripleToHex(style.getPropertyValue('--primary'));
+      // PAIRED with the background, deliberately. `--primary-foreground` is the
+      // readable text for `--primary` and for nothing else: taking it on its own
+      // while the fill fell back to the caller's saved hex paired the ivory meant
+      // for the dark-mode primary (42% lightness) with a pale brand colour, and
+      // the initials disappeared.
+      foreground = background ? hslTripleToHex(style.getPropertyValue('--primary-foreground')) : null;
+      fontFamily = style.fontFamily || '';
+    } catch {
+      // No computed style to read: the caller's hex below.
+    }
+  }
+
+  const rgb = background ? null : brandColor ? hexToRgb(brandColor) : null;
+  const fill = background || (rgb ? rgbToHex(rgb) : V2_DEFAULT_BRAND_COLOR);
+  return {
+    background: fill,
+    // The stylesheet leaves --primary-foreground off for a brand that reads
+    // with white on it, so work it out rather than assuming either.
+    foreground: foreground || readableForegroundOn(fill),
+    fontFamily: fontFamily || BRAND_MARK_FONT_STACK,
+  };
+}
+
+/**
+ * A rounded square in the brand colour with the tenant's initials on it, as a
+ * PNG data URL — `OrgMark`'s chip, in a form a `<link rel="icon">` can take.
+ * Null where a canvas cannot be used (a server render, jsdom without one), and
+ * the platform icon then stands.
+ *
+ * Cached per drawing, so the same tenant gets the same string every render: an
+ * icon link whose href changes makes the browser refetch, and an `<img>` whose
+ * src changes flickers.
+ */
+export function brandMarkDataUrl(initials: string, paint: BrandMarkPaint, size = BRAND_MARK_PX): string | null {
+  const key = `${size}|${initials}|${paint.background}|${paint.foreground}|${paint.fontFamily}`;
+  const cached = BRAND_MARK_CACHE.get(key);
+  if (cached !== undefined) return cached;
+  const drawn = drawBrandMark(initials, paint, size);
+  // Only a drawing is kept: a null means the environment could not draw at all,
+  // and caching that would outlive a canvas arriving later (a test installing one).
+  if (drawn) {
+    if (BRAND_MARK_CACHE.size > 24) BRAND_MARK_CACHE.clear();
+    BRAND_MARK_CACHE.set(key, drawn);
+  }
+  return drawn;
+}
+
+const BRAND_MARK_CACHE = new Map<string, string>();
+
+/**
+ * Forget every drawn mark. The cache is module-global and outlives a component,
+ * which is the point in the product and a trap in a test: a suite that draws a
+ * mark with a stubbed canvas would hand the same string to the next test, which
+ * may be checking what happens when nothing can be drawn.
+ */
+export function clearBrandMarkCache(): void {
+  BRAND_MARK_CACHE.clear();
+}
+
+function drawBrandMark(initials: string, paint: BrandMarkPaint, size: number): string | null {
+  if (typeof document === 'undefined') return null;
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    // `rounded-lg` is 8px on OrgMark's 32px badge: a quarter of the box.
+    const radius = size * 0.25;
+    ctx.beginPath();
+    const withRoundRect = ctx as CanvasRenderingContext2D & {
+      roundRect?: (x: number, y: number, w: number, h: number, r: number) => void;
+    };
+    if (typeof withRoundRect.roundRect === 'function') {
+      withRoundRect.roundRect(0, 0, size, size, radius);
+    } else {
+      ctx.moveTo(radius, 0);
+      ctx.lineTo(size - radius, 0);
+      ctx.quadraticCurveTo(size, 0, size, radius);
+      ctx.lineTo(size, size - radius);
+      ctx.quadraticCurveTo(size, size, size - radius, size);
+      ctx.lineTo(radius, size);
+      ctx.quadraticCurveTo(0, size, 0, size - radius);
+      ctx.lineTo(0, radius);
+      ctx.quadraticCurveTo(0, 0, radius, 0);
+    }
+    ctx.closePath();
+    ctx.fillStyle = paint.background;
+    ctx.fill();
+
+    // `text-[12px] font-semibold` in a 32px badge: three eighths of the box, at 600.
+    ctx.fillStyle = paint.foreground;
+    ctx.font = `600 ${Math.round(size * 0.375)}px ${paint.fontFamily}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(initials, size / 2, size / 2);
+
+    const url = canvas.toDataURL('image/png');
+    // jsdom without a canvas hands back "data:," rather than refusing.
+    return url.startsWith('data:image/png') ? url : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * `"175 77% 26%"` — a CSS custom property's value — as a hex. Null if it is not one.
+ *
+ * A custom property's COMPUTED value keeps any `calc()` unevaluated: it is
+ * resolved only in the property that finally consumes it. styles/v2-theme.css
+ * writes the dark tokens as `calc(var(--brand-h) - 2) calc(var(--brand-s) - 7%)
+ * 42%`, so a plain three-number parse read every dark-mode page as "no colour
+ * here" and silently fell back to the caller's saved hex — a mark in the light
+ * brand colour beside a sidebar chip in the dark one. One `calc(a ± b)` per
+ * component is the whole of what the stylesheet writes, so evaluate exactly
+ * that and nothing more.
+ */
+function hslTripleToHex(value: string): string | null {
+  const parts = splitTopLevel(value.trim());
+  if (parts.length !== 3) return null;
+  const [h, s, l] = parts.map(hslComponent);
+  if (h === null || s === null || l === null) return null;
+  return hslToHex(h, s, l);
+}
+
+/** Split on the spaces BETWEEN components, never on the ones inside a `calc(…)`. */
+function splitTopLevel(value: string): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let current = '';
+  for (const ch of value) {
+    if (ch === '(') depth++;
+    else if (ch === ')') depth--;
+    if (depth === 0 && /\s/.test(ch)) {
+      if (current) out.push(current);
+      current = '';
+      continue;
+    }
+    current += ch;
+  }
+  if (current) out.push(current);
+  return out;
+}
+
+/** One HSL component: `248`, `68%`, or `calc(68% - 7%)`. Null for anything else. */
+function hslComponent(token: string): number | null {
+  const plain = token.match(/^(-?\d*\.?\d+)%?$/);
+  if (plain) return Number(plain[1]);
+  const calc = token.match(/^calc\(\s*(-?\d*\.?\d+)%?\s*([+-])\s*(-?\d*\.?\d+)%?\s*\)$/);
+  if (!calc) return null;
+  const left = Number(calc[1]);
+  const right = Number(calc[3]);
+  return calc[2] === '+' ? left + right : left - right;
 }
 
 /* ------------------------------------------------------------------ */
