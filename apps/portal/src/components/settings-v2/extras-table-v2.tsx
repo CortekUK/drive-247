@@ -7,10 +7,30 @@
  * table scrolls, with one line under the table saying how much is shown while
  * more are to come (none once every extra is on screen).
  *
- * Rows open nothing. There is no extra record route and the v1 row opens nothing
- * either: its only control is the ⋯ menu, kept here with the same items, in the
- * same order, under the same conditions, calling ExtrasSettings' own handlers,
- * so its dialogs and mutations run exactly as in v1.
+ * Rows open nothing: there is no extra record route, and the v1 row opens
+ * nothing either.
+ *
+ * TEAM LEAD REVIEW, Sep 20 2026 — what this table stopped doing, and why.
+ *
+ *  - NO IMAGE IN THE TABLE. The 24px thumbnail and its image-count pip are
+ *    gone, and with them the indent they left before every name ("this gap —
+ *    remove it, it should start from here"). The picture is not lost: hovering
+ *    ANYWHERE on the row shows it full size beside the name, the way the
+ *    vehicles list shows a car's cover photo. Phones keep their thumbnail —
+ *    there is no hover on a touch screen, and the stacked rows are not the
+ *    table he was looking at.
+ *  - NO DESCRIPTION COLUMN. Truncated prose in a 150px column said nothing;
+ *    the full description is in the row's own Edit dialog, unchanged.
+ *  - NO TYPE COLUMN. It read "Quantity" or "Add-on", which Stock already says:
+ *    a quantity extra counts down there, an add-on prints a dash. Removing it
+ *    is what makes room for the actions. Stock stays (his words).
+ *  - EDIT, UPDATE STOCK, ACTIVATE/DEACTIVATE AND DELETE ARE IN THE ROW, as
+ *    labelled icon buttons, instead of hiding behind a "⋯" menu. Same handlers,
+ *    same order, same conditions as the menu had, so the dialogs and mutations
+ *    below them are still ExtrasSettings' own and still shared with v1. The
+ *    menu itself stays for the phone rows, where four buttons do not fit.
+ *  - The header reads "Name", not "Extra": the page is already called Extras
+ *    and the column holds a name.
  *
  * v1 tints each row: yellow for an inactive extra, red for low stock, emerald
  * otherwise. The kit has no row tints, so that meaning moves into the cells:
@@ -18,13 +38,14 @@
  * reads in the danger tone when it is out or low (v1's red stock text), and the
  * low-stock triangle stays beside the name.
  *
- * EXTREME DATA. A thumbnail whose image fails to load becomes the image tile
- * (no broken-image glyph). A price too wide for its column wraps inside it
- * rather than running into Pricing, and a per-day extra says "/ day" so it does
- * not read as a flat fee. When the bookings or vehicle-price read failed, stock
- * and the vehicle count print a dash instead of a confident wrong number. Below
- * `sm` the 880px table would hide Price, Stock, Status and the ⋯ menu off the
- * right edge with no cue, so phones get one stacked row per extra instead.
+ * EXTREME DATA. An image that fails to load becomes the image tile, in the
+ * hover card and in the phone thumbnail alike (no broken-image glyph). A price
+ * too wide for its column wraps inside it rather than running into Pricing, and
+ * a per-day extra says "/ day" so it does not read as a flat fee. When the
+ * bookings or vehicle-price read failed, stock and the vehicle count print a
+ * dash instead of a confident wrong number. Below `sm` the wide table would
+ * hide Price, Stock, Status and the row's controls off the right edge with no
+ * cue, so phones get one stacked row per extra instead.
  *
  * The progressive-rows hook lives HERE, not in ExtrasSettings, so it mounts with
  * its table and its sentinel. The rows come from `useRentalExtras`, which holds
@@ -34,7 +55,17 @@
  * booking site's order is simply oldest first.
  */
 
-import { AlertTriangle, ImageIcon, Loader2, MoreHorizontal, PackagePlus, Pencil, Power, Trash2 } from "lucide-react";
+import {
+  AlertTriangle,
+  ImageIcon,
+  Loader2,
+  MoreHorizontal,
+  PackagePlus,
+  Pencil,
+  Power,
+  Trash2,
+  type LucideIcon,
+} from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import {
   DropdownMenu,
@@ -43,6 +74,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui-v2/dropdown-menu";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui-v2/hover-card";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui-v2/tooltip";
 import {
   LIST_CLASSES,
   LIST_ROW_ACTION,
@@ -63,7 +96,7 @@ import {
   SettingsImage,
   TruncatedText,
 } from "@/components/settings-v2/section-states";
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RentalExtra } from "@/hooks/use-rental-extras";
 import { cn } from "@/lib/utils";
 
@@ -132,7 +165,7 @@ function pricingLabel(extra: RentalExtra): { text: string; title?: string } {
   return { text: `Per Vehicle (${formatSettingsNumber(extra.vehicle_pricing?.length || 0)})` };
 }
 
-interface MenuProps<T> {
+interface RowActionProps<T> {
   extra: T;
   busy: boolean;
   onEdit: (extra: T) => void;
@@ -141,7 +174,12 @@ interface MenuProps<T> {
   onDelete: (extra: T) => void;
 }
 
-function ExtraRowMenu<T extends RentalExtra>({ extra, busy, onEdit, onUpdateStock, onToggleActive, onDelete }: MenuProps<T>) {
+/**
+ * The phone stacked row's controls. The table's live in the row itself
+ * (`ExtraRowActions`); on a 360px row four buttons do not fit, so the menu is
+ * kept here, with the same items, in the same order, under the same conditions.
+ */
+function ExtraRowMenu<T extends RentalExtra>({ extra, busy, onEdit, onUpdateStock, onToggleActive, onDelete }: RowActionProps<T>) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -179,9 +217,243 @@ function ExtraRowMenu<T extends RentalExtra>({ extra, busy, onEdit, onUpdateStoc
   );
 }
 
+/**
+ * One row control: an icon button that says what it does on hover and to a
+ * screen reader. The same shape Custom pricing's holiday rows use, so the two
+ * Pricing tables read alike.
+ */
+function IconAction({
+  icon: Icon,
+  label,
+  tooltip,
+  onClick,
+  destructive,
+  busy,
+  disabled,
+}: {
+  icon: LucideIcon;
+  label: string;
+  tooltip: string;
+  onClick: () => void;
+  destructive?: boolean;
+  /** Its own write is in flight: a spinner in place of the icon. */
+  busy?: boolean;
+  disabled?: boolean;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className={cn(LIST_ROW_ACTION, destructive && "hover:text-destructive")}
+          onClick={onClick}
+          disabled={disabled || busy}
+          aria-label={label}
+        >
+          {busy ? <Loader2 className="size-4 animate-spin" /> : <Icon className="size-4" />}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{tooltip}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+/**
+ * Edit, Update stock, Activate/Deactivate and Delete, in the row (team lead,
+ * Sep 20 2026). Update stock only where there is stock to update, exactly as
+ * the "⋯" menu did; Activate/Deactivate is disabled while its own write is in
+ * flight, so a double click cannot send two opposite writes.
+ */
+function ExtraRowActions<T extends RentalExtra>({ extra, busy, onEdit, onUpdateStock, onToggleActive, onDelete }: RowActionProps<T>) {
+  return (
+    <div className="flex justify-end gap-0.5">
+      <IconAction icon={Pencil} tooltip="Edit" label={`Edit ${extra.name}`} onClick={() => onEdit(extra)} />
+      {extra.max_quantity !== null && (
+        <IconAction
+          icon={PackagePlus}
+          tooltip="Update stock"
+          label={`Update stock for ${extra.name}`}
+          onClick={() => onUpdateStock(extra)}
+        />
+      )}
+      <IconAction
+        icon={Power}
+        tooltip={extra.is_active ? "Deactivate" : "Activate"}
+        label={`${extra.is_active ? "Deactivate" : "Activate"} ${extra.name}`}
+        onClick={() => void onToggleActive(extra)}
+        busy={busy}
+      />
+      <IconAction
+        icon={Trash2}
+        tooltip="Delete"
+        label={`Delete ${extra.name}`}
+        onClick={() => onDelete(extra)}
+        destructive
+      />
+    </div>
+  );
+}
+
 function Thumbnail({ extra, className }: { extra: RentalExtra; className: string }) {
   return (
     <SettingsImage src={extra.image_urls[0]} alt="" fallbackIcon={ImageIcon} className={cn("block", className)} />
+  );
+}
+
+/** How long the pointer must rest on a row before its picture appears. */
+const HOVER_OPEN_DELAY = 150;
+
+/**
+ * Open while the pointer rests on the row, closed the moment it leaves.
+ *
+ * The delay is ours rather than Radix's `openDelay` because the thing being
+ * hovered is the whole ROW and the card is anchored to the name inside it:
+ * Radix would only ever see the name. The timer is cleared on unmount, so a
+ * row that scrolls out of the progressive slice cannot open a card afterwards.
+ */
+function useRowHover(delay = HOVER_OPEN_DELAY) {
+  const [open, setOpen] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clear = useCallback(() => {
+    if (timer.current) {
+      clearTimeout(timer.current);
+      timer.current = null;
+    }
+  }, []);
+  useEffect(() => clear, [clear]);
+  const onMouseEnter = useCallback(() => {
+    clear();
+    timer.current = setTimeout(() => setOpen(true), delay);
+  }, [clear, delay]);
+  const onMouseLeave = useCallback(() => {
+    clear();
+    setOpen(false);
+  }, [clear]);
+  return { open, onMouseEnter, onMouseLeave };
+}
+
+/**
+ * The extra's name, and — while the row is hovered — its picture beside it.
+ *
+ * The card is CONTROLLED by the row (`open`), so the whole row is the hover
+ * target while the card still opens next to the name rather than off the right
+ * edge of a full-width row. It is `pointer-events-none` on purpose: a portalled
+ * card sits above the row, so a pointer entering it would fire the row's
+ * `mouseleave`, close the card, land back on the row and open it again —
+ * a flicker loop. Nothing in the card is clickable, so letting the pointer
+ * through costs nothing.
+ *
+ * With no image there is no card at all: an empty popover is worse than none.
+ */
+function ExtraName({ extra, open }: { extra: RentalExtra; open: boolean }) {
+  const image = extra.image_urls[0];
+  const name = (
+    <span className={`min-w-0 truncate ${LIST_CLASSES.identifier}`} title={extra.name}>
+      {extra.name}
+    </span>
+  );
+  if (!image) return name;
+  const count = extra.image_urls.length;
+  return (
+    <HoverCard open={open}>
+      <HoverCardTrigger asChild>{name}</HoverCardTrigger>
+      <HoverCardContent side="right" align="center" className="pointer-events-none w-72 space-y-1.5 p-1.5">
+        <SettingsImage
+          src={image}
+          alt={`Picture of ${extra.name}`}
+          fallbackIcon={ImageIcon}
+          className="aspect-[16/10] w-full rounded-[18px]"
+        />
+        {count > 1 && (
+          <p className="px-1.5 pb-0.5 text-xs text-muted-foreground">
+            1 of {formatSettingsNumber(count)} images
+          </p>
+        )}
+      </HoverCardContent>
+    </HoverCard>
+  );
+}
+
+/**
+ * One table row. A component rather than markup inside the map because the
+ * hover state belongs to the row: a single id held by the table would re-render
+ * every visible row on every pointer move between them.
+ */
+function ExtraRow<T extends RentalExtra>({
+  extra,
+  lowStock,
+  currencyCode,
+  canEdit,
+  busy,
+  onEdit,
+  onUpdateStock,
+  onToggleActive,
+  onDelete,
+}: RowActionProps<T> & { lowStock: boolean; currencyCode: string; canEdit: boolean }) {
+  const hover = useRowHover();
+  const pricing = pricingLabel(extra);
+  return (
+    <ListRow onMouseEnter={hover.onMouseEnter} onMouseLeave={hover.onMouseLeave}>
+      {/* The name, and the extra's picture while the row is hovered. No
+          thumbnail: the indent it left before every name is what the review
+          called "this gap". */}
+      <ListCell className="text-left">
+        <div className="flex min-w-0 items-center justify-start gap-2.5">
+          <ExtraName extra={extra} open={hover.open} />
+          {lowStock && extra.is_active && (
+            <span className="shrink-0" title="Below 20% stock">
+              <AlertTriangle className="size-3.5 text-red-500 dark:text-red-400" aria-hidden="true" />
+              <span className="sr-only">Low stock</span>
+            </span>
+          )}
+        </div>
+      </ListCell>
+      {/* Never truncated: an ellipsis here hides money. Too wide for
+          the column, it wraps inside the cell instead. */}
+      <ListCell className="tabular-nums">
+        <span
+          className={cn(
+            "block [overflow-wrap:anywhere]",
+            extra.pricing_type === "per_vehicle" ? "text-muted-foreground" : LIST_CLASSES.text,
+            extra.pricing_type !== "per_vehicle" && Number(extra.price) < 0 && "text-red-500 dark:text-red-400",
+          )}
+        >
+          {extraPriceLabel(extra, currencyCode)}
+        </span>
+      </ListCell>
+      <ListCell>
+        <span className={`tabular-nums ${LIST_CLASSES.text}`} title={pricing.title}>
+          {pricing.text}
+        </span>
+      </ListCell>
+      {/* v1 prints out-of-stock and low stock in red: the danger tone. */}
+      <ListCell className="tabular-nums">
+        <span className="block [overflow-wrap:anywhere]">
+          <StockText extra={extra} lowStock={lowStock} />
+        </span>
+      </ListCell>
+      <ListCell>
+        <StatusText extra={extra} />
+      </ListCell>
+      {/* v1's menu items, as controls in the row. Clicks stop here.
+          The whole CELL is gated, not just its contents: the header drops the
+          actions column for a read-only user, so a cell left behind here would
+          leave the body one column wider than the head and shift every row. */}
+      {canEdit && (
+        <ListCell className="text-right" onClick={(e) => e.stopPropagation()}>
+          <ExtraRowActions
+            extra={extra}
+            busy={busy}
+            onEdit={onEdit}
+            onUpdateStock={onUpdateStock}
+            onToggleActive={onToggleActive}
+            onDelete={onDelete}
+          />
+        </ListCell>
+      )}
+    </ListRow>
   );
 }
 
@@ -202,7 +474,7 @@ export function ExtrasTableV2<T extends RentalExtra>({
   /** Changes with the result set only (the tenant): see `useProgressiveRows`. */
   resetKey: string;
   currencyCode: string;
-  /** `canEditSettings('extras')`: without it the row shows no menu. */
+  /** `canEditSettings('extras')`: without it the row shows no controls. */
   canEdit: boolean;
   /** ExtrasSettings' own `isLowStock`, so the rule lives in one place. */
   isLowStock: (extra: T) => boolean;
@@ -216,21 +488,12 @@ export function ExtrasTableV2<T extends RentalExtra>({
 }) {
   const ordered = useMemo(() => newestExtrasFirst(extras), [extras]);
   const extraRows = useProgressiveRows(ordered, resetKey);
-  const menu = (extra: T) =>
-    canEdit ? (
-      <ExtraRowMenu
-        extra={extra}
-        busy={busyId === extra.id}
-        onEdit={onEdit}
-        onUpdateStock={onUpdateStock}
-        onToggleActive={onToggleActive}
-        onDelete={onDelete}
-      />
-    ) : null;
 
   return (
     <>
-      {/* Phones: one stacked row per extra. The table below is hidden here. */}
+      {/* Phones: one stacked row per extra. The table below is hidden here, and
+          so is the hover card — there is no hover on a touch screen, which is
+          why these rows keep their thumbnail. */}
       <ul className="space-y-2 sm:hidden" aria-label="Rental extras">
         {extraRows.visible.map((extra) => {
           const lowStock = isLowStock(extra);
@@ -268,101 +531,45 @@ export function ExtrasTableV2<T extends RentalExtra>({
                   <span className={SETTINGS_PHONE_FACTS.afterDot}>{extra.max_quantity !== null ? "Quantity" : "Add-on"}</span>
                 </p>
               </div>
-              {menu(extra)}
+              {canEdit && (
+                <ExtraRowMenu
+                  extra={extra}
+                  busy={busyId === extra.id}
+                  onEdit={onEdit}
+                  onUpdateStock={onUpdateStock}
+                  onToggleActive={onToggleActive}
+                  onDelete={onDelete}
+                />
+              )}
             </li>
           );
         })}
       </ul>
 
       <div className="hidden sm:block">
-        <ListTable rows={extraRows} minWidth="min-w-[880px]" surface="settings">
-          <ListHeaderRow withActions={canEdit} />
-          <ListBody>
-            {extraRows.visible.map((extra) => {
-              const lowStock = isLowStock(extra);
-              const imageCount = extra.image_urls.length;
-              const pricing = pricingLabel(extra);
-              return (
-                <ListRow key={extra.id}>
-                  {/* v1's Image and Name columns as one: a small thumbnail (its
-                      negative margin keeps the row the height of a text row),
-                      the image count on it as in v1, the name, and the low-stock
-                      triangle, which never gives way to a long name. */}
-                  <ListCell className="text-left">
-                    <div className="flex min-w-0 items-center justify-start gap-2.5">
-                      <span className="relative -my-0.5 shrink-0">
-                        <Thumbnail extra={extra} className="size-6 rounded" />
-                        {imageCount > 1 && (
-                          <span
-                            className="absolute -bottom-1 -right-1.5 flex h-[14px] min-w-[14px] items-center justify-center rounded-full border bg-muted px-0.5 text-[9px] font-medium leading-none tabular-nums text-foreground"
-                            title={`${imageCount} images`}
-                          >
-                            {imageCount > 99 ? "99+" : imageCount}
-                          </span>
-                        )}
-                      </span>
-                      <span className={`min-w-0 truncate ${LIST_CLASSES.identifier}`} title={extra.name}>
-                        {extra.name}
-                      </span>
-                      {lowStock && extra.is_active && (
-                        <span className="shrink-0" title="Below 20% stock">
-                          <AlertTriangle className="size-3.5 text-red-500 dark:text-red-400" aria-hidden="true" />
-                          <span className="sr-only">Low stock</span>
-                        </span>
-                      )}
-                    </div>
-                  </ListCell>
-                  <ListCell>
-                    {extra.description ? (
-                      <span className={`block truncate ${LIST_CLASSES.text}`} title={extra.description}>
-                        {extra.description}
-                      </span>
-                    ) : (
-                      <Blank />
-                    )}
-                  </ListCell>
-                  {/* Never truncated: an ellipsis here hides money. Too wide for
-                      the column, it wraps inside the cell instead. */}
-                  <ListCell className="tabular-nums">
-                    <span
-                      className={cn(
-                        "block [overflow-wrap:anywhere]",
-                        extra.pricing_type === "per_vehicle" ? "text-muted-foreground" : LIST_CLASSES.text,
-                        extra.pricing_type !== "per_vehicle" && Number(extra.price) < 0 && "text-red-500 dark:text-red-400",
-                      )}
-                    >
-                      {extraPriceLabel(extra, currencyCode)}
-                    </span>
-                  </ListCell>
-                  <ListCell>
-                    <span className={`tabular-nums ${LIST_CLASSES.text}`} title={pricing.title}>
-                      {pricing.text}
-                    </span>
-                  </ListCell>
-                  <ListCell>
-                    <span className={LIST_CLASSES.text}>{extra.max_quantity !== null ? "Quantity" : "Add-on"}</span>
-                  </ListCell>
-                  {/* v1 prints out-of-stock and low stock in red: the danger tone. */}
-                  <ListCell className="tabular-nums">
-                    <span className="block [overflow-wrap:anywhere]">
-                      <StockText extra={extra} lowStock={lowStock} />
-                    </span>
-                  </ListCell>
-                  <ListCell>
-                    <StatusText extra={extra} />
-                  </ListCell>
-                  {/* The same menu as v1. Clicks on the trigger and on its items
-                      (portalled, but still React children of this cell) stop here. */}
-                  {canEdit && (
-                    <ListCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                      {menu(extra)}
-                    </ListCell>
-                  )}
-                </ListRow>
-              );
-            })}
-          </ListBody>
-        </ListTable>
+        {/* One provider for the whole table: a tooltip per row would mount a
+            provider per row. `delayDuration` matches Custom pricing's. */}
+        <TooltipProvider delayDuration={300}>
+          <ListTable rows={extraRows} minWidth="min-w-[820px]" surface="settings">
+            <ListHeaderRow withActions={canEdit} />
+            <ListBody>
+              {extraRows.visible.map((extra) => (
+                <ExtraRow
+                  key={extra.id}
+                  extra={extra}
+                  lowStock={isLowStock(extra)}
+                  currencyCode={currencyCode}
+                  canEdit={canEdit}
+                  busy={busyId === extra.id}
+                  onEdit={onEdit}
+                  onUpdateStock={onUpdateStock}
+                  onToggleActive={onToggleActive}
+                  onDelete={onDelete}
+                />
+              ))}
+            </ListBody>
+          </ListTable>
+        </TooltipProvider>
       </div>
       <ListFooter rows={extraRows} one="extra" many="extras" hideWhenAllShown />
     </>
@@ -371,24 +578,22 @@ export function ExtrasTableV2<T extends RentalExtra>({
 
 /**
  * Widths measured at the 944px card with Manrope, each with a few pixels to
- * spare: Price holds "AED 12,345.67", Pricing "Per Vehicle (128)", Type
- * "Quantity", Stock "1000 left" and Status "Inactive". Extra and Description
- * take the rest and truncate with their full text in a tooltip.
+ * spare: Price holds "AED 12,345.67 / day", Pricing "Per Vehicle (128)", Stock
+ * "1000 left" and Status "Inactive". Actions holds four 32px buttons. Name
+ * takes the rest and truncates with its full text in a tooltip.
  */
 function ListHeaderRow({ withActions }: { withActions: boolean }) {
   return (
     <ListTableHeader>
-      <ListHead className="w-[22%] text-left">Extra</ListHead>
-      <ListHead className="w-[16.5%]">Description</ListHead>
-      <ListHead className="w-[13.5%]">Price</ListHead>
-      <ListHead className="w-[15%]">Pricing</ListHead>
-      <ListHead className="w-[9%]">Type</ListHead>
-      <ListHead className="w-[9.5%]">Stock</ListHead>
-      <ListHead className="w-[8.5%]">Status</ListHead>
-      {/* Only for someone who can use the menu: for a viewer it was a blank
-          column with nothing under its blank heading. */}
+      <ListHead className="w-[28%] text-left">Name</ListHead>
+      <ListHead className="w-[17%]">Price</ListHead>
+      <ListHead className="w-[16%]">Pricing</ListHead>
+      <ListHead className="w-[11%]">Stock</ListHead>
+      <ListHead className="w-[10%]">Status</ListHead>
+      {/* Only for someone who can use the controls: for a viewer it was a
+          blank column with nothing under its blank heading. */}
       {withActions && (
-        <ListHead className="w-[6%] text-right">
+        <ListHead className="w-[18%] text-right">
           <span className="sr-only">Actions</span>
         </ListHead>
       )}

@@ -27,10 +27,25 @@ import { firstNameOf, getGreeting } from "./trax-greeting-utils";
  * but disappears on the near-black ground.
  */
 
+/**
+ * `xs` is the top bar's Help button (team lead, Sep 2026: the Help sparkle
+ * should be "bold like Trax's", but not too much). It is the same mark, not a
+ * lookalike, so a tenant's theme reaches it the way it reaches the panel. Its
+ * lift is the one thing it does not share: the 14px bloom the larger marks
+ * carry is tuned for 28px and up, and under a 20px badge sitting beside 13px
+ * text it reads as a smudge rather than depth — the "too bold" the lead ruled
+ * out. So each size carries its own shadow, and sm/md/lg keep theirs exactly.
+ */
 const MARK_SIZES = {
-  sm: { box: "size-7", icon: "size-3.5", halo: "-inset-3" },
-  md: { box: "size-10", icon: "size-5", halo: "-inset-5" },
-  lg: { box: "size-14", icon: "size-7", halo: "-inset-7" },
+  xs: {
+    box: "size-5",
+    icon: "size-3",
+    halo: "-inset-2",
+    lift: "shadow-[0_2px_6px_-2px_hsl(var(--primary)/0.5)]",
+  },
+  sm: { box: "size-7", icon: "size-3.5", halo: "-inset-3", lift: "shadow-[0_4px_14px_-4px_hsl(var(--primary)/0.55)]" },
+  md: { box: "size-10", icon: "size-5", halo: "-inset-5", lift: "shadow-[0_4px_14px_-4px_hsl(var(--primary)/0.55)]" },
+  lg: { box: "size-14", icon: "size-7", halo: "-inset-7", lift: "shadow-[0_4px_14px_-4px_hsl(var(--primary)/0.55)]" },
 } as const;
 
 export function TraxMark({
@@ -38,7 +53,7 @@ export function TraxMark({
   animated = false,
   className,
 }: {
-  size?: "sm" | "md" | "lg";
+  size?: keyof typeof MARK_SIZES;
   animated?: boolean;
   className?: string;
 }) {
@@ -59,7 +74,7 @@ export function TraxMark({
           )}
         />
       )}
-      <span className="absolute inset-0 overflow-hidden rounded-full shadow-[0_4px_14px_-4px_hsl(var(--primary)/0.55)]">
+      <span className={cn("absolute inset-0 overflow-hidden rounded-full", s.lift)}>
         {/* Oversized so the square corners never show while it turns. */}
         <span
           className={cn(

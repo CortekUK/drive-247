@@ -15,6 +15,11 @@
  *   codes                -> the kit table
  *
  * Copy is a real result: a blocked clipboard says so instead of "Copied!".
+ *
+ * `action` is the page's "Add promo code" button, beside the heading, as the
+ * Extras list carries its "Add Extra" (team lead, Sep 20 2026: the create form
+ * moved into a dialog behind it). It is rendered only where the page passes
+ * one, so a read-only manager sees the heading alone.
  */
 
 import { TicketPercent } from "lucide-react";
@@ -65,6 +70,7 @@ export function PromoCodesSectionV2<T extends PromoCodeRowV2>({
   onEdit,
   onDelete,
   onCreateFirst = () => focusPromoCreateForm(),
+  action,
 }: {
   promos: T[] | undefined;
   isLoading: boolean;
@@ -76,7 +82,10 @@ export function PromoCodesSectionV2<T extends PromoCodeRowV2>({
   resetKey: string;
   onEdit: (promo: T) => void;
   onDelete: (promo: T) => void;
+  /** Opens the create dialog: the empty state's button, and `action`'s. */
   onCreateFirst?: () => void;
+  /** The page's "Add promo code" button, shown beside the heading. */
+  action?: React.ReactNode;
 }) {
   const hasRows = Array.isArray(promos);
 
@@ -85,7 +94,20 @@ export function PromoCodesSectionV2<T extends PromoCodeRowV2>({
     body = (
       <>
         <SettingsSectionSkeleton variant="rows" rows={4} label="Loading promo codes" className="sm:hidden" />
-        <SettingsSectionSkeleton variant="table" rows={4} columns={7} label="Loading promo codes" className="hidden sm:block" />
+        {/* The shape the rows actually land in, or the table jumps under the
+            operator as they arrive: the flat settings panel `PromoCodesTableV2`
+            draws (`surface="settings"`), not the v2 Card, whose 24px bands
+            above and below the rows are not there afterwards; and one bar per
+            real column — an editor gets the trailing Edit/Delete column, a
+            read-only manager does not. */}
+        <SettingsSectionSkeleton
+          variant="table"
+          rows={4}
+          columns={canEdit ? 8 : 7}
+          surface="settings"
+          label="Loading promo codes"
+          className="hidden sm:block"
+        />
       </>
     );
   } else if (!hasRows) {
@@ -119,9 +141,14 @@ export function PromoCodesSectionV2<T extends PromoCodeRowV2>({
 
   return (
     <section className="space-y-3" aria-labelledby="v2-promo-list-heading">
-      <h2 id="v2-promo-list-heading" className={SETTINGS_SECTION_TITLE}>
-        All promo codes
-      </h2>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h2 id="v2-promo-list-heading" className={SETTINGS_SECTION_TITLE}>
+          All promo codes
+        </h2>
+        {/* Not over the empty state: there the teaching card's own button is
+            the one to press, and two Adds side by side read as two things. */}
+        {action && hasRows && promos.length > 0 ? action : null}
+      </div>
       {hasRows && Boolean(error) && (
         <SettingsLoadError variant="inline" thing="promo codes" error={error} onRetry={onRetry} retrying={isFetching} />
       )}

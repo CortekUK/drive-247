@@ -1,10 +1,23 @@
 /**
- * The sidebar Developer link's TWO gates.
+ * The sidebar Developer link's ONE remaining gate.
  *
- * The link is a local-only affordance leading to the `/dev` page, which
- * carries a Supabase DELETE and clears operator-facing state. "It must never
- * appear for a paying tenant, and it must never reach production" are the
- * only two things about it that actually matter.
+ * The link leads to the `/dev` page, which clears operator-facing local state
+ * and issues one Supabase DELETE (scoped to the open tenant's own
+ * `tenant_first_run` row). It used to carry three gates — a build gate, a
+ * localhost gate and a tenant gate — and the first two were removed on Sep 20
+ * 2026 because the request was to see the developer tool on the LIVE portal.
+ *
+ * So the only thing standing between this link and a paying operator is now
+ * the tenant gate, and this file is what holds it to that. The cases that
+ * matter most are no longer the build ones; they are:
+ *
+ *   - `nasir` and `squad`, two real tenants whose `tenants.portal_experience`
+ *     is already `'v2'` in production. They are "lean", so a gate written as
+ *     `useIsLean()` — which is what the localhost version used — would open
+ *     for them the moment the host gate went. Every future self-serve signup
+ *     lands on v2 as well, so that list only grows.
+ *   - the canary on a real production host, which MUST now show, because that
+ *     is the whole point of the change.
  *
  * WHY EVERY CASE RENDERS A SENTINEL
  * ---------------------------------
@@ -16,20 +29,14 @@
  * trivially "hidden" everything.
  *
  * The first case is also the probe's own existence test: it asserts the link
- * IS found under the one configuration that should produce it. Without that,
- * every "absent" assertion below would pass just as happily against a typo in
- * the test id.
+ * IS found under a configuration that should produce it. Without that, every
+ * "absent" assertion below would pass just as happily against a typo in the
+ * test id.
  *
- *   1. dev build + localhost + northwind          → SHOWS, as a link to /dev
- *   2. dev build + localhost + goniko/revtek/…    → hidden  (the outage case)
- *   3. dev build + a real host  + northwind       → hidden  (dev build served
- *                                                   somewhere that is not this
- *                                                   machine)
- *   4. PRODUCTION build + localhost + northwind   → hidden  (the build gate,
- *                                                   which in a real bundle is
- *                                                   not a branch at all: see
- *                                                   the note on case 4)
- *   5. tenant not resolved yet                    → hidden, and nothing throws
+ *   1. northwind, any host, any build  → SHOWS, as a link to /dev
+ *   2. every other tenant              → hidden  (the outage case)
+ *   3. a lean, non-canary tenant       → hidden  (portal_experience = 'v2')
+ *   4. tenant not resolved yet         → hidden, and nothing throws
  *
  * HARNESS: `react-dom/client` + `act`, matching the other gate tests here
  * (`dev-page-gate.test.tsx`, `first-run-wizard-gate.test.tsx`).
@@ -79,7 +86,8 @@ const realLocation = Object.getOwnPropertyDescriptor(window, 'location');
 /**
  * jsdom exposes `window.location` as a configurable accessor, so the whole
  * object can be swapped for the duration of a case and put back afterwards.
- * Only `hostname` is read by the component.
+ * The component no longer reads the hostname at all — these cases exist to
+ * prove exactly that.
  */
 function setHostname(hostname: string) {
   Object.defineProperty(window, 'location', {
@@ -118,7 +126,6 @@ beforeEach(() => {
   root = createRoot(container);
   currentTenant = null;
   setHostname('localhost');
-  vi.stubEnv('NODE_ENV', 'development');
 });
 
 afterEach(async () => {
@@ -128,10 +135,10 @@ afterEach(async () => {
   if (realLocation) Object.defineProperty(window, 'location', realLocation);
 });
 
-// ── 1. The canary, on this machine, in a dev build ─────────────────────────
+// ── 1. The canary — now everywhere, not only on this machine ───────────────
 
-describe('Developer sidebar link — shows', () => {
-  it('renders for northwind on localhost in a development build', async () => {
+describe('Developer sidebar link — shows for the canary', () => {
+  it('renders for northwind on localhost', async () => {
     currentTenant = { id: 'tenant-northwind', slug: 'northwind' };
     await render();
 
@@ -142,9 +149,28 @@ describe('Developer sidebar link — shows', () => {
     expect(devSection()!.textContent).toContain('Developer');
   });
 
-  it('renders on a tenant subdomain of localhost, which is how the portal is actually served in dev', async () => {
+  it('renders on a tenant subdomain of localhost, which is how the portal is served in dev', async () => {
     // `npm run dev:portal` puts the canary on northwind.portal.localhost:4002.
     setHostname('northwind.portal.localhost');
+    currentTenant = { id: 'tenant-northwind', slug: 'northwind' };
+    await render();
+
+    expect(sentinel()).not.toBeNull();
+    expect(devSection()).not.toBeNull();
+  });
+
+  it('renders on the LIVE production host — the whole point of dropping the host gate', async () => {
+    setHostname('northwind.portal.drive-247.com');
+    currentTenant = { id: 'tenant-northwind', slug: 'northwind' };
+    await render();
+
+    expect(sentinel()).not.toBeNull();
+    expect(devSection()).not.toBeNull();
+  });
+
+  it('renders in a production build — the build gate is gone, deliberately', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    setHostname('northwind.portal.drive-247.com');
     currentTenant = { id: 'tenant-northwind', slug: 'northwind' };
     await render();
 
@@ -182,6 +208,21 @@ describe('Developer sidebar link — the tenant gate', () => {
     },
   );
 
+  // THE case this gate exists for now. Both rows carry
+  // `tenants.portal_experience = 'v2'` in production, so they are "lean" —
+  // and lean is emphatically not "the canary".
+  it.each(['nasir', 'squad'])(
+    'does not render for %s, a lean tenant on the v2 portal that is not the canary',
+    async (slug) => {
+      setHostname(`${slug}.portal.drive-247.com`);
+      currentTenant = { id: `tenant-${slug}`, slug };
+      await render();
+
+      expect(sentinel()).not.toBeNull();
+      expect(devSection()).toBeNull();
+    },
+  );
+
   it('is keyed on the slug, so a northwind-shaped id under another slug still gets nothing', async () => {
     // northwind's production id, deliberately paired with someone else's slug.
     // An id-keyed gate would open here; a slug-keyed one cannot.
@@ -193,60 +234,7 @@ describe('Developer sidebar link — the tenant gate', () => {
   });
 });
 
-// ── 3. A dev build served from somewhere that is not this machine ──────────
-
-describe('Developer sidebar link — the hostname gate', () => {
-  it.each([
-    'northwind.portal.drive-247.com',
-    'portal.drive-247.com',
-    '192.168.1.42',
-    'northwind.portal.localhost.evil.com',
-  ])('does not render for the canary on %s', async (hostname) => {
-    setHostname(hostname);
-    currentTenant = { id: 'tenant-northwind', slug: 'northwind' };
-    await render();
-
-    expect(sentinel()).not.toBeNull();
-    expect(devSection()).toBeNull();
-  });
-});
-
-// ── 4. The build gate ──────────────────────────────────────────────────────
-
-describe('Developer sidebar link — the build gate', () => {
-  /**
-   * This asserts the RUNTIME half of the build gate: with NODE_ENV set to
-   * production the component returns null even for the canary on localhost,
-   * i.e. every other condition satisfied.
-   *
-   * In a real production bundle the guarantee is stronger than this test can
-   * show. `process.env.NODE_ENV` is substituted with the literal "production"
-   * at build time, so `DevSection` compiles to `if (false) return <Body />;
-   * return null;`, the minifier drops the dead branch, and `DevSectionBody` —
-   * which nothing else in the program references — is tree-shaken out along
-   * with the markup. There is no branch left to take.
-   */
-  it('does not render in a production build, with every other condition met', async () => {
-    vi.stubEnv('NODE_ENV', 'production');
-    setHostname('localhost');
-    currentTenant = { id: 'tenant-northwind', slug: 'northwind' };
-    await render();
-
-    expect(sentinel()).not.toBeNull();
-    expect(devSection()).toBeNull();
-  });
-
-  it('does not render in a test/unknown build either — the guard is an allowlist, not a denylist', async () => {
-    vi.stubEnv('NODE_ENV', 'staging');
-    currentTenant = { id: 'tenant-northwind', slug: 'northwind' };
-    await render();
-
-    expect(sentinel()).not.toBeNull();
-    expect(devSection()).toBeNull();
-  });
-});
-
-// ── 5. Nothing resolved yet ────────────────────────────────────────────────
+// ── 3. Nothing resolved yet ────────────────────────────────────────────────
 
 describe('Developer sidebar link — unresolved tenant', () => {
   it('renders nothing, and does not throw, before the tenant row loads', async () => {

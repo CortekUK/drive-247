@@ -292,7 +292,7 @@ export const NOTIFICATION_CATALOG: NotificationItem[] = [
     evidence: [
       "email sender: supabase/functions/notify-booking-pending/index.ts:292 (team switch :284)",
       "bell sender: supabase/migrations/20260317180000_add_renewal_customer_notification.sql:23 (rentals INSERT trigger)",
-      "trigger: apps/booking/src/app/booking-success/page.tsx:471; supabase/functions/stripe-webhook-live/index.ts:878,1254,1560",
+      "trigger: apps/booking/src/app/(legacy)/booking-success/page.tsx:471; supabase/functions/stripe-webhook-live/index.ts:878,1254,1560",
       "rental created: apps/booking/src/components/BookingCheckoutStep.tsx:1165",
       "no email: enquiry booking with no deposit skips payment, apps/booking/src/components/BookingCheckoutStep.tsx:754-763",
     ],
@@ -345,7 +345,7 @@ export const NOTIFICATION_CATALOG: NotificationItem[] = [
     },
     evidence: [
       "email sender: supabase/functions/notify-booking-pending/index.ts:250",
-      "trigger: apps/booking/src/app/booking-success/page.tsx:471; supabase/functions/stripe-webhook-live/index.ts:878,1254,1560",
+      "trigger: apps/booking/src/app/(legacy)/booking-success/page.tsx:471; supabase/functions/stripe-webhook-live/index.ts:878,1254,1560",
       "no email: apps/booking/src/components/BookingCheckoutStep.tsx:754-763 (enquiry, no deposit)",
     ],
   },
@@ -1939,7 +1939,7 @@ export const NOTIFICATION_CATALOG: NotificationItem[] = [
     evidence: [
       "bell sender: supabase/functions/bonzah-confirm-payment/index.ts:420 (admins and head admins)",
       "email sender: supabase/functions/bonzah-confirm-payment/index.ts:473",
-      "trigger: apps/booking/src/app/booking-success/page.tsx:545; apps/portal/src/components/rentals-v2/rental-create-v2.tsx:2092",
+      "trigger: apps/booking/src/app/(legacy)/booking-success/page.tsx:545; apps/portal/src/components/rentals-v2/rental-create-v2.tsx:2092",
     ],
   },
   {
@@ -2047,7 +2047,7 @@ export const NOTIFICATION_CATALOG: NotificationItem[] = [
       in_app: spec("not_sent", inApp("Website message from {{customer_name}}", "{{contact_subject}}")),
     },
     evidence: [
-      "trigger: apps/booking/src/app/contact/page.tsx:157 (recipient is the site's contact email, :164)",
+      "trigger: apps/booking/src/app/(legacy)/contact/page.tsx:157 (recipient is the site's contact email, :164)",
       "email sender: supabase/functions/send-contact-email/index.ts:105",
     ],
   },

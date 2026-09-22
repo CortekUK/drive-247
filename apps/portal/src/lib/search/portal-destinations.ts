@@ -16,12 +16,12 @@
  *   - which portal the tenant is on (the v2 chrome has its own settings index
  *     and the Integrations board; everyone else has the original settings tabs).
  * The settings lists are the navigation's own lists where they are exported
- * (SETTINGS_INDEX_SECTIONS, V2_GENERAL_SECTIONS); the rest are mirrored here and
+ * (SETTINGS_INDEX_SECTIONS, V2_SECTIONED_PAGES); the rest are mirrored here and
  * pinned to their sources by src/__tests__/lib/portal-search.test.ts.
  */
 import { isAreaHiddenForLean, isSettingsTabHiddenForLean, type LeanHiddenArea } from "@/lib/lean-areas";
 import { SETTINGS_INDEX_SECTIONS } from "@/components/settings-v2/settings-index";
-import { V2_GENERAL_SECTIONS } from "@/components/settings-v2/settings-shell-state";
+import { V2_SECTIONED_PAGES } from "@/components/settings-v2/settings-shell-state";
 import { SUPPORT_ROUTE } from "@/lib/support-route";
 
 export type DestinationGroup = "pages" | "settings" | "integrations";
@@ -134,6 +134,11 @@ export const PAGE_DESTINATIONS: readonly PortalDestination[] = [
   // v2 only: the account section of the v2 rail.
   page("/integrations", "Integrations", "Stripe, Square, Twilio, Bonzah, BoldSign, Tesla, Xero, Zoho, Turo and your custom domain.", "plug", "integrations apps connect connections stripe square twilio bonzah boldsign tesla xero zoho", { integrationsBoard: true }),
   page("/subscription", "Billing", "Your Drive247 plan, its invoices and your credit balance.", "crown", "billing subscription plan drive247 invoice upgrade", { experience: "v2" }),
+  // Off the v2 rail by default and offered in the sidebar customiser — but the
+  // page is live for every v2 tenant (its own gate resolves both the slug list
+  // and `portal_experience`), so the search is the other way in and must know
+  // about it.
+  page("/insights", "Insights", "One screen of honest money: what came in, what is owed, and what it cost.", "trending-up", "insights money revenue profit margin honest reports", { experience: "v2" }),
 
   // The original portal only: pages the v2 rail deliberately does not list.
   page("/blocked-customers", "Blocked Customers", "Customers you have blocked from renting.", "user", "blocked banned blacklist customers", { experience: "v1" }),
@@ -189,22 +194,42 @@ const setting = (
   gate: DestinationGate,
 ): PortalDestination => ({ id: `setting:${id}`, group: "settings", title, description, href, keywords, icon: "settings", gate });
 
-/** What people call each section of the v2 General page, for searching. */
-const GENERAL_SECTION_KEYWORDS: Record<string, string> = {
+/**
+ * What people call each section of a v2 settings page, for searching.
+ *
+ * Keyed by the section's ANCHOR, not by the page holding it, so the words
+ * follow a section that changes page — Tax and fees and Security deposit were
+ * General's on Sep 17 2026 and belong to the Tax and deposit page from Sep 20.
+ * Booking rules, Key handover (now Lockbox), Booking site and Optional modules
+ * are not sections any more: they are index pages, whose words are the index
+ * entry's own `keywords`.
+ */
+const SECTION_KEYWORDS: Record<string, string> = {
   "driver-requirements": "driver requirements age licence license passport id verification waiver",
-  "booking-rules": "booking rules notice lead time duration minimum maximum buffer cooldown",
-  "key-handover": "key handover lockbox keys code delivery collection",
   "tax-and-fees": "tax vat service fee fees charges surcharge",
   "security-deposit": "security deposit hold pre-authorisation preauth authorisation",
-  "booking-site": "booking site website price breakdown plate vin registration gig driver header footer colour",
-  "optional-modules": "modules features turo fleet health vehicle owners switch on off",
+  "notifications-email": "email notifications sender from address reply to team emails alerts reminders",
+  "notifications-push": "push notifications phone browser device alerts install home screen",
 };
 
-/** The v2 settings index, plus General's sections (each has its own link). */
+/**
+ * The v2 settings index, plus the SECTIONS of every page made of several.
+ *
+ * A section is a place of its own: it has its own `?tab=` link, its own
+ * permission and its own name, and that name is what a tenant types — "security
+ * deposit" or "vat", not the page that happens to hold it today. Reading
+ * `V2_SECTIONED_PAGES` (General, Tax and deposit, Notifications) rather than one
+ * page's list is what keeps that true when a section moves: Tax and fees and
+ * Security deposit left General for the new Tax and deposit page on Sep 20 2026,
+ * and a loop over General alone dropped both out of the search silently.
+ */
 function v2SettingsDestinations(): PortalDestination[] {
   const out: PortalDestination[] = [];
+  /** Index entry title by href: the page a section names in its breadcrumb. */
+  const pageTitles = new Map<string, string>();
   for (const section of SETTINGS_INDEX_SECTIONS) {
     for (const item of section.items) {
+      pageTitles.set(item.href, item.title);
       out.push(
         setting(`v2:${item.tab}`, item.title, item.description, item.href, `${section.title} ${item.keywords ?? ""}`, {
           experience: "v2",
@@ -214,18 +239,24 @@ function v2SettingsDestinations(): PortalDestination[] {
       );
     }
   }
-  for (const s of V2_GENERAL_SECTIONS) {
-    if (s.tab === "general") continue; // "Regional" is General itself, listed above.
-    out.push(
-      setting(
-        `v2-general:${s.anchor}`,
-        s.title,
-        `${s.description} (Settings › General)`,
-        `/settings?tab=${s.tab ?? "general"}`,
-        `general ${GENERAL_SECTION_KEYWORDS[s.anchor] ?? ""}`,
-        { experience: "v2", settingsTabs: [s.permTab] },
-      ),
-    );
+  for (const [page, { sections }] of Object.entries(V2_SECTIONED_PAGES)) {
+    const pageTitle = pageTitles.get(`/settings?tab=${page}`) ?? page;
+    for (const s of sections) {
+      // The section whose `?tab=` IS the page's own key is the page: "Regional"
+      // is simply what `/settings?tab=general` opens, and the index lists it
+      // above as General. Every other section has a link of its own.
+      if (s.tab === page) continue;
+      out.push(
+        setting(
+          `v2-section:${s.anchor}`,
+          s.title,
+          `${s.description} (Settings › ${pageTitle})`,
+          `/settings?tab=${s.tab ?? page}`,
+          `${pageTitle} ${SECTION_KEYWORDS[s.anchor] ?? ""}`,
+          { experience: "v2", settingsTabs: [s.permTab] },
+        ),
+      );
+    }
   }
   return out;
 }

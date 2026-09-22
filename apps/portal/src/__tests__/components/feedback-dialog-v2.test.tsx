@@ -1,6 +1,15 @@
 /**
  * FeedbackDialog — the v2 restyle, and v1 held still.
  *
+ * NOTE (Sep 20 2026): the canary no longer renders this component at all. The
+ * v2 feedback box is `components/feedback/feedback-dialog-v2.tsx` — words and
+ * five stars, no categories, no screenshot — and `(dashboard)/layout.tsx`
+ * picks between the two. The v2 branch asserted below is therefore the OLD v2
+ * restyle, still in the file and still correct, and it comes out with the v1
+ * component when this area is widened. The half of this file that matters
+ * today is the v1 half: those class strings are what ~56 paying tenants see.
+ * `feedback-dialog-v2-simple.test.tsx` covers the component they actually get.
+ *
  * "Send feedback to Drive247" stays, and stays reachable from the bottom-left
  * launcher. What changed is only how it looks on v2: it was v1-sized and
  * v1-coloured (hardcoded #6366f1 / #080812 / #737373 from the v1 design system,

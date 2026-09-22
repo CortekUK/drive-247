@@ -512,9 +512,21 @@ describe('v2 dark hovers stay visible and readable', () => {
   it('the sidebar back links, org switcher, user menu and integration pin are among them', () => {
     const LIGHT_HOVER_TEXT = new RegExp(String.raw`dark:(\[a&\]:)?hover:text-${DARK_LIGHT_TEXT}`);
     const count = (file: string) => classStrings(read(file)).filter((str) => V2_DARK.test(str) && LIGHT_HOVER_TEXT.test(str)).length;
+    // 6 since Sep 21 2026. It was 7 on Sep 20, when the booking-site row's
+    // pencil (hover → Branding) joined this rail; that row then moved onto the
+    // org row at the top, pencil and all, so the count went with it.
     expect(count('components/shared/layout/app-sidebar-v2.tsx')).toBe(6);
-    expect(count('components/shared/layout/org-switcher.tsx')).toBe(2);
-    expect(count('components/shared/layout/user-menu-v2.tsx')).toBe(2);
+    // 1 since Sep 21 2026: the Branding pencil, which arrived with the booking
+    // site. The org row was a pill wrapping a gear and a menu caret (two
+    // controls of this shape), then one link to /settings (0), and is now the
+    // booking-site link — which only tints — plus that pencil. Its gear moved
+    // down to the profile row, counted below.
+    expect(count('components/shared/layout/org-switcher.tsx')).toBe(1);
+    // 4 since Sep 21 2026: Customise sidebar and the account-menu caret, plus
+    // the Settings gear that moved here from the org row — once as the row's
+    // first icon and once stacked above the avatar in the collapsed rail
+    // (`SettingsLinkV2`). All four tint and turn primary alike.
+    expect(count('components/shared/layout/user-menu-v2.tsx')).toBe(4);
     expect(count('app/(dashboard)/integrations/integrations-board.tsx')).toBe(1);
     expect(count('components/ui-v2/badge.tsx')).toBe(2);
     const rc = classStrings(read('components/rentals-v2/rental-create-v2.tsx')).filter((str) => /hover:border-primary\/40/.test(str) && V2_DARK.test(str));
@@ -753,8 +765,13 @@ describe('Sep 17 review: grey and white hovers on v2-only surfaces are the purpl
   it('user menu: the initials on every avatar fallback are the light brand in dark', () => {
     // `text-primary` on `bg-primary/10`: in dark v2 that measured 1.91:1, so the
     // initials were all but invisible on the sidebar row, the menu and the
-    // profile dialog. All four fallbacks, or one of them is still unreadable.
-    const src = read('components/shared/layout/user-menu-v2.tsx');
+    // profile panel. Still four fallbacks — but one of them moved: the profile
+    // left this menu for `profile-sheet-v2.tsx` on Sep 20 2026 (it opens from
+    // the top now), taking its avatar with it. Both files are read, so the
+    // rule cannot be escaped by moving markup between them.
+    const src =
+      read('components/shared/layout/user-menu-v2.tsx') +
+      read('components/shared/layout/profile-sheet-v2.tsx');
     const fallbacks = src.match(/<AvatarFallback className="[^"]*"/g) ?? [];
     expect(fallbacks).toHaveLength(4);
     for (const fallback of fallbacks) expect(fallback, fallback).toContain(`dark:text-[${LINK}]`);

@@ -90,6 +90,18 @@ export interface SettingsIndexItem {
   anyOfTabs?: readonly string[];
   /** Listed for head admins only (Team: `/users` refuses everyone else). */
   headAdminOnly?: boolean;
+  /**
+   * A TOP-LEVEL route grant this entry also needs, for the entries that open a
+   * page of their own rather than a settings tab.
+   *
+   * `canView` here is the page's `canViewSettings`, which answers about
+   * `settings.*` sub-tabs: handed a key it does not know it returns TRUE, so a
+   * manager holding the Settings parent grant would be listed everything of
+   * this kind. Audit Logs has its own manager tab (`audit_logs`), and that is
+   * the grant that has to decide — so it is checked through `canAccessRoute`,
+   * the same ROUTE_TO_TAB lookup the sidebar filters with.
+   */
+  requiresRoute?: string;
   keywords?: string;
   tourAnchor?: string;
 }
@@ -168,6 +180,21 @@ export const SETTINGS_INDEX_SECTIONS: SettingsIndexSection[] = [
         tab: "team",
         headAdminOnly: true,
         keywords: "users team staff members roles permissions manager invite password",
+      },
+      {
+        // Moved here from the org menu at the top of the sidebar (Sep 20 2026,
+        // team lead): that menu held Organization settings, Billing and Audit
+        // Logs, and all three left it. (The row it hung off is the booking site
+        // now, and Settings is the gear in the profile row, since Sep 21.)
+        // `/audit-logs` is unchanged — only the way in moved —
+        // and the `audit_logs` manager grant still decides, through
+        // `requiresRoute`, exactly as it did in the menu.
+        title: "Audit Logs",
+        description: "Every change anyone on your team has made in this portal: who did it, what they changed, and when.",
+        href: "/audit-logs",
+        tab: "audit_logs",
+        requiresRoute: "/audit-logs",
+        keywords: "audit log logs history activity trail who changed record",
       },
     ],
   },
@@ -288,12 +315,24 @@ export const SETTINGS_INDEX_SECTIONS: SettingsIndexSection[] = [
 
 export function SettingsIndexV2({
   canView,
+  canAccessRoute = () => true,
   tenantSlug,
   isHeadAdmin = false,
   notice,
   hiddenHrefs,
 }: {
   canView: (tab: string) => boolean;
+  /**
+   * The ROUTE-level grant, for entries that open a page of their own — see
+   * `requiresRoute`. A prop rather than a `useManagerPermissions()` call
+   * inside this component, deliberately: everything else this component knows
+   * about permissions arrives the same way, and reaching for the hook here
+   * would make it untestable without a React Query provider.
+   *
+   * Defaults to "allowed", which is how `canAccessRoute` itself treats an
+   * unmapped route and what every non-manager role gets.
+   */
+  canAccessRoute?: (href: string) => boolean;
   tenantSlug: string | null | undefined;
   /** Head admins also see Team. */
   isHeadAdmin?: boolean;
@@ -325,9 +364,10 @@ export function SettingsIndexV2({
     (item: SettingsIndexItem) =>
       (item.anyOfTabs ?? [item.tab]).some(canView) &&
       (!item.headAdminOnly || isHeadAdmin) &&
+      (!item.requiresRoute || canAccessRoute(item.requiresRoute)) &&
       !isSettingsTabHiddenForLean(item.tab, leanTenant) &&
       !(hiddenKey ? hiddenKey.split("\n") : []).includes(item.href),
-    [canView, isHeadAdmin, leanTenant, hiddenKey]
+    [canView, isHeadAdmin, leanTenant, canAccessRoute, hiddenKey]
   );
 
   const sections = useMemo(() => {

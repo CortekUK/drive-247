@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { CircleDollarSign, MessageCircle, Search, SlidersHorizontal, Sparkles, X } from "lucide-react";
+import { CircleDollarSign, MessageCircle, Search, SlidersHorizontal, X } from "lucide-react";
+import { TraxMark } from "@/components/trax/trax-greeting";
 
 import { Button } from "@/components/ui-v2/button";
 import { Separator } from "@/components/ui-v2/separator";
@@ -269,7 +270,26 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
           would fade the controls too, which is why this is a child.
           At the very top of the page it is not painted at all, so the gradient
           runs from the top as it does in the sidebar; it fades in only once
-          rows start passing underneath, to keep the search field readable. */}
+          rows start passing underneath, to keep the search field readable.
+
+          AND IT IS BRAND-TINTED, NOT WHITE (Sep 20 2026).
+          Two changes were made to this bar on the same day, on two branches,
+          against the same complaint ("the background issue, the colour issue").
+          One rebuilt the ground as this masked veil, so no hairline or edge is
+          drawn across the top. The other found that the fill was `--background`
+          — plain white in both v2 trees — so a white wash over a brand-tinted
+          gradient reads as a pale band while the page below keeps its colour.
+          Both are right and neither is enough alone: the veil removes the EDGE,
+          the tint removes the COLOUR. So the veil keeps its mask and takes its
+          colour from `--v2-wash`, the token the app gradient itself is painted
+          with, at a fraction of the strength. `--primary` is a plain HSL triple
+          in both trees, so the `/ 0.10` is safe; `--border` would NOT be (it
+          carries its own alpha in dark), which is one more reason no hairline
+          comes back here.
+          Dark is unchanged and stays on `--background`: dark mode is out of
+          scope, `--background` is already dark there so nothing read as a pale
+          band, and a 6% tint would only make rows passing underneath harder to
+          read. The `dark:` utilities are emitted after the base ones. */}
       <div
         aria-hidden="true"
         data-slot="top-bar-veil"
@@ -280,7 +300,7 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
           // crisp, untinted gutter at each end for rows to scroll through —
           // exactly the visible edge this is meant to remove. The negative
           // inset is that padding, so the veil reaches the bar's real edges.
-          "pointer-events-none absolute -inset-x-3 top-0 -z-[1] h-[calc(100%+1.5rem)] bg-gradient-to-b from-background/75 via-background/55 to-transparent backdrop-blur-xl transition-opacity duration-200 sm:-inset-x-4 [mask-image:linear-gradient(to_bottom,black_0,black_62%,transparent_100%)] " +
+          "pointer-events-none absolute -inset-x-3 top-0 -z-[1] h-[calc(100%+1.5rem)] bg-gradient-to-b from-[hsl(var(--v2-wash,var(--primary))_/_0.10)] via-[hsl(var(--v2-wash,var(--primary))_/_0.06)] to-transparent dark:from-background/75 dark:via-background/55 backdrop-blur-xl transition-opacity duration-200 sm:-inset-x-4 [mask-image:linear-gradient(to_bottom,black_0,black_62%,transparent_100%)] " +
           (scrolled ? "opacity-100" : "opacity-0")
         }
       />
@@ -402,7 +422,17 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
 
           Labelled "Help", not "Trax" (team lead, Sep 2026): operators read
           "Help" and know what it is for, and Trax introduces itself on hover.
-          The generic AI sparkle replaces the robot for now. */}
+          The generic AI sparkle replaces the robot for now.
+
+          Its sparkle is TRAX'S OWN MARK, not a line icon (team lead, Sep 20
+          2026: "a bit bolder, a bit more 3D — but not so it gets too
+          prominent"). The outline glyph was the one thing in this bar that
+          looked like every other icon, while the thing it opens greets you
+          with a round gradient badge. Now the button and the panel carry the
+          same mark, at `xs`: one step past the old 16px glyph so it reads as a
+          badge, and small enough to sit beside 13px text without outweighing
+          it. The left padding matches the badge's top and bottom inset, so it
+          sits in the hover pill like an avatar in a chip. */}
       {trax && (
         <Tooltip>
           <TooltipTrigger asChild>
@@ -413,14 +443,14 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
               aria-expanded={trax.sheetOpen}
               onClick={trax.sheetOpen ? trax.closeSheet : trax.openSheet}
               className={
-                "h-8 gap-1.5 px-2.5 text-[13px] font-medium text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] hover:bg-primary/10 hover:text-primary dark:hover:text-[hsl(var(--v2-link,var(--primary)))] aria-expanded:bg-primary/10 " +
+                "h-8 gap-1.5 pl-1.5 pr-2.5 text-[13px] font-medium text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] hover:bg-primary/10 hover:text-primary dark:hover:text-[hsl(var(--v2-link,var(--primary)))] aria-expanded:bg-primary/10 " +
                 "dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:aria-expanded:bg-[hsl(var(--v2-hover,var(--muted)))] " +
                 (trax.sheetOpen ? "bg-primary/10 dark:bg-[hsl(var(--v2-hover,var(--muted)))]" : "") +
                 // On a phone the open page field takes the row (see phoneField).
                 (phoneField ? " max-sm:hidden" : "")
               }
             >
-              <Sparkles className="size-4" aria-hidden />
+              <TraxMark size="xs" />
               Help
             </Button>
           </TooltipTrigger>

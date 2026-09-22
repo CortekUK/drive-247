@@ -478,7 +478,7 @@ describe("the index: the pages that came out of General", () => {
   const business = SETTINGS_INDEX_SECTIONS.find((section) => section.title === "Business")!;
   const pricing = SETTINGS_INDEX_SECTIONS.find((section) => section.title === "Pricing")!;
 
-  it("Business reads General, Branding, Locations / Booking rules, Lockbox / Booking site, Optional modules, Team", () => {
+  it("Business reads General, Branding, Locations / Booking rules, Lockbox / Booking site, Optional modules, Team, Audit Logs", () => {
     expect(business.items.map((item) => item.title)).toEqual([
       "General",
       "Branding",
@@ -488,6 +488,12 @@ describe("the index: the pages that came out of General", () => {
       "Booking site",
       "Optional modules",
       "Team",
+      // Not one of the pages that came out of General: Audit Logs came off the
+      // v2 org menu on Sep 20 2026, when that menu became a plain link to this
+      // index. It is pinned in full (entry, href and its `audit_logs` grant) by
+      // settings-index-states; it is listed here only so this exact-equality
+      // check keeps describing the whole Business group.
+      "Audit Logs",
     ]);
   });
 

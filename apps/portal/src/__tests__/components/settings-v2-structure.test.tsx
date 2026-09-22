@@ -39,8 +39,13 @@ const h = vi.hoisted(() => ({
   from: vi.fn(),
   isManager: false,
   canView: ((_tab: string) => true) as (tab: string) => boolean,
+  /** The resolved tenant's slug, or null before the tenant row has loaded. */
+  slug: null as string | null,
 }));
 
+vi.mock("@/contexts/TenantContext", () => ({
+  useTenant: () => ({ tenant: h.slug ? { id: "t1", slug: h.slug } : null, tenantSlug: h.slug }),
+}));
 vi.mock("@/lib/v2-context", () => ({
   useV2: () => h.v2,
   // The provider now carries the tenant-level half of the same answer
@@ -89,6 +94,7 @@ beforeEach(() => {
   h.from.mockReset();
   h.isManager = false;
   h.canView = () => true;
+  h.slug = null;
 });
 
 /* -------------------------------------------------------------------------- */
@@ -570,42 +576,68 @@ describe("/settings/blacklist on v2", () => {
 /* Org menu                                                                    */
 /* -------------------------------------------------------------------------- */
 
-describe("OrgSwitcher (v2 sidebar): Team lives in Settings, not here", () => {
-  // Radix's popper constructs a ResizeObserver; the shared setup's stub is a
-  // plain function, so give it a class for these renders only.
-  const SetupResizeObserver = globalThis.ResizeObserver;
-  beforeEach(() => {
-    globalThis.ResizeObserver = class {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    } as unknown as typeof ResizeObserver;
-  });
-  afterEach(() => {
-    globalThis.ResizeObserver = SetupResizeObserver;
+describe("OrgSwitcher (v2 sidebar): never a way into Settings", () => {
+  /*
+   * This row used to open a dropdown holding Organization settings, Billing &
+   * subscription and Audit Logs. The review emptied it (Sep 20 2026): the first
+   * two have their own tab, Audit Logs moved onto the Settings index, and the
+   * row became one link to /settings with a gear inside it.
+   *
+   * On Sep 21 the gear moved down to the profile row (`SettingsLinkV2`, pinned
+   * in sidebar-settings-gear-v2.test.tsx), and the row became the tenant's
+   * booking site instead: the site link, and a Branding pencil beside it
+   * (pinned in sidebar-booking-site-row.test.tsx). What these cases hold is
+   * what must stay true through all of that — no menu, no Settings, none of the
+   * old menu's destinations — before the tenant row loads and after.
+   */
+  const hrefs = () =>
+    Array.from(document.querySelectorAll<HTMLElement>('[data-slot="org-row"], [data-slot="org-row"] a')).map((el) =>
+      el.getAttribute("href"),
+    );
+
+  it.each([
+    ["before the tenant row has loaded", null],
+    ["once the tenant row has loaded", "northwind"],
+  ])("%s: the mark and name, no menu, and nothing that leads to Settings", (_when, slug) => {
+    h.slug = slug;
+    for (const collapsed of [false, true]) {
+      const { unmount } = render(<OrgSwitcher collapsed={collapsed} />);
+      expect(screen.queryByRole("button")).toBeNull();
+      expect(screen.queryByRole("menuitem")).toBeNull();
+      // By destination: Settings went to the footer, and none of what the menu
+      // once held has come back.
+      for (const href of ["/settings", "/subscription", "/audit-logs", "/users"]) {
+        expect(hrefs(), `${href} (collapsed: ${collapsed})`).not.toContain(href);
+      }
+      unmount();
+    }
   });
 
-  const openMenu = () => {
+  it("before the tenant row has loaded there is no link at all: no slug, no booking site", () => {
     render(<OrgSwitcher />);
-    fireEvent.click(screen.getByText("Northwind Rentals"));
-  };
-
-  it("a head admin sees Settings, Billing and Audit Logs, and no Manage Users", () => {
-    openMenu();
-    const items = screen.getAllByRole("menuitem").map((item) => item.textContent?.trim());
-    expect(items).toEqual(["Organization settings", "Billing & subscription", "Audit Logs"]);
-    expect(screen.queryByText("Manage Users")).toBeNull();
-    expect(document.querySelector('a[href="/users"]')).toBeNull();
+    expect(screen.getByText("Northwind Rentals")).toBeTruthy();
+    expect(screen.queryByRole("link")).toBeNull();
   });
 
-  it("with no Audit Logs grant, no separator is left dangling after Billing", () => {
-    h.isManager = true;
-    h.canView = (tab) => tab === "settings";
-    openMenu();
-    const items = screen.getAllByRole("menuitem").map((item) => item.textContent?.trim());
-    expect(items).toEqual(["Organization settings", "Billing & subscription"]);
-    // One separator only: the one under the organization's name.
-    expect(document.querySelectorAll('[role="separator"]')).toHaveLength(1);
+  it("the collapsed rail keeps the tenant's name on hover, since it cannot print it", () => {
+    render(<OrgSwitcher collapsed />);
+    expect(document.querySelector('[data-slot="org-row"]')).toHaveAttribute("title", "Northwind Rentals");
+  });
+
+  it("for a manager with or without the Settings grant, still no menu and no way into Settings", () => {
+    // What a grant changes here is only the Branding pencil (pinned in
+    // sidebar-booking-site-row.test.tsx). Settings itself is the footer gear's
+    // to gate; this row never offers it, to anyone.
+    h.slug = "northwind";
+    for (const canView of [() => false, () => true]) {
+      h.isManager = true;
+      h.canView = canView;
+      const { unmount } = render(<OrgSwitcher />);
+      expect(screen.queryByRole("button")).toBeNull();
+      expect(hrefs()).not.toContain("/settings");
+      expect(screen.getByText("Northwind Rentals")).toBeTruthy();
+      unmount();
+    }
   });
 });
 

@@ -8,7 +8,7 @@
  * from its unsaved form.
  */
 
-import { render, screen } from "@testing-library/react";
+import { render } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const h = vi.hoisted(() => ({
@@ -33,7 +33,19 @@ vi.mock("next/link", () => ({
 
 import { OrgMark, OrgSwitcher } from "@/components/shared/layout/org-switcher";
 
-const mark = () => screen.getByRole("button", { name: "Organization menu" });
+// The collapsed rail was the menu's trigger, then a link straight to Settings;
+// on Sep 21 2026 Settings moved down to the profile row in the sidebar footer
+// (see org-switcher.tsx), so there is no "Settings" link here to find it by.
+// The mark is found by the org row's root instead, `data-slot="org-row"`, which
+// the row keeps in both states WHATEVER element it is — the tag is deliberately
+// not pinned. The mark itself is unchanged, and is read out of that row exactly
+// as it was read out of the link, as strictly as the getByRole this replaces:
+// exactly one row, or the test stops here.
+const mark = () => {
+  const rows = document.body.querySelectorAll<HTMLElement>('[data-slot="org-row"]');
+  expect(rows).toHaveLength(1);
+  return rows[0];
+};
 
 beforeEach(() => {
   h.theme = "light";

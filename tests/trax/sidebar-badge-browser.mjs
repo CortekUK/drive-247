@@ -49,6 +49,8 @@ export const useManagerPermissions = () => ({ isManager: false, canView: () => t
 export const useCMSPages = () => ({ data: [], isLoading: false });
 export const useNavPreferences = () => ({ preferences: { topLevelOrder: [], groupOrder: [], groupItemOrder: {}, hidden: [], pinned: [] } });
 export const useV2 = () => true;
+export const usePortalExperience = () => ({ onV2: true, lean: true });
+export const usePortalOnV2 = () => true;
 export const useRentalDetailV2 = () => ({});
 export const useVehicleRecord = () => ({});
 export const useCustomerRailHeader = () => ({ title: '', subtitle: '' });
@@ -59,6 +61,7 @@ export const SidebarCustomizerDialog = () => null;
 export const TraxRail = () => null;
 export const SupportRail = () => null;
 export const UserMenuV2 = () => React.createElement('div', { className: 'flex h-10 items-center px-2 text-[13px]' }, 'Operator');
+export const SettingsLinkV2 = () => null;
 const auth = { appUser: { id: 'a1', role: 'head_admin', is_super_admin: false } };
 export const useAuthStore = Object.assign((selector) => (selector ? selector(auth) : auth), { getState: () => auth, setState: () => {} });
 export const useAuth = () => auth;

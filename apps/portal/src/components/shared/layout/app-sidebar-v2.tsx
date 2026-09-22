@@ -98,7 +98,7 @@ import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useCMSPages } from "@/hooks/use-cms-pages";
 import { useCmsOutline } from "@/stores/cms-outline-store";
 import { ROUTE_TO_TAB } from "@/lib/permissions";
-import { UserMenuV2 } from "@/components/shared/layout/user-menu-v2";
+import { UserMenuV2, SettingsLinkV2 } from "@/components/shared/layout/user-menu-v2";
 import { OrgSwitcher } from "@/components/shared/layout/org-switcher";
 import { SidebarPromo } from "@/components/shared/layout/sidebar-promo";
 import { DevSection } from "@/components/shared/layout/dev-section";
@@ -185,6 +185,12 @@ interface NavItem {
   badgeLabel?: (count: number) => string;
   headAdminOnly?: boolean;
   superAdminOnly?: boolean;
+  /**
+   * Offered in the sidebar customiser but OFF until the user switches it on
+   * (`NavPreferences.shown`). Used for the rows that were deliberately taken
+   * off this rail while their pages stayed live — see `rawMoreItems`.
+   */
+  optional?: boolean;
 }
 
 /**
@@ -203,6 +209,41 @@ interface NavGroup {
   icon: any;
   items: NavItem[];
 }
+
+/**
+ * Every nav row in this rail, styled once.
+ *
+ * "A little bolder, slightly more 3D — don't make it too prominent, just a bit
+ * more" (team lead, Sep 20 2026). Taken as a NUDGE, not a redesign, and kept
+ * inside the two things a nav row can say without leaving the design system's
+ * flat rule behind:
+ *
+ *   - BOLDER: the resting label is `font-medium` rather than the primitive's
+ *     regular weight. The ACTIVE row already had `font-medium` from
+ *     `sidebarMenuButtonVariants`, which meant the only weight difference in
+ *     the rail was carrying the whole burden of "where am I"; lifting the
+ *     resting weight and leaning on colour for the active state reads as a
+ *     firmer rail without shouting. Nothing changes size, so no row moves.
+ *
+ *   - 3D: the ACTIVE row only, and only just. A 1px inset rim plus a single
+ *     1px drop, both in the brand at 8–12% — about as light as a shadow can
+ *     be and still be seen. The design system's "flat, 1px borders, no
+ *     shadows" rule is a v1 rule about CARDS; this is one row in the chrome,
+ *     it is a deliberate, requested exception, and it stops at the rail. If it
+ *     ever reads as heavy, delete the `data-[active=true]:shadow-…` and
+ *     nothing else has to change.
+ *
+ * Written as arbitrary values in `--primary` rather than a `/` modifier on a
+ * token that might carry its own alpha: `--primary` is a plain HSL triple in
+ * both v2 trees (see styles/v2-theme.css), whereas `--border` is `0 0% 100% /
+ * 10%` in dark and would expand to an invalid colour.
+ */
+const NAV_ROW =
+  "h-8 font-medium transition-colors " +
+  "data-[active=true]:shadow-[inset_0_0_0_1px_hsl(var(--primary)_/_0.12),0_1px_2px_hsl(var(--primary)_/_0.08)]";
+
+/** The same, for the group rows that are a button spanning the full width. */
+const NAV_ROW_WIDE = NAV_ROW + " w-full";
 
 /**
  * v2 sidebar. A NEW file beside `app-sidebar.tsx` — the v1 sidebar keeps
@@ -539,16 +580,30 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   // without a click, without crowding the three that matter most.
   //
   const rawMoreItems: NavItem[] = ([
-    // Insights, Insurances and Agreements are OFF the canary's rail, at the
-    // user's request, and this is the SECOND time they have been removed: they
-    // were taken out of the "Records" group, then a later restructure promoted
-    // them to top level and so reinstated them. If you are moving nav entries
-    // around, they do not come with you.
+    // Insights, Insurances and Agreements are STILL off the rail by default,
+    // and this was the SECOND time they had been removed: they were taken out
+    // of the "Records" group, then a later restructure promoted them to top
+    // level and so reinstated them. They do not come back on their own.
+    //
+    // What changed on Sep 20 2026 is that the customiser now OFFERS them
+    // (`optional: true`): they are absent until a user switches one on for
+    // themselves, and switching one on writes its href into
+    // `NavPreferences.shown`. Default behaviour for every tenant is therefore
+    // byte-identical to yesterday's — nobody is shown a row they did not ask
+    // for — while "the currently-hidden tabs can be shown" is true.
     //
     // Each is a decision that now has a home on the rental itself — its
     // Insurance, Agreement and Payments stages — so a second, rental-agnostic
-    // list of the same records is two places to look for one answer. The three
-    // PAGES are untouched and their routes still resolve.
+    // list of the same records is two places to look for one answer. That is
+    // still the reason they are off by default rather than on.
+    //
+    // All three routes are in ROUTE_TO_TAB (`reports`, `insurances`,
+    // `agreements`), so `filterItem` below decides whether a manager may see
+    // them at all, BEFORE any preference is read. Customisation can reveal a
+    // row this user could already have been given; it can never widen access.
+    { name: "Insights", href: "/insights", icon: TrendingUp, optional: true },
+    { name: "Insurances", href: "/insurances", icon: Shield, optional: true },
+    { name: "Agreements", href: "/agreements", icon: FileSignature, optional: true },
     // `/blocked-dates` is the route; "Availability" is what the page is FOR,
     // which is why the two do not match.
     { name: "Availability", href: "/blocked-dates", icon: CalendarDays },
@@ -707,6 +762,23 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
     .map((g) => ({ ...g, items: g.items.filter(filterItem) }))
     .filter((g) => g.items.length > 0);
 
+  /**
+   * The rows this rail renders itself, above everything customisable:
+   * Dashboard, Integrations and Billing. They are PERMANENT (team lead, Sep 20
+   * 2026) and never go through the overlay, so they are not in `rawTopLevel`.
+   *
+   * Declared here only so the customiser's preview can show them in place —
+   * a preview that silently omitted the first three rows would be a picture of
+   * a sidebar nobody has. They are not rendered from this list (the JSX
+   * below still owns that, with its tooltips, active states and comments), so
+   * keep the names in step if one of them is ever renamed.
+   */
+  const fixedRows: NavItem[] = [
+    { name: "Dashboard", href: "/", icon: LayoutGrid },
+    { name: "Integrations", href: "/integrations", icon: Plug },
+    { name: "Billing", href: "/subscription", icon: Crown },
+  ];
+
   // The user's own arrangement, laid over the nav the app just computed.
   // Deliberately applied AFTER `filterItem`: a stored href for a page this
   // user may not see then matches nothing, so customisation can only ever
@@ -714,16 +786,18 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   const arrangedNav = applyNavPreferences({
     topLevel: rawTopLevel,
     groups: rawGroups,
+    // The flat "More" rows go through the overlay too, as of Sep 20 2026.
+    // They used to be excluded because the helper understood two buckets and a
+    // third would have changed the stored shape — which is exactly what was
+    // done: `moreOrder` and `shown` were ADDED to `NavPreferences`, and
+    // `parseNavPreferences` defaults both, so every row stored before that
+    // date still produces the sidebar it produced then.
+    more: rawMoreItems,
     preferences: navPreferences,
   });
   const topLevel = arrangedNav.topLevel as NavItem[];
   const groups = arrangedNav.groups as NavGroup[];
-  // Not passed through `applyNavPreferences`: that helper understands two
-  // buckets (top level and groups) and reordering a third through it would
-  // need its stored shape to change. These render in declaration order, which
-  // is fine — they are the section a user reaches for less often, and the
-  // customisation UI has never offered to reorder them.
-  const moreItems = rawMoreItems;
+  const moreItems = arrangedNav.more as NavItem[];
 
   // --- Website view: the site's pages, and nothing else ---
   // Driven off the `cms_pages` rows rather than a hardcoded list, so the rail
@@ -1193,7 +1267,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
     <Sidebar collapsible="icon" className="transition-all duration-300 ease-in-out">
       {/* Organization switcher at the very top */}
       <SidebarHeader className="p-1.5 pt-4">
-        <OrgSwitcher collapsed={collapsed} />
+        <OrgSwitcher collapsed={collapsed} onNavigate={closeMobileOnNav} />
       </SidebarHeader>
 
       {/* Navigation — fingertip items + drill-in groups */}
@@ -1250,7 +1324,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                     onClick={() => switchView(view === "cms" ? "admin" : "cms")}
                     isActive={view === "cms"}
                     tooltip={view === "cms" ? "Back to Portal" : "Website"}
-                    className="h-8 transition-colors"
+                    className={NAV_ROW}
                   >
                     <Globe className="h-4 w-4 shrink-0" />
                   </SidebarMenuButton>
@@ -1274,7 +1348,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                     asChild
                     isActive={pathname === "/cms"}
                     tooltip={collapsed ? "Dashboard" : undefined}
-                    className="h-8 transition-colors"
+                    className={NAV_ROW}
                   >
                     <Link href="/cms" onClick={closeMobileOnNav}>
                       <LayoutGrid className="h-4 w-4 shrink-0" />
@@ -1382,7 +1456,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                     asChild
                     isActive={isCmsActive("/cms/site-settings")}
                     tooltip={collapsed ? "Site Settings" : undefined}
-                    className="h-8 transition-colors"
+                    className={NAV_ROW}
                   >
                     <Link href="/cms/site-settings" onClick={closeMobileOnNav}>
                       <Settings className="h-4 w-4 shrink-0" />
@@ -1414,7 +1488,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                       asChild
                       isActive={pathname === "/settings/apply-form"}
                       tooltip={collapsed ? "Apply form" : undefined}
-                      className="h-8 transition-colors"
+                      className={NAV_ROW}
                     >
                       <Link href="/settings/apply-form" onClick={closeMobileOnNav}>
                         <UserPlus className="h-4 w-4 shrink-0" />
@@ -1440,7 +1514,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                       asChild
                       isActive={isActive("/")}
                       tooltip={collapsed ? "Dashboard" : undefined}
-                      className="h-8 transition-colors"
+                      className={NAV_ROW}
                     >
                       <Link href="/" onClick={closeMobileOnNav}>
                         <LayoutGrid className="h-4 w-4 shrink-0" />
@@ -1457,7 +1531,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                       asChild
                       isActive={isActive("/integrations")}
                       tooltip={collapsed ? "Integrations" : undefined}
-                      className="h-8 transition-colors"
+                      className={NAV_ROW}
                     >
                       <Link href="/integrations" onClick={closeMobileOnNav}>
                         <Plug className="h-4 w-4 shrink-0" />
@@ -1488,7 +1562,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                       asChild
                       isActive={isActive("/subscription") || isActive("/credits")}
                       tooltip={collapsed ? "Billing" : undefined}
-                      className="h-8 transition-colors"
+                      className={NAV_ROW}
                     >
                       <Link href="/subscription" onClick={closeMobileOnNav}>
                         <Crown className="h-4 w-4 shrink-0" />
@@ -1517,7 +1591,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                       asChild
                       isActive={isActive("/welcome")}
                       tooltip={collapsed ? "Welcome Pack" : undefined}
-                      className="h-8 transition-colors"
+                      className={NAV_ROW}
                     >
                       <Link href="/welcome" onClick={closeMobileOnNav}>
                         <BookOpen className="h-4 w-4 shrink-0" />
@@ -1527,13 +1601,19 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                   </SidebarMenuItem>
                   )}
 
+                  {/* No "Booking site" row here any more (Sep 21 2026). Its
+                      behaviour — open the site in a new tab, the arrow always
+                      showing, a Branding pencil on hover — moved onto the org
+                      row at the top of this rail, under the tenant's own name
+                      instead of a "Booking site" title. See org-switcher.tsx. */}
+
                   {/* Ask AI — only when the caller owns a Trax instance to open. */}
                   {onAskAI && (
                     <SidebarMenuItem>
                       <SidebarMenuButton
                         onClick={onAskAI}
                         tooltip={collapsed ? "Ask AI" : undefined}
-                        className="h-8 transition-colors"
+                        className={NAV_ROW}
                       >
                         <Sparkles className="h-4 w-4 shrink-0" />
                         <span className={`text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>Ask AI</span>
@@ -1556,7 +1636,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                       <SidebarMenuButton
                         onClick={() => setDrillGroup(null)}
                         tooltip={collapsed ? "Back" : undefined}
-                        className="h-8 transition-colors"
+                        className={NAV_ROW}
                       >
                         <ArrowLeft className="h-4 w-4 shrink-0" />
                         <span className={`text-[13px] font-medium ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>
@@ -1570,7 +1650,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                           asChild
                           isActive={isActive(item.href)}
                           tooltip={collapsed ? item.name : undefined}
-                          className="h-8 transition-colors"
+                          className={NAV_ROW}
                         >
                           <Link href={item.href} onClick={closeMobileOnNav} className="flex items-center justify-between w-full">
                             <div className="flex items-center gap-2 min-w-0">
@@ -1619,7 +1699,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                             asChild
                             isActive={isActive(item.href)}
                             tooltip={collapsed ? item.name : undefined}
-                            className="h-8 transition-colors"
+                            className={NAV_ROW}
                           >
                             <Link href={item.href} onClick={closeMobileOnNav} className="flex items-center justify-between w-full">
                               <div className="flex items-center gap-2 min-w-0">
@@ -1674,7 +1754,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                               asChild
                               isActive={isActive(item.href)}
                               tooltip={collapsed ? item.name : undefined}
-                              className="h-8 transition-colors"
+                              className={NAV_ROW}
                             >
                               <Link
                                 href={item.href}
@@ -1726,7 +1806,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                                 onClick={() => setDrillGroup(group)}
                                 isActive={hasActive}
                                 tooltip={collapsed ? group.label : undefined}
-                                className="h-8 w-full transition-colors"
+                                className={NAV_ROW_WIDE}
                               >
                                 {collapsed ? (
                                   <GroupIcon className="h-4 w-4 shrink-0" />
@@ -1802,22 +1882,29 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
           </div>
         )}
 
-        {/* Local-only dev affordance: a link to the /dev page. Self-gating:
-            NODE_ENV, then localhost, then the northwind slug — see
-            dev-section.tsx. Renders null in every other case, and is dropped
-            from a production build entirely. */}
+        {/* A link to the /dev page. Self-gating, on the canary's SLUG and
+            nothing else — see dev-section.tsx, which also records what the
+            build and localhost gates used to buy and why they went (Sep 20
+            2026: the tool was asked for ON LIVE). It renders null for every
+            other tenant, including the other two whose
+            `tenants.portal_experience` is already 'v2'. */}
         {!collapsed && <DevSection />}
 
         <SidebarMenu>
-          {/* Profile row — whole row opens the user menu, and carries the
-              customiser trigger beside it. */}
+          {/* Profile row — the name opens the user menu, and the row carries
+              Settings, the customiser and the menu caret at its right end as
+              one group (team lead, Sep 21 2026: Settings moved down here from
+              the org row at the top, which is the booking site now). Collapsed,
+              the rail shows the avatar alone, so the Settings gear is stacked
+              above it rather than lost. See `SettingsLinkV2` in user-menu-v2.tsx. */}
           <SidebarMenuItem>
             {collapsed ? (
-              <div className="flex justify-center py-1">
+              <div className="flex flex-col items-center gap-1 py-1">
+                <SettingsLinkV2 variant="rail" onNavigate={closeMobileOnNav} />
                 <UserMenuV2 />
               </div>
             ) : (
-              <UserMenuV2 variant="row" />
+              <UserMenuV2 variant="row" settings onNavigate={closeMobileOnNav} />
             )}
           </SidebarMenuItem>
         </SidebarMenu>
@@ -1831,6 +1918,8 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
         onOpenChange={setCustomizerOpen}
         topLevel={rawTopLevel}
         groups={rawGroups}
+        more={rawMoreItems}
+        fixed={fixedRows}
       />
     </Sidebar>
   );

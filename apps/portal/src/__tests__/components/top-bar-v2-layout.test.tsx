@@ -153,6 +153,19 @@ describe('v2 top bar Help button', () => {
     expect(help.querySelector('svg.lucide-sparkles')).not.toBeNull();
     expect(help.querySelector('svg.lucide-bot')).toBeNull();
 
+    // The sparkle is Trax's own round gradient mark, not a line icon (team
+    // lead, Sep 20 2026: "a bit bolder, a bit more 3D — not too prominent").
+    // The badge is the one at `xs`, and the glyph sits INSIDE it.
+    const mark = help.querySelector<HTMLElement>('[data-slot="trax-mark"]');
+    expect(mark).not.toBeNull();
+    expect(mark!.className.split(/\s+/)).toContain('size-5');
+    expect(mark!.querySelector('svg.lucide-sparkles')).not.toBeNull();
+    // Its lift is the small one; the 14px bloom belongs to the larger marks.
+    expect(mark!.innerHTML).toContain('shadow-[0_2px_6px_-2px_hsl(var(--primary)/0.5)]');
+    expect(mark!.innerHTML).not.toContain('0_4px_14px');
+    // The badge sits in the pill like an avatar in a chip: left inset = top inset.
+    expect(help.className.split(/\s+/)).toEqual(expect.arrayContaining(['pl-1.5', 'pr-2.5']));
+
     // The tooltip is stubbed out in this harness, so pin its copy at the source.
     const src = readFileSync(
       join(__dirname, '..', '..', 'components', 'shared', 'layout', 'top-bar-v2.tsx'),
@@ -246,6 +259,46 @@ describe('v2 top bar: the scrolled ground blends', () => {
 });
 
 describe('v2 dashboard', () => {
+  /**
+   * The colour fix (team lead, Sep 20 2026: "the background issue, the colour
+   * issue"). At rest the bar has no ground, so the app gradient runs from the
+   * very top. What had to change: the fill was `--background`, plain white in
+   * both v2 trees, so the moment the page scrolled a white wash lay over a
+   * brand-tinted gradient and cut exactly the pale band across the top that the
+   * earlier review had asked us to remove. It now comes from `--v2-wash`, the
+   * token the gradient itself is painted with.
+   *
+   * It is the VEIL that carries it, not the header: the header keeps no ground
+   * of its own in any state (see the veil describe above), so a fill on the
+   * header would put back the edge the veil exists to remove.
+   */
+  it('scrolls to a brand-tinted veil, not a white band', () => {
+    render(<TopBarV2 />);
+    const header = document.querySelector('header')!;
+    // The header itself never has a ground, scrolled or not.
+    expect(header.className).toContain('bg-transparent');
+
+    const cls = document.querySelector<HTMLElement>('[data-slot="top-bar-veil"]')!.className;
+    // Brand hue, from the same token as the app gradient.
+    expect(cls).toContain('from-[hsl(var(--v2-wash,var(--primary))_/_0.10)]');
+    expect(cls).toContain('via-[hsl(var(--v2-wash,var(--primary))_/_0.06)]');
+    expect(cls).toContain('backdrop-blur-xl');
+    // Dark keeps the fill it had — dark mode was out of scope.
+    expect(cls).toContain('dark:from-background/75');
+    expect(cls).toContain('dark:via-background/55');
+
+    const source = readFileSync(
+      join(process.cwd(), 'src/components/shared/layout/top-bar-v2.tsx'),
+      'utf8',
+    );
+    // The light-mode white veil is gone, not merely moved...
+    expect(source).not.toContain('from-background/75 via-background/55');
+    expect(source).not.toContain('? "bg-background/60');
+    // ...and no hairline came back with the tint: --border carries its own
+    // alpha in dark, and the edge is the thing the veil removes.
+    expect(source).not.toContain('shadow-[inset_0_-1px_0_hsl(var(--border))]');
+  });
+
   it('no longer renders a New Rental button', () => {
     const src = readFileSync(
       join(__dirname, '..', '..', 'components', 'dashboard-v2', 'dashboard-v2.tsx'),

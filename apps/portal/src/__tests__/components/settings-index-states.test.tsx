@@ -155,6 +155,10 @@ describe("SettingsIndexV2 structure", () => {
       ["Booking site", "/settings?tab=booking-site"],
       ["Optional modules", "/settings?tab=modules"],
       ["Team", "/users"],
+      // Moved here from the v2 org menu on Sep 20 2026, and gated on the same
+      // `audit_logs` manager grant it had there — through `canAccessRoute`,
+      // which this render leaves at its permissive default.
+      ["Audit Logs", "/audit-logs"],
       // Tax and deposit's ENTRY moved out of Business into Pricing, first
       // (ticket item 1). The page and all three of its aliases are unchanged.
       ["Tax and deposit", "/settings?tab=tax-and-deposit"],

@@ -34,7 +34,7 @@ import { Calendar as CalendarV2 } from '@/components/ui-v2/calendar';
 import { Dialog as DialogV2, DialogContent as DialogContentV2, DialogDescription as DialogDescriptionV2, DialogFooter as DialogFooterV2, DialogHeader as DialogHeaderV2, DialogTitle as DialogTitleV2 } from '@/components/ui-v2/dialog';
 import { AlertDialog as AlertDialogV2, AlertDialogAction as AlertDialogActionV2, AlertDialogCancel as AlertDialogCancelV2, AlertDialogContent as AlertDialogContentV2, AlertDialogDescription as AlertDialogDescriptionV2, AlertDialogFooter as AlertDialogFooterV2, AlertDialogHeader as AlertDialogHeaderV2, AlertDialogTitle as AlertDialogTitleV2 } from '@/components/ui-v2/alert-dialog';
 import { format } from 'date-fns';
-import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, BellRing, Zap, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, ShieldCheck, FilePenLine, PenLine, Receipt, Banknote, Shield, Copy, Check, Clock, Crown, Package, Lock, RefreshCw, Eye, TrendingUp, MessageSquare, ArrowRight, ArrowLeft, Info, Sun, Undo2, Landmark, Globe } from 'lucide-react';
+import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, BellRing, Zap, Save, Loader2, Plus, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, ShieldCheck, FilePenLine, PenLine, Receipt, Banknote, Shield, Copy, Check, Clock, Crown, Package, Lock, RefreshCw, Eye, TrendingUp, MessageSquare, ArrowRight, ArrowLeft, Info, Sun, Undo2, Landmark, Globe } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useOrgSettings } from '@/hooks/use-org-settings';
 import { useTenantBranding } from '@/hooks/use-tenant-branding';
@@ -437,7 +437,7 @@ const Settings = () => {
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { isManager, canViewSettings, canEditSettings } = useManagerPermissions();
+  const { isManager, canViewSettings, canEditSettings, canAccessRoute } = useManagerPermissions();
   // v2: a manager's grants arrive after first paint. Until they do, a deep link
   // to a page they may open waits on a skeleton instead of bouncing to the index.
   const { isLoading: v2PermissionsLoading } = useManagerPermissions();
@@ -1979,6 +1979,10 @@ const Settings = () => {
   const [editPromoCodeError, setEditPromoCodeError] = useState('');
   // v2: the new-promo form has been submitted once, so "missing" errors show.
   const [promoSubmittedV2, setPromoSubmittedV2] = useState(false);
+  // v2 (team lead, Sep 20 2026): the new-promo form is a dialog behind an "Add
+  // promo code" button, not a panel standing open above the list. v1 keeps its
+  // own always-visible form, untouched.
+  const [newPromoOpenV2, setNewPromoOpenV2] = useState(false);
 
   // Fetch Promo Codes (moved up for use in generator)
   const { data: promoCodes, isLoading: isLoadingPromos, refetch: refetchPromos, error: promoCodesErrorV2, isFetching: isFetchingPromosV2 } = useQuery({
@@ -3505,8 +3509,17 @@ const Settings = () => {
               setPromoSubmittedV2(true);
               return;
             }
+            if (promoCodeError) return;
             setPromoSubmittedV2(false);
-            handleCreatePromo();
+            // The mutation's own onSuccess still toasts, logs, clears the form
+            // and refetches; this only closes the dialog once the code is in.
+            // A failure leaves it open with the reason written above the footer.
+            createPromoMutation.mutate(promoForm, { onSuccess: () => setNewPromoOpenV2(false) });
+          };
+          const openNewPromoV2 = () => {
+            createPromoMutation.reset();
+            setPromoSubmittedV2(false);
+            setNewPromoOpenV2(true);
           };
           const promoFieldError = (message?: string) =>
             message ? <span role="alert" className="text-destructive">{message}</span> : undefined;
@@ -3528,117 +3541,12 @@ const Settings = () => {
               </PopoverContentV2>
             </PopoverV2>
           );
-          // One code at a time, saved by its own Add (a list page: no save bar).
+          // One code at a time, in its own dialog (a list page: no save bar).
+          // Everything a code is made of is configured in there, so the page
+          // itself is the plain table the Extras page is — team lead, Sep 20
+          // 2026. v1 keeps its always-open form below, untouched.
           return (
             <div className="space-y-6">
-              {canEditPage && (
-                <SettingsPanel
-                  title="New promo code"
-                  footer={
-                    <>
-                    <SettingsSaveState
-                      status={createPromoMutation.isPending ? 'saving' : createPromoMutation.isError ? 'error' : 'idle'}
-                      error={promoSaveError(createPromoMutation.error)}
-                    />
-                    <ButtonV2 size="sm" onClick={handleCreatePromoV2} disabled={createPromoMutation.isPending || !!promoCodeError || promoCheckUnavailableV2}>
-                      {createPromoMutation.isPending && <Loader2 className="animate-spin" data-icon="inline-start" />}
-                      Add promo code
-                    </ButtonV2>
-                    </>
-                  }
-                >
-                  <div className="grid gap-4 px-5 py-4 sm:grid-cols-2 lg:grid-cols-3">
-                    <SettingsField label="Name" htmlFor="v2_promo_name" hint={promoFieldError(promoIssuesV2.name)}>
-                      <InputV2
-                        id="v2_promo_name"
-                        placeholder="Winter sale"
-                        value={promoForm.name}
-                        onChange={(e) => setPromoForm(prev => ({ ...prev, name: e.target.value }))}
-                        aria-invalid={promoIssuesV2.name ? true : undefined}
-                      />
-                    </SettingsField>
-                    <SettingsField label="Discount" htmlFor="v2_promo_value" hint={promoFieldError(promoIssuesV2.value)}>
-                      <div className="flex gap-2">
-                        <SelectV2 value={promoForm.type} onValueChange={(val) => setPromoForm(prev => ({ ...prev, type: val }))}>
-                          <SelectTriggerV2 className="w-32 shrink-0" aria-label="Discount type">
-                            <SelectValueV2 />
-                          </SelectTriggerV2>
-                          {/* Surface tone: Settings is a light, text-heavy
-                              screen, where the dark panel reads as an OS menu. */}
-                          <SelectContentV2 tone="surface">
-                            <SelectItemV2 value="percentage">Percent</SelectItemV2>
-                            <SelectItemV2 value="value">Amount</SelectItemV2>
-                          </SelectContentV2>
-                        </SelectV2>
-                        <InputV2
-                          id="v2_promo_value"
-                          type="text"
-                          inputMode="decimal"
-                          placeholder={promoForm.type === 'percentage' ? '10' : '20.00'}
-                          value={promoForm.value}
-                          onChange={(e) => setPromoForm(prev => ({ ...prev, value: e.target.value.replace(/[^0-9.]/g, '') }))}
-                          aria-invalid={promoIssuesV2.value ? true : undefined}
-                        />
-                      </div>
-                    </SettingsField>
-                    <SettingsField
-                      label="Code"
-                      htmlFor="v2_promo_code"
-                      hint={promoCheckUnavailableV2 ? (promoCodesErrorV2 ? <span className="text-destructive">Couldn&apos;t check existing codes. Load the list below, then add.</span> : 'Checking existing codes…') : promoCodeError ? <span className="text-destructive">{promoCodeError}</span> : 'Made from the name and discount. You can change it.'}
-                    >
-                      <div className="flex gap-2">
-                        <InputV2
-                          id="v2_promo_code"
-                          value={promoForm.code}
-                          onChange={(e) => setPromoForm(prev => ({ ...prev, code: e.target.value.toUpperCase().replace(/\s/g, '') }))}
-                          placeholder="SUMMER20"
-                          aria-invalid={promoCodeError ? true : undefined}
-                        />
-                        <ButtonV2 variant="outline" onClick={generatePromoCode}>
-                          Generate
-                        </ButtonV2>
-                      </div>
-                    </SettingsField>
-                    <SettingsField label="Starts">
-                      {promoDateField(promoForm.created_at, (date) => setPromoForm(prev => ({ ...prev, created_at: date })), 'Starts')}
-                    </SettingsField>
-                    <SettingsField label="Expires" hint={promoFieldError(promoIssuesV2.expires_at)}>
-                      {promoDateField(promoForm.expires_at, (date) => setPromoForm(prev => ({ ...prev, expires_at: date })), 'Expires')}
-                    </SettingsField>
-                    <SettingsField label="Max uses" htmlFor="v2_promo_max_users" hint={promoFieldError(promoIssuesV2.max_users)}>
-                      <InputV2
-                        id="v2_promo_max_users"
-                        type="text"
-                        inputMode="numeric"
-                        placeholder="100"
-                        value={promoForm.max_users}
-                        onChange={(e) => setPromoForm(prev => ({ ...prev, max_users: digitsOnly(e.target.value) }))}
-                        aria-invalid={promoIssuesV2.max_users ? true : undefined}
-                      />
-                    </SettingsField>
-                    <SettingsField
-                      label="Apply by itself on rentals of"
-                      htmlFor="v2_promo_min_duration"
-                      hint="Optional. Leave empty for a code customers type. Only for rentals paid in full."
-                      className="sm:col-span-2 lg:col-span-1"
-                    >
-                      <div className="flex items-center gap-2">
-                        <InputV2
-                          id="v2_promo_min_duration"
-                          type="text"
-                          inputMode="numeric"
-                          placeholder="14"
-                          value={promoForm.min_duration_days}
-                          onChange={(e) => setPromoForm(prev => ({ ...prev, min_duration_days: digitsOnly(e.target.value) }))}
-                          className="w-24"
-                        />
-                        <Unit>days or more</Unit>
-                      </div>
-                    </SettingsField>
-                  </div>
-                </SettingsPanel>
-              )}
-
               {/* `pointer-events-auto`: a view-only manager can still scroll the list. */}
               <div className="pointer-events-auto">
                 <PromoCodesSectionV2
@@ -3650,6 +3558,15 @@ const Settings = () => {
                   canEdit={canEditSettings('promos')}
                   currencyCode={tenant?.currency_code || 'USD'}
                   resetKey={tenant?.id ?? ''}
+                  action={
+                    canEditPage ? (
+                      <ButtonV2 onClick={openNewPromoV2} className="w-full shrink-0 sm:w-auto">
+                        <Plus data-icon="inline-start" />
+                        Add promo code
+                      </ButtonV2>
+                    ) : undefined
+                  }
+                  onCreateFirst={openNewPromoV2}
                   // parseLocalDate: `new Date('yyyy-MM-dd')` is UTC midnight, the day before west of Greenwich.
                   onEdit={(promo) => {
                     updatePromoMutation.reset();
@@ -3662,6 +3579,126 @@ const Settings = () => {
                   }}
                 />
               </div>
+
+              {/* Closing mid-save would leave the operator with no idea whether
+                  the code was created, so the dialog holds while the insert is
+                  in flight. */}
+              <DialogV2
+                open={newPromoOpenV2}
+                onOpenChange={(open) => {
+                  if (!createPromoMutation.isPending) setNewPromoOpenV2(open);
+                }}
+              >
+                <DialogContentV2 className="sm:max-w-2xl">
+                  <DialogHeaderV2>
+                    <DialogTitleV2>New promo code</DialogTitleV2>
+                    <DialogDescriptionV2>
+                      A code customers type at checkout, or a discount that applies by itself on longer rentals.
+                    </DialogDescriptionV2>
+                  </DialogHeaderV2>
+                  <div className="-mx-1 max-h-[70vh] overflow-y-auto px-1 py-2">
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <SettingsField label="Name" htmlFor="v2_promo_name" hint={promoFieldError(promoIssuesV2.name)}>
+                        <InputV2
+                          id="v2_promo_name"
+                          placeholder="Winter sale"
+                          value={promoForm.name}
+                          onChange={(e) => setPromoForm(prev => ({ ...prev, name: e.target.value }))}
+                          aria-invalid={promoIssuesV2.name ? true : undefined}
+                        />
+                      </SettingsField>
+                      <SettingsField label="Discount" htmlFor="v2_promo_value" hint={promoFieldError(promoIssuesV2.value)}>
+                        <div className="flex gap-2">
+                          <SelectV2 value={promoForm.type} onValueChange={(val) => setPromoForm(prev => ({ ...prev, type: val }))}>
+                            <SelectTriggerV2 className="w-32 shrink-0" aria-label="Discount type">
+                              <SelectValueV2 />
+                            </SelectTriggerV2>
+                            <SelectContentV2 tone="surface">
+                              <SelectItemV2 value="percentage">Percent</SelectItemV2>
+                              <SelectItemV2 value="value">Amount</SelectItemV2>
+                            </SelectContentV2>
+                          </SelectV2>
+                          <InputV2
+                            id="v2_promo_value"
+                            type="text"
+                            inputMode="decimal"
+                            placeholder={promoForm.type === 'percentage' ? '10' : '20.00'}
+                            value={promoForm.value}
+                            onChange={(e) => setPromoForm(prev => ({ ...prev, value: e.target.value.replace(/[^0-9.]/g, '') }))}
+                            aria-invalid={promoIssuesV2.value ? true : undefined}
+                          />
+                        </div>
+                      </SettingsField>
+                      <SettingsField
+                        label="Code"
+                        htmlFor="v2_promo_code"
+                        hint={promoCheckUnavailableV2 ? (promoCodesErrorV2 ? <span className="text-destructive">Couldn&apos;t check existing codes. Load the list below, then add.</span> : 'Checking existing codes…') : promoCodeError ? <span className="text-destructive">{promoCodeError}</span> : 'Made from the name and discount. You can change it.'}
+                      >
+                        <div className="flex gap-2">
+                          <InputV2
+                            id="v2_promo_code"
+                            value={promoForm.code}
+                            onChange={(e) => setPromoForm(prev => ({ ...prev, code: e.target.value.toUpperCase().replace(/\s/g, '') }))}
+                            placeholder="SUMMER20"
+                            aria-invalid={promoCodeError ? true : undefined}
+                          />
+                          <ButtonV2 variant="outline" onClick={generatePromoCode}>
+                            Generate
+                          </ButtonV2>
+                        </div>
+                      </SettingsField>
+                      <SettingsField label="Starts">
+                        {promoDateField(promoForm.created_at, (date) => setPromoForm(prev => ({ ...prev, created_at: date })), 'Starts')}
+                      </SettingsField>
+                      <SettingsField label="Expires" hint={promoFieldError(promoIssuesV2.expires_at)}>
+                        {promoDateField(promoForm.expires_at, (date) => setPromoForm(prev => ({ ...prev, expires_at: date })), 'Expires')}
+                      </SettingsField>
+                      <SettingsField label="Max uses" htmlFor="v2_promo_max_users" hint={promoFieldError(promoIssuesV2.max_users)}>
+                        <InputV2
+                          id="v2_promo_max_users"
+                          type="text"
+                          inputMode="numeric"
+                          placeholder="100"
+                          value={promoForm.max_users}
+                          onChange={(e) => setPromoForm(prev => ({ ...prev, max_users: digitsOnly(e.target.value) }))}
+                          aria-invalid={promoIssuesV2.max_users ? true : undefined}
+                        />
+                      </SettingsField>
+                      <SettingsField
+                        label="Apply by itself on rentals of"
+                        htmlFor="v2_promo_min_duration"
+                        hint="Optional. Leave empty for a code customers type. Only for rentals paid in full."
+                        className="sm:col-span-2"
+                      >
+                        <div className="flex items-center gap-2">
+                          <InputV2
+                            id="v2_promo_min_duration"
+                            type="text"
+                            inputMode="numeric"
+                            placeholder="14"
+                            value={promoForm.min_duration_days}
+                            onChange={(e) => setPromoForm(prev => ({ ...prev, min_duration_days: digitsOnly(e.target.value) }))}
+                            className="w-24"
+                          />
+                          <Unit>days or more</Unit>
+                        </div>
+                      </SettingsField>
+                    </div>
+                  </div>
+                  {createPromoMutation.isError && !createPromoMutation.isPending ? (
+                    <SettingsSaveState status="error" error={promoSaveError(createPromoMutation.error)} />
+                  ) : null}
+                  <DialogFooterV2>
+                    <ButtonV2 variant="outline" onClick={() => setNewPromoOpenV2(false)} disabled={createPromoMutation.isPending}>
+                      Cancel
+                    </ButtonV2>
+                    <ButtonV2 onClick={handleCreatePromoV2} disabled={createPromoMutation.isPending || !!promoCodeError || promoCheckUnavailableV2}>
+                      {createPromoMutation.isPending && <Loader2 className="animate-spin" data-icon="inline-start" />}
+                      Add promo code
+                    </ButtonV2>
+                  </DialogFooterV2>
+                </DialogContentV2>
+              </DialogV2>
             </div>
           );
         }
@@ -3810,6 +3847,13 @@ const Settings = () => {
         ) : !pageMeta ? (
           <SettingsIndexV2
             canView={canViewSettings}
+            /* The ROUTE-level grant, for index entries that open a page of
+               their own rather than a settings tab — Audit Logs today.
+               `canViewSettings` answers about `settings.*` sub-tabs and
+               returns TRUE for any key it does not know, so without this a
+               manager holding the Settings grant would be listed a page their
+               own nav filter hides from them. */
+            canAccessRoute={canAccessRoute}
             tenantSlug={tenantSlug}
             isHeadAdmin={isHeadAdmin}
             hiddenHrefs={v2ShowOptionalModules ? undefined : ['/settings?tab=modules']}

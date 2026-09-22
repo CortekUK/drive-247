@@ -1,20 +1,13 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
-import { ChevronsUpDown, Settings, CreditCard, History } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui-v2/dropdown-menu";
+import { ExternalLink, Pencil } from "lucide-react";
+import { useTenant } from "@/contexts/TenantContext";
 import { useTenantBranding } from "@/hooks/use-tenant-branding";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { getBrandInitials } from "@/components/shared/layout/brand-logo";
 import { BRAND_MARK_FALLBACK_INITIALS } from "@/lib/appearance/logo";
+import { bookingOriginFor } from "@/lib/booking-origin";
 import { cn } from "@/lib/utils";
 
 /**
@@ -81,147 +74,156 @@ export function OrgMark({ className, preview }: { className?: string; preview?: 
 }
 
 /**
- * Top-of-sidebar organization switcher — mirrors the user footer row, but
- * represents the current tenant/workspace.
+ * Top-of-sidebar organization row: the tenant's mark and name, and the way to
+ * their booking site.
  *
- * Permission parity with the v1 sidebar is load-bearing here. v1 gates its
- * footer Settings row on `(!isManager || canView('settings'))` and its
- * Administration group on `ROUTE_TO_TAB` + `headAdminOnly`. Those links moved
- * into this menu, so every one of those gates is repeated below — otherwise a
- * restricted manager would reach, from the org menu, exactly what the nav
- * filter hides from them.
+ * ── THE ROW IS THE BOOKING SITE (Sep 21 2026) ──────────────────────────────
+ * The walkthrough asked for this row to open the tenant's booking site — "when
+ * I press this, take me to the booking site" — with the "opens in a new
+ * window" arrow always showing and a small pencil appearing beside it on hover
+ * that goes to Branding. That behaviour was first built as a separate
+ * "Booking site" row in the nav; the user asked for it here instead, with no
+ * "Booking site" title: the tenant's own name says whose site it is. So:
+ *
+ *   - Clicking anywhere on the row, except the pencil, opens the booking site
+ *     in a new tab.
+ *   - The arrow is ALWAYS visible, so the row says up front that it leaves the
+ *     portal.
+ *   - The pencil appears on hover, with a hover state of its own, and goes to
+ *     Branding (`/settings/appearance`). `opacity-0` hides it from the eye but
+ *     not from the keyboard, so `focus-visible:opacity-100` shows it to a tab
+ *     user; and it keeps its room at rest, so the name never jumps on hover.
+ *   - Two links, siblings inside one container, never nested: an <a> in an <a>
+ *     is invalid, and the outer one would swallow the pencil's click. The
+ *     container carries the hover highlight, so it covers the pencil too.
+ *   - Collapsed, the mark alone opens the site; the rail has no room for the
+ *     pencil, and Branding is one click away on the Settings index.
+ *   - The pencil is shown only to someone Branding will let in. It was ungated
+ *     on the old nav row, so a manager without the Settings grant got a pencil
+ *     that bounced them to the dashboard. Its rule is the Settings gear's —
+ *     `!isManager || canView('settings')` — which is exactly what
+ *     `canAccessRoute('/settings/appearance')` resolves to today (the route
+ *     maps to the `settings` grant alone), so the two cannot disagree about
+ *     who may reach the same page. The site link itself needs no grant.
+ *
+ * The URL comes from `bookingOriginFor`, never `https://${slug}.drive-247.com`:
+ * that formula is right in production and wrong everywhere else, and it opened
+ * a PRODUCTION tab from a local portal (see lib/booking-origin.ts). Until the
+ * tenant row resolves there is no slug, so the row is plain identity — which
+ * also keeps the server render and the first client render the same.
+ *
+ * ── SETTINGS IS NOT HERE ANY MORE ──────────────────────────────────────────
+ * This row was once a dropdown (Organization settings, Billing & subscription,
+ * Audit Logs), then — once the Sep 20 review emptied it — one link to
+ * `/settings` with a gear inside. The gear moved down to the profile row in the
+ * sidebar footer on Sep 21 (`SettingsLinkV2` in user-menu-v2.tsx, with the
+ * manager gate this row used to carry).
+ *
+ * ── SETTINGS → BRANDING DRAWS THIS ROW ────────────────────────────────────
+ * The Portal name preview is a picture of the expanded row (`SIDEBAR_ROW` in
+ * components/settings/appearance/branding-previews.tsx): the same class
+ * strings and the same slots, so it can say where a long name gets cut off.
+ * branding-v2-lane.test.tsx holds the two together — change the row's slots
+ * or their widths here, and the picture changes with them.
  */
-export function OrgSwitcher({ collapsed }: { collapsed?: boolean }) {
-  // Controlled so the *container* can carry the open state. The pill has to
-  // wrap the gear as well as the trigger, and a `data-[state=open]` class only
-  // reaches the trigger itself.
-  const [open, setOpen] = useState(false);
+export function OrgSwitcher({
+  collapsed,
+  onNavigate,
+}: {
+  collapsed?: boolean;
+  /** Closes the phone sidebar sheet when a link here is followed. */
+  onNavigate?: () => void;
+}) {
+  const { tenant } = useTenant();
   const { branding } = useTenantBranding();
   const { isManager, canView } = useManagerPermissions();
+  const canOpenBranding = !isManager || canView("settings");
 
   const orgName = branding?.app_name || "Organization";
-
-  // v1's footer Settings gate, carried across verbatim.
-  const canSeeSettings = !isManager || canView("settings");
-  // v1's Administration group runs every item through ROUTE_TO_TAB; `/audit-logs`
-  // maps to the `audit_logs` tab.
-  const canSeeAuditLogs = !isManager || canView("audit_logs");
-  // Team management is not in this menu: it is the Team entry on the Settings
-  // index (head admins only, like v1's `headAdminOnly` Manage Users).
+  const bookingUrl = tenant?.slug ? bookingOriginFor(tenant.slug) : null;
+  // The link's text is only the tenant's name, which says nothing about where
+  // it goes; the label says it, and that it leaves the portal.
+  const siteLabel = `${orgName} booking site (opens in a new tab)`;
 
   const Logo = <OrgMark />;
 
   // No billing subtitle here by request — no trial countdown, no plan name.
   // Billing state still reaches the tenant where it has to: the payment-due
   // chip in the sidebar footer for dunning, and the subscription gate for an
-  // expired plan. This row is identity, not billing.
+  // expired plan.
 
-  const menu = (
-    <DropdownMenuContent align="end" side="bottom" sideOffset={6} className="w-64">
-      <DropdownMenuLabel className="flex items-center gap-2.5 p-2 font-normal">
-        {Logo}
-        <p className="min-w-0 truncate text-[13px] font-semibold">{orgName}</p>
-      </DropdownMenuLabel>
-      <DropdownMenuSeparator />
-      {canSeeSettings && (
-        <DropdownMenuItem asChild>
-          <Link href="/settings">
-            <Settings className="mr-2 h-4 w-4 text-muted-foreground" />
-            Organization settings
-          </Link>
-        </DropdownMenuItem>
-      )}
-      {/* Ungated on purpose: `canAccessRoute` returns true for `/subscription`
-          for every role, so a tenant can always reach a payment link. */}
-      <DropdownMenuItem asChild>
-        <Link href="/subscription">
-          <CreditCard className="mr-2 h-4 w-4 text-muted-foreground" />
-          Billing &amp; subscription
-        </Link>
-      </DropdownMenuItem>
-      {canSeeAuditLogs && <DropdownMenuSeparator />}
-      {canSeeAuditLogs && (
-        <DropdownMenuItem asChild>
-          <Link href="/audit-logs">
-            <History className="mr-2 h-4 w-4 text-muted-foreground" />
-            Audit Logs
-          </Link>
-        </DropdownMenuItem>
-      )}
-    </DropdownMenuContent>
-  );
-
-  // Collapsed rail: the mark IS the trigger. The expanded layout hides its
-  // caret button at this width, and a Radix trigger with `display:none` has no
-  // box to anchor to — the menu would open pinned to the viewport corner and
-  // Settings / Billing / Audit Logs would be unreachable from the rail.
   if (collapsed) {
+    if (!bookingUrl) {
+      return (
+        <div
+          data-slot="org-row"
+          title={orgName}
+          className="flex w-full items-center justify-center rounded-lg p-1.5"
+        >
+          {Logo}
+        </div>
+      );
+    }
     return (
-      <DropdownMenu open={open} onOpenChange={setOpen}>
-        <DropdownMenuTrigger asChild>
-          <button
-            aria-label="Organization menu"
-            title={orgName}
-            className="flex w-full cursor-pointer items-center justify-center rounded-lg p-1.5 outline-none transition-colors hover:bg-primary/10 data-[state=open]:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:data-[state=open]:bg-[hsl(var(--v2-hover,var(--muted)))]"
-          >
-            {Logo}
-          </button>
-        </DropdownMenuTrigger>
-        {menu}
-      </DropdownMenu>
+      <a
+        data-slot="org-row"
+        href={bookingUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={onNavigate}
+        aria-label={siteLabel}
+        title="Open your booking site"
+        className="flex w-full cursor-pointer items-center justify-center rounded-lg p-1.5 outline-none transition-colors hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]"
+      >
+        {Logo}
+      </a>
+    );
+  }
+
+  if (!bookingUrl) {
+    return (
+      <div data-slot="org-row" className="flex items-center rounded-lg">
+        <div className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg p-1.5 text-left">
+          {Logo}
+          <span className="min-w-0 flex-1 truncate text-[13px] font-semibold leading-tight">
+            {orgName}
+          </span>
+        </div>
+      </div>
     );
   }
 
   return (
-    // The pill lives on this container, not on the trigger, so the gear sits
-    // inside it rather than stranded alongside. Hover and open are neutral:
-    // they were `bg-sidebar-accent`, which the theme hook drives from the
-    // tenant's accent colour, so on a warm brand this went solid orange.
     <div
-      className={cn(
-        "flex items-center rounded-lg transition-colors hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]",
-        open && "bg-primary/10 dark:bg-[hsl(var(--v2-hover,var(--muted)))]"
-      )}
+      data-slot="org-row"
+      className="group/site flex items-center rounded-lg transition-colors hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]"
     >
-      {/* Logo and name open the menu as well, but as a plain button rather than
-          a second Radix trigger — a menu can only have one. The controlled
-          `open` state makes that trivial, and it is what lets the caret sit
-          after the gear instead of being trapped at the trigger's edge. */}
-      <button
-        onClick={() => setOpen(true)}
+      <a
+        href={bookingUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={onNavigate}
+        aria-label={siteLabel}
+        title="Open your booking site"
         className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-lg p-1.5 text-left outline-none"
       >
         {Logo}
         <span className="min-w-0 flex-1 truncate text-[13px] font-semibold leading-tight">
           {orgName}
         </span>
-      </button>
-
-      {/* Settings, rehomed from the v1 sidebar footer. Inside the pill but a
-          sibling of the trigger, never a child of it — a button nested in a
-          button is invalid markup and the trigger would swallow the click. */}
-      {canSeeSettings && (
+        <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-60" aria-hidden />
+      </a>
+      {canOpenBranding && (
         <Link
-          href="/settings"
-          aria-label="Settings"
-          title="Settings"
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-[hsl(var(--v2-link,var(--primary)))]"
+          href="/settings/appearance"
+          onClick={onNavigate}
+          aria-label="Edit your booking site's branding"
+          title="Edit branding"
+          className="mr-1 flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground opacity-0 outline-none transition-colors focus-visible:opacity-100 group-hover/site:opacity-100 hover:bg-primary/10 hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-[hsl(var(--v2-link,var(--primary)))]"
         >
-          <Settings className="h-4 w-4" />
+          <Pencil className="h-3.5 w-3.5" aria-hidden />
         </Link>
       )}
-
-      <DropdownMenu open={open} onOpenChange={setOpen}>
-        <DropdownMenuTrigger asChild>
-          <button
-            aria-label="Switch organization"
-            className="mr-1 flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted-foreground outline-none transition-colors hover:bg-primary/10 hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-[hsl(var(--v2-link,var(--primary)))]"
-          >
-            <ChevronsUpDown className="h-4 w-4" />
-          </button>
-        </DropdownMenuTrigger>
-        {menu}
-      </DropdownMenu>
     </div>
   );
 }

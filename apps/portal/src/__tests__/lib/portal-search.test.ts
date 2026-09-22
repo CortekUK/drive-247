@@ -11,6 +11,7 @@ import {
   type PortalDestination,
 } from "@/lib/search/portal-destinations";
 import { OPT_IN_CATEGORIES, RECORD_CATEGORIES, scoreText, toAmount, toFilterText } from "@/lib/search-service";
+import { V2_SECTIONED_PAGES } from "@/components/settings-v2/settings-shell-state";
 import { RECORD_GROUPS } from "@/hooks/use-global-search";
 import { readPortalSource, readRepoSource } from "../helpers/edge-source";
 
@@ -76,17 +77,25 @@ describe("typing the name of a place finds it", () => {
   });
 
   it("finds a settings section, not just the Settings page", () => {
+    // Security deposit is a SECTION of the Tax and deposit page (Sep 20 2026;
+    // it was General's before): found under its own name, at its own link.
     expect(titles(find("deposit", northwind))).toContain("Security deposit");
+    expect(hrefFor("deposit", northwind, "Security deposit")).toBe("/settings?tab=preauth");
     expect(titles(find("promo codes", northwind))).toContain("Promo codes");
     expect(titles(find("installments", northwind))).toContain("Installments");
     expect(titles(find("branding", northwind))).toContain("Branding");
-    expect(titles(find("key handover", northwind))).toContain("Key handover");
+    // The Key handover section became the Lockbox page (Sep 19 2026). Its old
+    // name still finds it.
+    expect(titles(find("key handover", northwind))).toContain("Lockbox");
   });
 
   it("finds things by what they are called, not only by their title", () => {
-    // "vat" and "lockbox" are keywords of Tax and fees / Key handover.
+    // "vat" is a keyword of Tax and fees (a section of Tax and deposit), and
+    // "key handover" of Lockbox, whose section was called that until Sep 19.
     expect(titles(find("vat", northwind))).toContain("Tax and fees");
-    expect(titles(find("lockbox", northwind))).toContain("Key handover");
+    expect(hrefFor("vat", northwind, "Tax and fees")).toBe("/settings?tab=fees");
+    expect(titles(find("vat", northwind))).toContain("Tax and deposit");
+    expect(titles(find("lockbox", northwind))).toContain("Lockbox");
     // "pcn" is a keyword of Fines; "blocked dates" of Availability.
     expect(titles(find("pcn", northwind))).toContain("Fines");
     expect(titles(find("blocked dates", northwind))).toContain("Availability");
@@ -123,7 +132,15 @@ describe("the original portal has its own settings list", () => {
     expect(titles(find("messages", classic))).toContain("Messages");
     expect(titles(find("audit", classic))).toContain("Audit Logs");
     expect(titles(find("messages", northwind))).not.toContain("Messages");
-    expect(titles(find("audit", northwind))).not.toContain("Audit Logs");
+  });
+
+  it("Audit Logs is on BOTH now — as a page there, as a Settings entry on v2", () => {
+    // Sep 20 2026: Audit Logs left the v2 org menu and became an entry on the
+    // Settings index, so v2 has a way in again and the search follows it. The
+    // two surfaces are different destinations on purpose: `/audit-logs` as a
+    // page is still `experience: "v1"`, and the v2 hit is the Settings entry.
+    expect(titles(find("audit", northwind))).toContain("Audit Logs");
+    expect(hrefFor("audit", northwind, "Audit Logs")).toBe("/audit-logs");
   });
 
   it("has no Integrations board, and Support and Help are v2 only", () => {
@@ -307,6 +324,11 @@ describe("the search does not fall behind the navigation", () => {
   const NOT_A_DESTINATION = new Set([
     "/cms/about", "/cms/blog", "/cms/contact", "/cms/fleet", "/cms/home", "/cms/privacy", "/cms/promotions",
     "/cms/reviews", "/cms/terms", // the Website view's page list — "Website content" covers it
+    // The booking-site row's pencil (hover → Branding). It is a settings page,
+    // and the settings half of the search already offers it as "Branding" from
+    // the Settings index — a second PAGE_DESTINATION for the same href would
+    // put the same place in the results twice.
+    "/settings/appearance",
   ]);
 
   it.each(["components/shared/layout/app-sidebar.tsx", "components/shared/layout/app-sidebar-v2.tsx"])(
@@ -343,6 +365,23 @@ describe("the search does not fall behind the navigation", () => {
   it("the v2 settings index is used as-is, not copied", () => {
     const src = readRepoSource("apps/portal/src/lib/search/portal-destinations.ts");
     expect(src).toContain('import { SETTINGS_INDEX_SECTIONS } from "@/components/settings-v2/settings-index"');
-    expect(src).toContain('import { V2_GENERAL_SECTIONS } from "@/components/settings-v2/settings-shell-state"');
+    // Every sectioned page (General, Tax and deposit, Notifications), not only
+    // General's list: reading General alone is how Tax and fees and Security
+    // deposit fell out of the search when they moved to Tax and deposit.
+    expect(src).toContain('import { V2_SECTIONED_PAGES } from "@/components/settings-v2/settings-shell-state"');
+  });
+
+  it("every section of every sectioned v2 page is its own destination, at its own link", () => {
+    for (const [page, { sections }] of Object.entries(V2_SECTIONED_PAGES)) {
+      for (const section of sections) {
+        // The section whose tab IS the page (General's Regional) is the page.
+        if (section.tab === page) continue;
+        const d = ALL_DESTINATIONS.find((x) => x.id === `setting:v2-section:${section.anchor}`);
+        expect(d, `${page} › ${section.title}`).toBeDefined();
+        expect(d!.title).toBe(section.title);
+        expect(d!.href).toBe(`/settings?tab=${section.tab ?? page}`);
+        expect(d!.gate?.settingsTabs).toEqual([section.permTab]);
+      }
+    }
   });
 });

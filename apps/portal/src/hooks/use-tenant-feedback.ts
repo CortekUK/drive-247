@@ -20,6 +20,13 @@ export interface SubmitFeedbackPayload {
   screenshot?: File | null;
   pagePath?: string | null;
   source?: FeedbackSource | null;
+  /**
+   * 1-5, from the v2 dialog's stars. Optional and nullable on purpose: v1's
+   * dialog has no stars and never sends it, and `tenant_feedback.rating` is
+   * `smallint NULL`, so a submission without one is a row with NULL rather
+   * than a refused INSERT.
+   */
+  rating?: number | null;
 }
 
 /**
@@ -158,6 +165,11 @@ export const useSubmitFeedback = () => {
           // corrupted the only reproduction field we capture — any filter or
           // GROUP BY on page_path missed every prompted submission.
           source: payload.source ?? null,
+          // Its own column too, for the same reason. It rode inside `message`
+          // as a "4/5 stars" first line while the column did not exist; a
+          // rating is something you average and group by, so prose was never
+          // its home.
+          rating: payload.rating ?? null,
           user_agent:
             typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 500) : null,
         })
