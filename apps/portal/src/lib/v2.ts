@@ -144,7 +144,7 @@ const V2_AREAS: Record<V2Area, readonly string[]> = {
    * then everyone. The programme itself only gives codes to subscribed
    * operators, and the page says so to anyone else.
    */
-  referrals: [NORTHWIND, 'test'],
+  referrals: [NORTHWIND],
 };
 
 /**
