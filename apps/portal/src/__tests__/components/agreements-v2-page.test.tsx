@@ -392,14 +392,15 @@ describe("Resend", () => {
     expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "No e-sign credits left", variant: "destructive" }));
   });
 
-  it("an individual agreement is re-sent as a new row through its own route, never /api/esign", async () => {
+  it("an individual agreement is re-sent as a new row through the agreements service, never /api/esign", async () => {
     render(<AgreementsPageV2 />);
     await flush();
     fireEvent.click(within(openMenu("Bob Stone")).getByRole("menuitem", { name: "Resend" }));
     const dialog = await screen.findByRole("alertdialog");
     expect(dialog.textContent).toMatch(/as a new row in this list/);
     await confirm();
-    expect(api.resendAgreementV2).toHaveBeenCalledWith("bob");
+    // Tenant-scoped: the client reads the old row for THIS tenant only.
+    expect(api.resendAgreementV2).toHaveBeenCalledWith("bob", "tenant-1");
     expect(fetchMock).not.toHaveBeenCalled();
     expect(state.supabaseCalls).toEqual([]);
     expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Agreement resent" }));

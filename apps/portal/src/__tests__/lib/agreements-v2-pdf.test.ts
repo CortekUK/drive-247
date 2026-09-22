@@ -300,6 +300,6 @@ describe('browser-safe base64', () => {
     expect(bytes.subarray(0, 5).toString()).toBe('%PDF-');
     expect(calls[0]).toBe('CONSULTING AGREEMENT');
     expect(calls).toContain('{{@sig1}}');
-    await expect(PDFDocument.load(bytes)).resolves.toBeTruthy();
+    await expect(PDFDocument.load(b64)).resolves.toBeTruthy();
   });
 });

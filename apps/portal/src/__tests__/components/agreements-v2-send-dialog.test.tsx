@@ -283,6 +283,15 @@ describe("step 3: preview and send", () => {
       recipientName: "Ada Lovelace",
       recipientEmail: "ada@example.com",
       cc: ["boss@example.com"],
+      // The same company details the preview filled in; the client renders
+      // the final html and the PDF from these (lib/agreements-v2/api-client.ts).
+      company: {
+        companyName: "Northwind Rentals",
+        companyEmail: "hello@northwind.test",
+        companyPhone: "+1 555 0100",
+        companyAddress: "1 Harbour Road",
+      },
+      timeZone: undefined,
     });
     expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Agreement sent" }));
     expect(onSent).toHaveBeenCalledTimes(1);
@@ -464,6 +473,20 @@ describe("readiness, asked when the dialog opens", () => {
     const sendButton = screen.getByRole("button", { name: /Send agreement/ });
     expect(sendButton).toBeDisabled();
     fireEvent.click(sendButton);
+    expect(api.sendAgreementV2).not.toHaveBeenCalled();
+  });
+
+  it("says so when the agreements service has not been deployed yet", async () => {
+    api.checkAgreementsReadyV2.mockResolvedValue({
+      ready: false,
+      reason: "service",
+      message: "Sending isn't switched on yet: the agreements service hasn't been deployed.",
+    });
+    renderDialog();
+    const note = await screen.findByText(/can.t be sent yet/);
+    expect(note.closest('[data-slot="send-not-ready"]')).toHaveTextContent(/agreements service hasn.t been deployed/);
+    await toPreview();
+    expect(screen.getByRole("button", { name: /Send agreement/ })).toBeDisabled();
     expect(api.sendAgreementV2).not.toHaveBeenCalled();
   });
 

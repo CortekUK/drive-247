@@ -117,3 +117,24 @@ Rental rows keep using the existing `POST /api/esign/view { agreementId }` to vi
 - **Signature block in the document** (12:19): two columns, "FOR THE COMPANY" (the operator's saved signature image, name, title, date) and "FOR THE CUSTOMER" (the signer's Signature field and Date signed). The starter content for "Create your template" / "Create new" should end with this two-column signatures section: the operator-signature slot on the company side, `{{@sig1}}` and `{{@date1}}` on the customer side. The PDF renderer has no columns, so it must still read correctly as a single column: the company block first, then the customer block.
 - **Tooltip shape** (12:45, whiteboard): "description" on the first line, "e.g.: …" on the second.
 - **Agreements = individual | rental** (whiteboard): the two kinds, as D4.
+
+## Revision, Sep 22 2026: the privileged work moved to an edge function
+
+The Next routes `app/api/agreements-v2/*` and `lib/agreements-v2/server/*` are **deleted**. They needed
+`SUPABASE_SERVICE_ROLE_KEY` (and even `NEXT_PUBLIC_SUPABASE_URL`) on the Next server, which the local
+portal does not have, and which production's Vercel env could not be relied on for either (the old
+`/api/esign` quietly falls back to the anon key). Everything that needs a secret now runs in ONE new
+edge function, **`supabase/functions/agreements-v2`**. It already gets `SUPABASE_URL`,
+`SUPABASE_SERVICE_ROLE_KEY` and the BoldSign keys as project secrets, and `verify_jwt` stays ON.
+
+- The browser calls it with `supabase.functions.invoke('agreements-v2', { body: { action, … } })`,
+  with actions `ready | send | sync | document` (contract in `apps/portal/src/lib/agreements-v2/api-client.ts`).
+- **The PDF is drawn in the browser** (`lib/agreements-v2/pdf.ts`, the same renderer the parity test
+  pins to `/api/esign`'s parser) from the final HTML the preview shows. `send` carries `contentHtml`
+  (stored verbatim as `content_html`) and `pdfBase64`. The preview and the sent PDF cannot drift.
+- Resend reads the old row in the browser (RLS, tenant-filtered), redraws the PDF from its stored
+  `content_html` and sends it with `resendOf`.
+- D20's rules now live in the edge function: tenant from the token, v2 gate, insert before credits,
+  refund on provider failure, northwind LIVE via the shared lean gate.
+- **To go live, run:** `npx supabase functions deploy agreements-v2`, and apply `ops/agreements_v2.sql`
+  (SQL editor). Both need the project owner's approval.
