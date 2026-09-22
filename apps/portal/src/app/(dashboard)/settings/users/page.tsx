@@ -226,7 +226,7 @@ export default function UsersManagement() {
   // After every hook, so the hook order never changes.
   if (v2Chrome) {
     return (
-      <div className="w-full max-w-[1160px] pb-16 md:pt-7">
+      <div className="w-full max-w-[1160px] pb-16 md:pt-[26px]">
         <SettingsSectionSkeleton variant="table" rows={5} columns={5} label="Opening Users" />
       </div>
     );

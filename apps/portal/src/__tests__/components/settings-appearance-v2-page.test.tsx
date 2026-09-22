@@ -59,6 +59,7 @@ vi.mock("@/components/settings/favicon-upload", () => ({ FaviconUpload: () => <d
 vi.mock("@/components/settings/appearance/logo-studio", () => ({ LogoStudio: () => <div data-testid="logo-studio" /> }));
 
 import { AppearanceSettings } from "@/components/settings/appearance/appearance-settings";
+import { SETTINGS_COLUMN_BESIDE_TRAX } from "@/components/settings-v2/settings-kit";
 
 const SetupResizeObserver = globalThis.ResizeObserver;
 
@@ -93,6 +94,20 @@ describe("Branding (v2): layout", () => {
     const headings = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
     expect(headings).toEqual(["Portal name", "Brand colour", "Logos"]);
     expect(screen.getByRole("textbox", { name: "Portal name" })).toHaveAttribute("maxLength", "60");
+  });
+
+  // TraxPanel is mounted on every dashboard route and floats over the
+  // bottom-right corner. Branding is a standalone 1160px settings column like
+  // the Settings index, Customer messages and Agreement templates, so it takes
+  // the same clearance; without it the panel covered the brand-colour controls
+  // and the save bar.
+  it("its page column steps aside for the open Trax panel, like every other v2 settings column", () => {
+    const { container } = render(<AppearanceSettings />);
+    const column = container.firstElementChild as HTMLElement;
+    expect(column.className).toContain("max-w-[1160px]");
+    for (const cls of SETTINGS_COLUMN_BESIDE_TRAX.split(/\s+/)) {
+      expect(column.className.split(/\s+/), cls).toContain(cls);
+    }
   });
 
   it("shows the two logo cards instead of LogoStudio and the favicon uploader", () => {

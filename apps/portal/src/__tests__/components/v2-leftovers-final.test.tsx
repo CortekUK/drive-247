@@ -128,10 +128,14 @@ describe('payments (v2): the row menu is the ui-v2 menu', () => {
 });
 
 describe('custom pricing (v2): the holiday table', () => {
-  it('centres the holiday name row like every other cell', () => {
+  it('reads the holiday name from the left, and keeps the actions on the right', () => {
+    // Centred in a column that takes whatever width the other four leave, the
+    // names floated mid-cell with a wide gap down the left of the table. A
+    // column of names reads from the left; the numbers and dates stay centred.
     const src = read('components/settings-v2/pricing-rules-v2.tsx');
-    expect(src).toContain('<div className="flex min-w-0 items-center justify-center gap-2">');
-    expect(src).not.toContain('<div className="flex min-w-0 items-center gap-2">');
+    expect(src).toContain('<div className="flex min-w-0 items-center justify-start gap-2">');
+    expect(src).toContain('<ListHead className="text-left">Holiday</ListHead>');
+    expect(src).not.toContain('<div className="flex min-w-0 items-center justify-center gap-2">');
     // The actions cell stays right-aligned.
     expect(src).toContain('<div className="flex justify-end gap-0.5">');
   });

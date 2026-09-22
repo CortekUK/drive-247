@@ -191,6 +191,7 @@ export const SETTINGS_VALUE_TO_KEY = {
     accounting: 'settings.accounting',
     reminders: 'settings.reminders',
     push: 'settings.reminders',
+    notifications: 'settings.reminders',
     templates: 'settings.templates',
     integrations: 'settings.integrations',
     messaging: 'settings.integrations',

@@ -444,6 +444,15 @@ describe("v2 Locations page", () => {
       expect(heading.closest("section.rounded-xl")).toBeNull();
       expect(heading.parentElement!.className.split(/\s+/)).toContain("border-b");
     });
+    // The heading pair is set like the kit's `SettingsSection` (settings-kit),
+    // which is the 14px section description — not the 13px one, which belongs
+    // to a PANEL's description, and these headings sit outside their panels.
+    for (const section of sections) {
+      expect(section.querySelector("h2 + p")!.className.split(/\s+/)).toEqual(
+        expect.arrayContaining(["text-sm", "text-muted-foreground"]),
+      );
+      expect(section.querySelector("h2 + p")!.className).not.toContain("text-[13px]");
+    }
     expect(sections[0].querySelector("h2 + p")?.textContent).toBe("How customers get the car.");
     expect(sections[1].querySelector("h2 + p")?.textContent).toBe("How customers bring the car back.");
     // Collection locations are called Return locations now.

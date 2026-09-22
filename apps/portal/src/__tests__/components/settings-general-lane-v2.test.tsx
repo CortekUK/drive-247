@@ -476,29 +476,38 @@ describe("Lockbox: Templates is a link to another page, with an arrow", () => {
 
 describe("the index: the pages that came out of General", () => {
   const business = SETTINGS_INDEX_SECTIONS.find((section) => section.title === "Business")!;
+  const pricing = SETTINGS_INDEX_SECTIONS.find((section) => section.title === "Pricing")!;
 
-  it("Business reads General, Branding, Locations / Booking rules, Lockbox, Tax and deposit / Booking site, Optional modules, Team", () => {
+  it("Business reads General, Branding, Locations / Booking rules, Lockbox / Booking site, Optional modules, Team", () => {
     expect(business.items.map((item) => item.title)).toEqual([
       "General",
       "Branding",
       "Locations",
       "Booking rules",
       "Lockbox",
-      "Tax and deposit",
       "Booking site",
       "Optional modules",
       "Team",
     ]);
   });
 
+  it("Tax and deposit's ENTRY is first under Pricing, not in Business; the page and its aliases are unchanged", () => {
+    // Ticket item 1: "fees, tax and deposit become a rule inside Pricing, next
+    // to custom pricing". Only the entry moved.
+    expect(business.items.map((item) => item.title)).not.toContain("Tax and deposit");
+    expect(pricing.items[0].title).toBe("Tax and deposit");
+    expect(pricing.items[0].href).toBe("/settings?tab=tax-and-deposit");
+  });
+
   it("each new entry links to its page and follows the permission it had as a section", () => {
-    const byTitle = new Map(business.items.map((item) => [item.title, item]));
+    const byTitle = new Map([...business.items, ...pricing.items].map((item) => [item.title, item]));
     // title -> [href, tab, anyOfTabs]
     const expected: Array<[string, string, string, readonly string[] | undefined]> = [
-      ["General", "/settings?tab=general", "general", ["general", "requirements"]],
+      // General gained the monthly rate (under the `pricing` grant), so it
+      // spans three permissions now.
+      ["General", "/settings?tab=general", "general", ["general", "requirements", "pricing"]],
       ["Booking rules", "/settings?tab=duration", "duration", undefined],
       ["Lockbox", "/settings?tab=lockbox", "lockbox", undefined],
-      ["Tax and deposit", "/settings?tab=tax-and-deposit", "fees", ["fees", "preauth"]],
       ["Booking site", "/settings?tab=booking-site", "general", undefined],
       ["Optional modules", "/settings?tab=modules", "general", undefined],
     ];
@@ -512,13 +521,21 @@ describe("the index: the pages that came out of General", () => {
       expect(item.description.length, title).toBeGreaterThanOrEqual(95);
       expect(item.description.length, title).toBeLessThanOrEqual(120);
     }
+    // Tax and deposit is checked the same way from the Pricing group it moved to.
+    const tax = byTitle.get("Tax and deposit")!;
+    expect([tax.href, tax.tab, tax.anyOfTabs]).toEqual(["/settings?tab=tax-and-deposit", "fees", ["fees", "preauth"]]);
+    expect(tax.description.length).toBeGreaterThanOrEqual(95);
+    expect(tax.description.length).toBeLessThanOrEqual(120);
   });
 
-  it("General's description is about what it holds now: currency, distance, driver age and ID", () => {
+  it("General's description is about what it holds now: currency, distance, driver age, ID and the monthly rate", () => {
     const general = business.items.find((item) => item.title === "General")!;
-    expect(general.description).toBe(
-      "Your currency and distance unit, plus the minimum driver age and the ID customers verify before they drive.",
-    );
+    // The monthly rate is General's third section now, so the description says
+    // so. Asserted by substance, not by the exact sentence.
+    expect(general.description.toLowerCase()).toContain("currency");
+    expect(general.description.toLowerCase()).toContain("distance unit");
+    expect(general.description.toLowerCase()).toContain("driver age");
+    expect(general.description.toLowerCase()).toContain("monthly rate");
     for (const gone of ["key handover", "deposit", "booking site", "modules", "tax"]) {
       expect(general.description.toLowerCase(), gone).not.toContain(gone);
     }

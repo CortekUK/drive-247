@@ -35,7 +35,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui-v2/alert-dialog";
-import { SettingsPanel, SettingsRow, useSettingsPageSave } from "@/components/settings-v2/settings-kit";
+import {
+  SettingsPanel,
+  SettingsRow,
+  SettingsRowAlignProvider,
+  useSettingsPageSave,
+} from "@/components/settings-v2/settings-kit";
 import type { RegisterSectionSave } from "@/components/settings-v2/pricing-money-parts";
 import {
   SettingsLoadError,
@@ -55,6 +60,7 @@ import { cn } from "@/lib/utils";
 import { Table } from "@/components/ui-v2/table";
 import {
   LIST_CLASSES,
+  LIST_SETTINGS_SURFACE,
   ListBody,
   ListCell,
   ListHead,
@@ -118,6 +124,12 @@ export function useImageLoadFailed(src: string | null | undefined): boolean {
  * Loading placeholder with the exact frame of a `SettingsPanel` of `SettingsRow`s
  * (bordered, a title bar when `title`, one ~64px row per setting), so the page
  * does not jump when the real panel replaces it.
+ *
+ * Its rows mirror an `align="end"` row — an elastic label column and the
+ * control at the end — because every panel it stands in for (regional, the
+ * location options, optional modules) lays its rows out that way. With the
+ * 420px label column it used, each control box jumped from the middle of the
+ * row to its end the moment the real panel arrived.
  */
 export function SettingsPanelSkeleton({
   rows = 2,
@@ -155,9 +167,9 @@ export function SettingsPanelSkeleton({
         {Array.from({ length: Math.max(1, rows) }).map((_, i) => (
           <div
             key={i}
-            className="flex flex-col gap-3 px-5 py-4 md:grid md:grid-cols-[minmax(0,420px)_minmax(0,1fr)] md:items-center md:gap-x-10"
+            className="flex flex-col gap-3 px-5 py-4 md:grid md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:gap-x-10"
           >
-            <div className="min-w-0 space-y-1.5">
+            <div className="min-w-0 space-y-1.5 md:max-w-2xl">
               <Skeleton className="h-3.5 w-24 rounded-full" />
               <Skeleton className="h-3 w-56 max-w-full rounded-full" />
               {descriptionLines === 2 && <Skeleton className="h-3 w-40 max-w-full rounded-full" />}
@@ -436,91 +448,92 @@ export function BusinessRegionalPanel({
 
   return (
     <>
-      <SettingsPanel
-        footer={
-          canEdit && pageSave ? (
-            status === "error" ? <SettingsSaveState status="error" error={saveError} /> : null
-          ) : canEdit ? (
-            <>
-              <SettingsSaveState
-                status={status}
-                error={saveError}
-                onRetry={status === "error" ? requestSave : undefined}
-                onDiscard={status === "dirty" ? onDiscard : undefined}
-                className="mr-auto"
-              />
-              <Button size="sm" onClick={requestSave} disabled={saving || !isDirty} className="min-w-[88px]">
-                {saving && <Loader2 className="animate-spin" data-icon="inline-start" />}
-                {saving ? "Saving…" : "Save"}
-              </Button>
-            </>
-          ) : undefined
-        }
-      >
-        {/* Both controls at the end of their row, the same width, each menu
-            opening under its own box's right edge. */}
-        <SettingsRow
-          label="Currency"
-          description="The symbol on prices, invoices and reports. Only US dollar can be chosen for now."
-          htmlFor="v2_currency_code"
-          align="end"
-          note={
-            unsupported ? (
-              <p className="text-muted-foreground">
-                Your currency is{" "}
-                <span className="font-medium text-foreground">{form.currency_code || "not set"}</span>. It stays as it
-                is unless you pick US dollar. Contact support for any other currency.
-              </p>
-            ) : currencyChanged ? (
-              <p className="text-amber-700 dark:text-amber-400">
-                Changing currency relabels your prices. It doesn&apos;t convert them.
-              </p>
+      <SettingsRowAlignProvider align="end">
+        <SettingsPanel
+          footer={
+            canEdit && pageSave ? (
+              status === "error" ? <SettingsSaveState status="error" error={saveError} /> : null
+            ) : canEdit ? (
+              <>
+                <SettingsSaveState
+                  status={status}
+                  error={saveError}
+                  onRetry={status === "error" ? requestSave : undefined}
+                  onDiscard={status === "dirty" ? onDiscard : undefined}
+                  className="mr-auto"
+                />
+                <Button size="sm" onClick={requestSave} disabled={saving || !isDirty} className="min-w-[88px]">
+                  {saving && <Loader2 className="animate-spin" data-icon="inline-start" />}
+                  {saving ? "Saving…" : "Save"}
+                </Button>
+              </>
             ) : undefined
           }
         >
-          <Select
-            value={form.currency_code}
-            onValueChange={(value) => onFormChange({ currency_code: value })}
-            disabled={!canEdit || saving}
+          {/* Both controls at the end of their row (the panel's align
+              provider), the same width, each menu opening under its own box's
+              right edge. */}
+          <SettingsRow
+            label="Currency"
+            description="The symbol on prices, invoices and reports. Only US dollar can be chosen for now."
+            htmlFor="v2_currency_code"
+            note={
+              unsupported ? (
+                <p className="text-muted-foreground">
+                  Your currency is{" "}
+                  <span className="font-medium text-foreground">{form.currency_code || "not set"}</span>. It stays as it
+                  is unless you pick US dollar. Contact support for any other currency.
+                </p>
+              ) : currencyChanged ? (
+                <p className="panel-ink-warn">
+                  Changing currency relabels your prices. It doesn&apos;t convert them.
+                </p>
+              ) : undefined
+            }
           >
-            <SelectTrigger id="v2_currency_code" className={REGIONAL_SELECT_WIDTH}>
-              <SelectValue placeholder="Choose a currency" />
-            </SelectTrigger>
-            <SelectContent tone="surface" align="end">
-              {/* A saved currency the list doesn't offer stays shown and can be
-                  picked again after trying US dollar. */}
-              {savedCurrency && !isSupportedCurrency(savedCurrency) && (
-                <SelectItem value={savedCurrency}>{savedCurrency} (current)</SelectItem>
-              )}
-              {SUPPORTED_CURRENCIES.map((code) => (
-                <SelectItem key={code} value={code} disabled={!isCurrencySelectable(code, savedCurrency)}>
-                  {CURRENCY_OPTION_LABELS[code]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </SettingsRow>
-        <SettingsRow
-          label="Distance unit"
-          description="Used for mileage and delivery distances."
-          htmlFor="v2_distance_unit"
-          align="end"
-        >
-          <Select
-            value={form.distance_unit}
-            onValueChange={(value: "km" | "miles") => onFormChange({ distance_unit: value })}
-            disabled={!canEdit || saving}
+            <Select
+              value={form.currency_code}
+              onValueChange={(value) => onFormChange({ currency_code: value })}
+              disabled={!canEdit || saving}
+            >
+              <SelectTrigger id="v2_currency_code" className={REGIONAL_SELECT_WIDTH}>
+                <SelectValue placeholder="Choose a currency" />
+              </SelectTrigger>
+              <SelectContent tone="surface" align="end">
+                {/* A saved currency the list doesn't offer stays shown and can be
+                    picked again after trying US dollar. */}
+                {savedCurrency && !isSupportedCurrency(savedCurrency) && (
+                  <SelectItem value={savedCurrency}>{savedCurrency} (current)</SelectItem>
+                )}
+                {SUPPORTED_CURRENCIES.map((code) => (
+                  <SelectItem key={code} value={code} disabled={!isCurrencySelectable(code, savedCurrency)}>
+                    {CURRENCY_OPTION_LABELS[code]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </SettingsRow>
+          <SettingsRow
+            label="Distance unit"
+            description="Used for mileage and delivery distances."
+            htmlFor="v2_distance_unit"
           >
-            <SelectTrigger id="v2_distance_unit" className={REGIONAL_SELECT_WIDTH}>
-              <SelectValue placeholder="Choose a unit" />
-            </SelectTrigger>
-            <SelectContent tone="surface" align="end">
-              <SelectItem value="km">Kilometres</SelectItem>
-              <SelectItem value="miles">Miles</SelectItem>
-            </SelectContent>
-          </Select>
-        </SettingsRow>
-      </SettingsPanel>
+            <Select
+              value={form.distance_unit}
+              onValueChange={(value: "km" | "miles") => onFormChange({ distance_unit: value })}
+              disabled={!canEdit || saving}
+            >
+              <SelectTrigger id="v2_distance_unit" className={REGIONAL_SELECT_WIDTH}>
+                <SelectValue placeholder="Choose a unit" />
+              </SelectTrigger>
+              <SelectContent tone="surface" align="end">
+                <SelectItem value="km">Kilometres</SelectItem>
+                <SelectItem value="miles">Miles</SelectItem>
+              </SelectContent>
+            </Select>
+          </SettingsRow>
+        </SettingsPanel>
+      </SettingsRowAlignProvider>
 
       <AlertDialog open={confirmOpen} onOpenChange={onConfirmOpenChange}>
         <AlertDialogContent>
@@ -997,9 +1010,12 @@ export function LocationsListV2({
       {visible.length === 0 ? (
         <SettingsNoMatch size="compact" query={query} noun={`${noun} locations`} onClear={() => setQuery("")} />
       ) : (
-        // A flat bordered box (no card shadow inside a settings panel). The
-        // body scrolls under the sticky header past ~8 rows.
-        <div className="overflow-hidden rounded-xl border">
+        // The settings table surface every other v2 settings list uses
+        // (promo codes, extras, holidays): a flat bordered box, no card
+        // shadow inside a settings panel. Spelled out here rather than
+        // rendered through `ListTable` because the body scrolls under the
+        // sticky header past ~8 rows, which `ListTable` does not do.
+        <div data-list-surface="settings" className={LIST_SETTINGS_SURFACE}>
           <div className={LOCATION_SCROLL_ROOT}>
             <Table aria-label={listName} className={cn("table-fixed", readOnly ? "min-w-[520px]" : "min-w-[680px]")}>
               <ListTableHeader>

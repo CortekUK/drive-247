@@ -32,6 +32,7 @@ import {
   Activity,
   BookOpen,
   BadgeDollarSign,
+  BellRing,
 } from 'lucide-react';
 
 interface NavItem {
@@ -99,6 +100,13 @@ function useNavigation() {
       label: 'Configuration',
       items: [
         { name: 'Settings', href: '/admin/settings', icon: Settings },
+        // The platform's own notification set: what we send operators, what
+        // operators send us, and what we broadcast to everyone. Separate from
+        // Settings because it saves to its own table with its own dirty guard.
+        // Super admins only — the page and the table's RLS say so too.
+        ...(user?.is_super_admin
+          ? [{ name: 'Notifications', href: '/admin/notifications', icon: BellRing }]
+          : []),
         // Terms of Service and Privacy Policy, as served at drive-247.com.
         // Not a tenant's rental terms — those are per-tenant CMS content and a
         // different contract entirely. See ops/platform_legal_documents.sql.

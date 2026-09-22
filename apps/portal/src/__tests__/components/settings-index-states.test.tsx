@@ -142,9 +142,9 @@ describe("SettingsIndexV2 structure", () => {
   const entries = () =>
     Array.from(container.querySelectorAll("section a")).map((a) => [a.querySelector("span")?.textContent, a.getAttribute("href")]);
 
-  it("head admin: Business, Pricing (with Promo codes and Extras), Payment plans, Notifications", () => {
+  it("head admin: Business, Pricing (Tax and deposit first, Weekend and holiday pricing last), Payment plans, Notifications, Templates", () => {
     render(<SettingsIndexV2 canView={() => true} tenantSlug="northwind" isHeadAdmin />);
-    expect(sectionTitles()).toEqual(["Business", "Pricing", "Payment plans", "Notifications"]);
+    expect(sectionTitles()).toEqual(["Business", "Pricing", "Payment plans", "Notifications", "Templates"]);
     expect(entries()).toEqual([
       ["General", "/settings?tab=general"],
       ["Branding", "/settings/appearance"],
@@ -152,20 +152,59 @@ describe("SettingsIndexV2 structure", () => {
       // Out of General into pages of their own (Sep 19 2026).
       ["Booking rules", "/settings?tab=duration"],
       ["Lockbox", "/settings?tab=lockbox"],
-      ["Tax and deposit", "/settings?tab=tax-and-deposit"],
       ["Booking site", "/settings?tab=booking-site"],
       ["Optional modules", "/settings?tab=modules"],
       ["Team", "/users"],
-      ["Custom pricing", "/settings?tab=pricing"],
+      // Tax and deposit's ENTRY moved out of Business into Pricing, first
+      // (ticket item 1). The page and all three of its aliases are unchanged.
+      ["Tax and deposit", "/settings?tab=tax-and-deposit"],
       ["Promo codes", "/settings?tab=promos"],
       ["Extras", "/settings?tab=extras"],
+      ["Weekend and holiday pricing", "/settings?tab=pricing"],
       ["Installments", "/settings?tab=installments"],
       ["Pay as you go", "/settings?tab=payg"],
       ["Auto-extension", "/settings?tab=auto-extend"],
-      ["Team emails", "/settings?tab=reminders"],
-      ["Push notifications", "/settings?tab=push"],
+      ["Notifications", "/settings?tab=notifications"],
       ["Customer messages", "/settings?tab=templates"],
+      ["Agreement templates", "/settings/agreement-templates"],
     ]);
+  });
+
+  it("Notifications is one entry (Team emails and Push notifications are part of it); Templates follows it", async () => {
+    const { SETTINGS_INDEX_SECTIONS } = await import("@/components/settings-v2/settings-index");
+    const titles = SETTINGS_INDEX_SECTIONS.map((section) => section.title);
+    expect(titles.indexOf("Templates")).toBe(titles.indexOf("Notifications") + 1);
+    const notifications = SETTINGS_INDEX_SECTIONS.find((section) => section.title === "Notifications")!;
+    expect(notifications.items.map((item) => [item.title, item.href, item.tab])).toEqual([
+      ["Notifications", "/settings?tab=notifications", "notifications"],
+    ]);
+    const templates = SETTINGS_INDEX_SECTIONS.find((section) => section.title === "Templates")!;
+    expect(templates.items.map((item) => [item.title, item.href, item.tab])).toEqual([
+      ["Customer messages", "/settings?tab=templates", "templates"],
+      ["Agreement templates", "/settings/agreement-templates", "templates"],
+    ]);
+    render(<SettingsIndexV2 canView={() => true} tenantSlug="northwind" isHeadAdmin />);
+    const hrefs = entries().map(([, href]) => href);
+    expect(hrefs).not.toContain("/settings?tab=reminders");
+    expect(hrefs).not.toContain("/settings?tab=push");
+  });
+
+  it("finds Notifications by the words of what it now holds", () => {
+    render(<SettingsIndexV2 canView={() => true} tenantSlug="northwind" isHeadAdmin />);
+    for (const words of ["team emails", "push notifications", "reminders", "sender", "from address", "bell", "in-app", "reply to"]) {
+      type(words);
+      expect(entries().map(([title]) => title), words).toContain("Notifications");
+    }
+  });
+
+  it("Notifications and the templates follow their own permissions", () => {
+    render(<SettingsIndexV2 canView={(tab) => tab === "notifications"} tenantSlug="northwind" isHeadAdmin={false} />);
+    expect(entries()).toEqual([["Notifications", "/settings?tab=notifications"]]);
+    act(() => root.unmount());
+    root = createRoot(container);
+    render(<SettingsIndexV2 canView={(tab) => tab === "templates"} tenantSlug="northwind" isHeadAdmin={false} />);
+    expect(sectionTitles()).toEqual(["Templates"]);
+    expect(entries().map(([title]) => title)).toEqual(["Customer messages", "Agreement templates"]);
   });
 
   it("Team is for head admins only", () => {
@@ -186,6 +225,10 @@ describe("SettingsIndexV2 structure", () => {
       "Security deposit",
       "Global blacklist",
       "Pricing rules",
+      "Custom pricing",
+      "Monthly rate",
+      // The parallel entry this ticket briefly had; there is one Tax entry now.
+      "Tax, fees and deposit",
     ]) {
       expect(titles).not.toContain(gone);
     }
@@ -233,6 +276,19 @@ describe("SettingsIndexV2 structure", () => {
     ]);
   });
 
+  it("the pricing permission lists Weekend and holiday pricing, and General for the monthly rate", () => {
+    // The monthly rate is a section of General under the `pricing` grant, so
+    // that grant alone opens General — and Weekend and holiday pricing, which
+    // it has always opened.
+    render(<SettingsIndexV2 canView={(tab) => tab === "pricing"} tenantSlug="northwind" isHeadAdmin={false} />);
+    expect(entries()).toEqual([
+      ["General", "/settings?tab=general"],
+      ["Weekend and holiday pricing", "/settings?tab=pricing"],
+    ]);
+    expect(sectionTitles()).toEqual(["Business", "Pricing"]);
+  });
+
+
   it("leaves out an entry the page says has nothing behind it (Optional modules with no module)", () => {
     render(
       <SettingsIndexV2 canView={() => true} tenantSlug="northwind" isHeadAdmin hiddenHrefs={["/settings?tab=modules"]} />,
@@ -248,16 +304,57 @@ describe("SettingsIndexV2 structure", () => {
     render(<SettingsIndexV2 canView={() => true} tenantSlug="northwind" isHeadAdmin />);
     type("deposit");
     expect(entries().map(([title]) => title)).toEqual(["Tax and deposit"]);
+    type("vat");
+    expect(entries().map(([title]) => title)).toEqual(["Tax and deposit"]);
+    type("preauth");
+    expect(entries().map(([title]) => title)).toEqual(["Tax and deposit"]);
     type("buffer");
     expect(entries().map(([title]) => title)).toEqual(["Booking rules"]);
     type("lockbox");
     expect(entries().map(([title]) => title)).toEqual(["Lockbox", "Customer messages"]);
     type("licence");
     expect(entries().map(([title]) => title)).toEqual(["General"]);
+    type("monthly rate");
+    expect(entries().map(([title]) => title)).toEqual(["General"]);
     type("breakdown");
     expect(entries().map(([title]) => title)).toEqual(["Booking site"]);
     type("turo");
     expect(entries().map(([title]) => title)).toEqual(["Optional modules"]);
+    type("holiday");
+    expect(entries().map(([title]) => title)).toEqual(["Weekend and holiday pricing"]);
+    type("surcharge");
+    expect(entries().map(([title]) => title)).toEqual(["Weekend and holiday pricing"]);
+    // The old name still finds the renamed page.
+    type("custom pricing");
+    expect(entries().map(([title]) => title)).toEqual(["Weekend and holiday pricing"]);
+  });
+
+  it("Tax and deposit and Weekend and holiday pricing: titles, links, permissions and descriptions", async () => {
+    const { SETTINGS_INDEX_SECTIONS } = await import("@/components/settings-v2/settings-index");
+    const pricing = SETTINGS_INDEX_SECTIONS.find((section) => section.title === "Pricing")!;
+    // Tax and deposit is FIRST under Pricing (ticket item 1, "fees, tax and
+    // deposit become a rule inside Pricing, next to custom pricing"), and the
+    // renamed weekend page is last.
+    expect(pricing.items.map((item) => item.title)).toEqual([
+      "Tax and deposit",
+      "Promo codes",
+      "Extras",
+      "Weekend and holiday pricing",
+    ]);
+    const fees = pricing.items[0];
+    // The page, its key and every alias are unchanged: only the entry moved.
+    expect([fees.href, fees.tab, fees.anyOfTabs]).toEqual(["/settings?tab=tax-and-deposit", "fees", ["fees", "preauth"]]);
+    const weekend = pricing.items[3];
+    expect([weekend.href, weekend.tab, weekend.anyOfTabs]).toEqual(["/settings?tab=pricing", "pricing", undefined]);
+    // Business no longer lists it.
+    const business = SETTINGS_INDEX_SECTIONS.find((section) => section.title === "Business")!;
+    expect(business.items.map((item) => item.title)).not.toContain("Tax and deposit");
+    // General no longer claims tax or deposits, and names the monthly rate.
+    const general = business.items.find((item) => item.title === "General")!;
+    expect(general.description).toContain("monthly rate");
+    expect(`${general.description} ${general.keywords}`).not.toMatch(/\b(tax|vat|deposit|preauth)\b/i);
+    // Regional, Driver requirements and Monthly rate.
+    expect(general.anyOfTabs).toEqual(["general", "requirements", "pricing"]);
   });
 
   it("a head admin finds Team by 'password'; anyone else gets no match and no hand-off", () => {
@@ -289,7 +386,8 @@ describe("SettingsIndexV2 structure", () => {
       expect(item!.section, title).toBe(section);
       expect(item!.href, title).toBe(href);
       expect(item!.tab, title).toBe(tab);
-      // Only General and Tax and deposit span several permissions; none is head-admin only.
+      // Only the sectioned pages (General, Tax and deposit) span several
+      // permissions; none of these is head-admin only.
       expect(item!.anyOfTabs, title).toBeUndefined();
       expect(item!.headAdminOnly, title).toBeUndefined();
       expect(item!.description.length, title).toBeGreaterThanOrEqual(95);
@@ -303,7 +401,7 @@ describe("SettingsIndexV2 structure", () => {
     expect(sectionTitles()).toEqual(["Pricing"]);
     expect(entries()).toEqual([["Extras", "/settings?tab=extras"]]);
 
-    // Promo codes and the payment plans, without Extras or Custom pricing.
+    // Promo codes and the payment plans, without Extras or the pricing pages.
     act(() => root.unmount());
     root = createRoot(container);
     const granted = new Set(["promos", "installments", "payg", "auto-extend"]);

@@ -33,6 +33,13 @@
  *   cutting digits off.
  *
  * The keys and values saved are exactly the ones the instant-save pages wrote.
+ *
+ * LAYOUT. Each panel carries its own `SettingsRowAlignProvider align="end"`:
+ * the label and its help take the row and the control sits at its end, the
+ * house style for a v2 settings form (settings-kit.tsx). These two pages are
+ * not in the settings page's `V2_PAGES_CONTROLS_AT_END`, so without this their
+ * switches sat in the middle of the row while every other settings page put
+ * them at its end.
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -46,7 +53,13 @@ import { Switch } from "@/components/ui-v2/switch";
 // uses the page's own popover, border and highlight tokens — see
 // components/ui-v2/select.tsx.
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui-v2/select";
-import { SettingsPanel, SettingsRow, settingsSaveIssue, useSettingsPageSave } from "@/components/settings-v2/settings-kit";
+import {
+  SettingsPanel,
+  SettingsRow,
+  SettingsRowAlignProvider,
+  settingsSaveIssue,
+  useSettingsPageSave,
+} from "@/components/settings-v2/settings-kit";
 import { useRegisterLeaveSave } from "@/components/settings-v2/business-section-save";
 import type { RegisterSectionSave } from "@/components/settings-v2/pricing-money-parts";
 import {
@@ -244,49 +257,51 @@ export function PayAsYouGoSettingsV2({
     <div className="space-y-4">
       {gate.inlineError}
       <SettingsReadOnlyFieldset readOnly={!canEdit}>
-        <SettingsPanel
-          footer={canEdit ? <DraftSaveFooter save={save} isDirty={isDirty} onSave={submit} onDiscard={discard} /> : undefined}
-        >
-          <SettingsRow
-            label="Pay as you go"
-            description="The rental, tax and percentage fees build up daily and are paid as the rental runs. Deposit, insurance and delivery are still paid upfront."
+        <SettingsRowAlignProvider align="end">
+          <SettingsPanel
+            footer={canEdit ? <DraftSaveFooter save={save} isDirty={isDirty} onSave={submit} onDiscard={discard} /> : undefined}
           >
-            <Switch
-              checked={values.pay_as_you_go_enabled}
-              onCheckedChange={set("pay_as_you_go_enabled")}
-              disabled={!canEdit || busy}
-              aria-label="Enable Pay As You Go"
-            />
-          </SettingsRow>
-          {values.pay_as_you_go_enabled ? (
-            <>
-              <SettingsRow label="Take the first week or month upfront" description="The keys cannot be handed over until it is paid.">
-                <Switch
-                  checked={values.payg_upfront_required}
-                  onCheckedChange={set("payg_upfront_required")}
-                  disabled={!canEdit || busy}
-                  aria-label="Require upfront payment"
-                />
-              </SettingsRow>
-              <SettingsRow
-                label="Daily reminder emails"
-                description="Sent while the customer owes money. You can always send one by hand."
-              >
-                <Switch
-                  checked={values.payg_auto_reminders_enabled}
-                  onCheckedChange={set("payg_auto_reminders_enabled")}
-                  disabled={!canEdit || busy}
-                  aria-label="Send automated reminders"
-                />
-              </SettingsRow>
-            </>
-          ) : (
             <SettingsRow
-              label="Off for new rentals"
-              description="Every rental is paid the usual way. Turn this on to offer pay as you go when you create a rental."
-            />
-          )}
-        </SettingsPanel>
+              label="Pay as you go"
+              description="The rental, tax and percentage fees build up daily and are paid as the rental runs. Deposit, insurance and delivery are still paid upfront."
+            >
+              <Switch
+                checked={values.pay_as_you_go_enabled}
+                onCheckedChange={set("pay_as_you_go_enabled")}
+                disabled={!canEdit || busy}
+                aria-label="Enable Pay As You Go"
+              />
+            </SettingsRow>
+            {values.pay_as_you_go_enabled ? (
+              <>
+                <SettingsRow label="Take the first week or month upfront" description="The keys cannot be handed over until it is paid.">
+                  <Switch
+                    checked={values.payg_upfront_required}
+                    onCheckedChange={set("payg_upfront_required")}
+                    disabled={!canEdit || busy}
+                    aria-label="Require upfront payment"
+                  />
+                </SettingsRow>
+                <SettingsRow
+                  label="Daily reminder emails"
+                  description="Sent while the customer owes money. You can always send one by hand."
+                >
+                  <Switch
+                    checked={values.payg_auto_reminders_enabled}
+                    onCheckedChange={set("payg_auto_reminders_enabled")}
+                    disabled={!canEdit || busy}
+                    aria-label="Send automated reminders"
+                  />
+                </SettingsRow>
+              </>
+            ) : (
+              <SettingsRow
+                label="Off for new rentals"
+                description="Every rental is paid the usual way. Turn this on to offer pay as you go when you create a rental."
+              />
+            )}
+          </SettingsPanel>
+        </SettingsRowAlignProvider>
       </SettingsReadOnlyFieldset>
     </div>
   );
@@ -392,114 +407,116 @@ export function AutoExtendSettingsV2({
     <div className="space-y-4">
       {gate.inlineError}
       <SettingsReadOnlyFieldset readOnly={!canEdit}>
-        <SettingsPanel
-          footer={
-            canEdit ? (
-              <DraftSaveFooter save={save} isDirty={isDirty} invalid={invalid !== null} onSave={submit} onDiscard={discard} />
-            ) : undefined
-          }
-        >
-          <SettingsRow
-            label="Auto-extension"
-            description="A rental renews each week or month and the customer pays before each new period. The opposite of pay as you go."
+        <SettingsRowAlignProvider align="end">
+          <SettingsPanel
+            footer={
+              canEdit ? (
+                <DraftSaveFooter save={save} isDirty={isDirty} invalid={invalid !== null} onSave={submit} onDiscard={discard} />
+              ) : undefined
+            }
           >
-            <Switch
-              checked={enabled}
-              onCheckedChange={(checked) => setChoices((prev) => ({ ...prev, auto_extend_enabled: checked }))}
-              disabled={!canEdit || busy}
-              aria-label="Enable auto-extension"
-            />
-          </SettingsRow>
-          {enabled ? (
-            <>
-              <SettingsRow
-                label="How to take payment"
-                description="The default for new rentals. Charging the card needs the customer's card saved at booking."
-                note={
-                  chargeMode === "auto_charge" && provider === "missing" ? (
-                    <SettingsDependencyNotice
-                      tone="warning"
-                      title="No payment provider is connected"
-                      body="Renewals can't charge a saved card until one is. Emailing a payment link works either way."
-                      action={{ label: "Open Integrations", href: "/integrations" }}
-                    />
-                  ) : undefined
-                }
-              >
-                <Select
-                  value={chargeMode}
-                  onValueChange={(value) => setChoices((prev) => ({ ...prev, auto_extend_default_charge_mode: value }))}
-                  disabled={!canEdit || busy}
-                >
-                  <SelectTrigger className="w-full max-w-60 sm:w-60" aria-label="How to take payment">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent tone="surface">
-                    <SelectItem value="pay_link">Email a payment link</SelectItem>
-                    <SelectItem value="auto_charge">Charge the saved card</SelectItem>
-                  </SelectContent>
-                </Select>
-              </SettingsRow>
-              <SettingsRow
-                label="Timing and retries"
-                description="Charge this many hours before a period ends, keep trying for the grace window, and pause after the failed attempts."
-                note={
-                  numberErrors.length > 0 ? (
-                    <ul role="alert" className="space-y-0.5 text-destructive">
-                      {numberErrors.map((key) => (
-                        <li key={key} className="[overflow-wrap:anywhere]">
-                          {AUTO_EXTEND_NUMBER_FIELDS[key].label}: {numberMessage(key)}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : undefined
-                }
-              >
-                {NUMBER_KEYS.map((key) => {
-                  const field = AUTO_EXTEND_NUMBER_FIELDS[key];
-                  const fieldInvalid = Boolean(numberMessage(key));
-                  const shown = shownNumber(key);
-                  const [before, after] =
-                    key === "auto_extend_default_lead_hours"
-                      ? ["Charge", "h early"]
-                      : key === "auto_extend_grace_hours"
-                        ? ["Grace", "h"]
-                        : ["Retries", ""];
-                  return (
-                    <label key={key} className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                      {before}
-                      <Input
-                        id={`v2_${key}`}
-                        type="number"
-                        inputMode="numeric"
-                        min={field.min}
-                        max={field.max}
-                        step={1}
-                        value={shown}
-                        onChange={(e) => setDrafts((prev) => ({ ...prev, [key]: e.target.value }))}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                        }}
-                        disabled={!canEdit || busy}
-                        aria-invalid={fieldInvalid || undefined}
-                        aria-label={`${field.label} (${field.min}–${field.max} ${field.unit})`}
-                        className="w-20 tabular-nums"
-                        // Wide enough for every digit: 80px cut "9999999" to "999999" on a phone.
-                        style={shown.length > 4 ? { minWidth: `calc(${Math.min(shown.length, 16)}ch + 1.75rem)` } : undefined}
-                      />
-                      {after}
-                    </label>
-                  );
-                })}
-              </SettingsRow>
-            </>
-          ) : (
             <SettingsRow
-              label="Off for new rentals"
-              description="Rentals end on their return date. Turn this on to offer weekly or monthly renewals when you create a rental."
-            />
-          )}
-        </SettingsPanel>
+              label="Auto-extension"
+              description="A rental renews each week or month and the customer pays before each new period. The opposite of pay as you go."
+            >
+              <Switch
+                checked={enabled}
+                onCheckedChange={(checked) => setChoices((prev) => ({ ...prev, auto_extend_enabled: checked }))}
+                disabled={!canEdit || busy}
+                aria-label="Enable auto-extension"
+              />
+            </SettingsRow>
+            {enabled ? (
+              <>
+                <SettingsRow
+                  label="How to take payment"
+                  description="The default for new rentals. Charging the card needs the customer's card saved at booking."
+                  note={
+                    chargeMode === "auto_charge" && provider === "missing" ? (
+                      <SettingsDependencyNotice
+                        tone="warning"
+                        title="No payment provider is connected"
+                        body="Renewals can't charge a saved card until one is. Emailing a payment link works either way."
+                        action={{ label: "Open Integrations", href: "/integrations" }}
+                      />
+                    ) : undefined
+                  }
+                >
+                  <Select
+                    value={chargeMode}
+                    onValueChange={(value) => setChoices((prev) => ({ ...prev, auto_extend_default_charge_mode: value }))}
+                    disabled={!canEdit || busy}
+                  >
+                    <SelectTrigger className="w-full max-w-60 sm:w-60" aria-label="How to take payment">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent tone="surface">
+                      <SelectItem value="pay_link">Email a payment link</SelectItem>
+                      <SelectItem value="auto_charge">Charge the saved card</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </SettingsRow>
+                <SettingsRow
+                  label="Timing and retries"
+                  description="Charge this many hours before a period ends, keep trying for the grace window, and pause after the failed attempts."
+                  note={
+                    numberErrors.length > 0 ? (
+                      <ul role="alert" className="space-y-0.5 text-destructive">
+                        {numberErrors.map((key) => (
+                          <li key={key} className="[overflow-wrap:anywhere]">
+                            {AUTO_EXTEND_NUMBER_FIELDS[key].label}: {numberMessage(key)}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : undefined
+                  }
+                >
+                  {NUMBER_KEYS.map((key) => {
+                    const field = AUTO_EXTEND_NUMBER_FIELDS[key];
+                    const fieldInvalid = Boolean(numberMessage(key));
+                    const shown = shownNumber(key);
+                    const [before, after] =
+                      key === "auto_extend_default_lead_hours"
+                        ? ["Charge", "h early"]
+                        : key === "auto_extend_grace_hours"
+                          ? ["Grace", "h"]
+                          : ["Retries", ""];
+                    return (
+                      <label key={key} className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                        {before}
+                        <Input
+                          id={`v2_${key}`}
+                          type="number"
+                          inputMode="numeric"
+                          min={field.min}
+                          max={field.max}
+                          step={1}
+                          value={shown}
+                          onChange={(e) => setDrafts((prev) => ({ ...prev, [key]: e.target.value }))}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                          }}
+                          disabled={!canEdit || busy}
+                          aria-invalid={fieldInvalid || undefined}
+                          aria-label={`${field.label} (${field.min}–${field.max} ${field.unit})`}
+                          className="w-20 tabular-nums"
+                          // Wide enough for every digit: 80px cut "9999999" to "999999" on a phone.
+                          style={shown.length > 4 ? { minWidth: `calc(${Math.min(shown.length, 16)}ch + 1.75rem)` } : undefined}
+                        />
+                        {after}
+                      </label>
+                    );
+                  })}
+                </SettingsRow>
+              </>
+            ) : (
+              <SettingsRow
+                label="Off for new rentals"
+                description="Rentals end on their return date. Turn this on to offer weekly or monthly renewals when you create a rental."
+              />
+            )}
+          </SettingsPanel>
+        </SettingsRowAlignProvider>
       </SettingsReadOnlyFieldset>
     </div>
   );

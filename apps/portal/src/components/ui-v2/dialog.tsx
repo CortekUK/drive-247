@@ -62,10 +62,22 @@ function DialogContent({
   return (
     <DialogPortal>
       <DialogOverlay />
+      {/*
+        The four `slide-*-1/2` classes are NOT a slide: they are what keeps the
+        dialog centred WHILE it animates. `animate-in` runs the plugin's `enter`
+        keyframe, whose `from` sets `transform: translate3d(var(--tw-enter-translate-x,0),
+        var(--tw-enter-translate-y,0),0) scale3d(...)` — a transform that replaces
+        the `-translate-x-1/2 -translate-y-1/2` centring for the length of the
+        animation. Without them the dialog starts with its top-left corner on the
+        centre of the screen and snaps back at the end, which reads as flying in
+        from the bottom right. They set the enter/exit translate vars to -50%, so
+        the keyframe carries the centring and the dialog simply grows from the
+        middle. The v1 kit has always had the same compensation.
+      */}
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-6 rounded-4xl bg-popover p-6 text-sm text-popover-foreground shadow-xl ring-1 ring-foreground/5 duration-100 outline-none sm:max-w-md dark:ring-foreground/10 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
+          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-6 rounded-4xl bg-popover p-6 text-sm text-popover-foreground shadow-xl ring-1 ring-foreground/5 duration-100 outline-none sm:max-w-md dark:ring-foreground/10 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-1/2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-1/2",
           className
         )}
         {...props}

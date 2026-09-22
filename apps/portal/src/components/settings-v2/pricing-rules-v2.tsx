@@ -1,17 +1,31 @@
 "use client";
 
 /**
- * v2 Settings (northwind): the Custom pricing page (`?tab=pricing`, formerly
- * "Pricing rules"; the tab key and the manager permission are unchanged). When
- * the monthly rate starts, weekend pricing, and holiday pricing, each with every state an operator can
- * meet: first load, a failed read, nothing configured, view-only access,
- * unsaved / saving / failed saves, and extreme data (long names, past holidays,
- * huge percentages, 100+ holidays).
+ * v2 Settings (northwind): Weekend and holiday pricing (`?tab=pricing`,
+ * formerly "Custom pricing" and before that "Pricing rules"; the tab key and
+ * the manager permission are unchanged), plus the monthly rate section that
+ * General mounts. Each part has every state an operator can meet: first load,
+ * a failed read, nothing configured, view-only access, unsaved / saving /
+ * failed saves, and extreme data (long names, past holidays, huge
+ * percentages, 100+ holidays).
+ *
+ *   PricingRulesV2         Weekend pricing, then Holiday pricing.
+ *   MonthlyRateSectionV2   "Monthly rate starts at", moved to General (D3).
+ *                          Same save key ("pricing-monthly-tier"), same
+ *                          behaviour; General's SettingsSection gives it its
+ *                          heading (MONTHLY_RATE_SECTION has the copy).
  *
  * v1 keeps `components/settings/pricing-rules-settings.tsx`, untouched. This
  * uses the same hooks (`useWeekendPricing`, `useTenantHolidays`) and sends the
  * same payloads. Holiday edits still send `excluded_vehicle_ids: []`, as v1
  * does; the dialog now warns when that clears a holiday's vehicle exclusions.
+ *
+ * The copy says what the pricing engine does (`lib/calculate-rental-price.ts`,
+ * the same file in booking): surcharges apply to every booking that includes
+ * the day, weekly and monthly ones too (on their per-day price); and when a
+ * holiday falls on a weekend day, only the holiday's surcharge applies unless
+ * `stack_surcharges` is on, which adds the two together. It is NOT "the higher
+ * one": a 5% holiday on a 10% weekend day charges 5% with stacking off.
  */
 
 import { Fragment, useEffect, useState } from "react";
@@ -56,7 +70,7 @@ import {
   ListTableHeader,
   useProgressiveRows,
 } from "@/components/shared/list-table-v2";
-import { SettingsField, SettingsPanel, SettingsRow, Unit, useSettingsPageSave } from "@/components/settings-v2/settings-kit";
+import { SettingsField, SettingsPanel, SettingsRow, SettingsRowAlignProvider, Unit, useSettingsPageSave } from "@/components/settings-v2/settings-kit";
 import {
   SettingsDependencyNotice,
   SettingsEmptyState,
@@ -111,6 +125,28 @@ const DAY_LABELS = [
   { value: 6, label: "Sat" },
 ];
 
+/** Title and description for the monthly rate's section heading (General's `SettingsSection`). */
+export const MONTHLY_RATE_SECTION = {
+  title: "Monthly rate",
+  description: "When a rental is long enough to be priced at your monthly rate instead of the daily or weekly one.",
+} as const;
+
+/** The section key the monthly rate registers with the page's save bar. `business-rules-logic.ts` reads it. */
+export const MONTHLY_RATE_SAVE_KEY = "pricing-monthly-tier";
+
+/**
+ * The "Holiday on a weekend day" row (`tenants.stack_surcharges`). Off, the
+ * holiday's surcharge is the only one charged that day; on, the weekend's is
+ * added to it. `off`/`on` label the switch's current state beside it.
+ */
+export const STACK_SURCHARGES_COPY = {
+  label: "Holiday on a weekend day",
+  description:
+    "Off: only the holiday surcharge is charged. On: the weekend surcharge is added to it, so a 20% holiday on a 10% weekend day costs 30% more.",
+  off: "Holiday only",
+  on: "Add both",
+} as const;
+
 export interface MonthlyTierProps {
   value: number;
   savedValue: number | null | undefined;
@@ -125,13 +161,12 @@ export interface PricingRulesV2Props {
   registerSave?: RegisterSectionSave;
   /** Weekend pricing's unsaved edits (the page's `pricingDirty`). */
   onDirtyChange?: (dirty: boolean) => void;
-  monthlyTier?: MonthlyTierProps;
+  // No monthly rate here: it moved to General (D3) as `MonthlyRateSectionV2`.
 }
 
-export function PricingRulesV2({ canEdit, registerSave, onDirtyChange, monthlyTier }: PricingRulesV2Props) {
+export function PricingRulesV2({ canEdit, registerSave, onDirtyChange }: PricingRulesV2Props) {
   return (
     <div className="pointer-events-auto space-y-10">
-      {monthlyTier && <MonthlyTierSection {...monthlyTier} canEdit={canEdit} registerSave={registerSave} />}
       <WeekendPricingSection canEdit={canEdit} registerSave={registerSave} onDirtyChange={onDirtyChange} />
       <HolidayPricingSection canEdit={canEdit} />
     </div>
@@ -142,7 +177,35 @@ export function PricingRulesV2({ canEdit, registerSave, onDirtyChange, monthlyTi
 /* Monthly rate                                                                */
 /* -------------------------------------------------------------------------- */
 
-function MonthlyTierSection({
+export interface MonthlyRateSectionV2Props {
+  canEdit: boolean;
+  registerSave?: RegisterSectionSave;
+  monthlyTier: MonthlyTierProps;
+  /**
+   * Draw the section's own "Monthly rate" heading. Leave it off (the default)
+   * inside General, where `<SettingsSection title={MONTHLY_RATE_SECTION.title}
+   * description={MONTHLY_RATE_SECTION.description}>` already heads it.
+   */
+  withHeading?: boolean;
+}
+
+/**
+ * "Monthly rate starts at": one row, saved through the page's save bar under
+ * `MONTHLY_RATE_SAVE_KEY`. The same component, save and behaviour the Custom
+ * pricing page had, lifted out so General can mount it.
+ */
+export function MonthlyRateSectionV2({ canEdit, registerSave, monthlyTier, withHeading = false }: MonthlyRateSectionV2Props) {
+  const body = <MonthlyRateBody {...monthlyTier} canEdit={canEdit} registerSave={registerSave} />;
+  if (!withHeading) return body;
+  return (
+    <section aria-labelledby="v2-monthly-rate" className="space-y-3">
+      <SectionHeader id="v2-monthly-rate" title={MONTHLY_RATE_SECTION.title} description={MONTHLY_RATE_SECTION.description} />
+      {body}
+    </section>
+  );
+}
+
+function MonthlyRateBody({
   value,
   savedValue,
   onChange,
@@ -155,7 +218,7 @@ function MonthlyTierSection({
   const dirty = read.hasData && Number(value) !== Number(saved);
   const pageSave = useSettingsPageSave();
   const save = useSectionSave({
-    sectionKey: "pricing-monthly-tier",
+    sectionKey: MONTHLY_RATE_SAVE_KEY,
     isDirty: dirty,
     registerSave,
     signature: String(value),
@@ -165,60 +228,57 @@ function MonthlyTierSection({
   const options = [30, 31].includes(Number(value)) ? [30, 31] : [30, 31, Number(value)];
 
   return (
-    <section aria-labelledby="v2-monthly-rate" className="space-y-3">
-      <SectionHeader
-        id="v2-monthly-rate"
-        title="Monthly rate"
-        description="When a rental is long enough to be priced at your monthly rate instead of the daily or weekly one."
-      />
-      <ReadGate read={read} thing="monthly pricing" rows={1}>
-        <SettingsReadOnlyFieldset readOnly={!canEdit}>
-          <SettingsPanel>
-            <SettingsRow
-              label="Monthly rate starts at"
-              description="Rentals this long or longer use the monthly rate. Also used for mileage allowance and extensions."
-              note={
-                // Inside the page's save bar only a failed save is said here.
-                canEdit && (pageSave ? save.status === "error" : save.status !== "idle") ? (
-                  <SettingsSaveState
-                    status={save.status}
-                    error={save.error}
-                    onRetry={pageSave ? undefined : save.retry}
-                    onDiscard={pageSave ? undefined : () => onChange(Number(saved))}
-                  />
-                ) : undefined
-              }
-            >
-              <Select value={String(value)} onValueChange={(next) => onChange(parseInt(next))}>
-                <SelectTrigger className="w-28" aria-label="Monthly rate starts at">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent tone="surface">
-                  {options.map((days) => (
-                    <SelectItem key={days} value={String(days)}>
-                      {days} days
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {canEdit && !pageSave && (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={dirty ? "default" : "outline"}
-                  disabled={!dirty || save.saving}
-                  aria-busy={save.saving || undefined}
-                  onClick={save.trigger}
-                >
-                  {save.saving && <Loader2 className="animate-spin" data-icon="inline-start" />}
-                  Save
-                </Button>
-              )}
-            </SettingsRow>
-          </SettingsPanel>
-        </SettingsReadOnlyFieldset>
-      </ReadGate>
-    </section>
+    <ReadGate read={read} thing="monthly pricing" rows={1}>
+      <SettingsReadOnlyFieldset readOnly={!canEdit}>
+        {/* Controls at the end of the row, as on Locations: left-aligned they
+            sat mid-row with the whole right half of the panel empty. */}
+        <SettingsRowAlignProvider align="end">
+        <SettingsPanel>
+          <SettingsRow
+            label="Monthly rate starts at"
+            description="Rentals this long or longer use the monthly rate. Also used for mileage allowance and extensions."
+            note={
+              // Inside the page's save bar only a failed save is said here.
+              canEdit && (pageSave ? save.status === "error" : save.status !== "idle") ? (
+                <SettingsSaveState
+                  status={save.status}
+                  error={save.error}
+                  onRetry={pageSave ? undefined : save.retry}
+                  onDiscard={pageSave ? undefined : () => onChange(Number(saved))}
+                />
+              ) : undefined
+            }
+          >
+            <Select value={String(value)} onValueChange={(next) => onChange(parseInt(next))}>
+              <SelectTrigger className="w-28" aria-label="Monthly rate starts at">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent tone="surface">
+                {options.map((days) => (
+                  <SelectItem key={days} value={String(days)}>
+                    {days} days
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {canEdit && !pageSave && (
+              <Button
+                type="button"
+                size="sm"
+                variant={dirty ? "default" : "outline"}
+                disabled={!dirty || save.saving}
+                aria-busy={save.saving || undefined}
+                onClick={save.trigger}
+              >
+                {save.saving && <Loader2 className="animate-spin" data-icon="inline-start" />}
+                Save
+              </Button>
+            )}
+          </SettingsRow>
+        </SettingsPanel>
+        </SettingsRowAlignProvider>
+      </SettingsReadOnlyFieldset>
+    </ReadGate>
   );
 }
 
@@ -303,17 +363,19 @@ function WeekendPricingSection({
       <SectionHeader
         id="v2-weekend-pricing"
         title="Weekend pricing"
-        description="A surcharge on the daily rate for the days you pick. Bookings of 7 days or more are not affected."
+        description="Charge more on the days you pick. It applies to every booking that includes them, weekly and monthly ones too."
       />
       <ReadGate read={read} thing="weekend pricing" rows={3}>
         <SettingsReadOnlyFieldset readOnly={!canEdit}>
+          {/* Controls at the end of the row, like the monthly rate above. */}
+          <SettingsRowAlignProvider align="end">
           <SettingsPanel
             footer={canEdit ? <SaveFooter save={save} disabled={!dirty || blocked} onDiscard={discard} /> : undefined}
           >
             <SettingsRow
               label="Surcharge"
               htmlFor="v2-weekend-percent"
-              description="Added to the daily rate on the days below."
+              description="Added to the day's price on the days below."
               note={percentNote ? <IssueLine issue={percentNote} id="v2-weekend-percent-note" /> : undefined}
             >
               <Input
@@ -361,13 +423,23 @@ function WeekendPricingSection({
               </div>
             </SettingsRow>
             <SettingsRow
-              label="Stack surcharges"
+              label={STACK_SURCHARGES_COPY.label}
               htmlFor="v2-stack-surcharges"
-              description="When a day matches more than one surcharge (a weekend that is also a holiday), add them together. Off: only the highest one applies."
+              description={<span id="v2-stack-surcharges-help">{STACK_SURCHARGES_COPY.description}</span>}
             >
-              <Switch id="v2-stack-surcharges" checked={stack} onCheckedChange={setStack} />
+              <Switch
+                id="v2-stack-surcharges"
+                checked={stack}
+                onCheckedChange={setStack}
+                aria-describedby="v2-stack-surcharges-help v2-stack-surcharges-state"
+              />
+              {/* What the switch does right now, in words: on/off alone does not say it. */}
+              <Unit>
+                <span id="v2-stack-surcharges-state">{stack ? STACK_SURCHARGES_COPY.on : STACK_SURCHARGES_COPY.off}</span>
+              </Unit>
             </SettingsRow>
           </SettingsPanel>
+          </SettingsRowAlignProvider>
         </SettingsReadOnlyFieldset>
       </ReadGate>
     </section>
@@ -475,16 +547,16 @@ function HolidayPricingSection({ canEdit }: { canEdit: boolean }) {
     setSaveError(null);
   };
 
-  const hasRows = read.hasData && holidays.length > 0;
-
   return (
     <section aria-labelledby="v2-holiday-pricing" className="space-y-3">
       <SectionHeader
         id="v2-holiday-pricing"
         title="Holiday pricing"
-        description="Surcharges for date ranges such as Christmas. A holiday takes priority over weekend pricing."
+        description="Charge more on date ranges such as Christmas. It applies to every booking that includes those dates."
         action={
-          canEdit && hasRows ? (
+          // One place to add a holiday, with or without rows, once the list has
+          // loaded (never over a skeleton or a failed read).
+          canEdit && read.hasData ? (
             <Button type="button" onClick={openAdd} className="w-full sm:w-auto">
               <Plus data-icon="inline-start" />
               Add holiday
@@ -493,24 +565,20 @@ function HolidayPricingSection({ canEdit }: { canEdit: boolean }) {
         }
       />
 
-      <ReadGate read={read} thing="holiday pricing" rows={3} variant="table" columns={4}>
+      <ReadGate read={read} thing="holiday pricing" rows={3} variant="table" columns={4} surface="settings">
         {holidays.length === 0 ? (
+          // One line, not a table's worth of card: the header already has Add holiday.
           <SettingsEmptyState
+            variant="inline"
             icon={CalendarRange}
             headline="No holiday surcharges yet"
-            body={
-              canEdit
-                ? "Charge more on your busiest dates. A holiday surcharge applies to bookings under 7 days that include those dates."
-                : "No holiday surcharges are set up. Ask an admin if you need one."
-            }
-            points={canEdit ? ["Set a date range and a percentage", "Repeat it every year, or run it once"] : undefined}
-            primaryAction={canEdit ? { label: "Add holiday", icon: Plus, onClick: openAdd } : undefined}
+            body={canEdit ? "Add one to charge more on your busiest dates." : "Ask an admin if you need one."}
           />
         ) : (
           <TooltipProvider delayDuration={300}>
-            <ListTable rows={rows} minWidth="min-w-0">
+            <ListTable rows={rows} minWidth="min-w-0" surface="settings">
               <ListTableHeader>
-                <ListHead>Holiday</ListHead>
+                <ListHead className="text-left">Holiday</ListHead>
                 <ListHead className="hidden w-[30%] sm:table-cell">Dates</ListHead>
                 <ListHead className="w-[8rem] sm:w-[16%]">Surcharge</ListHead>
                 <ListHead className="hidden w-[12%] md:table-cell">Repeats</ListHead>
@@ -526,9 +594,10 @@ function HolidayPricingSection({ canEdit }: { canEdit: boolean }) {
                   const dates = formatHolidayDates(holiday.start_date, holiday.end_date);
                   return (
                     <ListRow key={holiday.id}>
-                      <ListCell>
-                        {/* Centred like every other v2 cell: a flex row ignores the cell's text-center. */}
-                        <div className="flex min-w-0 items-center justify-center gap-2">
+                      <ListCell className="text-left">
+                        {/* The name column reads left, like a list of names: centred in a
+                            wide column it floated mid-cell with a gap down its left side. */}
+                        <div className="flex min-w-0 items-center justify-start gap-2">
                           <TruncatedText
                             text={holiday.name}
                             className={cn(LIST_CLASSES.identifier, "min-w-0", past && "text-muted-foreground")}
@@ -587,7 +656,7 @@ function HolidayPricingSection({ canEdit }: { canEdit: boolean }) {
                 })}
               </ListBody>
             </ListTable>
-            <ListFooter rows={rows} one="holiday" many="holidays" />
+            <ListFooter rows={rows} one="holiday" many="holidays" hideWhenAllShown />
           </TooltipProvider>
         )}
       </ReadGate>
@@ -602,7 +671,7 @@ function HolidayPricingSection({ canEdit }: { canEdit: boolean }) {
           <DialogHeader>
             <DialogTitle>{editing ? "Edit holiday" : "Add holiday"}</DialogTitle>
             <DialogDescription>
-              A surcharge on the daily rate for bookings under 7 days that include these dates.
+              Added to the day&apos;s price on these dates, for every booking that includes them.
             </DialogDescription>
           </DialogHeader>
           <form

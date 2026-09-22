@@ -78,6 +78,7 @@ import {
   SettingsSaveState,
 } from '@/components/settings-v2/section-states';
 import {
+  SETTINGS_COLUMN_BESIDE_TRAX,
   SettingsPageHeader,
   SettingsPageSaveProvider,
   SettingsPanel,
@@ -532,7 +533,11 @@ const V2_PAGE_TITLE = 'Branding';
 // md:pt-[26px]: no breadcrumb or Back button, so the header starts with the 32px
 // title, centred on the sidebar switch's row (50 + 26 + 16 = 92), as on every
 // other v2 settings page.
-const V2_PAGE_CLASS = 'w-full max-w-[1160px] space-y-8 pb-16 md:pt-[26px]';
+// SETTINGS_COLUMN_BESIDE_TRAX: the same column every other v2 settings page
+// uses, so while the floating Trax panel is open this column stops short of it
+// instead of running under it. TraxPanel is mounted on every dashboard route,
+// so without it the panel covered the brand-colour controls and the save bar.
+const V2_PAGE_CLASS = `w-full max-w-[1160px] space-y-8 pb-16 md:pt-[26px] ${SETTINGS_COLUMN_BESIDE_TRAX}`;
 /** Between the three sections: close enough to read as one page (was space-y-10). */
 const V2_SECTIONS_CLASS = 'space-y-8';
 

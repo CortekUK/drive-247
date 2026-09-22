@@ -2,9 +2,10 @@
 
 /**
  * v2 (northwind): the "All Promo Codes" table on Settings → Promo Codes, built
- * from the rentals list's kit (`components/shared/list-table-v2`). No pager:
- * rows arrive 25 at a time as the table scrolls, with one line under the card
- * saying how much is shown.
+ * from the rentals list's kit (`components/shared/list-table-v2`) on its flat
+ * settings surface (`surface="settings"`). No pager: rows arrive 25 at a time
+ * as the table scrolls, with one line under the table saying how much is shown
+ * while more are to come (none once every code is on screen).
  *
  * Rows open nothing. There is no promo code record route, and the v1 row opens
  * nothing either. Its three controls are kept with the Settings page's own
@@ -238,28 +239,32 @@ export function PromoCodesTableV2<T extends PromoCodeRowV2>({
       </ul>
 
       <div className="hidden sm:block">
-        <ListTable rows={promoRows} minWidth="min-w-[880px]">
+        <ListTable rows={promoRows} minWidth="min-w-[880px]" surface="settings">
           <ListTableHeader>
             {/* Widths measured at the 944px card with Manrope. Code holds a
                 17-character code and its copy mark; Value "AED 12,500.00"; each
                 date "May 28, 2026"; Max users and Auto-apply their own headings,
                 which are wider than any value under them. Name takes the rest and
                 truncates with its full text in a tooltip. */}
-            <ListHead className="w-[16%]">Name</ListHead>
+            <ListHead className="w-[16%] text-left">Name</ListHead>
             <ListHead className="w-[19%]">Code</ListHead>
             <ListHead className="w-[13.5%]">Value</ListHead>
             <ListHead className="w-[12.5%]">Created</ListHead>
             <ListHead className="w-[12.5%]">Expires</ListHead>
             <ListHead className="w-[10%]">Max users</ListHead>
             <ListHead className="w-[10.5%]">Auto-apply</ListHead>
-            <ListHead className="w-[6%] text-right">
-              <span className="sr-only">Actions</span>
-            </ListHead>
+            {/* The actions column only for someone who can use it: for a viewer
+                it was a blank column with nothing under its blank heading. */}
+            {canEdit && (
+              <ListHead className="w-[6%] text-right">
+                <span className="sr-only">Actions</span>
+              </ListHead>
+            )}
           </ListTableHeader>
           <ListBody>
             {promoRows.visible.map((promo) => (
               <ListRow key={promo.id}>
-                <ListCell>
+                <ListCell className="text-left">
                   <span className={`block truncate ${LIST_CLASSES.identifier}`} title={promo.name}>
                     {promo.name}
                   </span>
@@ -304,15 +309,17 @@ export function PromoCodesTableV2<T extends PromoCodeRowV2>({
                 {/* Edit and Delete, v1's two buttons, in the ⋯ menu. Clicks on the
                     trigger and on its items (portalled, but still React children
                     of this cell) stop here. */}
-                <ListCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                  {canEdit && <PromoRowMenu promo={promo} onEdit={onEdit} onDelete={onDelete} />}
-                </ListCell>
+                {canEdit && (
+                  <ListCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                    <PromoRowMenu promo={promo} onEdit={onEdit} onDelete={onDelete} />
+                  </ListCell>
+                )}
               </ListRow>
             ))}
           </ListBody>
         </ListTable>
       </div>
-      <ListFooter rows={promoRows} one="promo code" many="promo codes" />
+      <ListFooter rows={promoRows} one="promo code" many="promo codes" hideWhenAllShown />
     </>
   );
 }

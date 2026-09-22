@@ -34,7 +34,13 @@
  *
  * HEADINGS
  *   SETTINGS_PAGE_TITLE     the page's h1, bold
- *   SETTINGS_SECTION_TITLE  a section's h2, semibold, never a line under it
+ *   SETTINGS_SECTION_TITLE  a section's h2, semibold. `SettingsSection` draws
+ *                           no line under it. Locations is the one page that
+ *                           does (team lead, Sep 19 2026 — its two sides are
+ *                           headed outside their panels and the divider is
+ *                           what separates them); it draws its own heading
+ *                           block and is pinned by
+ *                           __tests__/components/settings-locations-lane-v2.
  *
  * SECTIONS AND DEEP LINKS
  *   <SettingsSection anchor="security-deposit" title=… description=…>
@@ -42,6 +48,13 @@
  *   useScrollToSection(id, ready)
  *     scrolls that section to the top once the page's data is in, for a
  *     `?tab=preauth` link or a `#settings-…` hash
+ *
+ * BESIDE THE TRAX PANEL
+ *   SETTINGS_COLUMN_BESIDE_TRAX   add to the page column: while the floating
+ *                                 Trax panel is open it stops short of it
+ *   SettingsRow                   stacks (label above control) while the
+ *                                 panel is open on a screen too narrow for
+ *                                 the 420px label column beside it
  *
  * TABS INSIDE A PAGE (reusable)
  *   <SettingsTabs label="General" tabs={[{ value, label }]} value onValueChange>
@@ -57,6 +70,14 @@
  *   <SettingsRowAlignProvider align="end">  every SettingsRow inside puts its
  *                                           control at the far end of the row
  *   <SettingsRow align="end">               one row. The default is "start".
+ *
+ *   This is the house style for a settings FORM, and a section owns it rather
+ *   than inheriting it: each panel in locations-v2, pricing-rules-v2,
+ *   fees-deposit-v2, payment-modes-v2 and business-rules-pages wraps itself in
+ *   the provider, so it reads the same whichever page mounts it (the return
+ *   reminder panel sits on Customer messages, not on a General-lane page).
+ *   The settings page's own `V2_PAGES_CONTROLS_AT_END` then only has to cover
+ *   the rows written in `settings/page.tsx` itself.
  */
 
 import { createContext, useContext, useEffect, useRef, type ReactNode } from "react";
@@ -72,6 +93,44 @@ import { cn } from "@/lib/utils";
 export const SETTINGS_PAGE_TITLE = "font-heading text-2xl font-bold tracking-tight text-foreground";
 /** A section title (and a panel title). */
 export const SETTINGS_SECTION_TITLE = "font-heading text-base font-semibold tracking-tight text-foreground";
+
+/* -------------------------------------------------------------------------- */
+/* Beside the Trax panel                                                       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The Trax panel floats over the bottom-right corner of the page
+ * (components/trax/trax-panel.tsx), and a settings column 1160px wide ran
+ * underneath it: the panel and its suggestion chips landed in the middle of a
+ * section, over its controls and over the page's Save changes.
+ *
+ * Added to a settings page's column (`w-full max-w-[1160px] …`), this makes
+ * the column's right edge stop short of the open panel on md and up: never
+ * wider than 1160px, never wider than the space left of the panel, never
+ * narrower than 20rem (below that there is no room for both, and the panel,
+ * which the operator can close, overlaps instead). The page's save bar is the
+ * column's last child, so it steps aside with it. The width animates with the
+ * panel's own 200ms.
+ *
+ * It keys on `data-trax-panel="open"`, which TraxPanel puts on <html>, and uses
+ * the FLOATING width (`--trax-width`, styles/v2-theme.css) even while the panel
+ * is expanded, so the page does not reflow under the expanded overlay's scrim.
+ * With Trax closed, below md, and on every v1 page (which never mounts
+ * TraxPanel) nothing matches and the column is exactly what it was.
+ */
+export const SETTINGS_COLUMN_BESIDE_TRAX =
+  "transition-[max-width] duration-200 ease-linear motion-reduce:transition-none " +
+  "md:[html[data-trax-panel=open]_&]:max-w-[min(1160px,max(20rem,calc(100%-var(--trax-width,440px)-1rem)))]";
+
+/**
+ * A settings row's grid needs ~720px (a 420px label column, the 40px gap and
+ * the panel padding, then the control). While the Trax panel is open on a
+ * screen up to 1440px wide the column is narrower than that, so rows stack as
+ * they do on a phone instead of squeezing the control to a sliver. Nothing
+ * changes with Trax closed.
+ */
+export const SETTINGS_ROW_STACKS_BESIDE_TRAX =
+  "max-[1440px]:[html[data-trax-panel=open]_&]:flex max-[1440px]:[html[data-trax-panel=open]_&]:items-stretch";
 
 export function SettingsPageHeader({
   title,
@@ -126,7 +185,9 @@ export function useSettingsPageSave(): boolean {
 /**
  * The page's Reset and Save changes. The last child of the page wrapper: where
  * the page is short it sits at the end, where it scrolls it floats 16px above
- * the bottom of the window. Both buttons wait for a genuine change.
+ * the bottom of the window. Both buttons wait for a genuine change. It is as
+ * wide as the page column, so a column carrying `SETTINGS_COLUMN_BESIDE_TRAX`
+ * keeps it clear of the open Trax panel.
  *
  * A refused save that names its field (`settingsSaveIssue`) also takes the
  * operator there — see `focusSettingsSaveIssue` below. That lives here rather
@@ -400,9 +461,13 @@ const ROW_CONTROLS_END = "flex min-w-0 flex-wrap items-center justify-start gap-
 /**
  * One setting: a left-aligned grid. The label column is 420px and the control
  * starts right after it, so it never drifts to the far edge of a wide screen.
- * The whole row stacks on a phone. With `align="end"` (or inside a
- * `SettingsRowAlignProvider align="end"`) the control sits at the end of the
- * row instead; the DOM is the same two columns either way.
+ * The whole row stacks on a phone, and beside an open Trax panel on a screen
+ * up to 1440px wide (`SETTINGS_ROW_STACKS_BESIDE_TRAX`). With `align="end"`
+ * (or inside a `SettingsRowAlignProvider align="end"`) the control sits at the
+ * end of the row instead; the DOM is the same two columns either way. Only the
+ * default layout takes the Trax stacking rule: it is the fixed 420px label
+ * column that squeezes the control beside the panel, and an "end" row's label
+ * column is elastic, so it narrows on its own without the control losing room.
  */
 export function SettingsRow({
   label,
@@ -431,7 +496,7 @@ export function SettingsRow({
         className={
           end
             ? ROW_GRID_END
-            : "flex flex-col gap-3 md:grid md:grid-cols-[minmax(0,420px)_minmax(0,1fr)] md:items-center md:gap-x-10"
+            : `flex flex-col gap-3 md:grid md:grid-cols-[minmax(0,420px)_minmax(0,1fr)] md:items-center md:gap-x-10 ${SETTINGS_ROW_STACKS_BESIDE_TRAX}`
         }
       >
         <div className={end ? ROW_LABEL_END : "min-w-0"}>

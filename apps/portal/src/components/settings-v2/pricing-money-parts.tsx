@@ -26,6 +26,7 @@ import {
 } from "@/components/settings-v2/section-states";
 import { ISSUE_TEXT_CLASS, type FieldIssue } from "@/components/settings-v2/pricing-money-logic";
 import { SETTINGS_SECTION_TITLE, useSettingsPageSave } from "@/components/settings-v2/settings-kit";
+import type { ListSurface } from "@/components/shared/list-table-v2";
 import { cn } from "@/lib/utils";
 
 /* -------------------------------------------------------------------------- */
@@ -171,6 +172,7 @@ export function ReadGate({
   rows,
   variant = "form",
   columns,
+  surface,
   children,
 }: {
   read: SettingsReadState;
@@ -178,10 +180,14 @@ export function ReadGate({
   rows: number;
   variant?: "form" | "table";
   columns?: number;
+  /** `table` only: the surface of the `ListTable` that replaces the skeleton. */
+  surface?: ListSurface;
   children: ReactNode;
 }) {
   if (read.isLoading) {
-    return <SettingsSectionSkeleton variant={variant} rows={rows} columns={columns} label={`Loading ${thing}`} />;
+    return (
+      <SettingsSectionSkeleton variant={variant} rows={rows} columns={columns} surface={surface} label={`Loading ${thing}`} />
+    );
   }
   if (read.isError && !read.hasData) {
     return (

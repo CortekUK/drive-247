@@ -236,9 +236,9 @@ export function LockboxTemplatesSectionV2({
 
   const heading = (
     <div className="flex flex-wrap items-start justify-between gap-3">
-      <div className="min-w-0 space-y-1">
+      <div className="min-w-0">
         <h2 className={SETTINGS_SECTION_TITLE}>Lockbox messages</h2>
-        <p className="text-sm text-muted-foreground">
+        <p className="mt-0.5 text-sm text-muted-foreground">
           {withSms ? "What customers receive with their lockbox code." : "The email customers receive with their lockbox code."}
         </p>
       </div>
@@ -255,7 +255,7 @@ export function LockboxTemplatesSectionV2({
 
   const wrap = (body: ReactNode) => (
     <TooltipProvider>
-      <section className="space-y-4" data-settings-section="lockbox-messages">
+      <section className="space-y-3" data-settings-section="lockbox-messages">
         {heading}
         {body}
       </section>
@@ -442,7 +442,7 @@ export function LockboxTemplatesSectionV2({
     );
 
   const missingCodeCopy = (armed: boolean) => (
-    <p className="text-xs text-amber-700 dark:text-amber-400" role="alert">
+    <p className="text-xs panel-ink-warn" role="alert">
       This message doesn&apos;t include <code className="font-mono">{LOCKBOX_CODE_VARIABLE}</code>, so the customer won&apos;t get
       the code to open the box.{armed ? (pageSave ? " Press Save changes again to keep it anyway." : " Press Save again to keep it anyway.") : ""}
     </p>
@@ -580,7 +580,7 @@ export function LockboxTemplatesSectionV2({
             {smsIssues.bodyError && <p className="text-xs text-destructive">{smsIssues.bodyError}</p>}
             {smsIssues.missingCode && missingCodeCopy(smsArmed)}
             {!smsReady && (
-              <p className="text-xs text-amber-700 dark:text-amber-400">
+              <p className="text-xs panel-ink-warn">
                 Text messages aren&apos;t set up, so this message isn&apos;t sent yet.{" "}
                 <Link href={integrationsHref} className="pointer-events-auto font-medium underline underline-offset-4">
                   Connect Twilio
@@ -588,7 +588,7 @@ export function LockboxTemplatesSectionV2({
               </p>
             )}
             {segments > 1 ? (
-              <p className="text-xs text-amber-700 dark:text-amber-400">
+              <p className="text-xs panel-ink-warn">
                 Likely sent as {segments} texts: with the details filled in it comes to about {smsLength} characters, and one
                 text holds {SMS_SINGLE_LIMIT}.
               </p>

@@ -898,7 +898,10 @@ function LocationSection({
         <h2 id={id} className={SETTINGS_SECTION_TITLE}>
           {title}
         </h2>
-        <p className="mt-0.5 text-[13px] text-muted-foreground">{description}</p>
+        {/* The kit's SECTION description (settings-kit.tsx `SettingsSection`),
+            which is 14px. The 13px one belongs to a PANEL's description, and
+            these headings sit outside their panels. */}
+        <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
       </div>
       {children}
     </section>

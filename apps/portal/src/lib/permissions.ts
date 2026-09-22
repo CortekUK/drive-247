@@ -322,6 +322,10 @@ export const SETTINGS_VALUE_TO_KEY: Record<string, string> = {
   // Push reuses the notifications permission key — no new grant to backfill for
   // managers who already have it.
   push: 'settings.reminders',
+  // v2 only: the Notifications page (Team emails and Push in one place). Same
+  // key again, so a manager keeps exactly the access they had. Load-bearing:
+  // an unmapped tab would fail OPEN in canViewSettings / canEditSettings.
+  notifications: 'settings.reminders',
   templates: 'settings.templates',
   // Integrations (all map to settings.integrations)
   integrations: 'settings.integrations',

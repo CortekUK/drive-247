@@ -427,13 +427,18 @@ export default function UsersManagement() {
         // action as the 32px pill centred on that line (HEADER_ACTIONS_V2 /
         // HEADER_PRIMARY_V2). "Team" is what the Settings index calls it.
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
-          <div className="min-w-0">
+          {/* The kit's `SettingsPageHeader` recipe (settings-kit.tsx), not a
+              copy of it: the same 6px gap under the title and the same 14px
+              description with its `max-w-2xl` measure cap. Hand-rolled, this
+              grew to 16px from `sm` and had no cap, so the one Settings page
+              with a header action read a size larger than the rest. */}
+          <div className="min-w-0 space-y-1.5">
             {/* The SETTINGS page title, not the list-page one. Team is opened
                 from the Settings index and reads as one of its pages, and the
                 list-page heading (text-3xl from `sm`) sat a step larger than
                 every Settings heading beside it. */}
             <h1 className={SETTINGS_PAGE_TITLE}>Team</h1>
-            <p className="text-muted-foreground text-sm sm:text-base">
+            <p className="max-w-2xl text-sm text-muted-foreground">
               Add people to your portal and choose what each person can see and change.
             </p>
           </div>

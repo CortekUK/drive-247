@@ -15,6 +15,13 @@
  * other 56 tenants never render any of this. The form state still lives in the
  * page (`rentalForm`), which keeps the page's leave-with-unsaved-changes guard.
  *
+ * LAYOUT. Each panel carries its own `SettingsRowAlignProvider align="end"`:
+ * the label and its help take the row and the control sits at its end, the
+ * house style for a v2 settings form (settings-kit.tsx, locations-v2.tsx).
+ * Owning it here rather than leaning on the page's `V2_PAGES_CONTROLS_AT_END`
+ * means every one of these panels reads the same wherever it is mounted — the
+ * return reminder sits on Customer messages, not on a General-lane page.
+ *
  * States, in the kit's order:
  *   1. first load  BusinessRentalGate: a form skeleton until the tenant's real
  *                  row is in. useRentalSettings shows DEFAULTS as placeholder
@@ -52,6 +59,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   SettingsPanel,
   SettingsRow,
+  SettingsRowAlignProvider,
   Unit,
   UnitGroup,
   UnitGroups,
@@ -146,7 +154,10 @@ const inlineLink = "font-medium text-primary underline-offset-4 hover:underline 
 /** Lockbox's Templates: a link to another page, in the brand colour, with an arrow after it. */
 const templatesLink =
   "inline-flex items-center gap-1 rounded-full text-sm font-medium text-primary underline-offset-4 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/30 dark:text-[hsl(var(--v2-link,var(--primary)))]";
-const warnText = "text-amber-600 dark:text-amber-400";
+/** A warning line, in the contrast-corrected v2 ink (styles/v2-theme.css),
+ *  the same one locations-v2 uses. Never a hardcoded amber: at 13px on the
+ *  card, `text-amber-600` measures under 4.5:1 in the light theme. */
+const warnText = "panel-ink-warn";
 /** How the lockbox code is sent. Email only: no text message or WhatsApp option. */
 const LOCKBOX_METHODS = ["email"] as const;
 
@@ -242,90 +253,92 @@ export function RequirementsPageV2({
 
   return (
     <SettingsReadOnlyFieldset readOnly={!canEdit}>
-      <SettingsPanel
-        footer={
-          canEdit ? (
-            <SectionSaveBar save={save} isDirty={isDirty} invalid={!!ageError} onSave={submit} onDiscard={discard} />
-          ) : undefined
-        }
-      >
-        <SettingsRow
-          label="Minimum driver age"
-          description={describeDriverAge(noMinimum ? "" : form.minimum_rental_age)}
-          htmlFor="v2_minimum_rental_age"
-          note={ageError ? <FieldError id="v2_minimum_rental_age_error">{ageError}</FieldError> : undefined}
-        >
-          <Input
-            id="v2_minimum_rental_age"
-            type="text"
-            inputMode="numeric"
-            maxLength={3}
-            value={form.minimum_rental_age ?? ""}
-            onChange={(e) => {
-              const raw = digitsOnly(e.target.value);
-              setForm((prev) => ({ ...prev, minimum_rental_age: raw === "" ? "" : parseInt(raw, 10) }));
-            }}
-            placeholder="None"
-            aria-invalid={ageError ? true : undefined}
-            aria-describedby={ageError ? "v2_minimum_rental_age_error" : undefined}
-            className="w-20 tabular-nums"
-          />
-          <Unit>years</Unit>
-        </SettingsRow>
-
-        <SettingsRow
-          label="ID document"
-          description="The document customers verify before they can drive."
-          htmlFor="v2_verification_document_type"
-          note={
-            customDoc && docLabel ? (
-              <p className="text-muted-foreground [overflow-wrap:anywhere]">
-                Saved as &ldquo;{docLabel.slice(0, -" (current)".length)}&rdquo;, which isn&apos;t one of the standard choices.
-              </p>
+      <SettingsRowAlignProvider align="end">
+        <SettingsPanel
+          footer={
+            canEdit ? (
+              <SectionSaveBar save={save} isDirty={isDirty} invalid={!!ageError} onSave={submit} onDiscard={discard} />
             ) : undefined
           }
         >
-          <Select
-            value={form.verification_document_type || undefined}
-            onValueChange={(value) => setForm((prev) => ({ ...prev, verification_document_type: value }))}
+          <SettingsRow
+            label="Minimum driver age"
+            description={describeDriverAge(noMinimum ? "" : form.minimum_rental_age)}
+            htmlFor="v2_minimum_rental_age"
+            note={ageError ? <FieldError id="v2_minimum_rental_age_error">{ageError}</FieldError> : undefined}
           >
-            <SelectTrigger id="v2_verification_document_type" className="w-48" title={docLabel}>
-              <SelectValue placeholder="Choose a document" />
-            </SelectTrigger>
-            <SelectContent tone="surface" align="end">
-              {docOptions.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </SettingsRow>
+            <Input
+              id="v2_minimum_rental_age"
+              type="text"
+              inputMode="numeric"
+              maxLength={3}
+              value={form.minimum_rental_age ?? ""}
+              onChange={(e) => {
+                const raw = digitsOnly(e.target.value);
+                setForm((prev) => ({ ...prev, minimum_rental_age: raw === "" ? "" : parseInt(raw, 10) }));
+              }}
+              placeholder="None"
+              aria-invalid={ageError ? true : undefined}
+              aria-describedby={ageError ? "v2_minimum_rental_age_error" : undefined}
+              className="w-20 tabular-nums"
+            />
+            <Unit>years</Unit>
+          </SettingsRow>
 
-        <SettingsRow
-          label="Allow rentals without ID verification"
-          description="For when you have checked the ID yourself. Staff must type a reason, which is saved on the rental and in your audit log."
-          note={
-            <div className="space-y-1">
-              {idWaiver.enabled && (
-                <p className={warnText}>
-                  Insurance still needs the customer&apos;s date of birth, and agreements will show blank ID fields.
+          <SettingsRow
+            label="ID document"
+            description="The document customers verify before they can drive."
+            htmlFor="v2_verification_document_type"
+            note={
+              customDoc && docLabel ? (
+                <p className="text-muted-foreground [overflow-wrap:anywhere]">
+                  Saved as &ldquo;{docLabel.slice(0, -" (current)".length)}&rdquo;, which isn&apos;t one of the standard choices.
                 </p>
-              )}
-              <p className="text-muted-foreground">
-                {idWaiver.canChange ? "Saves as soon as you switch it." : "Only a head admin can change this."}
-              </p>
-            </div>
-          }
-        >
-          <Switch
-            checked={idWaiver.enabled}
-            disabled={idWaiver.saving || !idWaiver.canChange}
-            onCheckedChange={idWaiver.onToggle}
-            aria-label="Allow rentals without ID verification"
-          />
-        </SettingsRow>
-      </SettingsPanel>
+              ) : undefined
+            }
+          >
+            <Select
+              value={form.verification_document_type || undefined}
+              onValueChange={(value) => setForm((prev) => ({ ...prev, verification_document_type: value }))}
+            >
+              <SelectTrigger id="v2_verification_document_type" className="w-48" title={docLabel}>
+                <SelectValue placeholder="Choose a document" />
+              </SelectTrigger>
+              <SelectContent tone="surface" align="end">
+                {docOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </SettingsRow>
+
+          <SettingsRow
+            label="Allow rentals without ID verification"
+            description="For when you have checked the ID yourself. Staff must type a reason, which is saved on the rental and in your audit log."
+            note={
+              <div className="space-y-1">
+                {idWaiver.enabled && (
+                  <p className={warnText}>
+                    Insurance still needs the customer&apos;s date of birth, and agreements will show blank ID fields.
+                  </p>
+                )}
+                <p className="text-muted-foreground">
+                  {idWaiver.canChange ? "Saves as soon as you switch it." : "Only a head admin can change this."}
+                </p>
+              </div>
+            }
+          >
+            <Switch
+              checked={idWaiver.enabled}
+              disabled={idWaiver.saving || !idWaiver.canChange}
+              onCheckedChange={idWaiver.onToggle}
+              aria-label="Allow rentals without ID verification"
+            />
+          </SettingsRow>
+        </SettingsPanel>
+      </SettingsRowAlignProvider>
     </SettingsReadOnlyFieldset>
   );
 }
@@ -402,156 +415,158 @@ export function DurationPageV2({ form, setForm, saved, canEdit, onSave, register
 
   return (
     <SettingsReadOnlyFieldset readOnly={!canEdit}>
-      <SettingsPanel
-        footer={
-          canEdit ? (
-            <SectionSaveBar save={save} isDirty={isDirty} invalid={invalid} onSave={submit} onDiscard={discard} />
-          ) : undefined
-        }
-      >
-        <SettingsRow
-          label="Advance notice"
-          description={
-            <>
-              How long before pickup a booking must be made.
-              {leadHint && <span className="whitespace-nowrap tabular-nums"> ({leadHint})</span>}
-            </>
-          }
-          note={
-            errors.lead ? (
-              <FieldError>{errors.lead}</FieldError>
-            ) : unitNote ? (
-              <p className="text-muted-foreground">{unitNote}</p>
+      <SettingsRowAlignProvider align="end">
+        <SettingsPanel
+          footer={
+            canEdit ? (
+              <SectionSaveBar save={save} isDirty={isDirty} invalid={invalid} onSave={submit} onDiscard={discard} />
             ) : undefined
           }
         >
-          <Input
-            type="text"
-            inputMode="numeric"
-            maxLength={unit === "days" ? 3 : 4}
-            value={form.booking_lead_time_value || ""}
-            onChange={(e) => {
-              setUnitNote(null);
-              setNumber("booking_lead_time_value", e.target.value);
-            }}
-            placeholder={unit === "days" ? "2" : "24"}
-            className={cn(numberBoxWidth(form.booking_lead_time_value, "w-20"), "tabular-nums")}
-            id="v2_booking_lead_time_value"
-            aria-label="Advance notice"
-            aria-invalid={errors.lead ? true : undefined}
-          />
-          <Select
-            value={unit}
-            onValueChange={(next: LeadUnit) => {
-              const result = switchLeadUnit(leadHours, next);
-              setUnitNote(result.blocked);
-              setForm((prev) => ({ ...prev, booking_lead_time_unit: result.unit, booking_lead_time_value: result.value }));
-            }}
+          <SettingsRow
+            label="Advance notice"
+            description={
+              <>
+                How long before pickup a booking must be made.
+                {leadHint && <span className="whitespace-nowrap tabular-nums"> ({leadHint})</span>}
+              </>
+            }
+            note={
+              errors.lead ? (
+                <FieldError>{errors.lead}</FieldError>
+              ) : unitNote ? (
+                <p className="text-muted-foreground">{unitNote}</p>
+              ) : undefined
+            }
           >
-            <SelectTrigger className="w-24" aria-label="Advance notice unit">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent tone="surface" align="end">
-              <SelectItem value="hours">hours</SelectItem>
-              <SelectItem value="days">days</SelectItem>
-            </SelectContent>
-          </Select>
-        </SettingsRow>
+            <Input
+              type="text"
+              inputMode="numeric"
+              maxLength={unit === "days" ? 3 : 4}
+              value={form.booking_lead_time_value || ""}
+              onChange={(e) => {
+                setUnitNote(null);
+                setNumber("booking_lead_time_value", e.target.value);
+              }}
+              placeholder={unit === "days" ? "2" : "24"}
+              className={cn(numberBoxWidth(form.booking_lead_time_value, "w-20"), "tabular-nums")}
+              id="v2_booking_lead_time_value"
+              aria-label="Advance notice"
+              aria-invalid={errors.lead ? true : undefined}
+            />
+            <Select
+              value={unit}
+              onValueChange={(next: LeadUnit) => {
+                const result = switchLeadUnit(leadHours, next);
+                setUnitNote(result.blocked);
+                setForm((prev) => ({ ...prev, booking_lead_time_unit: result.unit, booking_lead_time_value: result.value }));
+              }}
+            >
+              <SelectTrigger className="w-24" aria-label="Advance notice unit">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent tone="surface" align="end">
+                <SelectItem value="hours">hours</SelectItem>
+                <SelectItem value="days">days</SelectItem>
+              </SelectContent>
+            </Select>
+          </SettingsRow>
 
-        <SettingsRow
-          label="Shortest rental"
-          description="Bookings shorter than this are not allowed. Hours can be 0–23."
-          note={errors.min ? <FieldError>{errors.min}</FieldError> : undefined}
-        >
-          {/* Each box keeps its own unit: "[2] days  [4] hours", not "[2] days [4] hours". */}
-          <UnitGroups>
-            <UnitGroup>
-              <Input
-                type="text"
-                inputMode="numeric"
-                maxLength={4}
-                value={form.min_rental_days || ""}
-                onChange={(e) => setNumber("min_rental_days", e.target.value)}
-                placeholder="0"
-                className={cn(numberBoxWidth(form.min_rental_days, "w-16"), "tabular-nums")}
-                id="v2_min_rental_days"
-                aria-label="Shortest rental days"
-                aria-invalid={errors.min ? true : undefined}
-              />
-              <Unit>days</Unit>
-            </UnitGroup>
-            <UnitGroup>
-              <Input
-                type="text"
-                inputMode="numeric"
-                maxLength={2}
-                value={form.min_rental_hours || ""}
-                onChange={(e) => setNumber("min_rental_hours", e.target.value)}
-                placeholder="0"
-                className={cn(numberBoxWidth(form.min_rental_hours, "w-16"), "tabular-nums")}
-                aria-label="Shortest rental hours"
-                aria-invalid={errors.min ? true : undefined}
-              />
-              <Unit>hours</Unit>
-            </UnitGroup>
-          </UnitGroups>
-        </SettingsRow>
+          <SettingsRow
+            label="Shortest rental"
+            description="Bookings shorter than this are not allowed. Hours can be 0–23."
+            note={errors.min ? <FieldError>{errors.min}</FieldError> : undefined}
+          >
+            {/* Each box keeps its own unit: "[2] days  [4] hours", not "[2] days [4] hours". */}
+            <UnitGroups>
+              <UnitGroup>
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={4}
+                  value={form.min_rental_days || ""}
+                  onChange={(e) => setNumber("min_rental_days", e.target.value)}
+                  placeholder="0"
+                  className={cn(numberBoxWidth(form.min_rental_days, "w-16"), "tabular-nums")}
+                  id="v2_min_rental_days"
+                  aria-label="Shortest rental days"
+                  aria-invalid={errors.min ? true : undefined}
+                />
+                <Unit>days</Unit>
+              </UnitGroup>
+              <UnitGroup>
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={2}
+                  value={form.min_rental_hours || ""}
+                  onChange={(e) => setNumber("min_rental_hours", e.target.value)}
+                  placeholder="0"
+                  className={cn(numberBoxWidth(form.min_rental_hours, "w-16"), "tabular-nums")}
+                  aria-label="Shortest rental hours"
+                  aria-invalid={errors.min ? true : undefined}
+                />
+                <Unit>hours</Unit>
+              </UnitGroup>
+            </UnitGroups>
+          </SettingsRow>
 
-        <SettingsRow
-          label="Longest rental"
-          description="Bookings longer than this are not allowed."
-          note={
-            errors.max ? (
-              <FieldError>{errors.max}</FieldError>
-            ) : !errors.min ? (
-              <p className="tabular-nums text-muted-foreground">{describeDurationRange(minTotal, values.maxDays)}</p>
-            ) : undefined
-          }
-        >
-          <Input
-            type="text"
-            inputMode="numeric"
-            maxLength={5}
-            value={form.max_rental_days || ""}
-            onChange={(e) => setNumber("max_rental_days", e.target.value)}
-            placeholder="90"
-            className={cn(numberBoxWidth(form.max_rental_days, "w-20"), "tabular-nums")}
-            id="v2_max_rental_days"
-            aria-label="Longest rental days"
-            aria-invalid={errors.max ? true : undefined}
-          />
-          <Unit>days</Unit>
-        </SettingsRow>
+          <SettingsRow
+            label="Longest rental"
+            description="Bookings longer than this are not allowed."
+            note={
+              errors.max ? (
+                <FieldError>{errors.max}</FieldError>
+              ) : !errors.min ? (
+                <p className="tabular-nums text-muted-foreground">{describeDurationRange(minTotal, values.maxDays)}</p>
+              ) : undefined
+            }
+          >
+            <Input
+              type="text"
+              inputMode="numeric"
+              maxLength={5}
+              value={form.max_rental_days || ""}
+              onChange={(e) => setNumber("max_rental_days", e.target.value)}
+              placeholder="90"
+              className={cn(numberBoxWidth(form.max_rental_days, "w-20"), "tabular-nums")}
+              id="v2_max_rental_days"
+              aria-label="Longest rental days"
+              aria-invalid={errors.max ? true : undefined}
+            />
+            <Unit>days</Unit>
+          </SettingsRow>
 
-        <SettingsRow
-          label="Time between rentals"
-          description={
-            <>
-              {errors.buffer
-                ? "How long a car stays off the booking site after a rental ends, so you can clean and check it."
-                : buffer > 0
-                  ? `A car stays off the booking site for ${describeBuffer(buffer)} after a rental ends, so you can clean and check it.`
-                  : "A car can be booked again as soon as a rental ends."}{" "}
-              Up to 4,320 minutes (3 days).
-            </>
-          }
-          note={errors.buffer ? <FieldError>{errors.buffer}</FieldError> : undefined}
-        >
-          <Input
-            type="text"
-            inputMode="numeric"
-            maxLength={5}
-            value={form.buffer_time_minutes || ""}
-            onChange={(e) => setNumber("buffer_time_minutes", e.target.value)}
-            placeholder="0"
-            className={cn(numberBoxWidth(form.buffer_time_minutes, "w-20"), "tabular-nums")}
-            id="v2_buffer_time_minutes"
-            aria-label="Time between rentals in minutes"
-            aria-invalid={errors.buffer ? true : undefined}
-          />
-          <Unit>minutes</Unit>
-        </SettingsRow>
-      </SettingsPanel>
+          <SettingsRow
+            label="Time between rentals"
+            description={
+              <>
+                {errors.buffer
+                  ? "How long a car stays off the booking site after a rental ends, so you can clean and check it."
+                  : buffer > 0
+                    ? `A car stays off the booking site for ${describeBuffer(buffer)} after a rental ends, so you can clean and check it.`
+                    : "A car can be booked again as soon as a rental ends."}{" "}
+                Up to 4,320 minutes (3 days).
+              </>
+            }
+            note={errors.buffer ? <FieldError>{errors.buffer}</FieldError> : undefined}
+          >
+            <Input
+              type="text"
+              inputMode="numeric"
+              maxLength={5}
+              value={form.buffer_time_minutes || ""}
+              onChange={(e) => setNumber("buffer_time_minutes", e.target.value)}
+              placeholder="0"
+              className={cn(numberBoxWidth(form.buffer_time_minutes, "w-20"), "tabular-nums")}
+              id="v2_buffer_time_minutes"
+              aria-label="Time between rentals in minutes"
+              aria-invalid={errors.buffer ? true : undefined}
+            />
+            <Unit>minutes</Unit>
+          </SettingsRow>
+        </SettingsPanel>
+      </SettingsRowAlignProvider>
     </SettingsReadOnlyFieldset>
   );
 }
@@ -630,97 +645,99 @@ export function LockboxPageV2({
 
   return (
     <SettingsReadOnlyFieldset readOnly={!canEdit}>
-      <SettingsPanel
-        footer={
-          canEdit ? (
-            <SectionSaveBar save={save} isDirty={isDirty} invalid={!!codeError} onSave={submit} onDiscard={discard} />
-          ) : undefined
-        }
-      >
-        <SettingsRow
-          label="Lockbox handover"
-          description="On delivery rentals, staff can leave the keys in a lockbox and the code is sent to the customer."
-          note={enableNote}
+      <SettingsRowAlignProvider align="end">
+        <SettingsPanel
+          footer={
+            canEdit ? (
+              <SectionSaveBar save={save} isDirty={isDirty} invalid={!!codeError} onSave={submit} onDiscard={discard} />
+            ) : undefined
+          }
         >
-          <Switch
-            checked={enabled}
-            onCheckedChange={(checked) => setForm((prev) => ({ ...prev, lockbox_enabled: checked }))}
-            aria-label="Enable lockbox handover"
-          />
-        </SettingsRow>
+          <SettingsRow
+            label="Lockbox handover"
+            description="On delivery rentals, staff can leave the keys in a lockbox and the code is sent to the customer."
+            note={enableNote}
+          >
+            <Switch
+              checked={enabled}
+              onCheckedChange={(checked) => setForm((prev) => ({ ...prev, lockbox_enabled: checked }))}
+              aria-label="Enable lockbox handover"
+            />
+          </SettingsRow>
 
-        {enabled && (
-          <>
-            <SettingsRow
-              label="Code length"
-              description={
-                form.lockbox_code_length && !codeError
-                  ? `The Generate button on a vehicle makes a random ${form.lockbox_code_length}-digit code.`
-                  : "Leave empty to let staff type any code. Generate makes a 4-digit one."
-              }
-              htmlFor="v2_lockbox_code_length"
-              note={codeError ? <FieldError id="v2_lockbox_code_length_error">{codeError}</FieldError> : undefined}
-            >
-              <UnitGroup>
-                <Input
-                  id="v2_lockbox_code_length"
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={2}
-                  value={form.lockbox_code_length ?? ""}
-                  onChange={(e) => {
-                    const digits = digitsOnly(e.target.value);
-                    setForm((prev) => ({ ...prev, lockbox_code_length: digits === "" ? null : parseInt(digits, 10) }));
-                  }}
-                  placeholder="Any"
-                  className="w-20 tabular-nums"
-                  aria-invalid={codeError ? true : undefined}
-                  aria-describedby={codeError ? "v2_lockbox_code_length_error" : undefined}
-                />
-                <Unit>digits</Unit>
-              </UnitGroup>
-            </SettingsRow>
-
-            <SettingsRow label="Send the code by" description="Customers get their lockbox code in an email.">
-              <span data-lockbox-method="email" className="text-sm font-medium text-foreground">
-                Email
-              </span>
-            </SettingsRow>
-
-            <SettingsRow label="Send it automatically" description="After you approve the rental." htmlFor="v2_lockbox_send_offset">
-              <Select
-                value={offsetValue}
-                onValueChange={(value) =>
-                  setForm((prev) => ({ ...prev, lockbox_send_offset_minutes: value === "manual" ? null : parseInt(value, 10) }))
+          {enabled && (
+            <>
+              <SettingsRow
+                label="Code length"
+                description={
+                  form.lockbox_code_length && !codeError
+                    ? `The Generate button on a vehicle makes a random ${form.lockbox_code_length}-digit code.`
+                    : "Leave empty to let staff type any code. Generate makes a 4-digit one."
                 }
+                htmlFor="v2_lockbox_code_length"
+                note={codeError ? <FieldError id="v2_lockbox_code_length_error">{codeError}</FieldError> : undefined}
               >
-                <SelectTrigger id="v2_lockbox_send_offset" className="w-56">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent tone="surface" align="end">
-                  {offsetOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </SettingsRow>
+                <UnitGroup>
+                  <Input
+                    id="v2_lockbox_code_length"
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={2}
+                    value={form.lockbox_code_length ?? ""}
+                    onChange={(e) => {
+                      const digits = digitsOnly(e.target.value);
+                      setForm((prev) => ({ ...prev, lockbox_code_length: digits === "" ? null : parseInt(digits, 10) }));
+                    }}
+                    placeholder="Any"
+                    className="w-20 tabular-nums"
+                    aria-invalid={codeError ? true : undefined}
+                    aria-describedby={codeError ? "v2_lockbox_code_length_error" : undefined}
+                  />
+                  <Unit>digits</Unit>
+                </UnitGroup>
+              </SettingsRow>
 
-            <SettingsRow label="Lockbox message" description="The email that carries the code, and the instructions in it.">
-              {/* A link, not a button: the templates are managed in Customer
-                  messages, and the arrow says it opens another page. A
-                  view-only user's disabled fieldset never disables an <a>,
-                  and the page's leave guard asks first when there are
-                  unsaved edits. */}
-              <Link href={templatesHref} data-lockbox-templates="" className={templatesLink}>
-                Templates
-                <ArrowUpRight className="size-4 shrink-0" aria-hidden="true" />
-              </Link>
-            </SettingsRow>
-          </>
-        )}
-      </SettingsPanel>
+              <SettingsRow label="Send the code by" description="Customers get their lockbox code in an email.">
+                <span data-lockbox-method="email" className="text-sm font-medium text-foreground">
+                  Email
+                </span>
+              </SettingsRow>
+
+              <SettingsRow label="Send it automatically" description="After you approve the rental." htmlFor="v2_lockbox_send_offset">
+                <Select
+                  value={offsetValue}
+                  onValueChange={(value) =>
+                    setForm((prev) => ({ ...prev, lockbox_send_offset_minutes: value === "manual" ? null : parseInt(value, 10) }))
+                  }
+                >
+                  <SelectTrigger id="v2_lockbox_send_offset" className="w-56">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent tone="surface" align="end">
+                    {offsetOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </SettingsRow>
+
+              <SettingsRow label="Lockbox message" description="The email that carries the code, and the instructions in it.">
+                {/* A link, not a button: the templates are managed in Customer
+                    messages, and the arrow says it opens another page. A
+                    view-only user's disabled fieldset never disables an <a>,
+                    and the page's leave guard asks first when there are
+                    unsaved edits. */}
+                <Link href={templatesHref} data-lockbox-templates="" className={templatesLink}>
+                  Templates
+                  <ArrowUpRight className="size-4 shrink-0" aria-hidden="true" />
+                </Link>
+              </SettingsRow>
+            </>
+          )}
+        </SettingsPanel>
+      </SettingsRowAlignProvider>
     </SettingsReadOnlyFieldset>
   );
 }
@@ -773,78 +790,80 @@ export function ReturnReminderPanelV2({
 
   return (
     <SettingsReadOnlyFieldset readOnly={!canEdit}>
-      <SettingsPanel
-        footer={
-          canEdit ? <SectionSaveBar save={save} isDirty={isDirty} onSave={submit} onDiscard={discard} /> : undefined
-        }
-      >
-        <SettingsRow
-          label="Return reminder"
-          description={
-            enabled ? (
-              <>
-                Emailed <span className="tabular-nums">{describeReminderLead(hours)}</span> before the car is due back.{" "}
-                <Link href={emailTemplateHref} className={inlineLink}>
-                  {canEdit ? "Edit the email" : "View the email"}
-                </Link>
-              </>
-            ) : (
-              "Remind customers by email before their car is due back."
-            )
-          }
-          note={
-            enabled ? (
-              <div className="space-y-1">
-                <p className={clampNote || rangeNote ? warnText : "text-muted-foreground"}>
-                  {clampNote ?? rangeNote ?? "Between 1 and 168 hours (7 days)."}
-                </p>
-                <p className="text-muted-foreground">
-                  {smsReady ? (
-                    "Also sent as a text message, because Twilio is connected."
-                  ) : (
-                    <>
-                      Email only for now.{" "}
-                      <Link href={integrationsHref} className={inlineLink}>
-                        Connect Twilio
-                      </Link>{" "}
-                      to text it too.
-                    </>
-                  )}
-                </p>
-              </div>
-            ) : undefined
+      <SettingsRowAlignProvider align="end">
+        <SettingsPanel
+          footer={
+            canEdit ? <SectionSaveBar save={save} isDirty={isDirty} onSave={submit} onDiscard={discard} /> : undefined
           }
         >
-          <UnitGroups>
-            {enabled && (
-              <UnitGroup>
-                <Input
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={3}
-                  value={draft}
-                  onChange={(e) => {
-                    const digits = digitsOnly(e.target.value).slice(0, 3);
-                    setDraft(digits);
-                    setClampNote(null);
-                    const n = parseInt(digits, 10);
-                    if (n >= 1 && n <= 168) setForm((prev) => ({ ...prev, return_reminder_hours: n }));
-                  }}
-                  onBlur={commitDraft}
-                  className="w-20 tabular-nums"
-                  aria-label="Hours before return"
-                />
-                <Unit>hours before</Unit>
-              </UnitGroup>
-            )}
-            <Switch
-              checked={enabled}
-              onCheckedChange={(checked) => setForm((prev) => ({ ...prev, return_reminder_enabled: checked }))}
-              aria-label="Send return reminders"
-            />
-          </UnitGroups>
-        </SettingsRow>
-      </SettingsPanel>
+          <SettingsRow
+            label="Return reminder"
+            description={
+              enabled ? (
+                <>
+                  Emailed <span className="tabular-nums">{describeReminderLead(hours)}</span> before the car is due back.{" "}
+                  <Link href={emailTemplateHref} className={inlineLink}>
+                    {canEdit ? "Edit the email" : "View the email"}
+                  </Link>
+                </>
+              ) : (
+                "Remind customers by email before their car is due back."
+              )
+            }
+            note={
+              enabled ? (
+                <div className="space-y-1">
+                  <p className={clampNote || rangeNote ? warnText : "text-muted-foreground"}>
+                    {clampNote ?? rangeNote ?? "Between 1 and 168 hours (7 days)."}
+                  </p>
+                  <p className="text-muted-foreground">
+                    {smsReady ? (
+                      "Also sent as a text message, because Twilio is connected."
+                    ) : (
+                      <>
+                        Email only for now.{" "}
+                        <Link href={integrationsHref} className={inlineLink}>
+                          Connect Twilio
+                        </Link>{" "}
+                        to text it too.
+                      </>
+                    )}
+                  </p>
+                </div>
+              ) : undefined
+            }
+          >
+            <UnitGroups>
+              {enabled && (
+                <UnitGroup>
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={3}
+                    value={draft}
+                    onChange={(e) => {
+                      const digits = digitsOnly(e.target.value).slice(0, 3);
+                      setDraft(digits);
+                      setClampNote(null);
+                      const n = parseInt(digits, 10);
+                      if (n >= 1 && n <= 168) setForm((prev) => ({ ...prev, return_reminder_hours: n }));
+                    }}
+                    onBlur={commitDraft}
+                    className="w-20 tabular-nums"
+                    aria-label="Hours before return"
+                  />
+                  <Unit>hours before</Unit>
+                </UnitGroup>
+              )}
+              <Switch
+                checked={enabled}
+                onCheckedChange={(checked) => setForm((prev) => ({ ...prev, return_reminder_enabled: checked }))}
+                aria-label="Send return reminders"
+              />
+            </UnitGroups>
+          </SettingsRow>
+        </SettingsPanel>
+      </SettingsRowAlignProvider>
     </SettingsReadOnlyFieldset>
   );
 }
