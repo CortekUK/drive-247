@@ -45,6 +45,8 @@ export interface DestinationGate {
   experience?: "v2" | "v1";
   /** Needs the Integrations board (v2). */
   integrationsBoard?: boolean;
+  /** The credit wallet: not for a tenant whose plan includes e-signing (integration billing). */
+  creditWallet?: boolean;
   headAdminOnly?: boolean;
   /** Every listed switch must be on. */
   flags?: readonly DestinationFlag[];
@@ -68,6 +70,8 @@ export interface DestinationContext {
   /** The Integrations board is available (useV2('appearance')). */
   integrationsBoard: boolean;
   lean: boolean;
+  /** Integration billing: no credits (docs/integration-billing, D3). Absent means false. */
+  creditsRetired?: boolean;
   isHeadAdmin: boolean;
   flags: Partial<Record<DestinationFlag, boolean>>;
   canAccessRoute: (pathname: string) => boolean;
@@ -108,7 +112,7 @@ export const PAGE_DESTINATIONS: readonly PortalDestination[] = [
   page(SUPPORT_ROUTE, "Support", "Your conversations with the Drive247 support team, and a new request.", "life-buoy", "support help ticket tickets contact request problem issue team", { experience: "v2" }),
   page("/trax", "Help (TRAX)", "Ask TRAX, the assistant, about anything in your portal.", "sparkles", "help trax assistant ai ask question how", { experience: "v2" }),
   page("/settings", "Settings", "Your business, pricing, payment plans and notifications.", "settings", "settings configuration preferences options setup"),
-  page("/credits", "Credits", "The Drive247 credit balance used for SMS, checks and other paid features.", "credit-card", "credits balance wallet top up sms"),
+  page("/credits", "Credits", "The Drive247 credit balance used for SMS, checks and other paid features.", "credit-card", "credits balance wallet top up sms", { creditWallet: true }),
   page("/cms", "Website content", "The pages of your customer booking site.", "globe", "website cms site pages content booking site"),
   page("/cms/site-settings", "Website settings", "Logo, business name, footer, social links, phone and address on your site.", "globe", "website site settings footer social links logo phone address"),
   // The public "apply to rent" form. Its page calls notFound() where Leads is
@@ -133,7 +137,7 @@ export const PAGE_DESTINATIONS: readonly PortalDestination[] = [
 
   // v2 only: the account section of the v2 rail.
   page("/integrations", "Integrations", "Stripe, Square, Twilio, Bonzah, BoldSign, Tesla, Xero, Zoho, Turo and your custom domain.", "plug", "integrations apps connect connections stripe square twilio bonzah boldsign tesla xero zoho", { integrationsBoard: true }),
-  page("/subscription", "Billing", "Your Drive247 plan, its invoices and your credit balance.", "crown", "billing subscription plan drive247 invoice upgrade", { experience: "v2" }),
+  page("/subscription", "Billing", "Your Drive247 plan, your next bill and past invoices.", "crown", "billing subscription plan drive247 invoice upgrade", { experience: "v2" }),
   // Off the v2 rail by default and offered in the sidebar customiser — but the
   // page is live for every v2 tenant (its own gate resolves both the slug list
   // and `portal_experience`), so the search is the other way in and must know
@@ -333,6 +337,7 @@ export function isDestinationVisible(d: PortalDestination, ctx: DestinationConte
   if (g.experience === "v2" && !ctx.v2Chrome) return false;
   if (g.experience === "v1" && ctx.v2Chrome) return false;
   if (g.integrationsBoard && !ctx.integrationsBoard) return false;
+  if (g.creditWallet && ctx.creditsRetired) return false;
   if (g.headAdminOnly && !ctx.isHeadAdmin) return false;
   if (g.leanArea && isAreaHiddenForLean(g.leanArea, ctx.lean)) return false;
   if (g.flags && !g.flags.every((f) => ctx.flags[f] === true)) return false;

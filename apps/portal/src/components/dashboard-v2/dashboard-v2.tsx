@@ -3,6 +3,7 @@
 // v1 components, imported and not edited. These are operational alerts that
 // must survive a visual refresh — see the note above the JSX.
 import { LowCreditsBanner } from "@/components/dashboard/low-credits-banner";
+import { useIntegrationBilling } from "@/lib/integration-billing/hooks";
 import { BonzahStatusBanner } from "@/components/dashboard/bonzah-status-banner";
 import { BonzahPendingAlert } from "@/components/dashboard/bonzah-pending-alert";
 import { HomeBands } from "@/components/dashboard-v2/home/home-bands";
@@ -31,6 +32,8 @@ import { HOME_PALETTE } from "@/components/dashboard-v2/home/ui";
  */
 
 export function DashboardV2() {
+  // Integration billing (northwind): no credits, so no low-credits banner (D3).
+  const creditsRetired = useIntegrationBilling();
   return (
     /* Switch row alignment: at md+ the first band title ("On your desk", a 26px
        line box) is centred on the sidebar's Portal / Website switch, 92px from
@@ -44,7 +47,7 @@ export function DashboardV2() {
         decision on their onboarding — losing them to a visual refresh would be
         a functional regression, not a style change.
       */}
-      <LowCreditsBanner />
+      {!creditsRetired && <LowCreditsBanner />}
       <BonzahStatusBanner />
       <BonzahPendingAlert />
 

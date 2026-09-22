@@ -46,6 +46,7 @@ import { toast } from "@/hooks/use-toast";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useForcedEmptyState } from "@/hooks/use-forced-empty-state";
 import { useIsLean } from "@/lib/lean-context";
+import { useIntegrationBilling } from "@/lib/integration-billing/hooks";
 import { usePageSearch } from "@/components/shared/layout/page-search-slot";
 import { OverviewFlip } from "@/components/shared/layout/overview-flip";
 import { HEADER_ACTIONS_V2, HEADER_PRIMARY_V2 } from "@/components/shared/header-icon-button-v2";
@@ -85,6 +86,8 @@ export function AgreementsPageV2() {
   const { tenant } = useTenant();
   const { canEdit, canEditSettings } = useManagerPermissions();
   const canSend = canEdit("agreements");
+  // Integration billing (northwind): e-signing is on the plan — no credits to mention.
+  const creditsSentence = useIntegrationBilling() ? "" : " Sending uses e-sign credits.";
   const canCreateTemplate = canEditSettings("templates");
 
   const list = useAgreementsListV2();
@@ -388,8 +391,8 @@ export function AgreementsPageV2() {
             <AlertDialogTitle>Resend this agreement?</AlertDialogTitle>
             <AlertDialogDescription>
               {confirmRow?.kind === "rental"
-                ? `A new copy goes to ${confirmRow?.customerName} (${confirmRow?.customerEmail}) to sign, and any earlier copy still waiting for a signature is cancelled, so only the new one can be signed. It is built from your current default template and the rental as it stands now. Sending uses e-sign credits.`
-                : `A new copy goes to ${confirmRow?.customerName} (${confirmRow?.customerEmail}) to sign, as a new row in this list. The one sent before is left as it is, word for word. Sending uses e-sign credits.`}
+                ? `A new copy goes to ${confirmRow?.customerName} (${confirmRow?.customerEmail}) to sign, and any earlier copy still waiting for a signature is cancelled, so only the new one can be signed. It is built from your current default template and the rental as it stands now.${creditsSentence}`
+                : `A new copy goes to ${confirmRow?.customerName} (${confirmRow?.customerEmail}) to sign, as a new row in this list. The one sent before is left as it is, word for word.${creditsSentence}`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

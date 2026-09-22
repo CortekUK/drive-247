@@ -85,6 +85,9 @@ export function LocalInvoiceView({
   cardLast4,
   open,
   onClose,
+  lines,
+  linesLoading = false,
+  linesUnavailable = false,
 }: {
   invoice: TenantSubscriptionInvoice | null;
   tenantName: string;
@@ -93,6 +96,17 @@ export function LocalInvoiceView({
   cardLast4?: string | null;
   open: boolean;
   onClose: () => void;
+  /**
+   * OPTIONAL, integration billing only (docs/integration-billing, D11): the
+   * invoice line by line from Stripe — "Platform subscription", "Inshur
+   * subscription" — in place of the one merged "Monthly Subscription" row.
+   * Every caller that does not pass it renders exactly as before.
+   */
+  lines?: Array<{ label: string; amount: number }> | null;
+  /** While `lines` is on its way; shows placeholder rows rather than the merged one. */
+  linesLoading?: boolean;
+  /** `lines` could not be loaded: say so, rather than fall back to the merged row. */
+  linesUnavailable?: boolean;
 }) {
   if (!invoice) return null;
 
@@ -251,6 +265,33 @@ export function LocalInvoiceView({
                 </tr>
               </thead>
               <tbody>
+                {lines && lines.length > 0 ? (
+                  lines.map((line, i) => (
+                    <tr key={`${line.label}-${i}`} className="border-b">
+                      <td className="py-3 pr-3">
+                        <p className="font-medium">{line.label}</p>
+                      </td>
+                      <td className="whitespace-nowrap py-3 text-right font-medium tabular-nums">
+                        {line.amount < 0
+                          ? `\u2212${formatCurrency(-line.amount, invoice.currency)}`
+                          : formatCurrency(line.amount, invoice.currency)}
+                      </td>
+                    </tr>
+                  ))
+                ) : linesLoading ? (
+                  <tr className="border-b">
+                    <td className="py-3 pr-3" colSpan={2}>
+                      <div className="h-5 w-full animate-pulse rounded bg-muted" aria-label="Loading the invoice lines" />
+                    </td>
+                  </tr>
+                ) : linesUnavailable ? (
+                  <tr className="border-b">
+                    <td className="py-3 pr-3 text-muted-foreground" colSpan={2}>
+                      The line-by-line breakdown could not be loaded. The total below is what was billed.
+                    </td>
+                  </tr>
+                ) : (
+                <>
                 <tr className="border-b">
                   <td className="py-3 pr-3">
                     <p className="font-medium">Monthly Subscription</p>
@@ -276,6 +317,8 @@ export function LocalInvoiceView({
                       {formatCurrency(invoice.usage_amount, invoice.currency)}
                     </td>
                   </tr>
+                )}
+                </>
                 )}
               </tbody>
               <tfoot>

@@ -33,6 +33,7 @@ import {
   BookOpen,
   BadgeDollarSign,
   BellRing,
+  Plug,
 } from 'lucide-react';
 
 interface NavItem {
@@ -100,6 +101,13 @@ function useNavigation() {
       label: 'Configuration',
       items: [
         { name: 'Settings', href: '/admin/settings', icon: Settings },
+        // Premium integrations: which are paid, their monthly price, first
+        // month free, and the hide / beta / not-available flags on the
+        // operator's Integrations page. Platform-wide; super admins only (the
+        // catalog table's RLS says so too). docs/integration-billing.
+        ...(user?.is_super_admin
+          ? [{ name: 'Integrations', href: '/admin/integrations', icon: Plug }]
+          : []),
         // The platform's own notification set: what we send operators, what
         // operators send us, and what we broadcast to everyone. Separate from
         // Settings because it saves to its own table with its own dirty guard.

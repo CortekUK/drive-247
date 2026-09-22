@@ -16,6 +16,7 @@ import {
     type RentalTimeFacts,
 } from '@/lib/agreement-datetime';
 import { readTenantOnV2ById, resolveBoldSignMode } from '@/lib/lean-tenants';
+import { creditsRetiredForSend } from '@/lib/integration-billing-gate';
 import { FALLBACK_COMPANY_NAME } from '@/lib/tenant-defaults';
 
 // BoldSign configuration — resolved per-request based on tenant mode
@@ -806,7 +807,17 @@ export async function POST(request: NextRequest) {
         // ── Blocking credit check BEFORE sending to BoldSign ──
         const isTestMode = boldsignMode === 'test';
         let creditDeductionResult: any = null;
-        if (tenantId) {
+        // Integration billing (northwind): e-signing is included in the plan, so
+        // no credits are checked, taken, refunded or alerted on
+        // (docs/integration-billing/build-spec.md, D2). Decided on the tenant
+        // that OWNS the rental, never on the body's id alone. With nothing
+        // deducted, the refund and auto-refill below stay idle.
+        const creditsRetired = creditsRetiredForSend({
+            requestTenantId: tenantId,
+            rentalTenantId: rental?.tenant_id,
+            tenantSlug: (tenant as { slug?: string | null } | null)?.slug,
+        });
+        if (tenantId && !creditsRetired) {
             const { data: deductResult, error: deductError } = await supabase.rpc('deduct_credits', {
                 p_tenant_id: tenantId,
                 p_category: 'esign',

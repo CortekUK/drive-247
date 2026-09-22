@@ -44,9 +44,11 @@ function formatDate(dateStr: string | null) {
 function InvoiceHistoryTable({
   invoices,
   onViewInvoice,
+  hideBreakdown = false,
 }: {
   invoices: TenantSubscriptionInvoice[];
   onViewInvoice: (invoice: TenantSubscriptionInvoice) => void;
+  hideBreakdown?: boolean;
 }) {
   const [showAll, setShowAll] = useState(false);
   // v2 chrome (northwind only): pages of 25 rather than one "show all" dump.
@@ -84,9 +86,8 @@ function InvoiceHistoryTable({
    * list, not per row, so columns never appear and disappear as the tenant
    * pages through "Show all".
    */
-  const hasAnyBreakdown = invoices.some(
-    (inv) => inv.base_amount != null || inv.usage_amount != null,
-  );
+  const hasAnyBreakdown =
+    !hideBreakdown && invoices.some((inv) => inv.base_amount != null || inv.usage_amount != null);
 
   return (
     // `w-full` alone let the columns crush into each other instead of
@@ -508,10 +509,18 @@ export function UsageDashboard({
   invoices,
   invoicesLoading,
   onViewInvoice,
+  hideBreakdown = false,
 }: {
   invoices: TenantSubscriptionInvoice[];
   invoicesLoading: boolean;
   onViewInvoice: (invoice: TenantSubscriptionInvoice) => void;
+  /**
+   * OPTIONAL, integration billing only: drop the Base / Usage columns. Base is
+   * every fixed line summed, so with a premium integration on the bill it would
+   * read "$220" — the one merged figure the receipt exists to split. Everyone
+   * else passes nothing and keeps the columns.
+   */
+  hideBreakdown?: boolean;
 }) {
   return (
     <div className="space-y-6">
@@ -532,6 +541,7 @@ export function UsageDashboard({
           <InvoiceHistoryTable
             invoices={invoices}
             onViewInvoice={onViewInvoice}
+            hideBreakdown={hideBreakdown}
           />
         )}
       </div>

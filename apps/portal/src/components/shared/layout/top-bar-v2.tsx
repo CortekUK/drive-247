@@ -14,6 +14,8 @@ import { MessagesSheet } from "@/components/shared/layout/dock-sheets";
 import { NotificationBell } from "@/components/shared/layout/notification-bell";
 import { useUnreadCount } from "@/hooks/use-unread-count";
 import { useCreditWallet } from "@/hooks/use-credit-wallet";
+// Northwind has no credits (docs/integration-billing/build-spec.md, D3).
+import { useIntegrationBilling } from "@/lib/integration-billing/hooks";
 import { useTraxOptional } from "@/components/trax/trax-provider";
 import { usePageSearchSlot } from "@/components/shared/layout/page-search-slot";
 
@@ -123,6 +125,9 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
   /* `isLoading` matters: the pill must not flash a 0 before the wallet resolves,
      because a zero credit balance is an alarming number to show by accident. */
   const { balance, isLowBalance, isLoading: creditsLoading } = useCreditWallet();
+  /* Integration billing (northwind): e-signing is on the plan and there are no
+     credits, so there is no balance to show. Every other tenant keeps the pill. */
+  const creditsRetired = useIntegrationBilling();
 
   /* The one dynamic part of the bar: a list page lends its own search and
      filters, and takes them back when it unmounts. Null on a page with nothing
@@ -481,7 +486,7 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
             of which read wrong in this bar and in v2 dark mode. The LOGIC is not
             duplicated — both read the same `useCreditWallet`, so the low-balance
             threshold lives in one place. Same split as app-sidebar / -v2. */}
-        {!creditsLoading && (
+        {!creditsLoading && !creditsRetired && (
           <Tooltip>
             <TooltipTrigger asChild>
               <Link
