@@ -1,0 +1,210 @@
+// HEAD's HTML -> PDF block parser from apps/portal/src/app/api/esign/route.ts,
+// lifted verbatim from commit 5a664cbb (before the operator-signature image
+// block) by the same TypeScript lift the tests use. esign-operator-signature
+// .test.ts compiles it beside today's parser and requires the two to agree on
+// every document without an operator signature. Do not edit by hand.
+
+const WINANSI_REPLACEMENTS: Record<string, string> = {
+    '': '[ ]',  // ballot box
+    '': '[x]',  // ballot box with check
+    '': '[x]',  // ballot box with x
+    '': 'Y',    // check mark
+    '': 'Y',    // heavy check mark
+    '': 'X',    // ballot x
+    '': 'X',    // heavy ballot x
+    '→': '->',   // → rightwards arrow
+    '←': '<-',   // ← leftwards arrow
+    '⇒': '=>',   // ⇒
+    ' ': ' ',    // nbsp -> regular space
+};
+
+const WINANSI_HIGH = new Set('€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ');
+
+function sanitizePdfText(s: string): string {
+    if (!s) return '';
+    let out = '';
+    for (const ch of s) {
+        const replacement = WINANSI_REPLACEMENTS[ch];
+        if (replacement !== undefined) { out += replacement; continue; }
+        const code = ch.codePointAt(0)!;
+        if (code === 0x09 || code === 0x0A || code === 0x0D) { out += ch; continue; }
+        if (code < 0x20) continue;
+        if (code <= 0x7E) { out += ch; continue; }
+        if (code >= 0xA0 && code <= 0xFF) { out += ch; continue; }
+        if (WINANSI_HIGH.has(ch)) { out += ch; continue; }
+        out += '?';
+    }
+    return out;
+}
+
+function decodeEntities(str: string): string {
+    return decodeHtmlEntities(str);
+}
+
+function stripTags(html: string): string {
+    return sanitizePdfText(decodeEntities(html.replace(/<[^>]+>/g, '')).trim());
+}
+
+function parseInlineRuns(html: string, parentBold = false, parentItalic = false, parentUnderline = false): TextRun[] {
+    const runs: TextRun[] = [];
+    let remaining = html;
+
+    // Match the first inline formatting tag
+    const tagRe = /<(strong|b|em|i|u)((?:\s+[^>]*)?)>([\s\S]*?)<\/\1>/i;
+
+    while (remaining.length > 0) {
+        const match = remaining.match(tagRe);
+        if (match && match.index !== undefined) {
+            // Text before the tag
+            if (match.index > 0) {
+                const text = stripTags(remaining.substring(0, match.index));
+                if (text) runs.push({ text, bold: parentBold, italic: parentItalic, underline: parentUnderline });
+            }
+            const tagName = match[1].toLowerCase();
+            const innerHtml = match[3];
+            const isBold = parentBold || tagName === 'strong' || tagName === 'b';
+            const isItalic = parentItalic || tagName === 'em' || tagName === 'i';
+            const isUnderline = parentUnderline || tagName === 'u';
+            // Recurse for nested tags
+            const innerRuns = parseInlineRuns(innerHtml, isBold, isItalic, isUnderline);
+            runs.push(...innerRuns);
+            remaining = remaining.substring(match.index + match[0].length);
+        } else {
+            const text = stripTags(remaining);
+            if (text) runs.push({ text, bold: parentBold, italic: parentItalic, underline: parentUnderline });
+            break;
+        }
+    }
+
+    return runs.length > 0 ? runs : [{ text: '', bold: false, italic: false, underline: false }];
+}
+
+function extractAlign(tagHtml: string): TextAlign {
+    const alignMatch = tagHtml.match(/text-align:\s*(left|center|right)/i);
+    return (alignMatch ? alignMatch[1].toLowerCase() : 'left') as TextAlign;
+}
+
+function parseTableRows(tableHtml: string): TableRow[] {
+    const rows: TableRow[] = [];
+    const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+    let rowMatch;
+    while ((rowMatch = rowRegex.exec(tableHtml)) !== null) {
+        const rowContent = rowMatch[1];
+        const isHeader = /<th/i.test(rowContent);
+        const cellRegex = /<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi;
+        const cells: string[] = [];
+        let cellMatch;
+        while ((cellMatch = cellRegex.exec(rowContent)) !== null) {
+            cells.push(stripTags(cellMatch[1]));
+        }
+        if (cells.length > 0) {
+            rows.push({ cells, isHeader });
+        }
+    }
+    return rows;
+}
+
+function parseListItems(listHtml: string): TextRun[][] {
+    const items: TextRun[][] = [];
+    const itemRegex = /<li[^>]*>([\s\S]*?)<\/li>/gi;
+    let match;
+    while ((match = itemRegex.exec(listHtml)) !== null) {
+        const runs = parseInlineRuns(match[1]);
+        if (runs.some(r => r.text.trim())) items.push(runs);
+    }
+    return items;
+}
+
+function removeEmptyFields(html: string): string {
+    return html
+        .replace(/<tr>\s*<td>.*?<\/td>\s*<td>\s*<\/td>\s*<\/tr>/gi, '')
+        .replace(/<p>\s*<strong>[^<]*:<\/strong>\s*<\/p>/gi, '')
+        .replace(/<p>\s*<strong>[^<]*:<\/strong>(\s|&nbsp;)*<\/p>/gi, '')
+        .replace(/<p>\s*<\/p>/gi, '')
+        .replace(/<tr>\s*<td>.*?<\/td>\s*<td>\s+<\/td>\s*<\/tr>/gi, '');
+}
+
+function parseHtmlToBlocks(html: string): PdfBlock[] {
+    const blocks: PdfBlock[] = [];
+    let cleaned = removeEmptyFields(html).replace(/\r\n/g, '\n');
+
+    // Replace block-level elements with indexed markers to preserve document order
+    let idx = 0;
+    const blockMap = new Map<string, { tag: string; content: string; attrs: string }>();
+
+    const replaceBlock = (tag: string) => (match: string, ...args: string[]) => {
+        const key = `\n\x00BLOCK_${idx++}\x00\n`;
+        // For tags with captured attrs group: args[0]=attrs, args[1]=content
+        // For tags without attrs: args[0]=content
+        const hasAttrs = args.length >= 2 && typeof args[1] === 'string';
+        const attrs = hasAttrs ? (args[0] || '') : '';
+        const content = hasAttrs ? (args[1] || '') : (args[0] || '');
+        blockMap.set(key.trim(), { tag, content, attrs });
+        return key;
+    };
+
+    // Order matters: tables first (they contain <td>/<th>/<p> which shouldn't be matched separately)
+    cleaned = cleaned.replace(/<table[^>]*>([\s\S]*?)<\/table>/gi, replaceBlock('table'));
+    cleaned = cleaned.replace(/<h1([^>]*)>([\s\S]*?)<\/h1>/gi, replaceBlock('h1'));
+    cleaned = cleaned.replace(/<h2([^>]*)>([\s\S]*?)<\/h2>/gi, replaceBlock('h2'));
+    cleaned = cleaned.replace(/<h3([^>]*)>([\s\S]*?)<\/h3>/gi, replaceBlock('h3'));
+    cleaned = cleaned.replace(/<ul[^>]*>([\s\S]*?)<\/ul>/gi, replaceBlock('ul'));
+    cleaned = cleaned.replace(/<ol[^>]*>([\s\S]*?)<\/ol>/gi, replaceBlock('ol'));
+    cleaned = cleaned.replace(/<hr\s*\/?>/gi, () => {
+        const key = `\n\x00BLOCK_${idx++}\x00\n`;
+        blockMap.set(key.trim(), { tag: 'hr', content: '', attrs: '' });
+        return key;
+    });
+    cleaned = cleaned.replace(/<p([^>]*)>([\s\S]*?)<\/p>/gi, replaceBlock('p'));
+
+    // Split by lines and process in document order
+    const parts = cleaned.split('\n').map(p => p.trim()).filter(Boolean);
+
+    for (const part of parts) {
+        const block = blockMap.get(part);
+        if (block) {
+            const align = extractAlign(block.attrs);
+            switch (block.tag) {
+                case 'hr':
+                    blocks.push({ type: 'hr' });
+                    break;
+                case 'h1':
+                    blocks.push({ type: 'h1', runs: parseInlineRuns(block.content), align });
+                    break;
+                case 'h2':
+                    blocks.push({ type: 'h2', runs: parseInlineRuns(block.content), align });
+                    break;
+                case 'h3':
+                    blocks.push({ type: 'h3', runs: parseInlineRuns(block.content), align });
+                    break;
+                case 'p': {
+                    const runs = parseInlineRuns(block.content);
+                    if (runs.some(r => r.text.trim())) {
+                        blocks.push({ type: 'paragraph', runs, align });
+                    }
+                    break;
+                }
+                case 'table': {
+                    const rows = parseTableRows(block.content);
+                    if (rows.length > 0) blocks.push({ type: 'table', rows });
+                    break;
+                }
+                case 'ul':
+                    blocks.push({ type: 'bullet-list', items: parseListItems(block.content) });
+                    break;
+                case 'ol':
+                    blocks.push({ type: 'ordered-list', items: parseListItems(block.content) });
+                    break;
+            }
+        } else {
+            // Raw text outside any block tag — skip internal markers and strip control chars
+            if (/\x00/.test(part)) continue;
+            const text = stripTags(part).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+            if (text) {
+                blocks.push({ type: 'paragraph', runs: [{ text, bold: false, italic: false, underline: false }] });
+            }
+        }
+    }
+
+    return blocks;
+}

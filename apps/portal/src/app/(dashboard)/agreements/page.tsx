@@ -30,6 +30,7 @@ import { AgreementsTeachingEmptyState } from "@/components/empty-states/lean-emp
 import { useForcedEmptyState } from "@/hooks/use-forced-empty-state";
 import { useV2 } from "@/lib/v2-context";
 import { AgreementsTableV2 } from "@/components/agreements-v2/agreements-table-v2";
+import { AgreementsPageV2 } from "@/components/agreements-v2/agreements-page-v2";
 import { HEADER_ACTIONS_V2, HEADER_PRIMARY_V2, HeaderIconButton } from "@/components/shared/header-icon-button-v2";
 
 interface AgreementDoc {
@@ -49,7 +50,26 @@ interface AgreementDoc {
   status?: string;
 }
 
-export default function AgreementsList() {
+/**
+ * The Agreements route.
+ *
+ * The ONLY edit Agreements v2 makes to this file: one branch, resolved from the
+ * gate the root layout already worked out on the server (V2_PLAN §3). v2
+ * tenants get `AgreementsPageV2`; every other tenant renders `AgreementsList`
+ * below exactly as before, including its own `useV2("chrome")` branches.
+ *
+ * Branching in a wrapper, not with an early return inside `AgreementsList`,
+ * keeps every hook in that component unconditional, and means v2 never runs
+ * its three queries. Retiring v2 is deleting this wrapper, the entry in
+ * `V2_AREAS` and the Agreements v2 files (keeping `AgreementsTableV2`, which
+ * the chrome branch below still mounts).
+ */
+export default function AgreementsPage() {
+  const v2 = useV2("agreements");
+  return v2 ? <AgreementsPageV2 /> : <AgreementsList />;
+}
+
+function AgreementsList() {
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(25);

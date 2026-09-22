@@ -31,7 +31,7 @@
 
 import { describe, expect, it } from "vitest";
 import { blankComments, readEdgeFunctionSource } from "../../helpers/edge-contract";
-import { payloadKeysAtCallSite, portalCall, portalTarget, positionsOf, readRepoSource } from "./boldsign-source";
+import { interfaceMembers, payloadKeysAtCallSite, portalCall, portalTarget, positionsOf, readRepoSource } from "./boldsign-source";
 
 const PORTAL_ROUTE = "apps/portal/src/app/api/esign/route.ts";
 const AGREEMENTS_PAGE = "apps/portal/src/app/(dashboard)/agreements/page.tsx";
@@ -71,7 +71,22 @@ describe("boldsign/resend — a resend is the same call as a send", () => {
       label: "rental detail Send",
     });
 
-    for (const key of send) {
+    // `templateId` is the one exception, and it is optional by construction:
+    // the v2 stage sends it only for THAT send, when the operator picked a
+    // template other than the default (Agreements v2, build-spec D14). No row
+    // records which template a document came from, so no resend can repeat
+    // the pick; a resend sends the default, exactly as every resend did before
+    // the field existed. It must stay optional on the route for that to hold.
+    const PER_SEND_OPTIONAL = new Set(["templateId"]);
+    const declared = interfaceMembers(readRepoSource(PORTAL_ROUTE), "ESignRequest");
+    for (const key of PER_SEND_OPTIONAL) {
+      expect(
+        declared.find((m) => m.name === key)?.optional,
+        `ESignRequest.${key} is no longer optional. Every resend path omits it.`,
+      ).toBe(true);
+    }
+
+    for (const key of send.filter((k) => !PER_SEND_OPTIONAL.has(k))) {
       expect(
         resend,
         `The agreements page's Resend no longer sends \`${key}\`, which the rental ` +

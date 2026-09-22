@@ -170,7 +170,7 @@ describe("SettingsIndexV2 structure", () => {
       ["Auto-extension", "/settings?tab=auto-extend"],
       ["Notifications", "/settings?tab=notifications"],
       ["Customer messages", "/settings?tab=templates"],
-      ["Agreement templates", "/settings/agreement-templates"],
+      // Agreement templates moved to the Agreements tab (Agreements v2, D1).
     ]);
   });
 
@@ -185,7 +185,6 @@ describe("SettingsIndexV2 structure", () => {
     const templates = SETTINGS_INDEX_SECTIONS.find((section) => section.title === "Templates")!;
     expect(templates.items.map((item) => [item.title, item.href, item.tab])).toEqual([
       ["Customer messages", "/settings?tab=templates", "templates"],
-      ["Agreement templates", "/settings/agreement-templates", "templates"],
     ]);
     render(<SettingsIndexV2 canView={() => true} tenantSlug="northwind" isHeadAdmin />);
     const hrefs = entries().map(([, href]) => href);
@@ -208,7 +207,16 @@ describe("SettingsIndexV2 structure", () => {
     root = createRoot(container);
     render(<SettingsIndexV2 canView={(tab) => tab === "templates"} tenantSlug="northwind" isHeadAdmin={false} />);
     expect(sectionTitles()).toEqual(["Templates"]);
-    expect(entries().map(([title]) => title)).toEqual(["Customer messages", "Agreement templates"]);
+    expect(entries().map(([title]) => title)).toEqual(["Customer messages"]);
+  });
+
+  it("has no Agreement templates entry: the templates live on the Agreements tab (Agreements v2, D1)", async () => {
+    const { SETTINGS_INDEX_SECTIONS } = await import("@/components/settings-v2/settings-index");
+    const every = SETTINGS_INDEX_SECTIONS.flatMap((section) => section.items);
+    expect(every.map((item) => item.title)).not.toContain("Agreement templates");
+    expect(every.map((item) => item.href)).not.toContain("/settings/agreement-templates");
+    render(<SettingsIndexV2 canView={() => true} tenantSlug="northwind" isHeadAdmin />);
+    expect(container.querySelector('a[href^="/settings/agreement-templates"]')).toBeNull();
   });
 
   it("Team is for head admins only", () => {

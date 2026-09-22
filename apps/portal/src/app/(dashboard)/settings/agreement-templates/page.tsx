@@ -44,6 +44,7 @@ import {
 } from '@/hooks/use-agreement-templates';
 import { useV2 } from '@/lib/v2-context';
 import { AgreementTemplatesPageV2 } from '@/components/settings-v2/agreement-templates-v2';
+import { SettingsSectionSkeleton } from '@/components/settings-v2/section-states';
 
 function TemplateCategorySection({ category }: { category: TemplateCategory }) {
   const router = useRouter();
@@ -379,8 +380,15 @@ export default function AgreementTemplatesPage() {
   const initialCategory = (searchParams.get('category') as TemplateCategory) || 'standard';
   const [activeCategory, setActiveCategory] = useState<TemplateCategory>(initialCategory);
   const paygEnabled = rentalSettings?.pay_as_you_go_enabled;
+  // Agreements v2 (northwind only; fails closed to v1): the templates live on
+  // the Agreements tab, so this route sends v2 there. v1 is unchanged.
+  const v2Agreements = useV2('agreements');
+  useEffect(() => {
+    if (v2Agreements) router.replace('/agreements?view=templates');
+  }, [v2Agreements, router]);
   // v2 chrome (northwind only; fails closed to v1). After every hook above.
   const v2Chrome = useV2('chrome');
+  if (v2Agreements) return <SettingsSectionSkeleton variant="cards" rows={3} label="Opening agreement templates" />;
   if (v2Chrome) return <AgreementTemplatesPageV2 />;
 
   return (

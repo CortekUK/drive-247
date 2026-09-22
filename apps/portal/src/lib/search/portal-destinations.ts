@@ -91,7 +91,7 @@ const page = (
  * Every page the sidebars, the account section and the top bar link to, with
  * the same conditions they are shown under (components/shared/layout/
  * app-sidebar.tsx and app-sidebar-v2.tsx). A page the v2 rail deliberately
- * dropped (Insurances, Agreements, Messages…) is `experience: "v1"`.
+ * dropped (Insurances, Messages…) is `experience: "v1"`.
  */
 export const PAGE_DESTINATIONS: readonly PortalDestination[] = [
   page("/", "Dashboard", "Your desk: what needs attention today, reminders and money in play.", "dashboard", "home desk overview today start"),
@@ -139,6 +139,12 @@ export const PAGE_DESTINATIONS: readonly PortalDestination[] = [
   // and `portal_experience`), so the search is the other way in and must know
   // about it.
   page("/insights", "Insights", "One screen of honest money: what came in, what is owed, and what it cost.", "trending-up", "insights money revenue profit margin honest reports", { experience: "v2" }),
+  // A default rail row again (Agreements v2, D2): individual agreements are
+  // sent from it and the agreement templates live on it. Its own entry rather
+  // than lifting the v1 one's gate, because on v1 the page has no templates and
+  // its entry must keep saying what that page is. The two are never visible
+  // together, so sharing an href (and so an id) never lists it twice.
+  page("/agreements", "Agreements", "Agreements sent for signature, their signed copies, and your agreement templates.", "file-signature", "agreements contracts signed signatures esign e-sign send agreement templates", { experience: "v2" }),
 
   // The original portal only: pages the v2 rail deliberately does not list.
   page("/blocked-customers", "Blocked Customers", "Customers you have blocked from renting.", "user", "blocked banned blacklist customers", { experience: "v1" }),

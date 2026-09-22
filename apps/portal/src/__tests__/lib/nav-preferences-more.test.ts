@@ -6,8 +6,9 @@
  *
  *  1. a THIRD bucket (`moreOrder`) for the flat rows under "More";
  *  2. `shown`, for rows that are OFF by default and offered in the customiser
- *     (Insights, Insurances, Agreements) — the canary's rail must look exactly
- *     as it did until somebody asks for one;
+ *     (Insights, Insurances) — the canary's rail must look exactly as it did
+ *     until somebody asks for one. Agreements was one of them until Agreements
+ *     v2 (Sep 21 2026) put it back on the rail by default, as an ordinary row;
  *  3. PERMANENT rows, which may never be hidden however a stored preference is
  *     spelled.
  *
@@ -42,7 +43,8 @@ const TOP = [
 const MORE = [
   item("Insights", "/insights", { optional: true }),
   item("Insurances", "/insurances", { optional: true }),
-  item("Agreements", "/agreements", { optional: true }),
+  // An ordinary row since Agreements v2 (D2): on by default, still hideable.
+  item("Agreements", "/agreements"),
   item("Availability", "/blocked-dates"),
   item("Payments", "/payments"),
   item("Invoices", "/invoices"),
@@ -62,6 +64,7 @@ const hrefs = (items: OverlayNavItem[]) => items.map((i) => i.href);
 describe("off-by-default rows", () => {
   it("are absent until the user asks for one", () => {
     expect(hrefs(apply(EMPTY_NAV_PREFERENCES).more)).toEqual([
+      "/agreements",
       "/blocked-dates",
       "/payments",
       "/invoices",
@@ -71,8 +74,9 @@ describe("off-by-default rows", () => {
   });
 
   it("appear once their href is in `shown`, in their declared position", () => {
-    const more = apply({ ...EMPTY_NAV_PREFERENCES, shown: ["/agreements"] }).more;
+    const more = apply({ ...EMPTY_NAV_PREFERENCES, shown: ["/insurances"] }).more;
     expect(hrefs(more)).toEqual([
+      "/insurances",
       "/agreements",
       "/blocked-dates",
       "/payments",
@@ -104,6 +108,7 @@ describe("off-by-default rows", () => {
     const applied = apply(old);
     expect(hrefs(applied.topLevel)).toEqual(["/rentals", "/customers", "/vehicles"]);
     expect(hrefs(applied.more)).toEqual([
+      "/agreements",
       "/blocked-dates",
       "/payments",
       "/invoices",
@@ -121,6 +126,7 @@ describe("the More bucket", () => {
     expect(hrefs(more)).toEqual([
       "/support",
       "/fines",
+      "/agreements",
       "/blocked-dates",
       "/payments",
       "/invoices",

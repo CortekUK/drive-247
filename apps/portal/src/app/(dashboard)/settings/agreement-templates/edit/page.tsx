@@ -47,6 +47,7 @@ import { BONZAH_INSURANCE_ADDENDUM_HTML } from '@/lib/bonzah-addendum';
 import { useUnsavedChangesWarning } from '@/hooks/use-unsaved-changes-warning';
 import { UnsavedChangesDialog } from '@/components/shared/unsaved-changes-dialog';
 import { AgreementTemplateEditorV2 } from '@/components/settings-v2/agreement-templates-v2';
+import { SettingsSectionSkeleton } from '@/components/settings-v2/section-states';
 const DEPOSIT_CLAUSE_SAMPLE = "<h2>Security deposit</h2><p>A refundable security deposit of <strong>$200.00</strong> is charged to the Renter&rsquo;s payment method at the start of the rental period. This is a charge, not a temporary authorisation hold. It is refunded after the vehicle is returned and inspected, less any deductions.</p>";
 
 
@@ -77,6 +78,12 @@ export default function EditAgreementTemplatePage() {
   // header on the sidebar switch's row at md; every other tenant renders the
   // classes it did before. Above the early returns, as every hook must be.
   const v2Chrome = useV2('chrome');
+  // Agreements v2 (northwind only; fails closed to v1): templates are edited on
+  // the Agreements tab, so this route sends v2 there. v1 is unchanged.
+  const v2Agreements = useV2('agreements');
+  useEffect(() => {
+    if (v2Agreements) router.replace('/agreements?view=templates');
+  }, [v2Agreements, router]);
   const sampleData = getSampleData();
 
   const currentTemplate = templateType === 'default' ? defaultTemplate : customTemplate;
@@ -200,6 +207,8 @@ export default function EditAgreementTemplatePage() {
       '<span style="display:inline-block;border:2px dashed #d97706;border-radius:6px;padding:4px 16px;color:#d97706;font-size:12px;font-weight:600;background:#fffbeb;">Initials</span>'
     );
   const isSaving = isUpdating;
+
+  if (v2Agreements) return <SettingsSectionSkeleton variant="form" rows={3} label="Opening agreement templates" />;
 
   // v2 (northwind): the editor rebuilt on the state kit. After every hook above.
   if (v2Chrome) {

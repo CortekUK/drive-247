@@ -65,6 +65,7 @@ const EVERY_AREA: V2Area[] = [
   'insights',
   'availability',
   'turo',
+  'agreements',
 ];
 
 /** Live operators. None of these may ever be moved by this change. */

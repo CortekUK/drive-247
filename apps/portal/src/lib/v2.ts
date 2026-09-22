@@ -70,7 +70,8 @@ export type V2Area =
   | 'vehicles'
   | 'insights'
   | 'availability'
-  | 'turo';
+  | 'turo'
+  | 'agreements';
 
 /**
  * One entry per v2 area. Today every list is just the canary.
@@ -133,6 +134,18 @@ const V2_AREAS: Record<V2Area, readonly string[]> = {
    * adding a slug here, once the canary has run it long enough to have failed.
    */
   turo: [NORTHWIND],
+  /**
+   * `/agreements` — Agreements v2: templates on the Agreements tab, the
+   * half-and-half template editor, individual agreements sent from the tab
+   * (a NEW table, never `rental_agreements`), and the template picker in the
+   * v2 rental detail's Agreement stage.
+   *
+   * The v1 Agreements page and the v1 Settings → Agreement templates screens
+   * are untouched and keep serving everyone else. northwind signs in LIVE
+   * BoldSign mode (it is lean), so a send made through this area is a real,
+   * legally binding document that spends live credits.
+   */
+  agreements: [NORTHWIND],
 };
 
 /**

@@ -1625,9 +1625,9 @@ export const NOTIFICATION_CATALOG: NotificationItem[] = [
       ),
     },
     evidence: [
-      "email: apps/portal/src/app/api/esign/route.ts:1997 → supabase/functions/send-signing-email/index.ts:109; apps/booking/src/app/api/esign/route.ts:1007",
-      "bell: apps/portal/src/app/api/esign/route.ts:2109; apps/booking/src/app/api/esign/route.ts:1092",
-      "trigger: apps/portal/src/components/rentals-v2/rental-detail/stage-agreement.tsx:493; apps/portal/src/components/rentals-v2/rental-create-v2.tsx:2571; apps/booking/src/components/BookingCheckoutStep.tsx:713",
+      "email: apps/portal/src/app/api/esign/route.ts:2083 → supabase/functions/send-signing-email/index.ts:109; apps/booking/src/app/api/esign/route.ts:1007",
+      "bell: apps/portal/src/app/api/esign/route.ts:2195; apps/booking/src/app/api/esign/route.ts:1092",
+      "trigger: apps/portal/src/components/rentals-v2/rental-detail/stage-agreement.tsx:503; apps/portal/src/components/rentals-v2/rental-create-v2.tsx:2571; apps/booking/src/components/BookingCheckoutStep.tsx:713",
     ],
   },
   {
