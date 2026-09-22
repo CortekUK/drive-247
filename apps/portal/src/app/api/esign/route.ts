@@ -44,6 +44,10 @@ interface ESignRequest {
     extensionNewEndDate?: string;
     extensionNumber?: number;
     extensionAmount?: number;
+    // Agreements v2 (the v2 rental stage's "Selected template"): send THIS
+    // template instead of the category's active one. Sent only when the
+    // operator picked a different one, so a default send is today's request.
+    templateId?: string;
 }
 
 // ============================================================================
@@ -553,11 +557,25 @@ interface TextRun { text: string; bold: boolean; italic: boolean; underline: boo
 interface TableRow { cells: string[]; isHeader: boolean; }
 type TextAlign = 'left' | 'center' | 'right';
 interface PdfBlock {
-    type: 'h1' | 'h2' | 'h3' | 'paragraph' | 'table' | 'bullet-list' | 'ordered-list' | 'hr';
+    type: 'h1' | 'h2' | 'h3' | 'paragraph' | 'table' | 'bullet-list' | 'ordered-list' | 'hr' | 'image';
     runs?: TextRun[];
     rows?: TableRow[];
     items?: TextRun[][];
     align?: TextAlign;
+    image?: { format: 'png' | 'jpeg'; base64: string };
+}
+
+// Agreements v2: the ONE image an agreement can carry, the operator's own
+// signature, written by the v2 editor as a block between paragraphs:
+//   <img data-operator-signature="true" src="data:image/png;base64,...">
+// Every other <img> (a remote URL, an SVG, one without the attribute) is still
+// ignored. No v1 template can contain this element: the v1 editor has no image.
+const OPERATOR_SIGNATURE_MAX_SRC = 512_000;
+function parseOperatorSignatureImg(tag: string): PdfBlock['image'] | null {
+    if (!/\sdata-operator-signature\s*=\s*["']true["']/i.test(tag)) return null;
+    const src = tag.match(/\ssrc\s*=\s*["']data:image\/(png|jpeg);base64,([A-Za-z0-9+/]+={0,2})["']/i);
+    if (!src || src[0].length > OPERATOR_SIGNATURE_MAX_SRC) return null;
+    return { format: src[1].toLowerCase() as 'png' | 'jpeg', base64: src[2] };
 }
 
 // Delegates to the shared decoder. The inline version handled seven entities and
@@ -674,6 +692,14 @@ function parseHtmlToBlocks(html: string): PdfBlock[] {
         return key;
     });
     cleaned = cleaned.replace(/<p([^>]*)>([\s\S]*?)<\/p>/gi, replaceBlock('p'));
+    // Last, so only an image standing between blocks is matched; one inside a
+    // paragraph, cell or list item is stripped with the rest of its tags.
+    cleaned = cleaned.replace(/<img\b[^>]*>/gi, (tag) => {
+        if (!parseOperatorSignatureImg(tag)) return tag;
+        const key = `\n\x00BLOCK_${idx++}\x00\n`;
+        blockMap.set(key.trim(), { tag: 'img', content: tag, attrs: '' });
+        return key;
+    });
 
     // Split by lines and process in document order
     const parts = cleaned.split('\n').map(p => p.trim()).filter(Boolean);
@@ -713,6 +739,11 @@ function parseHtmlToBlocks(html: string): PdfBlock[] {
                 case 'ol':
                     blocks.push({ type: 'ordered-list', items: parseListItems(block.content) });
                     break;
+                case 'img': {
+                    const image = parseOperatorSignatureImg(block.content);
+                    if (image) blocks.push({ type: 'image', image });
+                    break;
+                }
             }
         } else {
             // Raw text outside any block tag — skip internal markers and strip control chars
@@ -920,7 +951,7 @@ function drawWrappedRuns(ctx: PdfCtx, runs: TextRun[], fontSize: number, lineHei
     ctx.y -= lineHeight;
 }
 
-function renderBlocksToPdf(ctx: PdfCtx, blocks: PdfBlock[]) {
+async function renderBlocksToPdf(ctx: PdfCtx, blocks: PdfBlock[]) {
     const S = { h1: 16, h2: 13, h3: 11, body: 10 };
     const LH = { h1: 22, h2: 18, h3: 15, body: 14 };
 
@@ -1059,6 +1090,28 @@ function renderBlocksToPdf(ctx: PdfCtx, blocks: PdfBlock[]) {
                     thickness: 0.5, color: rgb(0.7, 0.7, 0.7),
                 });
                 ctx.y -= 8;
+                break;
+            }
+            case 'image': {
+                // The operator's signature: at most 200 x 70pt, aspect kept,
+                // never enlarged. An image pdf-lib cannot decode is left out
+                // rather than failing the whole agreement.
+                if (!block.image) break;
+                let img;
+                try {
+                    img = block.image.format === 'png'
+                        ? await ctx.doc.embedPng(block.image.base64)
+                        : await ctx.doc.embedJpg(block.image.base64);
+                } catch (e) {
+                    console.warn('Operator signature image could not be embedded, so it is left out:', e);
+                    break;
+                }
+                const scale = Math.min(200 / img.width, 70 / img.height, 1);
+                const w = img.width * scale;
+                const h = img.height * scale;
+                ensureSpace(ctx, h + 4);
+                ctx.page.drawImage(img, { x: MARGIN, y: ctx.y - h + S.body, width: w, height: h });
+                ctx.y -= h + 4;
                 break;
             }
         }
@@ -1352,6 +1405,35 @@ export async function POST(request: NextRequest) {
         const customer = rental?.customers || { name: body.customerName, email: body.customerEmail };
         const vehicle = rental?.vehicles || { make: '', model: '', reg: 'N/A' };
 
+        // Agreements v2: an explicitly chosen template, read here, before any
+        // credit is spent, and only from the rental's own tenant. Without
+        // `templateId` nothing here runs and the template is picked below
+        // exactly as it always was.
+        let requestedTemplate: { template_content: string | null } | null = null;
+        if (body.templateId) {
+            if (rental?.tenant_id && rental.tenant_id === body.tenantId) {
+                const { data: picked } = await supabase
+                    .from('agreement_templates')
+                    .select('template_content')
+                    .eq('id', body.templateId)
+                    .eq('tenant_id', rental.tenant_id)
+                    .maybeSingle();
+                requestedTemplate = picked;
+            }
+            if (!requestedTemplate) {
+                return NextResponse.json({ ok: false, error: 'Template not found' }, { status: 400 });
+            }
+            // A template with no wording ("<p></p>") would otherwise reach the
+            // customer as an empty contract, or as the built-in text below.
+            // Blank means what isBlankHtml (settings-v2/message-rules) means,
+            // the rule that keeps it out of the v2 picker: no text once the
+            // tags are gone, and no image, table or rule either.
+            const requestedWording = requestedTemplate.template_content ?? '';
+            if (!stripTags(requestedWording) && !/<(img|table|hr)\b/i.test(requestedWording)) {
+                return NextResponse.json({ ok: false, error: 'That template has no wording yet.' }, { status: 400 });
+            }
+        }
+
         // Fetch latest identity verification for this customer
         let verification: any = null;
         const customerId = rental?.customer_id || (customer as any)?.id;
@@ -1539,6 +1621,10 @@ export async function POST(request: NextRequest) {
                 templateData = fallback;
             }
 
+            // Agreements v2: the chosen template replaces the category's active
+            // one, and goes through exactly the same rendering rules below.
+            if (requestedTemplate) templateData = requestedTemplate;
+
             // Tenant's own T&Cs and whether a real mileage allowance resolves for
             // this rental. Both drive conditional injection below: we only add a
             // clause the operator has actually configured, never an invented one.
@@ -1561,7 +1647,7 @@ export async function POST(request: NextRequest) {
                 const blocks = parseHtmlToBlocks(processedHtml);
                 // Append platform disclaimer
                 blocks.push(...PLATFORM_DISCLAIMER_BLOCKS);
-                renderBlocksToPdf(ctx, blocks);
+                await renderBlocksToPdf(ctx, blocks);
             }
         }
 

@@ -27,8 +27,9 @@
  *    Customers). A `?tab=blacklist` link says it isn't part of the workspace.
  *  - Team emails and Push notifications — both are part of the one
  *    Notifications page now; `?tab=reminders` and `?tab=push` open it at the
- *    email and push setup. Customer messages moved to a Templates group, with
- *    the agreement template beside it.
+ *    email and push setup. Customer messages moved to a Templates group.
+ *  - Agreement templates — they live on the Agreements tab now (Agreements
+ *    v2, D1), and the old route redirects there.
  *
  * Business reads as who you are (General, Branding, Locations), how a rental
  * runs (Booking rules, Lockbox), then the rest (Booking site, Optional
@@ -302,13 +303,8 @@ export const SETTINGS_INDEX_SECTIONS: SettingsIndexSection[] = [
         tab: "templates",
         keywords: "templates email agreement contract return reminder sms lockbox code instructions",
       },
-      {
-        title: "Agreement templates",
-        description: "The rental agreement customers sign before they drive: its wording, the details it fills in, and a preview.",
-        href: "/settings/agreement-templates",
-        tab: "templates",
-        keywords: "agreement contract rental agreement terms signature sign esign document",
-      },
+      // Agreement templates left Settings for the Agreements tab (Agreements
+      // v2, D1): /settings/agreement-templates redirects to /agreements?view=templates.
     ],
   },
 ];

@@ -78,6 +78,8 @@ import { useTenant } from "@/contexts/TenantContext";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui-v2/badge";
 import { useRentalAgreements, type RentalAgreement } from "@/hooks/use-rental-agreements";
+import { useManagerPermissions } from "@/hooks/use-manager-permissions";
+import { useV2 } from "@/lib/v2-context";
 // The same resolver the send path runs, so the mileage an operator reads here
 // is the mileage the next document will state. Reaching for the rental's raw
 // columns instead would re-derive the tier — and the three engines that each
@@ -85,6 +87,7 @@ import { useRentalAgreements, type RentalAgreement } from "@/hooks/use-rental-ag
 import { resolveAgreementMileage } from "@/lib/agreement-mileage";
 import type { StageProps } from "./stages";
 import { SHOW_MULTI_PERIOD } from "./multi-period";
+import { AgreementTemplateRowV2, useRentalTemplateChoiceV2 } from "./agreement-template-row-v2";
 import {
   fmtDate,
   fmtDateTime,
@@ -327,6 +330,13 @@ export function StageAgreement({ detail, onStage, refetch }: StageProps) {
   const { data: swaps } = useVehicleSwaps(rental.id, tenant?.id);
   const { data: vehicleMileage } = useVehicleMileage(vehicle?.id ?? null, tenant?.id);
 
+  // Agreements v2: which template the next send uses. Off (not on the
+  // agreements canary), the stage sends exactly what it always did.
+  const agreementsV2 = useV2("agreements");
+  const templateChoice = useRentalTemplateChoiceV2(rental, agreementsV2);
+  const templateIdToSend = templateChoice.templateIdToSend;
+  const { canEditSettings } = useManagerPermissions();
+
   const [sending, setSending] = useState(false);
   const [checking, setChecking] = useState(false);
   const [viewing, setViewing] = useState<string | null>(null);
@@ -499,6 +509,9 @@ export function StageAgreement({ detail, onStage, refetch }: StageProps) {
           customerName: customer.name,
           tenantId: tenant.id,
           agreementType: "original",
+          // Only a template other than the one /api/esign picks by itself is
+          // named, so a send with the default selected is today's request.
+          ...(templateIdToSend ? { templateId: templateIdToSend } : {}),
         }),
       });
       const data = await response.json().catch(() => ({}) as Record<string, any>);
@@ -542,7 +555,7 @@ export function StageAgreement({ detail, onStage, refetch }: StageProps) {
     } finally {
       setSending(false);
     }
-  }, [customer, tenant?.id, rental.id, rank, toast, invalidate]);
+  }, [customer, tenant?.id, rental.id, rank, toast, invalidate, templateIdToSend]);
 
   /**
    * Open the document.
@@ -715,7 +728,7 @@ export function StageAgreement({ detail, onStage, refetch }: StageProps) {
       {state === "not_sent" ? (
         <Section
           title="Nothing has been sent"
-          description="The agreement goes out only when you send it — creating the rental does not send one."
+          description="A rental created in the portal sends its agreement automatically. This one has none yet, so send it from here."
         >
           <EmptyHint>
             {firstName} has not been asked to sign anything for this rental. Send it and they get an email with a
@@ -882,6 +895,17 @@ export function StageAgreement({ detail, onStage, refetch }: StageProps) {
               ))}
           </div>
         </Section>
+      )}
+
+      {/* ── the template the next send uses (Agreements v2) ─────────────── */}
+      {agreementsV2 && (
+        <AgreementTemplateRowV2
+          rental={rental}
+          choice={templateChoice}
+          mileage={mileage}
+          canEdit={canEditSettings("templates")}
+          busy={sending}
+        />
       )}
 
       {/* One line, because a signed contract is worth nothing if it went to

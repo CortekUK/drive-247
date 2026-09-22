@@ -580,22 +580,25 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   // without a click, without crowding the three that matter most.
   //
   const rawMoreItems: NavItem[] = ([
-    // Insights, Insurances and Agreements are STILL off the rail by default,
-    // and this was the SECOND time they had been removed: they were taken out
-    // of the "Records" group, then a later restructure promoted them to top
-    // level and so reinstated them. They do not come back on their own.
+    // Insights and Insurances are STILL off the rail by default, and this was
+    // the SECOND time they had been removed: they were taken out of the
+    // "Records" group, then a later restructure promoted them to top level and
+    // so reinstated them. They do not come back on their own.
     //
     // What changed on Sep 20 2026 is that the customiser now OFFERS them
     // (`optional: true`): they are absent until a user switches one on for
     // themselves, and switching one on writes its href into
-    // `NavPreferences.shown`. Default behaviour for every tenant is therefore
-    // byte-identical to yesterday's — nobody is shown a row they did not ask
-    // for — while "the currently-hidden tabs can be shown" is true.
+    // `NavPreferences.shown`. Nobody is shown one of those rows they did not
+    // ask for, while "the currently-hidden tabs can be shown" is true. Each is
+    // a decision that has a home on the rental itself (its Insurance and
+    // Payments stages), so a second, rental-agnostic list of the same records
+    // is two places to look for one answer.
     //
-    // Each is a decision that now has a home on the rental itself — its
-    // Insurance, Agreement and Payments stages — so a second, rental-agnostic
-    // list of the same records is two places to look for one answer. That is
-    // still the reason they are off by default rather than on.
+    // Agreements is ON by default again (Agreements v2, D2; team lead, Sep 21
+    // 2026: "the tab we had, let's use it"). It is no longer only a second view
+    // of the rental's Agreement stage: individual agreements are sent from it
+    // and the agreement templates live on it, so it has no other home. It is
+    // an ordinary row: it can still be hidden or moved in the customiser.
     //
     // All three routes are in ROUTE_TO_TAB (`reports`, `insurances`,
     // `agreements`), so `filterItem` below decides whether a manager may see
@@ -603,7 +606,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
     // row this user could already have been given; it can never widen access.
     { name: "Insights", href: "/insights", icon: TrendingUp, optional: true },
     { name: "Insurances", href: "/insurances", icon: Shield, optional: true },
-    { name: "Agreements", href: "/agreements", icon: FileSignature, optional: true },
+    { name: "Agreements", href: "/agreements", icon: FileSignature },
     // `/blocked-dates` is the route; "Availability" is what the page is FOR,
     // which is why the two do not match.
     { name: "Availability", href: "/blocked-dates", icon: CalendarDays },

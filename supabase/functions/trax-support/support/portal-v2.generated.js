@@ -13,6 +13,7 @@ const V2_AREAS = {
     insights: [NORTHWIND],
     availability: [NORTHWIND],
     turo: [NORTHWIND],
+    agreements: [NORTHWIND],
 };
 export const V2_AREA_LIST = Object.keys(V2_AREAS);
 const V2_EXPERIENCE = 'v2';
