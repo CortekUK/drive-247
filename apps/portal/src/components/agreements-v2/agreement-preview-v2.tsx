@@ -306,6 +306,7 @@ export function AgreementPreviewV2({
   banner,
   className,
   disclaimer = true,
+  unresolvedNote,
 }: {
   /** The rendered agreement (renderAgreementHtml in 'preview' mode, or a sent snapshot). */
   html: string;
@@ -317,6 +318,12 @@ export function AgreementPreviewV2({
    * Default true. Pass false only for a renderer that does not append it.
    */
   disclaimer?: boolean;
+  /**
+   * The sentence above the page when some names have nothing to fill them in.
+   * The default says only that they print blank; a caller that knows WHY (an
+   * individual agreement has no rental) passes words that say so, and what to do.
+   */
+  unresolvedNote?: (count: number) => string;
 }) {
   const isClient = useIsClient();
   const prepared = useMemo(() => (isClient ? prepareAgreementPreviewV2(html) : null), [html, isClient]);
@@ -329,9 +336,11 @@ export function AgreementPreviewV2({
         {prepared && prepared.unresolved > 0 && (
           <p className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
             <span aria-hidden="true" className="inline-block h-3 w-5 shrink-0 rounded-sm border border-dashed border-amber-500 bg-amber-100" />
-            {prepared.unresolved === 1
-              ? "1 highlighted name has nothing to fill it in, so it is left blank when the agreement is sent."
-              : `${prepared.unresolved} highlighted names have nothing to fill them in, so they are left blank when the agreement is sent.`}
+            {unresolvedNote
+              ? unresolvedNote(prepared.unresolved)
+              : prepared.unresolved === 1
+                ? "1 highlighted name has nothing to fill it in, so it is left blank when the agreement is sent."
+                : `${prepared.unresolved} highlighted names have nothing to fill them in, so they are left blank when the agreement is sent.`}
           </p>
         )}
         <article className="agr-sheet" aria-label="Agreement preview">

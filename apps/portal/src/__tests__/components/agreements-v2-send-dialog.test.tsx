@@ -505,3 +505,14 @@ describe("readiness, asked when the dialog opens", () => {
     expect(screen.getByRole("button", { name: /Send agreement/ })).not.toBeDisabled();
   });
 });
+
+describe("the blanks note on an individual agreement", () => {
+  it("says the highlighted details come from a rental, and what to do", async () => {
+    const { individualUnresolvedNoteV2 } = await import("@/components/agreements-v2/send-agreement-dialog-v2");
+    const many = individualUnresolvedNoteV2(25);
+    expect(many).toMatch(/^25 highlighted details in this template come from a rental/);
+    expect(many).toMatch(/isn't linked to a rental, so they are left blank/);
+    expect(many).toMatch(/Use Edit to remove or change them, or pick a template written for this/);
+    expect(individualUnresolvedNoteV2(1)).toMatch(/^1 highlighted detail .* so it is left blank\. Use Edit to remove or change it/);
+  });
+});

@@ -101,6 +101,18 @@ export const CC_HELP = "Enter one or more email addresses, separated by a comma.
 export const CREDITS_NOTE = "Sending uses e-sign credits.";
 
 /**
+ * Why names are highlighted on an INDIVIDUAL agreement, and what to do. A
+ * template written for rentals (the built-in agreement is one) carries the
+ * vehicle, dates, prices and so on, and an agreement not linked to a rental
+ * has nothing to fill them — so they print blank. Saying only "left blank"
+ * left the operator guessing why.
+ */
+export function individualUnresolvedNoteV2(count: number): string {
+  const what = count === 1 ? "1 highlighted detail" : `${count} highlighted details`;
+  return `${what} in this template come from a rental (like the vehicle, dates or prices). This agreement isn't linked to a rental, so ${count === 1 ? "it is" : "they are"} left blank. Use Edit to remove or change ${count === 1 ? "it" : "them"}, or pick a template written for this.`;
+}
+
+/**
  * The document being sent when it is not simply a template's saved wording: a
  * one-off edit of a template (`templateId` is where it started), or one written
  * with Create new (`templateId` null). Either way it is used for this send only.
@@ -689,7 +701,12 @@ export function SendAgreementDialogV2({ open, onOpenChange, onSent }: SendAgreem
                   </Button>
                 </div>
                 <div className="rounded-2xl bg-muted p-4">
-                  <AgreementPreviewV2 html={previewHtml} banner={titleValue.trim()} className="mx-auto" />
+                  <AgreementPreviewV2
+                    html={previewHtml}
+                    banner={titleValue.trim()}
+                    className="mx-auto"
+                    unresolvedNote={individualUnresolvedNoteV2}
+                  />
                 </div>
               </div>
             )}
