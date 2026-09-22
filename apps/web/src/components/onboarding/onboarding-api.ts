@@ -1,6 +1,7 @@
 "use client";
 
 import type { SignupPlanId } from "@/lib/plans";
+import type { PromoOffer } from "@/lib/promo-offer";
 import { getBrowserSupabase } from "@/lib/supabase/browser";
 import {
   SIGNUP_ERROR_COPY,
@@ -27,6 +28,16 @@ export interface SlugCheckRequest {
 }
 export interface PaymentIntentRequest {
   planId: SignupPlanId;
+  /**
+   * A Drive247 promo / referral code to apply at payment.
+   *
+   * Present (a code, or `null`) routes to `signup-payment-intent-v2`; omitted
+   * keeps the original `signup-payment-intent`, untouched. `null` means a code
+   * WAS involved in this signup and has been dropped — the promo-aware
+   * function still answers, so a draft subscription minted with the old code
+   * is replaced at the full price instead of being reused with the discount.
+   */
+  promoCode?: string | null;
 }
 export interface ProvisionRequest {
   companyName: string;
@@ -90,6 +101,10 @@ export interface PaymentIntentResponse {
   currency: "usd";
   mode: "test" | "live";
   alreadyPaid: boolean;
+  /** signup-payment-intent-v2 only: the plan price before the code. */
+  listAmountCents?: number;
+  /** signup-payment-intent-v2 only: the promo / referral code applied, if any. */
+  promo?: PromoOffer | null;
 }
 export interface ResumeSignupDTO {
   planId: SignupPlanId;
@@ -530,11 +545,41 @@ async function suggestFreeSlugs(
  * The user retries explicitly via `onRetryIntent`.
  */
 export function signupPaymentIntent(b: PaymentIntentRequest): Promise<PaymentIntentResponse> {
-  return callFunction<PaymentIntentResponse>("signup-payment-intent", b, {
-    auth: "session",
-    timeoutMs: 30_000,
-    dedupeKey: `signup-payment-intent:${b.planId}`,
-  });
+  // Only a signup that carries (or carried) a promo code uses the promo-aware
+  // copy, so every other signup keeps running on the original function.
+  const promoAware = b.promoCode !== undefined;
+  return callFunction<PaymentIntentResponse>(
+    promoAware ? "signup-payment-intent-v2" : "signup-payment-intent",
+    promoAware && b.promoCode ? { planId: b.planId, promoCode: b.promoCode } : { planId: b.planId },
+    {
+      auth: "session",
+      timeoutMs: 30_000,
+      // The code is part of the key: a call with a different code is a
+      // different request, never the same in-flight promise.
+      dedupeKey: `signup-payment-intent:${b.planId}:${promoAware ? b.promoCode ?? "none" : "v1"}`,
+    },
+  );
+}
+
+/** What `lookupPromoCode` answers: the offer, or why the code can't be used. */
+export type PromoLookupResult =
+  | { valid: true; offer: PromoOffer }
+  | { valid: false; reason: string };
+
+/**
+ * Is this Drive247 promo / referral code usable on this plan? The public
+ * `promo-code-lookup` function (rate-limited per visitor on the server). Used
+ * by the "Have a promo code?" field before a new intent is minted, so a typo
+ * never throws away a code that is already applied.
+ */
+export async function lookupPromoCode(code: string, planId: SignupPlanId): Promise<PromoLookupResult> {
+  const body = await callFunction<Record<string, unknown>>(
+    "promo-code-lookup",
+    { code, planKey: planId },
+    { auth: "anon", timeoutMs: 15_000, dedupeKey: `promo-code-lookup:${code}:${planId}` },
+  );
+  if (body?.valid === true) return { valid: true, offer: body as unknown as PromoOffer };
+  return { valid: false, reason: typeof body?.reason === "string" ? body.reason : "not_found" };
 }
 
 /**

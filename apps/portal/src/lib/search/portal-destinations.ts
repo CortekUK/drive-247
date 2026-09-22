@@ -34,7 +34,8 @@ export type DestinationFlag =
   | "fleet_health_enabled"
   | "turo_sync_enabled"
   | "pending_bookings"
-  | "custom_site_enabled";
+  | "custom_site_enabled"
+  | "referrals_enabled";
 
 export interface DestinationGate {
   /** Hidden for a lean tenant when this area is. */
@@ -134,6 +135,7 @@ export const PAGE_DESTINATIONS: readonly PortalDestination[] = [
   // v2 only: the account section of the v2 rail.
   page("/integrations", "Integrations", "Stripe, Square, Twilio, Bonzah, BoldSign, Tesla, Xero, Zoho, Turo and your custom domain.", "plug", "integrations apps connect connections stripe square twilio bonzah boldsign tesla xero zoho", { integrationsBoard: true }),
   page("/subscription", "Billing", "Your Drive247 plan, its invoices and your credit balance.", "crown", "billing subscription plan drive247 invoice upgrade", { experience: "v2" }),
+  page("/referrals", "Referrals", "Your Drive247 referral code and link, your reward, and who you referred.", "gift", "referrals refer invite referral code link reward discount friend operator", { flags: ["referrals_enabled"] }),
 
   // The original portal only: pages the v2 rail deliberately does not list.
   page("/blocked-customers", "Blocked Customers", "Customers you have blocked from renting.", "user", "blocked banned blacklist customers", { experience: "v1" }),

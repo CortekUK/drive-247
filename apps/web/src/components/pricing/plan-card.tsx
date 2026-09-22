@@ -10,7 +10,13 @@ import {
   type SignupPlan,
   type SignupPlanId,
 } from "@/lib/plans";
+import { discountedPrice, type PromoOffer } from "@/lib/promo-offer";
 import { cn } from "@/lib/utils";
+
+/** "$79", "$79.20". */
+function formatUsd(n: number): string {
+  return `$${Number.isInteger(n) ? n : n.toFixed(2)}`;
+}
 
 interface PlanCardProps {
   plan: SignupPlan;
@@ -23,6 +29,8 @@ interface PlanCardProps {
    * `components/signup-journey/`.
    */
   onSelect?(planId: SignupPlanId): void;
+  /** A Drive247 promo / referral code the visitor carries: shown as the discounted price. */
+  offer?: PromoOffer | null;
 }
 
 /**
@@ -37,7 +45,7 @@ interface PlanCardProps {
  * Must be rendered inside <OnboardingProvider> (supplied by PricingSection)
  * UNLESS `onSelect` is given, in which case the provider is never consulted.
  */
-export function PlanCard({ plan, onSelect }: PlanCardProps) {
+export function PlanCard({ plan, onSelect, offer }: PlanCardProps) {
   // `open()` never throws and never rejects — every failure mode (missing Stripe
   // config, missing Supabase env, a dead network) surfaces as a banner inside the
   // dialog itself, per the onboarding spec. The card therefore has no error
@@ -93,11 +101,21 @@ export function PlanCard({ plan, onSelect }: PlanCardProps) {
       </p>
 
       <div className="mt-5 flex items-baseline gap-1">
+        {offer && (
+          <span className="mr-1 text-lg text-muted-foreground line-through" aria-label={`was ${formatPlanPriceUsd(plan)}`}>
+            {formatPlanPriceUsd(plan)}
+          </span>
+        )}
         <span className="text-4xl font-bold tracking-tighter">
-          {formatPlanPriceUsd(plan)}
+          {offer ? formatUsd(discountedPrice(plan.priceUsd, offer)) : formatPlanPriceUsd(plan)}
         </span>
         <span className="text-sm text-muted-foreground">/month</span>
       </div>
+      {offer && (
+        <p className="mt-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+          {offer.discountText} {offer.durationText}
+        </p>
+      )}
       {/* Reserves two rendered lines (14px text at leading-relaxed ≈ 22.75px/line),
           so a tier whose tagline happens to fit on one line does not pull its
           Subscribe button above the other two. 2.5rem was under one line short. */}

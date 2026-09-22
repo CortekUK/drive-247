@@ -1,0 +1,6 @@
+{
+  "compilerOptions": { "lib": ["deno.window"] },
+  "imports": {
+    "supabase": "https://esm.sh/@supabase/supabase-js@2.57.4"
+  }
+}

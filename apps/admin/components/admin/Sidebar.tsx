@@ -32,6 +32,7 @@ import {
   Activity,
   BookOpen,
   BadgeDollarSign,
+  TicketPercent,
 } from 'lucide-react';
 
 interface NavItem {
@@ -55,7 +56,11 @@ function useNavigation() {
 
   const salesGroup: NavGroup = {
     label: 'Sales',
-    items: [{ name: 'Onboarding', href: '/admin/sales', icon: TrendingUp }],
+    items: [
+      { name: 'Onboarding', href: '/admin/sales', icon: TrendingUp },
+      // Drive247 subscription promo codes + operator referral links.
+      { name: 'Promo Codes', href: '/admin/promo-codes', icon: TicketPercent },
+    ],
   };
 
   // Sales agents (without super admin) only see the Sales group.

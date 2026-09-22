@@ -101,6 +101,7 @@ export function OnboardingDialog() {
     signInInstead,
     startPayment,
     markPaid,
+    applyPromoCode,
     submitTenantDetails,
     startGoogleSignup,
     updateBusiness,
@@ -429,6 +430,10 @@ export function OnboardingDialog() {
                       onRetryIntent={() => void startPayment()}
                       onPaid={() => void markPaid()}
                       onError={(e) => setError(e)}
+                      amountDueCents={state.payment.amountDueCents}
+                      promo={state.payment.promo}
+                      promoNotice={state.payment.promoNotice}
+                      onApplyPromo={applyPromoCode}
                     />
                   ) : null}
 

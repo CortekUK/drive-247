@@ -1,6 +1,7 @@
 "use server";
 
 import { cookies, headers } from "next/headers";
+import { normalizeReferralCode, REFERRAL_COOKIE } from "@/lib/referral-cookie";
 import { getStrategyCallAdminClient } from "@/lib/strategy-call/supabase-admin";
 import {
   createStrategyCallSessionToken,
@@ -97,6 +98,22 @@ export async function submitStrategyCallAction(
     }
 
     const cookieStore = await cookies();
+
+    // A Drive247 promo / referral code the visitor carries (/r/{code}) rides
+    // along with the lead, so sales can put it on the payment link they send.
+    // Best effort: the lead is saved either way, and whether the code is still
+    // usable is checked when the link is made, not here.
+    const promoCode = normalizeReferralCode(cookieStore.get(REFERRAL_COOKIE)?.value);
+    if (promoCode && created.contact_request_id) {
+      const { error: promoError } = await supabase
+        .from("contact_requests")
+        .update({ promo_code: promoCode })
+        .eq("id", created.contact_request_id);
+      if (promoError) {
+        console.warn("Strategy-call promo code not saved (non-fatal)", { code: promoError.code });
+      }
+    }
+
     cookieStore.set(STRATEGY_CALL_SESSION_COOKIE, rawToken, {
       httpOnly: true,
       secure: true,

@@ -367,6 +367,16 @@ verify_jwt = false
 [functions.subscription-link]
 verify_jwt = false
 
+# The same payment link WITH a Drive247 platform promo code (sales pre-applied
+# it, or the prospect typed one). Same anonymous token model as above.
+[functions.subscription-link-v2]
+verify_jwt = false
+
+# Public "is this promo / referral code good?" for /r/{code}, the signup field
+# and the payment page. Display text only; rate-limited per hashed IP.
+[functions.promo-code-lookup]
+verify_jwt = false
+
 # Expiry sweep + "link expired unpaid" notification. Called by pg_cron, which
 # carries no user JWT; protected by x-platform-secret.
 [functions.sweep-subscription-links]

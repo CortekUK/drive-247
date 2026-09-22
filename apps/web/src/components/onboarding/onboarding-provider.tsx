@@ -18,11 +18,19 @@ import {
   type SignupPlan,
   type SignupPlanId,
 } from "@/lib/plans";
+import { promoRejectionText } from "@/lib/promo-offer";
+import {
+  clearReferralCodeInDocument,
+  normalizeReferralCode,
+  readReferralCodeFromDocument,
+  writeReferralCodeInDocument,
+} from "@/lib/referral-cookie";
 import { checkSlugShape, normalizeSlugClient } from "@/lib/signup-validation";
 import { getBrowserSupabase } from "@/lib/supabase/browser";
 
 import {
   fetchSignupMeta,
+  lookupPromoCode,
   signupBegin,
   signupBeginOauth,
   signupPaymentIntent,
@@ -32,6 +40,7 @@ import {
   slugAvailabilityAnon,
   toOnboardingError,
   type ClientSignupMeta,
+  type PaymentIntentResponse,
   type ProvisionRequest,
   type ResumeSignupDTO,
 } from "./onboarding-api";
@@ -153,6 +162,9 @@ const INITIAL_STATE: OnboardingState = {
     publishableKey: null,
     mode: null,
     paid: false,
+    amountDueCents: null,
+    promo: null,
+    promoNotice: null,
   },
   business: freshBusinessDraft(),
   provisioning: { completed: [], phase: "idle", failure: null, activeSince: null },
@@ -506,6 +518,14 @@ export function OnboardingProvider({
   const markPaidInFlightRef = useRef(false);
 
   /**
+   * Set once a promo code has been refused or removed in this signup. Intents
+   * then still go through the promo-aware function, with no code, so a draft
+   * subscription minted with the old code is replaced rather than reused at
+   * the discount.
+   */
+  const promoDroppedRef = useRef(false);
+
+  /**
    * `continueToProvisioning`, reachable from code defined above it.
    *
    * The callbacks form a genuine cycle — `startPaymentInternal` needs to hand
@@ -539,6 +559,9 @@ export function OnboardingProvider({
       // own business, and `signup-provision` is idempotent, so a stale copy can
       // only ever re-describe the tenant it already built.
       clearTenantDraft();
+      // A promo / referral code has done its job once the operator exists: the
+      // landing page must not keep offering it to them on this browser.
+      clearReferralCodeInDocument();
       dispatch({ type: "result", result });
       dispatch({
         type: "provisioning",
@@ -680,7 +703,27 @@ export function OnboardingProvider({
       // intent we are about to replace.
       dispatch({ type: "payment", patch: { clientSecret: null } });
       try {
-        const res = await signupPaymentIntent({ planId });
+        // A Drive247 promo / referral code the visitor carries: the /r/{code}
+        // cookie, which survives the Google and Stripe redirects.
+        const carried = readReferralCodeFromDocument();
+        let promoNotice: string | null = null;
+        let res: PaymentIntentResponse;
+        try {
+          res = await signupPaymentIntent({
+            planId,
+            ...(carried ? { promoCode: carried } : promoDroppedRef.current ? { promoCode: null } : {}),
+          });
+        } catch (e) {
+          // A code that can't be used never blocks the signup: forget it, say
+          // why, and carry on at the full price.
+          const refused = toOnboardingError(e);
+          if (!carried || refused.code !== "PROMO_INVALID") throw e;
+          clearReferralCodeInDocument();
+          promoDroppedRef.current = true;
+          const reason = refused.detail?.reason;
+          promoNotice = `${promoRejectionText(typeof reason === "string" ? reason : null)} You're subscribing at the full price.`;
+          res = await signupPaymentIntent({ planId, promoCode: null });
+        }
         if (res.alreadyPaid) {
           // They already hold a live subscription for this plan (a resume, or a
           // second tab that paid). Skip the card form entirely.
@@ -693,6 +736,9 @@ export function OnboardingProvider({
               clientSecret: null,
               mode: res.mode,
               paid: true,
+              amountDueCents: null,
+              promo: null,
+              promoNotice: null,
             },
           });
           // Nothing left to collect and nothing left to charge — go straight to
@@ -711,6 +757,11 @@ export function OnboardingProvider({
             publishableKey: res.publishableKey,
             mode: res.mode,
             paid: false,
+            // What Stripe's first invoice asks for, shown only when a code
+            // changed it; otherwise the step shows the plan price as before.
+            amountDueCents: res.promo ? res.amountCents : null,
+            promo: res.promo ?? null,
+            promoNotice,
           },
         });
       } catch (e) {
@@ -1593,6 +1644,35 @@ export function OnboardingProvider({
     await startPaymentInternal(stateRef.current.planId);
   }, [startPaymentInternal]);
 
+  const applyPromoCode = useCallback(
+    async (raw: string | null): Promise<string | null> => {
+      const s = stateRef.current;
+      if (s.step !== "payment" || s.payment.paid || !s.planId) return null;
+      if (raw === null) {
+        clearReferralCodeInDocument();
+        promoDroppedRef.current = true;
+        await startPaymentInternal(s.planId);
+        return null;
+      }
+      const code = normalizeReferralCode(raw);
+      if (!code) return promoRejectionText("not_found");
+      if (s.payment.promo?.displayCode === code) return null;
+      // Checked before anything changes, so a typo never throws away a code
+      // that is already applied.
+      try {
+        const check = await lookupPromoCode(code, s.planId);
+        if (!check.valid) return promoRejectionText(check.reason);
+      } catch (e) {
+        return promoRejectionText(toOnboardingError(e).code === "RATE_LIMITED" ? "rate_limited" : "unavailable");
+      }
+      writeReferralCodeInDocument(code);
+      promoDroppedRef.current = false;
+      await startPaymentInternal(s.planId);
+      return null;
+    },
+    [startPaymentInternal],
+  );
+
   const markPaid = useCallback(async () => {
     const s = stateRef.current;
     if (s.step !== "payment") {
@@ -1825,6 +1905,7 @@ export function OnboardingProvider({
       signInInstead,
       startPayment,
       markPaid,
+      applyPromoCode,
       updateBusiness,
       checkSlug,
       retryProvision,
@@ -1848,6 +1929,7 @@ export function OnboardingProvider({
       signInInstead,
       startPayment,
       markPaid,
+      applyPromoCode,
       updateBusiness,
       checkSlug,
       retryProvision,

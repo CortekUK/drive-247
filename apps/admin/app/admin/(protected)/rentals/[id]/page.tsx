@@ -52,6 +52,7 @@ import { BarChart3 } from 'lucide-react';
 import { TenantCreditsTab } from '@/components/admin/tenant-credits-tab';
 import { TenantPaymentsTab } from '@/components/admin/tenant-payments-tab';
 import { FinanceEventsTab } from '@/components/admin/finance-events-tab';
+import { LinkPromoPicker } from '@/components/admin/promo-codes/link-promo-picker';
 import { AdminTodosTab } from '@/components/admin-todos/admin-todos-tab';
 import { isLeanTenant } from '@/lib/lean-tenants';
 import {
@@ -693,7 +694,7 @@ export default function TenantDetailsPage() {
       // Load any pending one-time discount live from Stripe (source of truth).
       if (subData) {
         try {
-          const { data: dd } = await supabase.functions.invoke('apply-subscription-discount', {
+          const { data: dd } = await supabase.functions.invoke('apply-subscription-discount-v2', {
             body: { tenantId, action: 'get' },
           });
           setCurrentDiscount(dd?.discount ?? null);
@@ -739,7 +740,7 @@ export default function TenantDetailsPage() {
     }
     setDiscountBusy(true);
     try {
-      const { data, error } = await supabase.functions.invoke('apply-subscription-discount', {
+      const { data, error } = await supabase.functions.invoke('apply-subscription-discount-v2', {
         body: { tenantId: params.id, action: 'apply', discountType, value: num },
       });
       if (error) throw error;
@@ -758,7 +759,7 @@ export default function TenantDetailsPage() {
   const handleRemoveDiscount = async () => {
     setDiscountBusy(true);
     try {
-      const { data, error } = await supabase.functions.invoke('apply-subscription-discount', {
+      const { data, error } = await supabase.functions.invoke('apply-subscription-discount-v2', {
         body: { tenantId: params.id, action: 'remove' },
       });
       if (error) throw error;
@@ -2270,6 +2271,7 @@ export default function TenantDetailsPage() {
                           <Button size="sm" variant="ghost" disabled={subLinkBusy} onClick={handleRevokeLink}>Revoke</Button>
                         )}
                       </div>
+                      {subLinkLive && <LinkPromoPicker tenantId={String(params.id)} />}
                     </>
                   )}
                 </div>
