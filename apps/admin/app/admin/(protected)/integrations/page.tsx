@@ -35,8 +35,8 @@ import {
   ADMIN_INTEGRATIONS,
   DEFAULT_PREMIUM_KEYS,
   PREVIEW_ONLY_KEYS,
+  catalogRowsToSave,
   centsToDollarsInput,
-  parseDollarsToCents,
   premiumPriceProblem,
 } from '@/lib/integration-pricing';
 
@@ -217,21 +217,10 @@ export default function IntegrationsAdminPage() {
     const { data: me } = auth?.user
       ? await supabase.from('app_users').select('id').eq('auth_user_id', auth.user.id).maybeSingle()
       : { data: null };
-    const now = new Date().toISOString();
-    const payload = rows.map((r) => ({
-      integration_key: r.key,
-      is_premium: r.is_premium,
-      // A free integration keeps no price, so turning premium back on asks for one again.
-      // Blank = "Price to be announced": premium, but not on sale yet.
-      monthly_price_cents: r.is_premium && r.price.trim() !== '' ? parseDollarsToCents(r.price) : null,
-      currency: 'usd',
-      first_month_free: r.is_premium && r.first_month_free,
-      is_beta: r.is_beta,
-      is_unavailable: r.is_unavailable,
-      is_hidden: r.is_hidden,
-      updated_at: now,
-      updated_by: (me as { id?: string } | null)?.id ?? null,
-    }));
+    const payload = catalogRowsToSave(rows, {
+      updatedBy: (me as { id?: string } | null)?.id ?? null,
+      now: new Date().toISOString(),
+    });
     // One upsert on the primary key: re-pressing Save after a failure is always safe.
     const { error } = await supabase.from('integration_catalog_v2').upsert(payload, { onConflict: 'integration_key' });
     setSaving(false);

@@ -21,6 +21,8 @@ import {
   DEFAULT_PREMIUM_KEYS as PORTAL_DEFAULT_PREMIUM,
   INTEGRATION_KEYS as PORTAL_KEYS,
   PREVIEW_ONLY_KEYS as PORTAL_PREVIEW,
+  catalogFromRows,
+  type CatalogRow,
 } from '../../../apps/portal/src/lib/integration-billing/catalog';
 import {
   INTEGRATION_BILLING_TENANTS as BOOKING_TENANTS,
@@ -30,9 +32,11 @@ import {
   ADMIN_INTEGRATIONS,
   DEFAULT_PREMIUM_KEYS as ADMIN_DEFAULT_PREMIUM,
   PREVIEW_ONLY_KEYS as ADMIN_PREVIEW,
+  catalogRowsToSave,
   centsToDollarsInput,
   parseDollarsToCents,
   premiumPriceProblem,
+  type CatalogDraftRow,
 } from '../../../apps/admin/lib/integration-pricing';
 
 const root = path.resolve(__dirname, '../../..');
@@ -134,5 +138,59 @@ describe('the admin price parser', () => {
     expect(centsToDollarsInput(2000)).toBe('20.00');
     expect(centsToDollarsInput(5)).toBe('0.05');
     expect(centsToDollarsInput(null)).toBe('');
+  });
+});
+
+describe('the super admin’s switches reach the operator’s board', () => {
+  // The admin page's own save payload, fed to the portal's own reader — the
+  // two halves of the wiring, with the same column names in between. (The
+  // database half is proved separately against a real Postgres; see
+  // docs/integration-billing/build-spec.md.)
+  const draft = (key: string, over: Partial<CatalogDraftRow> = {}): CatalogDraftRow => ({
+    key,
+    is_premium: false,
+    price: '',
+    first_month_free: false,
+    is_beta: false,
+    is_unavailable: false,
+    is_hidden: false,
+    ...over,
+  });
+  const board = (rows: CatalogDraftRow[]) =>
+    catalogFromRows(catalogRowsToSave(rows, { updatedBy: null, now: '2026-09-22T20:00:00.000Z' }) as unknown as CatalogRow[]);
+
+  it('carries premium, the price, first month free, beta, not available and hidden across', () => {
+    const seen = board([
+      draft('square', { is_premium: true, price: '20.00', first_month_free: true }),
+      draft('turo_sync', { is_premium: true, is_unavailable: true }),
+      draft('twilio_messages', { is_beta: true }),
+      draft('zoho', { is_hidden: true }),
+      draft('xero', { is_premium: true, price: '20.20' }),
+      draft('inshur'),
+      draft('bonzah'),
+    ]);
+    expect(seen.square).toMatchObject({ isPremium: true, monthlyPriceCents: 2000, firstMonthFree: true });
+    expect(seen.xero.monthlyPriceCents).toBe(2020);
+    expect(seen.turo_sync).toMatchObject({ isPremium: true, isUnavailable: true, monthlyPriceCents: null });
+    expect(seen.twilio_messages).toMatchObject({ isBeta: true, isPremium: false });
+    expect(seen.zoho.isHidden).toBe(true);
+    // Saved rows beat the defaults, in both directions.
+    expect(seen.inshur.isPremium).toBe(false);
+    expect(seen.bonzah).toMatchObject({ isPremium: false, isHidden: false, isBeta: false, isUnavailable: false });
+    // A key the admin never saved keeps its default.
+    expect(seen.checkmydriver).toMatchObject({ isPremium: true, monthlyPriceCents: null });
+  });
+
+  it('every switch goes back off again', () => {
+    const seen = board([
+      draft('square'),
+      draft('turo_sync', { is_premium: true, price: '12.50' }),
+      draft('twilio_messages'),
+      draft('zoho'),
+    ]);
+    expect(seen.square).toMatchObject({ isPremium: false, monthlyPriceCents: null, firstMonthFree: false });
+    expect(seen.turo_sync).toMatchObject({ isUnavailable: false, monthlyPriceCents: 1250 });
+    expect(seen.twilio_messages.isBeta).toBe(false);
+    expect(seen.zoho.isHidden).toBe(false);
   });
 });

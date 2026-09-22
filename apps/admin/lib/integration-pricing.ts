@@ -63,6 +63,44 @@ export function centsToDollarsInput(cents: number | null | undefined): string {
   return `${whole}.${fraction}`;
 }
 
+/** One row of the admin form, as the page holds it while it is being edited. */
+export interface CatalogDraftRow {
+  key: string;
+  is_premium: boolean;
+  /** Dollars, as typed. Blank means "Price to be announced". */
+  price: string;
+  first_month_free: boolean;
+  is_beta: boolean;
+  is_unavailable: boolean;
+  is_hidden: boolean;
+}
+
+/**
+ * The form → exactly the `integration_catalog_v2` rows to upsert. PURE, so the
+ * column names and the price conversion are pinned by a test rather than only
+ * by the screen: what the super admin sets here is what the operator's board
+ * reads (tests/integrations/integration-billing).
+ */
+export function catalogRowsToSave(
+  rows: readonly CatalogDraftRow[],
+  opts: { updatedBy: string | null; now: string },
+): Array<Record<string, unknown>> {
+  return rows.map((r) => ({
+    integration_key: r.key,
+    is_premium: r.is_premium,
+    // A free integration keeps no price, so turning premium back on asks for
+    // one again. Blank on a premium row = "Price to be announced".
+    monthly_price_cents: r.is_premium && r.price.trim() !== '' ? parseDollarsToCents(r.price) : null,
+    currency: 'usd',
+    first_month_free: r.is_premium && r.first_month_free,
+    is_beta: r.is_beta,
+    is_unavailable: r.is_unavailable,
+    is_hidden: r.is_hidden,
+    updated_at: opts.now,
+    updated_by: opts.updatedBy,
+  }));
+}
+
 /**
  * Why a premium price cannot be saved, or null when it can. A BLANK price is
  * allowed: the integration shows "Price to be announced" and cannot be
