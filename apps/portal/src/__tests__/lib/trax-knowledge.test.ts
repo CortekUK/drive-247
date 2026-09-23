@@ -31,7 +31,7 @@ describe('TRAX maintained knowledge',()=>{
     for(const [table,fields] of selections)for(const field of fields.split(','))expect(()=>member(member(tables,table),'Row')&&member(member(member(tables,table),'Row'),field)).not.toThrow();
   });
   it('matches its sources, portal route inventory and permission coverage',async()=>{
-    await expect(prepare(true)).resolves.toMatchObject({verified:6,partially_documented:21,unsupported:1,requiring_confirmation:16});
+    await expect(prepare(true)).resolves.toMatchObject({verified:6,partially_documented:21,unsupported:1,requiring_confirmation:17});
   },60_000); // Hashes every catalogued source; can exceed the 5s default when the machine is busy.
   it('detects changes and deleted sources without normalizing business text away',async()=>{
     const sha=(text:string)=>createHash('sha256').update(text).digest('hex');

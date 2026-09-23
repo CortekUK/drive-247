@@ -133,6 +133,7 @@ export const ROUTE_TO_TAB = {
     '/reminders': 'reminders',
     '/reports': 'reports',
     '/insights': 'reports',
+    '/referrals': 'settings.subscription',
     '/integrations': 'settings.integrations',
     '/pl-dashboard': 'pl_dashboard',
     '/cms': 'cms',

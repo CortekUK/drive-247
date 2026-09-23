@@ -2147,6 +2147,26 @@
       "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
     },
     {
+      "id": "referrals",
+      "title": "Referrals",
+      "status": "requiring_confirmation",
+      "scope": "The operator's Drive247 referral programme page: their referral code and link, their reward tier, and who they referred. Canary only.",
+      "routePrefixes": [
+        "/referrals"
+      ],
+      "permissionKeys": [],
+      "document": "docs/trax/unverified-modules.md",
+      "sources": [
+        {
+          "path": "apps/portal/src/app/(dashboard)/referrals/page.tsx",
+          "symbols": []
+        }
+      ],
+      "tests": [],
+      "guides": [],
+      "limits": "Not eligible for retrieval or navigation until the programme's workflow and authorization are reviewed."
+    },
+    {
       "id": "users",
       "title": "Staff administration",
       "status": "partially_documented",
