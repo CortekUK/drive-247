@@ -257,9 +257,13 @@ export function SettingsStickySaveBar({
 
 /**
  * One titled part of a page that holds several (Tax and deposit). The id is
- * `settings-<anchor>`, the target of a deep link; `scroll-mt-24` keeps its
- * title clear of the 64px sticky top bar when it is scrolled to. `action` sits
- * beside the title (a section's own "View only" on a partly editable page).
+ * `settings-<anchor>`, the target of a deep link; `scroll-mt-24` is the gap
+ * left above its title when it is scrolled to. It was there to clear the 64px
+ * top bar back when the bar was `sticky` over a scrolling window; since the v2
+ * fixed frame the page scrolls inside `<main>`, whose scrollport already starts
+ * at the bar's bottom edge, so a deep link CANNOT land a title under the bar
+ * and this is plain breathing room. `action` sits beside the title (a section's
+ * own "View only" on a partly editable page).
  */
 export function SettingsSection({
   anchor,
@@ -299,11 +303,14 @@ export function SettingsSection({
 }
 
 /**
- * Scroll the element with `targetId` to the top of the window once `ready`
- * (the page's data is in, so the skeletons above it have given way and it will
- * not be pushed down after the jump). Once per target: scrolling back up is
- * not undone, and a new target (another deep link) scrolls again. A section
- * that mounts a few frames late is still found (up to ~half a second).
+ * Scroll the element with `targetId` to the top of the page's scrollport once
+ * `ready` (the page's data is in, so the skeletons above it have given way and
+ * it will not be pushed down after the jump). Once per target: scrolling back
+ * up is not undone, and a new target (another deep link) scrolls again. A
+ * section that mounts a few frames late is still found (up to ~half a second).
+ *
+ * `scrollIntoView` rather than `window.scrollTo`, so this follows the scroller:
+ * the document under v1, `<main>` under the v2 fixed frame.
  */
 export const SCROLL_TO_SECTION_MAX_FRAMES = 30;
 
@@ -365,9 +372,12 @@ export const SETTINGS_FOCUS_MAX_FRAMES = 30;
 /**
  * Take the operator to the field a refused save named: focus it, then bring it
  * into view. Focus first with `preventScroll` and scroll once afterwards, so
- * the browser's own jump cannot land the field under the 64px sticky top bar.
- * Instant rather than smooth where the operator has asked for less motion.
- * Returns whether the error named a field at all.
+ * there is exactly one jump rather than the browser's and ours fighting.
+ * `scrollIntoView` is deliberately container-agnostic — it scrolls whichever
+ * box actually scrolls, which is `<main>` under the v2 fixed frame and the
+ * window under v1, so neither needs its own code path. Instant rather than
+ * smooth where the operator has asked for less motion. Returns whether the
+ * error named a field at all.
  */
 export function focusSettingsSaveIssue(error: unknown): boolean {
   const field = settingsSaveIssueField(error);

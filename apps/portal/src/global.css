@@ -485,25 +485,27 @@ All colors MUST be HSL.
    that takes every portal page down.
 
    - sidebar-container   both chromes' fixed sidebar column starts below the banner
-   - sidebar-inset > header   the sticky v2 top bar pins below it (v1's header is
-                         static, so `top` does nothing there). NOT on the bounded
-                         routes: there the wrapper is the header's scroll container
-                         and already starts below the banner, so the offset would
-                         open a banner-high gap above the bar
    - sidebar-wrapper, sidebar-inset, sidebar-gap   the viewport-high floors
                          (`min-h-svh`, v1's `h-svh` gap) lose the banner height, so
                          a short page does not scroll by exactly that much
-   - data-bounded-height   Messages and Trax bound the wrapper to the viewport
+   - data-bounded-height   every wrapper bounded to the viewport — the three
+                         workspaces under either chrome, and EVERY v2 route since
+                         the fixed frame (Sep 23 2026). Without it the banner's
+                         in-flow spacer pushes an `h-svh` wrapper down by the
+                         banner's height and the document scrolls by that much.
    - trax-panel          the phone sheet (inset-3) starts below it. From md up the
                          panel floats, anchored to the bottom-right corner with a
                          height that already leaves room above it, so a `top` there
-                         would override its `bottom` and lift it under the banner. */
+                         would override its `bottom` and lift it under the banner.
+
+   There is no `sidebar-inset > header` rule any more: it moved the v2 top bar
+   down while that bar was `sticky top-0`. In the fixed frame the bar is a plain
+   non-scrolling ROW inside a wrapper that already starts below the banner, and
+   v1's header was always static — so `top` had nothing left to act on in either
+   chrome. */
 html[data-system-banner] [data-slot="sidebar-container"] {
   top: var(--system-banner-h, 0px);
   height: calc(100svh - var(--system-banner-h, 0px));
-}
-html[data-system-banner] [data-slot="sidebar-wrapper"]:not([data-bounded-height]) [data-slot="sidebar-inset"] > header {
-  top: var(--system-banner-h, 0px);
 }
 html[data-system-banner] [data-slot="sidebar-wrapper"],
 html[data-system-banner] [data-slot="sidebar-inset"] {

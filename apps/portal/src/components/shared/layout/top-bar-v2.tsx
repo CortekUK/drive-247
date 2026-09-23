@@ -25,8 +25,27 @@ import { usePageSearchSlot } from "@/components/shared/layout/page-search-slot";
  * Modelled on the Stripe dashboard: a bar spanning the CONTENT column only
  * (right of the sidebar, never the full window), search on the left, a
  * right-aligned icon cluster (credits, messages, notifications), Trax beside
- * the search field, a hairline bottom border, pinned while the page
- * scrolls under it.
+ * the search field.
+ *
+ * ---------------------------------------------------------------------------
+ * IT DOES NOT SCROLL, AND NOTHING SCROLLS UNDER IT (Sep 23 2026)
+ *
+ * The bar is a plain non-scrolling ROW of the v2 frame, exactly as the
+ * sidebar's header is a non-scrolling row of the sidebar. `(dashboard)/layout.tsx`
+ * bounds the shell to one viewport and makes `<main>` the only scroll
+ * container, so the page scrolls BELOW this bar and no row ever passes
+ * underneath it.
+ *
+ * That is why the bar carries no ground of its own — no border, no shadow, no
+ * fill. It used to be `sticky top-0 z-40` over a window-scrolling page, which
+ * meant content DID pass under it, so it painted a masked, blurred "veil"
+ * (`data-slot="top-bar-veil"`) that faded in on scroll to keep the search field
+ * readable, toggled by a `scrolled` state reading `window.scrollY`. Every fix
+ * the team lead asked for — remove the hairline, widen the veil to the bar's
+ * real edges, tint it with `--v2-wash` instead of white — was chasing the EDGE
+ * OF THAT VEIL. With nothing passing under the bar there is no edge to draw and
+ * nothing to hide, so the veil, its `scrolled` state and its window scroll
+ * listener are gone rather than tuned again.
  *
  * It replaces two things the v2 chrome had instead of a bar:
  *   - the search field at the top of the left sidebar, and
@@ -67,8 +86,6 @@ import { usePageSearchSlot } from "@/components/shared/layout/page-search-slot";
  * ---------------------------------------------------------------------------
  * TOKENS ARE BORROWED, NOT INVENTED
  *
- * The translucent-over-blur ground is this portal's own sticky-surface idiom,
- * already used verbatim in `ui-v2/tabs.tsx` and `notifications/notification-sheet.tsx`.
  * The search field is lifted from the sidebar field it replaces, so it reads as
  * the same control in a new place rather than a new control. The icon buttons are
  * the `ui-v2` Button at `size="icon-sm"`, which is what `SidebarTrigger` already
@@ -133,17 +150,6 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
      filters, and takes them back when it unmounts. Null on a page with nothing
      to filter, which is when the global ⌘K pill is the right thing to show. */
   const slot = usePageSearchSlot();
-
-  // Whether the page has scrolled under the bar. The window is the scroller on
-  // every page but the bounded workspaces (Messages, Trax), which scroll inside
-  // their own panel, so there the bar simply stays transparent.
-  const [scrolled, setScrolled] = useState(false);
-  useEffect(() => {
-    const read = () => setScrolled(window.scrollY > 2);
-    read();
-    window.addEventListener("scroll", read, { passive: true });
-    return () => window.removeEventListener("scroll", read);
-  }, []);
 
   /* Typed locally and pushed on a delay. The rentals list serialises its search
      into the QUERY STRING, so one push per keystroke is one navigation per
@@ -247,68 +253,22 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
 
   return (
     <header
-      /* `sticky` here depends on the dashboard layout dropping `overflow-x-hidden`
-         from the v2 Inset — `overflow-x: hidden` forces `overflow-y` to compute
-         to `auto`, which makes that element a scroll container, and a sticky
-         child pins to ITS scrollport rather than the viewport. Since the Inset's
-         height grows with its content it never scrolls, so the bar would have
-         scrolled away. See the note in (dashboard)/layout.tsx.
+      /* A ROW, not a pinned layer. The v2 frame (see `(dashboard)/layout.tsx`)
+         is one viewport tall and does not scroll; this bar and the banners are
+         non-scrolling rows in it and `<main>` below is the only scroll
+         container. So there is no `sticky`, no `top-0` and no `z-40`: nothing
+         can pass under this element, which is the whole point.
 
-         h-16 and not h-14: four files already size themselves with
-         `h-[calc(100vh-4rem)]`, two of them Settings pages the canary reaches.
-         Matching v1's 64px keeps that arithmetic true instead of leaving an 8px
-         gap on those screens. */
-      className={
-        "sticky top-0 z-40 flex h-16 shrink-0 items-center gap-2 bg-transparent px-3 sm:px-4"
-      }
+         No border, no shadow, no fill either — it sits straight on the app
+         gradient the layout paints, the way the sidebar's own header does, so
+         the two sides of the screen read as one surface.
+
+         h-16 and not h-14: six files already size themselves with
+         `h-[calc(100svh-66px)]` / `h-[calc(100vh-4rem)]`, two of them Settings
+         pages the canary reaches. Matching v1's 64px keeps that arithmetic true
+         instead of leaving an 8px gap on those screens. */
+      className={"flex h-16 shrink-0 items-center gap-2 bg-transparent px-3 sm:px-4"}
     >
-      {/* The bar's ground, as a veil rather than a band.
-          The app gradient is painted on the layout's root, behind the sidebar
-          and this bar alike, so any fill here risks looking like a separate
-          strip. It used to be a 60% white fill with a hairline along the
-          bottom, and on a scrolled page that hairline read as a line drawn
-          across the top of the screen (team lead's review).
-          So: no border and no shadow. The ground is its own layer, sitting
-          behind the controls, reaching a little PAST the bar and fading to
-          nothing over that tail, so there is no edge anywhere for the eye to
-          catch. The mask fades the blur with it — masking the header itself
-          would fade the controls too, which is why this is a child.
-          At the very top of the page it is not painted at all, so the gradient
-          runs from the top as it does in the sidebar; it fades in only once
-          rows start passing underneath, to keep the search field readable.
-
-          AND IT IS BRAND-TINTED, NOT WHITE (Sep 20 2026).
-          Two changes were made to this bar on the same day, on two branches,
-          against the same complaint ("the background issue, the colour issue").
-          One rebuilt the ground as this masked veil, so no hairline or edge is
-          drawn across the top. The other found that the fill was `--background`
-          — plain white in both v2 trees — so a white wash over a brand-tinted
-          gradient reads as a pale band while the page below keeps its colour.
-          Both are right and neither is enough alone: the veil removes the EDGE,
-          the tint removes the COLOUR. So the veil keeps its mask and takes its
-          colour from `--v2-wash`, the token the app gradient itself is painted
-          with, at a fraction of the strength. `--primary` is a plain HSL triple
-          in both trees, so the `/ 0.10` is safe; `--border` would NOT be (it
-          carries its own alpha in dark), which is one more reason no hairline
-          comes back here.
-          Dark is unchanged and stays on `--background`: dark mode is out of
-          scope, `--background` is already dark there so nothing read as a pale
-          band, and a 6% tint would only make rows passing underneath harder to
-          read. The `dark:` utilities are emitted after the base ones. */}
-      <div
-        aria-hidden="true"
-        data-slot="top-bar-veil"
-        className={
-          // `-inset-x-3 sm:-inset-x-4` and NOT `inset-x-0`: an absolutely
-          // positioned child is placed against its ancestor's PADDING box, so
-          // `left:0` starts inside this bar's own `px-3 sm:px-4` and left a
-          // crisp, untinted gutter at each end for rows to scroll through —
-          // exactly the visible edge this is meant to remove. The negative
-          // inset is that padding, so the veil reaches the bar's real edges.
-          "pointer-events-none absolute -inset-x-3 top-0 -z-[1] h-[calc(100%+1.5rem)] bg-gradient-to-b from-[hsl(var(--v2-wash,var(--primary))_/_0.10)] via-[hsl(var(--v2-wash,var(--primary))_/_0.06)] to-transparent dark:from-background/75 dark:via-background/55 backdrop-blur-xl transition-opacity duration-200 sm:-inset-x-4 [mask-image:linear-gradient(to_bottom,black_0,black_62%,transparent_100%)] " +
-          (scrolled ? "opacity-100" : "opacity-0")
-        }
-      />
       {/* Phone-only navigation opener. Replaces the floating left-edge handle.
           Suppressed where the layout renders no sidebar at all — the Messages
           workspace does that — because the trigger would still toggle sidebar
@@ -523,9 +483,9 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
                   <MessageCircle />
                   {chatUnread > 0 && (
                     /* `ring-2 ring-background` is the one addition to the shared
-                       badge: the bar's ground is translucent over a blur, and a
-                       16px red dot on that smears without a ring to seat it. The
-                       dock's tucked handle solves the same problem the same way. */
+                       badge: a 16px red dot needs a ring to seat it against the
+                       app gradient this bar sits on. The dock's tucked handle
+                       solved the same problem the same way. */
                     <span className="absolute -right-0.5 -top-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold leading-none text-white ring-2 ring-background">
                       {chatUnread > 9 ? "9+" : chatUnread}
                     </span>

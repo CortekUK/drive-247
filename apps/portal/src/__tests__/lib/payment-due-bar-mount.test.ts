@@ -4,13 +4,18 @@
  *
  * `main` carries, for v2 chrome only:
  *
- *     md:[header+&]:pt-0  md:[header+&]:-mt-3.5
+ *     md:[header+&]:pt-0  md:[header+&>*:first-child]:-mt-3.5
  *
  * which is the rule that puts a page's title row on the same line as the
  * Portal/Website switch in the sidebar (measured at 92px — see the long note
- * above `<main>` in `(dashboard)/layout.tsx`). It is deliberately an ADJACENT
- * sibling rule: when a maintenance or deposit banner is showing between the top
- * bar and main, main keeps its normal spacing instead of sliding under the banner.
+ * above `<main>` in `(dashboard)/layout.tsx`). The 14px pull-up sits on main's
+ * FIRST CHILD rather than on main since the v2 fixed frame (Sep 23 2026): main
+ * is the scroll container now, a scrollport is the padding box, and pulling
+ * main itself up would start that scrollport above the top bar's bottom edge
+ * and let rows scroll into the strip behind it. Both halves are deliberately
+ * ADJACENT sibling rules: when a maintenance or deposit banner is showing
+ * between the top bar and main, main keeps its normal spacing instead of
+ * sliding under the banner.
  *
  * ADJACENCY IS STRUCTURAL. `header + main` stops matching the moment any element
  * exists between the two — `display: none` does not exempt it. `PaymentDueBar`
@@ -64,7 +69,10 @@ describe('PaymentDueBar is mounted where it cannot break the v2 alignment', () =
     // "keep today's spacing when a banner is in between" behaviour. Either way
     // this test should be revisited rather than deleted.
     expect(SRC).toContain('md:[header+&]:pt-0');
-    expect(SRC).toContain('md:[header+&]:-mt-3.5');
+    expect(SRC).toContain('md:[header+&>*:first-child]:-mt-3.5');
+    // Never back on `main` itself: that is the form that puts the scrollport
+    // 14px above the bar and re-opens the seam the fixed frame closed.
+    expect(SRC).not.toContain('md:[header+&]:-mt-3.5');
   });
 
   it('renders ABOVE the v2 top bar', () => {

@@ -123,20 +123,20 @@ import { brandSurface } from "@/components/auth-v2/brand-surface";
 
 /**
  * jsdom lays nothing out, so give the sidebar name a width: 8px a character in
- * a 134px box. 134 is the real room, from the classes of the expanded org row
+ * a 138px box. 138 is the real room, from the classes of the expanded org row
  * once the tenant slug has resolved and the row is the booking-site entry
  * (org-switcher.tsx; `SIDEBAR_ROW` copies them):
  *
  *   256  the sidebar, 16rem (ui-v2/sidebar.tsx `SIDEBAR_WIDTH`; no border)
  *   244  less the header's `p-1.5`, 6px a side (app-sidebar-v2.tsx)
- *   212  less the Branding pencil after the site link: `w-7` (28px) and its
- *        `mr-1` (4px). It is `opacity-0` until hover but keeps its room.
- *   200  less the site link's own `p-1.5`, 6px a side
- *   158  less the mark, `h-8 w-8` (32px), and the `gap-2.5` after it (10px)
- *   134  less the `gap-2.5` before the arrow (10px) and the arrow, `w-3.5`
+ *   216  less the Branding pencil after the site link: `w-7` (28px), flush with
+ *        the row's right edge. It is `opacity-0` until hover but keeps its room.
+ *   204  less the site link's own `p-1.5`, 6px a side
+ *   162  less the mark, `h-8 w-8` (32px), and the `gap-2.5` after it (10px)
+ *   138  less the `gap-2.5` before the arrow (10px) and the arrow, `w-3.5`
  *        (14px)
  *
- * So 16 characters fit (128px) and 17 do not (136px).
+ * So 17 characters fit (136px) and 18 do not (144px).
  *
  * The figure has moved each time the controls beside the name changed:
  *   - 130 until Sep 20 2026: a Settings gear (28px) and a "Switch
@@ -146,10 +146,13 @@ import { brandSurface } from "@/components/auth-v2/brand-surface";
  *     end margin passed to it).
  *   - 190, briefly, on Sep 21 2026: the gear moved down to the profile row and
  *     the org row was identity only, the mark and the name with nothing after.
- *   - 134 since: the row became the booking-site entry, with the arrow after
- *     the name (24px with its gap) and the pencil's room after the link (32px).
- * At 190, "Northwind Rentals" (17 characters, 136px) fit; at 134 it is cut off
- * again, as it was at 130.
+ *   - 134 until Sep 23 2026: the row became the booking-site entry, with the
+ *     arrow after the name (24px with its gap) and the pencil's room after the
+ *     link (28px plus the 4px `mr-1` that held it short of the row's edge).
+ *   - 138 since: the team lead asked for the pencil to sit ON the row's right
+ *     edge, like every other trailing control in this sidebar, so its `mr-1`
+ *     went and those 4px came back to the name.
+ * At 190, "Northwind Car Hire" (18 characters, 144px) fit; at 138 it is cut off.
  */
 const descriptors = {
   scrollWidth: Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollWidth"),
@@ -165,7 +168,7 @@ function measureNames() {
   Object.defineProperty(HTMLElement.prototype, "clientWidth", {
     configurable: true,
     get(this: HTMLElement) {
-      return this.hasAttribute("data-preview-name") ? 134 : 0;
+      return this.hasAttribute("data-preview-name") ? 138 : 0;
     },
   });
 }
@@ -257,23 +260,24 @@ describe("Portal name: a live preview of where the name shows", () => {
     expect(within(pictures).getAllByText("NO")).toHaveLength(1);
     expect(within(pictures).getByAltText("Default icon in a browser tab")).toBeInTheDocument();
 
-    // The cut-off note belongs to the field and travels with it. 17 characters
-    // (136px): the shortest name the 134px box cuts off (see `measureNames`).
-    fireEvent.change(nameInput(), { target: { value: "Northwind Rentals" } });
+    // The cut-off note belongs to the field and travels with it. 18 characters
+    // (144px): the shortest name the 138px box cuts off (see `measureNames`).
+    fireEvent.change(nameInput(), { target: { value: "Northwind Car Hire" } });
     expect(field.contains(screen.getByText(PORTAL_NAME_CUT_OFF_NOTE))).toBe(true);
   });
 
   it("says when the name is too long for the sidebar, and stops saying it once it fits", () => {
     render(<AppearanceSettings />);
-    // "Northwind", 9 characters: 72px in the 134px box (see `measureNames`). Fits.
+    // "Northwind", 9 characters: 72px in the 138px box (see `measureNames`). Fits.
     expect(screen.queryByText(PORTAL_NAME_CUT_OFF_NOTE)).toBeNull();
-    // 16 characters: 128px. Fits — the longest that does.
-    fireEvent.change(nameInput(), { target: { value: "Northwind Rental" } });
+    // 17 characters: 136px. Fits — the longest that does, and only since the
+    // pencil's `mr-1` went and gave the name back 4px (Sep 23 2026).
+    fireEvent.change(nameInput(), { target: { value: "Northwind Rentals" } });
     expect(screen.queryByText(PORTAL_NAME_CUT_OFF_NOTE)).toBeNull();
-    // 17 characters: 136px. Cut off — the shortest that is. It fit the
+    // 18 characters: 144px. Cut off — the shortest that is. It fit the
     // identity-only row's 190px, before the arrow and the pencil's room came in
     // beside the name.
-    fireEvent.change(nameInput(), { target: { value: "Northwind Rentals" } });
+    fireEvent.change(nameInput(), { target: { value: "Northwind Car Hire" } });
     const note = screen.getByText(PORTAL_NAME_CUT_OFF_NOTE);
     expect(note).toHaveAttribute("role", "status");
     expect(note.className).toContain("text-muted-foreground");

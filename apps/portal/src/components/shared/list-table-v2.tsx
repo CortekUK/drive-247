@@ -35,6 +35,7 @@ import { Card, CardContent } from "@/components/ui-v2/card";
 import { Button } from "@/components/ui-v2/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui-v2/table";
 import { cn } from "@/lib/utils";
+import { scrollportFill } from "@/lib/scrollport";
 
 /** Rows on first paint, and rows each fill adds. The rentals list's figure. */
 export const LIST_ROWS_PER_FILL = 25;
@@ -246,17 +247,25 @@ function spaceBelow(el: HTMLElement): number {
 }
 
 /**
- * The height cap, in px, that makes a list's scroll box fill the window below
+ * The height cap, in px, that makes a list's scroll box fill the room below
  * where it starts, with the lines under it still on screen; `undefined` below
  * `md` or while `enabled` is false, which leaves the box's 520px class in force.
  *
  * MEASURED, not `calc(100vh - Npx)`: the page above a list (header, overview
  * card, a banner, the Trax panel narrowing the column) is a different height on
  * every page and changes while the page is open, and a hardcoded offset is
- * wrong for all of them. The box's top is taken in document coordinates, so the
- * cap does not move as the page scrolls, and it never depends on the box's own
- * height, so applying it cannot feed back into the next measurement. It is
- * re-measured when the window resizes and when any ancestor changes size
+ * wrong for all of them.
+ *
+ * MEASURED AGAINST THE SCROLLPORT, not the window (Sep 23 2026). Under v2 the
+ * page scrolls inside `<main>`, not the document — see `lib/scrollport.ts`.
+ * `scrollportFill` takes the box's top from the scrollport's CONTENT origin, so
+ * the cap does not move as the page scrolls, and its height from the scrollport
+ * rather than `window.innerHeight`; under v1, with no scrollport, it returns the
+ * old window numbers unchanged. Left on `window.scrollY` the top would have slid
+ * with every scroll (that value is always 0 once the window stops scrolling) and
+ * a re-measure taken mid-page would have grown the list. It never depends on the
+ * box's own height, so applying it cannot feed back into the next measurement.
+ * It is re-measured when the window resizes and when any ancestor changes size
  * (content above growing, rows arriving). Never below LIST_FILL_MIN_HEIGHT, so
  * a short window still shows a usable list and the page scrolls instead.
  *
@@ -290,8 +299,8 @@ export function useViewportFillCap(ref: RefObject<HTMLElement | null>, enabled: 
       return;
     }
     const measure = () => {
-      const top = el.getBoundingClientRect().top + window.scrollY;
-      setCap(Math.max(LIST_FILL_MIN_HEIGHT, Math.floor(window.innerHeight - top - spaceBelow(el))));
+      const { top, height } = scrollportFill(el);
+      setCap(Math.max(LIST_FILL_MIN_HEIGHT, Math.floor(height - top - spaceBelow(el))));
     };
     measure();
 

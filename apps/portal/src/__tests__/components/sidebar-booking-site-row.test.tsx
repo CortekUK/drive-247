@@ -267,6 +267,36 @@ describe('the booking-site link, on the org row (Sep 21 2026)', () => {
     expect(siteLink()!.parentElement).toBe(orgRow());
   });
 
+  /**
+   * Team lead, Sep 23 2026, on the sidebar's org row: the hover pencil "should
+   * sit at the very END of the row, properly aligned, rather than looking
+   * slightly off".
+   *
+   * It carried `mr-1`, which held its 28px hover pill 4px short of the row's
+   * right edge — 10px from the sidebar's edge, against the 6px the header's
+   * `p-1.5` gives everything else, which is what read as not quite lined up.
+   * Flush, it is the same trailing control as the Settings gear, the customiser
+   * and the caret on the profile row in the footer: 28px, `rounded-lg`, and
+   * ending exactly on their row's edge.
+   */
+  it('puts the pencil on the row\'s right edge, like every other trailing control', () => {
+    expanded();
+    const edit = pencil()!;
+    const cls = [...edit.classList];
+    // Nothing may hold it short of the edge.
+    expect(cls.filter((c) => /^m[rxs]?-/.test(c))).toEqual([]);
+    expect(cls).not.toContain('mr-1');
+    // It is the LAST thing in the row, and the row itself adds no end padding.
+    expect(edit.nextElementSibling).toBeNull();
+    expect(orgRow()!.lastElementChild).toBe(edit);
+    expect([...orgRow()!.classList].filter((c) => /^p[rxe]?-/.test(c))).toEqual([]);
+    // Same box and same corner as the footer row's trailing controls. v2 markup
+    // never uses `rounded-md`.
+    expect(cls).toEqual(expect.arrayContaining(['h-7', 'w-7', 'shrink-0', 'rounded-lg']));
+    expect(cls).not.toContain('rounded-md');
+    expect(cls).not.toContain('rounded-sm');
+  });
+
   it('collapsed: the mark alone is the booking-site link, with no pencil', () => {
     collapsed();
     const row = orgRow()!;

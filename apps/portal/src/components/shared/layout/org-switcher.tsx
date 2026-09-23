@@ -93,6 +93,14 @@ export function OrgMark({ className, preview }: { className?: string; preview?: 
  *     Branding (`/settings/appearance`). `opacity-0` hides it from the eye but
  *     not from the keyboard, so `focus-visible:opacity-100` shows it to a tab
  *     user; and it keeps its room at rest, so the name never jumps on hover.
+ *   - It sits ON THE ROW'S RIGHT EDGE (team lead, Sep 23 2026: it "looked
+ *     slightly off"). It used to carry `mr-1`, which held its 28px hover pill
+ *     4px short of the edge — 10px from the sidebar's edge against the 6px the
+ *     header's `p-1.5` gives everything else, so it read as not quite lined up.
+ *     Flush, and `rounded-lg` rather than `rounded-md`, it is the same trailing
+ *     control as the Settings gear, the customiser and the caret on the profile
+ *     row in the footer (`user-menu-v2.tsx`), which are also 28px, also flush,
+ *     and also inside a `p-1.5` row.
  *   - Two links, siblings inside one container, never nested: an <a> in an <a>
  *     is invalid, and the outer one would swallow the pencil's click. The
  *     container carries the hover highlight, so it covers the pencil too.
@@ -219,7 +227,7 @@ export function OrgSwitcher({
           onClick={onNavigate}
           aria-label="Edit your booking site's branding"
           title="Edit branding"
-          className="mr-1 flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground opacity-0 outline-none transition-colors focus-visible:opacity-100 group-hover/site:opacity-100 hover:bg-primary/10 hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-[hsl(var(--v2-link,var(--primary)))]"
+          className="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-lg text-muted-foreground opacity-0 outline-none transition-colors focus-visible:opacity-100 group-hover/site:opacity-100 hover:bg-primary/10 hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-[hsl(var(--v2-link,var(--primary)))]"
         >
           <Pencil className="h-3.5 w-3.5" aria-hidden />
         </Link>

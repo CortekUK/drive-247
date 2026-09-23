@@ -79,11 +79,18 @@ describe('(dashboard)/layout.tsx mounts', () => {
     expect(layout.slice(tour, host)).toMatch(/^<FirstRentalTour suppressed=\{promptsSuppressed\} \/>\s*$/);
   });
 
-  it('marks the bounded-height routes on the Provider wrapper', () => {
+  it('marks every viewport-bounded wrapper on the Provider wrapper', () => {
     const provider = at(/<Provider\b/);
-    const attr = at('data-bounded-height={isBoundedHeight ? "" : undefined}');
+    // `boundedShell` = the three workspaces under either chrome, plus EVERY v2
+    // route since the fixed frame (Sep 23 2026). The CSS below shortens each of
+    // them by the banner's height; a v2 `h-svh` wrapper without this attribute
+    // would be pushed down by the banner's spacer and scroll the document by
+    // exactly that much.
+    const attr = at('data-bounded-height={boundedShell ? "" : undefined}');
     expect(attr).toBeGreaterThan(provider);
     expect(attr).toBeLessThan(at('<TraxWrap>'));
+    expect(layout).toContain('const boundedShell = isBoundedHeight || v2FixedFrame;');
+    expect(layout).toContain('boundedShell ? "h-svh overflow-hidden" : ""');
   });
 });
 
@@ -139,7 +146,6 @@ describe('global.css offsets', () => {
   it('moves every viewport-pinned piece by the banner height', () => {
     const expected = [
       /html\[data-system-banner\] \[data-slot="sidebar-container"\] \{\s*top: var\(--system-banner-h, 0px\);\s*height: calc\(100svh - var\(--system-banner-h, 0px\)\);\s*\}/,
-      /html\[data-system-banner\] \[data-slot="sidebar-wrapper"\]:not\(\[data-bounded-height\]\) \[data-slot="sidebar-inset"\] > header \{\s*top: var\(--system-banner-h, 0px\);\s*\}/,
       /html\[data-system-banner\] \[data-slot="sidebar-wrapper"\],\s*html\[data-system-banner\] \[data-slot="sidebar-inset"\] \{\s*min-height: calc\(100svh - var\(--system-banner-h, 0px\)\);\s*\}/,
       /html\[data-system-banner\] \[data-slot="sidebar-gap"\] \{\s*height: calc\(100svh - var\(--system-banner-h, 0px\)\);\s*\}/,
       /html\[data-system-banner\] \[data-bounded-height\] \{\s*height: calc\(100svh - var\(--system-banner-h, 0px\)\);\s*\}/,
@@ -154,7 +160,10 @@ describe('global.css offsets', () => {
       .split('}')
       .map((chunk) => chunk.split('{')[0].trim())
       .filter(Boolean);
-    expect(selectors.length).toBeGreaterThanOrEqual(6);
+    // Five since the fixed frame (Sep 23 2026) retired the `sidebar-inset >
+    // header` offset, which only ever moved a `sticky` top bar. The floor is a
+    // guard against the block being emptied, not a target.
+    expect(selectors.length).toBeGreaterThanOrEqual(5);
     for (const selector of selectors) {
       expect(selector).not.toMatch(/\.[A-Za-z_\\-]/);
       expect(selector.startsWith('html[data-system-banner]')).toBe(true);

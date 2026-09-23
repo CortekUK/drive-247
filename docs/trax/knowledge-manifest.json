@@ -169,7 +169,7 @@
     "apps/portal/src/components/settings-v2/settings-index.tsx": "281dfe05d6293284862d5f515515cec266cf78238233ea07ecc98b881b3469d6",
     "apps/portal/src/components/settings/appearance/appearance-settings.tsx": "9e54a28fb7f66a5f7b59de144a8ddee29f8ebea8bbce269aadea2e15c381c511",
     "apps/portal/src/components/settings/appearance/brand-color-field.tsx": "e2e6e1fe847be467c772926a64b36657e8821ea013b8c8ed262e9f575d2eaf54",
-    "apps/portal/src/components/settings/appearance/branding-previews.tsx": "9bc44a6ebd31ec54d1d03d8bd312b08e10806a9b182c39b9f147f3d20d844ff9",
+    "apps/portal/src/components/settings/appearance/branding-previews.tsx": "ebe74099df41ba9d3b46241066058b1cdeac396c2544b5387f2dbd62bb4b65c3",
     "apps/portal/src/components/settings/appearance/logo-studio.tsx": "7ebdf8fdc59d97dfa95b4e8e82df5afc3198bb906926f1bce381568f0c098d75",
     "apps/portal/src/components/settings/appearance/logos-v2.tsx": "2209681ca923f032423597cc257e53dac3af96f428378b0c92dc928f60ccfbb3",
     "apps/portal/src/components/settings/favicon-upload.tsx": "c82c59f960de0a3ba611daee522547f5b89873b366cbaa8495f6db832a3785e9",

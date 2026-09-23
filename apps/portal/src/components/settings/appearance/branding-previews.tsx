@@ -118,8 +118,11 @@ export const SIDEBAR_ROW = {
   name: 'min-w-0 flex-1 truncate text-[13px] font-semibold leading-tight',
   /** "Opens in a new tab", always shown, after the name. */
   external: 'h-3.5 w-3.5 shrink-0 opacity-60',
-  /** The Branding pencil's slot, after the link: invisible at rest, but it keeps its room. */
-  pencil: 'mr-1 flex h-7 w-7 shrink-0 items-center justify-center',
+  /**
+   * The Branding pencil's slot, after the link and flush with the row's right
+   * edge: invisible at rest, but it keeps its room.
+   */
+  pencil: 'flex h-7 w-7 shrink-0 items-center justify-center',
 } as const;
 
 /** True once the element's text no longer fits its box (re-checked as it changes size). */

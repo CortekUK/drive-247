@@ -389,6 +389,139 @@ describe('ListTable fillViewport', () => {
   });
 });
 
+/**
+ * The same cap, measured inside the v2 FIXED FRAME (Sep 23 2026).
+ *
+ * The window no longer scrolls: `<main>` is the scroll container and carries
+ * `data-scrollport`, so `useViewportFillCap` asks it instead of the window
+ * (lib/scrollport.ts). Everything above stays the same — the same page, the
+ * same 92px of space below the box — so the numbers here can be checked against
+ * the window ones by hand.
+ */
+describe('ListTable fillViewport inside the v2 fixed frame', () => {
+  class ResizeObserverStub {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+
+  /** The bar's 64px, then the port: 900 - 64 = 836 of scrollport. */
+  const BAR = 64;
+  const PORT_HEIGHT = 836;
+  let portScroll = 0;
+
+  const saved = {
+    innerHeight: Object.getOwnPropertyDescriptor(window, 'innerHeight'),
+    scrollY: Object.getOwnPropertyDescriptor(window, 'scrollY'),
+    clientHeight: Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientHeight'),
+    scrollTop: Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollTop'),
+  };
+
+  beforeEach(() => {
+    portScroll = 0;
+    vi.stubGlobal('IntersectionObserver', ResizeObserverStub);
+    vi.stubGlobal('ResizeObserver', ResizeObserverStub);
+    vi.spyOn(window, 'matchMedia').mockImplementation(
+      (query: string) =>
+        ({
+          matches: query === '(min-width: 768px)',
+          media: query,
+          addEventListener: () => {},
+          removeEventListener: () => {},
+        }) as unknown as MediaQueryList,
+    );
+    // The window is 900 tall and NEVER scrolls, which is the whole point.
+    Object.defineProperty(window, 'innerHeight', { configurable: true, get: () => 900 });
+    Object.defineProperty(window, 'scrollY', { configurable: true, get: () => 0 });
+    Object.defineProperty(HTMLElement.prototype, 'clientHeight', {
+      configurable: true,
+      get(this: HTMLElement) {
+        return this.hasAttribute('data-scrollport') ? PORT_HEIGHT : 0;
+      },
+    });
+    Object.defineProperty(HTMLElement.prototype, 'scrollTop', {
+      configurable: true,
+      get(this: HTMLElement) {
+        return this.hasAttribute('data-scrollport') ? portScroll : 0;
+      },
+      set() {},
+    });
+    // The SAME layout as the window harness above, now in scrollport-content
+    // coordinates: the box at 400-700, its card ending at 724, the count line
+    // at 748-776. On screen that is `64 + content - portScroll`.
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const box = (top: number, bottom: number) => {
+        const shift = BAR - portScroll;
+        return ({ top: top + shift, bottom: bottom + shift, left: 0, right: 0, width: 0, height: bottom - top, x: 0, y: top + shift, toJSON: () => ({}) }) as DOMRect;
+      };
+      if (this.hasAttribute('data-scrollport')) {
+        // The port's own border box starts at the bar's bottom and never moves.
+        return ({ top: BAR, bottom: 900, left: 0, right: 0, width: 0, height: PORT_HEIGHT, x: 0, y: BAR, toJSON: () => ({}) }) as DOMRect;
+      }
+      if (this.dataset.slot === 'card-content') return box(400, 700);
+      if (this.dataset.slot === 'card') return box(376, 724);
+      if (this.dataset.testid === 'count-line') return box(748, 776);
+      return box(0, 0);
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    for (const [key, desc] of Object.entries(saved)) {
+      const target = key === 'innerHeight' || key === 'scrollY' ? window : HTMLElement.prototype;
+      if (desc) Object.defineProperty(target, key, desc);
+      else delete (target as unknown as Record<string, unknown>)[key];
+    }
+  });
+
+  function Page() {
+    const rows = useProgressiveRows([1, 2, 3], 'k');
+    return (
+      <main data-scrollport="" style={{ paddingBottom: '16px' }}>
+        <div style={{ paddingBottom: '24px' }}>
+          <ListTable rows={rows} fillViewport>
+            <ListBody>
+              {rows.visible.map((row) => (
+                <ListRow key={row}>
+                  <ListCell>{row}</ListCell>
+                </ListRow>
+              ))}
+            </ListBody>
+          </ListTable>
+          <div data-testid="count-line" />
+        </div>
+      </main>
+    );
+  }
+
+  const scrollBox = (container: HTMLElement) =>
+    container.querySelector('[data-slot="card-content"]') as HTMLElement;
+
+  // Space below the box is unchanged by the frame — it is read from the
+  // elements AFTER the box, and those distances do not move: 52 (count line
+  // bottom 776 - card bottom 724) + 24 (the page's padding) + 16 (main's) = 92.
+  // The box starts 400 down the scrollport, which is 836 tall, so the cap is
+  // 836 - 400 - 92 = 344.
+  //
+  // HAND-CHECKED AGAINST THE WINDOW: at rest the box sits 464px down a 900px
+  // viewport, and 900 - 464 - 92 is the same 344. The frame moved WHERE the
+  // room is measured, not how much of it there is.
+  it('caps the box at the room left in the scrollport under its top', () => {
+    const { container } = render(<Page />);
+    expect(scrollBox(container).style.maxHeight).toBe('344px');
+  });
+
+  it('measures the same cap however far <main> is scrolled', () => {
+    // The failure this replaces: `rect.top + window.scrollY` with a window that
+    // never scrolls is just `rect.top`, so a re-measure 250px down the page
+    // would have read the box as starting at 150 and grown the cap to 594.
+    portScroll = 250;
+    const { container } = render(<Page />);
+    expect(scrollBox(container).style.maxHeight).toBe('344px');
+  });
+});
+
 describe('ListFooter', () => {
   const footer = (visible: number, total: number, hasMore: boolean, serverTotal?: number) =>
     render(

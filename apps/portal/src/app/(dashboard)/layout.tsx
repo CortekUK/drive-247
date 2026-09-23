@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/stores/auth-store";
 import { Button } from "@/components/ui/button";
@@ -204,6 +204,84 @@ export default function DashboardLayout({
 
   /* Routes that bound their own height instead of letting the document scroll. */
   const isBoundedHeight = isMessagesWorkspace || isTraxWorkspace || isSupportWorkspace;
+
+  /**
+   * THE V2 FIXED FRAME (Sep 23 2026).
+   *
+   * Team lead, with a screenshot of the top-left: "the sidebar heading is fixed
+   * and scrolling begins after it. Make the main view's top bar fixed the same
+   * way, so scrolling starts below it. That also solves the line problem we
+   * keep seeing."
+   *
+   * So the v2 shell is bounded to exactly one viewport and does not scroll:
+   * `<Provider>` is `h-svh overflow-hidden`, the Inset is a full-height column,
+   * the dunning bar / top bar / banners are non-scrolling rows in it, and
+   * `<main>` is the only scroll container. The page therefore scrolls BELOW the
+   * bar and nothing ever passes underneath it — which is what removed the
+   * "line": the seam the lead kept reporting was the edge of the blurred veil
+   * `TopBarV2` painted to hide the rows sliding under it. No rows under it, no
+   * veil, no edge. The sidebar has worked this way all along (fixed header,
+   * scrolling menu), so the two sides of the screen now match.
+   *
+   * The three bounded workspaces already did this for themselves, so the frame
+   * simply WIDENS their bound to every v2 route rather than nesting a second
+   * one: they keep `overflow-hidden` on their own `main` and go on scrolling
+   * inside their panels.
+   *
+   * `h-svh`, the same unit those workspaces use — never `100vh`, which on a
+   * phone is the viewport WITHOUT the address bar and so hangs the last rows of
+   * every page below the fold until the bar hides.
+   *
+   * v1 is untouched: `boundedShell` collapses to `isBoundedHeight` there, and
+   * every class string below keeps its exact v1 spelling.
+   */
+  const v2FixedFrame = v2Chrome;
+  const boundedShell = isBoundedHeight || v2FixedFrame;
+
+  /**
+   * Keyboard scrolling, which moved with the scroller.
+   *
+   * With the window as the scroller, Page Down / Space / Home / End scrolled
+   * the page wherever focus was, including nowhere (a fresh load, focus on
+   * <body>). A scrollable ELEMENT only answers those keys when focus is inside
+   * it, so `<main>` carries `tabIndex={-1}`: a click anywhere in the content
+   * now lands focus on it (the browser walks up to the nearest focusable
+   * ancestor), and focus is put there on arrival — but ONLY when nothing else
+   * has claimed it.
+   *
+   * THE GUARD IS WHAT MAKES THAT SAFE, and it is deliberately strict. A page
+   * that focuses its own field has already done so by the time either of these
+   * runs, so `document.activeElement` is not <body> and we leave it alone; and
+   * after a mouse click on a nav link focus is on the LINK, which is where it
+   * belongs — the sidebar menu is itself a scroller, so those keys go on
+   * scrolling the nav exactly as they do today. `preventScroll`, so restoring
+   * focus can never itself scroll the page it just arrived on.
+   *
+   * A ref CALLBACK and not just the effect below: the layout holds four early
+   * returns (loading, the gate latch, the first paint, a suspended tenant), so
+   * on a cold load `main` mounts a beat AFTER `pathname` last changed and an
+   * effect keyed on the route would never fire for it. The callback fires when
+   * the element attaches, whichever of those paths let go.
+   */
+  const mainRef = useRef<HTMLElement | null>(null);
+  const claimFocus = useCallback((node: HTMLElement | null) => {
+    if (!node || typeof document === "undefined") return;
+    const active = document.activeElement;
+    if (active && active !== document.body && active !== document.documentElement) return;
+    node.focus({ preventScroll: true });
+  }, []);
+  const attachMain = useCallback(
+    (node: HTMLElement | null) => {
+      mainRef.current = node;
+      if (v2FixedFrame) claimFocus(node);
+    },
+    [v2FixedFrame, claimFocus],
+  );
+  // And again on each navigation, for the routes reached without a click that
+  // parks focus somewhere (⌘K, a redirect, the browser's Back).
+  useEffect(() => {
+    if (v2FixedFrame) claimFocus(mainRef.current);
+  }, [v2FixedFrame, claimFocus, pathname]);
 
   /* Trax's shared conversation, provided to the top bar, the floating panel and
      the full page so all three are the SAME thread. v2 only: for v1 this is a
@@ -522,14 +600,15 @@ export default function DashboardLayout({
         className={
           [
             v2Theme ? "bg-background bg-app-gradient" : "",
-            /* Messages is the ONE route where the app itself must not scroll.
+            /* THE FRAME'S CEILING, for every v2 route and for the three
+               bounded workspaces under either chrome (see `boundedShell`).
                The bound has to be here, at the top of the chain: this wrapper
                is `min-h-svh`, a floor and not a ceiling, so anything taller
                inside pushed the whole page — all three columns together —
                rather than scrolling within itself. Measured, not assumed: with
                only the floor, `main` came out 4250px tall in an 820px window
                and the document scrolled 3430px. */
-            isBoundedHeight ? "h-svh overflow-hidden" : "",
+            boundedShell ? "h-svh overflow-hidden" : "",
           ]
             .filter(Boolean)
             .join(" ") || undefined
@@ -537,11 +616,13 @@ export default function DashboardLayout({
         /* The Support rail holds ticket rows (subject, reference, preview, time,
            status), so it is 19rem there instead of the nav's 16rem. */
         style={v2Chrome && isSupportWorkspace ? ({ "--sidebar-width": "19rem" } as React.CSSProperties) : undefined}
-        /* Marks the bounded-height routes for global.css, which shortens the
-           wrapper by the system banner's height while one is showing (otherwise
-           Messages and Trax would scroll the document by exactly that much).
-           No attribute at all on every other route. */
-        data-bounded-height={isBoundedHeight ? "" : undefined}
+        /* Marks every wrapper that is bounded to the viewport for global.css,
+           which shortens it by the system banner's height while one is showing.
+           Without it the banner's in-flow spacer pushes a `h-svh` wrapper down
+           by exactly the banner's height and the document scrolls by that much —
+           which is how Messages and Trax found it, and is now true of every v2
+           route. No attribute at all on a window-scrolling v1 page. */
+        data-bounded-height={boundedShell ? "" : undefined}
       >
         <TraxWrap>
         <SearchSlotWrap>
@@ -682,24 +763,59 @@ export default function DashboardLayout({
               removed, `flex-1` distributes the wrapper's bounded height and no
               viewport arithmetic is needed anywhere — v1's 4rem header is a
               sibling above, so the flex pass subtracts it on its own. */}
-          {/* v2: THE PAGE HEADER SITS ON THE SIDEBAR SWITCH'S ROW. The user asked
+          {/* THE ONE SCROLL CONTAINER of the v2 frame, and nothing above it in
+              the column scrolls at all.
+
+              `overflow-y-auto` with `min-h-0` is the pair that makes that true:
+              a flex item's `min-height: auto` floors it at its CONTENT height,
+              and that floor beats `flex-1`, so without it this element grows
+              past the bounded shell and the frame clips the bottom of every long
+              page instead of scrolling it. `overflow-x-hidden` is spelled out
+              rather than left to compute, and clamps sideways overflow exactly
+              where `html, body { overflow-x: hidden }` used to.
+
+              `data-scrollport` is the marker `lib/scrollport.ts` looks for, so
+              the handful of places that measure "the room left below me on
+              screen" ask THIS box instead of the window. `tabIndex={-1}` and
+              `outline-none` are what keep Page Down / Space / Home / End
+              working now that the window is not the scroller (see the focus
+              effect above).
+
+              v2: THE PAGE HEADER SITS ON THE SIDEBAR SWITCH'S ROW. The user asked
               for the page title row (Rentals, Customers, Vehicles and every page
               like them) to line up with the Portal / Website switch in the
               sidebar. Measured in headless Chrome on the real AppSidebarV2 and
               TopBarV2: the switch is centred 92px from the top at every desktop
               width, collapsed or not, and a page header (a 24px page padding,
               then a 36px title row) was centred at 122px, so 30px low. Dropping
-              main's 16px top padding and pulling main up 14px under the
-              transparent top bar puts it at 92px. Desktop only (md, where the
-              sidebar is on screen). `[header+&]` applies it only when main sits
-              directly under the top bar: with a maintenance or deposit banner
-              showing in between, main keeps today's spacing instead of sliding
-              under the banner. The v1 branch is unchanged. */}
+              main's 16px top padding and pulling the page up 14px puts it at 92px.
+
+              THE 14px MOVED OFF `main` AND ONTO ITS FIRST CHILD, and that is the
+              whole reason the frame can be flush. A scrollport IS the padding
+              box: pulling `main` itself up 14px would start the scrollport 14px
+              ABOVE the bar's bottom edge, so scrolled rows would show in that
+              strip — the same content-under-the-bar the frame exists to end,
+              just 14px of it. On the first child the scrollport still begins
+              exactly at the bar's bottom, and the 14px it borrows is above the
+              scroll origin, which is unreachable and clipped. That region is the
+              page's own top padding (24px), so nothing of a page is lost, every
+              `h-[calc(100svh-66px)]` full-height page still ends exactly on
+              main's bottom padding, and the title row lands back at 92px.
+
+              Desktop only (md, where the sidebar is on screen). `[header+&]`
+              applies both parts only when main sits directly under the top bar:
+              with a maintenance or deposit banner showing in between, main keeps
+              today's spacing instead of sliding under the banner. The v1 branch
+              is unchanged — no bound, no scrollport, no tabindex, the window
+              still scrolls the document. */}
           <main
+            ref={attachMain}
+            tabIndex={v2FixedFrame && !isBoundedHeight ? -1 : undefined}
+            data-scrollport={v2FixedFrame ? "" : undefined}
             className={
               isBoundedHeight
                 ? `flex min-h-0 flex-1 flex-col overflow-hidden p-0${v2Chrome ? " min-w-0" : ""}`
-                : `flex flex-1 flex-col gap-4 p-4${v2Chrome ? " min-w-0 md:[header+&]:pt-0 md:[header+&]:-mt-3.5" : " pt-0"}`
+                : `flex flex-1 flex-col gap-4 p-4${v2Chrome ? " min-h-0 min-w-0 overflow-y-auto overflow-x-hidden outline-none md:[header+&]:pt-0 md:[header+&>*:first-child]:-mt-3.5" : " pt-0"}`
             }
           >
             {children}

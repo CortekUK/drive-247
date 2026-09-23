@@ -3,6 +3,7 @@
 import { Fragment, useLayoutEffect, useRef, useState } from "react";
 import { ArrowRight, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { scrollportFill } from "@/lib/scrollport";
 
 /**
  * Three guided steps, then the real form.
@@ -53,13 +54,17 @@ export function RentalOnboardingShell({
     const el = rootRef.current;
     if (!el) return;
     const update = () => {
-      // Document-relative top, so a re-measure that fires while the page is
-      // scrolled (the observer below can fire at any scroll position) sizes the
-      // shell exactly as one at scroll 0 would.
-      const top = el.getBoundingClientRect().top + window.scrollY;
-      // 16 = <main>'s bottom padding (p-4). With 12 the page ended 4px below the
-      // viewport, so it scrolled by 4px at every width, banner or not.
-      setHeight(`${Math.max(320, window.innerHeight - top - 16)}px`);
+      // Measured against the SCROLLPORT — `<main>` under v2's fixed frame, the
+      // window under v1 (lib/scrollport.ts). `top` is taken from the
+      // scrollport's content origin, so a re-measure that fires while the page
+      // is scrolled (the observer below can fire at any scroll position) sizes
+      // the shell exactly as one at scroll 0 would; `window.scrollY` used to do
+      // that job and is always 0 once the window stops being the scroller.
+      const { top, height } = scrollportFill(el);
+      // 16 = <main>'s bottom padding (p-4), which is inside `height`. With 12
+      // the page ended 4px below the viewport, so it scrolled by 4px at every
+      // width, banner or not.
+      setHeight(`${Math.max(320, height - top - 16)}px`);
     };
     update();
     window.addEventListener("resize", update);

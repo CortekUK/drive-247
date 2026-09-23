@@ -12,6 +12,7 @@ import { useTenantHolidays } from "@/hooks/use-tenant-holidays";
 import { useWeekendPricing } from "@/hooks/use-weekend-pricing";
 import { useFleetDailyPrices } from "@/hooks/use-fleet-daily-prices";
 import { useTenant } from "@/contexts/TenantContext";
+import { scrollportFill } from "@/lib/scrollport";
 import { RentalFilters } from "@/hooks/use-enhanced-rentals";
 import {
   ViewType,
@@ -246,16 +247,20 @@ export function CalendarView({ filters }: CalendarViewProps) {
     const measure = () => {
       const el = gridRef.current;
       if (!el) return;
-      // DOCUMENT-space top, not viewport-space. Using rect.top alone would
+      // SCROLLPORT-space top, not viewport-space. Using rect.top alone would
       // feed back on itself: scrolling the page down shrinks rect.top, which
-      // would grow the grid, which changes how far the page can scroll. Adding
-      // scrollY makes the measurement independent of scroll position.
-      const docTop = el.getBoundingClientRect().top + window.scrollY;
+      // would grow the grid, which changes how far the page can scroll.
+      // `scrollportFill` measures from the scroll container's content origin,
+      // so the value is independent of scroll position — the window under v1,
+      // and `<main>` under v2's fixed frame, where `window.scrollY` is always 0
+      // and would have left exactly that feedback loop (lib/scrollport.ts).
+      // This grid reaches v2 through `timeline-v2/connected-timeline.tsx`.
+      const { top, height } = scrollportFill(el);
       const BOTTOM_GAP = 16;
       // Floor guards the pathological case (very short window, or the grid
       // pushed below the fold) — better a small scrollable grid than a
       // negative height that collapses the calendar entirely.
-      setGridMaxH(Math.max(280, Math.round(window.innerHeight - docTop - BOTTOM_GAP)));
+      setGridMaxH(Math.max(280, Math.round(height - top - BOTTOM_GAP)));
     };
 
     measure();
