@@ -61,9 +61,26 @@ global.ResizeObserver = vi.fn().mockImplementation(() => ({
   disconnect: vi.fn(),
 }));
 
-// Mock IntersectionObserver
-global.IntersectionObserver = vi.fn().mockImplementation(() => ({
-  observe: vi.fn(),
-  unobserve: vi.fn(),
-  disconnect: vi.fn(),
-}));
+/**
+ * IntersectionObserver, as a CLASS.
+ *
+ * A `vi.fn()` with a mock implementation is not constructible under Vitest 4,
+ * and `next/link`'s prefetch does `new IntersectionObserver(...)`. So any test
+ * that renders a Link threw — but only sometimes: the throw depends on whether
+ * the prefetch effect fires, and on whether some other file in the same worker
+ * installed a real class stub first. That is what made
+ * `integrations-board-premium` fail in a full run and pass on its own.
+ */
+class IntersectionObserverStub implements IntersectionObserver {
+  readonly root: Element | Document | null = null;
+  readonly rootMargin: string = "";
+  readonly thresholds: ReadonlyArray<number> = [];
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+  takeRecords(): IntersectionObserverEntry[] {
+    return [];
+  }
+}
+
+global.IntersectionObserver = IntersectionObserverStub;

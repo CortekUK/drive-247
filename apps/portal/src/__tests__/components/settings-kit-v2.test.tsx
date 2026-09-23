@@ -269,7 +269,8 @@ describe("flush with the section heading", () => {
     const rows = panel.querySelector("[data-settings-rows]")!;
     expect(classes(rows)).not.toContain("divide-y");
     expect(rows.children).toHaveLength(2);
-    // Spacing, not lines: a row's own 16px a side is all that separates it.
+    // Spacing, not lines: 16px under one row and 16px over the next is all
+    // that separates them.
     for (const row of Array.from(rows.children)) expect(classes(row)).toContain("py-4");
   });
 

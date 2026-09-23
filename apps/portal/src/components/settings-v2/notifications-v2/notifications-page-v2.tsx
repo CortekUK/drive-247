@@ -483,8 +483,8 @@ function InAppExplainer() {
     // the email sender's above it (settings-kit.tsx).
     <section data-settings-section="in-app" className={SETTINGS_PANEL_FLUSH} aria-labelledby="notifications-in-app-title">
       <div className="pb-2">
-        {/* The kit's panel-title recipe, not a copy of it: the Email card and
-            Push on this device beside it use the same constant. */}
+        {/* The kit's panel-title recipe, not a copy of it: the email sender
+            and Push on this device beside it use the same constant. */}
         <h2 id="notifications-in-app-title" className={SETTINGS_SECTION_TITLE}>
           {COPY.inAppTitle}
         </h2>

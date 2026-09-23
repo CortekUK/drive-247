@@ -101,6 +101,11 @@ describe("SettingsSectionSkeleton", () => {
   it("renders form pairs and cards", () => {
     render(<SettingsSectionSkeleton variant="form" rows={4} />);
     expect(container.querySelectorAll(".rounded-3xl")).toHaveLength(4);
+    // `form` stands in for a `SettingsPanel`, which draws no box (settings-kit),
+    // so it draws none either: no card to flash and then vanish, sliding every
+    // label 20px left as it goes.
+    const form = container.querySelector('[data-settings-state="loading"] > div')!;
+    expect(form.className).toBe("space-y-5");
     render(<SettingsSectionSkeleton variant="cards" rows={6} header />);
     expect(container.querySelectorAll(".rounded-2xl.bg-card")).toHaveLength(6);
   });

@@ -69,9 +69,9 @@ export const PUSH_SETUP_OFF_COPY = {
 } as const;
 
 /**
- * The test message itself. The page hands the card an `onSendTest` that goes
+ * The test message itself. The page hands the panel an `onSendTest` that goes
  * through notification-test-v2 (so the test carries the Open in app button);
- * when that function isn't deployed the card falls back to `usePushNotifications`'
+ * when that function isn't deployed the panel falls back to `usePushNotifications`'
  * own send-push call with "Just my devices", which is live, and sends exactly
  * this message either way.
  */
@@ -90,7 +90,7 @@ export const PUSH_SETUP_FALLBACK_NOTE =
  * a 404 from the gateway (`not_deployed`) or a fetch that never reached it
  * (`network`, supabase-js' FunctionsFetchError). Step 3 is the "final check on
  * the phone" (transcript 20:18–20:46): it must not be the one step that breaks
- * because a NEW function hasn't shipped, so the card retries the live sender.
+ * because a NEW function hasn't shipped, so the panel retries the live sender.
  * Any other failure (no devices, a role the function refuses, a bad session) is
  * a real answer and is shown as it is.
  */
@@ -182,7 +182,7 @@ export function PushSetupV2(props: PushSetupV2Props) {
 
   if (tenant.push_notifications_enabled !== true) {
     return (
-      <SetupCard className={props.className}>
+      <SetupPanel className={props.className}>
         <div data-push-setup="off" className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-start gap-3">
             <BellOff className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -195,7 +195,7 @@ export function PushSetupV2(props: PushSetupV2Props) {
             <a href={PUSH_SUPPORT_HREF}>{PUSH_SETUP_OFF_COPY.action}</a>
           </Button>
         </div>
-      </SetupCard>
+      </SetupPanel>
     );
   }
 
@@ -309,7 +309,7 @@ function PushSetupSteps({ canEdit = true, onSendTest, className }: PushSetupV2Pr
   const otherPlatform: PushSetupPlatform = platform === "iphone" ? "other" : "iphone";
 
   return (
-    <SetupCard className={className}>
+    <SetupPanel className={className}>
       {/* No dividers: each step already carries its own number, so the
           line was saying a second time what the 1, 2, 3 say (settings-kit.tsx,
           `SettingsPanel`). */}
@@ -428,7 +428,7 @@ function PushSetupSteps({ canEdit = true, onSendTest, className }: PushSetupV2Pr
         lock screen or with a sound is set on the phone, not here. On iPhone: Settings, then Notifications, then
         this app. On Android: press and hold a notification, then tap the settings icon.
       </p>
-    </SetupCard>
+    </SetupPanel>
   );
 }
 
@@ -436,7 +436,7 @@ function PushSetupSteps({ canEdit = true, onSendTest, className }: PushSetupV2Pr
 /* Parts                                                                       */
 /* -------------------------------------------------------------------------- */
 
-function SetupCard({ children, className }: { children: ReactNode; className?: string }) {
+function SetupPanel({ children, className }: { children: ReactNode; className?: string }) {
   const titleId = useId();
   return (
     <section

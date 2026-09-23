@@ -128,10 +128,9 @@ export const SETTINGS_COLUMN_BESIDE_TRAX =
 
 /**
  * A settings row's grid needs ~700px (a 420px label column, the 40px gap, then
- * the control). While the Trax panel is open on a
- * screen up to 1440px wide the column is narrower than that, so rows stack as
- * they do on a phone instead of squeezing the control to a sliver. Nothing
- * changes with Trax closed.
+ * the control). While the Trax panel is open on a screen up to 1440px wide the
+ * column is narrower than that, so rows stack as they do on a phone instead of
+ * squeezing the control to a sliver. Nothing changes with Trax closed.
  */
 export const SETTINGS_ROW_STACKS_BESIDE_TRAX =
   "max-[1440px]:[html[data-trax-panel=open]_&]:flex max-[1440px]:[html[data-trax-panel=open]_&]:items-stretch";
@@ -516,10 +515,10 @@ const ROW_CONTROLS_END = "flex min-w-0 flex-wrap items-center justify-start gap-
  * separates one row from the next: 16px + 16px, the same 32px the divider line
  * used to sit in the middle of.
  *
- * The label column is 420px and the control
- * starts right after it, so it never drifts to the far edge of a wide screen.
- * The whole row stacks on a phone, and beside an open Trax panel on a screen
- * up to 1440px wide (`SETTINGS_ROW_STACKS_BESIDE_TRAX`). With `align="end"`
+ * The label column is 420px and the control starts right after it, so it never
+ * drifts to the far edge of a wide screen. The whole row stacks on a phone, and
+ * beside an open Trax panel on a screen up to 1440px wide
+ * (`SETTINGS_ROW_STACKS_BESIDE_TRAX`). With `align="end"`
  * (or inside a `SettingsRowAlignProvider align="end"`) the control sits at the
  * end of the row instead; the DOM is the same two columns either way. Only the
  * default layout takes the Trax stacking rule: it is the fixed 420px label

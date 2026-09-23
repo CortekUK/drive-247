@@ -260,8 +260,12 @@ describe('insurance policies (v2): newest added first', () => {
     expect(code).toContain('exportInsuranceToCSV(listedPolicies,');
   });
 
-  it('centres the expiry stack', () => {
-    expect(codeOnly(readPortalSource(INSURANCE_LIST))).toContain('<div className="flex flex-col items-center gap-0.5">');
+  it('starts the expiry stack at the left, like the cell around it', () => {
+    // A flex column ignores the cell's text-align, so the cross-axis setting
+    // is what keeps the "expires soon" line under the date rather than off it.
+    const code = codeOnly(readPortalSource(INSURANCE_LIST));
+    expect(code).toContain('<div className="flex flex-col items-start gap-0.5">');
+    expect(code).not.toContain('<div className="flex flex-col items-center gap-0.5">');
   });
 });
 
