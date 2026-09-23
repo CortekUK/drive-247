@@ -25,7 +25,7 @@
  */
 
 import { useMemo, useEffect, useRef, useState, type ReactNode, type Ref } from 'react';
-import { ExternalLink, X } from 'lucide-react';
+import { ExternalLink, SlidersHorizontal, X } from 'lucide-react';
 
 import { OrgMark } from '@/components/shared/layout/org-switcher';
 import { brandSurface } from '@/components/auth-v2/brand-surface';
@@ -103,6 +103,13 @@ export function portalTabTitle(name: string, metaTitle?: string | null): string 
  *     arrow after the name, always shown, and the Branding pencil's slot after
  *     that. The pencil only appears on hover, but its room is kept at rest, so
  *     the picture keeps that room too, empty.
+ *   - Sep 23 2026: the row was re-ordered (mark · name · pencil · gap ·
+ *     customiser · arrow), and the sidebar customiser came up from the profile
+ *     row in the footer. Three 28px controls now, where there were one and a
+ *     bare 14px icon, so the name lost 32px — 138px to 106px. The name link no
+ *     longer stretches either (`flex-1` went from it and from the name), which
+ *     is what lets the pencil sit against the name; the gap after the pencil is
+ *     the spacer, and it is the first thing to give its width back.
  */
 export const SIDEBAR_ROW = {
   frame: 'w-64 max-w-full shrink-0 p-1.5',
@@ -113,16 +120,27 @@ export const SIDEBAR_ROW = {
    */
   framedWithBorder: 'w-[258px] max-w-full shrink-0 border p-1.5',
   row: 'flex items-center rounded-lg',
-  /** The mark, the name and the arrow: the real row's booking-site link. */
-  trigger: 'flex min-w-0 flex-1 items-center gap-2.5 rounded-lg p-1.5 text-left',
-  name: 'min-w-0 flex-1 truncate text-[13px] font-semibold leading-tight',
-  /** "Opens in a new tab", always shown, after the name. */
-  external: 'h-3.5 w-3.5 shrink-0 opacity-60',
+  /** The mark and the name: the real row's booking-site link, hugging them. */
+  trigger: 'flex min-w-0 items-center gap-2.5 rounded-lg p-1.5 text-left',
+  name: 'min-w-0 truncate text-[13px] font-semibold leading-tight',
   /**
-   * The Branding pencil's slot, after the link and flush with the row's right
-   * edge: invisible at rest, but it keeps its room.
+   * One trailing control's room: 28px square. Three of them — the Branding
+   * pencil straight after the name, then the sidebar customiser and the
+   * booking-site arrow at the row's end. The pencil's is drawn EMPTY, because
+   * it only appears on hover; the other two are always on screen, so their
+   * icons are drawn. Without the cursor and hover classes the real ones carry:
+   * this is a picture, and nothing in it is clickable.
    */
-  pencil: 'flex h-7 w-7 shrink-0 items-center justify-center',
+  control: 'flex h-7 w-7 shrink-0 items-center justify-center text-muted-foreground',
+  /** The glyph inside a control: the row's own 14px, not the footer's 16px. */
+  icon: 'h-3.5 w-3.5',
+  /**
+   * The gap between the pencil and the last two controls. `flex-1` with a 0
+   * basis, so it takes what is spare and gives every pixel of it back to the
+   * name first — which is why it is worth nothing in the width sum that
+   * branding-v2-lane.test.tsx works through by hand.
+   */
+  spacer: 'flex-1',
 } as const;
 
 /** True once the element's text no longer fits its box (re-checked as it changes size). */
@@ -177,9 +195,20 @@ function SidebarRow({
         <span ref={nameRef} className={SIDEBAR_ROW.name} data-preview-name="">
           {name}
         </span>
-        <ExternalLink className={SIDEBAR_ROW.external} aria-hidden="true" />
       </div>
-      <span aria-hidden="true" className={SIDEBAR_ROW.pencil} />
+      {/* The Branding pencil's room: kept and left empty, because it is
+          `opacity-0` until the real row is hovered but never gives its 28px
+          back to the name. */}
+      <span aria-hidden="true" className={SIDEBAR_ROW.control} />
+      <span aria-hidden="true" className={SIDEBAR_ROW.spacer} />
+      {/* Always on screen in the real row, so drawn here: the sidebar
+          customiser, then the booking-site arrow on the row's right edge. */}
+      <span aria-hidden="true" className={SIDEBAR_ROW.control}>
+        <SlidersHorizontal className={SIDEBAR_ROW.icon} />
+      </span>
+      <span aria-hidden="true" className={SIDEBAR_ROW.control}>
+        <ExternalLink className={SIDEBAR_ROW.icon} />
+      </span>
     </div>
   );
 }

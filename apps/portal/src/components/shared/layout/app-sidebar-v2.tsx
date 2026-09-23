@@ -420,9 +420,10 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
     return () => window.removeEventListener("keydown", onKey);
   }, [canSeeCms, switchView]);
 
-  // Opened from the user menu at the foot of the rail. The dialog needs the
-  // computed nav, which only exists here, so the trigger and the dialog are
-  // joined by an event rather than by threading props through UserMenuV2.
+  // Opened from the ORG ROW at the top of the rail (org-switcher.tsx; it was
+  // the user menu at the foot until Sep 23 2026). The dialog needs the computed
+  // nav, which only exists here, so the trigger and the dialog are joined by an
+  // event rather than by threading props through OrgSwitcher.
   useEffect(() => {
     const openCustomizer = () => setCustomizerOpen(true);
     window.addEventListener("open-sidebar-customizer", openCustomizer);
@@ -1919,9 +1920,10 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
 
         <SidebarMenu>
           {/* Profile row — the name opens the user menu, and the row carries
-              Settings, the customiser and the menu caret at its right end as
-              one group (team lead, Sep 21 2026: Settings moved down here from
-              the org row at the top, which is the booking site now). Collapsed,
+              Settings and the menu caret at its right end as one group (team
+              lead, Sep 21 2026: Settings moved down here from the org row at
+              the top, which is the booking site now; Sep 23 2026: the sidebar
+              customiser went the other way, up to that same org row). Collapsed,
               the rail shows the avatar alone, so the Settings gear is stacked
               above it rather than lost. See `SettingsLinkV2` in user-menu-v2.tsx. */}
           <SidebarMenuItem>

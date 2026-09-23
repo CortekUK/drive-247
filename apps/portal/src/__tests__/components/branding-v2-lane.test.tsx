@@ -123,20 +123,24 @@ import { brandSurface } from "@/components/auth-v2/brand-surface";
 
 /**
  * jsdom lays nothing out, so give the sidebar name a width: 8px a character in
- * a 138px box. 138 is the real room, from the classes of the expanded org row
+ * a 106px box. 106 is the real room, from the classes of the expanded org row
  * once the tenant slug has resolved and the row is the booking-site entry
  * (org-switcher.tsx; `SIDEBAR_ROW` copies them):
  *
  *   256  the sidebar, 16rem (ui-v2/sidebar.tsx `SIDEBAR_WIDTH`; no border)
  *   244  less the header's `p-1.5`, 6px a side (app-sidebar-v2.tsx)
- *   216  less the Branding pencil after the site link: `w-7` (28px), flush with
- *        the row's right edge. It is `opacity-0` until hover but keeps its room.
- *   204  less the site link's own `p-1.5`, 6px a side
- *   162  less the mark, `h-8 w-8` (32px), and the `gap-2.5` after it (10px)
- *   138  less the `gap-2.5` before the arrow (10px) and the arrow, `w-3.5`
- *        (14px)
+ *   216  less the Branding pencil, `h-7 w-7` (28px), which sits straight after
+ *        the name. It is `opacity-0` until hover but keeps its room.
+ *   188  less the sidebar customiser, `h-7 w-7` (28px)
+ *   160  less the booking-site arrow on the row's right edge, `h-7 w-7` (28px)
+ *   148  less the site link's own `p-1.5`, 6px a side
+ *   106  less the mark, `h-8 w-8` (32px), and the `gap-2.5` after it (10px)
  *
- * So 17 characters fit (136px) and 18 do not (144px).
+ * The `flex-1` spacer between the pencil and the last two controls is worth
+ * nothing here: its basis is 0, and every spare pixel it holds goes back to the
+ * name before the name is cut off.
+ *
+ * So 13 characters fit (104px) and 14 do not (112px).
  *
  * The figure has moved each time the controls beside the name changed:
  *   - 130 until Sep 20 2026: a Settings gear (28px) and a "Switch
@@ -149,10 +153,16 @@ import { brandSurface } from "@/components/auth-v2/brand-surface";
  *   - 134 until Sep 23 2026: the row became the booking-site entry, with the
  *     arrow after the name (24px with its gap) and the pencil's room after the
  *     link (28px plus the 4px `mr-1` that held it short of the row's edge).
- *   - 138 since: the team lead asked for the pencil to sit ON the row's right
- *     edge, like every other trailing control in this sidebar, so its `mr-1`
- *     went and those 4px came back to the name.
- * At 190, "Northwind Car Hire" (18 characters, 144px) fit; at 138 it is cut off.
+ *   - 138 that same day: the team lead asked for the pencil to sit ON the row's
+ *     right edge, like every other trailing control in this sidebar, so its
+ *     `mr-1` went and those 4px came back to the name.
+ *   - 106 since, from the re-order later that day: the pencil moved up against
+ *     the name, the sidebar customiser came up from the profile row in the
+ *     footer, and the arrow left the name link to become a control of its own
+ *     at the row's end. Three 28px controls where there were one and a bare
+ *     14px icon with a 10px gap: 84px of trailing controls instead of 52.
+ * At 190, "Northwind Car Hire" (18 characters, 144px) fit; at 106 even
+ * "Northwind Rentals" (17, 136px) is cut off, and it fit until the re-order.
  */
 const descriptors = {
   scrollWidth: Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollWidth"),
@@ -168,7 +178,7 @@ function measureNames() {
   Object.defineProperty(HTMLElement.prototype, "clientWidth", {
     configurable: true,
     get(this: HTMLElement) {
-      return this.hasAttribute("data-preview-name") ? 138 : 0;
+      return this.hasAttribute("data-preview-name") ? 106 : 0;
     },
   });
 }
@@ -260,24 +270,27 @@ describe("Portal name: a live preview of where the name shows", () => {
     expect(within(pictures).getAllByText("NO")).toHaveLength(1);
     expect(within(pictures).getByAltText("Default icon in a browser tab")).toBeInTheDocument();
 
-    // The cut-off note belongs to the field and travels with it. 18 characters
-    // (144px): the shortest name the 138px box cuts off (see `measureNames`).
-    fireEvent.change(nameInput(), { target: { value: "Northwind Car Hire" } });
+    // The cut-off note belongs to the field and travels with it. 14 characters
+    // (112px): the shortest name the 106px box cuts off (see `measureNames`).
+    fireEvent.change(nameInput(), { target: { value: "Northwind Cars" } });
     expect(field.contains(screen.getByText(PORTAL_NAME_CUT_OFF_NOTE))).toBe(true);
   });
 
   it("says when the name is too long for the sidebar, and stops saying it once it fits", () => {
     render(<AppearanceSettings />);
-    // "Northwind", 9 characters: 72px in the 138px box (see `measureNames`). Fits.
+    // "Northwind", 9 characters: 72px in the 106px box (see `measureNames`). Fits.
     expect(screen.queryByText(PORTAL_NAME_CUT_OFF_NOTE)).toBeNull();
-    // 17 characters: 136px. Fits — the longest that does, and only since the
-    // pencil's `mr-1` went and gave the name back 4px (Sep 23 2026).
+    // 13 characters: 104px. Fits — the longest that does, now that three 28px
+    // controls follow the name (Sep 23 2026). "Northwind Rentals", 17, no
+    // longer does.
+    fireEvent.change(nameInput(), { target: { value: "Northwind Car" } });
+    expect(screen.queryByText(PORTAL_NAME_CUT_OFF_NOTE)).toBeNull();
     fireEvent.change(nameInput(), { target: { value: "Northwind Rentals" } });
-    expect(screen.queryByText(PORTAL_NAME_CUT_OFF_NOTE)).toBeNull();
-    // 18 characters: 144px. Cut off — the shortest that is. It fit the
-    // identity-only row's 190px, before the arrow and the pencil's room came in
-    // beside the name.
-    fireEvent.change(nameInput(), { target: { value: "Northwind Car Hire" } });
+    expect(screen.getByText(PORTAL_NAME_CUT_OFF_NOTE)).toBeInTheDocument();
+    // 14 characters: 112px. Cut off — the shortest that is. It fit the
+    // identity-only row's 190px, and the 138px this row had before the
+    // customiser and the arrow took their own 28px boxes beside the name.
+    fireEvent.change(nameInput(), { target: { value: "Northwind Cars" } });
     const note = screen.getByText(PORTAL_NAME_CUT_OFF_NOTE);
     expect(note).toHaveAttribute("role", "status");
     expect(note.className).toContain("text-muted-foreground");
@@ -294,14 +307,17 @@ describe("Portal name: a live preview of where the name shows", () => {
   });
 
   it("the preview row is the real sidebar row: same slots, same room around the name", () => {
-    // Sep 21 2026: the org row is the tenant's booking-site entry. Once the
-    // tenant slug resolves, the expanded row holds exactly two slots, side by
-    // side and never nested:
-    //   1. the link to the booking site: the mark, the name, and the "opens in
-    //      a new tab" arrow, which is always shown;
-    //   2. the Branding pencil, a link of its own. It is `opacity-0` until
-    //      hover, but it keeps its room at rest, so it takes its width from the
-    //      name even while unseen.
+    // Sep 21 2026: the org row is the tenant's booking-site entry. Sep 23: it
+    // was re-ordered, and once the tenant slug resolves the expanded row holds
+    // exactly five slots, side by side and never nested:
+    //   1. the link to the booking site: the mark and the name, hugging them;
+    //   2. the Branding pencil, a link of its own, straight after the name. It
+    //      is `opacity-0` until hover, but it keeps its room at rest, so it
+    //      takes its width from the name even while unseen;
+    //   3. the `flex-1` gap, which gives its width back to the name first;
+    //   4. the sidebar customiser, a button, always shown;
+    //   5. the "opens in a new tab" arrow on the row's right edge, always
+    //      shown — a link of its own now, not an icon inside slot 1.
     // With no slug the row is plain identity, which is not the row a tenant
     // sees once the page has loaded (org-switcher.tsx), so give it one.
     s.tenant = { ...s.tenant, slug: "northwind" };
@@ -318,37 +334,51 @@ describe("Portal name: a live preview of where the name shows", () => {
     expect(orgRow).not.toBeNull();
     expect(orgRow.closest("a, button")).toBeNull();
     expectSlot(orgRow, SIDEBAR_ROW.row);
-    expect(orgRow.children).toHaveLength(2);
-    const [site, pencil] = Array.from(orgRow.children) as HTMLElement[];
+    expect(orgRow.children).toHaveLength(5);
+    const [site, pencil, gap, customiser, arrowLink] = Array.from(orgRow.children) as HTMLElement[];
 
-    // 1. The site link: the mark, the name, then the arrow, and nothing else.
+    // 1. The site link: the mark and the name, and nothing else.
     expect(site.tagName).toBe("A");
     expect(site).toHaveAttribute("href", bookingOriginFor("northwind"));
     expectSlot(site, SIDEBAR_ROW.trigger);
-    expect(site.children).toHaveLength(3);
-    const [mark, name, arrow] = Array.from(site.children);
+    expect(site.children).toHaveLength(2);
+    const [mark, name] = Array.from(site.children);
     expect(mark.textContent).toBe("NO"); // OrgMark's initials chip: there is no square icon
     expect(name.tagName).toBe("SPAN");
     expect(name.className).toBe(SIDEBAR_ROW.name);
     expect(name.textContent).toBe("Northwind");
-    expect(arrow.tagName).toBe("svg");
-    expectSlot(arrow, SIDEBAR_ROW.external);
+    // Neither stretches, which is what lets the pencil sit against the name.
+    for (const el of [site, name]) expect(classesOf(el)).not.toContain("flex-1");
 
     // 2. The pencil: beside the site link, not inside it, going to Branding.
-    expectSlot(pencil, SIDEBAR_ROW.pencil);
+    expectSlot(pencil, SIDEBAR_ROW.control);
     expect(pencil).toHaveAttribute("href", "/settings/appearance");
     expect(site.contains(pencil)).toBe(false);
     expect(site.querySelector("a, button")).toBeNull();
     // Hidden from the eye only: `opacity-0`, never `hidden` or `absolute`,
-    // either of which would hand its 32px back to the name at rest.
+    // either of which would hand its 28px back to the name at rest.
     expect(classesOf(pencil)).toContain("opacity-0");
     for (const cls of ["hidden", "absolute", "fixed"]) expect(classesOf(pencil), cls).not.toContain(cls);
-    // Those two are the row's only controls.
+
+    // 3. The gap, and 4/5 the two controls at the end, both always shown.
+    expectSlot(gap, SIDEBAR_ROW.spacer);
+    expect(gap).toBeEmptyDOMElement();
+    expect(customiser.tagName).toBe("BUTTON");
+    expect(customiser).toHaveAttribute("aria-label", "Customise sidebar");
+    expectSlot(customiser, SIDEBAR_ROW.control);
+    expect(arrowLink.tagName).toBe("A");
+    expect(arrowLink).toHaveAttribute("href", bookingOriginFor("northwind"));
+    expectSlot(arrowLink, SIDEBAR_ROW.control);
+    for (const el of [customiser, arrowLink]) expect(classesOf(el)).not.toContain("opacity-0");
+    const arrow = arrowLink.firstElementChild!;
+    expect(arrow.tagName).toBe("svg");
+    expectSlot(arrow, SIDEBAR_ROW.icon);
+
+    // Those are the row's only controls: two links to the site, the pencil and
+    // the customiser.
     const links = within(sidebar).getAllByRole("link");
-    expect(links).toHaveLength(2);
-    expect(links[0]).toBe(site);
-    expect(links[1]).toBe(pencil);
-    expect(within(sidebar).queryByRole("button")).toBeNull();
+    expect(links).toEqual([site, pencil, arrowLink]);
+    expect(within(sidebar).getAllByRole("button")).toEqual([customiser]);
 
     // The picture has exactly the real row's slots, and no more: a slot it
     // draws that the sidebar does not (the old chevron, then the gear) takes
@@ -360,9 +390,17 @@ describe("Portal name: a live preview of where the name shows", () => {
     );
     const row = picture.querySelector<HTMLElement>("[data-preview-sidebar-row]")!;
     expect(row.className).toBe(SIDEBAR_ROW.row);
-    expect(Array.from(row.children).map((child) => child.className)).toEqual([SIDEBAR_ROW.trigger, SIDEBAR_ROW.pencil]);
-    const [pictureSite, picturePencil] = Array.from(row.children) as HTMLElement[];
-    // Inside the site link's slot: the same three as the real one, in the same order.
+    expect(Array.from(row.children).map((child) => child.className)).toEqual([
+      SIDEBAR_ROW.trigger,
+      SIDEBAR_ROW.control,
+      SIDEBAR_ROW.spacer,
+      SIDEBAR_ROW.control,
+      SIDEBAR_ROW.control,
+    ]);
+    const [pictureSite, picturePencil, pictureGap, pictureCustomiser, pictureArrowBox] = Array.from(
+      row.children,
+    ) as HTMLElement[];
+    // Inside the site link's slot: the same two as the real one, in the same order.
     expect(Array.from(pictureSite.children).map((child) => child.tagName)).toEqual(
       Array.from(site.children).map((child) => child.tagName),
     );
@@ -370,11 +408,21 @@ describe("Portal name: a live preview of where the name shows", () => {
     expect(pictureMark.className).toBe(mark.className); // the same OrgMark
     expect(pictureName).toHaveAttribute("data-preview-name");
     expect(pictureName.className).toBe(SIDEBAR_ROW.name);
-    const pictureArrow = pictureSite.lastElementChild!;
-    expect(pictureArrow.tagName).toBe("svg");
-    expectSlot(pictureArrow, SIDEBAR_ROW.external);
-    // The pencil's room, kept and left empty: the space, not the control.
+    // The pencil's room and the gap, kept and left empty: the space, not the
+    // control. The two that are always on screen are drawn, icon and all.
     expect(picturePencil).toBeEmptyDOMElement();
+    expect(pictureGap).toBeEmptyDOMElement();
+    for (const [box, real] of [
+      [pictureCustomiser, customiser],
+      [pictureArrowBox, arrowLink],
+    ] as const) {
+      const icon = box.firstElementChild!;
+      expect(icon.tagName).toBe("svg");
+      expectSlot(icon, SIDEBAR_ROW.icon);
+      // The same glyph at the same size as the real control, which is what the
+      // picture is for (lucide stamps its own `lucide-<name>` class on each).
+      expect(classesOf(icon)).toEqual(classesOf(real.firstElementChild!));
+    }
     // A picture, not a control: no link and no button anywhere in it.
     expect(picture.querySelector("a, button")).toBeNull();
   });

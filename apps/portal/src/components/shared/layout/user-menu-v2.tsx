@@ -14,7 +14,7 @@ import {
 import { Button } from '@/components/ui-v2/button';
 import { Badge } from '@/components/ui-v2/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui-v2/avatar';
-import { User, LogOut, Moon, Sun, ChevronsUpDown, Send, SlidersHorizontal, Compass, Settings } from 'lucide-react';
+import { User, LogOut, Moon, Sun, ChevronsUpDown, Send, Compass, Settings } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Switch } from '@/components/ui-v2/switch';
 import { useFeedbackStore } from '@/stores/feedback-store';
@@ -30,11 +30,13 @@ import { ProfileSheetV2 } from './profile-sheet-v2';
  * gear moves down to the profile row). It used to sit in the org row at the top
  * of the rail, which is the tenant's booking site now (see org-switcher.tsx).
  *
- * `row` is the gear in the expanded profile row: first of the three icons at
- * its right end (Settings, Customise sidebar, account menu), which the review
- * asked to read as ONE group, right-aligned, apart from the name on the left.
- * They are adjacent with no gap between them, and the trigger's own right
- * padding is the space that keeps the group off the name.
+ * `row` is the gear in the expanded profile row: first of the two icons at its
+ * right end (Settings, account menu), which the review asked to read as ONE
+ * group, right-aligned, apart from the name on the left. They are adjacent with
+ * no gap between them, and the trigger's own right padding is the space that
+ * keeps the group off the name. There were three until Sep 23 2026, when the
+ * sidebar customiser moved UP to the org row at the top of the rail (team lead;
+ * see org-switcher.tsx).
  *
  * `rail` is the collapsed sidebar's: the rail shows the avatar alone, so the
  * gear is stacked above it. Above rather than below keeps the avatar at the
@@ -120,8 +122,8 @@ export const UserMenuV2 = ({
   // the dashboard layout, and must not be instantiated a second time.
   const tourEligible = useFirstRentalTourEligible();
 
-  // Controlled so the row CONTAINER can carry the open state. The pill now
-  // wraps the customise and caret buttons as well as the trigger, and a
+  // Controlled so the row CONTAINER can carry the open state. The pill wraps
+  // the Settings gear and the caret as well as the trigger, and a
   // `data-[state=open]` class only ever reaches the trigger itself.
   const [menuOpen, setMenuOpen] = useState(false);
   /**
@@ -172,9 +174,10 @@ export const UserMenuV2 = ({
               menuOpen ? 'bg-primary/10 dark:bg-[hsl(var(--v2-hover,var(--muted)))]' : ''
             }`}
           >
-            {/* The customise button is a SIBLING of the trigger, not a child of
-                it: nesting a button inside the trigger button is invalid markup,
-                and the click would open the menu on its way past. */}
+            {/* The gear and the caret are SIBLINGS of the trigger, not children
+                of it: nesting a button or a link inside the trigger button is
+                invalid markup, and the click would open the menu on its way
+                past. */}
             <DropdownMenuTrigger asChild>
               <button className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2 py-2.5 text-left outline-none cursor-pointer">
                 <Avatar className="h-8 w-8 rounded-full overflow-hidden shrink-0">
@@ -193,24 +196,17 @@ export const UserMenuV2 = ({
               </button>
             </DropdownMenuTrigger>
             {settings && <SettingsLinkV2 variant="row" onNavigate={onNavigate} />}
-            {/* The customiser dialog needs the nav the sidebar computed, so it
-                is mounted there and opened from here by event — the same
-                pattern `open-global-search` already uses. */}
-            <button
-              type="button"
-              onClick={() =>
-                window.dispatchEvent(new Event('open-sidebar-customizer'))
-              }
-              aria-label="Customise sidebar"
-              title="Customise sidebar"
-              className="shrink-0 rounded-lg p-1.5 text-muted-foreground outline-none transition-colors cursor-pointer hover:bg-primary/10 hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-[hsl(var(--v2-link,var(--primary)))]"
-            >
-              <SlidersHorizontal className="h-4 w-4" />
-            </button>
-            {/* The caret sits AFTER the customise button, so it can no longer be
-                a child of the trigger. It drives the same menu through the
-                controlled `open` state instead. `stopPropagation` on pointerdown
-                is what makes that work while the menu is open: without it the
+            {/* The sidebar customiser was the second icon here until Sep 23
+                2026. It is on the ORG ROW at the top of the rail now (team lead;
+                org-switcher.tsx), still opening the dialog by dispatching
+                `open-sidebar-customizer` — the dialog itself stays mounted in
+                app-sidebar-v2.tsx, which is the only place holding the computed
+                nav it needs. Nothing else moved: the gear and the caret are
+                where they were. */}
+            {/* The caret sits AFTER the gear, so it can no longer be a child of
+                the trigger. It drives the same menu through the controlled
+                `open` state instead. `stopPropagation` on pointerdown is what
+                makes that work while the menu is open: without it the
                 dismissable layer would treat this as an outside click and close
                 the menu a beat before the toggle reopened it. */}
             <button

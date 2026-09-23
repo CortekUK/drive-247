@@ -14,22 +14,37 @@
  * its own hover state, and clicking the pencil goes to the Branding page;
  * clicking anywhere else on the row opens the tenant's booking site."
  *
+ * Sep 23 2026, with two screenshots of the row, the ORDER changed and the
+ * sidebar customiser came UP into this row from the profile row in the footer.
+ * Left to right the row is now:
+ *
+ *      mark · name · pencil · (gap) · customiser · arrow
+ *
+ *  - the pencil against the NAME, so a long name truncates before it rather
+ *    than shoving it about;
+ *  - the arrow at the extreme END, which makes it a control of its own rather
+ *    than an icon inside the name link — the row therefore holds two links to
+ *    the same URL, both promising a new tab;
+ *  - the customiser between them, always visible: it is a primary way into the
+ *    sidebar customiser and hover-hiding it would bury it.
+ *
  * Things here can break without anyone noticing until it is in front of an
  * operator, so each has a case:
  *
  *  - the pencil must be a SIBLING of the site link, not a child of it. Nested
  *    anchors are invalid markup and the outer one swallows the click, which is
- *    the entire job of the pencil.
+ *    the entire job of the pencil. The arrow is a sibling for the same reason.
  *  - the pencil is hidden with `opacity-0`, which hides it from the eye and
  *    NOT from the keyboard — so it needs `focus-visible:opacity-100` or it is
- *    a control a tab user can focus and cannot see.
+ *    a control a tab user can focus and cannot see. Nothing hides the other two.
  *  - the URL comes from `bookingOriginFor`. The naive
  *    `https://${slug}.drive-247.com` opened a PRODUCTION tab from a local
  *    portal, which is the bug that helper exists to prevent.
  *  - the old row must not come back beside the new one: one way to the site,
  *    under the tenant's name, and never a "Booking site" title.
- *  - both links close the phone sheet (`closeMobileOnNav`), or on a phone the
+ *  - every LINK closes the phone sheet (`closeMobileOnNav`), or on a phone the
  *    sheet is still covering the portal when the operator comes back to it.
+ *    The customiser must not: it opens a dialog over the sheet.
  *  - until the tenant row resolves there is no slug, so the org row is plain
  *    identity: no link at all, rather than a link to a guessed URL.
  *
@@ -153,15 +168,32 @@ function unmount() {
 }
 
 const PENCIL = 'a[aria-label="Edit your booking site\'s branding"]';
+/** The arrow at the row's end. Its own label, so it is never confused with the name link's. */
+const ARROW = 'a[aria-label="Open your booking site (opens in a new tab)"]';
+const CUSTOMISE = 'button[aria-label="Customise sidebar"]';
 const orgRow = () => document.querySelector<HTMLElement>('[data-slot="org-row"]');
 const pencil = () => document.querySelector<HTMLAnchorElement>(PENCIL);
-/** The booking-site link: collapsed, the row itself; expanded, the row's link that is not the pencil. */
+const arrow = () => document.querySelector<HTMLAnchorElement>(ARROW);
+const customise = () => document.querySelector<HTMLButtonElement>(CUSTOMISE);
+/**
+ * The booking-site link UNDER THE NAME: collapsed, the row itself; expanded,
+ * the row's link that is neither the pencil nor the arrow.
+ */
 const siteLink = () => {
   const row = orgRow();
   if (!row) return null;
   if (row instanceof HTMLAnchorElement) return row;
-  return [...row.querySelectorAll<HTMLAnchorElement>('a')].find((a) => !a.matches(PENCIL)) ?? null;
+  return [...row.querySelectorAll<HTMLAnchorElement>('a')].find((a) => !a.matches(PENCIL) && !a.matches(ARROW)) ?? null;
 };
+/** The row's children, named: what an operator reads left to right. */
+const order = () =>
+  [...orgRow()!.children].map((el) => {
+    if (el.matches(PENCIL)) return 'pencil';
+    if (el.matches(ARROW)) return 'arrow';
+    if (el.matches(CUSTOMISE)) return 'customise';
+    if (el === siteLink()) return 'mark+name';
+    return el.className.includes('flex-1') ? 'gap' : el.tagName;
+  });
 const relTokens = (a: Element) => (a.getAttribute('rel') ?? '').split(/\s+/);
 /** Class tokens that take an element off the screen, whatever the pointer does. */
 const HIDING = ['opacity-0', 'hidden', 'invisible', 'sr-only'];
@@ -202,22 +234,80 @@ describe('the booking-site link, on the org row (Sep 21 2026)', () => {
     expect(relTokens(link)).toEqual(expect.arrayContaining(['noopener', 'noreferrer']));
   });
 
-  it('always shows the external-link icon, hover or no hover', () => {
+  /**
+   * Team lead, Sep 23 2026, with screenshots: the pencil next to the title, the
+   * arrow at the extreme end, and the customiser brought up from the footer's
+   * profile row to sit before the arrow.
+   */
+  it('reads mark+name · pencil · gap · customiser · arrow, left to right', () => {
     expanded();
-    const row = orgRow()!;
-    const arrow = siteLink()!.querySelector('svg.lucide-external-link');
-    expect(arrow).not.toBeNull();
-    // Inside the link itself, and nothing between it and the row hides it: no
-    // hiding class on the icon or any wrapper, so no hover rule can be what
-    // brings it back.
-    for (let el: Element | null = arrow; el && el !== row.parentElement; el = el.parentElement) {
-      expect([...el.classList].filter((t) => HIDING.includes(t))).toEqual([]);
-    }
-    // And no hover-only styling on the icon: it looks the same either way.
-    expect([...arrow!.classList].filter((t) => t.includes('hover'))).toEqual([]);
+    expect(order()).toEqual(['mark+name', 'pencil', 'gap', 'customise', 'arrow']);
+    // Every control is a direct child of the row and none is nested in another:
+    // an <a> inside an <a> is invalid markup and the outer one eats the click.
+    for (const el of [siteLink()!, pencil()!, customise()!, arrow()!]) expect(el.parentElement).toBe(orgRow());
+    expect(orgRow()!.querySelector('a a, a button, button a')).toBeNull();
+    // The name link hugs its content, so the pencil lands against the name
+    // instead of at the far edge: a stretched link is what put it there before.
+    expect([...siteLink()!.classList]).not.toContain('flex-1');
+    expect([...siteLink()!.querySelector('span')!.classList]).not.toContain('flex-1');
+    // Without the Branding grant the pencil drops out and the rest holds.
+    unmount();
+    mocks.isManager = true;
+    mocks.canView = false;
+    expanded();
+    expect(order()).toEqual(['mark+name', 'gap', 'customise', 'arrow']);
   });
 
-  it('puts the pencil beside the site link, going to Branding, and never inside it', () => {
+  it('always shows the external-link arrow at the very end, opening the same site', () => {
+    expanded();
+    const row = orgRow()!;
+    const end = arrow()!;
+    expect(end).toBeTruthy();
+    // Last in the row, and the same destination as the name: two links, one site.
+    expect(row.lastElementChild).toBe(end);
+    expect(end.nextElementSibling).toBeNull();
+    expect(end.getAttribute('href')).toBe(LOCAL_BOOKING_ORIGIN);
+    expect(end.getAttribute('target')).toBe('_blank');
+    expect(relTokens(end)).toEqual(expect.arrayContaining(['noopener', 'noreferrer']));
+    expect(end.querySelector('svg.lucide-external-link')).not.toBeNull();
+    // The tooltip the lead asked it to keep, and a label that still says it leaves.
+    expect(end.getAttribute('title')).toBe('Open your booking site');
+    expect(end.getAttribute('aria-label')).toMatch(/new tab/i);
+    // Nothing between the icon and the row hides it, so no hover rule can be
+    // what brings it back.
+    for (let el: Element | null = end; el && el !== row.parentElement; el = el.parentElement) {
+      expect([...el.classList].filter((t) => HIDING.includes(t))).toEqual([]);
+    }
+  });
+
+  /**
+   * The customiser, moved here from the profile row in the sidebar footer
+   * (user-menu-v2.tsx). It keeps opening the dialog by event: the dialog is
+   * mounted in app-sidebar-v2.tsx, which is the only place holding the computed
+   * nav it needs.
+   */
+  it('puts the customiser before the arrow, always visible, and it opens the customiser dialog', () => {
+    expanded();
+    const button = customise()!;
+    expect(button).toBeTruthy();
+    expect(button.getAttribute('title')).toBe('Customise sidebar');
+    expect(button.getAttribute('type')).toBe('button');
+    expect(button.nextElementSibling).toBe(arrow());
+    // Never hover-revealed: it is a primary way in, so hiding it would bury it.
+    for (let el: Element | null = button; el && el !== orgRow()!.parentElement; el = el.parentElement) {
+      expect([...el.classList].filter((t) => HIDING.includes(t))).toEqual([]);
+    }
+    expect([...button.classList]).not.toContain('group-hover/site:opacity-100');
+    // And it is not a link: it opens a dialog, it does not go anywhere.
+    expect(button.getAttribute('href')).toBeNull();
+    const opened = vi.fn();
+    window.addEventListener('open-sidebar-customizer', opened);
+    act(() => button.click());
+    window.removeEventListener('open-sidebar-customizer', opened);
+    expect(opened).toHaveBeenCalledTimes(1);
+  });
+
+  it('puts the pencil beside the name, going to Branding, and never inside the link', () => {
     expanded();
     const link = siteLink()!;
     const edit = pencil()!;
@@ -246,7 +336,10 @@ describe('the booking-site link, on the org row (Sep 21 2026)', () => {
     expect(pencil() !== null).toBe(shown);
     const link = siteLink()!;
     expect(link.getAttribute('href')).toBe(LOCAL_BOOKING_ORIGIN);
-    expect(link.querySelector('svg')).not.toBeNull();
+    // The grant decides the pencil and nothing else: the site is anyone's to
+    // open, and the customiser only arranges the person's own sidebar.
+    expect(arrow()!.getAttribute('href')).toBe(LOCAL_BOOKING_ORIGIN);
+    expect(customise()).not.toBeNull();
     // Without the pencil, nothing on the row leads to Branding at all.
     if (!shown) expect(orgRow()!.querySelector('a[href="/settings/appearance"]')).toBeNull();
   });
@@ -268,48 +361,60 @@ describe('the booking-site link, on the org row (Sep 21 2026)', () => {
   });
 
   /**
-   * Team lead, Sep 23 2026, on the sidebar's org row: the hover pencil "should
-   * sit at the very END of the row, properly aligned, rather than looking
-   * slightly off".
+   * Team lead, Sep 23 2026, on the sidebar's org row: the trailing control
+   * "should sit at the very END of the row, properly aligned, rather than
+   * looking slightly off".
    *
-   * It carried `mr-1`, which held its 28px hover pill 4px short of the row's
-   * right edge — 10px from the sidebar's edge, against the 6px the header's
-   * `p-1.5` gives everything else, which is what read as not quite lined up.
-   * Flush, it is the same trailing control as the Settings gear, the customiser
-   * and the caret on the profile row in the footer: 28px, `rounded-lg`, and
-   * ending exactly on their row's edge.
+   * The pencil carried `mr-1`, which held its 28px hover pill 4px short of the
+   * row's right edge — 10px from the sidebar's edge, against the 6px the
+   * header's `p-1.5` gives everything else, which is what read as not quite
+   * lined up. Flush, the three controls are the same trailing control as the
+   * Settings gear and the caret on the profile row in the footer: 28px,
+   * `rounded-lg`, and the last of them ending exactly on their row's edge.
    */
-  it('puts the pencil on the row\'s right edge, like every other trailing control', () => {
+  it('gives all three controls one box, and ends the last one flush with the row', () => {
     expanded();
-    const edit = pencil()!;
-    const cls = [...edit.classList];
-    // Nothing may hold it short of the edge.
-    expect(cls.filter((c) => /^m[rxs]?-/.test(c))).toEqual([]);
-    expect(cls).not.toContain('mr-1');
-    // It is the LAST thing in the row, and the row itself adds no end padding.
-    expect(edit.nextElementSibling).toBeNull();
-    expect(orgRow()!.lastElementChild).toBe(edit);
+    for (const [name, el] of [['pencil', pencil()!], ['customise', customise()!], ['arrow', arrow()!]] as const) {
+      const cls = [...el.classList];
+      // Nothing may hold anything short of the edge, or apart from its neighbour.
+      expect(cls.filter((c) => /^m[rxsle]?-/.test(c)), name).toEqual([]);
+      // Same box and same corner as the footer row's trailing controls. v2
+      // markup never uses `rounded-md`.
+      expect(cls, name).toEqual(expect.arrayContaining(['h-7', 'w-7', 'shrink-0', 'rounded-lg']));
+      expect(cls, name).not.toContain('rounded-md');
+      expect(cls, name).not.toContain('rounded-sm');
+      // The v2 hover pair, light and dark, on every one of them.
+      expect(cls, name).toEqual(
+        expect.arrayContaining([
+          'hover:bg-primary/10',
+          'hover:text-primary',
+          'dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]',
+          'dark:hover:text-[hsl(var(--v2-link,var(--primary)))]',
+        ]),
+      );
+    }
+    // The arrow is the LAST thing in the row, and the row adds no end padding.
+    expect(arrow()!.nextElementSibling).toBeNull();
+    expect(orgRow()!.lastElementChild).toBe(arrow());
     expect([...orgRow()!.classList].filter((c) => /^p[rxe]?-/.test(c))).toEqual([]);
-    // Same box and same corner as the footer row's trailing controls. v2 markup
-    // never uses `rounded-md`.
-    expect(cls).toEqual(expect.arrayContaining(['h-7', 'w-7', 'shrink-0', 'rounded-lg']));
-    expect(cls).not.toContain('rounded-md');
-    expect(cls).not.toContain('rounded-sm');
   });
 
-  it('collapsed: the mark alone is the booking-site link, with no pencil', () => {
+  it('collapsed: the mark alone is the booking-site link, with no pencil and no customiser', () => {
     collapsed();
     const row = orgRow()!;
     expect(row.tagName).toBe('A');
     expect(row.getAttribute('href')).toBe(LOCAL_BOOKING_ORIGIN);
     expect(row.getAttribute('target')).toBe('_blank');
     expect(relTokens(row)).toEqual(expect.arrayContaining(['noopener', 'noreferrer']));
-    // The mark and nothing else: no name, no arrow, and no pencil — the rail
-    // has no room for them.
+    // The mark and nothing else: no name, no arrow, no pencil and no
+    // customiser. The rail is 48px wide — there is no room for three controls
+    // beside a 32px mark, and Branding is one click away on the Settings index.
     expect(row.children).toHaveLength(1);
     expect(row.textContent).not.toContain('Acme Hire');
     expect(row.querySelector('svg')).toBeNull();
     expect(pencil()).toBeNull();
+    expect(arrow()).toBeNull();
+    expect(customise()).toBeNull();
     expect(document.querySelector('a[href="/settings/appearance"]')).toBeNull();
     // With no name on screen, the accessible name is what says where it goes.
     expect(row.getAttribute('aria-label')).toMatch(/Acme Hire/);
@@ -320,9 +425,11 @@ describe('the booking-site link, on the org row (Sep 21 2026)', () => {
     for (const mount of [expanded, collapsed]) {
       mount();
       const toSite = [...document.querySelectorAll('a')].filter((a) => a.getAttribute('href') === LOCAL_BOOKING_ORIGIN);
-      expect(toSite).toHaveLength(1);
-      expect(toSite[0]).toBe(siteLink());
-      expect(document.querySelectorAll('a[target="_blank"]')).toHaveLength(1);
+      // Expanded that is the name and the arrow, both on the org row; collapsed
+      // it is the mark. Two links, still one row and one destination.
+      expect(toSite).toEqual(mount === expanded ? [siteLink(), arrow()] : [siteLink()]);
+      expect(toSite.every((a) => a.closest('[data-slot="org-row"]'))).toBe(true);
+      expect(document.querySelectorAll('a[target="_blank"]')).toHaveLength(mount === expanded ? 2 : 1);
       // No "Booking site" title anywhere — not as text (the collapsed row's
       // label was sr-only text), not as a label or a tooltip's title.
       expect(document.body.textContent).not.toMatch(/booking site/i);
@@ -350,6 +457,7 @@ describe('the booking-site link, on the org row (Sep 21 2026)', () => {
   it.each([
     ['the site link', siteLink],
     ['the Branding pencil', pencil],
+    ['the arrow at the end', arrow],
   ] as const)('on a phone, following %s closes the sidebar sheet', (_which, find) => {
     mocks.mobile = true;
     expanded();
@@ -363,16 +471,32 @@ describe('the booking-site link, on the org row (Sep 21 2026)', () => {
     expect(sidebarState!.openMobile).toBe(false);
   });
 
-  it('has no links at all until the tenant slug resolves', () => {
+  it('on a phone, the customiser LEAVES the sheet open: it opens a dialog over it', () => {
+    // Closing the sheet under an open dialog would leave the person facing the
+    // page they were already on the moment they dismiss it.
+    mocks.mobile = true;
+    expanded();
+    act(() => sidebarState!.setOpenMobile(true));
+    const button = customise()!;
+    expect(button.closest('[data-mobile="true"]')).not.toBeNull();
+    act(() => button.click());
+    expect(sidebarState!.openMobile).toBe(true);
+  });
+
+  it('has no links or controls at all until the tenant slug resolves', () => {
     mocks.slug = null;
     for (const mount of [expanded, collapsed]) {
       mount();
       const row = orgRow()!;
       // The row is there — the tenant's mark is identity — but it goes nowhere.
+      // Not even the customiser: this branch is the moment before the tenant
+      // row arrives, and a row that is only a name should stay only a name.
       expect(row).toBeTruthy();
       expect(row.matches('a')).toBe(false);
       expect(row.querySelector('a, button')).toBeNull();
       expect(pencil()).toBeNull();
+      expect(arrow()).toBeNull();
+      expect(customise()).toBeNull();
       expect(document.querySelector('a[target="_blank"]')).toBeNull();
       unmount();
     }

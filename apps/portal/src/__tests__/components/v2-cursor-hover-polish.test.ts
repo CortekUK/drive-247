@@ -516,17 +516,21 @@ describe('v2 dark hovers stay visible and readable', () => {
     // pencil (hover → Branding) joined this rail; that row then moved onto the
     // org row at the top, pencil and all, so the count went with it.
     expect(count('components/shared/layout/app-sidebar-v2.tsx')).toBe(6);
-    // 1 since Sep 21 2026: the Branding pencil, which arrived with the booking
-    // site. The org row was a pill wrapping a gear and a menu caret (two
-    // controls of this shape), then one link to /settings (0), and is now the
-    // booking-site link — which only tints — plus that pencil. Its gear moved
-    // down to the profile row, counted below.
+    // Still 1 on Sep 23 2026, and now deliberately: the org row's three
+    // trailing controls — the Branding pencil, the sidebar customiser it took
+    // from the profile row, and the booking-site arrow — share ONE class
+    // string (`ROW_CONTROL`), because they have to stay the same box for the
+    // Branding preview's width arithmetic to hold. The pencil adds its
+    // hover-reveal classes on top of it. (The row was a pill wrapping a gear
+    // and a menu caret, two controls of this shape, then one link to /settings,
+    // 0, before the booking site arrived.)
     expect(count('components/shared/layout/org-switcher.tsx')).toBe(1);
-    // 4 since Sep 21 2026: Customise sidebar and the account-menu caret, plus
-    // the Settings gear that moved here from the org row — once as the row's
-    // first icon and once stacked above the avatar in the collapsed rail
-    // (`SettingsLinkV2`). All four tint and turn primary alike.
-    expect(count('components/shared/layout/user-menu-v2.tsx')).toBe(4);
+    // 3 since Sep 23 2026, when the customiser moved up to the org row: the
+    // account-menu caret, plus the Settings gear that came here from that same
+    // org row — once as the row's first icon and once stacked above the avatar
+    // in the collapsed rail (`SettingsLinkV2`). All three tint and turn primary
+    // alike.
+    expect(count('components/shared/layout/user-menu-v2.tsx')).toBe(3);
     expect(count('app/(dashboard)/integrations/integrations-board.tsx')).toBe(1);
     expect(count('components/ui-v2/badge.tsx')).toBe(2);
     const rc = classStrings(read('components/rentals-v2/rental-create-v2.tsx')).filter((str) => /hover:border-primary\/40/.test(str) && V2_DARK.test(str));

@@ -119,11 +119,18 @@ beforeEach(() => {
 afterEach(() => { act(() => root?.unmount()); root = null; document.body.replaceChildren(); vi.unstubAllGlobals(); });
 
 describe('Settings is the gear in the profile row, not the org row (Sep 21 2026)', () => {
-  it('expanded: the row reads name | Settings, Customise, account menu — one group at its right end', () => {
+  // The customiser sat between the gear and the caret until Sep 23 2026, when
+  // the team lead moved it UP to the org row at the top of the rail (pinned in
+  // sidebar-booking-site-row.test.tsx). Nothing else about this row changed.
+  it('expanded: the row reads name | Settings, account menu — one group at its right end', () => {
     expanded();
     const [gear] = gears();
     expect(gear.getAttribute('href')).toBe('/settings');
-    expect(slots(gear.parentElement!)).toEqual(['name', 'Settings', 'Customise sidebar', 'Open account menu']);
+    expect(slots(gear.parentElement!)).toEqual(['name', 'Settings', 'Open account menu']);
+    // It is on the org row in the header now, and nowhere in the footer.
+    const customiser = document.querySelector('[aria-label="Customise sidebar"]')!;
+    expect(customiser.closest('[data-sidebar="footer"]')).toBeNull();
+    expect(customiser.closest('[data-slot="org-row"]')).not.toBeNull();
     // A link, and never inside a button: nested in the menu trigger, the
     // trigger would swallow the click and the markup would be invalid.
     expect(gear.closest('button')).toBeNull();
@@ -132,10 +139,14 @@ describe('Settings is the gear in the profile row, not the org row (Sep 21 2026)
   it('the org row at the top never leads to Settings, so there is one way in and not two', () => {
     expanded();
     expect(orgRow().textContent).toContain('Northwind Rentals');
-    // The org row is the booking site and its Branding pencil now (see
-    // sidebar-booking-site-row.test.tsx) — never Settings, and never a menu.
+    // The org row is the booking site, its Branding pencil and the sidebar
+    // customiser now (see sidebar-booking-site-row.test.tsx) — never Settings,
+    // and never a menu. Its one button opens the customiser dialog and goes
+    // nowhere; the gear is the only thing on either row that reaches /settings.
     expect(orgHrefs()).not.toContain('/settings');
-    expect(orgRow().querySelector('button')).toBeNull();
+    expect([...orgRow().querySelectorAll('button')].map((b) => b.getAttribute('aria-label'))).toEqual([
+      'Customise sidebar',
+    ]);
     expect(document.querySelectorAll('a[href="/settings"]')).toHaveLength(1);
     expect(document.querySelector('a[href="/settings"]')).toBe(gears()[0]);
   });
@@ -174,12 +185,19 @@ describe('Settings is the gear in the profile row, not the org row (Sep 21 2026)
     expect(orgHrefs()).not.toContain('/settings');
   });
 
-  it('the Support rail mounts the same row without the gear, exactly as before', () => {
+  it('the Support rail mounts the same row without the gear: the name and the caret', () => {
     // support-rail.tsx renders `<UserMenuV2 variant="row" />` with no
-    // `settings` prop. Its footer must not change: Support is not this work.
+    // `settings` prop, so its footer is the name and the account menu.
+    //
+    // It carried the customiser too until Sep 23 2026 — where it did nothing:
+    // on /support the sidebar early-returns `<SupportRail />`, so
+    // `SidebarCustomizerDialog` is never mounted and the event had no listener
+    // to open anything. Moving the button to the org row took that dead control
+    // off this rail as well.
     render(createElement(UserMenuV2, { variant: 'row' }));
     expect(gears()).toHaveLength(0);
     const caret = document.querySelector('button[aria-label="Open account menu"]')!;
-    expect(slots(caret.parentElement!)).toEqual(['name', 'Customise sidebar', 'Open account menu']);
+    expect(slots(caret.parentElement!)).toEqual(['name', 'Open account menu']);
+    expect(document.querySelector('[aria-label="Customise sidebar"]')).toBeNull();
   });
 });

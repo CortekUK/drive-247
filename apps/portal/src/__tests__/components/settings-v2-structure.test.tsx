@@ -586,14 +586,19 @@ describe("OrgSwitcher (v2 sidebar): never a way into Settings", () => {
    * On Sep 21 the gear moved down to the profile row (`SettingsLinkV2`, pinned
    * in sidebar-settings-gear-v2.test.tsx), and the row became the tenant's
    * booking site instead: the site link, and a Branding pencil beside it
-   * (pinned in sidebar-booking-site-row.test.tsx). What these cases hold is
-   * what must stay true through all of that — no menu, no Settings, none of the
-   * old menu's destinations — before the tenant row loads and after.
+   * (pinned in sidebar-booking-site-row.test.tsx). On Sep 23 the row was
+   * re-ordered and the SIDEBAR CUSTOMISER came up into it from the profile row,
+   * which is the one button it may now hold — it opens a dialog, not a menu,
+   * and it goes nowhere. What these cases hold is what must stay true through
+   * all of that — no menu, no Settings, none of the old menu's destinations —
+   * before the tenant row loads and after.
    */
   const hrefs = () =>
     Array.from(document.querySelectorAll<HTMLElement>('[data-slot="org-row"], [data-slot="org-row"] a')).map((el) =>
       el.getAttribute("href"),
     );
+  /** Anything on the row that is a button, by its label: only ever the customiser. */
+  const buttons = () => screen.queryAllByRole("button").map((el) => el.getAttribute("aria-label"));
 
   it.each([
     ["before the tenant row has loaded", null],
@@ -602,7 +607,9 @@ describe("OrgSwitcher (v2 sidebar): never a way into Settings", () => {
     h.slug = slug;
     for (const collapsed of [false, true]) {
       const { unmount } = render(<OrgSwitcher collapsed={collapsed} />);
-      expect(screen.queryByRole("button")).toBeNull();
+      // The expanded row once the tenant is known is the only one with a
+      // button, and it is the customiser: never a dropdown trigger.
+      expect(buttons()).toEqual(slug && !collapsed ? ["Customise sidebar"] : []);
       expect(screen.queryByRole("menuitem")).toBeNull();
       // By destination: Settings went to the footer, and none of what the menu
       // once held has come back.
@@ -633,7 +640,9 @@ describe("OrgSwitcher (v2 sidebar): never a way into Settings", () => {
       h.isManager = true;
       h.canView = canView;
       const { unmount } = render(<OrgSwitcher />);
-      expect(screen.queryByRole("button")).toBeNull();
+      // The customiser is ungated — it arranges the person's own sidebar — and
+      // it is still the row's only button.
+      expect(buttons()).toEqual(["Customise sidebar"]);
       expect(hrefs()).not.toContain("/settings");
       expect(screen.getByText("Northwind Rentals")).toBeTruthy();
       unmount();

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ExternalLink, Pencil } from "lucide-react";
+import { ExternalLink, Pencil, SlidersHorizontal } from "lucide-react";
 import { useTenant } from "@/contexts/TenantContext";
 import { useTenantBranding } from "@/hooks/use-tenant-branding";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
@@ -74,6 +74,24 @@ export function OrgMark({ className, preview }: { className?: string; preview?: 
 }
 
 /**
+ * The three controls at the end of the expanded org row — the Branding pencil,
+ * the sidebar customiser and the booking-site arrow — are one shape, so they
+ * are one class string. 28px square and `rounded-lg`: the same box as the
+ * Settings gear and the account caret on the profile row in the sidebar footer
+ * (`user-menu-v2.tsx`), which is what the team lead lined this row up against.
+ * `v2` markup never uses `rounded-md` or `rounded-sm`.
+ *
+ * Shared rather than repeated three times because they have to stay identical:
+ * the Branding preview measures the name against these widths (see below), so a
+ * control that quietly grows here moves where a tenant's name is cut off there.
+ */
+const ROW_CONTROL =
+  "flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-lg text-muted-foreground outline-none transition-colors hover:bg-primary/10 hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-[hsl(var(--v2-link,var(--primary)))]";
+
+/** The glyph inside each of them, and the row's own scale: 14px, not the footer's 16. */
+const ROW_CONTROL_ICON = "h-3.5 w-3.5";
+
+/**
  * Top-of-sidebar organization row: the tenant's mark and name, and the way to
  * their booking site.
  *
@@ -83,36 +101,62 @@ export function OrgMark({ className, preview }: { className?: string; preview?: 
  * window" arrow always showing and a small pencil appearing beside it on hover
  * that goes to Branding. That behaviour was first built as a separate
  * "Booking site" row in the nav; the user asked for it here instead, with no
- * "Booking site" title: the tenant's own name says whose site it is. So:
+ * "Booking site" title: the tenant's own name says whose site it is.
  *
- *   - Clicking anywhere on the row, except the pencil, opens the booking site
- *     in a new tab.
- *   - The arrow is ALWAYS visible, so the row says up front that it leaves the
- *     portal.
- *   - The pencil appears on hover, with a hover state of its own, and goes to
- *     Branding (`/settings/appearance`). `opacity-0` hides it from the eye but
- *     not from the keyboard, so `focus-visible:opacity-100` shows it to a tab
- *     user; and it keeps its room at rest, so the name never jumps on hover.
- *   - It sits ON THE ROW'S RIGHT EDGE (team lead, Sep 23 2026: it "looked
- *     slightly off"). It used to carry `mr-1`, which held its 28px hover pill
- *     4px short of the edge — 10px from the sidebar's edge against the 6px the
- *     header's `p-1.5` gives everything else, so it read as not quite lined up.
- *     Flush, and `rounded-lg` rather than `rounded-md`, it is the same trailing
- *     control as the Settings gear, the customiser and the caret on the profile
- *     row in the footer (`user-menu-v2.tsx`), which are also 28px, also flush,
- *     and also inside a `p-1.5` row.
- *   - Two links, siblings inside one container, never nested: an <a> in an <a>
+ * ── THE ORDER, AND WHY (team lead, Sep 23 2026, with screenshots) ──────────
+ * Left to right: mark · name · pencil · (gap) · customiser · arrow.
+ *
+ *   - Clicking the mark or the name opens the booking site in a new tab, as
+ *     the row has done since Sep 21.
+ *   - The PENCIL sits immediately after the name rather than out at the row's
+ *     end, which is why the name link no longer stretches (`flex-1` went from
+ *     both the link and the name span). A `flex-1` link would push the pencil
+ *     to the far edge again; hugging its content instead means a long name
+ *     TRUNCATES against the pencil rather than shoving it around, which is the
+ *     behaviour asked for. The gap the name used to fill is an explicit
+ *     spacer, so the last two controls are pinned to the edge whether or not
+ *     the pencil is there.
+ *   - That spacer is inert: it is the one place on the row that no longer
+ *     opens the site. It cannot be part of the name link without the link
+ *     stretching, and the pencil sitting against the name is what was asked
+ *     for. The mark, the name and the arrow all still open it.
+ *   - The CUSTOMISER came up from the profile row in the footer
+ *     (`user-menu-v2.tsx`). It is ALWAYS visible, never hover-revealed: it is a
+ *     primary way into the sidebar customiser and hiding it would bury it. It
+ *     dispatches `open-sidebar-customizer`; the dialog stays mounted in
+ *     app-sidebar-v2.tsx, which is the only place that has the computed nav.
+ *   - The ARROW is last, on the row's right edge, and is now a control of its
+ *     own rather than an icon inside the name link — that is the only way it
+ *     can be at the END while the pencil is at the NAME. So the row holds two
+ *     links to the same URL, which is fine: same destination, same promise of
+ *     a new tab. It keeps "Open your booking site" as its tooltip.
+ *   - The arrow and the customiser are always visible, so the row says up front
+ *     that it leaves the portal. The pencil appears on hover, with a hover
+ *     state of its own, and goes to Branding (`/settings/appearance`).
+ *     `opacity-0` hides it from the eye but not from the keyboard, so
+ *     `focus-visible:opacity-100` shows it to a tab user; and it keeps its room
+ *     at rest, so the name never jumps on hover.
+ *   - All three are the same 28px `rounded-lg` box (`ROW_CONTROL`), the last
+ *     one flush with the row's right edge — the same trailing control as the
+ *     Settings gear and the caret on the profile row in the footer, which are
+ *     also 28px, also flush, and also inside a `p-1.5` row. The pencil used to
+ *     carry `mr-1`, which held it 4px short of the edge and read as not quite
+ *     lined up (team lead, Sep 23 2026); nothing here carries an end margin now.
+ *   - Links are siblings inside one container, never nested: an <a> in an <a>
  *     is invalid, and the outer one would swallow the pencil's click. The
- *     container carries the hover highlight, so it covers the pencil too.
- *   - Collapsed, the mark alone opens the site; the rail has no room for the
- *     pencil, and Branding is one click away on the Settings index.
+ *     container carries the hover highlight, so it covers all three controls.
+ *   - Collapsed, the mark alone opens the site; the rail is 48px, which has no
+ *     room for three controls beside a 32px mark, so neither the pencil nor the
+ *     customiser is drawn there. Branding is one click away on the Settings
+ *     index, and the customiser is on the expanded rail.
  *   - The pencil is shown only to someone Branding will let in. It was ungated
  *     on the old nav row, so a manager without the Settings grant got a pencil
  *     that bounced them to the dashboard. Its rule is the Settings gear's —
  *     `!isManager || canView('settings')` — which is exactly what
  *     `canAccessRoute('/settings/appearance')` resolves to today (the route
  *     maps to the `settings` grant alone), so the two cannot disagree about
- *     who may reach the same page. The site link itself needs no grant.
+ *     who may reach the same page. The site link itself needs no grant, and
+ *     neither does the customiser: it arranges the person's own sidebar.
  *
  * The URL comes from `bookingOriginFor`, never `https://${slug}.drive-247.com`:
  * that formula is right in production and wrong everywhere else, and it opened
@@ -206,6 +250,10 @@ export function OrgSwitcher({
       data-slot="org-row"
       className="group/site flex items-center rounded-lg transition-colors hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]"
     >
+      {/* The mark and the name, hugging their content: no `flex-1` here or on
+          the span, or the pencil after them would be pushed to the row's far
+          edge, which is what this change undid. A long name truncates instead
+          (`min-w-0` on both, so the flex item may shrink below its text). */}
       <a
         href={bookingUrl}
         target="_blank"
@@ -213,13 +261,12 @@ export function OrgSwitcher({
         onClick={onNavigate}
         aria-label={siteLabel}
         title="Open your booking site"
-        className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-lg p-1.5 text-left outline-none"
+        className="flex min-w-0 cursor-pointer items-center gap-2.5 rounded-lg p-1.5 text-left outline-none"
       >
         {Logo}
-        <span className="min-w-0 flex-1 truncate text-[13px] font-semibold leading-tight">
+        <span className="min-w-0 truncate text-[13px] font-semibold leading-tight">
           {orgName}
         </span>
-        <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-60" aria-hidden />
       </a>
       {canOpenBranding && (
         <Link
@@ -227,11 +274,41 @@ export function OrgSwitcher({
           onClick={onNavigate}
           aria-label="Edit your booking site's branding"
           title="Edit branding"
-          className="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-lg text-muted-foreground opacity-0 outline-none transition-colors focus-visible:opacity-100 group-hover/site:opacity-100 hover:bg-primary/10 hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-[hsl(var(--v2-link,var(--primary)))]"
+          className={cn(ROW_CONTROL, "opacity-0 focus-visible:opacity-100 group-hover/site:opacity-100")}
         >
-          <Pencil className="h-3.5 w-3.5" aria-hidden />
+          <Pencil className={ROW_CONTROL_ICON} aria-hidden />
         </Link>
       )}
+      {/* The gap, as its own element rather than an auto margin on what follows:
+          the pencil is conditional, so a margin would have to move between
+          elements to survive a manager without the Settings grant. `flex-1`
+          with a 0 basis takes every spare pixel and gives them all back the
+          moment the name needs them. */}
+      <span aria-hidden className="flex-1" />
+      {/* Deliberately NOT `onNavigate`, unlike every link on this row: this
+          opens a dialog over the phone sheet rather than navigating, and
+          closing the sheet under it would leave the person facing the page
+          they were on the moment they dismiss the dialog. */}
+      <button
+        type="button"
+        onClick={() => window.dispatchEvent(new Event("open-sidebar-customizer"))}
+        aria-label="Customise sidebar"
+        title="Customise sidebar"
+        className={ROW_CONTROL}
+      >
+        <SlidersHorizontal className={ROW_CONTROL_ICON} aria-hidden />
+      </button>
+      <a
+        href={bookingUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={onNavigate}
+        aria-label="Open your booking site (opens in a new tab)"
+        title="Open your booking site"
+        className={ROW_CONTROL}
+      >
+        <ExternalLink className={ROW_CONTROL_ICON} aria-hidden />
+      </a>
     </div>
   );
 }
