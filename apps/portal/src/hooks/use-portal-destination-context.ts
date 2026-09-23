@@ -23,6 +23,8 @@ export function usePortalDestinationContext(): DestinationContext {
   const v2Chrome = useV2("chrome");
   const integrationsBoard = useV2("appearance");
   const turoV2 = useV2("turo") || isV2("turo", tenant?.slug);
+  // Same predicate as both sidebars' Referrals entry.
+  const referralsOn = useV2("referrals") || isV2("referrals", tenant?.slug);
   const { settings: rentalSettings } = useRentalSettings();
   const { settings: orgSettings } = useOrgSettings();
   const customSite = useCustomSiteEnabled();
@@ -50,6 +52,7 @@ export function usePortalDestinationContext(): DestinationContext {
       turo_sync_enabled: turoV2 && t?.turo_bridge_enabled === true,
       pending_bookings: paymentModeManual,
       custom_site_enabled: customSite.enabled,
+      referrals_enabled: referralsOn,
     },
     canAccessRoute,
     canViewSettings,

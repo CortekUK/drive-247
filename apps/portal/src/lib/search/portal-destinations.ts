@@ -34,7 +34,8 @@ export type DestinationFlag =
   | "fleet_health_enabled"
   | "turo_sync_enabled"
   | "pending_bookings"
-  | "custom_site_enabled";
+  | "custom_site_enabled"
+  | "referrals_enabled";
 
 export interface DestinationGate {
   /** Hidden for a lean tenant when this area is. */
@@ -145,6 +146,7 @@ export const PAGE_DESTINATIONS: readonly PortalDestination[] = [
   // its entry must keep saying what that page is. The two are never visible
   // together, so sharing an href (and so an id) never lists it twice.
   page("/agreements", "Agreements", "Agreements sent for signature, their signed copies, and your agreement templates.", "file-signature", "agreements contracts signed signatures esign e-sign send agreement templates", { experience: "v2" }),
+  page("/referrals", "Referrals", "Your Drive247 referral code and link, your reward, and who you referred.", "gift", "referrals refer invite referral code link reward discount friend operator", { flags: ["referrals_enabled"] }),
 
   // The original portal only: pages the v2 rail deliberately does not list.
   page("/blocked-customers", "Blocked Customers", "Customers you have blocked from renting.", "user", "blocked banned blacklist customers", { experience: "v1" }),

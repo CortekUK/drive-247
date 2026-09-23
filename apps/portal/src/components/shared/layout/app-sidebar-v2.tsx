@@ -64,6 +64,7 @@ import {
   Mail,
   Newspaper,
   Plug,
+  Gift,
 } from "lucide-react";
 // CRITICAL: `ui/sidebar` and `ui-v2/sidebar` each define their OWN React
 // context. The dashboard layout pairs this component with ui-v2's
@@ -284,6 +285,8 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   const reportsHidden = useIsAreaHidden("reports");
   const plDashboardHidden = useIsAreaHidden("pl-dashboard");
   const welcomeHidden = useIsAreaHidden("welcome");
+  // The Drive247 referral programme page — its own gate area (lib/v2.ts).
+  const referralsOn = useV2("referrals");
   const fleetHealthHidden = useIsAreaHidden("fleet-health");
   // Website rail + its publish switches. React Query dedupes this against the
   // /cms dashboard's own read, so the extra mount costs nothing.
@@ -1573,6 +1576,27 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
+
+                  {/* Referrals — the operator's Drive247 referral programme: their
+                      code and link, and the reward on their own Drive247 bill.
+                      Beside Billing because it is money between the operator and
+                      us. The route maps to the Subscription permission, so a
+                      manager without it is refused there. */}
+                  {referralsOn && (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={isActive("/referrals")}
+                      tooltip={collapsed ? "Referrals" : undefined}
+                      className="h-8 transition-colors"
+                    >
+                      <Link href="/referrals" onClick={closeMobileOnNav}>
+                        <Gift className="h-4 w-4 shrink-0" />
+                        <span className={`text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>Referrals</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  )}
 
                   {/* Welcome pack, kept from v1 — the source worktree dropped
                       it, but `/welcome` is a live route this branch's v1 rail

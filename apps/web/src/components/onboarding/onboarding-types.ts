@@ -1,4 +1,5 @@
 import type { SignupPlan, SignupPlanId } from "@/lib/plans";
+import type { PromoOffer } from "@/lib/promo-offer";
 
 // ---------------------------------------------------------------------------
 // Steps
@@ -35,6 +36,9 @@ export type SignupErrorCode =
   | "EMAIL_INVALID"
   | "EMAIL_DISPOSABLE"
   | "PLAN_UNKNOWN"
+  // A Drive247 promo / referral code that cannot be used (signup-payment-intent-v2).
+  // The dialog drops the code and carries on at the full price, saying why.
+  | "PROMO_INVALID"
   | "TERMS_NOT_ACCEPTED"
   | "SLUG_INVALID"
   // --- identity / conflict (409)
@@ -101,6 +105,7 @@ export const SIGNUP_ERROR_COPY: Record<SignupErrorCode, string> = {
   EMAIL_DISPOSABLE:
     "Please use a permanent business email address — this is the login for your portal.",
   PLAN_UNKNOWN: "That plan is no longer available. Please pick a plan again.",
+  PROMO_INVALID: "Your promo code can't be used, so you're subscribing at the full price.",
   TERMS_NOT_ACCEPTED: "Please accept the Terms and Privacy Policy to continue.",
   SLUG_INVALID:
     "Your web address must start with a letter and use only lowercase letters, numbers and hyphens.",
@@ -323,6 +328,15 @@ export interface OnboardingState {
     publishableKey: string | null;
     mode: "test" | "live" | null;
     paid: boolean;
+    /**
+     * What the first invoice actually asks for, from Stripe — below the plan
+     * price when a Drive247 promo / referral code applies. Null = plan price.
+     */
+    amountDueCents?: number | null;
+    /** The promo / referral code applied to this subscription, if any. */
+    promo?: PromoOffer | null;
+    /** Why a code the visitor carried was dropped (shown on the card step). */
+    promoNotice?: string | null;
   };
   business: BusinessDraft;
   provisioning: ProvisioningState;
@@ -440,6 +454,14 @@ export interface PaymentStepProps {
   onPaid(): void;
   /** Surfaces a Stripe-side failure to the shell. */
   onError(err: OnboardingError): void;
+  /** What the first invoice asks for when a promo / referral code changed it. */
+  amountDueCents?: number | null;
+  /** The promo / referral code applied to this subscription, if any. */
+  promo?: PromoOffer | null;
+  /** Why a code the visitor carried was dropped. */
+  promoNotice?: string | null;
+  /** "Have a promo code?": apply a code, or remove the applied one with null. Resolves to a message, or null. */
+  onApplyPromo?(code: string | null): Promise<string | null>;
 }
 
 // ---------------------------------------------------------------------------
@@ -470,6 +492,13 @@ export interface OnboardingContextValue {
 
   startPayment(): Promise<void>;
   markPaid(): Promise<void>;
+  /**
+   * The payment step's "Have a promo code?" field. A code is checked first and
+   * only then applied (a new intent is minted with it); `null` removes the code
+   * that is applied. Resolves to a message to show under the field, or null
+   * when the code was applied / removed.
+   */
+  applyPromoCode(code: string | null): Promise<string | null>;
 
   updateBusiness(patch: Partial<BusinessDraft>): void;
   checkSlug(slug: string): Promise<SlugCheckResult>;

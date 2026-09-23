@@ -1,4 +1,7 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
+import { REFERRAL_COOKIE } from "@/lib/referral-cookie";
+import { promoRejectionText } from "@/lib/promo-offer";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +14,28 @@ export const metadata: Metadata = {
 
 interface PageProps {
   params: Promise<{ token: string }>;
-  searchParams: Promise<{ cancelled?: string; err?: string }>;
+  searchParams: Promise<{ cancelled?: string; err?: string; promo?: string }>;
+}
+
+/** A Drive247 promo / referral code on this checkout (from subscription-link-v2). */
+interface PromoInfo {
+  kind: "campaign" | "referral";
+  displayCode: string;
+  discountText: string;
+  durationText: string;
+  referrerName: string | null;
+  preApplied: boolean;
+  discountedAmount: number;
+  duration: "once" | "repeating" | "forever";
+  durationMonths: number | null;
+}
+
+/** "for the first 3 months", "on the first bill", "on every bill". */
+function promoSpan(p: PromoInfo): string {
+  if (p.duration === "forever") return "on every bill";
+  if (p.duration === "once") return "on the first bill";
+  const n = p.durationMonths ?? 1;
+  return n === 1 ? "for the first month" : `for the first ${n} months`;
 }
 
 interface LinkInfo {
@@ -30,6 +54,8 @@ interface LinkInfo {
   privacyUrl?: string;
   declined?: boolean;
   error?: string;
+  promo?: PromoInfo | null;
+  promoError?: string | null;
 }
 
 function money(amount?: number, currency?: string) {
@@ -80,19 +106,50 @@ export default async function SubscribePage({ params, searchParams }: PageProps)
     </Shell>;
   }
 
-  const fnBase = `${supabaseUrl}/functions/v1/subscription-link`;
+  const v1Base = `${supabaseUrl}/functions/v1/subscription-link`;
+  const v2Base = `${supabaseUrl}/functions/v1/subscription-link-v2`;
+  const headers = { apikey: anonKey, Authorization: `Bearer ${anonKey}` };
+
+  // A Drive247 promo code: typed here ("?promo=CODE"), or carried from a referral
+  // link (cookie). "?promo=none" means the visitor removed it.
+  const promoParam = typeof sp?.promo === "string" ? sp.promo.trim().toUpperCase().slice(0, 64) : "";
+  const cookieCode = (await cookies()).get(REFERRAL_COOKIE)?.value?.toUpperCase().slice(0, 64) ?? "";
+  const typedCode = promoParam === "NONE" ? "" : promoParam || cookieCode;
+
+  // Read through subscription-link-v2, which answers exactly as the original
+  // does plus the promo code. If it is unavailable for any reason, fall back to
+  // the original: a prospect must never be blocked by the promo feature.
   let info: LinkInfo = { state: "invalid" };
+  let loaded = false;
   try {
-    const res = await fetch(`${fnBase}?token=${encodeURIComponent(token)}&info=1`, {
-      headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}` },
-      cache: "no-store",
-    });
-    info = (await res.json()) as LinkInfo;
+    const res = await fetch(
+      `${v2Base}?token=${encodeURIComponent(token)}&info=1${typedCode ? `&promo_code=${encodeURIComponent(typedCode)}` : ""}`,
+      { headers, cache: "no-store" },
+    );
+    const body = (await res.json()) as LinkInfo;
+    if (typeof body?.state === "string" && res.status < 500) {
+      info = body;
+      loaded = true;
+    }
   } catch {
-    return <Shell title="We couldn&rsquo;t load this link">
-      <p>Please try again in a moment, or ask your Drive247 contact for a fresh link.</p>
-    </Shell>;
+    // fall through to the original function
   }
+  if (!loaded) {
+    try {
+      const res = await fetch(`${v1Base}?token=${encodeURIComponent(token)}&info=1`, { headers, cache: "no-store" });
+      info = (await res.json()) as LinkInfo;
+    } catch {
+      return <Shell title="We couldn&rsquo;t load this link">
+        <p>Please try again in a moment, or ask your Drive247 contact for a fresh link.</p>
+      </Shell>;
+    }
+  }
+
+  const promo = info.promo ?? null;
+  // Only a checkout that carries a code goes to v2; everything else pays
+  // exactly as before.
+  const fnBase = promo ? v2Base : v1Base;
+  const promoMessage = !promo && info.promoError && typedCode ? promoRejectionText(info.promoError) : null;
 
   const portalHref = info.portalUrl;
 
@@ -156,6 +213,8 @@ export default async function SubscribePage({ params, searchParams }: PageProps)
   const price = money(info.amount, info.currency);
   const per = info.interval === "year" ? "year" : "month";
   const chargeToday = info.chargeToday !== false;
+  const promoPrice = promo ? money(promo.discountedAmount, info.currency) : null;
+  const firstPrice = promoPrice ?? price;
 
   return (
     <Shell title={`Activate ${info.companyName ?? "your subscription"}`}>
@@ -167,7 +226,25 @@ export default async function SubscribePage({ params, searchParams }: PageProps)
               ? "This link is too close to expiring to start a payment. Ask your Drive247 contact for a fresh one."
               : err === "plan_unavailable"
                 ? "This link is out of date. Ask your Drive247 contact for a fresh one."
-                : "We couldn't start the payment just then. Please try again."}
+                : err === "promo_invalid"
+                  ? "That promo code can't be used any more. You can continue without it, or try another code."
+                  : err === "promo_one_code"
+                    ? "Only one code can be used, and this link already has one."
+                    : "We couldn't start the payment just then. Please try again."}
+        </div>
+      )}
+      {promo && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-900">
+          <p className="font-medium">
+            {promo.kind === "referral" && promo.referrerName
+              ? `${promo.referrerName} invited you: ${promo.discountText} ${promo.durationText}.`
+              : `${promo.displayCode}: ${promo.discountText} ${promo.durationText}.`}
+          </p>
+          <p className="mt-0.5 text-xs text-emerald-800">
+            {promo.preApplied
+              ? "Applied by your Drive247 contact."
+              : <>Code <span className="font-mono">{promo.displayCode}</span> applied &middot; <a href="?promo=none" className="underline">Remove</a></>}
+          </p>
         </div>
       )}
       {cancelled && (
@@ -188,9 +265,18 @@ export default async function SubscribePage({ params, searchParams }: PageProps)
       <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
         <div className="flex items-baseline justify-between">
           <span className="font-medium text-slate-900">{info.planName}</span>
-          <span className="text-lg font-semibold text-slate-900">{price}</span>
+          <span className="text-lg font-semibold text-slate-900">
+            {promoPrice && <s className="mr-2 text-sm font-normal text-slate-400">{price}</s>}
+            {firstPrice}
+          </span>
         </div>
-        <div className="mt-1 text-xs text-slate-500">per {per}, cancel any time</div>
+        <div className="mt-1 text-xs text-slate-500">
+          {promo
+            ? promo.duration === "forever"
+              ? <>per {per} with your discount, cancel any time</>
+              : <>{promoSpan(promo)}, then {price} per {per}</>
+            : <>per {per}, cancel any time</>}
+        </div>
       </div>
       )}
 
@@ -200,12 +286,31 @@ export default async function SubscribePage({ params, searchParams }: PageProps)
           // would name one number and then charge another.
           ? <>You have an outstanding invoice. The exact amount is shown on the next page.</>
           : chargeToday
-            ? <>You&rsquo;ll be charged <strong className="text-slate-900">{price}</strong> today, then {price} every {per}.</>
-            : <>Your card is saved today and nothing is charged yet. Your first payment of <strong className="text-slate-900">{price}</strong> comes later.</>}
+            ? promo
+              ? promo.duration === "forever"
+                ? <>You&rsquo;ll be charged <strong className="text-slate-900">{firstPrice}</strong> today, then {firstPrice} every {per}.</>
+                : <>You&rsquo;ll be charged <strong className="text-slate-900">{firstPrice}</strong> today. The discount applies {promoSpan(promo)}; after that it&rsquo;s {price} every {per}.</>
+              : <>You&rsquo;ll be charged <strong className="text-slate-900">{price}</strong> today, then {price} every {per}.</>
+            : <>Your card is saved today and nothing is charged yet. Your first payment of <strong className="text-slate-900">{firstPrice}</strong> comes later.</>}
       </p>
+
+      {info.linkMode !== "invoice" && !promo && (
+        <form method="GET" className="space-y-1.5">
+          <label htmlFor="promo" className="text-xs font-medium text-slate-700">Have a promo code?</label>
+          <div className="flex gap-2">
+            <input id="promo" name="promo" defaultValue={typedCode} autoComplete="off"
+              className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm uppercase text-slate-900 placeholder:normal-case placeholder:font-sans"
+              placeholder="e.g. SUNSET-4821" />
+            <button type="submit" className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Apply</button>
+          </div>
+          {promoMessage && <p className="text-xs text-red-700">{promoMessage}</p>}
+        </form>
+      )}
       <p>Payment is handled by Stripe. We never see your card details.</p>
 
       <form method="POST" action={`${fnBase}?token=${encodeURIComponent(token)}`} className="space-y-4 pt-1">
+        {/* A code the prospect typed or carried in; one sales pre-applied is read from the link itself. */}
+        {promo && !promo.preApplied && <input type="hidden" name="promo_code" value={promo.displayCode} />}
         <label className="flex cursor-pointer items-start gap-3 text-slate-700">
           <input type="checkbox" name="accept_terms" value="on" required className="mt-1 h-4 w-4 rounded border-slate-300 text-indigo-600" />
           <span className="text-xs leading-relaxed">

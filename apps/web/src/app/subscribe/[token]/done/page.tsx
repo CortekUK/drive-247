@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 
 interface PageProps {
   params: Promise<{ token: string }>;
-  searchParams: Promise<{ session_id?: string }>;
+  searchParams: Promise<{ session_id?: string; v?: string }>;
 }
 
 function Shell({ title, children }: { title: string; children: React.ReactNode }) {
@@ -26,7 +26,11 @@ function Shell({ title, children }: { title: string; children: React.ReactNode }
 
 export default async function SubscribeDonePage({ params, searchParams }: PageProps) {
   const { token } = await params;
-  const sessionId = (await searchParams)?.session_id ?? "";
+  const sp = await searchParams;
+  const sessionId = sp?.session_id ?? "";
+  // A checkout that carried a Drive247 promo code was minted by
+  // subscription-link-v2 (it adds v=2), which also records the code on return.
+  const fn = sp?.v === "2" ? "subscription-link-v2" : "subscription-link";
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
@@ -42,7 +46,7 @@ export default async function SubscribeDonePage({ params, searchParams }: PagePr
   if (token && sessionId && supabaseUrl && anonKey) {
     try {
       const res = await fetch(
-        `${supabaseUrl}/functions/v1/subscription-link?token=${encodeURIComponent(token)}&done=1&session_id=${encodeURIComponent(sessionId)}`,
+        `${supabaseUrl}/functions/v1/${fn}?token=${encodeURIComponent(token)}&done=1&session_id=${encodeURIComponent(sessionId)}`,
         { headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}` }, cache: "no-store" },
       );
       const body = await res.json();

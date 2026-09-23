@@ -71,7 +71,8 @@ export type V2Area =
   | 'insights'
   | 'availability'
   | 'turo'
-  | 'agreements';
+  | 'agreements'
+  | 'referrals';
 
 /**
  * One entry per v2 area. Today every list is just the canary.
@@ -146,6 +147,17 @@ const V2_AREAS: Record<V2Area, readonly string[]> = {
    * legally binding document that spends live credits.
    */
   agreements: [NORTHWIND],
+  /**
+   * `/referrals` — the operator's Drive247 referral programme page: their code
+   * and link, their reward tier, who they referred. A new route with no v1
+   * counterpart, shown in BOTH rails (v1 and v2) for every tenant listed here.
+   *
+   * Widening this to everyone is the plan (brief: "every operator has a
+   * Referrals page"); it goes the usual way — canary, then friendly tenants,
+   * then everyone. The programme itself only gives codes to subscribed
+   * operators, and the page says so to anyone else.
+   */
+  referrals: [NORTHWIND],
 };
 
 /**

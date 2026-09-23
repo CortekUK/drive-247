@@ -24,18 +24,26 @@ import * as React from "react";
 import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
 import type { Stripe, StripeElementsOptions } from "@stripe/stripe-js";
 import { loadStripe } from "@stripe/stripe-js";
-import { CreditCard, Loader2, Lock, ShieldCheck, TriangleAlert } from "lucide-react";
+import { CreditCard, Gift, Loader2, Lock, ShieldCheck, TriangleAlert } from "lucide-react";
 import { useTheme } from "next-themes";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import type {
   OnboardingError,
   PaymentStepProps,
 } from "@/components/onboarding/onboarding-types";
 import { SIGNUP_ERROR_COPY } from "@/components/onboarding/onboarding-types";
+import type { PromoOffer } from "@/lib/promo-offer";
+
+/** "$79", "$79.20" from cents. */
+function formatCents(cents: number): string {
+  const dollars = cents / 100;
+  return `$${Number.isInteger(dollars) ? dollars : dollars.toFixed(2)}`;
+}
 
 /**
  * `loadStripe` memoised per publishable key.
@@ -112,6 +120,10 @@ export function PaymentStep({
   onRetryIntent,
   onPaid,
   onError,
+  amountDueCents = null,
+  promo = null,
+  promoNotice = null,
+  onApplyPromo,
 }: PaymentStepProps) {
   const { resolvedTheme } = useTheme();
   const [stripeJs, setStripeJs] = React.useState<StripeJsState>("idle");
@@ -301,13 +313,42 @@ export function PaymentStep({
             {plan.fleetBand}
           </p>
         </div>
-        <div className="shrink-0 text-right">
-          <p className="text-2xl font-bold tracking-tighter">
-            ${plan.priceUsd}
-          </p>
-          <p className="text-xs text-muted-foreground">/month</p>
-        </div>
+        {promo && typeof amountDueCents === "number" ? (
+          // A promo / referral code: the figure is Stripe's own first invoice,
+          // so what is shown here is exactly what the card is charged.
+          <div className="shrink-0 text-right">
+            <p className="text-xs text-muted-foreground line-through">
+              <span className="sr-only">Was </span>${plan.priceUsd}/month
+            </p>
+            <p className="text-2xl font-bold tracking-tighter">{formatCents(amountDueCents)}</p>
+            <p className="text-xs text-muted-foreground">due today</p>
+          </div>
+        ) : (
+          <div className="shrink-0 text-right">
+            <p className="text-2xl font-bold tracking-tighter">
+              ${plan.priceUsd}
+            </p>
+            <p className="text-xs text-muted-foreground">/month</p>
+          </div>
+        )}
       </div>
+
+      {promo ? (
+        <AppliedPromo
+          promo={promo}
+          busy={busy}
+          onRemove={onApplyPromo ? () => void onApplyPromo(null) : undefined}
+        />
+      ) : (
+        <>
+          {promoNotice && (
+            <p className="mt-2 text-xs leading-relaxed text-amber-700 dark:text-amber-400" role="status">
+              {promoNotice}
+            </p>
+          )}
+          {onApplyPromo && <PromoCodeField busy={busy} onApply={onApplyPromo} />}
+        </>
+      )}
 
       {mode === "test" && (
         <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -320,6 +361,9 @@ export function PaymentStep({
         You&apos;re starting a monthly subscription. Today&apos;s payment covers
         your first month; it renews on the same date each month and you can
         manage it from your portal.
+        {promo && promo.duration !== "forever" && (
+          <> Your discount applies {promo.durationText}; after that the plan is ${plan.priceUsd}/month.</>
+        )}
       </p>
 
       <Separator className="my-4" />
@@ -804,5 +848,116 @@ function ConfigurationErrorPanel() {
         <a href="/strategy-call">Book a strategy call</a>
       </Button>
     </FallbackForm>
+  );
+}
+
+/** The code on this subscription: what it gives, and a way to take it off. */
+function AppliedPromo({
+  promo,
+  busy,
+  onRemove,
+}: {
+  promo: PromoOffer;
+  busy: boolean;
+  onRemove?: () => void;
+}) {
+  return (
+    <div className="mt-2 flex items-start justify-between gap-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-100">
+      <p className="flex min-w-0 items-start gap-1.5 leading-relaxed">
+        <Gift className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        <span>
+          <span className="font-mono font-semibold">{promo.displayCode}</span> applied:{" "}
+          {promo.discountText} {promo.durationText}
+          {promo.kind === "referral" && promo.referrerName ? `, thanks to ${promo.referrerName}` : ""}.
+        </span>
+      </p>
+      {onRemove && (
+        <button
+          type="button"
+          onClick={onRemove}
+          disabled={busy}
+          className="shrink-0 font-medium underline underline-offset-2 disabled:opacity-50"
+        >
+          Remove
+        </button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * "Have a promo code?" A link until asked for, because most operators have
+ * none and an empty field reads as a price they are missing out on. The code is
+ * checked before anything changes; only a good code replaces the payment form
+ * (a new intent is minted with it).
+ */
+function PromoCodeField({
+  busy,
+  onApply,
+}: {
+  busy: boolean;
+  onApply(code: string | null): Promise<string | null>;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const [code, setCode] = React.useState("");
+  const [checking, setChecking] = React.useState(false);
+  const [message, setMessage] = React.useState<string | null>(null);
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="mt-2 text-xs font-medium text-indigo-600 underline-offset-2 hover:underline dark:text-indigo-400"
+      >
+        Have a promo code?
+      </button>
+    );
+  }
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!code.trim() || checking || busy) return;
+    setChecking(true);
+    setMessage(null);
+    try {
+      setMessage(await onApply(code.trim()));
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  return (
+    <form onSubmit={submit} className="mt-2">
+      <div className="flex gap-2">
+        <Input
+          value={code}
+          onChange={(e) => {
+            setCode(e.target.value.toUpperCase());
+            setMessage(null);
+          }}
+          placeholder="Promo code"
+          aria-label="Promo code"
+          autoComplete="off"
+          spellCheck={false}
+          maxLength={64}
+          className="h-9 font-mono text-sm uppercase"
+        />
+        <Button
+          type="submit"
+          variant="outline"
+          size="sm"
+          className="h-9 shrink-0"
+          disabled={!code.trim() || checking || busy}
+        >
+          {checking ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : "Apply"}
+        </Button>
+      </div>
+      {message && (
+        <p className="mt-1.5 text-xs text-destructive" role="alert">
+          {message}
+        </p>
+      )}
+    </form>
   );
 }

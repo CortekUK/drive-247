@@ -5,6 +5,7 @@ import { Check } from "lucide-react";
 import { OnboardingProvider } from "@/components/onboarding/onboarding-provider";
 import { PlanCard } from "@/components/pricing/plan-card";
 import { useFadeIn } from "@/hooks/use-fade-in";
+import type { PromoOffer } from "@/lib/promo-offer";
 import {
   PLATFORM_INCLUDED,
   PRICING_FOOTNOTE,
@@ -32,6 +33,11 @@ interface PricingSectionProps {
    * page.
    */
   onSelectPlan?(planId: SignupPlanId): void;
+  /**
+   * A Drive247 promo / referral code the visitor carries. The cards show the
+   * discounted price; the signup dialog applies the code at payment.
+   */
+  offer?: PromoOffer | null;
 }
 
 /**
@@ -56,6 +62,7 @@ interface PricingSectionProps {
 export function PricingSection({
   plans = SIGNUP_PLANS,
   onSelectPlan,
+  offer = null,
 }: PricingSectionProps) {
   const { ref, visible } = useFadeIn();
 
@@ -120,7 +127,7 @@ export function PricingSection({
           } ${visible ? "fade-in-visible" : "fade-in-hidden"}`}
         >
           {catalogue.map((plan) => (
-            <PlanCard key={plan.id} plan={plan} onSelect={onSelectPlan} />
+            <PlanCard key={plan.id} plan={plan} onSelect={onSelectPlan} offer={offer} />
           ))}
         </div>
 

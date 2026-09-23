@@ -43,6 +43,7 @@ import {
   Link2,
   ArrowUpRight,
   CornerDownLeft,
+  Gift,
 } from "lucide-react";
 import {
   Command,
@@ -95,6 +96,7 @@ const ICONS: Record<string, typeof Search> = {
   "bar-chart": BarChart3,
   "trending-up": TrendingUp,
   crown: Crown,
+  gift: Gift,
   "message-square": MessageSquare,
   history: History,
   workflow: Workflow,

@@ -62,13 +62,16 @@ export default function ProtectedLayout({
     }
   }, [user, loading, router]);
 
-  // Sales-only users (sales agent without super admin) are confined to /admin/sales.
+  // Sales-only users (sales agent without super admin) are confined to /admin/sales,
+  // plus Promo Codes, where they may look up codes and copy referral links (the
+  // page and admin-promo-codes both refuse them anything that changes money).
   useEffect(() => {
     if (loading || !user) return;
     if (
       user.is_sales_agent &&
       !user.is_super_admin &&
-      !pathname.startsWith('/admin/sales')
+      !pathname.startsWith('/admin/sales') &&
+      !pathname.startsWith('/admin/promo-codes')
     ) {
       router.replace('/admin/sales');
     }

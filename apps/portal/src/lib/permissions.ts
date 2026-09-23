@@ -197,6 +197,11 @@ export const ROUTE_TO_TAB: Record<string, string> = {
   // admin-create-user edge functions and backfilled for every existing manager.
   // Anyone who may read the reports may read this; nobody new gains access.
   '/insights': 'reports',
+  // The Drive247 referral programme page: the operator's code, their reward on
+  // their own Drive247 bill, and who they referred — money between the operator
+  // and Drive247, so it inherits the Subscription tab's key. Unmapped routes are
+  // ALLOWED for every manager, so leaving this out would open the page to all.
+  '/referrals': 'settings.subscription',
   // `/integrations` maps to the SAME key as the Settings > Integrations tab it
   // is a full-page version of. It was missing, and this table FAILS OPEN:
   // `getTabKeyForRoute` returning null makes `canAccessRoute` treat the route as

@@ -145,7 +145,11 @@ function analyse(file, src) {
 function walkFns(dir, acc = []) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     const p = join(dir, e.name);
-    if (e.isDirectory()) walkFns(p, acc);
+    // `_tests` holds Deno test harnesses. Supabase never deploys an
+    // underscore directory, and they use `import.meta`, which this scanner
+    // does not model — scanning them would report a reference that cannot
+    // fail in production.
+    if (e.isDirectory()) { if (e.name !== '_tests') walkFns(p, acc); }
     else if (e.name.endsWith('.ts') && !e.name.endsWith('.d.ts')) acc.push(p);
   }
   return acc;

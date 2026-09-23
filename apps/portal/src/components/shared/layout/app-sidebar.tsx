@@ -35,7 +35,7 @@ import { useTenant } from "@/contexts/TenantContext";
 import { useIsAreaHidden } from "@/lib/lean-context";
 import { isV2 } from "@/lib/v2";
 import { useV2 } from "@/lib/v2-context";
-import { UserPlus, Workflow } from "lucide-react";
+import { UserPlus, Workflow, Gift } from "lucide-react";
 import { usePendingBookingsCount } from "@/hooks/use-pending-bookings";
 import { useUnreadCount } from "@/hooks/use-unread-count";
 import { useAuthStore } from "@/stores/auth-store";
@@ -187,6 +187,9 @@ export function AppSidebar() {
   // half of what decides whether the Turo Sync entry exists at all. The slug
   // term stays OR'd in so the answer can never be narrower than it was.
   const turoV2 = useV2("turo") || isV2("turo", tenantSlug);
+  // Referrals (Drive247 referral programme), gated like Turo: resolved flags OR'd
+  // with the slug list, so the entry can never be narrower than the page's gate.
+  const referralsOn = useV2("referrals") || isV2("referrals", tenantSlug);
   // Turo Sync. BOTH gates, and in this order.
   //
   // `tenants.turo_bridge_enabled` is already true for five tenants in
@@ -401,6 +404,7 @@ export function AppSidebar() {
           ? [{ name: "New Website Content", href: "/cms/new-website", icon: Sparkles }]
           : []),
         { name: "Audit Logs", href: "/audit-logs", icon: AnimatedHistory },
+        ...(referralsOn ? [{ name: "Referrals", href: "/referrals", icon: Gift }] : []),
         { name: "Manage Users", href: "/users", icon: AnimatedUsers, headAdminOnly: true },
       ].filter(item => {
         if (item.superAdminOnly && !appUser?.is_super_admin) return false;
