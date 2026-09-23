@@ -357,8 +357,8 @@ describe('authentication and the tenant', () => {
     const res = await send(validBody());
     expect(res.status).toBe(200);
     expect(providerCalls()[0].init.headers['X-API-KEY']).toBe('live-key');
-    const deduct = state.rpcCalls.find((c) => c.name === 'deduct_credits')!;
-    expect(deduct.params.p_is_test_mode).toBe(false);
+    // …and it is on integration billing, so no credits at all (D2 of docs/integration-billing).
+    expect(state.rpcCalls.find((c) => c.name === 'deduct_credits')).toBeUndefined();
     expect(opsOn('individual_agreements_v2', 'insert')[0].payload.boldsign_mode).toBe('live');
     expect(sentForms[0].get('BrandId')).toBe('brand-live');
   });
@@ -500,6 +500,14 @@ describe('validation', () => {
 /* ── the send ──────────────────────────────────────────────────────────── */
 
 describe('sending', () => {
+  // A v2 tenant that still pays for e-signing in credits: the same id and
+  // fixture as northwind, flagged portal_experience = v2 under another slug.
+  // northwind itself has no credits (integration billing, D2), pinned in its
+  // own tests at the end of this block.
+  beforeEach(() => {
+    state.tenants = [{ ...northwind, slug: 'acme' }, goniko];
+    state.portalExperience[TENANT_A] = 'v2';
+  });
   it('inserts the row BEFORE deducting credits, and deducts BEFORE calling the provider', async () => {
     const res = await send(validBody());
     expect(res.status).toBe(200);
@@ -736,7 +744,39 @@ describe('sending', () => {
 
 /* ── resend ────────────────────────────────────────────────────────────── */
 
+describe('northwind: e-signing is on the plan, no credits (integration billing)', () => {
+  it('sends without checking, taking or alerting on credits', async () => {
+    const res = await send(validBody());
+    expect(res.status).toBe(200);
+    expect(res.json).toMatchObject({ ok: true, status: 'sent' });
+    expect(state.rpcCalls).toEqual([]);
+    expect(opsOn('reminders', 'insert')).toHaveLength(0);
+  });
+
+  it('a provider refusal refunds nothing, because nothing was taken', async () => {
+    state.fetchImpl = async () => new Response('{"error":"Invalid document"}', { status: 400 });
+    const res = await send(validBody());
+    expect(res.status).toBe(502);
+    expect(state.rpcCalls).toEqual([]);
+  });
+
+  it('is never credit_failed, even with an empty wallet', async () => {
+    state.deduct = { success: false, balance: 0, required: 7 };
+    const res = await send(validBody());
+    expect(res.status).toBe(200);
+    expect(state.rpcCalls).toEqual([]);
+  });
+});
+
 describe('resend', () => {
+  // A v2 tenant that still pays for e-signing in credits: the same id and
+  // fixture as northwind, flagged portal_experience = v2 under another slug.
+  // northwind itself has no credits (integration billing, D2), pinned in its
+  // own tests at the end of this block.
+  beforeEach(() => {
+    state.tenants = [{ ...northwind, slug: 'acme' }, goniko];
+    state.portalExperience[TENANT_A] = 'v2';
+  });
   const oldRow = {
     id: OLD_ROW,
     tenant_id: TENANT_A,

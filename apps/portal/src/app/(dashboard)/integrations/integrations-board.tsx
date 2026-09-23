@@ -17,7 +17,7 @@
 // `page.tsx` must stay a Server Component to resolve the v2 gate — see the
 // comment there.
 
-import { type ComponentType, useEffect, useMemo, useState } from "react";
+import { type ComponentType, useEffect, useMemo, useRef, useState } from "react";
 import { useTenant } from "@/contexts/TenantContext";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardTitle } from "@/components/ui-v2/card";
@@ -34,7 +34,16 @@ import {
 // The branch drew these two from `@phosphor-icons/react`, which is not a
 // dependency of this app. lucide-react — already the icon set everywhere else
 // in the portal — carries both, and takes the same `size` / `color` props.
-import { Globe, IdCard, Pin } from "lucide-react";
+import { Crown, Globe, IdCard, Pin } from "lucide-react";
+// Integration billing (northwind only): premium, beta, not-available and hidden
+// flags from the super admin's catalog. See premium-integration.tsx.
+import {
+  useIntegrationBilling,
+  useIntegrationCatalog,
+  useIntegrationSubscriptions,
+} from "@/lib/integration-billing/hooks";
+import { freeEntry, keyForBoardName, type CatalogEntry } from "@/lib/integration-billing/catalog";
+import { BetaPill, IntegrationDialogBody, PremiumCrown } from "./premium-integration";
 
 // logo.dev — publishable key (safe for client-side img.logo.dev)
 const LOGO_TOKEN = "pk_EmodMTbiSPiHDa2fIPUo3w";
@@ -113,12 +122,15 @@ function IntegrationCard({
   pinned,
   onOpen,
   onTogglePin,
+  billing,
 }: {
   it: Integration;
   tenant: unknown;
   pinned: boolean;
   onOpen: () => void;
   onTogglePin: () => void;
+  /** The catalog's word on this card — integration-billing tenant only. */
+  billing?: CatalogEntry;
 }) {
   // Resolved per card rather than once for the grid: each integration answers
   // "am I working?" from its own state, and a card whose integration has no
@@ -128,8 +140,16 @@ function IntegrationCard({
   return (
     <Card
       onClick={onOpen}
-      className="group relative flex cursor-pointer flex-col items-center gap-2 border bg-transparent py-6 text-center shadow-none transition-all duration-200 hover:border-primary/30 hover:bg-gradient-to-br hover:from-primary/15 hover:via-primary/5 hover:to-transparent"
+      className={cn(
+        "group relative flex cursor-pointer flex-col items-center gap-2 border bg-transparent py-6 text-center shadow-none transition-all duration-200 hover:border-primary/30 hover:bg-gradient-to-br hover:from-primary/15 hover:via-primary/5 hover:to-transparent",
+        // Not available: dimmed slightly, still readable and still opens.
+        billing?.isUnavailable && "opacity-60",
+      )}
     >
+      {/* Premium: a small crown in the corner the pin does not use. */}
+      {billing?.isPremium && (
+        <PremiumCrown className="absolute left-3 top-3 z-10 p-1.5" title="Premium integration" />
+      )}
       {/* Pin. A real <button> inside a clickable div, so it has to stop the
           click going any further — without `stopPropagation` every pin would
           also open the dialog behind it. The card body is untouched and still
@@ -166,7 +186,17 @@ function IntegrationCard({
 
       {/* Text */}
       <CardContent className="flex-1 space-y-1 px-6 pt-1">
-        {!it.localLogo && <CardTitle className="text-base">{it.name}</CardTitle>}
+        {!it.localLogo && (
+          <CardTitle className="flex items-center justify-center gap-1.5 text-base">
+            {it.name}
+            {billing?.isBeta && <BetaPill />}
+          </CardTitle>
+        )}
+        {it.localLogo && billing?.isBeta && (
+          <div className="flex justify-center">
+            <BetaPill />
+          </div>
+        )}
         <p className="text-sm text-muted-foreground">{it.description}</p>
       </CardContent>
 
@@ -177,7 +207,9 @@ function IntegrationCard({
           operation, so it belongs inside the dialog, behind whatever
           confirmation that particular provider warrants. */}
       <div className="px-6 pb-0.5">
-        {CardStatus && tenant ? (
+        {billing?.isUnavailable ? (
+          <StatusChip state="disconnected" label="Not available" />
+        ) : CardStatus && tenant ? (
           <CardStatus tenant={tenant as never} />
         ) : (
           <span className="text-xs text-muted-foreground/60">&nbsp;</span>
@@ -201,7 +233,44 @@ export function IntegrationsBoard() {
   // `lean-areas.ts` holds those hook-level gates; this board itself does NOT
   // filter the card away.
   const { tenant } = useTenant();
-  const visibleIntegrations = integrations;
+
+  // Integration billing — northwind only. Every other tenant: `billingOn` is
+  // false, no catalog is read, and the board is exactly the one it always was.
+  const billingOn = useIntegrationBilling();
+  const { catalog, isLoading: catalogLoading } = useIntegrationCatalog();
+  const { byKey: subscriptionsByKey, everBilled, isLoading: subscriptionsLoading } = useIntegrationSubscriptions();
+  // Until both are known a deep link waits, so it can never open a card the
+  // catalog hides. (The grid itself paints at once, as it always has.)
+  const billingPending = billingOn && (catalogLoading || subscriptionsLoading);
+  const billingFor = (it: Integration): CatalogEntry | undefined => {
+    // Not until the saved catalog has arrived, so a default never flashes a
+    // crown on a card a super admin has made free.
+    if (!billingOn || catalogLoading) return undefined;
+    const key = keyForBoardName(it.name);
+    if (!key) return undefined;
+    const entry = catalog[key] ?? freeEntry(key);
+    // Someone paying for it keeps seeing what they pay for — premium, at the
+    // price they subscribed at, and never hidden — even if the catalog has
+    // changed since. Stripe keeps billing until a super admin cancels it.
+    const row = subscriptionsByKey[key];
+    return row
+      ? {
+          ...entry,
+          isPremium: true,
+          monthlyPriceCents: row.monthly_price_cents,
+          currency: row.currency,
+          isHidden: false,
+          // "Not available" stops new subscribers, not someone already paying.
+          isUnavailable: false,
+        }
+      : entry;
+  };
+  const visibleIntegrations = useMemo(
+    () => (billingOn ? integrations.filter((it) => !billingFor(it)?.isHidden) : integrations),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [billingOn, catalog, subscriptionsByKey],
+  );
+  const anyPremium = billingOn && visibleIntegrations.some((it) => billingFor(it)?.isPremium);
 
   const [selected, setSelected] = useState<Integration | null>(null);
   const entry = selected ? panelFor(selected.name) : undefined;
@@ -233,7 +302,12 @@ export function IntegrationsBoard() {
   // Next.js coupling to answer a one-shot question on mount. The params are
   // NOT stripped — the Xero chip and the Zoho panel read theirs to show a
   // success/failure note and clean up after themselves.
+  // Once, and — on integration billing — only after the catalog is known, so a
+  // deep link can never open a card the catalog hides.
+  const deepLinked = useRef(false);
   useEffect(() => {
+    if (billingPending || deepLinked.current) return;
+    deepLinked.current = true;
     const q = new URLSearchParams(window.location.search);
     const wanted =
       q.get("open") ??
@@ -244,10 +318,10 @@ export function IntegrationsBoard() {
     if (!wanted) return;
     const hit = visibleIntegrations.find((i) => i.name === wanted);
     if (hit) setSelected(hit);
-    // Mount-only on purpose: a later filter change must not re-open a dialog
-    // the operator already closed.
+    // Once on purpose: a later filter change must not re-open a dialog the
+    // operator already closed.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [billingPending]);
 
   return (
     /* Switch row alignment: at md+ the h1 (text-3xl leading-tight, a 37.5px
@@ -261,6 +335,13 @@ export function IntegrationsBoard() {
         <p className="mt-1.5 text-sm text-muted-foreground">
           Connect the tools that power payments, documents, messaging and more.
         </p>
+        {/* Free vs premium, said once — no filter ("itni cheezein nahi hain"). */}
+        {anyPremium && (
+          <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Crown aria-hidden className="size-3.5 shrink-0 fill-amber-400/30 text-amber-500" />
+            Premium integrations are billed monthly on your Drive247 bill once you subscribe. Everything else has no Drive247 charge.
+          </p>
+        )}
       </div>
 
       {/* Grid.
@@ -288,6 +369,7 @@ export function IntegrationsBoard() {
                   pinned
                   onOpen={() => setSelected(it)}
                   onTogglePin={() => toggle(it.name)}
+                  billing={billingFor(it)}
                 />
               ))}
             </div>
@@ -306,6 +388,7 @@ export function IntegrationsBoard() {
                   pinned={false}
                   onOpen={() => setSelected(it)}
                   onTogglePin={() => toggle(it.name)}
+                  billing={billingFor(it)}
                 />
               ))}
             </div>
@@ -321,6 +404,7 @@ export function IntegrationsBoard() {
               pinned={false}
               onOpen={() => setSelected(it)}
               onTogglePin={() => toggle(it.name)}
+              billing={billingFor(it)}
             />
           ))}
         </div>
@@ -345,7 +429,13 @@ export function IntegrationsBoard() {
                 </div>
                 <DialogTitle className="flex items-center gap-2">
                   {selected.name}
-                  {entry && tenant && <entry.StatusChip tenant={tenant as never} />}
+                  {billingFor(selected)?.isPremium && <PremiumCrown />}
+                  {billingFor(selected)?.isBeta && <BetaPill />}
+                  {billingFor(selected)?.isUnavailable ? (
+                    <StatusChip state="disconnected" label="Not available" />
+                  ) : (
+                    entry && tenant && <entry.StatusChip tenant={tenant as never} />
+                  )}
                 </DialogTitle>
                 <DialogDescription>{selected.description}</DialogDescription>
               </DialogHeader>
@@ -356,12 +446,31 @@ export function IntegrationsBoard() {
                   id, which is how a query ends up pointed at the wrong row. */}
               {!tenant ? (
                 <PanelLoading />
-              ) : entry ? (
-                <entry.Panel tenant={tenant as never} onClose={() => setSelected(null)} />
               ) : (
-                <div className="rounded-xl border bg-muted/30 p-3 text-xs text-muted-foreground">
-                  {selected.category} integration &middot; configuration coming soon.
-                </div>
+                (() => {
+                  const body = entry ? (
+                    <entry.Panel tenant={tenant as never} onClose={() => setSelected(null)} />
+                  ) : (
+                    <div className="rounded-xl border bg-muted/30 p-3 text-xs text-muted-foreground">
+                      {selected.category} integration &middot; configuration coming soon.
+                    </div>
+                  );
+                  const billing = billingFor(selected);
+                  const key = keyForBoardName(selected.name);
+                  // Free and available (and every non-billing tenant): the panel, untouched.
+                  if (!billing || !key || (!billing.isPremium && !billing.isUnavailable)) return body;
+                  return (
+                    <IntegrationDialogBody
+                      name={selected.name}
+                      integrationKey={key}
+                      entry={billing}
+                      subscription={subscriptionsByKey[key]}
+                      everBilled={everBilled.has(key)}
+                    >
+                      {body}
+                    </IntegrationDialogBody>
+                  );
+                })()
               )}
             </>
           )}

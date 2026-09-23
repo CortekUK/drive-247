@@ -1,6 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useIntegrationBilling } from "@/lib/integration-billing/hooks";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,7 +26,7 @@ function formatDayLabel(dayStr: string) {
 type TimeRange = "7d" | "30d" | "3m" | "6m" | "12m";
 type IntegrationFilter = "all" | "esign" | "twilio" | "verification";
 
-export default function CreditsAnalyticsPage() {
+function CreditsAnalyticsBody() {
   const { transactions, isLoading } = useCreditWallet();
   const [timeRange, setTimeRange] = useState<TimeRange>("6m");
   const [integrationFilter, setIntegrationFilter] = useState<IntegrationFilter>("all");
@@ -126,4 +128,19 @@ export default function CreditsAnalyticsPage() {
       </Card>
     </div>
   );
+}
+
+/**
+ * Integration billing (northwind): there are no credits any more — e-signing
+ * is on the plan (docs/integration-billing/build-spec.md, D3) — so, like
+ * /credits, this lands on Billing. Every other tenant gets the page unchanged.
+ */
+export default function CreditsAnalyticsPage() {
+  const creditsRetired = useIntegrationBilling();
+  const router = useRouter();
+  useEffect(() => {
+    if (creditsRetired) router.replace("/subscription");
+  }, [creditsRetired, router]);
+  if (creditsRetired) return null;
+  return <CreditsAnalyticsBody />;
 }

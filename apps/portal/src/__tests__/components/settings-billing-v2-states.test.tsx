@@ -23,6 +23,10 @@ import { resolve } from "node:path";
 
 const h = vi.hoisted(() => ({
   v2: { on: true },
+  /* Integration billing (docs/integration-billing): off by default, so every
+     test below models a lean v2 tenant that still pays in credits. The block
+     at the end switches it on for northwind's own layout. */
+  integrationBilling: { on: false },
   perms: { edit: true },
   search: { value: "" },
   router: { push: () => undefined, replace: () => undefined },
@@ -115,6 +119,13 @@ vi.mock("@/components/subscription/payment-methods", () => ({
   ),
 }));
 vi.mock("@/components/subscription/payment-methods-dialog", () => ({ PaymentMethodsDialog: () => null }));
+vi.mock("@/lib/integration-billing/hooks", () => ({
+  useIntegrationBilling: () => h.integrationBilling.on,
+  useInvoiceLines: () => ({ data: undefined, isLoading: false }),
+}));
+vi.mock("@/components/integration-billing/next-invoice-card", () => ({
+  NextInvoiceCard: () => <div data-testid="next-invoice" />,
+}));
 vi.mock("@/components/billing/billing-preview", () => ({
   useIsBillingPreviewTenant: () => false,
   useBillingPreview: () => false,
@@ -204,6 +215,7 @@ beforeEach(() => {
   document.body.appendChild(container);
   root = createRoot(container);
   h.v2.on = true;
+  h.integrationBilling.on = false;
   h.perms.edit = true;
   h.search.value = "";
   window.sessionStorage.clear();
@@ -669,5 +681,27 @@ describe("billing page (v2): back from a checkout that was not a subscription", 
       buttonByText("Subscribe").click();
     });
     expect(window.sessionStorage.getItem("drive247:v2-checkout-started")).toBeNull();
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* Integration billing (northwind): no credits, the next invoice line by line  */
+/* -------------------------------------------------------------------------- */
+
+describe("billing page (v2): integration billing", () => {
+  it("replaces the Credits section with the next invoice", () => {
+    h.integrationBilling.on = true;
+    resetSub({ isSubscribed: true, subscription: ACTIVE_SUBSCRIPTION });
+    render(<SubscriptionPage />);
+    expect(container.querySelector('[data-testid="credits"]')).toBeNull();
+    expect(container.querySelector('[data-testid="next-invoice"]')).not.toBeNull();
+    expect(text()).not.toContain("Credits");
+  });
+
+  it("a lean tenant that still pays in credits keeps Credits and gets no next-invoice card", () => {
+    resetSub({ isSubscribed: true, subscription: ACTIVE_SUBSCRIPTION });
+    render(<SubscriptionPage />);
+    expect(container.querySelector('[data-testid="credits"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="next-invoice"]')).toBeNull();
   });
 });

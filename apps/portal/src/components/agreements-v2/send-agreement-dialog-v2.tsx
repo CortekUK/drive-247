@@ -54,6 +54,8 @@ import {
 } from "@/components/ui-v2/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
+// Integration billing (northwind): e-signing is on the plan, so no credits note.
+import { useIntegrationBilling } from "@/lib/integration-billing/hooks";
 import { toast } from "@/hooks/use-toast";
 import { defaultTemplateFor, useAgreementTemplatesV2 } from "@/hooks/use-agreement-templates-v2";
 import { buildIndividualData, ensureSignatureTag, renderAgreementHtml } from "@/lib/agreements-v2/render";
@@ -194,6 +196,7 @@ export function SendAgreementDialogV2({ open, onOpenChange, onSent }: SendAgreem
   const baseId = useId();
   const fieldId = (name: string) => `${baseId}-${name}`;
   const { tenant } = useTenant();
+  const creditsRetired = useIntegrationBilling();
   const company = useCompanyDetailsV2();
   const { templates, isLoading: templatesLoading, error: templatesError, refetch: refetchTemplates } = useAgreementTemplatesV2();
 
@@ -737,7 +740,7 @@ export function SendAgreementDialogV2({ open, onOpenChange, onSent }: SendAgreem
                   <span>Sending isn&apos;t available yet — see the note above.</span>
                 </p>
               )}
-              {step === "preview" && !duplicateReason && !notReady && !sendError && <p className="text-xs text-muted-foreground">{CREDITS_NOTE}</p>}
+              {step === "preview" && !creditsRetired && !duplicateReason && !notReady && !sendError && <p className="text-xs text-muted-foreground">{CREDITS_NOTE}</p>}
             </div>
             <div className="flex flex-col-reverse gap-2 sm:flex-row">
               {step === "details" ? (

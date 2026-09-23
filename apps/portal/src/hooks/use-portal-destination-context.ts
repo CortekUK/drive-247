@@ -8,6 +8,7 @@ import { isV2 } from "@/lib/v2";
 import { useV2 } from "@/lib/v2-context";
 import type { DestinationContext } from "@/lib/search/portal-destinations";
 import { useAuthStore } from "@/stores/auth-store";
+import { isIntegrationBillingTenant } from "@/lib/integration-billing/gate";
 
 /**
  * What the global search needs to know to offer only the places this user can
@@ -43,6 +44,7 @@ export function usePortalDestinationContext(): DestinationContext {
     v2Chrome,
     integrationsBoard,
     lean,
+    creditsRetired: isIntegrationBillingTenant(tenant?.slug),
     isHeadAdmin: appUser?.role === "head_admin",
     flags: {
       lead_management_enabled: t?.lead_management_enabled === true,

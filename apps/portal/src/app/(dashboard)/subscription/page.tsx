@@ -70,6 +70,10 @@ import {
   readCheckoutNote,
   type CheckoutKind,
 } from "@/components/settings-v2/billing-states-v2";
+// Integration billing (northwind only): no Credits section, a line-by-line Next
+// invoice, and receipts line by line. docs/integration-billing/build-spec.md.
+import { useIntegrationBilling, useInvoiceLines } from "@/lib/integration-billing/hooks";
+import { NextInvoiceCard } from "@/components/integration-billing/next-invoice-card";
 
 function formatCurrency(amount: number, currency: string) {
   return new Intl.NumberFormat("en-US", {
@@ -202,6 +206,14 @@ export default function SubscriptionPage() {
     : [];
   const shownInvoices = previewActive ? previewInvoices : invoices;
 
+  /* Integration billing (northwind): credits are gone (e-signing is on the
+     plan), and the bill is shown line by line — "Platform subscription",
+     "Inshur subscription" — never one merged amount. Every other tenant: false,
+     and nothing below changes for them. Never against sample data. */
+  const creditsRetired = useIntegrationBilling();
+  const lineByLine = creditsRetired && !previewActive;
+  const viewingLines = useInvoiceLines(lineByLine ? viewingInvoice?.stripe_invoice_id : null);
+
   // No tab state: the page is one column now. `?tab=credits` links that
   // predate this still resolve — they land on the same page, and the Credits
   // section is simply further down it rather than behind a click.
@@ -221,6 +233,7 @@ export default function SubscriptionPage() {
           invoices={shownInvoices}
           invoicesLoading={previewActive ? false : invoicesLoading}
           onViewInvoice={setViewingInvoice}
+          hideBreakdown={lineByLine}
         />
         <LocalInvoiceView
           invoice={viewingInvoice}
@@ -229,6 +242,9 @@ export default function SubscriptionPage() {
           cardLast4={shownSubscription?.card_last4}
           open={!!viewingInvoice}
           onClose={() => setViewingInvoice(null)}
+          lines={lineByLine ? viewingLines.data?.lines ?? null : undefined}
+          linesLoading={lineByLine && !!viewingInvoice && viewingLines.isLoading}
+          linesUnavailable={lineByLine && !!viewingInvoice && viewingLines.isError}
         />
       </>
     ) : null;
@@ -796,10 +812,17 @@ export default function SubscriptionPage() {
           </div>
           </section>
 
+          {/* Integration billing: no credits any more (e-signing is included), so
+              the Credits section — "ek alag vertical" — gives way to the next
+              invoice, line by line. Everyone else keeps Credits here. */}
+          {lineByLine ? (
+            <NextInvoiceCard />
+          ) : creditsRetired ? null : (
           <section>
             <h2 className="mb-4 text-lg font-semibold tracking-tight">Credits</h2>
             <CreditsPanel hideReadOnlyNotice={v2ReadOnly} suppressCheckoutToast={v2ReturnKind === "subscription"} />
           </section>
+          )}
 
           {/* One instance for the page. `mocked` while previewing: the dialog is
               fully interactive against sample cards so Primary / Secondary /

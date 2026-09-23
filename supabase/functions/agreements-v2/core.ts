@@ -29,6 +29,8 @@
  *   3. deduct_credits (category 'esign', reference = the row, reference type
  *      'individual_agreement', test flag per mode). No credits: the row is
  *      credit_failed, 402.
+ *      Skipped entirely for the integration-billing tenant (northwind), whose
+ *      plan includes e-signing (docs/integration-billing/build-spec.md, D2).
  *   4. send to the provider, which emails the recipient and the CC itself. A
  *      refusal or a network failure refunds with add_credits exactly as
  *      /api/esign does, and marks the row send_failed, 502.
@@ -53,6 +55,7 @@ import {
   type ProviderDeps,
 } from './provider.ts';
 import { INDIVIDUAL_TABLE, isMissingTableError } from './tables.ts';
+import { isIntegrationBillingTenant } from '../integration-billing/gate.ts';
 import { isUuidV2, validateIndividualSendV2 } from './validation.ts';
 
 export interface AgreementsDepsV2 {
@@ -242,23 +245,33 @@ async function send(ctx: AgreementsContextV2, body: Record<string, unknown>, dep
   if (!apiKey) return failed(502, 'send_failed', 'Signing is not configured on this server.');
 
   // ── 3. credits (exact params as /api/esign, the reference being this row) ──
-  const { data: deducted, error: deductError } = await client.rpc('deduct_credits', {
-    p_tenant_id: tenant.id,
-    p_category: 'esign',
-    p_description: `E-sign agreement: ${value.recipientName} (Ref: ${ref(id)})`,
-    p_reference_id: id,
-    p_reference_type: 'individual_agreement',
-    p_is_test_mode: isTestMode,
-  });
-  if (deductError) {
-    console.error('[agreements-v2/send] deduct_credits failed:', deductError.message);
-    return failed(502, 'send_failed', 'The e-sign credit check failed, so nothing was sent. Try again.');
+  //
+  // Not for the integration-billing tenant (northwind): e-signing is included
+  // in its plan and it has no credits at all (docs/integration-billing, D2).
+  // `tenant` is the caller's own, from their app_users row, never the body.
+  // With nothing deducted, the refund and the auto-refill below do nothing.
+  // deno-lint-ignore no-explicit-any
+  let deducted: any = null;
+  if (!isIntegrationBillingTenant(tenant.slug)) {
+    const { data, error: deductError } = await client.rpc('deduct_credits', {
+      p_tenant_id: tenant.id,
+      p_category: 'esign',
+      p_description: `E-sign agreement: ${value.recipientName} (Ref: ${ref(id)})`,
+      p_reference_id: id,
+      p_reference_type: 'individual_agreement',
+      p_is_test_mode: isTestMode,
+    });
+    if (deductError) {
+      console.error('[agreements-v2/send] deduct_credits failed:', deductError.message);
+      return failed(502, 'send_failed', 'The e-sign credit check failed, so nothing was sent. Try again.');
+    }
+    if (data?.success === false) {
+      await raiseEsignCreditAlert(client, tenant.id, { balance: Number(data.balance ?? 0), insufficient: true, isTestMode });
+      return failed(402, 'credit_failed', 'There are not enough e-sign credits to send this agreement.');
+    }
+    deducted = data;
+    await raiseEsignCreditAlert(client, tenant.id, { balance: Number(data?.balance_after ?? 0), isTestMode });
   }
-  if (deducted?.success === false) {
-    await raiseEsignCreditAlert(client, tenant.id, { balance: Number(deducted.balance ?? 0), insufficient: true, isTestMode });
-    return failed(402, 'credit_failed', 'There are not enough e-sign credits to send this agreement.');
-  }
-  await raiseEsignCreditAlert(client, tenant.id, { balance: Number(deducted?.balance_after ?? 0), isTestMode });
 
   const refund = async () => {
     if (!deducted?.success) return;

@@ -61,6 +61,8 @@ import { Label } from "@/components/ui-v2/label";
 import { Switch } from "@/components/ui-v2/switch";
 
 import type { IntegrationPanelProps, PanelTenant } from "./_kit";
+// Integration billing (northwind): e-signing is on the plan, no credits (D3).
+import { isIntegrationBillingTenant } from "@/lib/integration-billing/gate";
 import {
   CopyValue,
   PanelCard,
@@ -146,6 +148,8 @@ type Health = {
 function useBoldSignHealth(tenant: PanelTenant) {
   return useQuery({
     queryKey: ["boldsign-panel", "health", tenant.id],
+    // Integration billing: no credits, so no wallet, cost or alert to read.
+    enabled: !isIntegrationBillingTenant(tenant.slug),
     queryFn: async (): Promise<Health> => {
       const [walletRes, costRes, alertRes] = await Promise.all([
         (supabase as any)
@@ -313,6 +317,14 @@ export function BoldSignStatus({ tenant }: { tenant: PanelTenant }) {
   // shows up as "rendered fewer hooks than expected" once the read fails.
   const mode = useBoldSignMode(tenant.boldsign_mode);
 
+  // Integration billing: e-signing is on the plan, so nothing here can run out
+  // and the wallet is never read.
+  if (isIntegrationBillingTenant(tenant.slug)) {
+    return mode === "test"
+      ? <StatusChip state="attention" label="Sandbox — not binding" />
+      : <StatusChip state="connected" label="Ready to sign" />;
+  }
+
   // A failed read is not a broken integration. Saying "Not connected" here
   // would invite the operator to go looking for a connection that does not
   // exist (_kit: never render a failed read as disconnected).
@@ -479,7 +491,10 @@ export default function BoldSignPanel({ tenant, onClose }: IntegrationPanelProps
 
   const brandId = mode === "live" ? activity.data!.brandLiveId : activity.data!.brandTestId;
   const otherBrandId = mode === "live" ? activity.data!.brandTestId : activity.data!.brandLiveId;
-  const outOfCredits = spendable < esignCost;
+  // Integration billing (northwind): e-signing is included in the plan. There
+  // is no balance to run out of, so none of the credit machinery shows.
+  const creditsRetired = isIntegrationBillingTenant(tenant.slug);
+  const outOfCredits = !creditsRetired && spendable < esignCost;
 
   return (
     <div className="space-y-5">
@@ -509,9 +524,15 @@ export default function BoldSignPanel({ tenant, onClose }: IntegrationPanelProps
               {mode === "live" ? "Live" : "Sandbox"}
             </span>
           </PanelRow>
+          {creditsRetired ? (
+            <PanelRow label="Cost per agreement" hint="E-signatures are included with your plan.">
+              Included
+            </PanelRow>
+          ) : (
           <PanelRow label="Cost per agreement" hint="Charged on send, refunded if BoldSign rejects it.">
             {esignCost} credits
           </PanelRow>
+          )}
           <PanelRow
             label="Agreement template"
             hint={
@@ -599,6 +620,11 @@ export default function BoldSignPanel({ tenant, onClose }: IntegrationPanelProps
       </PanelSection>
 
       {/* ── Credits ─────────────────────────────────────────────────────── */}
+      {creditsRetired ? (
+        <PanelSection title="Pricing">
+          <PanelNote>E-signatures are included with your plan. No credits needed.</PanelNote>
+        </PanelSection>
+      ) : (
       <PanelSection
         title="Credits"
         description="Every signature is paid for from your credit balance."
@@ -700,6 +726,7 @@ export default function BoldSignPanel({ tenant, onClose }: IntegrationPanelProps
           </div>
         </PanelCard>
       </PanelSection>
+      )}
 
       {/* ── Activity ────────────────────────────────────────────────────── */}
       <PanelSection

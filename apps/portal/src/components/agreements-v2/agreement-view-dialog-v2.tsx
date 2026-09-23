@@ -45,7 +45,7 @@ export type AgreementDocumentV2 =
 export function unavailableReasonV2(rawStatus: string | null | undefined): string {
   const status = (rawStatus ?? "").toLowerCase();
   if (status === "credit_failed") {
-    return "It was never sent: there were no e-sign credits left when it was issued. Top up, then resend it.";
+    return "It was never sent: there were no e-sign credits left when it was issued. Resend it (top up first if your plan uses credits).";
   }
   if (status === "send_failed" || status === "failed") {
     return "It was never sent: the signing service turned it down. Resend it to try again.";
