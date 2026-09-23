@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Loader2, RefreshCw, RotateCcw, Shuffle } from 'lucide-react';
+import { ArrowLeft, Loader2, RefreshCw, RotateCcw, Shuffle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,10 +11,10 @@ import { Switch } from '@/components/ui/switch';
 import { toast } from '@/components/ui/sonner';
 import { money, promoApi, SOURCE_LABEL, type PromoCode, type Referral, type TenantLite, type Tier } from './api';
 import {
-  CopyValue, TenantPicker, TermsFields, TierEditor, draftFromTerms, termsFromDraft, tierDrafts, tiersFromDrafts,
+  CopyValue, TermsFields, TierEditor, draftFromTerms, termsFromDraft, tierDrafts, tiersFromDrafts,
   type TermsDraft, type TierDraft,
 } from './shared';
-import { VoidReferralDialog } from './referrals-tab';
+import { VoidReferralDialog } from './referral-dialogs';
 
 type Setup = {
   tenant: TenantLite & { contact_email: string | null; tenant_type: string | null };
@@ -30,31 +30,38 @@ type Setup = {
   programDefaults: { discountText: string; durationText: string };
 };
 
-export function OperatorsTab({ canEdit, initialTenant }: { canEdit: boolean; initialTenant?: TenantLite | null }) {
-  const [tenant, setTenant] = useState<TenantLite | null>(initialTenant ?? null);
+/**
+ * One operator's referral set-up: their code and link, what a new operator
+ * gets, their reward tiers and who they referred.
+ *
+ * Opened with View from the Referral Links list (and from the leaderboard),
+ * which is why it takes a tenant id and offers a way back rather than owning
+ * an operator picker of its own.
+ */
+export function OperatorReferralView({
+  tenantId, canEdit, onBack,
+}: { tenantId: string; canEdit: boolean; onBack: () => void }) {
   const [setup, setSetup] = useState<Setup | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    if (!tenant) { setSetup(null); return; }
     setLoading(true);
     try {
-      setSetup(await promoApi<Setup>('get_tenant_referral', { tenantId: tenant.id }));
+      setSetup(await promoApi<Setup>('get_tenant_referral', { tenantId }));
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
       setLoading(false);
     }
-  }, [tenant]);
+  }, [tenantId]);
 
   useEffect(() => { load(); }, [load]);
 
   return (
     <div className="space-y-4">
-      <div className="max-w-md space-y-1.5">
-        <Label>Operator</Label>
-        <TenantPicker value={tenant} onChange={setTenant} />
-      </div>
+      <Button variant="ghost" size="sm" className="-ml-2 gap-1.5" onClick={onBack}>
+        <ArrowLeft className="h-4 w-4" /> Back to referral links
+      </Button>
       {loading && <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />}
       {setup && !loading && <OperatorSetup setup={setup} canEdit={canEdit} onChanged={load} />}
     </div>
