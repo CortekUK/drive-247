@@ -181,7 +181,7 @@ export function InsurancePolicyListV2<T extends InsurancePolicyListRowV2>({
                     as Fines does with "N days overdue". A chip beside the date
                     needed a column wide enough to squeeze everything else. */}
                 <ListCell className="tabular-nums">
-                  <div className="flex flex-col items-center gap-0.5">
+                  <div className="flex flex-col items-start gap-0.5">
                     <span className={LIST_CLASSES.text}>
                       {format(parseLocalDate(policy.expiry_date), "MMM d, yyyy")}
                     </span>

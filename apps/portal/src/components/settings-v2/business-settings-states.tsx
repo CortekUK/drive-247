@@ -36,6 +36,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui-v2/alert-dialog";
 import {
+  SETTINGS_PANEL_FLUSH,
   SettingsPanel,
   SettingsRow,
   SettingsRowAlignProvider,
@@ -122,8 +123,13 @@ export function useImageLoadFailed(src: string | null | undefined): boolean {
 
 /**
  * Loading placeholder with the exact frame of a `SettingsPanel` of `SettingsRow`s
- * (bordered, a title bar when `title`, one ~64px row per setting), so the page
- * does not jump when the real panel replaces it.
+ * (flush with the section heading, a title block when `title`, one ~64px row
+ * per setting), so the page does not jump when the real panel replaces it.
+ *
+ * It carries `SETTINGS_PANEL_FLUSH` and no `divide-y` for the same reason the
+ * panel does (settings-kit.tsx): a bordered card here would flash a box that
+ * the loaded panel no longer draws, and shift every label 20px sideways as it
+ * went.
  *
  * Its rows mirror an `align="end"` row — an elastic label column and the
  * control at the end — because every panel it stands in for (regional, the
@@ -154,20 +160,20 @@ export function SettingsPanelSkeleton({
       aria-busy="true"
       aria-live="polite"
       data-settings-state="loading"
-      className={cn("rounded-xl border bg-card", className)}
+      className={cn(SETTINGS_PANEL_FLUSH, className)}
     >
       <span className="sr-only">{label}</span>
       {title && (
-        <div aria-hidden="true" className="space-y-1.5 px-5 pt-4 pb-1">
+        <div aria-hidden="true" className="space-y-1.5 pb-2">
           <Skeleton className="h-4 w-32 rounded-full" />
           <Skeleton className="h-3 w-72 max-w-full rounded-full" />
         </div>
       )}
-      <div aria-hidden="true" className="divide-y">
+      <div aria-hidden="true" data-settings-rows="">
         {Array.from({ length: Math.max(1, rows) }).map((_, i) => (
           <div
             key={i}
-            className="flex flex-col gap-3 px-5 py-4 md:grid md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:gap-x-10"
+            className="flex flex-col gap-3 py-4 md:grid md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:gap-x-10"
           >
             <div className="min-w-0 space-y-1.5 md:max-w-2xl">
               <Skeleton className="h-3.5 w-24 rounded-full" />
@@ -179,7 +185,7 @@ export function SettingsPanelSkeleton({
         ))}
       </div>
       {footer && (
-        <div aria-hidden="true" className="flex items-center justify-end border-t px-5 py-3">
+        <div aria-hidden="true" className="flex items-center justify-end pt-2">
           <Skeleton className="h-8 w-[88px] rounded-full" />
         </div>
       )}
@@ -1021,9 +1027,11 @@ export function LocationsListV2({
               <ListTableHeader>
                 <ListHead className="w-[20%]">Name</ListHead>
                 <ListHead>Address</ListHead>
-                <ListHead className="w-[13%]">Fee</ListHead>
+                {/* The one money column: right, so the figures stack. */}
+                <ListHead className="w-[13%] text-right">Fee</ListHead>
                 <ListHead className="w-[13%]">Available</ListHead>
-                {!readOnly && <ListHead className="w-[12.5rem]">Actions</ListHead>}
+                {/* Trailing and right, as the actions column is on every other v2 list. */}
+                {!readOnly && <ListHead className="w-[12.5rem] text-right">Actions</ListHead>}
               </ListTableHeader>
               <ListBody>
                 {visible.map((location) => {
@@ -1041,7 +1049,7 @@ export function LocationsListV2({
                           {location.address}
                         </span>
                       </ListCell>
-                      <ListCell>
+                      <ListCell className="text-right">
                         <TabularValue negative={fee < 0}>{locationFeeLabel(location.delivery_fee, currencyCode)}</TabularValue>
                       </ListCell>
                       <ListCell>
@@ -1051,7 +1059,7 @@ export function LocationsListV2({
                       </ListCell>
                       {!readOnly && (
                         <ListCell>
-                          <div className="flex items-center justify-center gap-1">
+                          <div className="flex items-center justify-end gap-1">
                             <Button
                               type="button"
                               variant="ghost"

@@ -65,7 +65,7 @@ import { useRegisterLeaveSave } from "../business-section-save";
 import type { RegisterSectionSave } from "../pricing-money-parts";
 import { EmailNotificationSettingsV2 } from "../notification-states-v2";
 import { SettingsLoadError, SettingsSectionSkeleton, useWarnOnUnsavedChanges } from "../section-states";
-import { SETTINGS_SECTION_TITLE, SettingsRow, SettingsRowAlignProvider, SettingsSection } from "../settings-kit";
+import { SETTINGS_PANEL_FLUSH, SETTINGS_SECTION_TITLE, SettingsRow, SettingsRowAlignProvider, SettingsSection } from "../settings-kit";
 import { settingsSectionId } from "../settings-shell-state";
 import { EmailSenderSettingsV2 } from "./email-sender-settings-v2";
 import { NotificationItemPanel, type NotificationPreviewContext } from "./notification-item-panel";
@@ -417,7 +417,10 @@ export function NotificationsPageV2({ canEdit, registerSave, todaySettings, scro
         </div>
 
         <SettingsSection anchor={NOTIFICATIONS_CHANNELS_ANCHOR} title={COPY.channelsTitle} description={COPY.channelsDescription}>
-          <div className="space-y-4">
+          {/* space-y-8, not the 4 these three panels had as cards: with no
+              border between them, 16px put a panel's TITLE as close to the row
+              above it as two rows of the same panel are to each other. */}
+          <div className="space-y-8">
             <div id={settingsSectionId(NOTIFICATIONS_EMAIL_ANCHOR)} className="scroll-mt-24">
               <EmailSenderSettingsV2 canEdit={canEdit} registerSave={registerSave} />
             </div>
@@ -475,8 +478,11 @@ export function NotificationsPageV2({ canEdit, registerSave, todaySettings, scro
 
 function InAppExplainer() {
   return (
-    <section data-settings-section="in-app" className="rounded-xl border bg-card" aria-labelledby="notifications-in-app-title">
-      <div className="px-5 pt-4 pb-1">
+    // Not built from `SettingsPanel`, but it must read as one: the same
+    // flush surface and the same title block, so its two rows line up with
+    // the email sender's above it (settings-kit.tsx).
+    <section data-settings-section="in-app" className={SETTINGS_PANEL_FLUSH} aria-labelledby="notifications-in-app-title">
+      <div className="pb-2">
         {/* The kit's panel-title recipe, not a copy of it: the Email card and
             Push on this device beside it use the same constant. */}
         <h2 id="notifications-in-app-title" className={SETTINGS_SECTION_TITLE}>
@@ -485,7 +491,7 @@ function InAppExplainer() {
         <p className="mt-0.5 text-[13px] text-muted-foreground">{COPY.inAppDescription}</p>
       </div>
       <SettingsRowAlignProvider align="end">
-        <div className="divide-y">
+        <div data-settings-rows="">
           <SettingsRow label="Your team" description={COPY.inAppTeam} />
           <SettingsRow label="Customers" description={COPY.inAppCustomer} />
         </div>

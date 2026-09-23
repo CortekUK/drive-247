@@ -235,9 +235,12 @@ describe("Appearance, v2: the page", () => {
     expect(container.querySelector("[data-settings-save-bar]")).not.toBeNull();
   });
 
-  it("points customers' site styling at Website → Site settings, not CMS", () => {
+  it("points customers' site styling at Site settings, not CMS", () => {
     mount();
-    expect(container.querySelector('a[href="/cms/site-settings"]')?.textContent).toBe("Website → Site settings");
+    // The LABEL is just "Website" — the arrow form wrapped onto a second line
+    // and read as breadcrumbs. What matters is the destination, which is still
+    // Site settings rather than the CMS index.
+    expect(container.querySelector('a[href="/cms/site-settings"]')?.textContent).toBe("Website");
     expect(container.textContent).not.toContain("under CMS");
   });
 

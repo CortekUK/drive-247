@@ -380,18 +380,18 @@ export function EmailSenderSettingsV2({ canEdit = true, registerSave, className 
   const senderRows = senderFailed ? (
     <SettingsLoadError thing="the email sender" error={senderQuery.error} onRetry={retrySender} />
   ) : (
-    <SettingsReadOnlyFieldset readOnly={storageOff} className="divide-y">
+    <SettingsReadOnlyFieldset readOnly={storageOff}>
       {storageOff && (
         <p
           data-sender-storage="off"
-          className="flex items-start gap-2 px-5 py-3 text-[13px] text-muted-foreground"
+          className="flex items-start gap-2 py-3 text-[13px] text-muted-foreground"
         >
           <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
           <span>{EMAIL_SENDER_STORAGE_OFF_COPY}</span>
         </p>
       )}
       {senderQuery.error && !storageOff && (
-        <div className="px-5 py-3">
+        <div className="py-3">
           <SettingsLoadError variant="inline" thing="the email sender" error={senderQuery.error} onRetry={retrySender} />
         </div>
       )}
@@ -465,7 +465,7 @@ export function EmailSenderSettingsV2({ canEdit = true, registerSave, className 
         />
       </SettingsRow>
 
-      <div data-sender-preview="" className="space-y-0.5 px-5 py-3 text-[13px] text-muted-foreground [overflow-wrap:anywhere]">
+      <div data-sender-preview="" className="space-y-0.5 py-3 text-[13px] text-muted-foreground [overflow-wrap:anywhere]">
         <p>
           Customers see: <span className="font-medium text-foreground">{preview.display}</span>
         </p>
@@ -500,9 +500,9 @@ export function EmailSenderSettingsV2({ canEdit = true, registerSave, className 
       retrying={prefsQuery.isFetching}
     />
   ) : (
-    <div className="divide-y">
+    <div>
       {prefsQuery.error && (
-        <div className="px-5 py-3">
+        <div className="py-3">
           <SettingsLoadError
             variant="inline"
             thing="team email settings"
@@ -556,8 +556,14 @@ export function EmailSenderSettingsV2({ canEdit = true, registerSave, className 
     </div>
   );
 
+  // No `divide-y` on either fieldset, and no `px-5` on the blocks between the
+  // rows (the storage notice, the inline read errors, the sender preview): the
+  // panel around them draws no box and insets nothing, so a line or a 20px
+  // gutter here would be the only one on the page (settings-kit.tsx). This is
+  // the longest panel in the app at seven blocks, and it still reads on the
+  // 32px between rows plus its one title.
   return panel(
-    <SettingsReadOnlyFieldset readOnly={!canEdit} className="divide-y">
+    <SettingsReadOnlyFieldset readOnly={!canEdit}>
       {senderRows}
       {teamRows}
     </SettingsReadOnlyFieldset>,

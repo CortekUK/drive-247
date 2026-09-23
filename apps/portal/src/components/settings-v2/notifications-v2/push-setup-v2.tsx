@@ -52,7 +52,7 @@ import { useV2 } from "@/lib/v2-context";
 import type { NotificationTestResponse } from "@/lib/notifications-v2/types";
 import { cn } from "@/lib/utils";
 import { SettingsSectionSkeleton } from "../section-states";
-import { SETTINGS_SECTION_TITLE } from "../settings-kit";
+import { SETTINGS_PANEL_FLUSH, SETTINGS_SECTION_TITLE } from "../settings-kit";
 
 /* -------------------------------------------------------------------------- */
 /* Constants                                                                   */
@@ -183,7 +183,7 @@ export function PushSetupV2(props: PushSetupV2Props) {
   if (tenant.push_notifications_enabled !== true) {
     return (
       <SetupCard className={props.className}>
-        <div data-push-setup="off" className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div data-push-setup="off" className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-start gap-3">
             <BellOff className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
             <p className="min-w-0 text-sm text-muted-foreground">
@@ -310,7 +310,10 @@ function PushSetupSteps({ canEdit = true, onSendTest, className }: PushSetupV2Pr
 
   return (
     <SetupCard className={className}>
-      <ol className="divide-y" aria-label="Push setup steps">
+      {/* No dividers: each step already carries its own number, so the
+          line was saying a second time what the 1, 2, 3 say (settings-kit.tsx,
+          `SettingsPanel`). */}
+      <ol aria-label="Push setup steps">
         {/* ---- 1. Install ------------------------------------------------ */}
         <Step
           n={1}
@@ -420,7 +423,7 @@ function PushSetupSteps({ canEdit = true, onSendTest, className }: PushSetupV2Pr
         </Step>
       </ol>
 
-      <p className="border-t px-5 py-3 text-[13px] leading-snug text-muted-foreground">
+      <p className="pt-3 text-[13px] leading-snug text-muted-foreground">
         <span className="font-medium text-foreground">How push looks:</span> whether it shows as a banner, on the
         lock screen or with a sound is set on the phone, not here. On iPhone: Settings, then Notifications, then
         this app. On Android: press and hold a notification, then tap the settings icon.
@@ -439,9 +442,12 @@ function SetupCard({ children, className }: { children: ReactNode; className?: s
     <section
       aria-labelledby={titleId}
       data-settings-section="push-setup"
-      className={cn("rounded-xl border bg-card", className)}
+      // Flush like `SettingsPanel`, which this is a hand-written copy of: it
+      // sits between the email sender panel and the in-app explainer on
+      // Notifications, and all three must share one left edge.
+      className={cn(SETTINGS_PANEL_FLUSH, className)}
     >
-      <div className="px-5 pt-4 pb-1">
+      <div className="pb-2">
         <h2 id={titleId} className={SETTINGS_SECTION_TITLE}>
           {PUSH_SETUP_TITLE}
         </h2>
@@ -473,7 +479,7 @@ function Step({
   children: ReactNode;
 }) {
   return (
-    <li data-step={id} data-done={done || undefined} className="flex gap-3 px-5 py-4">
+    <li data-step={id} data-done={done || undefined} className="flex gap-3 py-4">
       <span
         aria-hidden="true"
         className={cn(

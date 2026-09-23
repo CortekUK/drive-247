@@ -977,14 +977,20 @@ function OptionRow({
   );
 }
 
-/** A row that belongs to the option above it: indented, its control at the end, no divider between them. */
+/**
+ * A row that belongs to the option above it: indented, its control at the end.
+ * The 20px indent is now the ONLY thing saying so — the panel lost its row
+ * dividers with its border (settings-kit.tsx), so `md:pl-10` (20px of panel
+ * padding + 20px of indent) became `md:pl-5`, the same 20px measured from a
+ * flush left edge.
+ */
 function SubRow({ className, ...props }: ComponentProps<typeof SettingsRow>) {
-  return <SettingsRow align="end" {...props} className={cn("py-3 md:pl-10", className)} />;
+  return <SettingsRow align="end" {...props} className={cn("py-3 md:pl-5", className)} />;
 }
 
 /** The locations table under its option, lined up with the sub-rows. */
 function ListArea({ children }: { children: ReactNode }) {
-  return <div className="space-y-3 px-5 pt-1 pb-3 md:pl-10">{children}</div>;
+  return <div className="space-y-3 pt-1 pb-3 md:pl-5">{children}</div>;
 }
 
 /** The toned-down red for a field's problem. */
@@ -1185,7 +1191,7 @@ function AreaRows({
   return (
     <SettingsReadOnlyFieldset readOnly={readOnly}>
       {!full && (
-        <p className="px-5 py-2 text-[13px] leading-snug text-muted-foreground md:pl-10">
+        <p className="py-2 text-[13px] leading-snug text-muted-foreground md:pl-5">
           Uses the center point and price set under Pickup and delivery.
         </p>
       )}

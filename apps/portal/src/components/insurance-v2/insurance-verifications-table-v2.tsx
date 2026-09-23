@@ -151,7 +151,10 @@ export function InsuranceVerificationsTableV2({
                     <Button
                       size="xs"
                       variant="ghost"
-                      className="-my-1.5 text-muted-foreground"
+                      // `-ml-2.5` pulls the ghost button's own left padding
+                      // back, so "Attach" starts on the same left edge as the
+                      // rental link that stands here on the other rows.
+                      className="-my-1.5 -ml-2.5 text-muted-foreground"
                       onClick={() => onAttach(v.id)}
                     >
                       <Link2 className="h-3.5 w-3.5" />

@@ -82,7 +82,8 @@ export function GlobalBlacklistTableV2<T extends GlobalBlacklistEntryRowV2>({
           <ListHead className="w-[15%]">Status</ListHead>
           <ListHead className="w-[14%]">First blocked</ListHead>
           <ListHead className="w-[14%]">Last blocked</ListHead>
-          <ListHead className="w-[15%]">Details</ListHead>
+          {/* Trailing, so it sits right like every other v2 list's action column. */}
+          <ListHead className="w-[15%] text-right">Details</ListHead>
         </ListTableHeader>
         <ListBody>
           {entryRows.visible.map((entry) => {
@@ -131,7 +132,7 @@ export function GlobalBlacklistTableV2<T extends GlobalBlacklistEntryRowV2>({
                       baseline. Inline, its label's descender space made the row
                       3px taller than a rentals row even with `-my-1.5`. */}
                   <ListCell onClick={(e) => e.stopPropagation()}>
-                    <div className="flex justify-center">
+                    <div className="flex justify-end">
                       <Button
                         variant="ghost"
                         size="sm"
@@ -158,7 +159,7 @@ export function GlobalBlacklistTableV2<T extends GlobalBlacklistEntryRowV2>({
                 {expanded && (
                   // Not a toggle: as in v1, clicking inside the details leaves them open.
                   <ListRow id={detailsId} className="bg-muted/30 hover:bg-muted/30">
-                    <ListCell colSpan={5} className="text-left">
+                    <ListCell colSpan={5}>
                       <div className="space-y-2">
                         <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                           Blocking Companies

@@ -4,11 +4,15 @@
  * The building blocks of a v2 settings page (northwind only — see
  * `settings/page.tsx`, which renders these behind `useV2('chrome')`).
  *
- * Modelled on Stripe's settings detail pages: one heading, then flat panels of
- * rows — label and a line of help on the left, the control right after it. No
+ * Modelled on Stripe's settings detail pages: one heading, then panels of rows
+ * — label and a line of help on the left, the control right after it. No
  * breadcrumb (Settings in the nav is the way back), no card-per-field, no
  * decorative icons, and ONE save bar per page. A row is ~64px, so a page of
  * related settings fits on one screen where v1 gave every field its own card.
+ *
+ * A panel draws NO BOX: no border, no card fill, no padding, no row dividers
+ * (`SETTINGS_PANEL_FLUSH`). Every label lines up under the section heading
+ * above it and under the page title above that. See `SettingsPanel` for why.
  *
  * PAGE SAVE BAR (reusable)
  *   <SettingsPageSaveProvider>          wrap the page body; sections inside it
@@ -123,8 +127,8 @@ export const SETTINGS_COLUMN_BESIDE_TRAX =
   "md:[html[data-trax-panel=open]_&]:max-w-[min(1160px,max(20rem,calc(100%-var(--trax-width,440px)-1rem)))]";
 
 /**
- * A settings row's grid needs ~720px (a 420px label column, the 40px gap and
- * the panel padding, then the control). While the Trax panel is open on a
+ * A settings row's grid needs ~700px (a 420px label column, the 40px gap, then
+ * the control). While the Trax panel is open on a
  * screen up to 1440px wide the column is narrower than that, so rows stack as
  * they do on a phone instead of squeezing the control to a sliver. Nothing
  * changes with Trax closed.
@@ -412,9 +416,39 @@ function settingsScrollBehavior(): ScrollBehavior {
 /* -------------------------------------------------------------------------- */
 
 /**
- * A flat bordered panel of rows, with an optional title. `footer` is a panel
- * action (e.g. "Add promo code"). Inside a page save bar there is no divider
- * line above it, and it collapses when a section's save part renders nothing.
+ * A panel's surface: none at all.
+ *
+ * WHY FLUSH (operator screenshot, Settings → General → Regional, Sep 23 2026).
+ * The panel used to be `rounded-xl border bg-card` with `px-5` rows, so the
+ * section heading "Regional" sat at the page column's left edge while
+ * "Currency" and "Distance unit" started ~20px right of it — the card's own
+ * padding. Now the panel draws nothing: no border, no card fill, no inset. The
+ * page title, the section heading and every row label share ONE left edge, and
+ * a row's control at the end shares the column's right edge with a section's
+ * own action button. Grouping comes from the vertical gaps and the headings,
+ * which is also the standing direction for v2 ("no lines, we are making a
+ * blended UI" — team lead, repeatedly).
+ *
+ * Exported so the hand-written twins stay in step with it: the loading
+ * skeleton (`SettingsPanelSkeleton`, business-settings-states.tsx) and the two
+ * panels on Notifications that are not built from this one (the in-app
+ * explainer and the push setup card).
+ */
+export const SETTINGS_PANEL_FLUSH = "border-0 bg-transparent p-0";
+
+/**
+ * A flush panel of rows, with an optional title. `footer` is a panel action
+ * (e.g. "Add promo code"). Inside a page save bar it collapses when a section's
+ * save part renders nothing; outside one it carries that section's own Save, at
+ * the end of the row like every other control.
+ *
+ * NO ROW DIVIDERS. `divide-y` went with the border: a hairline is still a line,
+ * and nothing here is long enough to need one — the longest panel (the email
+ * sender) is seven rows under a title. A row's label and its help sit 2px
+ * apart against the 32px between one row's content and the next, so the
+ * grouping reads on spacing alone. Where a divider was carrying something
+ * spacing cannot — a row that BELONGS to the row above it — the owning page
+ * indents the child instead (locations-v2's `SubRow`, the installment plans).
  */
 export function SettingsPanel({
   title,
@@ -431,19 +465,25 @@ export function SettingsPanel({
 }) {
   const pageSave = useSettingsPageSave();
   return (
-    <section className={cn("rounded-xl border bg-card", className)}>
+    <section className={cn(SETTINGS_PANEL_FLUSH, className)}>
       {(title || description) && (
-        <div className="px-5 pt-4 pb-1">
+        // `pb-2` rather than the card's old `px-5 pt-4 pb-1`: the top padding
+        // was the card's, and the section above already spaces this.
+        <div className="pb-2">
           {title && <h2 className={SETTINGS_SECTION_TITLE}>{title}</h2>}
           {description && <p className="mt-0.5 text-[13px] text-muted-foreground">{description}</p>}
         </div>
       )}
-      <div className="divide-y">{children}</div>
+      {/* Kept as its own element (it carried `divide-y`) so the rows have the
+          same parent they always had, and so a test can find them. */}
+      <div data-settings-rows="">{children}</div>
       {footer &&
         (pageSave ? (
-          <div className="flex flex-wrap items-center justify-start gap-2 px-5 pb-4 empty:hidden">{footer}</div>
+          <div className="flex flex-wrap items-center justify-start gap-2 empty:hidden">{footer}</div>
         ) : (
-          <div className="flex flex-wrap items-center justify-end gap-2 border-t px-5 py-3">{footer}</div>
+          // No line above it either: the last row's own 16px bottom padding
+          // plus this is the gap that separates the Save from the settings.
+          <div className="flex flex-wrap items-center justify-end gap-2 pt-2">{footer}</div>
         ))}
     </section>
   );
@@ -469,7 +509,14 @@ const ROW_LABEL_END = "min-w-0 md:max-w-2xl";
 const ROW_CONTROLS_END = "flex min-w-0 flex-wrap items-center justify-start gap-2 md:justify-end";
 
 /**
- * One setting: a left-aligned grid. The label column is 420px and the control
+ * One setting: a left-aligned grid, flush with the section heading above it —
+ * no horizontal padding at all, so the label starts exactly under the heading
+ * and an `align="end"` control ends exactly under a section's action button
+ * (see `SETTINGS_PANEL_FLUSH`). Only `py-4` is left, which is what now
+ * separates one row from the next: 16px + 16px, the same 32px the divider line
+ * used to sit in the middle of.
+ *
+ * The label column is 420px and the control
  * starts right after it, so it never drifts to the far edge of a wide screen.
  * The whole row stacks on a phone, and beside an open Trax panel on a screen
  * up to 1440px wide (`SETTINGS_ROW_STACKS_BESIDE_TRAX`). With `align="end"`
@@ -501,7 +548,7 @@ export function SettingsRow({
   const inherited = useContext(SettingsRowAlignContext);
   const end = (align ?? inherited) === "end";
   return (
-    <div className={cn("px-5 py-4", className)}>
+    <div className={cn("py-4", className)}>
       <div
         className={
           end

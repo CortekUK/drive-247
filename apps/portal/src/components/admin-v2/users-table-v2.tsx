@@ -252,7 +252,8 @@ export function UsersTableV2<T extends AppUser>({
               <ListHead className="w-[44%]">Name</ListHead>
               <ListHead className="w-[18%]">Role</ListHead>
               <ListHead className="w-[24%]">Status</ListHead>
-              <ListHead className="w-[14%]">Actions</ListHead>
+              {/* Trailing and right, as the actions column is on every other v2 list. */}
+              <ListHead className="w-[14%] text-right">Actions</ListHead>
             </TableRow>
           </TableHeader>
           <ListBody>
@@ -271,15 +272,15 @@ export function UsersTableV2<T extends AppUser>({
                   <span className={LIST_CLASSES.text}>{roleLabel(user.role)}</span>
                 </ListCell>
                 <ListCell className="whitespace-normal">
-                  <UserStatus user={user} className="items-center" />
+                  <UserStatus user={user} />
                 </ListCell>
                 {/* Rows open nothing, but the menu's clicks (portalled items are
                     still React children of this cell) stop here all the same. */}
                 <ListCell onClick={(e) => e.stopPropagation()}>
-                  {/* `flex mx-auto`: an inline button sits on the text baseline
-                      and made the row taller; as a block it centres under the
-                      Actions heading. */}
-                  <UserRowMenu user={user} {...actions} className="mx-auto flex" />
+                  {/* `flex ml-auto`: an inline button sits on the text baseline
+                      and made the row taller; as a block it sits under the
+                      right-aligned Actions heading. */}
+                  <UserRowMenu user={user} {...actions} className="ml-auto flex" />
                 </ListCell>
               </ListRow>
             ))}

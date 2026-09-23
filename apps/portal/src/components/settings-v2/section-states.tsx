@@ -129,7 +129,8 @@ function ActionButton({
 export interface SettingsSectionSkeletonProps {
   /**
    * `table`: a v2 list-table card (header + rows at the kit's 45px row height).
-   * `form`: label/field pairs. `cards`: a grid of soft cards.
+   * `form`: label/field pairs, flush like the settings panel they stand in for.
+   * `cards`: a grid of soft cards.
    * `rows`: the stacked rows a list shows below `sm` instead of its table, so a
    * phone does not load a table that is cut off at the card edge and then jump.
    * `stack`: full-width cards one above the other, at every width (a page of
@@ -242,7 +243,10 @@ export function SettingsSectionSkeleton({
       )}
 
       {variant === "form" && (
-        <div aria-hidden="true" className="space-y-5 rounded-2xl bg-card p-5 sm:p-6">
+        // Flush, like the `SettingsPanel` it stands in for (settings-kit.tsx):
+        // a card here would flash a box the loaded panel no longer draws, and
+        // slide every label sideways by its padding as it went.
+        <div aria-hidden="true" className="space-y-5">
           {Array.from({ length: count }).map((_, r) => (
             <div key={r} className="grid gap-2 sm:grid-cols-[minmax(0,14rem)_minmax(0,1fr)] sm:items-center sm:gap-6">
               <div className="space-y-1.5">
@@ -324,7 +328,12 @@ export interface SettingsEmptyStateProps {
   className?: string;
 }
 
-/** The inline empty state's surface: the same flat panel `SettingsPanel` draws. */
+/**
+ * The inline empty state's surface: the flat settings list card
+ * (`LIST_SETTINGS_SURFACE`), because an inline empty state stands in for a
+ * TABLE of things (holidays, promo codes), not for a `SettingsPanel` — the
+ * panel itself draws no box at all now (settings-kit.tsx).
+ */
 export const SETTINGS_EMPTY_INLINE_CLASS =
   "flex flex-col gap-3 rounded-xl border bg-card px-5 py-4 sm:flex-row sm:items-center sm:justify-between";
 

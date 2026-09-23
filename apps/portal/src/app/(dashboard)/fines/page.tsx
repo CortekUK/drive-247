@@ -496,10 +496,7 @@ const FinesList = () => {
           <ListTableHeader>
             <ListHead className="w-[4%]">
               {canEdit('fines') && (
-                // `mx-auto`: the checkbox is a block-level flex box, which a
-                // centred cell's text-align does not move.
                 <CheckboxV2
-                  className="mx-auto"
                   checked={allShownSelected}
                   onCheckedChange={(checked) =>
                     setSelectedFines(checked === true ? fineRows.visible.map((fine) => fine.id) : [])
@@ -523,7 +520,8 @@ const FinesList = () => {
                 `created_at` desc default, which nothing on v2 can change). */}
             <ListHead className="w-[13.5%]">Due date</ListHead>
             <ListHead className="w-[16%]">Status</ListHead>
-            <ListHead className="w-[11%]">Amount</ListHead>
+            {/* The one money column: right, so the figures stack. */}
+            <ListHead className="w-[11%] text-right">Amount</ListHead>
             <ListHead className="w-[4%] text-right">
               <span className="sr-only">Actions</span>
             </ListHead>
@@ -555,7 +553,6 @@ const FinesList = () => {
                   <ListCell onClick={(e) => e.stopPropagation()}>
                     {canEdit('fines') && (
                       <CheckboxV2
-                        className="mx-auto"
                         checked={selectedFines.includes(fine.id)}
                         onCheckedChange={(checked) => handleSelectFine(fine.id, checked as boolean)}
                         aria-label={`Select fine ${reference}`}
@@ -626,10 +623,10 @@ const FinesList = () => {
                     title={fine.isOverdue ? `${dueDate ?? ''} · ${overdueText}` : undefined}
                   >
                     {dueDate ? (
-                      // Centred like every v2 cell. `max-w-full` keeps the
-                      // date truncating: a centred flex item is only as wide as
-                      // its text, so without it a long date would spill out.
-                      <div className="flex flex-col items-center gap-0.5">
+                      // `max-w-full` keeps the date truncating: a flex item
+                      // sized to its content is only as wide as its text, so
+                      // without it a long date would spill out of the column.
+                      <div className="flex flex-col items-start gap-0.5">
                         <span
                           className={cn(
                             'block max-w-full truncate',
@@ -655,7 +652,7 @@ const FinesList = () => {
                       </ListStatusText>
                     </span>
                   </ListCell>
-                  <ListCell className="tabular-nums">
+                  <ListCell className="text-right tabular-nums">
                     <span className={`block truncate ${LIST_CLASSES.text}`}>
                       {formatCurrency(Number(fine.amount), tenant?.currency_code || 'USD')}
                     </span>

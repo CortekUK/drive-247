@@ -399,8 +399,8 @@ function ExtraRow<T extends RentalExtra>({
       {/* The name, and the extra's picture while the row is hovered. No
           thumbnail: the indent it left before every name is what the review
           called "this gap". */}
-      <ListCell className="text-left">
-        <div className="flex min-w-0 items-center justify-start gap-2.5">
+      <ListCell>
+        <div className="flex min-w-0 items-center gap-2.5">
           <ExtraName extra={extra} open={hover.open} />
           {lowStock && extra.is_active && (
             <span className="shrink-0" title="Below 20% stock">
@@ -412,7 +412,7 @@ function ExtraRow<T extends RentalExtra>({
       </ListCell>
       {/* Never truncated: an ellipsis here hides money. Too wide for
           the column, it wraps inside the cell instead. */}
-      <ListCell className="tabular-nums">
+      <ListCell className="text-right tabular-nums">
         <span
           className={cn(
             "block [overflow-wrap:anywhere]",
@@ -585,8 +585,9 @@ export function ExtrasTableV2<T extends RentalExtra>({
 function ListHeaderRow({ withActions }: { withActions: boolean }) {
   return (
     <ListTableHeader>
-      <ListHead className="w-[28%] text-left">Name</ListHead>
-      <ListHead className="w-[17%]">Price</ListHead>
+      <ListHead className="w-[28%]">Name</ListHead>
+      {/* The one money column: right, so the figures stack. */}
+      <ListHead className="w-[17%] text-right">Price</ListHead>
       <ListHead className="w-[16%]">Pricing</ListHead>
       <ListHead className="w-[11%]">Stock</ListHead>
       <ListHead className="w-[10%]">Status</ListHead>

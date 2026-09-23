@@ -4,7 +4,7 @@
  * The rentals list is the reference every v2 table copies. These tests keep
  * the kit's class strings in lockstep with that file, so the lists cannot drift
  * apart silently, and pin the infinite-scroll behaviour that replaces the pager,
- * the centred columns, the absence of sorting, and the window-filling body.
+ * the left-aligned columns, the absence of sorting, and the window-filling body.
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -53,13 +53,17 @@ describe('list table kit matches the rentals list', () => {
     expect(rentalsSource).toContain(`const ROWS_PER_FILL = ${LIST_ROWS_PER_FILL};`);
   });
 
-  it('centres all five headings and every cell, like the kit', () => {
-    expect(rentalsSource.match(/tracking-wider text-muted-foreground text-center">/g)).toHaveLength(5);
+  it('left-aligns all five headings and every cell, like the kit', () => {
+    expect(rentalsSource.match(/tracking-wider text-muted-foreground text-left">/g)).toHaveLength(5);
     // Rental #, Customer, Pickup, Return, Status.
-    expect(rentalsSource.match(/<TableCell className="py-3 text-center/g)).toHaveLength(5);
-    // The two cells that lay their content out with flex centre it themselves.
-    expect(rentalsSource).toContain('<div className="flex flex-col items-center gap-0.5">');
-    expect(rentalsSource).toContain('<div className="flex flex-wrap items-center justify-center gap-1.5">');
+    expect(rentalsSource.match(/<TableCell className="py-3 text-left/g)).toHaveLength(5);
+    // The two cells that lay their content out with flex have to start too: a
+    // flex box ignores the cell's text-align.
+    expect(rentalsSource).toContain('<div className="flex flex-col items-start gap-0.5">');
+    expect(rentalsSource).toContain('<div className="flex flex-wrap items-center justify-start gap-1.5">');
+    // And nothing centred survives anywhere in the reference table.
+    expect(rentalsSource).not.toContain('text-center">');
+    expect(rentalsSource).not.toContain('justify-center');
   });
 
   it('fills the window with the kit hook, on the box that carries the kit classes', () => {
@@ -90,18 +94,18 @@ describe('ListHead and ListCell', () => {
       </table>,
     ).container.querySelector('th')!;
 
-  it('centres a heading, replacing the ui-v2 TableHead text-left', () => {
+  it('left-aligns a heading', () => {
     const th = head({ children: 'Phone', className: 'w-[20%]' });
     const classes = th.className.split(/\s+/);
-    expect(classes).toContain('text-center');
-    expect(classes).not.toContain('text-left');
+    expect(classes).toContain('text-left');
+    expect(classes).not.toContain('text-center');
     expect(classes).toContain('w-[20%]');
   });
 
-  it("lets a trailing actions column's text-right win", () => {
+  it("lets a money or trailing actions column's text-right win", () => {
     const classes = head({ children: <span className="sr-only">Actions</span>, className: 'text-right' }).className.split(/\s+/);
     expect(classes).toContain('text-right');
-    expect(classes).not.toContain('text-center');
+    expect(classes).not.toContain('text-left');
   });
 
   it('never renders a sort control', () => {
@@ -119,7 +123,7 @@ describe('ListHead and ListCell', () => {
     expect(kitSource).not.toContain('_ignoredSort');
   });
 
-  it('centres a cell', () => {
+  it('left-aligns a cell', () => {
     const { container } = render(
       <table>
         <tbody>
@@ -130,7 +134,22 @@ describe('ListHead and ListCell', () => {
       </table>,
     );
     const classes = container.querySelector('td')!.className.split(/\s+/);
-    expect(classes).toEqual(expect.arrayContaining(['py-3', 'text-center', 'tabular-nums']));
+    expect(classes).toEqual(expect.arrayContaining(['py-3', 'text-left', 'tabular-nums']));
+  });
+
+  it("lets a money cell's text-right win over the kit's left", () => {
+    const { container } = render(
+      <table>
+        <tbody>
+          <tr>
+            <ListCell className="text-right tabular-nums">$12.50</ListCell>
+          </tr>
+        </tbody>
+      </table>,
+    );
+    const classes = container.querySelector('td')!.className.split(/\s+/);
+    expect(classes).toContain('text-right');
+    expect(classes).not.toContain('text-left');
   });
 });
 

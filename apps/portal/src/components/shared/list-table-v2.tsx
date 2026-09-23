@@ -6,12 +6,12 @@
  * The rentals list (`rentals-v2/rentals-list-v2.tsx`) is the reference. Its
  * table is a card whose body scrolls inside itself with the scrollbar hidden,
  * under a sticky, blurred header of small uppercase column names. Headings and
- * cells are centred. The row's identifier is weighted and everything else is
- * plain text; status is coloured TEXT, never a pill; the whole row opens the
- * record; and there is no pager. Rows arrive 25 at a time as the operator
- * scrolls, with one quiet line under the card saying how much of the set is on
- * screen. The order is the page's own (newest added first): columns do not
- * sort.
+ * cells read left, and only money reads right. The row's identifier is weighted
+ * and everything else is plain text; status is coloured TEXT, never a pill; the
+ * whole row opens the record; and there is no pager. Rows arrive 25 at a time
+ * as the operator scrolls, with one quiet line under the card saying how much
+ * of the set is on screen. The order is the page's own (newest added first):
+ * columns do not sort.
  *
  * Every v2 list builds its table from these parts so the lists cannot drift
  * apart. The class strings are exported, and `list-table-v2.test.tsx` checks the
@@ -54,12 +54,19 @@ export const LIST_CLASSES = {
   fillViewport: "md:overscroll-contain",
   header: "sticky top-0 z-10 bg-card/95 backdrop-blur-sm",
   headerRow: "border-b hover:bg-transparent",
-  // `text-center` stays LAST: the lockstep test strips the width out of the
-  // rentals heading (`h-10 w-[20%] `) and matches the rest verbatim. It also
-  // replaces ui-v2 TableHead's own `text-left` through tailwind-merge, and a
-  // call site's `text-right` (a trailing actions column) still wins over it.
-  head: "h-10 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-center",
-  cell: "py-3 text-center",
+  // Team lead, Sep 23 2026: headings and cells read LEFT, reversing the Sep 17
+  // "centre everything" review — a centred heading over a left-ish column left
+  // a band of dead space down the left of every list.
+  //
+  // `text-left` stays LAST, where `text-center` stood: the lockstep test strips
+  // the width out of the rentals heading (`h-10 w-[20%] `) and matches the rest
+  // verbatim. Position inside this string is the only thing it fixes — a call
+  // site's own alignment arrives later in `cn(LIST_CLASSES.head, className)`, so
+  // `text-right` (money, and the trailing actions column) still wins through
+  // tailwind-merge. Stated rather than left to inherit, so the exported string
+  // says what the column does and a diff against it is readable.
+  head: "h-10 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left",
+  cell: "py-3 text-left",
   identifier: "font-semibold tabular-nums tracking-tight text-foreground",
   text: "font-medium text-foreground",
   metaChip:
@@ -406,7 +413,8 @@ export function ListTableHeader({ children }: { children: ReactNode }) {
 
 /**
  * A column name. Pass `className` for its width (`w-[20%]`), or `text-right`
- * for a trailing actions column.
+ * for a money column or the trailing actions column — the only two that leave
+ * the left edge.
  *
  * Plain text, never a sort control: every v2 list shows its rows newest added
  * first and the operator cannot re-order them (team lead, Sep 2026). No button,

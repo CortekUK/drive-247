@@ -220,7 +220,7 @@ describe("SettingsRow align", () => {
     expect(classes(layouts[2].children[0])).toEqual(["min-w-0"]);
   });
 
-  it("works inside a panel, with a divider between rows and none under the title", () => {
+  it("works inside a panel: flush rows, no divider between them and no line under the title", () => {
     const { container } = render(
       <SettingsRowAlignProvider align="end">
         <SettingsPanel title="Regional">
@@ -233,12 +233,16 @@ describe("SettingsRow align", () => {
         </SettingsPanel>
       </SettingsRowAlignProvider>,
     );
-    const rows = container.querySelector("section > .divide-y")!.children;
+    const rows = container.querySelector("section > [data-settings-rows]")!.children;
     expect(rows).toHaveLength(2);
     for (const row of Array.from(rows)) {
       expect(classes(row.firstElementChild)).toContain("md:grid-cols-[minmax(0,1fr)_auto]");
+      // Flush under the heading: no card padding to indent "Currency" by.
+      expect(row.className).not.toContain("px-5");
     }
     expect(classes(container.querySelector("section h2")!.parentElement)).not.toContain("border-b");
+    // No lines anywhere in the panel: not under the title, not between rows.
+    expect(container.querySelector(".divide-y")).toBeNull();
   });
 });
 

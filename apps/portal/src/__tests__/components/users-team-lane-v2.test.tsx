@@ -149,15 +149,17 @@ describe('UsersTableV2: a simple list, straight on the page', () => {
     expect(container.innerHTML).not.toContain('max-h-[520px]');
   });
 
-  it('shows four visible, centred headings with no sort control', () => {
+  it('shows four visible headings with no sort control, left but for Actions', () => {
     const { container } = renderList();
     const heads = Array.from(container.querySelectorAll('thead th'));
     expect(heads.map((h) => h.textContent)).toEqual(['Name', 'Role', 'Status', 'Actions']);
     for (const h of heads) {
-      expect(h.classList).toContain('text-center');
       expect(h.querySelector('button, svg, .sr-only')).toBeNull();
       expect(h.getAttribute('aria-sort')).toBeNull();
     }
+    // Name, Role and Status read left with every other v2 list; Actions trails right.
+    for (const h of heads.slice(0, 3)) expect(h.classList).toContain('text-left');
+    expect(heads[3].classList).toContain('text-right');
   });
 
   it('keeps the page order (newest first comes from the query) and puts the email under the name', () => {
@@ -171,7 +173,7 @@ describe('UsersTableV2: a simple list, straight on the page', () => {
       ['N/A', 'vic@example.com'],
       ['Ada Head', 'ada@example.com'],
     ]);
-    for (const c of firstCells) expect(c.classList).toContain('text-center');
+    for (const c of firstCells) expect(c.classList).toContain('text-left');
   });
 
   it('role is plain text and status is coloured text, never a pill', () => {
@@ -219,12 +221,14 @@ describe('UsersTableV2: a simple list, straight on the page', () => {
     expect(list.querySelectorAll('svg')).toHaveLength(3);
   });
 
-  it('the menu trigger is a block centred under the Actions heading', () => {
+  it('the menu trigger is a block under the right-aligned Actions heading', () => {
     const { container } = renderList();
     const trigger = container.querySelector('table button[aria-label="Actions for Max Manager"]')!;
-    expect(trigger.classList).toContain('mx-auto');
+    // `ml-auto`, not text-align: a block button is only as wide as its icon,
+    // so the cell's alignment cannot move it.
+    expect(trigger.classList).toContain('ml-auto');
+    expect(trigger.classList).not.toContain('mx-auto');
     expect(trigger.classList).toContain('flex');
-    expect(trigger.closest('td')!.classList).toContain('text-center');
   });
 
   it('a manager row offers every action; the handlers get that row', () => {

@@ -3385,7 +3385,9 @@ const Settings = () => {
                 }
               >
                 <SettingsReadOnlyFieldset readOnly={!canEditGeneral}>
-                <div className="grid gap-6 px-5 py-4 md:grid-cols-2">
+                {/* No `px-5`: the panel around it is flush, so the two
+                    colour pickers start under the panel title (settings-kit.tsx). */}
+                <div className="grid gap-6 py-4 md:grid-cols-2">
                   <ColorPicker
                     label="Light mode"
                     value={brandingForm.light_header_footer_color || '#1A2B25'}

@@ -134,7 +134,8 @@ export function InsurancePoliciesTableV2<T extends InsurancePolicyRowV2>({
               truncates with the whole name in its title, and Customer truncates. */}
           <ListHead className="w-[30.5%]">Document</ListHead>
           <ListHead className="w-[10%]">Customer</ListHead>
-          <ListHead className="w-[9.5%]">Premium</ListHead>
+          {/* The one money column: right, so the figures stack. */}
+          <ListHead className="w-[9.5%] text-right">Premium</ListHead>
           <ListHead className="w-[17.5%]">Policy status</ListHead>
           <ListHead className="w-[8%]">Payment</ListHead>
           <ListHead className="w-[16.5%]">Created</ListHead>
@@ -184,8 +185,8 @@ export function InsurancePoliciesTableV2<T extends InsurancePolicyRowV2>({
                 onOpen={canViewRental ? () => onViewRental(doc) : undefined}
               >
                 <ListCell>
-                  <div className="flex min-w-0 flex-col items-center gap-0.5">
-                    <div className="flex min-w-0 max-w-full items-center justify-center gap-1.5">
+                  <div className="flex min-w-0 flex-col items-start gap-0.5">
+                    <div className="flex min-w-0 max-w-full items-center gap-1.5">
                       <span className={cn("truncate", LIST_CLASSES.identifier)} title={doc.document_name}>
                         {doc.document_name}
                       </span>
@@ -227,7 +228,7 @@ export function InsurancePoliciesTableV2<T extends InsurancePolicyRowV2>({
                 </ListCell>
                 {/* v1's exact text: a hard-coded "$" and two decimals. Never
                     truncated, an ellipsis here hides money. */}
-                <ListCell className="tabular-nums">
+                <ListCell className="text-right tabular-nums">
                   {doc.premium_amount != null ? (
                     <span className={LIST_CLASSES.text}>{`$${doc.premium_amount.toFixed(2)}`}</span>
                   ) : doc.provider === "inshur" ? (

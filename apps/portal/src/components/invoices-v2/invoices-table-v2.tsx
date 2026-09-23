@@ -83,7 +83,8 @@ export function InvoicesTableV2<T extends InvoiceRowV2>({
           <ListHead className="w-[19%]">Vehicle</ListHead>
           <ListHead className="w-[13%]">Invoice date</ListHead>
           <ListHead className="w-[13%]">Due date</ListHead>
-          <ListHead className="w-[14%]">Amount</ListHead>
+          {/* The one money column: right, so the figures stack. */}
+          <ListHead className="w-[14%] text-right">Amount</ListHead>
           <ListHead className="w-[6%] text-right">
             <span className="sr-only">Actions</span>
           </ListHead>
@@ -138,7 +139,7 @@ export function InvoicesTableV2<T extends InvoiceRowV2>({
                 </ListCell>
                 {/* Never truncated: an ellipsis here hides money. The cell does not
                     wrap, and 14% holds "AED 123,456.78" at the 944px card. */}
-                <ListCell className="tabular-nums">
+                <ListCell className="text-right tabular-nums">
                   <span className={LIST_CLASSES.text}>
                     {formatCurrency(invoice.total_amount, currencyCode)}
                   </span>

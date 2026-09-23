@@ -570,7 +570,8 @@ const PaymentsList = () => {
                 <ListHead className="w-[6.45%] px-2">Rental</ListHead>
                 <ListHead className="w-[14.2%] px-2" data-tour="payments-type-column">Type</ListHead>
                 <ListHead className="w-[13.5%] px-2">Method</ListHead>
-                <ListHead className="w-[13.2%] px-2">Amount</ListHead>
+                {/* The one money column: right, so the figures stack. */}
+                <ListHead className="w-[13.2%] px-2 text-right">Amount</ListHead>
                 <ListHead className="w-[12.85%] px-2">Status</ListHead>
                 {/* Stays the last column: the tour's actions step stands to its left. */}
                 <ListHead className="w-[11.1%] text-right" data-tour="payments-actions-column">
@@ -599,7 +600,7 @@ const PaymentsList = () => {
                         <button
                           type="button"
                           onClick={() => router.push(`/customers/${payment.customers.id}`)}
-                          className={`${LIST_CLASSES.text} mx-auto block max-w-full truncate text-center hover:underline`}
+                          className={`${LIST_CLASSES.text} block max-w-full truncate text-left hover:underline`}
                           title={payment.customers.name}
                         >
                           {payment.customers.name}
@@ -610,7 +611,7 @@ const PaymentsList = () => {
                           <button
                             type="button"
                             onClick={() => router.push(`/vehicles/${payment.vehicles!.id}`)}
-                            className={`${LIST_CLASSES.text} mx-auto block max-w-full truncate text-center hover:underline`}
+                            className={`${LIST_CLASSES.text} block max-w-full truncate text-left hover:underline`}
                             title={payment.vehicles.make && payment.vehicles.model ? `${payment.vehicles.reg} • ${payment.vehicles.make} ${payment.vehicles.model}` : payment.vehicles.reg}
                           >
                             {payment.vehicles.reg}
@@ -627,7 +628,7 @@ const PaymentsList = () => {
                           <button
                             type="button"
                             onClick={() => router.push(`/rentals/${payment.rentals!.id}`)}
-                            className={`${LIST_CLASSES.text} mx-auto block max-w-full truncate text-center hover:underline`}
+                            className={`${LIST_CLASSES.text} block max-w-full truncate text-left hover:underline`}
                             title={payment.rentals.rental_number || `R-${payment.rentals.id.slice(0, 6)}`}
                           >
                             {payment.rentals.rental_number || `R-${payment.rentals.id.slice(0, 6)}`}
@@ -654,8 +655,11 @@ const PaymentsList = () => {
                           reads, and the tour's note calls it "under the amount".
                           It wraps rather than truncates, so a discount suffix is
                           never cut off. */}
-                      <ListCell className="px-2 tabular-nums">
-                        <div className="flex flex-col items-center gap-0.5">
+                      <ListCell className="px-2 text-right tabular-nums">
+                        {/* `items-end`: the stack is a flex column, so the rate
+                            line follows the amount to the column's right edge
+                            rather than staying where text-align left it. */}
+                        <div className="flex flex-col items-end gap-0.5">
                           <span className={`block max-w-full truncate ${LIST_CLASSES.identifier}`} title={amountV2}>{amountV2}</span>
                           {rateV2 && (
                             <span data-tour="payments-rate" className="block whitespace-normal break-words text-[11px] font-normal text-muted-foreground tabular-nums">

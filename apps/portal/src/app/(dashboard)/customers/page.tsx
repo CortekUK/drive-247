@@ -1013,7 +1013,7 @@ const CustomersList = () => {
                       onOpen={() => router.push(`/customers/${customer.id}`)}
                     >
                       <ListCell>
-                        <div className="flex min-w-0 items-center justify-center gap-1.5">
+                        <div className="flex min-w-0 items-center gap-1.5">
                           {/* A real button, so the record stays reachable by keyboard. */}
                           <button
                             type="button"
@@ -1021,7 +1021,7 @@ const CustomersList = () => {
                               e.stopPropagation();
                               router.push(`/customers/${customer.id}`);
                             }}
-                            className={`${LIST_CLASSES.identifier} truncate text-center hover:underline`}
+                            className={`${LIST_CLASSES.identifier} truncate text-left hover:underline`}
                           >
                             {customer.name}
                           </button>

@@ -87,8 +87,11 @@ export function CreditTransactionsTableV2({
           <ListHead className="w-[13%]">Type</ListHead>
           <ListHead className="w-[31%]">Description</ListHead>
           <ListHead className="w-[14%]">Category</ListHead>
-          <ListHead className="w-[10%]">Amount</ListHead>
-          <ListHead className="w-[10%]">Balance</ListHead>
+          {/* Amount and Balance are the wallet's ledger: right-aligned so the
+              digits stack under each other and a run of them can be scanned
+              down the column. Their headings follow the numbers. */}
+          <ListHead className="w-[10%] text-right">Amount</ListHead>
+          <ListHead className="w-[10%] text-right">Balance</ListHead>
         </ListTableHeader>
         <ListBody>
           {transactionRows.visible.map((tx) => {
@@ -124,11 +127,11 @@ export function CreditTransactionsTableV2({
                     <Blank />
                   )}
                 </ListCell>
-                <ListCell className={`font-medium tabular-nums ${LIST_TONES[amountTone]}`}>
+                <ListCell className={`text-right font-medium tabular-nums ${LIST_TONES[amountTone]}`}>
                   {tx.amount > 0 ? "+" : ""}
                   {tx.amount}
                 </ListCell>
-                <ListCell className="tabular-nums">
+                <ListCell className="text-right tabular-nums">
                   <span className={LIST_CLASSES.text}>{tx.balance_after}</span>
                 </ListCell>
               </ListRow>

@@ -88,16 +88,20 @@ describe("columns", () => {
     expect(heads).not.toContain("Agreement");
   });
 
-  it("left-aligns Customer, header and cell together, like every v2 table's first column", () => {
+  it("left-aligns Customer, header and cell together, like every other v2 column", () => {
     // Centred in its wide column, every name sat far in from the card's left
-    // edge (reported on the live page). The other columns stay centred.
+    // edge (reported on the live page). Since Sep 23 2026 the whole table reads
+    // left from the kit, so Customer carries no override of its own — and Email
+    // beside it reads the same way.
     renderTable([SIGNED]);
     const [customerHead, emailHead] = screen.getAllByRole("columnheader");
     expect(customerHead.className.split(/\s+/)).toContain("text-left");
-    expect(emailHead.className.split(/\s+/)).not.toContain("text-left");
+    expect(customerHead.className.split(/\s+/)).not.toContain("text-center");
+    expect(emailHead.className.split(/\s+/)).toContain("text-left");
     const [, row] = screen.getAllByRole("row");
     const [customerCell] = within(row).getAllByRole("cell");
     expect(customerCell.className.split(/\s+/)).toContain("text-left");
+    expect(customerCell.className.split(/\s+/)).not.toContain("text-center");
   });
 
   it("a rental row shows its rental reference under the name; an individual row says Individual", () => {

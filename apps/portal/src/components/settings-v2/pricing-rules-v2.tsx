@@ -578,7 +578,7 @@ function HolidayPricingSection({ canEdit }: { canEdit: boolean }) {
           <TooltipProvider delayDuration={300}>
             <ListTable rows={rows} minWidth="min-w-0" surface="settings">
               <ListTableHeader>
-                <ListHead className="text-left">Holiday</ListHead>
+                <ListHead>Holiday</ListHead>
                 <ListHead className="hidden w-[30%] sm:table-cell">Dates</ListHead>
                 <ListHead className="w-[8rem] sm:w-[16%]">Surcharge</ListHead>
                 <ListHead className="hidden w-[12%] md:table-cell">Repeats</ListHead>
@@ -594,10 +594,8 @@ function HolidayPricingSection({ canEdit }: { canEdit: boolean }) {
                   const dates = formatHolidayDates(holiday.start_date, holiday.end_date);
                   return (
                     <ListRow key={holiday.id}>
-                      <ListCell className="text-left">
-                        {/* The name column reads left, like a list of names: centred in a
-                            wide column it floated mid-cell with a gap down its left side. */}
-                        <div className="flex min-w-0 items-center justify-start gap-2">
+                      <ListCell>
+                        <div className="flex min-w-0 items-center gap-2">
                           <TruncatedText
                             text={holiday.name}
                             className={cn(LIST_CLASSES.identifier, "min-w-0", past && "text-muted-foreground")}

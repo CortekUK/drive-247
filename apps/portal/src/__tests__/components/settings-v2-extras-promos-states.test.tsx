@@ -770,26 +770,40 @@ describe("Promo rows carry the Extras table's Edit and Delete", () => {
   });
 
   it("agrees with its own header on every column's alignment, the way Extras does", () => {
+    // Every head and cell carries one alignment class, straight from the kit or
+    // as the call site's own override; "none" would be a column that lost it.
     const align = (el: Element) => {
       const cls = (el.getAttribute("class") ?? "").split(/\s+/);
-      return cls.find((c) => c === "text-left" || c === "text-right") ?? "text-center";
+      return cls.find((c) => c === "text-left" || c === "text-right" || c === "text-center") ?? "none";
     };
     const columns = () => ({
       head: Array.from(container.querySelectorAll("thead th")).map(align),
       body: Array.from(container.querySelectorAll("tbody tr:first-child td")).map(align),
     });
 
-    // Extras, the reference: the name reads left, the controls right, the facts
-    // between them centred — and the head and the body say the same thing.
+    // Extras, the reference (team lead, Sep 23 2026): everything reads left
+    // except the money column and the trailing controls, which read right — and
+    // the head and the body say the same thing.
     render(table([extra()]));
     const extras = columns();
     expect(extras.head).toEqual(extras.body);
-    expect(extras.head).toEqual(["text-left", "text-center", "text-center", "text-center", "text-center", "text-right"]);
+    // Name, Price, Pricing, Stock, Status, Actions.
+    expect(extras.head).toEqual(["text-left", "text-right", "text-left", "text-left", "text-left", "text-right"]);
 
     render(section({ promos: [promo()] }).node);
     const promos = columns();
     expect(promos.head).toEqual(promos.body);
-    expect(promos.head).toEqual(["text-left", ...Array(6).fill("text-center"), "text-right"]);
+    // Name, Code, Value, Created, Expires, Max users, Auto-apply, Actions.
+    expect(promos.head).toEqual([
+      "text-left",
+      "text-left",
+      "text-right",
+      "text-left",
+      "text-left",
+      "text-left",
+      "text-left",
+      "text-right",
+    ]);
   });
 
   it("loads in the shape the rows land in: the flat settings panel, one bar per real column", () => {

@@ -324,9 +324,10 @@ export function PromoCodesTableV2<T extends PromoCodeRowV2>({
                   which are wider than any value under them; the last column holds
                   Edit and Delete. Name takes the rest and truncates with its full
                   text in a tooltip. */}
-              <ListHead className="w-[16%] text-left">Name</ListHead>
+              <ListHead className="w-[16%]">Name</ListHead>
               <ListHead className="w-[17%]">Code</ListHead>
-              <ListHead className="w-[12.5%]">Value</ListHead>
+              {/* The one money column: right, so the figures stack. */}
+              <ListHead className="w-[12.5%] text-right">Value</ListHead>
               <ListHead className="w-[11%]">Created</ListHead>
               <ListHead className="w-[12.5%]">Expires</ListHead>
               <ListHead className="w-[10%]">Max users</ListHead>
@@ -343,19 +344,18 @@ export function PromoCodesTableV2<T extends PromoCodeRowV2>({
             <ListBody>
               {promoRows.visible.map((promo) => (
                 <ListRow key={promo.id}>
-                  <ListCell className="text-left">
+                  <ListCell>
                     <span className={`block truncate ${LIST_CLASSES.identifier}`} title={promo.name}>
                       {promo.name}
                     </span>
                   </ListCell>
                   {/* v1's Copy button, now the code itself: one click copies it. */}
                   <ListCell onClick={(e) => e.stopPropagation()}>
-                    {/* A block <button> is only as wide as its content, so it is centred as a box (mx-auto), as the column is. */}
-                    <CopyCode code={promo.code} onCopy={onCopy} className="mx-auto justify-center text-center" />
+                    <CopyCode code={promo.code} onCopy={onCopy} />
                   </ListCell>
                   {/* Never truncated: an ellipsis here hides money. A value too wide
                       for the column wraps inside it instead of overlapping. */}
-                  <ListCell className="tabular-nums">
+                  <ListCell className="text-right tabular-nums">
                     <span
                       className={cn(
                         "block [overflow-wrap:anywhere]",

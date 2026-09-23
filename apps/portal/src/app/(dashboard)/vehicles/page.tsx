@@ -1072,7 +1072,7 @@ export default function VehiclesListEnhanced() {
                     onOpen={() => handleRowClick(vehicle.id)}
                   >
                     <ListCell className={dim}>
-                      <div className="flex min-w-0 items-center justify-center">
+                      <div className="flex min-w-0 items-center">
                         {/* A real link, so the record stays reachable by keyboard. */}
                         <VehicleRegLink
                           vehicleId={vehicle.id}
@@ -1125,9 +1125,9 @@ export default function VehiclesListEnhanced() {
                     {inshurEnabled && (
                       // The whole row navigates; the badge's re-check button must not.
                       <ListCell className={dim} onClick={(e) => e.stopPropagation()}>
-                        {/* The badge with its re-check button is a flex row, which
-                            does not follow the cell's text-center. */}
-                        <div className="flex justify-center">
+                        {/* The badge with its re-check button is a flex row, and
+                            a flex row starts at the start edge on its own. */}
+                        <div className="flex">
                           <InshurEligibilityBadge
                             compact
                             state={inshurStateByVehicle.get(vehicle.id) ?? 'not_checked'}

@@ -147,7 +147,7 @@ export function AgreementsListTableV2({
           "Pending signature" whole. */}
       <ListTable rows={agreementRows} minWidth="min-w-[760px]">
         <ListTableHeader>
-          <ListHead className="w-[30%] text-left">Customer</ListHead>
+          <ListHead className="w-[30%]">Customer</ListHead>
           <ListHead className="w-[30%]">Email</ListHead>
           <ListHead className="w-[19%]">Sent</ListHead>
           <ListHead className="w-[15%]">Status</ListHead>
@@ -166,10 +166,7 @@ export function AgreementsListTableV2({
 
             return (
               <ListRow key={row.id} data-agreement-kind={row.kind} data-agreement-status={row.status}>
-                {/* Left-aligned, header and cell together, like every v2 table's
-                    first column: centred in a 30% column, the names sat far in
-                    from the card's left edge. */}
-                <ListCell className="text-left">
+                <ListCell>
                   <span
                     className={`block truncate ${LIST_CLASSES.identifier}`}
                     title={row.title ? `${row.customerName} · ${row.title}` : row.customerName}

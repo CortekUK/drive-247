@@ -192,13 +192,15 @@ describe('v2 vehicles table columns', () => {
     expect(thead.querySelectorAll('[aria-sort]')).toHaveLength(0);
   });
 
-  it('centres headings and cells', async () => {
+  it('left-aligns headings and cells: the list carries no money column', async () => {
     const { container } = await renderPage();
     for (const th of Array.from(container.querySelectorAll('thead th'))) {
-      expect(classesOf(th)).toContain('text-center');
+      expect(classesOf(th)).toContain('text-left');
+      expect(classesOf(th)).not.toContain('text-center');
     }
     for (const td of Array.from(rowFor('AA11 OLD').querySelectorAll('td'))) {
-      expect(classesOf(td)).toContain('text-center');
+      expect(classesOf(td)).toContain('text-left');
+      expect(classesOf(td)).not.toContain('text-center');
     }
   });
 

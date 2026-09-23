@@ -100,7 +100,20 @@ function SelectContent({
           // override here and none is added.
                                   tone === "dark" ? "dark bg-popover/70 [--v2-hover:calc(var(--brand-h,248)_+_10)_calc(var(--brand-s,68%)_+_22%)_66%_/_0.3] [--accent-foreground:var(--popover-foreground)]"
                                     : "border border-border bg-popover",
-          "z-50 max-h-[var(--radix-select-content-available-height)] min-w-36 origin-[var(--radix-select-content-transform-origin)] overflow-x-hidden overflow-y-auto rounded-3xl text-popover-foreground shadow-lg ring-1 ring-foreground/5 duration-100 data-[align-trigger=true]:animate-none data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 dark:ring-foreground/10 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 !animate-none relative before:pointer-events-none before:absolute before:inset-0 before:-z-[1] before:rounded-[inherit] data-[tone=dark]:before:backdrop-blur-2xl data-[tone=dark]:before:backdrop-saturate-150 [&_[data-slot$=-item]:focus]:bg-[hsl(var(--v2-hover,var(--foreground)_/_0.1))] [&_[data-slot$=-item][data-highlighted]]:bg-[hsl(var(--v2-hover,var(--foreground)_/_0.1))] [&_[data-slot$=-separator]]:bg-foreground/5 [&_[data-variant=destructive]]:!text-accent-foreground [&_[data-variant=destructive]_*]:!text-accent-foreground",
+          // OPEN/CLOSE ANIMATION. The shadcn enter/exit pair — fade + 95% zoom
+          // over `duration-100`, sliding from the side Radix chose — is the
+          // whole difference between a panel that appears and one that snaps
+          // into existence. It was present from the first commit of these
+          // primitives and dead the whole time: a blanket `!animate-none` sat
+          // at the end of this same string, and `animation: none !important`
+          // beats every `data-[state=*]` rule regardless of order. Reported as
+          // "the dropdowns don't look professional", which was exactly right.
+          //
+          // `data-[align-trigger=true]:animate-none` below is the ONE case that
+          // must stay still: with `position="item-aligned"` Radix lays the panel
+          // over the trigger and lines the selected row up with it, so zooming
+          // it in reads as the page jumping rather than a menu opening.
+          "z-50 max-h-[var(--radix-select-content-available-height)] min-w-36 origin-[var(--radix-select-content-transform-origin)] overflow-x-hidden overflow-y-auto rounded-3xl text-popover-foreground shadow-lg ring-1 ring-foreground/5 duration-100 data-[align-trigger=true]:animate-none data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 dark:ring-foreground/10 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 relative before:pointer-events-none before:absolute before:inset-0 before:-z-[1] before:rounded-[inherit] data-[tone=dark]:before:backdrop-blur-2xl data-[tone=dark]:before:backdrop-saturate-150 [&_[data-slot$=-item]:focus]:bg-[hsl(var(--v2-hover,var(--foreground)_/_0.1))] [&_[data-slot$=-item][data-highlighted]]:bg-[hsl(var(--v2-hover,var(--foreground)_/_0.1))] [&_[data-slot$=-separator]]:bg-foreground/5 [&_[data-variant=destructive]]:!text-accent-foreground [&_[data-variant=destructive]_*]:!text-accent-foreground",
                                   position === "popper" &&
                                     "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
                                   className

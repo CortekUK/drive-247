@@ -628,19 +628,19 @@ export function RentalsListV2() {
                     separate slab sitting on the card. */}
                 <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur-sm">
                   <TableRow className="border-b hover:bg-transparent">
-                    <TableHead className="h-10 w-[20%] text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-center">
+                    <TableHead className="h-10 w-[20%] text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left">
                       Rental #
                     </TableHead>
-                    <TableHead className="h-10 w-[28%] text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-center">
+                    <TableHead className="h-10 w-[28%] text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left">
                       Customer
                     </TableHead>
-                    <TableHead className="h-10 w-[16%] text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-center">
+                    <TableHead className="h-10 w-[16%] text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left">
                       Pickup
                     </TableHead>
-                    <TableHead className="h-10 w-[16%] text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-center">
+                    <TableHead className="h-10 w-[16%] text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left">
                       Return
                     </TableHead>
-                    <TableHead className="h-10 w-[20%] text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-center">
+                    <TableHead className="h-10 w-[20%] text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left">
                       Status
                     </TableHead>
                   </TableRow>
@@ -694,8 +694,8 @@ export function RentalsListV2() {
                             one: this is the string an operator reads out on
                             the phone and searches for, so it carries the row
                             rather than sitting in it. */}
-                        <TableCell className="py-3 text-center">
-                          <div className="flex flex-col items-center gap-0.5">
+                        <TableCell className="py-3 text-left">
+                          <div className="flex flex-col items-start gap-0.5">
                             <span className="font-semibold tabular-nums tracking-tight text-foreground">
                               {rental.rental_number}
                             </span>
@@ -727,7 +727,7 @@ export function RentalsListV2() {
                             name is already on the record, so nothing is fetched
                             to fix this. No initials disc: at the user's request
                             the name carries the cell on its own. */}
-                        <TableCell className="py-3 text-center">
+                        <TableCell className="py-3 text-left">
                           <span className="block truncate font-medium text-foreground">
                             {rental.customer.name}
                           </span>
@@ -737,12 +737,12 @@ export function RentalsListV2() {
                             two columns line up down the page: proportional
                             digits give every row a different width and the
                             column reads as ragged noise. */}
-                        <TableCell className="py-3 text-center tabular-nums">
+                        <TableCell className="py-3 text-left tabular-nums">
                           <span className="font-medium text-foreground">
                             {formatRentalDate(rental.start_date)}
                           </span>
                         </TableCell>
-                        <TableCell className="py-3 text-center tabular-nums">
+                        <TableCell className="py-3 text-left tabular-nums">
                           {rental.end_date ? (
                             <span className="font-medium text-foreground">
                               {formatRentalDate(rental.end_date)}
@@ -762,8 +762,8 @@ export function RentalsListV2() {
                             "Active". PAYG and auto-extend are secondary and now
                             look it, so the coloured pill is the only thing in
                             the column asking for the eye. */}
-                        <TableCell className="py-3 text-center">
-                          <div className="flex flex-wrap items-center justify-center gap-1.5">
+                        <TableCell className="py-3 text-left">
+                          <div className="flex flex-wrap items-center justify-start gap-1.5">
                             <RentalStatusText status={rental.computed_status} />
                             {rental.is_pay_as_you_go && <MetaChip>PAYG</MetaChip>}
                             {(rental as any).auto_extend_enabled && <MetaChip>Auto-extend</MetaChip>}

@@ -136,7 +136,8 @@ export function PendingBookingsTableV2({
           <ListHead className="w-[13.1%]">Vehicle</ListHead>
           <ListHead className="w-[11.9%] px-2">Pickup</ListHead>
           <ListHead className="w-[11.9%] px-2">Return</ListHead>
-          <ListHead className="w-[10.5%] px-2">Amount</ListHead>
+          {/* The one money column: right, so the figures stack. */}
+          <ListHead className="w-[10.5%] px-2 text-right">Amount</ListHead>
           <ListHead className="w-[14.6%] px-2">Verification</ListHead>
           <ListHead className="w-[15.6%] px-2">Expiry</ListHead>
           <ListHead className="w-[8.1%] text-right">
@@ -180,7 +181,7 @@ export function PendingBookingsTableV2({
                     give way first. */}
                 <ListCell>
                   {reg && makeModel ? (
-                    <span className="flex max-w-full items-center justify-center gap-1.5" title={`${reg} • ${makeModel}`}>
+                    <span className="flex max-w-full items-center gap-1.5" title={`${reg} • ${makeModel}`}>
                       <span className={`${LIST_CLASSES.text} shrink-0 tabular-nums`}>{reg}</span>
                       <span className="min-w-0 truncate text-muted-foreground">{makeModel}</span>
                     </span>
@@ -204,7 +205,7 @@ export function PendingBookingsTableV2({
                 </ListCell>
                 {/* v1's "$" and `toLocaleString()`, so the figure reads exactly
                     as the confirmation dialogs print it. */}
-                <ListCell className="px-2 tabular-nums">
+                <ListCell className="px-2 text-right tabular-nums">
                   {booking.amount != null ? (
                     <span className={LIST_CLASSES.text}>${booking.amount.toLocaleString()}</span>
                   ) : (

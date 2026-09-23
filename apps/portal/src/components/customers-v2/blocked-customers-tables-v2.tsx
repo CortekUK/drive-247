@@ -118,7 +118,7 @@ export function BlockedCustomersTableV2<T extends BlockedCustomerRowV2>({
                       e.stopPropagation();
                       onOpen(customer);
                     }}
-                    className={`${LIST_CLASSES.identifier} mx-auto block max-w-full truncate text-center hover:underline`}
+                    className={`${LIST_CLASSES.identifier} block max-w-full truncate text-left hover:underline`}
                   >
                     {customer.name}
                   </button>

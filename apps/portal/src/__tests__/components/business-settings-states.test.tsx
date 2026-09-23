@@ -921,11 +921,11 @@ describe("LocationsListV2", () => {
     const table = container.querySelector('table[aria-label="Delivery locations"]') as HTMLTableElement;
     const heads = Array.from(table.querySelectorAll("thead th"));
     expect(heads.map((th) => th.textContent)).toEqual(["Name", "Address", "Fee", "Available", "Actions"]);
-    // Centred like every v2 table heading; no sort control.
-    heads.forEach((th) => {
-      expect(th.className).toContain("text-center");
-      expect(th.querySelector("button")).toBeNull();
-    });
+    // Left like every v2 table heading, but for Fee (money) and the trailing
+    // Actions column, which both read right. No sort control on any of them.
+    heads.forEach((th) => expect(th.querySelector("button")).toBeNull());
+    [0, 1, 3].forEach((i) => expect(heads[i].className).toContain("text-left"));
+    [2, 4].forEach((i) => expect(heads[i].className).toContain("text-right"));
     const trs = Array.from(table.querySelectorAll("tbody tr"));
     const cells = (tr: Element) => Array.from(tr.querySelectorAll("td")).map((td) => td.textContent);
     expect(cells(trs[0])).toEqual(["Free spot", "2 Quay St", "No fee", "Off", "EditNo feeDelete"]);

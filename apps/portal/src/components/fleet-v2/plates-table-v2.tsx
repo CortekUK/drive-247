@@ -174,7 +174,8 @@ export function PlatesTableV2<T extends PlateRowV2>({
           <ListHead className="w-[15%]">Vehicle</ListHead>
           <ListHead className="w-[10%]">Supplier</ListHead>
           <ListHead className="w-[12%]">Order date</ListHead>
-          <ListHead className="w-[12%]">Cost</ListHead>
+          {/* The one money column: right, so the figures stack. */}
+          <ListHead className="w-[12%] text-right">Cost</ListHead>
           <ListHead className="w-[10%]">Status</ListHead>
           <ListHead className="w-[9.5%]">Notes</ListHead>
           <ListHead className="w-[11%]">Document</ListHead>
@@ -188,11 +189,14 @@ export function PlatesTableV2<T extends PlateRowV2>({
                 <ListRow key={row}>
                   {SKELETON_BARS.map((bar, cell) => (
                     <ListCell key={cell}>
-                      {/* Centred like the cells they stand in for; the last is the actions column, which stays right. */}
+                      {/* Left like the cells they stand in for; the last is
+                          the actions column, which stays right. A bar is a
+                          block div, so it needs the margin — text-align cannot
+                          move it. */}
                       <div
                         className={cn(
                           "h-3 animate-pulse rounded-full bg-muted",
-                          cell === SKELETON_BARS.length - 1 ? "ml-auto" : "mx-auto",
+                          cell === SKELETON_BARS.length - 1 && "ml-auto",
                           bar,
                         )}
                       />
@@ -215,7 +219,7 @@ export function PlatesTableV2<T extends PlateRowV2>({
                         type="button"
                         onClick={() => onCopyPlateNumber(plate.plate_number)}
                         title="Click to copy"
-                        className="group mx-auto flex max-w-full items-center justify-center gap-1.5 text-center"
+                        className="group flex max-w-full items-center gap-1.5 text-left"
                       >
                         <span className={LIST_CLASSES.identifier}>{plate.plate_number}</span>
                         <Copy className="size-3 shrink-0 text-muted-foreground group-hover:text-foreground" />
@@ -228,7 +232,7 @@ export function PlatesTableV2<T extends PlateRowV2>({
                         <button
                           type="button"
                           onClick={() => onOpenVehicle(plate)}
-                          className="mx-auto flex max-w-full items-center justify-center gap-1.5 text-center hover:underline"
+                          className="flex max-w-full items-center gap-1.5 text-left hover:underline"
                           title={makeModel ? `${plate.vehicles.reg} • ${makeModel}` : plate.vehicles.reg}
                         >
                           <span className={cn(LIST_CLASSES.text, "shrink-0 tabular-nums")}>{plate.vehicles.reg}</span>
@@ -250,7 +254,7 @@ export function PlatesTableV2<T extends PlateRowV2>({
                     <ListCell className="tabular-nums">
                       {orderDate ? <span className={LIST_CLASSES.text}>{orderDate}</span> : <Blank />}
                     </ListCell>
-                    <ListCell className="tabular-nums">
+                    <ListCell className="text-right tabular-nums">
                       {cost ? <span className={LIST_CLASSES.text}>{cost}</span> : <Blank />}
                     </ListCell>
                     <ListCell>
@@ -271,7 +275,7 @@ export function PlatesTableV2<T extends PlateRowV2>({
                           type="button"
                           onClick={() => onOpenDocument(plate)}
                           title={documentTitle(plate)}
-                          className={`${LIST_CLASSES.text} mx-auto flex max-w-full items-center justify-center gap-1.5 text-center hover:underline`}
+                          className={`${LIST_CLASSES.text} flex max-w-full items-center gap-1.5 text-left hover:underline`}
                         >
                           <FileText className="size-3.5 shrink-0 text-muted-foreground" />
                           <span className="min-w-0 truncate">{plate.document_name || "View"}</span>

@@ -2,6 +2,9 @@
  * The v2 settings kit (`components/settings-v2/settings-kit.tsx`): no breadcrumb,
  * a bold page title over semibold section titles with no line under them,
  * left-aligned rows, and ONE sticky save bar per page that the sections defer to.
+ *
+ * And, since Sep 23 2026, panels that draw NO BOX: see "flush with the section
+ * heading" below, which pins the alignment the operator's screenshot was about.
  */
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -13,6 +16,7 @@ vi.mock("@/hooks/use-manager-permissions", () => ({
 
 import {
   SETTINGS_PAGE_TITLE,
+  SETTINGS_PANEL_FLUSH,
   SETTINGS_SECTION_TITLE,
   SettingsPageHeader,
   SettingsPageHeaderSkeleton,
@@ -167,14 +171,18 @@ describe("sections inside a page save bar", () => {
     retry: vi.fn(),
   });
 
-  it("outside one, a panel keeps its own Save footer on a divider line", () => {
+  it("outside one, a panel keeps its own Save footer — below the rows, on no line", () => {
     const { container } = render(
       <SettingsPanel footer={<SectionSaveBar save={businessSave("dirty")} isDirty onSave={vi.fn()} />}>
         <SettingsRow label="Minimum driver age" />
       </SettingsPanel>,
     );
     expect(screen.getByRole("button", { name: "Save" })).toBeTruthy();
-    expect(classes(container.querySelector("section")!.lastElementChild)).toContain("border-t");
+    const footer = container.querySelector("section")!.lastElementChild!;
+    // The line went with the panel border (see "flush with the heading"): the
+    // last row's own bottom padding plus this is what sets Save apart.
+    expect(classes(footer)).not.toContain("border-t");
+    expect(classes(footer)).toEqual(expect.arrayContaining(["justify-end", "pt-2"]));
   });
 
   it("inside one, a dirty section shows no Save, and its footer collapses with no line", () => {
@@ -214,6 +222,73 @@ describe("sections inside a page save bar", () => {
       "Couldn't save. We couldn't reach the server. Your changes are still here.",
     ]);
     expect(screen.queryAllByRole("button")).toHaveLength(0);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* The alignment invariant                                                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Every horizontal padding class on `el` and on its ancestors up to (but not
+ * including) `stop`. `p-0` and the vertical ones (`py-*`, `pt-*`, `pb-*`) do
+ * not count, and a responsive prefix does: `md:pl-5` indents just as much.
+ *
+ * ONE of these anywhere between a section and a row's label is the bug the
+ * flush panel fixed — the card's `px-5` put "Currency" ~20px right of the
+ * heading "Regional" above it (operator screenshot, Sep 23 2026).
+ */
+const INSET = /^(?:[a-z]+:)?(?:p|px|pl|pr)-(?:[1-9]|\[)/;
+const insetsUpTo = (el: Element, stop: Element) => {
+  const found: string[] = [];
+  for (let node: Element | null = el; node && node !== stop; node = node.parentElement) {
+    found.push(...classes(node).filter((c) => INSET.test(c)));
+  }
+  return found;
+};
+
+describe("flush with the section heading", () => {
+  it("a panel draws no box at all: no border, no card fill, no padding, no row dividers", () => {
+    const { container } = render(
+      <SettingsPanel title="Regional" description="Currency and distances on your booking site.">
+        <SettingsRow label="Currency">
+          <span>US dollar</span>
+        </SettingsRow>
+        <SettingsRow label="Distance unit">
+          <span>Miles</span>
+        </SettingsRow>
+      </SettingsPanel>,
+    );
+    const panel = container.querySelector("section")!;
+    expect(classes(panel)).toEqual(expect.arrayContaining(SETTINGS_PANEL_FLUSH.split(" ")));
+    for (const chrome of ["rounded-xl", "bg-card", "shadow", "divide-y", "px-5"]) {
+      expect(panel.getAttribute("class")).not.toContain(chrome);
+    }
+    // The title block is flush too, so the panel title sits over its own rows.
+    expect(insetsUpTo(panel.querySelector("h2")!, panel)).toEqual([]);
+    const rows = panel.querySelector("[data-settings-rows]")!;
+    expect(classes(rows)).not.toContain("divide-y");
+    expect(rows.children).toHaveLength(2);
+    // Spacing, not lines: a row's own 16px a side is all that separates it.
+    for (const row of Array.from(rows.children)) expect(classes(row)).toContain("py-4");
+  });
+
+  it("a row's label and its control share the section heading's left and right edges", () => {
+    const { container } = render(
+      <SettingsSection anchor="regional" title="Regional" description="Currency and distances." action={<button type="button">View only</button>}>
+        <SettingsPanel>
+          <SettingsRow label="Currency" align="end">
+            <span>US dollar</span>
+          </SettingsRow>
+        </SettingsPanel>
+      </SettingsSection>,
+    );
+    const section = container.querySelector("section")!;
+    const heading = screen.getByRole("heading", { name: "Regional" });
+    const action = screen.getByRole("button", { name: "View only" });
+    const label = screen.getByText("Currency");
+    const control = screen.getByText("US dollar");
+    for (const el of [heading, action, label, control]) expect(insetsUpTo(el, section)).toEqual([]);
   });
 });
 

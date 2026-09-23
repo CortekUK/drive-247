@@ -69,10 +69,14 @@ describe('customers (v2): five columns, no actions menu', () => {
     expect(v2Table).toContain('<ListTable rows={customerRows} fillViewport>');
   });
 
-  it('centres the name cell, which lays its button and the contact icon out with flex', () => {
-    expect(v2Table).toContain('flex min-w-0 items-center justify-center gap-1.5');
-    expect(v2Table).toContain('truncate text-center hover:underline');
-    expect(v2Table).not.toContain('text-left');
+  it('starts the name cell at the left, button and contact icon together', () => {
+    // The flex row needs no `justify-start` (a flex row starts there anyway),
+    // but the <button> does need `text-left`: a button centres its own text
+    // whatever the cell around it says.
+    expect(v2Table).toContain('flex min-w-0 items-center gap-1.5');
+    expect(v2Table).toContain('truncate text-left hover:underline');
+    expect(v2Table).not.toContain('justify-center');
+    expect(v2Table).not.toContain('text-center');
   });
 
   it('leaves the v1 table as it was: contact, balance, sortable headings and the actions menu', () => {
@@ -206,11 +210,14 @@ describe('payments (v2): newest added first', () => {
     expect(code).toContain('sortOrder: listSortOrder,');
   });
 
-  it('centres the link buttons and the amount stack', () => {
+  it('starts the link buttons at the left and follows the amount stack right', () => {
     const code = codeOnly(source);
-    expect(code.match(/mx-auto block max-w-full truncate text-center hover:underline/g)).toHaveLength(3);
-    expect(code).not.toContain('block max-w-full truncate text-left');
-    expect(code).toContain('<div className="flex flex-col items-center gap-0.5">');
+    expect(code.match(/block max-w-full truncate text-left hover:underline/g)).toHaveLength(3);
+    expect(code).not.toContain('mx-auto block max-w-full truncate');
+    // Amount is money, so its cell reads right and the rate line under it
+    // follows: `items-end`, because a flex column ignores text-align.
+    expect(code).toContain('<ListHead className="w-[13.2%] px-2 text-right">Amount</ListHead>');
+    expect(code).toContain('<div className="flex flex-col items-end gap-0.5">');
   });
 });
 
@@ -293,16 +300,24 @@ describe('agreements (v2): newest added first across all three sources', () => {
   });
 });
 
-describe('fines (v2): centred cells', () => {
+describe('fines (v2): left-aligned cells, money apart', () => {
   const code = codeOnly(readPortalSource(FINES));
 
-  it('centres the due-date stack and keeps the date truncating', () => {
-    expect(code).toContain('<div className="flex flex-col items-center gap-0.5">');
+  it('starts the due-date stack at the left and keeps the date truncating', () => {
+    expect(code).toContain('<div className="flex flex-col items-start gap-0.5">');
     expect(code).toContain("'block max-w-full truncate',");
   });
 
-  it('centres both selection checkboxes', () => {
-    expect(code.match(/<CheckboxV2\s+className="mx-auto"/g)).toHaveLength(2);
+  it('leaves both selection checkboxes on the left edge', () => {
+    // A checkbox is a block-level flex box, so what puts it on the left is the
+    // absence of a centring margin, not the cell's text-align.
+    expect(code).not.toContain('<CheckboxV2\n                  className="mx-auto"');
+    expect(code).not.toMatch(/<CheckboxV2\s+className="mx-auto"/);
+  });
+
+  it('right-aligns the Amount column, heading and cell', () => {
+    expect(code).toContain('<ListHead className="w-[11%] text-right">Amount</ListHead>');
+    expect(code).toContain('<ListCell className="text-right tabular-nums">');
   });
 });
 

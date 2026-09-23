@@ -546,8 +546,12 @@ function V2PageDescription() {
     <>
       Your portal name, brand colour and logos. Your customers&apos; booking site keeps its own
       colours in{' '}
+      {/* Label is just "Website". The arrow-path form ("Website → Site
+          settings") wrapped onto a second line at this column width and read as
+          breadcrumbs rather than a link. The href still lands on Site settings,
+          which is where those colours actually are. */}
       <Link href="/cms/site-settings" className="font-medium text-primary underline-offset-4 hover:underline dark:text-[hsl(var(--v2-link,var(--primary)))]">
-        Website → Site settings
+        Website
       </Link>
       .
     </>
@@ -790,7 +794,9 @@ function AppearanceFormV2({
                     Sep 2026). `PortalNamePreview` owns the grid, because the
                     cut-off note that sits under the field is measured off the
                     sidebar picture. */}
-                <div className="px-5 py-4">
+                {/* `py-4` only — the panel it sits in draws no box and no
+                    gutter, so the field starts under "Portal name". */}
+                <div className="py-4">
                   <PortalNamePreview
                     name={portalName}
                     iconUrl={form.favicon_url}
@@ -822,7 +828,7 @@ function AppearanceFormV2({
               description="Pick a colour and your portal updates around you straight away. Nothing is saved until you press Save changes."
             >
               <SettingsPanel>
-                <div className="space-y-3 px-5 py-4">
+                <div className="space-y-3 py-4">
                   <BrandSwatches value={form.light_primary_color} onChange={applyBrandColor} disabled={readOnly} />
                   <BrandColorField value={form.light_primary_color} onChange={applyBrandColor} disabled={readOnly} />
                   {hexInvalid && (
@@ -939,7 +945,10 @@ function AppearanceSkeletonV2() {
       <div aria-hidden="true" className={V2_SECTIONS_CLASS}>
         <div className="space-y-3">
           {sectionHeading('w-28', 'w-96')}
-          <div className="space-y-3 rounded-xl border bg-card px-5 py-4">
+          {/* The loaded sections are flush panels now (settings-kit.tsx), so
+              the placeholder draws no card either — a box that vanishes and
+              slides every field 20px left is worse than no box. */}
+          <div className="space-y-3 py-4">
             <Skeleton className="h-9 w-full max-w-md rounded-3xl" />
             {/* The sidebar row and the browser tab: the 44px row, 6px padding
                 a side and a 1px border a side make 58px tall; the 256px
@@ -952,7 +961,7 @@ function AppearanceSkeletonV2() {
         </div>
         <div className="space-y-3">
           {sectionHeading('w-28', 'w-[36rem]')}
-          <div className="rounded-xl border bg-card px-5 py-4">
+          <div className="py-4">
             <div className="flex flex-wrap items-start gap-x-2 gap-y-1">
               {/* The five colours and Custom. */}
               {[...V2_BRAND_PRESETS.map((preset) => preset.id), 'custom'].map((id) => (

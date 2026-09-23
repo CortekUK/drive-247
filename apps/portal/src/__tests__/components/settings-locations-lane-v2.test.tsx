@@ -440,8 +440,13 @@ describe("v2 Locations page", () => {
     expect(sections.map((s) => s.querySelector("h2")?.textContent)).toEqual(["Pickup and delivery", "Return"]);
     sections.forEach((section) => {
       const heading = section.querySelector("h2")!;
-      // Not inside a bordered panel.
-      expect(heading.closest("section.rounded-xl")).toBeNull();
+      // Not inside a panel — and the panel under it draws no box either, so
+      // the heading, its divider and every option row share one left edge.
+      expect(heading.closest("[data-settings-rows]")).toBeNull();
+      const panel = section.querySelector("[data-settings-rows]")!.parentElement!;
+      for (const chrome of ["rounded-xl", "bg-card", "px-5", "divide-y"]) {
+        expect(panel.className).not.toContain(chrome);
+      }
       expect(heading.parentElement!.className.split(/\s+/)).toContain("border-b");
     });
     // The heading pair is set like the kit's `SettingsSection` (settings-kit),

@@ -118,7 +118,7 @@ export function BlogPostsTableV2({
             return (
               <ListRow key={post.id} onOpen={() => onOpen(post)}>
                 <ListCell>
-                  <div className="flex min-w-0 items-center justify-center gap-1.5">
+                  <div className="flex min-w-0 items-center gap-1.5">
                     {/* A real button, so the post stays reachable by keyboard. */}
                     <button
                       type="button"
@@ -127,7 +127,7 @@ export function BlogPostsTableV2({
                         onOpen(post);
                       }}
                       title={titleTooltip}
-                      className={`${LIST_CLASSES.identifier} truncate text-center hover:underline`}
+                      className={`${LIST_CLASSES.identifier} truncate text-left hover:underline`}
                     >
                       {post.title}
                     </button>

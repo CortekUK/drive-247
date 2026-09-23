@@ -362,7 +362,10 @@ describe("Holiday pricing, with holidays", () => {
     // 420px label column with the whole right half of the panel empty.
     render(<PricingRulesV2 canEdit />);
     const percent = document.querySelector("#v2-weekend-percent")!;
-    const row = percent.closest("div.px-5")!;
+    // `py-4` is all a SettingsRow carries now: the panel it sits in draws no
+    // box and insets nothing, so there is no `px-5` to find it by.
+    const row = percent.closest("div.py-4")!;
+    expect(row.className).not.toContain("px-5");
     // The end layout: label takes the free space, the control column is auto.
     expect(row.querySelector("div")!.className).toContain("md:grid-cols-[minmax(0,1fr)_auto]");
     const controls = percent.closest("div.md\\:justify-end");
@@ -373,9 +376,11 @@ describe("Holiday pricing, with holidays", () => {
     expect(stack.closest("div.md\\:justify-end")).not.toBeNull();
   });
 
-  it("the name column reads from the left, while dates and numbers stay centred", () => {
+  it("reads from the left, name column and every other, with nothing centred", () => {
     // A centred name column left a wide empty gap down the left of the table,
-    // because Holiday takes whatever width the other four columns leave.
+    // because Holiday takes whatever width the other four columns leave. The
+    // Sep 23 2026 review made left the rule for the whole table, so the name
+    // column no longer needs an override of its own.
     h.holidays.holidays = [holiday(1), holiday(2)];
     render(<PricingRulesV2 canEdit />);
     const section = holidaySection();
@@ -383,11 +388,12 @@ describe("Holiday pricing, with holidays", () => {
     const nameHead = heads.find((th) => th.textContent?.trim() === "Holiday")!;
     const datesHead = heads.find((th) => th.textContent?.trim() === "Dates")!;
     expect(nameHead.className).toContain("text-left");
-    expect(datesHead.className).not.toContain("text-left");
+    expect(datesHead.className).toContain("text-left");
+    expect(datesHead.className).not.toContain("text-center");
 
     const firstCell = section.querySelector("tbody tr td")!;
     expect(firstCell.className).toContain("text-left");
-    expect(firstCell.querySelector("div")!.className).toContain("justify-start");
+    expect(firstCell.querySelector("div")!.className).not.toContain("justify-center");
   });
 
   it("says nothing under the table when every holiday is on screen, and counts while more are coming", () => {
