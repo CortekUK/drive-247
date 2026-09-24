@@ -1041,7 +1041,23 @@ function PageSaveHarness({ children }: { children: (register: RegisterSectionSav
   );
 }
 
-describe("LocationSettings", () => {
+/*
+ * An explicit timeout, because vitest's 5s default is not a property of this
+ * suite — it is a property of how busy the machine is.
+ *
+ * Both describes render whole settings surfaces (a searchable location list, a
+ * reminder-rules editor with its stored/edited state), which is comfortably
+ * under 5s alone and over it whenever two or three other suites are running in
+ * parallel — routine here, with several sessions on one checkout. Twice now a
+ * full run has reported one of these as failed and a solo run has passed it
+ * 139/139, and each time someone went looking for a regression that did not
+ * exist. A test that cries wolf on every busy run makes a real failure mean
+ * less, so the bound is stated rather than inherited. Same figure and same
+ * reason as PAGE_TEST in users-team-lane-v2-page-wiring.test.tsx.
+ */
+const UNDER_LOAD = { timeout: 20_000 };
+
+describe("LocationSettings", UNDER_LOAD, () => {
   const hook = (over: Record<string, unknown> = {}) => ({
     locationSettings: settingsRow(),
     isLoadingSettings: false,

@@ -154,13 +154,27 @@ beforeEach(() => {
 const bodyRows = () => screen.getAllByRole("row").slice(1);
 const rowNames = () => bodyRows().map((r) => within(r).getAllByRole("cell")[0].textContent);
 
-const openMenu = (name: string) => {
-  const trigger = screen.getByRole("button", { name: `Actions for ${name}` });
-  act(() => {
-    trigger.focus();
-    fireEvent.keyDown(trigger, { key: "Enter" });
-  });
-  return screen.getByRole("menu");
+/**
+ * The row's actions are icon buttons IN the row (2026-09-24), not items behind
+ * a ⋯ trigger, so there is nothing to open. Found by the sentence each button
+ * carries in `aria-label`, which is also its tooltip — `RowIconAction` in
+ * agreements-table-v2.tsx.
+ */
+const ACTION_LABEL = {
+  View: (who: string) => `View the agreement for ${who}`,
+  Download: (who: string) => `Download the signed PDF for ${who}`,
+  Resend: (who: string) => `Resend the agreement to ${who}`,
+} as const;
+
+const rowAction = (name: string, action: keyof typeof ACTION_LABEL) =>
+  screen.getByRole("button", { name: ACTION_LABEL[action](name) });
+
+/** Every action offered on that row, in render order. */
+const rowActionLabels = (name: string) => {
+  const row = screen.getByText(name).closest("tr")!;
+  return within(row)
+    .getAllByRole("button")
+    .map((b) => b.getAttribute("aria-label"));
 };
 
 const flush = () => act(async () => {});
@@ -189,8 +203,7 @@ describe("the header", () => {
     render(<AgreementsPageV2 />);
     await flush();
     expect(screen.queryByRole("button", { name: "Send agreement" })).toBeNull();
-    const menu = openMenu("Ann Lee");
-    expect(within(menu).getAllByRole("menuitem").map((i) => i.textContent?.trim())).toEqual(["View"]);
+    expect(rowActionLabels("Ann Lee")).toEqual([ACTION_LABEL.View("Ann Lee")]);
     expect(state.viewDialog.onResend).toBeUndefined();
   });
 });
@@ -323,7 +336,7 @@ describe("Resend", () => {
   it("asks first, then re-posts /api/esign with exactly the rental Agreement stage's payload", async () => {
     render(<AgreementsPageV2 />);
     await flush();
-    fireEvent.click(within(openMenu("Ann Lee")).getByRole("menuitem", { name: "Resend" }));
+    fireEvent.click(rowAction("Ann Lee", "Resend"));
     const dialog = await screen.findByRole("alertdialog");
     expect(dialog.textContent).toMatch(/earlier copy still waiting for a signature is cancelled/);
     // A send costs several e-sign credits (7 by default), never "one".
@@ -356,7 +369,7 @@ describe("Resend", () => {
   it("cancelling sends nothing", async () => {
     render(<AgreementsPageV2 />);
     await flush();
-    fireEvent.click(within(openMenu("Ann Lee")).getByRole("menuitem", { name: "Resend" }));
+    fireEvent.click(rowAction("Ann Lee", "Resend"));
     fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Cancel" }));
     await flush();
     expect(fetchMock).not.toHaveBeenCalled();
@@ -367,7 +380,7 @@ describe("Resend", () => {
     state.agreementType = "extension";
     render(<AgreementsPageV2 />);
     await flush();
-    fireEvent.click(within(openMenu("Ann Lee")).getByRole("menuitem", { name: "Resend" }));
+    fireEvent.click(rowAction("Ann Lee", "Resend"));
     await confirm();
     expect(fetchMock).not.toHaveBeenCalled();
     expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Resend it from the rental" }));
@@ -377,7 +390,7 @@ describe("Resend", () => {
     state.agreementType = null;
     render(<AgreementsPageV2 />);
     await flush();
-    fireEvent.click(within(openMenu("Ann Lee")).getByRole("menuitem", { name: "Resend" }));
+    fireEvent.click(rowAction("Ann Lee", "Resend"));
     await confirm();
     expect(fetchMock).not.toHaveBeenCalled();
     expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Not sent", variant: "destructive" }));
@@ -387,7 +400,7 @@ describe("Resend", () => {
     fetchMock.mockResolvedValueOnce({ ok: false, json: async () => ({ ok: false, error: "insufficient_credits" }) });
     render(<AgreementsPageV2 />);
     await flush();
-    fireEvent.click(within(openMenu("Ann Lee")).getByRole("menuitem", { name: "Resend" }));
+    fireEvent.click(rowAction("Ann Lee", "Resend"));
     await confirm();
     expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "No e-sign credits left", variant: "destructive" }));
   });
@@ -395,7 +408,7 @@ describe("Resend", () => {
   it("an individual agreement is re-sent as a new row through the agreements service, never /api/esign", async () => {
     render(<AgreementsPageV2 />);
     await flush();
-    fireEvent.click(within(openMenu("Bob Stone")).getByRole("menuitem", { name: "Resend" }));
+    fireEvent.click(rowAction("Bob Stone", "Resend"));
     const dialog = await screen.findByRole("alertdialog");
     expect(dialog.textContent).toMatch(/as a new row in this list/);
     await confirm();
@@ -410,7 +423,7 @@ describe("Resend", () => {
     api.resendAgreementV2.mockResolvedValueOnce({ id: "bob-2", status: "credit_failed" });
     render(<AgreementsPageV2 />);
     await flush();
-    fireEvent.click(within(openMenu("Bob Stone")).getByRole("menuitem", { name: "Resend" }));
+    fireEvent.click(rowAction("Bob Stone", "Resend"));
     await confirm();
     expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Not sent", variant: "destructive" }));
   });
@@ -420,7 +433,7 @@ describe("View", () => {
   it("opens the view dialog on that row, with Resend handed over for a sender", async () => {
     render(<AgreementsPageV2 />);
     await flush();
-    fireEvent.click(within(openMenu("Bob Stone")).getByRole("menuitem", { name: "View" }));
+    fireEvent.click(rowAction("Bob Stone", "View"));
     expect(screen.getByTestId("view-dialog").textContent).toBe("bob");
     expect(typeof state.viewDialog.onResend).toBe("function");
     // Resend from the dialog closes it and asks for confirmation.

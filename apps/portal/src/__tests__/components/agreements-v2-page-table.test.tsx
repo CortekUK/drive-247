@@ -69,14 +69,28 @@ const renderTable = (rows: AgreementRowV2[], over: Partial<React.ComponentProps<
     />,
   );
 
-/** Radix opens its menu from the keyboard as well as the pointer; jsdom has no PointerEvent. */
-const openMenu = (name: string) => {
-  const trigger = screen.getByRole("button", { name: `Actions for ${name}` });
-  act(() => {
-    trigger.focus();
-    fireEvent.keyDown(trigger, { key: "Enter" });
-  });
-  return screen.getByRole("menu");
+/**
+ * The row's actions are icon buttons IN the row now, not items behind a ⋯
+ * trigger (2026-09-24: "can we bring these icons out of the dropdown since we
+ * have space"), so there is no menu to open. Each button is found by the
+ * sentence it carries in `aria-label`, which is also its tooltip — see
+ * `RowIconAction` in agreements-table-v2.tsx.
+ */
+const ACTION_LABEL = {
+  View: (who: string) => `View the agreement for ${who}`,
+  Download: (who: string) => `Download the signed PDF for ${who}`,
+  Resend: (who: string) => `Resend the agreement to ${who}`,
+} as const;
+
+const rowAction = (name: string, action: keyof typeof ACTION_LABEL) =>
+  screen.getByRole("button", { name: ACTION_LABEL[action](name) });
+
+/** Every action offered on that row, in the order they are rendered. */
+const rowActions = (name: string) => {
+  const row = screen.getByText(name).closest("tr")!;
+  return within(row)
+    .getAllByRole("button")
+    .map((b) => b.getAttribute("aria-label"));
 };
 
 describe("columns", () => {
@@ -156,32 +170,35 @@ describe("actions per status", () => {
     expect(agreementRowActionsV2({ ...FAILED, customerName: "" }, true).resend).toBe(false);
   });
 
-  it("the signed row's menu offers View and Download, and nothing else", () => {
+  it("the signed row shows View and Download, and nothing else", () => {
     const onDownload = vi.fn();
     renderTable([SIGNED], { onDownload });
-    const menu = openMenu("Ann Lee");
-    expect(within(menu).getAllByRole("menuitem").map((i) => i.textContent?.trim())).toEqual(["View", "Download signed PDF"]);
-    fireEvent.click(within(menu).getByRole("menuitem", { name: "Download signed PDF" }));
+    expect(rowActions("Ann Lee")).toEqual([
+      ACTION_LABEL.View("Ann Lee"),
+      ACTION_LABEL.Download("Ann Lee"),
+    ]);
+    fireEvent.click(rowAction("Ann Lee", "Download"));
     expect(onDownload).toHaveBeenCalledWith(SIGNED);
   });
 
-  it("the failed row's menu offers View and Resend, and hands the row over", () => {
+  it("the failed row shows View and Resend, and hands the row over", () => {
     const onResend = vi.fn();
     const onView = vi.fn();
     renderTable([FAILED], { onResend, onView });
-    let menu = openMenu("Cat Diaz");
-    expect(within(menu).getAllByRole("menuitem").map((i) => i.textContent?.trim())).toEqual(["View", "Resend"]);
-    fireEvent.click(within(menu).getByRole("menuitem", { name: "Resend" }));
+    expect(rowActions("Cat Diaz")).toEqual([
+      ACTION_LABEL.View("Cat Diaz"),
+      ACTION_LABEL.Resend("Cat Diaz"),
+    ]);
+    fireEvent.click(rowAction("Cat Diaz", "Resend"));
     expect(onResend).toHaveBeenCalledWith(FAILED);
-    menu = openMenu("Cat Diaz");
-    fireEvent.click(within(menu).getByRole("menuitem", { name: "View" }));
+    // No menu to reopen: the second action is already on screen.
+    fireEvent.click(rowAction("Cat Diaz", "View"));
     expect(onView).toHaveBeenCalledWith(FAILED);
   });
 
-  it("a view-only viewer's menu is View alone", () => {
+  it("a view-only viewer gets View alone", () => {
     renderTable([PENDING], { canResend: false });
-    const menu = openMenu("Bob Stone");
-    expect(within(menu).getAllByRole("menuitem").map((i) => i.textContent?.trim())).toEqual(["View"]);
+    expect(rowActions("Bob Stone")).toEqual([ACTION_LABEL.View("Bob Stone")]);
   });
 
   it("never prints 'No document'", () => {
@@ -189,9 +206,14 @@ describe("actions per status", () => {
     expect(screen.queryByText(/No document/)).toBeNull();
   });
 
-  it("the trigger spins while that row's action is in flight", () => {
+  it("the action that is running spins, and the others do not", () => {
     renderTable([PENDING], { resendingId: "p" });
-    expect(screen.getByRole("button", { name: "Actions for Bob Stone" })).toHaveAttribute("aria-busy", "true");
+    // The spinner is on Resend itself now, not on a shared ⋯ trigger, so two
+    // rows resending at once are told apart.
+    const resend = rowAction("Bob Stone", "Resend");
+    expect(resend).toHaveAttribute("aria-busy", "true");
+    expect(resend).toBeDisabled();
+    expect(rowAction("Bob Stone", "View")).not.toHaveAttribute("aria-busy");
   });
 });
 
@@ -212,11 +234,18 @@ describe("v2 style tripwires on the Agreements v2 files", () => {
     expect(src).not.toMatch(/border-border\//);
   });
 
-  it("every row menu is the ui-v2 menu, end-aligned and sized to its labels", () => {
+  it("every row menu that remains is the ui-v2 menu, end-aligned and sized to its labels", () => {
     const src = readPortalSource("components/agreements-v2/agreements-table-v2.tsx");
     expect(src).toContain('} from "@/components/ui-v2/dropdown-menu";');
     const contents = src.match(/<DropdownMenuContent[^>]*>/g) ?? [];
-    expect(contents.length).toBeGreaterThanOrEqual(3);
+    /*
+     * The COUNT is no longer the assertion. It was `>= 3` as a proxy for "all
+     * of them", and the sent-agreements table lost its row menu on 2026-09-24
+     * — its actions are icon buttons in the row now, which the behaviour tests
+     * above cover. What has to hold is the shape of the menus that are left, so
+     * a new one cannot arrive centred or sized to a fixed width.
+     */
+    expect(contents.length).toBeGreaterThan(0);
     for (const tag of contents) expect(tag).toBe('<DropdownMenuContent align="end" className="w-auto">');
   });
 

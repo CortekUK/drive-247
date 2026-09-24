@@ -5,7 +5,10 @@
  *    these." -> h1 "Team" with no icon, one line under it, one labelled pill.
  *  - "'Search by name and email', we don't need it." -> no search on v2.
  *  - "Don't show it like a card. Not the table-inside-a-card format. Simple,
- *    just show a simple list." -> the list sits on the page with no card.
+ *    just show a simple list." -> REVERSED 2026-09-24. Card-less, the table
+ *    stopped reading as a table once the page had a wash behind it ("still the
+ *    table is not visible"), so it uses the kit's ListTable card like every
+ *    other v2 list. The other two points above still stand.
  *
  * Every other tenant keeps the v1 page: the second half of each page test
  * renders the same page with the v2 flag off and checks v1's own markers
@@ -141,12 +144,32 @@ function renderPage(v2: boolean) {
 /* ------------------------------------------------------------ the list -- */
 
 describe('UsersTableV2: a simple list, straight on the page', () => {
-  it('has no card around it and no second surface inside one', () => {
+  /*
+   * REVERSED 2026-09-24. This asserted the opposite — no card, no card body —
+   * from the Settings walkthrough ("Don't show it like a card... just show a
+   * simple list"). Card-less, the table stopped reading as a table once the
+   * page around it had a wash: a header rule and a line of text on open ground.
+   * Reported twice, the second time as "still the table is not visible".
+   *
+   * It is the kit's ListTable now, the same surface the rentals, invoices and
+   * agreements lists use, so these assert the card is THERE and is the kit's
+   * one rather than a hand-rolled box.
+   */
+  it('sits in the list kit card, like every other v2 list', () => {
     const { container } = renderList();
-    expect(container.querySelector('[data-slot="card"]')).toBeNull();
-    expect(container.querySelector('[data-slot="card-content"]')).toBeNull();
-    // No inner scroll box either: the list is as tall as the team.
-    expect(container.innerHTML).not.toContain('max-h-[520px]');
+    expect(container.querySelector('[data-slot="card"]')).not.toBeNull();
+    expect(container.querySelector('[data-slot="card-content"]')).not.toBeNull();
+    // One surface, not a card inside a card.
+    expect(container.querySelectorAll('[data-slot="card"]')).toHaveLength(1);
+  });
+
+  it('gets its sticky header from the kit, not a hand-rolled one', () => {
+    const { container } = renderList();
+    const thead = container.querySelector('thead');
+    expect(thead).not.toBeNull();
+    // ListTableHeader's classes: near-opaque card colour, blurred, pinned.
+    expect(thead!.className).toContain('sticky');
+    expect(thead!.className).toContain('bg-card/95');
   });
 
   it('shows four visible headings with no sort control, left but for Actions', () => {
@@ -381,13 +404,14 @@ describe('/users page: v2 header, no search, no card; v1 unchanged', () => {
     expect(description.className.split(/\s+/).sort()).toEqual(refDescription.className.split(/\s+/).sort());
   });
 
-  it('v2: no search box, no card, and the people are listed', async () => {
+  it('v2: no search box, the list kit card, and the people are listed', async () => {
     const { container } = renderPage(true);
     await waitFor(() => expect(container.querySelectorAll('tbody tr')).toHaveLength(3));
+    // No search: that part of the walkthrough stands ("we don't need it").
     expect(container.querySelector('input')).toBeNull();
-    expect(container.querySelector('[data-slot="card"]')).toBeNull();
-    // v1's Card is `rounded-lg border bg-card`; nothing on the v2 page is.
-    expect(container.querySelector('.rounded-lg.border.bg-card')).toBeNull();
+    // The card does NOT stand — see the note above the list tests. The table
+    // now sits in the kit's card like every other v2 list.
+    expect(container.querySelector('[data-slot="card"]')).not.toBeNull();
     expect(screen.getAllByText('Max Manager').length).toBeGreaterThan(0);
   });
 

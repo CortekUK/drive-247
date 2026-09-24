@@ -1848,7 +1848,25 @@
           "path": "apps/portal/src/hooks/use-audit-logs.ts",
           "symbols": [
             "limit(500)",
-            "formatActionName"
+            "AUDIT_LOGS_V2_LIMIT = 1000",
+            "formatActionName",
+            "auditLogSearchText"
+          ]
+        },
+        {
+          "path": "apps/portal/src/components/admin-v2/audit-logs-filter-panel.tsx",
+          "symbols": [
+            "countActiveAuditLogFilters",
+            "Date range",
+            "Clear dates"
+          ]
+        },
+        {
+          "path": "apps/portal/src/components/admin-v2/audit-logs-overview.tsx",
+          "symbols": [
+            "Log entries",
+            "Views & warnings",
+            "Only the most recent"
           ]
         },
         {

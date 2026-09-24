@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { format } from "date-fns";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -48,6 +48,7 @@ import {
   AUDIT_LOGS_V2_LIMIT,
   useAuditLogActions,
   useAdminUsers,
+  filterAuditLogs,
   formatActionName,
   getActionColor,
   AuditLogsFilters,
@@ -56,10 +57,22 @@ import { useV2 } from "@/lib/v2-context";
 import { HEADER_ACTIONS_V2, HEADER_PRIMARY_V2 } from "@/components/shared/header-icon-button-v2";
 import { useTenant } from "@/contexts/TenantContext";
 import { AuditLogsTableV2 } from "@/components/admin-v2/audit-logs-table-v2";
+import { usePageSearch } from "@/components/shared/layout/page-search-slot";
+import { OverviewFlip } from "@/components/shared/layout/overview-flip";
+import {
+  AuditLogsFilterPanel,
+  countActiveAuditLogFilters,
+} from "@/components/admin-v2/audit-logs-filter-panel";
+import { AuditLogsOverview } from "@/components/admin-v2/audit-logs-overview";
 
 const AuditLogs = () => {
   const [filters, setFilters] = useState<AuditLogsFilters>({});
   const [currentPage, setCurrentPage] = useState(1);
+  // v2 only. The top bar owns both: the search field writes `searchTerm` (there
+  // is no box anywhere on v1, so it stays "" there), and its Filters button
+  // turns the overview over to the filter panel.
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const pageSize = 25;
   const { toast } = useToast();
 
@@ -77,6 +90,25 @@ const AuditLogs = () => {
   const logsCapped = v2Chrome && (logs?.length ?? 0) >= AUDIT_LOGS_V2_LIMIT;
   const { data: serverLogCount } = useAuditLogsServerCount(filters, logsCapped);
 
+  /**
+   * v2 only: the rows the table, the graph and Export CSV all work from.
+   *
+   * The five filters are query clauses and stay on the server. The search box
+   * is the one thing that is NOT: it sifts the rows already loaded, and never
+   * touches the query — an audit log has no searchable column that would not
+   * mean a new index, and a search that silently covered only the loaded page
+   * while LOOKING like a server search is the worse lie of the two. The caption
+   * on the graph says what is loaded.
+   *
+   * With no term this returns the fetch result itself (same array, not a copy),
+   * so an unsearched page behaves exactly as it did, and v1 — which registers
+   * no search box at all — can never reach a narrowed set.
+   */
+  const visibleLogs = useMemo(
+    () => (v2Chrome ? filterAuditLogs(logs ?? [], searchTerm) : logs ?? []),
+    [v2Chrome, logs, searchTerm],
+  );
+
   // Pagination
   const totalLogs = logs?.length || 0;
   const totalPages = Math.ceil(totalLogs / pageSize);
@@ -86,6 +118,8 @@ const AuditLogs = () => {
 
   const clearFilters = () => {
     setFilters({});
+    // v2's top-bar search; always "" on v1, where nothing can set it.
+    setSearchTerm("");
     setCurrentPage(1);
   };
 
@@ -94,15 +128,22 @@ const AuditLogs = () => {
     filters.action ||
     filters.actorId ||
     filters.dateFrom ||
-    filters.dateTo;
+    filters.dateTo ||
+    // v2 only, and the reason the empty state below still offers a way out when
+    // a search — rather than a filter — is what emptied the table.
+    searchTerm.trim();
 
   const handleExportCSV = () => {
-    if (!logs || logs.length === 0) {
+    // The rows the table is showing. Identical to the fetch result whenever
+    // nothing is searched, which is every v1 page and every unsearched v2 one;
+    // with a search it exports what you are looking at, as the customers list
+    // does, rather than rows that are not on screen.
+    if (visibleLogs.length === 0) {
       toast({ title: "No data to export", variant: "destructive" });
       return;
     }
     const headers = ["Date & Time", "Action", "Entity Type", "Entity Name", "Details", "Performed By"];
-    const rows = logs.map((log) => [
+    const rows = visibleLogs.map((log) => [
       format(new Date(log.created_at), "yyyy-MM-dd HH:mm:ss"),
       formatActionName(log.action),
       log.entity_type || "",
@@ -130,6 +171,33 @@ const AuditLogs = () => {
     toast({ title: "CSV exported successfully" });
   };
 
+  /**
+   * v2 only: hand the top bar this page's search and its filter button, the
+   * way every other v2 list does. `null` on v1, which leaves the bar (and the
+   * inline filter bar below) exactly as they were.
+   *
+   * No debounce here — this page has never debounced anything, and the
+   * filtering is a pass over rows already in memory, so the bar's own 400ms is
+   * the only delay and `onChange` is the raw setter.
+   *
+   * It sits down here, after every piece of state it reads and before the
+   * `isLoading` early return, so the hook runs on every render.
+   */
+  usePageSearch(
+    v2Chrome
+      ? {
+          placeholder: "Search log entries…",
+          value: searchTerm,
+          onChange: setSearchTerm,
+          filters: {
+            open: filtersOpen,
+            onOpenChange: setFiltersOpen,
+            activeCount: countActiveAuditLogFilters(filters),
+          },
+        }
+      : null,
+  );
+
   if (isLoading) {
     return (
       <div className="container mx-auto p-6 space-y-6">
@@ -139,7 +207,17 @@ const AuditLogs = () => {
             <Skeleton className="h-4 w-64" />
           </div>
         </div>
+        {/* v2 has no inline filter bar: hold the hero row's shape instead (the
+            graph across the whole row, since this tab has no featured card), so
+            the table does not jump when the rows land. 260px is the loaded
+            graph's height. v1 keeps its one-line bar placeholder. */}
+        {v2Chrome ? (
+          <div className="grid grid-cols-1 gap-6 py-2">
+            <Skeleton className="h-[260px]" />
+          </div>
+        ) : (
         <Skeleton className="h-10 w-full" />
+        )}
         <Card>
           <CardContent className="p-0">
             <div className="space-y-4 p-4">
@@ -183,7 +261,37 @@ const AuditLogs = () => {
         )}
       </div>
 
+      {/* v2: the overview turns over to show the filter panel. Its front face
+          is the hero row — one graph over the same rows the table shows, full
+          width because this tab has no featured card (see the overview's own
+          header). The five filters that used to sit in a row under the title
+          now live on the back face, and the search field is in the top bar. */}
+      {v2Chrome && (
+        <OverviewFlip
+          flipped={filtersOpen}
+          onFlipBack={() => setFiltersOpen(false)}
+          front={
+            <AuditLogsOverview
+              logs={visibleLogs}
+              filtered={!!hasActiveFilters}
+              capped={logsCapped}
+            />
+          }
+          back={
+            <AuditLogsFilterPanel
+              filters={filters}
+              actions={actions ?? []}
+              users={adminUsers ?? []}
+              onChange={setFilters}
+              onClear={clearFilters}
+              onClose={() => setFiltersOpen(false)}
+            />
+          }
+        />
+      )}
+
       {/* Filter Bar */}
+      {!v2Chrome && (
       <div className="flex flex-wrap items-center gap-3">
         <Select
           value={filters.entityType || "all"}
@@ -336,16 +444,25 @@ const AuditLogs = () => {
           </Button>
         )}
       </div>
+      )}
 
-      {/* Audit Logs Table */}
-      {logs && logs.length > 0 ? (
+      {/* Audit Logs Table. `visibleLogs` is the fetch result itself on v1 and on
+          an unsearched v2 page, so this reads exactly as `logs?.length` did. */}
+      {visibleLogs.length > 0 ? (
         v2Chrome ? (
           // v2: the rentals list's table (components/shared/list-table-v2).
           // Every fetched row, no page slice and no pager: rows arrive as it
           // scrolls. Rows open nothing, as in v1.
           <AuditLogsTableV2
-            logs={logs}
-            resetKey={`${tenant?.id ?? ""}|${filters.entityType ?? ""}|${filters.action ?? ""}|${filters.actorId ?? ""}|${filters.dateFrom ?? ""}|${filters.dateTo ?? ""}`}
+            logs={visibleLogs}
+            // The search term is in the key too: it changes the result set, so
+            // the table's 25-row fill starts again rather than holding a window
+            // measured against the rows a previous term left.
+            resetKey={`${tenant?.id ?? ""}|${filters.entityType ?? ""}|${filters.action ?? ""}|${filters.actorId ?? ""}|${filters.dateFrom ?? ""}|${filters.dateTo ?? ""}|${searchTerm.trim().toLowerCase()}`}
+            // Left exactly as it was. A search narrows the rows below the cap,
+            // so the table's own `capped` check turns false and the count is
+            // ignored — it is only ever used when the rows on screen really are
+            // the first 1,000 the server would have returned.
             serverCount={logsCapped ? serverLogCount : undefined}
           />
         ) : (

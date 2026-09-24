@@ -109,6 +109,47 @@ export function agreementRowActionsV2(
   };
 }
 
+/**
+ * One action, in the row, as an icon.
+ *
+ * `title` AND `aria-label` carry the same sentence: the tooltip is the only
+ * thing a sighted operator has to tell Resend from Download, since the icons
+ * lost their menu labels, and the label is what assistive tech reads. They say
+ * who the row is about ("Resend the agreement to Haseeb") because a column of
+ * identical icons is otherwise ambiguous once it is read out of context.
+ *
+ * Busy swaps the icon for a spinner and disables the button, which is what the
+ * menu items did — the difference is that the spinner is now on the action that
+ * is actually running rather than on a shared trigger, so two rows resending at
+ * once are distinguishable.
+ */
+function RowIconAction({
+  label,
+  icon: Icon,
+  busy,
+  onClick,
+}: {
+  label: string;
+  icon: typeof Eye;
+  busy: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <Button
+      variant="ghost"
+      size="icon-sm"
+      className={LIST_ROW_ACTION}
+      aria-label={label}
+      title={label}
+      aria-busy={busy || undefined}
+      disabled={busy}
+      onClick={onClick}
+    >
+      {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Icon className="h-4 w-4" />}
+    </Button>
+  );
+}
+
 export function AgreementsListTableV2({
   rows,
   resetKey,
@@ -150,8 +191,12 @@ export function AgreementsListTableV2({
           <ListHead className="w-[30%]">Customer</ListHead>
           <ListHead className="w-[30%]">Email</ListHead>
           <ListHead className="w-[19%]">Sent</ListHead>
-          <ListHead className="w-[15%]">Status</ListHead>
-          <ListHead className="w-[6%] text-right">
+          <ListHead className="w-[13%]">Status</ListHead>
+          {/* 10%, not 6%: the actions are two icon buttons in the row now, not
+              one ⋯ trigger, and two 32px buttons do not fit 6% of the 760px
+              floor (~46px). Taken from Status, which holds its longest value
+              ("Pending signature") in 13%. */}
+          <ListHead className="w-[10%] text-right">
             <span className="sr-only">Actions</span>
           </ListHead>
         </ListTableHeader>
@@ -161,7 +206,6 @@ export function AgreementsListTableV2({
             const isViewing = viewingId === row.id;
             const isDownloading = downloadingId === row.id;
             const isResending = resendingId === row.id;
-            const menuBusy = isViewing || isDownloading || isResending;
             const who = row.customerName || row.customerEmail || "this agreement";
 
             return (
@@ -196,50 +240,38 @@ export function AgreementsListTableV2({
                     {AGREEMENT_STATUS_LABEL_V2[row.status]}
                   </ListStatusText>
                 </ListCell>
+                {/* The actions are IN the row, not behind a ⋯ menu.
+                    A row never has more than two: View is always there, and
+                    Download and Resend are mutually exclusive by status
+                    (`agreementRowActionsV2` — Download once signed, Resend only
+                    while it is not). So the whole menu was one click standing
+                    between the operator and a choice of at most two, in a
+                    column with room for both. */}
                 <ListCell className="px-1 text-right" onClick={(e) => e.stopPropagation()}>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        className={LIST_ROW_ACTION}
-                        aria-label={`Actions for ${who}`}
-                        aria-busy={menuBusy || undefined}
-                      >
-                        {menuBusy ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <MoreHorizontal className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-auto">
-                      <DropdownMenuItem onClick={() => onView(row)} disabled={isViewing}>
-                        {isViewing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
-                        View
-                      </DropdownMenuItem>
-                      {actions.download && (
-                        <DropdownMenuItem onClick={() => onDownload(row)} disabled={isDownloading}>
-                          {isDownloading ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Download className="h-4 w-4" />
-                          )}
-                          Download signed PDF
-                        </DropdownMenuItem>
-                      )}
-                      {actions.resend && (
-                        <DropdownMenuItem onClick={() => onResend(row)} disabled={isResending}>
-                          {isResending ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <RotateCw className="h-4 w-4" />
-                          )}
-                          Resend
-                        </DropdownMenuItem>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  <div className="flex items-center justify-end gap-0.5">
+                    <RowIconAction
+                      label={`View the agreement for ${who}`}
+                      icon={Eye}
+                      busy={isViewing}
+                      onClick={() => onView(row)}
+                    />
+                    {actions.download && (
+                      <RowIconAction
+                        label={`Download the signed PDF for ${who}`}
+                        icon={Download}
+                        busy={isDownloading}
+                        onClick={() => onDownload(row)}
+                      />
+                    )}
+                    {actions.resend && (
+                      <RowIconAction
+                        label={`Resend the agreement to ${who}`}
+                        icon={RotateCw}
+                        busy={isResending}
+                        onClick={() => onResend(row)}
+                      />
+                    )}
+                  </div>
                 </ListCell>
               </ListRow>
             );

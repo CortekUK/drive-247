@@ -3,11 +3,17 @@
 /**
  * v2 (northwind): the Team list on /users.
  *
- * A plain list on the page: no card, no table inside a card, no search and no
- * icons (team lead, Settings walkthrough, Sep 2026: "Don't show it like a
- * card... just show a simple list"). The column heads, cells and status tones
- * are the v2 list kit's (`components/shared/list-table-v2`), so it still reads
- * like every other v2 list. `ListTable` is not used because it IS the card.
+ * The v2 list kit's TABLE, in its card (`components/shared/list-table-v2`), as
+ * every other v2 list renders one.
+ *
+ * It was a plain list on the page for a while — no card, no search, no icons —
+ * from the Settings walkthrough (team lead, Sep 2026: "Don't show it like a
+ * card... just show a simple list"). That is REVERSED as of 2026-09-24: with
+ * only a header rule and a row of text on the page ground, the thing did not
+ * read as a table at all. Reported twice, the second time as "still the table
+ * is not visible", which is exactly what a card-less table looks like once the
+ * page around it has a wash. The cells, heads and tones were already the kit's;
+ * what was missing was the surface that makes them a table.
  *
  * A tenant's staff is a handful of people, so every row renders at once: no
  * progressive fill, no pager, no count line. The order is the page query's
@@ -35,7 +41,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui-v2/dropdown-menu";
 import { Skeleton } from "@/components/ui-v2/skeleton";
-import { Table, TableHeader, TableRow } from "@/components/ui-v2/table";
 import {
   LIST_CLASSES,
   LIST_ROW_ACTION,
@@ -45,6 +50,9 @@ import {
   ListHead,
   ListRow,
   ListStatusText,
+  ListTable,
+  ListTableHeader,
+  useProgressiveRows,
 } from "@/components/shared/list-table-v2";
 import { describeLoadError } from "@/components/settings-v2/section-states";
 import { cn } from "@/lib/utils";
@@ -165,6 +173,20 @@ export function UsersTableV2<T extends AppUser>({
 }) {
   const rows = users ?? [];
 
+  /*
+   * The kit's rows shell. `ListTable` needs it for the scroll root and the
+   * "more coming" sentinel, and it must be created ABOVE the three early
+   * returns below so the hook order never changes between states.
+   *
+   * A tenant's staff is a handful of people, so the progressive fill (25 at a
+   * time) never actually engages — but using the same shell as every other list
+   * is the point: the card, the sticky header and the scrolling body all come
+   * from it, and they cannot drift from the other lists by being hand-rolled
+   * here. The reset key is constant because there is one set per tenant and the
+   * page remounts when the tenant changes.
+   */
+  const rowsShell = useProgressiveRows(rows, "team");
+
   if (rows.length === 0 && error) {
     return (
       <div role="alert" data-team-state="error" className="py-10 text-center">
@@ -244,20 +266,22 @@ export function UsersTableV2<T extends AppUser>({
           crushing Status. Name and email truncate with their full text in a
           tooltip. */}
       <div className="hidden lg:block">
-        <Table className="min-w-[600px] table-fixed">
-          {/* Not the kit's ListTableHeader: that one is sticky on the card's
-              colour, which is a visible band on the dark page ground. */}
-          <TableHeader>
-            <TableRow className={LIST_CLASSES.headerRow}>
-              <ListHead className="w-[44%]">Name</ListHead>
-              <ListHead className="w-[18%]">Role</ListHead>
-              <ListHead className="w-[24%]">Status</ListHead>
-              {/* Trailing and right, as the actions column is on every other v2 list. */}
-              <ListHead className="w-[14%] text-right">Actions</ListHead>
-            </TableRow>
-          </TableHeader>
+        {/* The kit's card and its sticky header, exactly as the rentals,
+            invoices and agreements lists render theirs. The header is
+            `ListTableHeader` again: its near-opaque `bg-card/95` was a visible
+            band while this table sat straight on the page ground, and inside
+            the card — which is what it is drawn for — it is the surface the
+            rows scroll under. */}
+        <ListTable rows={rowsShell} minWidth="min-w-[600px]">
+          <ListTableHeader>
+            <ListHead className="w-[44%]">Name</ListHead>
+            <ListHead className="w-[18%]">Role</ListHead>
+            <ListHead className="w-[24%]">Status</ListHead>
+            {/* Trailing and right, as the actions column is on every other v2 list. */}
+            <ListHead className="w-[14%] text-right">Actions</ListHead>
+          </ListTableHeader>
           <ListBody>
-            {rows.map((user) => (
+            {rowsShell.visible.map((user) => (
               <ListRow key={user.id}>
                 <ListCell>
                   <span className={cn("block truncate", LIST_CLASSES.identifier)} title={displayName(user)}>
@@ -285,7 +309,7 @@ export function UsersTableV2<T extends AppUser>({
               </ListRow>
             ))}
           </ListBody>
-        </Table>
+        </ListTable>
       </div>
     </>
   );

@@ -432,3 +432,54 @@ export function getActionColor(action: string): string {
   }
   return "text-gray-600 bg-gray-50 dark:bg-gray-800";
 }
+
+/**
+ * v2 only: the text one loaded row is searched against.
+ *
+ * Audit Logs has no server-side search and gains none here. The five filters
+ * (entity, action, user, from, to) are query clauses; this narrows the rows the
+ * page already HOLDS, which is why it is a pure function of a row and not a
+ * query builder. Everything it matches is text the row itself carries:
+ *
+ *   - the ACTION, both as the table prints it (`formatActionName`) and as the
+ *     raw key. A support thread quotes `rental_cancelled` while the table shows
+ *     "Cancelled", and typing either should find the row.
+ *   - the ENTITY type, and the customer name printed beside it.
+ *   - WHO performed it: the actor's name and email — or "System", which is the
+ *     word the table prints for a row with no actor, so it is searchable too.
+ *   - the DETAILS as JSON, which is exactly what the row's tooltip shows, so a
+ *     reason, a status change and any id inside them are all reachable. Keys
+ *     match as well as values; that is the price of one predictable rule, and
+ *     the alternative (values only) would put ids and amounts out of reach.
+ *
+ * The DATE is deliberately not matched: From/To are the way to narrow by date,
+ * and unlike this they go to the server rather than sifting one loaded page.
+ */
+export function auditLogSearchText(log: AuditLog): string {
+  const named = [log.actor?.name, log.actor?.email].filter(Boolean).join(" ");
+  return [
+    formatActionName(log.action),
+    log.action,
+    log.entity_type ?? "",
+    log.details?.customer_name ?? "",
+    named || "System",
+    JSON.stringify(log.details ?? null),
+  ]
+    .join(" ")
+    .toLowerCase();
+}
+
+/**
+ * The loaded rows a search term leaves, matched case-insensitively as a
+ * substring of `auditLogSearchText`.
+ *
+ * An empty or blank term returns the SAME array, not a copy: the page's Export
+ * CSV and its row count then read the untouched fetch result, so an unsearched
+ * v2 page (and every v1 page, which has no search box at all) behaves exactly
+ * as it did before the box existed.
+ */
+export function filterAuditLogs(logs: AuditLog[], term: string): AuditLog[] {
+  const needle = term.trim().toLowerCase();
+  if (!needle) return logs;
+  return logs.filter((log) => auditLogSearchText(log).includes(needle));
+}
