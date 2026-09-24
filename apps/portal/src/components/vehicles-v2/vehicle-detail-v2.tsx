@@ -70,8 +70,8 @@ import { FormatProvider, daysBetween, daysUntil, todayISO } from "./kit";
 import { SECTIONS, SECTION_GROUPS, readSection, sectionHref, type SectionId } from "./sections";
 import { OverviewRail, type Attention, type Vital } from "./overview-rail";
 import { ConnectedTimeline } from "@/components/timeline-v2/connected-timeline";
-import { Clock } from "lucide-react";
-import { ContextColumn, RecordDock, RecordDockNav, useWiderThan } from "@/components/ui-v2/record-dock";
+import { ArrowLeft, Clock } from "lucide-react";
+import { ContextColumn, DOCK_CLEARANCE, RecordDock, RecordDockNav, useWiderThan } from "@/components/ui-v2/record-dock";
 import { VehicleTab } from "./tab-vehicle";
 import { RatesTab } from "./tab-rates";
 import { AddonsTab } from "./tab-addons";
@@ -697,7 +697,7 @@ export function VehicleDetailV2({ vehicleId }: { vehicleId: string }) {
       <div className="flex h-[calc(100dvh-1rem)] min-h-[600px]">
         {/* ── panel ─────────────────────────────────────────────────────── */}
         <main
-          className={`relative min-w-0 flex-1 overflow-hidden px-4 py-5 md:px-8 md:py-6${docked ? " pb-[calc(env(safe-area-inset-bottom,0px)+4.5rem)]" : ""}`}
+          className={`relative min-w-0 flex-1 overflow-hidden px-4 py-5 md:px-8 md:py-6${docked ? " " + DOCK_CLEARANCE : ""}`}
         >
           {/* The only trace of the write path on screen, and it earns its place:
               there is no Save button, so an operator who types into a field has
@@ -917,27 +917,30 @@ export function VehicleDetailV2({ vehicleId }: { vehicleId: string }) {
           </ContextColumn>
         ) : null}
 
+        {/* The same dock the rental and customer screens carry, so a record is
+            a record whichever one you opened. */}
         <RecordDock
-          panels={[
-            ...(railFits
-              ? []
-              : [
-                  {
-                    id: "sections",
-                    label: sectionMeta.label,
-                    icon: sectionMeta.icon,
-                    description: "Every part of this vehicle's record. You are on " + sectionMeta.label + ".",
-                    content: (close: () => void) => (
-                      <RecordDockNav
-                        groups={SECTION_GROUPS}
-                        current={section}
-                        onSelect={goToSection}
-                        close={close}
-                      />
-                    ),
-                  },
-                ]),
-            ...(readoutFits
+          back={{ href: "/vehicles", label: "All vehicles", icon: ArrowLeft }}
+          primary={
+            railFits
+              ? undefined
+              : {
+                  id: "sections",
+                  label: sectionMeta.label,
+                  icon: sectionMeta.icon,
+                  description: "Every part of this vehicle's record. You are on " + sectionMeta.label + ".",
+                  content: (close: () => void) => (
+                    <RecordDockNav
+                      groups={SECTION_GROUPS}
+                      current={section}
+                      onSelect={goToSection}
+                      close={close}
+                    />
+                  ),
+                }
+          }
+          secondary={
+            readoutFits
               ? []
               : [
                   {
@@ -967,8 +970,8 @@ export function VehicleDetailV2({ vehicleId }: { vehicleId: string }) {
                       </div>
                     ),
                   },
-                ]),
-          ]}
+                ]
+          }
         />
       </div>
     </FormatProvider>

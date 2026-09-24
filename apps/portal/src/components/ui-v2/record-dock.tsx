@@ -9,18 +9,40 @@
  * the thing the operator opened the record to read.
  *
  * So below the width where a column fits, it stops being a column and becomes a
- * button on this dock: a floating pill at the bottom of the screen, where a
- * thumb already is. Tapping opens that column as a bottom sheet over the panel,
- * and closing returns to exactly where they were — the middle column never
- * moves, never reflows, and never scrolls away underneath them.
+ * control on this dock: a bar floating clear of the bottom edge, where a thumb
+ * already is. Tapping opens that column as a bottom sheet over the panel, and
+ * closing returns to exactly where they were — the middle column never moves,
+ * never reflows, and never scrolls away underneath them.
+ *
+ * ── The shape (asked for Sep 24 2026, with a sketch) ──────────────────────
+ *
+ *   ╭─────────────────────────────────╮
+ *   │  ◇   ◇        ( ● )       ◇   ◇ │   the circle breaks the bar's top
+ *   ╰─────────────────────────────────╯   edge and sits proud of it
+ *
+ * One raised circle in the MIDDLE, holding the record's own navigation — a
+ * rental's stages, a customer's sections. It is the control used on every
+ * visit, so it is the biggest thing here and it sits under where a thumb
+ * already rests rather than off in a corner.
+ *
+ * Everything else flanks it as a plain icon: the way back to the list on one
+ * side, the record's context panel on the other. Icons only, never a label —
+ * a label is a sentence wide, and the two labelled buttons this replaces made
+ * a bar wider than the screen, which then scrolled sideways to reach its own
+ * second item. Each name still appears in full as the sheet's title, and as
+ * the button's accessible name for anyone who cannot see the icon.
+ *
+ * The two flanks are equal-width flex boxes, so the circle sits on the
+ * screen's centre line whatever each side holds — two icons, one, or none.
+ *
+ * It is deliberately NOT a second navigation: the app's own sidebar keeps the
+ * nav, and on a phone the top bar's trigger still opens it. This carries one
+ * record's own panels and nothing else, exactly once — one dock per record
+ * screen, and nothing else pinned to the bottom of it.
  *
  * The dock only ever carries panels the caller says are off screen, so at full
  * width it renders nothing at all and the page is the three columns it always
  * was. There is no desktop state to keep in step.
- *
- * It is deliberately NOT a second navigation: the app's own sidebar keeps the
- * nav, and on a phone the top bar's trigger still opens it. This carries one
- * record's own panels and nothing else.
  */
 
 import { useCallback, useState, useSyncExternalStore } from "react";
@@ -58,7 +80,7 @@ export function useWiderThan(px: number): boolean {
 
 export type DockPanel = {
   id: string;
-  /** On the dock button and as the sheet's title. */
+  /** The button's accessible name and the sheet's title. Never drawn on the bar. */
   label: string;
   icon: ComponentType<{ className?: string }>;
   /** One line under the title, saying what the sheet holds. */
@@ -67,54 +89,134 @@ export type DockPanel = {
   content: (close: () => void) => ReactNode;
 };
 
-export function RecordDock({ panels, className }: { panels: DockPanel[]; className?: string }) {
+/** The way out of the record — the same Back link the rail carries on a desktop. */
+export type DockBack = { href: string; label: string; icon: ComponentType<{ className?: string }> };
+
+/**
+ * The room the dock needs above it, as a class for the scrolling panel.
+ *
+ * Exported so the three record screens cannot each guess a different number
+ * and leave their last row under the bar. It adds up the bar (3.5rem), the gap
+ * it floats on (1rem), the part of the circle that rises above it (1.25rem)
+ * and a little air, plus the phone's home indicator.
+ */
+export const DOCK_CLEARANCE = "pb-[calc(env(safe-area-inset-bottom,0px)+6rem)]";
+
+/** 44px — the touch target every control on this bar meets. */
+const ICON_BUTTON =
+  "flex size-11 shrink-0 items-center justify-center rounded-full text-foreground/70 transition-colors " +
+  "hover:bg-foreground/5 hover:text-foreground active:bg-foreground/10 " +
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+export function RecordDock({
+  back,
+  primary,
+  secondary = [],
+  className,
+}: {
+  back?: DockBack;
+  /** The record's own navigation: the raised circle in the middle. */
+  primary?: DockPanel;
+  /** Flanking panels. They split either side of the circle, in order. */
+  secondary?: DockPanel[];
+  className?: string;
+}) {
   const [open, setOpen] = useState<string | null>(null);
+
+  // No rail to reach and no context to open means there is nothing for a dock
+  // to carry, and a bar holding one Back arrow is furniture, not navigation.
+  const panels = [...(primary ? [primary] : []), ...secondary];
   if (panels.length === 0) return null;
+
+  // The circle is the record's own nav. Where that column already fits on
+  // screen the caller passes no `primary`, and rather than leave a hole in the
+  // middle the first flanking panel is promoted into it.
+  const centre = primary ?? secondary[0];
+  const flanking = primary ? secondary : secondary.slice(1);
+  // Back already weights the left, so an odd icon goes right; without it the
+  // odd one goes left, and either way the two sides stay as even as they can.
+  const leftCount = back ? Math.floor(flanking.length / 2) : Math.ceil(flanking.length / 2);
+  const left = flanking.slice(0, leftCount);
+  const right = flanking.slice(leftCount);
+
+  const panelButton = (panel: DockPanel) => (
+    <button
+      key={panel.id}
+      type="button"
+      onClick={() => setOpen(panel.id)}
+      aria-haspopup="dialog"
+      aria-label={panel.label}
+      title={panel.label}
+      className={ICON_BUTTON}
+    >
+      <panel.icon className="size-5" />
+    </button>
+  );
 
   return (
     <>
       {/*
         Bottom centre, above the panel's own scrolling. `pointer-events-none` on
-        the strip and `auto` on the pill so the dock never eats a tap meant for
+        the strip and `auto` on the bar so the dock never eats a tap meant for
         the content beside it.
 
         The padding adds the phone's home indicator (`safe-area-inset-bottom`)
-        to a base gap, so the pill clears the bar on an iPhone and sits at 12px
-        everywhere else. z-40 keeps it under every Radix overlay (z-50), so an
-        open dialog covers it rather than fighting it.
+        to a 1rem gap, so the bar floats clear of the bottom edge rather than
+        sitting on it — which is the difference between a dock and a toolbar.
+        z-40 keeps it under every Radix overlay (z-50), so an open dialog covers
+        it rather than fighting it.
       */}
       <div
         className={cn(
           "pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-4",
-          "pb-[calc(env(safe-area-inset-bottom,0px)+0.75rem)]",
+          "pb-[calc(env(safe-area-inset-bottom,0px)+1rem)]",
           className,
         )}
       >
         <nav
           aria-label="This record's panels"
+          /* Translucent and blurred over whatever scrolls beneath, with a wide
+             soft shadow so it reads as lifted off the page rather than drawn on
+             it. `h-14` leaves the circle room to rise out of the top edge
+             without the bar growing to contain it. */
           className={cn(
-            "pointer-events-auto flex max-w-full items-center gap-1 overflow-x-auto rounded-full p-1.5 no-scrollbar",
-            "border border-foreground/10 bg-background/85 shadow-lg shadow-black/10 backdrop-blur-xl",
+            "pointer-events-auto relative flex h-14 max-w-full items-center gap-1 rounded-full px-2",
+            "border border-foreground/10 bg-background/80 shadow-[0_8px_30px_rgb(0_0_0/0.12)] backdrop-blur-xl",
           )}
         >
-          {panels.map((panel) => (
-            <button
-              key={panel.id}
-              type="button"
-              onClick={() => setOpen(panel.id)}
-              aria-haspopup="dialog"
-              /* h-11 is the 44px touch target; the row never wraps, so a long
-                 label scrolls the pill rather than growing it into two lines. */
-              className={cn(
-                "flex h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-full px-4 text-sm font-medium",
-                "text-foreground/80 transition-colors hover:bg-foreground/5 hover:text-foreground",
-                "active:bg-foreground/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              )}
-            >
-              <panel.icon className="size-4 shrink-0" />
-              {panel.label}
-            </button>
-          ))}
+          {/* Equal-width flanks: the circle stays on the centre line whether a
+              side holds two icons, one, or none. */}
+          <div className="flex flex-1 basis-0 items-center justify-end gap-1">
+            {back ? (
+              <Link href={back.href} aria-label={back.label} title={back.label} className={ICON_BUTTON}>
+                <back.icon className="size-5" />
+              </Link>
+            ) : null}
+            {left.map(panelButton)}
+          </div>
+
+          {/* The focal point. `-translate-y-5` lifts it clear of the bar's top
+              edge and the background ring cuts a clean hole around it, so the
+              two read as one piece rather than a button dropped on a bar. */}
+          <button
+            type="button"
+            onClick={() => setOpen(centre.id)}
+            aria-haspopup="dialog"
+            aria-label={centre.label}
+            title={centre.label}
+            className={cn(
+              "flex size-14 shrink-0 -translate-y-5 items-center justify-center rounded-full",
+              "bg-primary text-primary-foreground ring-4 ring-background",
+              "shadow-[0_10px_25px_-5px_hsl(var(--primary)_/_0.5)] transition-transform",
+              "active:scale-95 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring",
+            )}
+          >
+            <centre.icon className="size-6" />
+          </button>
+
+          <div className="flex flex-1 basis-0 items-center justify-start gap-1">
+            {right.map(panelButton)}
+          </div>
         </nav>
       </div>
 

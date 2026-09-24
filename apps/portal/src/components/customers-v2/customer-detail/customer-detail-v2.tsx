@@ -69,7 +69,7 @@ import { SectionFines } from "./section-fines";
 import { SectionReviews } from "./section-reviews";
 import { SectionActivity } from "./section-activity";
 import { OverviewRail } from "./overview-rail";
-import { ContextColumn, RecordDock, RecordDockNav, useWiderThan } from "@/components/ui-v2/record-dock";
+import { ContextColumn, DOCK_CLEARANCE, RecordDock, RecordDockNav, useWiderThan } from "@/components/ui-v2/record-dock";
 import { EmptyHint, Panel, expiryOf, fmtDate } from "./kit";
 import type { Drift } from "./kit";
 import type { CustomerRecord } from "./types";
@@ -184,7 +184,7 @@ export function CustomerDetailV2() {
           you land halfway down a screen you have never seen. */}
       <div
         key={section}
-        className={`flex min-w-0 flex-1 flex-col overflow-hidden md:pr-6${docked ? " pb-[calc(env(safe-area-inset-bottom,0px)+4.5rem)]" : ""}`}
+        className={`flex min-w-0 flex-1 flex-col overflow-hidden md:pr-6${docked ? " " + DOCK_CLEARANCE : ""}`}
       >
         {/* The one fact that changes what every other section means, so it
             follows the reader to all of them. Deliberately short: the right
@@ -253,27 +253,31 @@ export function CustomerDetailV2() {
         </ContextColumn>
       ) : null}
 
+      {/* Same shape as the rental screen: the circle is this record's own
+          sections, wearing the icon of the one you are on, with the way back
+          to the list on its left and the overview panel on its right. */}
       <RecordDock
-        panels={[
-          ...(railFits
-            ? []
-            : [
-                {
-                  id: "sections",
-                  label: meta.label,
-                  icon: meta.icon,
-                  description: "Every part of this customer's record. You are on " + meta.label + ".",
-                  content: (close: () => void) => (
-                    <RecordDockNav
-                      groups={SECTION_GROUPS}
-                      current={section}
-                      hrefFor={(next: SectionId) => sectionHref(id, next)}
-                      close={close}
-                    />
-                  ),
-                },
-              ]),
-          ...(overviewFits
+        back={{ href: "/customers", label: "All customers", icon: ArrowLeft }}
+        primary={
+          railFits
+            ? undefined
+            : {
+                id: "sections",
+                label: meta.label,
+                icon: meta.icon,
+                description: "Every part of this customer's record. You are on " + meta.label + ".",
+                content: (close: () => void) => (
+                  <RecordDockNav
+                    groups={SECTION_GROUPS}
+                    current={section}
+                    hrefFor={(next: SectionId) => sectionHref(id, next)}
+                    close={close}
+                  />
+                ),
+              }
+        }
+        secondary={
+          overviewFits
             ? []
             : [
                 {
@@ -297,8 +301,8 @@ export function CustomerDetailV2() {
                     </div>
                   ),
                 },
-              ]),
-        ]}
+              ]
+        }
       />
     </Frame>
   );

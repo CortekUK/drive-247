@@ -58,7 +58,7 @@ import { StageAgreement } from "./stage-agreement";
 import { StageInsurance } from "./stage-insurance";
 import { StageHandover } from "./stage-handover";
 import { RightRail } from "./right-rail";
-import { ContextColumn, RecordDock, RecordDockNav, useWiderThan } from "@/components/ui-v2/record-dock";
+import { ContextColumn, DOCK_CLEARANCE, RecordDock, RecordDockNav, useWiderThan } from "@/components/ui-v2/record-dock";
 import { EmptyHint, Panel } from "./_kit";
 
 /**
@@ -172,7 +172,7 @@ export function RentalDetailV2() {
           sitting under it. */}
       <div
         key={stage}
-        className={`flex min-w-0 flex-1 flex-col overflow-hidden md:pr-6${docked ? " pb-[calc(env(safe-area-inset-bottom,0px)+4.5rem)]" : ""}`}
+        className={`flex min-w-0 flex-1 flex-col overflow-hidden md:pr-6${docked ? " " + DOCK_CLEARANCE : ""}`}
       >
         {View ? (
           <View detail={detail} onStage={onStage} refetch={onRefetch} />
@@ -192,27 +192,33 @@ export function RentalDetailV2() {
         </ContextColumn>
       ) : null}
 
+      {/* The circle carries the stages, because moving between them is what an
+          operator does on every visit to a rental. Its icon is the stage they
+          are on, so the dock also answers "where am I" without a word on it.
+          Back to the list flanks it on the left, the activity panel on the
+          right — the same two things the desktop rails hold. */}
       <RecordDock
-        panels={[
-          ...(railFits
-            ? []
-            : [
-                {
-                  id: "stages",
-                  label: meta.label,
-                  icon: meta.icon,
-                  description: "Every stage of this rental. You are on " + meta.label + ".",
-                  content: (close: () => void) => (
-                    <RecordDockNav
-                      groups={[{ items: STAGES }]}
-                      current={stage}
-                      hrefFor={(next: StageId) => stageHref(id!, next)}
-                      close={close}
-                    />
-                  ),
-                },
-              ]),
-          ...(contextFits
+        back={{ href: "/rentals", label: "All rentals", icon: ArrowLeft }}
+        primary={
+          railFits
+            ? undefined
+            : {
+                id: "stages",
+                label: meta.label,
+                icon: meta.icon,
+                description: "Every stage of this rental. You are on " + meta.label + ".",
+                content: (close: () => void) => (
+                  <RecordDockNav
+                    groups={[{ items: STAGES }]}
+                    current={stage}
+                    hrefFor={(next: StageId) => stageHref(id!, next)}
+                    close={close}
+                  />
+                ),
+              }
+        }
+        secondary={
+          contextFits
             ? []
             : [
                 {
@@ -226,8 +232,8 @@ export function RentalDetailV2() {
                     </div>
                   ),
                 },
-              ]),
-        ]}
+              ]
+        }
       />
     </Frame>
   );

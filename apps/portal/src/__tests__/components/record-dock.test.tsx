@@ -15,7 +15,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
-import { Car, Clock } from "lucide-react";
+import { ArrowLeft, Car, Clock } from "lucide-react";
 import { RecordDock, RecordDockNav } from "@/components/ui-v2/record-dock";
 
 const src = (p: string) => readFileSync(resolve(__dirname, "../../", p), "utf8");
@@ -41,37 +41,73 @@ describe("the record dock", () => {
     vi.unstubAllGlobals();
   });
 
+  const stages = { id: "stages", label: "Payments", icon: Car, content: () => <p>stage list</p> };
+  const context = { id: "context", label: "Activity", icon: Clock, content: () => <p>the timeline</p> };
+  const back = { href: "/rentals", label: "All rentals", icon: ArrowLeft };
+
   it("renders nothing when every column fits", () => {
-    const { container } = render(<RecordDock panels={[]} />);
+    // Not even the Back arrow: a bar holding one link is furniture, not
+    // navigation, and it would sit over the record for no reason.
+    const { container } = render(<RecordDock back={back} />);
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("offers one button per off-screen panel, and opens that panel", () => {
-    render(
-      <RecordDock
-        panels={[
-          { id: "stages", label: "Payments", icon: Car, content: () => <p>stage list</p> },
-          { id: "context", label: "Activity", icon: Clock, content: () => <p>the timeline</p> },
-        ]}
-      />,
-    );
+  it("offers one control per off-screen panel, and opens that panel", () => {
+    render(<RecordDock back={back} primary={stages} secondary={[context]} />);
 
-    const stages = screen.getByRole("button", { name: /payments/i });
     expect(screen.getByRole("button", { name: /activity/i })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /all rentals/i }).getAttribute("href")).toBe("/rentals");
     // Closed until asked for: a sheet that starts open would cover the record.
     expect(screen.queryByText("stage list")).toBeNull();
 
-    fireEvent.click(stages);
+    fireEvent.click(screen.getByRole("button", { name: /payments/i }));
     expect(screen.getByText("stage list")).toBeTruthy();
     expect(screen.queryByText("the timeline")).toBeNull();
   });
 
-  it("clears the phone's home indicator", () => {
-    const { container } = render(
-      <RecordDock panels={[{ id: "a", label: "Stages", icon: Car, content: () => null }]} />,
-    );
+  it("puts the record's own nav in the middle, raised and brand-coloured", () => {
+    render(<RecordDock back={back} primary={stages} secondary={[context]} />);
+    const centre = screen.getByRole("button", { name: /payments/i });
+    // The sketch: one circle, larger than its neighbours, breaking the bar's
+    // top edge. `-translate-y-5` is what lifts it; the ring cuts the hole.
+    expect(centre.className).toContain("-translate-y-5");
+    expect(centre.className).toContain("size-14");
+    expect(centre.className).toContain("bg-primary");
+    expect(centre.className).toContain("rounded-full");
+    // …and it is between the two flanks, not beside them.
+    const bar = centre.parentElement!;
+    const order = Array.from(bar.children);
+    expect(order.indexOf(centre)).toBe(1);
+    expect(order).toHaveLength(3);
+    // Equal-width flanks are what keep it on the screen's centre line.
+    expect((order[0] as HTMLElement).className).toContain("flex-1 basis-0");
+    expect((order[2] as HTMLElement).className).toContain("flex-1 basis-0");
+  });
+
+  it("carries icons, never labels", () => {
+    render(<RecordDock back={back} primary={stages} secondary={[context]} />);
+    const bar = screen.getByRole("navigation");
+    // Two labelled buttons made a bar wider than the screen. The names live on
+    // `aria-label` and on the sheet's title instead, so nothing is lost.
+    expect(bar.textContent).toBe("");
+    expect(screen.getByRole("button", { name: /activity/i }).querySelector("svg")).toBeTruthy();
+  });
+
+  it("promotes the only panel into the middle when there is no rail to show", () => {
+    // The tablet case: the rail fits, the context column does not.
+    render(<RecordDock back={back} secondary={[context]} />);
+    const centre = screen.getByRole("button", { name: /activity/i });
+    expect(centre.className).toContain("-translate-y-5");
+  });
+
+  it("floats clear of the bottom edge and the phone's home indicator", () => {
+    const { container } = render(<RecordDock primary={stages} />);
     const strip = container.querySelector("div.fixed");
     expect(strip?.className).toContain("env(safe-area-inset-bottom");
+    // The gap under the bar is what makes it read as floating rather than as a
+    // toolbar welded to the edge.
+    expect(strip?.className).toContain("+1rem)]");
+    expect(screen.getByRole("navigation").className).toContain("rounded-full");
   });
 
   it("marks where you are, and closes the sheet once a row is taken", () => {
@@ -110,7 +146,22 @@ describe("the three record screens hand their columns to the dock", () => {
   });
 
   it.each(pages)("%s leaves room for the dock above the last row", (file) => {
-    expect(src(`components/${file}`)).toContain("env(safe-area-inset-bottom,0px)+4.5rem");
+    // One shared figure, so three screens cannot each guess a different one
+    // and leave their last row under the bar.
+    expect(src(`components/${file}`)).toContain("DOCK_CLEARANCE");
+  });
+
+  it.each(pages)("%s gives the dock a way back to its list", (file) => {
+    expect(src(`components/${file}`)).toMatch(/back=\{\{ href: "\/(rentals|customers|vehicles)"/);
+  });
+
+  it.each(pages)("%s puts the record's own nav on the circle", (file) => {
+    // `primary` IS the middle. A screen that passed its sections as
+    // `secondary` would push them out to a flank and leave the circle to
+    // whatever happened to be first.
+    const text = src(`components/${file}`);
+    expect(text).toMatch(/primary=\{\s*railFits/);
+    expect(text).toContain("RecordDockNav");
   });
 
   it("gives the phone's sheet back to the navigation", () => {
