@@ -13,7 +13,7 @@ import { SupportRailProvider } from '../../../../../shared/trax-support/support-
 
 function LoadingScreen() {
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-screen bg-background bg-app-gradient">
       {/* Sidebar skeleton */}
       <div className="hidden md:flex flex-col h-screen w-[280px] border-r border-border flex-shrink-0 p-4 gap-4">
         <div className="flex items-center gap-3 h-12">
@@ -94,7 +94,11 @@ export default function ProtectedLayout({
     <TooltipProvider>
       <SidebarProvider>
         <SupportRailProvider>
-        <div className="flex h-screen bg-background overflow-hidden">
+        {/* The brand wash, on every page behind the sign-in — not just the
+            login screen, which is where it used to stop. This is the layer
+            that makes a page read as part of the product rather than as a
+            white box with the product's cards on it. */}
+        <div className="flex h-screen overflow-hidden bg-background bg-app-gradient">
           {/* On Support a phone keeps the navigation sheet behind the header's menu. */}
           {isSupport ? <><AdminSupportRail /><Sidebar desktop={false} /></> : <Sidebar />}
           <div className="flex-1 flex min-w-0 flex-col overflow-hidden">

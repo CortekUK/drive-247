@@ -248,12 +248,26 @@
   }
 
   /* Soft ambient page background — the faint indigo wash from the v2 shell. */
+  /* The page wash — the single most recognisable thing about the Northwind
+   * shell, and for a long time the thing this app was missing.
+   *
+   * It was here already but at roughly half strength and a layer short, and it
+   * was only ever applied to the login screen, so every page behind the
+   * sign-in was flat white while the operator portal's were washed in the
+   * brand. That is most of what "the theme does not match" meant.
+   *
+   * These are now the portal's own four layers at the portal's own opacities
+   * (`apps/portal/src/styles/v2-theme.css`). `--v2-wash` there is the brand
+   * hue at 51% lightness; `--primary` here is 248 68% 51%, the same value, so
+   * it substitutes exactly. */
   .bg-app-gradient {
     background-image:
-      radial-gradient(70rem 50rem at 105% -10%, hsl(var(--primary) / 0.10), transparent 55%),
-      radial-gradient(60rem 48rem at -8% -6%, hsl(var(--chart-3) / 0.08), transparent 52%),
-      linear-gradient(180deg, hsl(var(--primary) / 0.04) 0%, transparent 45%);
+      radial-gradient(70rem 50rem at 105% -10%, hsl(var(--primary) / 0.20), transparent 55%),
+      radial-gradient(60rem 48rem at -8% -6%, hsl(var(--chart-3) / 0.16), transparent 52%),
+      radial-gradient(55rem 45rem at 50% 115%, hsl(var(--primary) / 0.12), transparent 55%),
+      linear-gradient(180deg, hsl(var(--primary) / 0.07) 0%, transparent 45%);
     background-repeat: no-repeat;
+    background-attachment: fixed;
   }
 
   /* -----------------------------------------------------------------------
