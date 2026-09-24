@@ -16,7 +16,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { ArrowLeft, Car, Clock } from "lucide-react";
-import { RecordDock, RecordDockNav } from "@/components/ui-v2/record-dock";
+import { RecordDock, RecordDockNav, contextTabPanels } from "@/components/ui-v2/record-dock";
 
 const src = (p: string) => readFileSync(resolve(__dirname, "../../", p), "utf8");
 
@@ -128,6 +128,59 @@ describe("the record dock", () => {
   });
 });
 
+describe("each context view gets its own icon", () => {
+  beforeEach(() => stubMatchMedia(false));
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  const tabs = [
+    { id: "overview", label: "At a glance", icon: Car, content: <p>the glance</p> },
+    { id: "timeline", label: "Timeline", icon: Clock, content: <p>the timeline</p> },
+  ];
+  const back = { href: "/rentals", label: "All rentals", icon: ArrowLeft };
+
+  it("turns a rail's tabs into one dock panel each", () => {
+    const panels = contextTabPanels(tabs);
+    expect(panels.map((p) => p.label)).toEqual(["At a glance", "Timeline"]);
+    expect(panels.map((p) => p.id)).toEqual(["overview", "timeline"]);
+  });
+
+  it("opens the view itself, with no tab strip in the way", () => {
+    render(<RecordDock primary={{ id: "n", label: "Nav", icon: Car, content: () => <p>nav</p> }} secondary={contextTabPanels(tabs)} />);
+
+    // Both are on the bar. Neither is behind the other.
+    fireEvent.click(screen.getByRole("button", { name: /timeline/i }));
+    expect(screen.getByText("the timeline")).toBeTruthy();
+    // The sheet holds the view, not a chooser: a tablist here would mean the
+    // operator still has to pick after tapping.
+    expect(document.querySelectorAll('[role="tablist"]')).toHaveLength(0);
+    expect(screen.queryByText("the glance")).toBeNull();
+  });
+
+  it("splits the views either side of the circle", () => {
+    render(
+      <RecordDock
+        back={back}
+        primary={{ id: "n", label: "Nav", icon: Car, content: () => <p>nav</p> }}
+        secondary={contextTabPanels([...tabs, { id: "third", label: "Messages", icon: Clock, content: <p>msgs</p> }])}
+      />,
+    );
+    const bar = screen.getByRole("navigation");
+    const [leftGroup, , rightGroup] = Array.from(bar.children) as HTMLElement[];
+    // Back weights the left, so three views split 1 | 2 and the bar reads
+    // two-and-two around the circle — the sketch's shape.
+    expect(Array.from(leftGroup.children).map((e) => e.getAttribute("aria-label"))).toEqual(["All rentals", "At a glance"]);
+    expect(Array.from(rightGroup.children).map((e) => e.getAttribute("aria-label"))).toEqual(["Timeline", "Messages"]);
+  });
+
+  it("falls back to an icon when a tab has none", () => {
+    const [panel] = contextTabPanels([{ id: "x", label: "Nameless", content: <p>x</p> }]);
+    expect(panel.icon).toBeTruthy();
+  });
+});
+
 describe("the three record screens hand their columns to the dock", () => {
   const pages = [
     ["rentals-v2/rental-detail/rental-detail-v2.tsx", "railFits", "contextFits"],
@@ -153,6 +206,14 @@ describe("the three record screens hand their columns to the dock", () => {
 
   it.each(pages)("%s gives the dock a way back to its list", (file) => {
     expect(src(`components/${file}`)).toMatch(/back=\{\{ href: "\/(rentals|customers|vehicles)"/);
+  });
+
+  it.each(pages)("%s gives every context view its own icon", (file) => {
+    // Not one panel holding the whole column: that put a tab strip inside the
+    // sheet and every view two taps deep.
+    const text = src(`components/${file}`);
+    expect(text).toContain("contextTabPanels(");
+    expect(text).toMatch(/(customerRailTabs|rentalRailTabs|vehicleRailTabs)/);
   });
 
   it.each(pages)("%s puts the record's own nav on the circle", (file) => {

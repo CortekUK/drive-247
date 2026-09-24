@@ -45,9 +45,12 @@
  * was. There is no desktop state to keep in step.
  */
 
-import { useCallback, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import type { ComponentType, ReactNode } from "react";
 import Link from "next/link";
+import { usePathname, useSearchParams } from "next/navigation";
+import { PanelRight } from "lucide-react";
+import type { ContextTab } from "@/components/timeline-v2/context-rail";
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from "@/components/ui-v2/drawer";
 import { cn } from "@/lib/utils";
 
@@ -122,6 +125,24 @@ export function RecordDock({
   className?: string;
 }) {
   const [open, setOpen] = useState<string | null>(null);
+
+  /*
+   * A sheet closes when the page underneath it changes.
+   *
+   * The nav rows call `close` themselves, but a context view can navigate too
+   * — a customer's "At a glance" jumps to the section that owns a problem —
+   * and those rows have no handle on the dock. Without this the operator
+   * arrives at the section they asked for with the sheet still over it.
+   *
+   * Keyed on the whole URL because a section is sometimes a path segment and
+   * sometimes a query parameter.
+   */
+  // Both can be null where there is no route context around the component —
+  // a unit test, a story — and a dock that throws there is a dock nobody can
+  // test.
+  const pathname = usePathname();
+  const search = useSearchParams()?.toString() ?? "";
+  useEffect(() => setOpen(null), [pathname, search]);
 
   // No rail to reach and no context to open means there is nothing for a dock
   // to carry, and a bar holding one Back arrow is furniture, not navigation.
@@ -245,6 +266,34 @@ export function RecordDock({
       ))}
     </>
   );
+}
+
+/**
+ * A context column's tabs, as one dock icon each.
+ *
+ * Asked for Sep 24 2026. The column used to arrive here as a single panel, so
+ * a phone got one button that opened a sheet with a tab strip inside it: every
+ * view two taps deep, and all but the first one's name hidden behind the
+ * first. One icon per view puts them all on the bar, each a single tap.
+ *
+ * The tabs come from the rail's own list (`customerRailTabs`,
+ * `rentalRailTabs`, `vehicleRailTabs`), which is also what the desktop strip
+ * renders, so the two cannot offer different views.
+ *
+ * `svh` rather than a fixed height: a view is as tall as the visible viewport
+ * allows on a phone with its address bar showing. `scroll: false` marks the
+ * views that pin their own layout and scroll inside it — Messages does — so
+ * those get a flex column and the rest get the sheet's own scrolling.
+ */
+export function contextTabPanels(tabs: ContextTab[]): DockPanel[] {
+  return tabs.map((tab) => ({
+    id: tab.id,
+    label: tab.label,
+    icon: tab.icon ?? PanelRight,
+    content: () => (
+      <div className={cn("h-[68svh] min-h-0", tab.scroll === false && "flex flex-col")}>{tab.content}</div>
+    ),
+  }));
 }
 
 /**

@@ -19,8 +19,8 @@
  * absent, so this page shows it unconditionally instead.
  */
 
-import { ArrowLeft, Car, CreditCard, FileSignature, KeyRound, MapPin, PackagePlus, Clock, ShieldCheck, User } from "lucide-react";
-import { RecordDock, RecordDockNav } from "@/components/ui-v2/record-dock";
+import { Activity as ActivityIcon, ArrowLeft, Car, CreditCard, FileSignature, KeyRound, MapPin, MessageSquare, PackagePlus, ShieldCheck, User } from "lucide-react";
+import { RecordDock, RecordDockNav, contextTabPanels } from "@/components/ui-v2/record-dock";
 
 /** The rental screen's stages, near enough to the real `STAGES` to judge by. */
 const STAGES = [
@@ -33,6 +33,18 @@ const STAGES = [
   { id: "payments", label: "Payments", icon: CreditCard },
   { id: "handover", label: "Handover", icon: KeyRound },
 ] as const;
+
+function FakeView({ name }: { name: string }) {
+  return (
+    <div className="space-y-3 pb-4">
+      {Array.from({ length: 8 }, (_, i) => (
+        <div key={i} className="rounded-xl border border-foreground/10 p-3">
+          <p className="text-sm text-foreground">{name} {i + 1}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function RecordDockPlayground() {
   return (
@@ -71,23 +83,15 @@ export default function RecordDockPlayground() {
             />
           ),
         }}
-        secondary={[
-          {
-            id: "context",
-            label: "Activity",
-            icon: Clock,
-            description: "Payment plan, messages and everything that happened.",
-            content: () => (
-              <div className="space-y-3 pb-4">
-                {Array.from({ length: 8 }, (_, i) => (
-                  <div key={i} className="rounded-xl border border-foreground/10 p-3">
-                    <p className="text-sm text-foreground">Activity {i + 1}</p>
-                  </div>
-                ))}
-              </div>
-            ),
-          },
-        ]}
+        /* One icon per context view, which is what the real screens pass:
+           a rental's Payment Plan / Messages / Activity, a customer's At a
+           glance / Timeline. Each opens its own view — there is no tab strip
+           inside the sheet. */
+        secondary={contextTabPanels([
+          { id: "payment-plan", label: "Payment Plan", icon: CreditCard, content: <FakeView name="Payment Plan" /> },
+          { id: "messages", label: "Messages", icon: MessageSquare, content: <FakeView name="Messages" /> },
+          { id: "activity", label: "Activity", icon: ActivityIcon, content: <FakeView name="Activity" /> },
+        ])}
       />
     </main>
   );

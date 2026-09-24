@@ -68,10 +68,10 @@ import type { DistanceUnit } from "@/lib/format-utils";
 
 import { FormatProvider, daysBetween, daysUntil, todayISO } from "./kit";
 import { SECTIONS, SECTION_GROUPS, readSection, sectionHref, type SectionId } from "./sections";
-import { OverviewRail, type Attention, type Vital } from "./overview-rail";
+import { OverviewRail, vehicleRailTabs, type Attention, type Vital } from "./overview-rail";
 import { ConnectedTimeline } from "@/components/timeline-v2/connected-timeline";
-import { ArrowLeft, Clock } from "lucide-react";
-import { ContextColumn, DOCK_CLEARANCE, RecordDock, RecordDockNav, useWiderThan } from "@/components/ui-v2/record-dock";
+import { ArrowLeft } from "lucide-react";
+import { ContextColumn, DOCK_CLEARANCE, RecordDock, RecordDockNav, contextTabPanels, useWiderThan } from "@/components/ui-v2/record-dock";
 import { VehicleTab } from "./tab-vehicle";
 import { RatesTab } from "./tab-rates";
 import { AddonsTab } from "./tab-addons";
@@ -942,35 +942,23 @@ export function VehicleDetailV2({ vehicleId }: { vehicleId: string }) {
           secondary={
             readoutFits
               ? []
-              : [
-                  {
-                    id: "readout",
-                    label: "Overview",
-                    icon: Clock,
-                    description: "The timeline and this vehicle at a glance.",
-                    content: (close: () => void) => (
-                      <div className="h-[68svh] min-h-0">
-                        <OverviewRail<SectionId>
-                          name={vehicleName}
-                          plate={hidePlate ? "" : vehicle.reg}
-                          coverSrc={photos[0]?.photo_url ?? vehicle.photo_url ?? null}
-                          statusLabel={status.label}
-                          statusTone={status.tone}
-                          listingLine={listingLine}
-                          attention={attention}
-                          vitals={vitals}
-                          events={events}
-                          eventsLoading={eventsLoading}
-                          onJump={(next: SectionId) => {
-                            goToSection(next);
-                            close();
-                          }}
-                          timeline={<ConnectedTimeline scope={{ kind: "vehicle", id: vehicleId }} compact heading="Vehicle timeline" />}
-                        />
-                      </div>
-                    ),
-                  },
-                ]
+              : /* One icon per context view: Overview, Activity, Timeline. */
+                contextTabPanels(
+                  vehicleRailTabs<SectionId>({
+                    name: vehicleName,
+                    plate: hidePlate ? "" : vehicle.reg,
+                    coverSrc: photos[0]?.photo_url ?? vehicle.photo_url ?? null,
+                    statusLabel: status.label,
+                    statusTone: status.tone,
+                    listingLine,
+                    attention,
+                    vitals,
+                    events,
+                    eventsLoading,
+                    onJump: goToSection,
+                    timeline: <ConnectedTimeline scope={{ kind: "vehicle", id: vehicleId }} compact heading="Vehicle timeline" />,
+                  }),
+                )
           }
         />
       </div>

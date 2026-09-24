@@ -45,7 +45,7 @@
 import { useCallback } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, CalendarClock, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import { useRentalDetailV2 } from "./use-rental-detail-v2";
 import { STAGES, readStage, stageHref, type StageId, type StageProps } from "./stages";
@@ -57,8 +57,8 @@ import { StagePayments } from "./stage-payments";
 import { StageAgreement } from "./stage-agreement";
 import { StageInsurance } from "./stage-insurance";
 import { StageHandover } from "./stage-handover";
-import { RightRail } from "./right-rail";
-import { ContextColumn, DOCK_CLEARANCE, RecordDock, RecordDockNav, useWiderThan } from "@/components/ui-v2/record-dock";
+import { RightRail, rentalRailTabs } from "./right-rail";
+import { ContextColumn, DOCK_CLEARANCE, RecordDock, RecordDockNav, contextTabPanels, useWiderThan } from "@/components/ui-v2/record-dock";
 import { EmptyHint, Panel } from "./_kit";
 
 /**
@@ -220,19 +220,9 @@ export function RentalDetailV2() {
         secondary={
           contextFits
             ? []
-            : [
-                {
-                  id: "context",
-                  label: "Activity",
-                  icon: CalendarClock,
-                  description: "Payment plan, messages and everything that happened.",
-                  content: () => (
-                    <div className="h-[68svh] min-h-0">
-                      <RightRail detail={detail} refetch={onRefetch} />
-                    </div>
-                  ),
-                },
-              ]
+            : /* One icon per context view: Payment Plan, Messages, Activity.
+                 Each is a tap, not a tap-then-a-tab. */
+              contextTabPanels(rentalRailTabs(detail))
         }
       />
     </Frame>

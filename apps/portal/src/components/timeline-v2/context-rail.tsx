@@ -8,7 +8,24 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui-v2/tab
 import { cn } from "@/lib/utils";
 import "./timeline.css";
 
-type ContextTab = { id: string; label: string; content: React.ReactNode; keepMounted?: boolean; scroll?: boolean; padded?: boolean };
+/**
+ * `icon` is for the dock, not for this strip.
+ *
+ * Below the width where this column fits, each of these tabs becomes its own
+ * icon on the record's dock — asked for Sep 24 2026, because one dock button
+ * that opened a sheet with a tab strip inside it made every context view two
+ * taps away and hid their names behind the first one. The list lives here so
+ * the strip and the dock cannot end up offering different tabs.
+ */
+export type ContextTab = {
+  id: string;
+  label: string;
+  content: React.ReactNode;
+  icon?: React.ComponentType<{ className?: string }>;
+  keepMounted?: boolean;
+  scroll?: boolean;
+  padded?: boolean;
+};
 
 /** Radix supplies tab navigation and focus handling. Messages mount only when opened. */
 export function ContextTabs({ tabs, defaultValue, label }: { tabs: ContextTab[]; defaultValue: string; label: string }) {

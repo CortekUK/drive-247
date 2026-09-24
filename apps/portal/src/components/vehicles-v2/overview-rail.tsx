@@ -30,7 +30,9 @@ import {
   Car,
   ChevronRight,
   CircleCheck,
+  Activity as ActivityIcon,
   FileText,
+  Gauge,
   History,
   ImageIcon,
   LayoutDashboard,
@@ -42,7 +44,7 @@ import {
 import { cn } from "@/lib/utils";
 import { HeroChip, fmtDateTime } from "./kit";
 import type { VehicleEvent } from "@/hooks/use-vehicle-events";
-import { ContextTabs } from "@/components/timeline-v2/context-rail";
+import { ContextTabs, type ContextTab } from "@/components/timeline-v2/context-rail";
 
 
 /** One thing that wants dealing with, and the tab that owns it. */
@@ -79,20 +81,8 @@ const EVENT_ICON: Record<string, React.ComponentType<{ className?: string }>> = 
   service_removed: Wrench,
 };
 
-export function OverviewRail<K extends string>({
-  name,
-  plate,
-  coverSrc,
-  statusLabel,
-  statusTone,
-  listingLine,
-  attention,
-  vitals,
-  events,
-  eventsLoading,
-  onJump,
-  timeline,
-}: {
+/** Named so the tab list below and the column itself take the same thing. */
+export type OverviewRailProps<K extends string> = {
   name: string;
   plate: string;
   coverSrc: string | null;
@@ -106,12 +96,40 @@ export function OverviewRail<K extends string>({
   eventsLoading: boolean;
   onJump: (target: K) => void;
   timeline?: React.ReactNode;
-}) {
-  return <ContextTabs label="Vehicle context" defaultValue="overview" tabs={[
-    { id: "overview", label: "Overview", content: <Overview name={name} plate={plate} coverSrc={coverSrc} statusLabel={statusLabel} statusTone={statusTone} listingLine={listingLine} attention={attention} vitals={vitals} onJump={onJump} /> },
-    { id: "activity", label: "Activity", content: <Activity events={events} loading={eventsLoading} /> },
-    ...(timeline ? [{ id: "timeline", label: "Timeline", content: timeline }] : []),
-  ]} />;
+};
+
+export function OverviewRail<K extends string>({
+  name,
+  plate,
+  coverSrc,
+  statusLabel,
+  statusTone,
+  listingLine,
+  attention,
+  vitals,
+  events,
+  eventsLoading,
+  onJump,
+  timeline,
+}: OverviewRailProps<K>) {
+  return <ContextTabs label="Vehicle context" defaultValue="overview" tabs={vehicleRailTabs({ name, plate, coverSrc, statusLabel, statusTone, listingLine, attention, vitals, events, eventsLoading, onJump, timeline })} />;
+}
+
+/**
+ * This vehicle's context views, as data.
+ *
+ * The desktop column renders them as a tab strip; on a phone the dock renders
+ * one icon per entry, each opening that view directly. Both read this, so a
+ * view cannot exist in one place and not the other.
+ */
+export function vehicleRailTabs<K extends string>({
+  name, plate, coverSrc, statusLabel, statusTone, listingLine, attention, vitals, events, eventsLoading, onJump, timeline,
+}: OverviewRailProps<K>): ContextTab[] {
+  return [
+    { id: "overview", label: "Overview", icon: Gauge, content: <Overview name={name} plate={plate} coverSrc={coverSrc} statusLabel={statusLabel} statusTone={statusTone} listingLine={listingLine} attention={attention} vitals={vitals} onJump={onJump} /> },
+    { id: "activity", label: "Activity", icon: ActivityIcon, content: <Activity events={events} loading={eventsLoading} /> },
+    ...(timeline ? [{ id: "timeline", label: "Timeline", icon: History, content: timeline }] : []),
+  ];
 }
 
 /* ══════════════════════════════════════════════════════════════════════════

@@ -53,7 +53,7 @@
 import { useCallback } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { AlertTriangle, ArrowLeft, Clock, Loader2 } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import { useCustomerDetailV2 } from "./use-customer-detail-v2";
 import { SECTIONS, SECTION_GROUPS, readSectionFrom, sectionHref, type SectionId, type SectionProps } from "./sections";
@@ -68,8 +68,8 @@ import { SectionMoney } from "./section-money";
 import { SectionFines } from "./section-fines";
 import { SectionReviews } from "./section-reviews";
 import { SectionActivity } from "./section-activity";
-import { OverviewRail } from "./overview-rail";
-import { ContextColumn, DOCK_CLEARANCE, RecordDock, RecordDockNav, useWiderThan } from "@/components/ui-v2/record-dock";
+import { OverviewRail, customerRailTabs } from "./overview-rail";
+import { ContextColumn, DOCK_CLEARANCE, RecordDock, RecordDockNav, contextTabPanels, useWiderThan } from "@/components/ui-v2/record-dock";
 import { EmptyHint, Panel, expiryOf, fmtDate } from "./kit";
 import type { Drift } from "./kit";
 import type { CustomerRecord } from "./types";
@@ -279,29 +279,20 @@ export function CustomerDetailV2() {
         secondary={
           overviewFits
             ? []
-            : [
-                {
-                  id: "overview",
-                  label: "At a glance",
-                  icon: Clock,
-                  description: "The timeline and everything derived from this record.",
-                  content: (close: () => void) => (
-                    <div className="h-[68svh] min-h-0">
-                      <OverviewRail
-                        c={record}
-                        verifyDrift={verifyDrift}
-                        reviewDrift={reviewDrift}
-                        onJump={(next: SectionId) => {
-                          onJump(next);
-                          close();
-                        }}
-                        currency={currency}
-                        saving={saving}
-                      />
-                    </div>
-                  ),
-                },
-              ]
+            : /* One icon per context view — "At a glance" and "Timeline" as
+                 two separate taps on the bar, not one button that opens a
+                 sheet with a tab strip inside it. The list is the rail's own,
+                 so the dock and the desktop column cannot drift. */
+              contextTabPanels(
+                customerRailTabs({
+                  c: record,
+                  verifyDrift,
+                  reviewDrift,
+                  onJump,
+                  currency,
+                  saving,
+                }),
+              )
         }
       />
     </Frame>
