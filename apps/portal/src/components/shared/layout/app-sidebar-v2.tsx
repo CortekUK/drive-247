@@ -239,8 +239,23 @@ interface NavGroup {
  * both v2 trees (see styles/v2-theme.css), whereas `--border` is `0 0% 100% /
  * 10%` in dark and would expand to an invalid colour.
  */
+/*
+ * The MOBILE half of the size pair, added Sep 24 2026.
+ *
+ * Below `md` this sidebar is not a rail at all — it is the sheet behind the
+ * top bar's trigger, and the only navigation on the screen. At the rail's own
+ * 32px it was a list of 32px rows and 13px labels on a phone: under the 44px
+ * every other tappable thing in the app now meets, and small enough that
+ * operators were reading it at arm's length.
+ *
+ * So the rail's density is moved behind `md:` and the sheet gets its own:
+ * 44px rows, a 15px label and an 18px icon. Nothing about the desktop rail
+ * moves — every `md:` value here is exactly what the row had before — and the
+ * sheet is the only place the larger set can apply, because at `md` and up
+ * this component renders as the rail instead.
+ */
 const NAV_ROW =
-  "h-8 font-medium transition-colors " +
+  "h-11 md:h-8 [&>svg]:size-[18px] md:[&>svg]:size-4 font-medium transition-colors " +
   "data-[active=true]:shadow-[inset_0_0_0_1px_hsl(var(--primary)_/_0.12),0_1px_2px_hsl(var(--primary)_/_0.08)]";
 
 /** The same, for the group rows that are a button spanning the full width. */
@@ -900,7 +915,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
             ) : (
               <Link href="/rentals" className="flex items-center gap-2 h-8 px-1 rounded-xl hover:bg-primary/10 transition-colors text-muted-foreground hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-[hsl(var(--v2-link,var(--primary)))]">
                 <ArrowLeft className="h-4 w-4 shrink-0" />
-                <span className="text-[13px]">All rentals</span>
+                <span className="text-[15px] md:text-[13px]">All rentals</span>
               </Link>
             )}
           </div>
@@ -1038,7 +1053,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
             ) : (
               <Link href="/vehicles" className="flex items-center gap-2 h-8 px-1 rounded-xl hover:bg-primary/10 transition-colors text-muted-foreground hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-[hsl(var(--v2-link,var(--primary)))]">
                 <ArrowLeft className="h-4 w-4 shrink-0" />
-                <span className="text-[13px]">All vehicles</span>
+                <span className="text-[15px] md:text-[13px]">All vehicles</span>
               </Link>
             )}
           </div>
@@ -1113,7 +1128,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                             className="flex items-center gap-2.5"
                           >
                             <s.icon className="h-4 w-4 shrink-0" />
-                            <span className="text-[13px]">{s.label}</span>
+                            <span className="text-[15px] md:text-[13px]">{s.label}</span>
                           </Link>
                         </SidebarMenuButton>
                       </SidebarMenuItem>
@@ -1175,7 +1190,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
             ) : (
               <Link href="/customers" className="flex items-center gap-2 h-8 px-1 rounded-xl hover:bg-primary/10 transition-colors text-muted-foreground hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-[hsl(var(--v2-link,var(--primary)))]">
                 <ArrowLeft className="h-4 w-4 shrink-0" />
-                <span className="text-[13px]">All customers</span>
+                <span className="text-[15px] md:text-[13px]">All customers</span>
               </Link>
             )}
           </div>
@@ -1251,7 +1266,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                             className="flex items-center gap-2.5"
                           >
                             <s.icon className="h-4 w-4 shrink-0" />
-                            <span className="text-[13px]">{s.label}</span>
+                            <span className="text-[15px] md:text-[13px]">{s.label}</span>
                           </Link>
                         </SidebarMenuButton>
                       </SidebarMenuItem>
@@ -1310,15 +1325,21 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                 <button
                   key={tab.key}
                   onClick={() => switchView(tab.key)}
-                  className={`relative z-10 flex items-center justify-between gap-1.5 cursor-pointer rounded-full px-2.5 py-1 text-[12px] font-medium transition-colors ${
+                  /* Same mobile/desktop split as the nav rows below: a 44px
+                     tap target and readable type in the sheet, the rail's own
+                     compact strip from `md` up. */
+                  className={`relative z-10 flex h-10 items-center justify-center gap-1.5 cursor-pointer rounded-full px-3 text-[14px] font-medium transition-colors md:h-auto md:justify-between md:px-2.5 md:py-1 md:text-[12px] ${
                     view === tab.key
                       ? "text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]"
                       : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
                   <span>{tab.label}</span>
+                  {/* The ⌥1 / ⌥2 hints are for a keyboard the phone does not
+                      have, and on a 288px sheet they were the widest thing in
+                      a row whose label is the point. */}
                   <kbd
-                    className={`rounded-full px-1.5 py-0.5 font-mono text-[10px] font-semibold transition-colors ${
+                    className={`hidden rounded-full px-1.5 py-0.5 font-mono text-[10px] font-semibold transition-colors md:inline-block ${
                       view === tab.key
                         ? "bg-primary/15 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]"
                         : "bg-foreground/10 text-foreground/70"
@@ -1373,7 +1394,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                     <Link href="/cms" onClick={closeMobileOnNav}>
                       <LayoutGrid className="h-4 w-4 shrink-0" />
                       <span
-                        className={`text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}
+                        className={`text-[15px] md:text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}
                       >
                         Dashboard
                       </span>
@@ -1392,12 +1413,12 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                       asChild
                       isActive={isCmsActive(item.href)}
                       tooltip={collapsed ? item.name : undefined}
-                      className="h-8 min-w-0 flex-1 transition-colors"
+                      className="h-11 md:h-8 [&>svg]:size-[18px] md:[&>svg]:size-4 min-w-0 flex-1 transition-colors"
                     >
                       <Link href={item.href} onClick={closeMobileOnNav}>
                         <item.icon className="h-4 w-4 shrink-0" />
                         <span
-                          className={`text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"} ${
+                          className={`text-[15px] md:text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"} ${
                             !collapsed && !item.published ? "text-muted-foreground" : ""
                           }`}
                         >
@@ -1480,7 +1501,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                   >
                     <Link href="/cms/site-settings" onClick={closeMobileOnNav}>
                       <Settings className="h-4 w-4 shrink-0" />
-                      <span className={`text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>
+                      <span className={`text-[15px] md:text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>
                         Site Settings
                       </span>
                     </Link>
@@ -1512,7 +1533,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                     >
                       <Link href="/settings/apply-form" onClick={closeMobileOnNav}>
                         <UserPlus className="h-4 w-4 shrink-0" />
-                        <span className={`text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>
+                        <span className={`text-[15px] md:text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>
                           Apply form
                         </span>
                       </Link>
@@ -1538,7 +1559,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                     >
                       <Link href="/" onClick={closeMobileOnNav}>
                         <LayoutGrid className="h-4 w-4 shrink-0" />
-                        <span className={`text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>Dashboard</span>
+                        <span className={`text-[15px] md:text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>Dashboard</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -1555,7 +1576,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                     >
                       <Link href="/integrations" onClick={closeMobileOnNav}>
                         <Plug className="h-4 w-4 shrink-0" />
-                        <span className={`text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>Integrations</span>
+                        <span className={`text-[15px] md:text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>Integrations</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -1586,7 +1607,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                     >
                       <Link href="/subscription" onClick={closeMobileOnNav}>
                         <Crown className="h-4 w-4 shrink-0" />
-                        <span className={`text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>Billing</span>
+                        <span className={`text-[15px] md:text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>Billing</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -1602,11 +1623,11 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                       asChild
                       isActive={isActive("/referrals")}
                       tooltip={collapsed ? "Referrals" : undefined}
-                      className="h-8 transition-colors"
+                      className="h-11 md:h-8 [&>svg]:size-[18px] md:[&>svg]:size-4 transition-colors"
                     >
                       <Link href="/referrals" onClick={closeMobileOnNav}>
                         <Gift className="h-4 w-4 shrink-0" />
-                        <span className={`text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>Referrals</span>
+                        <span className={`text-[15px] md:text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>Referrals</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -1636,7 +1657,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                     >
                       <Link href="/welcome" onClick={closeMobileOnNav}>
                         <BookOpen className="h-4 w-4 shrink-0" />
-                        <span className={`text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>Welcome Pack</span>
+                        <span className={`text-[15px] md:text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>Welcome Pack</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -1657,7 +1678,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                         className={NAV_ROW}
                       >
                         <Sparkles className="h-4 w-4 shrink-0" />
-                        <span className={`text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>Ask AI</span>
+                        <span className={`text-[15px] md:text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>Ask AI</span>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   )}
@@ -1680,7 +1701,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                         className={NAV_ROW}
                       >
                         <ArrowLeft className="h-4 w-4 shrink-0" />
-                        <span className={`text-[13px] font-medium ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>
+                        <span className={`text-[15px] md:text-[13px] font-medium ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>
                           {drillGroup.label}
                         </span>
                       </SidebarMenuButton>
@@ -1696,7 +1717,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                           <Link href={item.href} onClick={closeMobileOnNav} className="flex items-center justify-between w-full">
                             <div className="flex items-center gap-2 min-w-0">
                               <item.icon className="h-4 w-4 shrink-0" />
-                              <span className={`text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>
+                              <span className={`text-[15px] md:text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>
                                 {item.name}
                               </span>
                             </div>
@@ -1745,7 +1766,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                             <Link href={item.href} onClick={closeMobileOnNav} className="flex items-center justify-between w-full">
                               <div className="flex items-center gap-2 min-w-0">
                                 <item.icon className="h-4 w-4 shrink-0" />
-                                <span className={`text-[13px] transition-all duration-200 ease-in-out ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>
+                                <span className={`text-[15px] md:text-[13px] transition-all duration-200 ease-in-out ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>
                                   {item.name}
                                 </span>
                               </div>
@@ -1803,7 +1824,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                                 aria-label={count > 0 && item.badgeLabel ? `${item.name}, ${item.badgeLabel(count)}` : undefined}
                               >
                                 <item.icon className="h-4 w-4 shrink-0" />
-                                <span className={`text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "min-w-0 flex-1 truncate opacity-100"}`}>
+                                <span className={`text-[15px] md:text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "min-w-0 flex-1 truncate opacity-100"}`}>
                                   {item.name}
                                 </span>
                                 {/* Right-aligned inside the row; the label is flex-1 and
@@ -1855,7 +1876,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                                   <>
                                     <div className="flex items-center gap-2 min-w-0">
                                       <GroupIcon className="h-4 w-4 shrink-0" />
-                                      <span className="text-[13px] truncate">{group.label}</span>
+                                      <span className="text-[15px] md:text-[13px] truncate">{group.label}</span>
                                     </div>
                                     <div className="flex items-center gap-1.5 shrink-0">
                                       {totalBadge > 0 && <span className="w-1.5 h-1.5 rounded-full bg-destructive" />}
