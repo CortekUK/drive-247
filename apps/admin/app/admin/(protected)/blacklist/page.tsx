@@ -226,7 +226,7 @@ export default function BlacklistPage() {
 
   if (loading) {
     return (
-      <div className="p-8">
+      <div>
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-2">Blocked Customers</h1>
         <p className="text-muted-foreground mb-8">All blocked customers across every tenant</p>
         <div className="text-xl text-muted-foreground text-center py-12">Loading...</div>
@@ -235,7 +235,7 @@ export default function BlacklistPage() {
   }
 
   return (
-    <div className="p-8">
+    <div>
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">Blocked Customers</h1>

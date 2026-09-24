@@ -285,7 +285,7 @@ export default function IntegrationsAdminPage() {
   const failed = subscribers.filter((s) => s.status === 'failed');
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 p-6">
+    <div className="mx-auto max-w-6xl space-y-6">
       <header className="flex items-center gap-3">
         <span className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
           <Plug className="size-5" />

@@ -279,7 +279,7 @@ export default function WelcomePackAdminPage() {
 
   if (loading) {
     return (
-      <div className="space-y-4 p-6">
+      <div className="space-y-4">
         <Skeleton className="h-10 w-64" />
         <Skeleton className="h-96 w-full" />
       </div>
@@ -287,7 +287,7 @@ export default function WelcomePackAdminPage() {
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6">
       <div className="flex items-center gap-3">
         <BookOpen className="h-6 w-6 text-primary" />
         <div>

@@ -152,7 +152,7 @@ export default function ManageAdminsPage() {
   }
 
   return (
-    <div className="p-8">
+    <div>
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">Manage Super Admins</h1>

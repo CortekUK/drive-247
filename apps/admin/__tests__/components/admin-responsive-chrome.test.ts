@@ -177,3 +177,59 @@ describe("the admin pages wear Northwind's type scale", () => {
     expect(offenders).toEqual([]);
   });
 });
+
+/*
+ * The shell pads once, and the top bar paints nothing.
+ *
+ * Reported as "remove this white space" with a screenshot, Sep 25 2026. Two
+ * causes stacked at the top of every page:
+ *
+ *   1. `(protected)/layout.tsx` wraps children in `p-4 sm:p-6`, and seven
+ *      pages ALSO padded themselves — `p-8`, or `p-6` beside a max-width — so
+ *      24+32px of nothing sat above their own title.
+ *   2. The header was `bg-background/80 backdrop-blur-xl border-b`, an opaque
+ *      white band across the top that cut the page wash off at the chrome.
+ *
+ * The portal's top bar carries no fill, no border and no shadow for exactly
+ * this reason (`top-bar-v2.tsx`), and it can because nothing scrolls under it.
+ * The same is true here: the header is a non-scrolling row in an `h-screen`
+ * flex column and `<main>` is the only scroll container.
+ */
+describe("the admin shell pads once", () => {
+  it("keeps the padding on the layout, where every page gets it", () => {
+    expect(src("app/admin/(protected)/layout.tsx")).toContain("'p-4 sm:p-6'");
+  });
+
+  it("has no page padding itself on top of that", () => {
+    const pages = readdirSync(resolve(ROOT, "app/admin/(protected)"), { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => `app/admin/(protected)/${e.name}/page.tsx`)
+      .filter((p) => existsSync(resolve(ROOT, p)));
+
+    // The rule is about the page's OUTERMOST element only: an inner panel or a
+    // CardContent pads itself and should. So this finds the default export's
+    // `return (` and looks at the first className after it, nothing else.
+    const offenders = pages.filter((p) => {
+      const s = src(p);
+      const from = s.indexOf("export default function");
+      if (from < 0) return false;
+      const ret = s.indexOf("return (", from);
+      if (ret < 0) return false;
+      const root = s.slice(ret, ret + 400).match(/className="([^"]*)"/);
+      // Split on whitespace rather than matching inside the string: `p-4` as
+      // a substring also lives inside `gap-4`, so a loose match would fail a
+      // root whose only sin was a gap.
+      return !!root && root[1].split(/\s+/).some((c) => /^(sm:|md:|lg:)?p[xytblr]?-[0-9]/.test(c));
+    });
+    expect(offenders).toEqual([]);
+  });
+
+  it("leaves the top bar unpainted so the wash runs to the top edge", () => {
+    const header = src("components/admin/Header.tsx");
+    const cls = [...header.matchAll(/className="([^"]*)"/g)].map((m) => m[1])[0] ?? "";
+    for (const paint of ["bg-background", "border-b", "backdrop-blur"]) {
+      expect(cls).not.toContain(paint);
+    }
+    expect(cls).toContain("h-14");
+  });
+});

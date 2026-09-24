@@ -222,7 +222,7 @@ export default function DashboardPage() {
   const lifetimeLabel = formatMoneyMap(m.lifetimeRevenue);
 
   return (
-    <div className="p-8">
+    <div>
       <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">Platform Dashboard</h1>

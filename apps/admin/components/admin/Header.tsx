@@ -67,7 +67,18 @@ export function Header() {
   const breadcrumbs = useBreadcrumbs();
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b border-border/60 bg-background/80 backdrop-blur-xl px-4 sm:px-6">
+    <header
+      /* No fill, no border, no blur — it sits straight on the app gradient,
+         the way the portal's top bar does. It used to be `bg-background/80
+         backdrop-blur-xl border-b`, which painted an opaque white band across
+         the top of every page and cut the wash off at the header.
+
+         Safe to leave bare because nothing ever passes under it: this is a
+         non-scrolling row in a `h-screen` flex column, and `<main>` below is
+         the only scroll container. The `sticky` stays only because it costs
+         nothing on an element that cannot scroll. */
+      className="sticky top-0 z-30 flex h-14 items-center gap-4 px-4 sm:px-6"
+    >
       {isMobile && (
         <Button
           variant="ghost"
