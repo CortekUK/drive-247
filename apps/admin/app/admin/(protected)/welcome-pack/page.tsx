@@ -525,7 +525,7 @@ export default function WelcomePackAdminPage() {
                       onChange={(e) => setSettings({ ...settings, intro_md: e.target.value })}
                     />
                   </div>
-                  <div className="flex items-center justify-between rounded-lg border p-4">
+                  <div className="flex items-center justify-between rounded-2xl border p-4">
                     <div>
                       <Label>Show the first-login prompt</Label>
                       <p className="text-xs text-muted-foreground">
@@ -537,7 +537,7 @@ export default function WelcomePackAdminPage() {
                       onCheckedChange={(v) => setSettings({ ...settings, show_on_first_login: v })}
                     />
                   </div>
-                  <div className="rounded-lg border p-4">
+                  <div className="rounded-2xl border p-4">
                     <Label>Version — {settings.version}</Label>
                     <p className="mb-2 text-xs text-muted-foreground">
                       Bumping this re-prompts every operator who has already completed the

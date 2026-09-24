@@ -608,7 +608,7 @@ export default function SetupChecklistAdmin() {
                     value={r.title}
                     onChange={(e) => patch(i, { title: e.target.value })}
                     placeholder="Auto-extension"
-                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                    className="w-full rounded-3xl border border-border bg-background px-4 py-2 text-sm"
                   />
                 </label>
 
@@ -623,7 +623,7 @@ export default function SetupChecklistAdmin() {
                     value={r.description}
                     onChange={(e) => patch(i, { description: e.target.value })}
                     rows={2}
-                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                    className="w-full rounded-3xl border border-border bg-background px-4 py-2 text-sm"
                   />
                 </label>
 
@@ -641,7 +641,7 @@ export default function SetupChecklistAdmin() {
                     disabled={!!r.id}
                     onChange={(e) => patch(i, { item_key: e.target.value })}
                     placeholder="auto_extension"
-                    className="w-full rounded-lg border border-border bg-background px-3 py-2 font-mono text-sm disabled:opacity-60"
+                    className="w-full rounded-3xl border border-border bg-background px-4 py-2 font-mono text-sm disabled:opacity-60"
                   />
                 </label>
 
@@ -667,7 +667,7 @@ export default function SetupChecklistAdmin() {
                         onChange={(e) => patch(i, { video_url: e.target.value })}
                         placeholder="https://www.loom.com/embed/… or /explainers/auto-extend.mp4"
                         aria-invalid={unusableLink(r.video_url)}
-                        className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm aria-[invalid=true]:border-destructive"
+                        className="w-full rounded-3xl border border-border bg-background px-4 py-2 text-sm aria-[invalid=true]:border-destructive"
                       />
                     </label>
 
@@ -688,7 +688,7 @@ export default function SetupChecklistAdmin() {
                         }}
                         placeholder="1:30"
                         aria-invalid={hasVideo(r) && parseVideoLength(r.video_length) === null}
-                        className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm tabular-nums"
+                        className="w-full rounded-3xl border border-border bg-background px-4 py-2 text-sm tabular-nums"
                       />
                     </label>
                   </div>
@@ -700,7 +700,7 @@ export default function SetupChecklistAdmin() {
                       onChange={(e) => patch(i, { guide_url: e.target.value })}
                       placeholder="https://… or /settings?tab=auto-extend"
                       aria-invalid={unusableLink(r.guide_url)}
-                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm aria-[invalid=true]:border-destructive"
+                      className="w-full rounded-3xl border border-border bg-background px-4 py-2 text-sm aria-[invalid=true]:border-destructive"
                     />
                   </label>
 

@@ -297,12 +297,12 @@ export default function OnboardingQuestionsAdmin() {
                   <label className="block text-sm sm:col-span-2">
                     <span className="mb-1 block font-medium">Prompt</span>
                     <input value={r.prompt} onChange={(e) => patch(i, { prompt: e.target.value })}
-                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" />
+                      className="w-full rounded-3xl border border-border bg-background px-4 py-2 text-sm" />
                   </label>
                   <label className="block text-sm">
                     <span className="mb-1 block font-medium">Type</span>
                     <select value={r.kind} onChange={(e) => patch(i, { kind: e.target.value as Kind })}
-                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm">
+                      className="w-full rounded-3xl border border-border bg-background px-4 py-2 text-sm">
                       <option value="single">Pick one</option>
                       <option value="multi">Pick any</option>
                       <option value="text">Free text</option>
@@ -315,7 +315,7 @@ export default function OnboardingQuestionsAdmin() {
                     Help <span className="font-normal text-muted-foreground">(optional)</span>
                   </span>
                   <input value={r.help} onChange={(e) => patch(i, { help: e.target.value })}
-                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" />
+                    className="w-full rounded-3xl border border-border bg-background px-4 py-2 text-sm" />
                 </label>
 
                 <label className="block text-sm">
@@ -328,7 +328,7 @@ export default function OnboardingQuestionsAdmin() {
                   <input value={r.question_key} disabled={!!r.id}
                     onChange={(e) => patch(i, { question_key: e.target.value })}
                     placeholder="fleet_size"
-                    className="w-full rounded-lg border border-border bg-background px-3 py-2 font-mono text-sm disabled:opacity-60" />
+                    className="w-full rounded-3xl border border-border bg-background px-4 py-2 font-mono text-sm disabled:opacity-60" />
                 </label>
 
                 {r.kind === 'text' ? (
@@ -337,7 +337,7 @@ export default function OnboardingQuestionsAdmin() {
                       Placeholder <span className="font-normal text-muted-foreground">(optional)</span>
                     </span>
                     <input value={r.placeholder} onChange={(e) => patch(i, { placeholder: e.target.value })}
-                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" />
+                      className="w-full rounded-3xl border border-border bg-background px-4 py-2 text-sm" />
                   </label>
                 ) : (
                   <div className="text-sm">

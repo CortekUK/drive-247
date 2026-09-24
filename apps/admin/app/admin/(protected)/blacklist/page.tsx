@@ -246,15 +246,15 @@ export default function BlacklistPage() {
 
       {/* Stats Row */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-        <div className="bg-dark-card rounded-lg border border-dark-border p-5">
+        <div className="rounded-4xl bg-card p-5 shadow-sm ring-1 ring-foreground/10">
           <p className="text-sm text-muted-foreground">Total Blocked</p>
           <p className="text-2xl font-bold text-red-600 mt-1">{totalBlocked}</p>
         </div>
-        <div className="bg-dark-card rounded-lg border border-dark-border p-5">
+        <div className="rounded-4xl bg-card p-5 shadow-sm ring-1 ring-foreground/10">
           <p className="text-sm text-muted-foreground">Globally Blacklisted</p>
           <p className="text-2xl font-bold text-orange-600 mt-1">{globallyBlacklisted}</p>
         </div>
-        <div className="bg-dark-card rounded-lg border border-dark-border p-5">
+        <div className="rounded-4xl bg-card p-5 shadow-sm ring-1 ring-foreground/10">
           <p className="text-sm text-muted-foreground">Tenants Affected</p>
           <p className="text-2xl font-bold text-foreground mt-1">{uniqueTenants}</p>
         </div>
@@ -275,7 +275,7 @@ export default function BlacklistPage() {
       {/* `overflow-x-auto`, not `overflow-hidden`: this table is wider than a
           phone and the card was CLIPPING the columns past the fold with no way
           to reach them. Any non-visible overflow still rounds the corners. */}
-      <div className="bg-dark-card rounded-lg shadow overflow-x-auto border border-dark-border">
+      <div className="overflow-x-auto rounded-4xl bg-card shadow-sm ring-1 ring-foreground/10">
         <table className="min-w-full divide-y divide-dark-border">
           <thead className="bg-dark-bg">
             <tr>

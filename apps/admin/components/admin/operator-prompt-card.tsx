@@ -221,7 +221,7 @@ export function OperatorPromptCard({ tenantId }: { tenantId: string }) {
                   key={opt.value}
                   type="button"
                   onClick={() => setSelected(opt.value)}
-                  className={`rounded-lg border p-3 text-left transition ${
+                  className={`rounded-2xl border p-3 text-left transition ${
                     active
                       ? 'border-primary bg-primary/5 ring-1 ring-primary'
                       : 'border-border hover:bg-muted/50'
@@ -244,7 +244,7 @@ export function OperatorPromptCard({ tenantId }: { tenantId: string }) {
           )}
 
           {/* Progress */}
-          <div className="rounded-lg border p-3">
+          <div className="rounded-2xl border p-3">
             <p className="mb-2 text-xs font-medium text-muted-foreground">Operator progress</p>
             <div className="space-y-1.5 text-sm">
               <div className="flex items-center justify-between gap-3">
@@ -359,8 +359,8 @@ export function OperatorPromptCard({ tenantId }: { tenantId: string }) {
                 : 'Complete both steps below to keep your payments running without interruption.'}
             </p>
             <div className="space-y-2">
-              <div className="rounded-lg border p-3">1. Connect your Stripe account</div>
-              <div className="rounded-lg border p-3">2. Confirm your payment details</div>
+              <div className="rounded-2xl border p-3">1. Connect your Stripe account</div>
+              <div className="rounded-2xl border p-3">2. Confirm your payment details</div>
             </div>
             <p className="rounded-lg bg-amber-50 p-3 text-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
               Complete both and we&apos;ll add 100 free credits to your account — on us.

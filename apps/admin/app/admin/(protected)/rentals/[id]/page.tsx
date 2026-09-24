@@ -1943,7 +1943,7 @@ export default function TenantDetailsPage() {
                 ) : policyAcceptances.length === 0 ? (
                   <p className="text-muted-foreground text-center py-6 text-sm">No policy acceptances recorded</p>
                 ) : (
-                  <div className="rounded-lg border border-border/40 overflow-hidden">
+                  <div className="overflow-hidden rounded-2xl border border-border/40">
                     <Table>
                       <TableHeader>
                         <TableRow className="bg-primary/5 hover:bg-primary/5">
@@ -2014,7 +2014,7 @@ export default function TenantDetailsPage() {
                 ) : staffUsers.length === 0 ? (
                   <p className="text-muted-foreground text-center py-6 text-sm">No staff users found</p>
                 ) : (
-                  <div className="rounded-lg border border-border/40 overflow-hidden">
+                  <div className="overflow-hidden rounded-2xl border border-border/40">
                     <Table>
                       <TableHeader>
                         <TableRow className="bg-primary/5 hover:bg-primary/5">
@@ -3120,7 +3120,7 @@ export default function TenantDetailsPage() {
               ) : plans.length === 0 ? (
                 <p className="text-muted-foreground text-center py-6 text-sm">No plans configured. Add a plan to enable subscriptions.</p>
               ) : (
-                <div className="rounded-lg border border-border/40 overflow-hidden">
+                <div className="overflow-hidden rounded-2xl border border-border/40">
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-primary/5 hover:bg-primary/5">
@@ -3234,7 +3234,7 @@ export default function TenantDetailsPage() {
                 <Separator />
                 <div>
                   <h3 className="text-sm font-semibold mb-3">Invoices</h3>
-                  <div className="rounded-lg border border-border/40 overflow-hidden">
+                  <div className="overflow-hidden rounded-2xl border border-border/40">
                     <Table>
                       <TableHeader>
                         <TableRow className="bg-primary/5 hover:bg-primary/5">
@@ -3339,7 +3339,7 @@ export default function TenantDetailsPage() {
           <DialogHeader>
             <DialogTitle>{editingPlan ? 'Edit Plan' : 'Add Plan'}</DialogTitle>
             {editingPlan && editingPlan.active_subscriptions > 0 && (
-              <div className="rounded-lg px-4 py-3 text-sm bg-amber-500/10 border border-amber-500/30 text-amber-600 mt-2">
+              <div className="rounded-2xl bg-warning/10 px-4 py-3 text-sm text-warning ring-1 ring-warning/25 mt-2">
                 This plan has {editingPlan.active_subscriptions} active subscriber{editingPlan.active_subscriptions > 1 ? 's' : ''}.
                 Changing the price will only apply to new subscriptions.
               </div>
@@ -3537,7 +3537,7 @@ export default function TenantDetailsPage() {
                 : 'This will use the production Bonzah API. Real insurance policies will be issued.'}
             </DialogDescription>
           </DialogHeader>
-          <div className="rounded-lg px-4 py-3 text-sm bg-amber-500/10 border border-amber-500/30 text-amber-600">
+          <div className="rounded-2xl bg-warning/10 px-4 py-3 text-sm text-warning ring-1 ring-warning/25">
             Make sure everything is properly configured before switching.
           </div>
           <DialogFooter>
@@ -3557,7 +3557,7 @@ export default function TenantDetailsPage() {
               for <strong className="text-foreground">{tenant.company_name}</strong>.
             </DialogDescription>
           </DialogHeader>
-          <div className="rounded-lg px-4 py-3 text-sm bg-amber-500/10 border border-amber-500/30 text-amber-600">
+          <div className="rounded-2xl bg-warning/10 px-4 py-3 text-sm text-warning ring-1 ring-warning/25">
             Users will need to sign in again to access their accounts.
           </div>
           <DialogFooter>

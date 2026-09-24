@@ -110,7 +110,7 @@ export function TenantCreditsTab({ tenantId }: { tenantId: string }) {
     <div className="space-y-6">
       {/* Balance Overview */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-dark-card rounded-lg p-5 border border-dark-border">
+        <div className="rounded-4xl bg-card p-5 shadow-sm ring-1 ring-foreground/10">
           <p className="text-sm text-green-600 font-medium mb-1">Live Balance</p>
           <p className="text-3xl font-bold text-foreground">{wallet?.balance?.toFixed(0) ?? '0'}</p>
           <div className="mt-3 flex gap-4 text-xs text-dark-text-secondary">
@@ -119,7 +119,7 @@ export function TenantCreditsTab({ tenantId }: { tenantId: string }) {
           </div>
         </div>
 
-        <div className="bg-dark-card rounded-lg p-5 border border-dark-border">
+        <div className="rounded-4xl bg-card p-5 shadow-sm ring-1 ring-foreground/10">
           <p className="text-sm text-yellow-600 font-medium mb-1">Test Balance</p>
           <p className="text-3xl font-bold text-foreground">{wallet?.test_balance?.toFixed(0) ?? '0'}</p>
           <div className="mt-3 flex gap-4 text-xs text-dark-text-secondary">
@@ -130,7 +130,7 @@ export function TenantCreditsTab({ tenantId }: { tenantId: string }) {
       </div>
 
       {/* Adjust Credits */}
-      <div className="bg-dark-card rounded-lg p-5 border border-dark-border">
+      <div className="rounded-4xl bg-card p-5 shadow-sm ring-1 ring-foreground/10">
         <h3 className="text-lg font-semibold text-foreground mb-4">Adjust Credits</h3>
         <div className="space-y-4 max-w-md">
           <div>
@@ -168,7 +168,7 @@ export function TenantCreditsTab({ tenantId }: { tenantId: string }) {
               value={adjustAmount}
               onChange={(e) => setAdjustAmount(e.target.value)}
               placeholder="e.g. 100 or -50"
-              className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-lg text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-purple-500"
+              className="w-full rounded-3xl border border-border bg-background px-4 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/30"
             />
           </div>
 
@@ -179,7 +179,7 @@ export function TenantCreditsTab({ tenantId }: { tenantId: string }) {
               value={adjustNote}
               onChange={(e) => setAdjustNote(e.target.value)}
               placeholder="Reason for adjustment"
-              className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-lg text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-purple-500"
+              className="w-full rounded-3xl border border-border bg-background px-4 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/30"
             />
           </div>
 

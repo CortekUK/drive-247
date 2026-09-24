@@ -227,7 +227,7 @@ export function PlatformPushSettings() {
         )}
 
         {!isSupported && !needsInstall && (
-          <p className="flex items-center gap-2 rounded-lg border p-3 text-sm text-muted-foreground">
+          <p className="flex items-center gap-2 rounded-2xl border p-3 text-sm text-muted-foreground">
             <AlertTriangle className="h-4 w-4 shrink-0" />
             This browser doesn&apos;t support push notifications. Chrome, Edge and Firefox all do,
             on desktop and Android.
@@ -235,14 +235,14 @@ export function PlatformPushSettings() {
         )}
 
         {isBlocked && (
-          <p className="flex items-center gap-2 rounded-lg border border-destructive/40 p-3 text-sm text-destructive">
+          <p className="flex items-center gap-2 rounded-2xl border border-destructive/40 p-3 text-sm text-destructive">
             <AlertTriangle className="h-4 w-4 shrink-0" />
             Notifications are blocked for this site. Re-enable them in your browser settings, then reload.
           </p>
         )}
 
         {error && !isBlocked && (
-          <p className="flex items-center gap-2 rounded-lg border border-destructive/40 p-3 text-sm text-destructive">
+          <p className="flex items-center gap-2 rounded-2xl border border-destructive/40 p-3 text-sm text-destructive">
             <AlertTriangle className="h-4 w-4 shrink-0" />
             {error}
           </p>
@@ -252,7 +252,7 @@ export function PlatformPushSettings() {
             and the site address; no payload field can override that. Installing
             is the only way to get our own branding on it. */}
         {!isInstalled && !needsInstall && (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border p-3">
             <p className="min-w-0 text-sm text-muted-foreground">
               Install this dashboard so notifications show <strong className="text-foreground">Drive247 Admin</strong>
               {' '}instead of your browser&apos;s name and icon.
@@ -351,7 +351,7 @@ export function PlatformPushSettings() {
             </div>
           )}
 
-          <div className="flex items-center gap-2 rounded-lg border p-3">
+          <div className="flex items-center gap-2 rounded-2xl border p-3">
             <Checkbox
               id="include-test"
               checked={prefs.include_test_tenants}

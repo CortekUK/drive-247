@@ -178,7 +178,7 @@ export default function ManageAdminsPage() {
       {/* `overflow-x-auto`, not `overflow-hidden`: this table is wider than a
           phone and the card was CLIPPING the columns past the fold with no way
           to reach them. Any non-visible overflow still rounds the corners. */}
-      <div className="bg-dark-card rounded-lg shadow overflow-x-auto border border-dark-border">
+      <div className="overflow-x-auto rounded-4xl bg-card shadow-sm ring-1 ring-foreground/10">
         <table className="min-w-full divide-y divide-dark-border">
           <thead className="bg-dark-bg">
             <tr>
@@ -238,7 +238,7 @@ export default function ManageAdminsPage() {
       {/* Create Admin Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/30 supports-[backdrop-filter]:backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-dark-card rounded-lg p-8 max-w-md w-full border border-dark-border">
+          <div className="w-full max-w-md rounded-4xl bg-card p-8 shadow-sm ring-1 ring-foreground/10">
             <h2 className="text-2xl font-bold text-foreground mb-4">Add Super Admin</h2>
 
             <form onSubmit={handleCreateAdmin} className="space-y-4">
@@ -315,7 +315,7 @@ export default function ManageAdminsPage() {
       {/* Create Sales Agent Modal */}
       {showSalesModal && (
         <div className="fixed inset-0 bg-black/30 supports-[backdrop-filter]:backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-dark-card rounded-lg p-8 max-w-md w-full border border-dark-border">
+          <div className="w-full max-w-md rounded-4xl bg-card p-8 shadow-sm ring-1 ring-foreground/10">
             <h2 className="text-2xl font-bold text-foreground mb-4">Add Sales Agent</h2>
 
             <form onSubmit={handleCreateSalesAgent} className="space-y-4">

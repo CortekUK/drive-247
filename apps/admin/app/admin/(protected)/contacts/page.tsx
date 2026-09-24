@@ -100,7 +100,7 @@ export default function ContactRequestsPage() {
       {/* `overflow-x-auto`, not `overflow-hidden`: this table is wider than a
           phone and the card was CLIPPING the columns past the fold with no way
           to reach them. Any non-visible overflow still rounds the corners. */}
-      <div className="bg-dark-card rounded-lg shadow overflow-x-auto border border-dark-border">
+      <div className="overflow-x-auto rounded-4xl bg-card shadow-sm ring-1 ring-foreground/10">
         <table className="min-w-full divide-y divide-dark-border">
           <thead className="bg-dark-bg">
             <tr>

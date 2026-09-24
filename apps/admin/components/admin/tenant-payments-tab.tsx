@@ -756,7 +756,7 @@ export function TenantPaymentsTab({ tenantId }: { tenantId: string }) {
         {readiness && (
           <CardContent>
             <div className="grid gap-6 md:grid-cols-2">
-              <div className="rounded-lg border p-4">
+              <div className="rounded-2xl border p-4">
                 <p className="text-sm font-semibold mb-2 flex items-center gap-2">
                   <CreditCard className="h-4 w-4" /> Subscription → UAE
                 </p>
@@ -791,7 +791,7 @@ export function TenantPaymentsTab({ tenantId }: { tenantId: string }) {
                 })()}
                 <TrackVerdict track={readiness.subscription} />
               </div>
-              <div className="rounded-lg border p-4">
+              <div className="rounded-2xl border p-4">
                 <p className="text-sm font-semibold mb-2 flex items-center gap-2">
                   <Link2 className="h-4 w-4" /> Connect → Own Stripe
                 </p>

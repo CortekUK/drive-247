@@ -378,7 +378,7 @@ export default function PlatformRentalsPage() {
 
                 {/* Reasons */}
                 {reasons.length > 0 ? (
-                  <div className={cn('rounded-lg border p-3', SEV[selected.health_severity ?? 'ok'].chipBg)}>
+                  <div className={cn('rounded-2xl border p-3', SEV[selected.health_severity ?? 'ok'].chipBg)}>
                     <p className={cn('text-xs font-bold uppercase tracking-wide mb-2', SEV[selected.health_severity ?? 'ok'].text)}>
                       Why this needs attention
                     </p>

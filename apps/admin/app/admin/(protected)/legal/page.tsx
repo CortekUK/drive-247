@@ -296,7 +296,7 @@ export default function LegalPagesAdmin() {
               <input
                 value={doc.title}
                 onChange={(e) => patch({ title: e.target.value })}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                className="w-full rounded-3xl border border-border bg-background px-4 py-2 text-sm"
               />
             </label>
 
@@ -306,7 +306,7 @@ export default function LegalPagesAdmin() {
                 value={doc.version}
                 onChange={(e) => patch({ version: e.target.value })}
                 placeholder="2026-02-platform-tou"
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 font-mono text-sm"
+                className="w-full rounded-3xl border border-border bg-background px-4 py-2 font-mono text-sm"
               />
             </label>
           </div>
@@ -319,7 +319,7 @@ export default function LegalPagesAdmin() {
               value={doc.effective_date}
               onChange={(e) => patch({ effective_date: e.target.value })}
               placeholder="1 March 2026"
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+              className="w-full rounded-3xl border border-border bg-background px-4 py-2 text-sm"
             />
           </label>
 

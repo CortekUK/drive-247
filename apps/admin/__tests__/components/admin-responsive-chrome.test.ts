@@ -51,10 +51,27 @@ describe("no admin table is clipped on a phone", () => {
     "app/admin/(protected)/contacts/page.tsx",
   ];
 
-  it.each(pages)("%s scrolls its table instead of clipping it", (page) => {
-    const s = src(page);
-    expect(s).toContain('className="bg-dark-card rounded-lg shadow overflow-x-auto border border-dark-border"');
-    expect(s).not.toContain('className="bg-dark-card rounded-lg shadow overflow-hidden border border-dark-border"');
+  /*
+   * The RULE, not the class string. This first asserted the exact wrapper it
+   * expected, and a restyle that kept the scrolling perfectly intact broke it
+   * anyway — a test that fails on a change it does not care about teaches
+   * people to edit tests rather than read them. What matters is that a table
+   * has a scroller on an ancestor near it, whatever that ancestor looks like.
+   */
+  it.each(pages)("%s has a scroller above its table, not a clip", (page) => {
+    const lines = src(page).split("\n");
+    const tables = lines.flatMap((l, i) => (/<table\b/.test(l) ? [i] : []));
+    expect(tables.length).toBeGreaterThan(0);
+
+    for (const at of tables) {
+      // Class attributes only. Reading the raw slice matched the COMMENT that
+      // explains this fix, which happens to contain the word it forbids.
+      const classes = [...lines.slice(Math.max(0, at - 6), at + 1).join("\n").matchAll(/className="([^"]*)"/g)]
+        .map((m) => m[1])
+        .join(" ");
+      expect(classes).toMatch(/overflow-(x-)?(auto|scroll)/);
+      expect(classes).not.toMatch(/overflow-hidden/);
+    }
   });
 });
 
