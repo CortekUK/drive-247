@@ -122,9 +122,27 @@ export const SETTINGS_SECTION_TITLE = "font-heading text-base font-semibold trac
  * With Trax closed, below md, and on every v1 page (which never mounts
  * TraxPanel) nothing matches and the column is exactly what it was.
  */
-export const SETTINGS_COLUMN_BESIDE_TRAX =
-  "transition-[max-width] duration-200 ease-linear motion-reduce:transition-none " +
-  "md:[html[data-trax-panel=open]_&]:max-w-[min(1160px,max(20rem,calc(100%-var(--trax-width,440px)-1rem)))]";
+/*
+ * REVERSED 2026-09-24, deliberately, and kept as an empty string rather than
+ * deleted.
+ *
+ * Everything above describes what this used to do and why it seemed right:
+ * the column shrank so the floating panel never covered a control. The problem
+ * is that SETTINGS WAS THE ONLY PLACE THAT DID IT. On every other v2 page —
+ * rentals, customers, vehicles, the dashboard — Trax floats over the content
+ * and nothing reflows, so opening the panel in Settings re-laid the page out
+ * while opening it anywhere else did not. The inconsistency read as a bug, and
+ * was reported as one; the overlap it avoided never was, because the operator
+ * can move or close the panel.
+ *
+ * Empty rather than removed: the name is interpolated into ~21 page columns and
+ * pinned by name in three suites, so emptying it turns the behaviour off
+ * everywhere at once and in one place, and restoring the old decision is
+ * putting the two lines back. A no-op string adds nothing to any class list —
+ * `cn()` drops it — so the rendered markup is exactly what it would be if every
+ * call site had been edited.
+ */
+export const SETTINGS_COLUMN_BESIDE_TRAX = "";
 
 /**
  * A settings row's grid needs ~700px (a 420px label column, the 40px gap, then
@@ -132,8 +150,17 @@ export const SETTINGS_COLUMN_BESIDE_TRAX =
  * column is narrower than that, so rows stack as they do on a phone instead of
  * squeezing the control to a sliver. Nothing changes with Trax closed.
  */
-export const SETTINGS_ROW_STACKS_BESIDE_TRAX =
-  "max-[1440px]:[html[data-trax-panel=open]_&]:flex max-[1440px]:[html[data-trax-panel=open]_&]:items-stretch";
+/*
+ * REVERSED with the column above, and for the same reason.
+ *
+ * This existed only to rescue a column the panel had squeezed: once it was
+ * narrower than the ~700px a settings row needs, the rows stacked instead of
+ * crushing the control to a sliver. With the column no longer shrinking there
+ * is nothing to rescue — and leaving it on would be worse than the original
+ * problem, since rows would restack on a FULL-WIDTH column purely because a
+ * floating panel opened somewhere over on the right.
+ */
+export const SETTINGS_ROW_STACKS_BESIDE_TRAX = "";
 
 export function SettingsPageHeader({
   title,

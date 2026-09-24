@@ -101,13 +101,20 @@ describe("Branding (v2): layout", () => {
   // the Settings index, Customer messages and Agreement templates, so it takes
   // the same clearance; without it the panel covered the brand-colour controls
   // and the save bar.
-  it("its page column steps aside for the open Trax panel, like every other v2 settings column", () => {
+  it("uses the same 1160px column as every other v2 settings page, and does not move for Trax", () => {
     const { container } = render(<AppearanceSettings />);
     const column = container.firstElementChild as HTMLElement;
     expect(column.className).toContain("max-w-[1160px]");
-    for (const cls of SETTINGS_COLUMN_BESIDE_TRAX.split(/\s+/)) {
-      expect(column.className.split(/\s+/), cls).toContain(cls);
-    }
+    /*
+     * The column used to step aside for the open panel; that was reversed on
+     * 2026-09-24 so Settings behaves like every other v2 page, where Trax
+     * floats over the content. The hook is still interpolated here — it is an
+     * empty string now (settings-kit.tsx) — so the assertion is that it adds
+     * nothing, rather than a loop over its tokens, which with an empty string
+     * becomes `toContain("")` and fails.
+     */
+    expect(SETTINGS_COLUMN_BESIDE_TRAX).toBe("");
+    expect(column.className).not.toContain("data-trax-panel");
   });
 
   it("shows the two logo cards instead of LogoStudio and the favicon uploader", () => {

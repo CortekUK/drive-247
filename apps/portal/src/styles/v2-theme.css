@@ -756,6 +756,41 @@ html:has(body.v2-theme)::-webkit-scrollbar-corner {
   background: transparent;
 }
 
+/* THE SAME BAR, ON THE ELEMENT THAT ACTUALLY SCROLLS.
+ *
+ * In the v2 fixed frame the document does not scroll at all: `<main>` is the
+ * scroll container (`overflow-y-auto`, marked `data-scrollport` — see
+ * (dashboard)/layout.tsx), and because it runs to the right edge of the window
+ * its scrollbar LOOKS like the page's. Styling only `html` above therefore
+ * left the visible bar untouched on every v2 page. Both rules are kept: the
+ * html one still covers the bounded-height routes and any v2 page rendered
+ * without the fixed frame.
+ *
+ * Same greys as above, and for the same reason they are literals there.
+ */
+.v2-theme [data-scrollport] {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(120 120 135 / 0.3) transparent;
+}
+.v2-theme [data-scrollport]::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.v2-theme [data-scrollport]::-webkit-scrollbar-track {
+  background: transparent;
+}
+.v2-theme [data-scrollport]::-webkit-scrollbar-thumb {
+  background: rgb(120 120 135 / 0.3);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  transition: background 0.15s ease;
+}
+.v2-theme [data-scrollport]::-webkit-scrollbar-thumb:hover {
+  background: rgb(120 120 135 / 0.5);
+  background-clip: padding-box;
+}
+
 /* Scrollbar utilities */
 .v2-theme .scrollbar-thin {
   scrollbar-width: thin;

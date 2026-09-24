@@ -1,17 +1,27 @@
 /**
- * D6: the v2 settings column and its rows beside the floating Trax panel.
+ * D6 REVERSED: the v2 settings column no longer reacts to the Trax panel.
  *
- * The panel floats over the bottom-right corner (trax-panel.tsx, z-40) and
- * puts `data-trax-panel="open"` on <html> while it is open. A settings column
- * 1160px wide ran underneath it, so the panel sat over the middle of a
- * section and over Save changes. The column now stops short of the open
- * panel, and rows stack while it is too narrow for the 420px label column.
+ * This suite used to prove the opposite. The panel floats over the
+ * bottom-right corner (trax-panel.tsx, z-40) and puts `data-trax-panel="open"`
+ * on <html> while it is open; a 1160px settings column ran underneath it, so
+ * the column was made to stop short of the panel and its rows to stack while
+ * it was too narrow. The overlap that avoided was real — but SETTINGS WAS THE
+ * ONLY PLACE THAT DID IT. On rentals, customers, vehicles and the dashboard
+ * the panel simply floats over the content, so opening Trax re-laid out one
+ * area of the portal and left every other one alone. That inconsistency is
+ * what got reported (2026-09-24: "when the trax is open in other pages it
+ * comes above them not shrink the content but in setting it reduce the size to
+ * fit ... follow the same thing in setting"), and the overlap never was: the
+ * operator can move or close the panel.
  *
- * jsdom cannot evaluate media queries, so the classes are compiled with the
- * real Tailwind (the version the portal builds with) and the CSS it emits is
- * checked: which selector and media query each rule sits behind, and the
- * value. That is what proves the change is a no-op with Trax closed and on v1
- * (which never mounts TraxPanel, so <html> never carries the attribute).
+ * So both hooks are now empty strings, and these tests hold them empty. They
+ * are kept rather than deleted because the SEAM is still there — the constants
+ * are interpolated into ~21 page columns — and an empty constant is invisible
+ * in a rendered class list, so nothing else would notice it quietly coming
+ * back or being dropped.
+ *
+ * The compile-the-real-CSS approach is kept too: it is the only way to prove a
+ * class contributes NOTHING, since jsdom cannot evaluate media queries.
  */
 import { describe, expect, it } from "vitest";
 import { render } from "@testing-library/react";
@@ -23,7 +33,7 @@ import {
   SettingsRow,
 } from "@/components/settings-v2/settings-kit";
 
-const TRAX_OPEN = "[html[data-trax-panel=open]_&]";
+const TRAX_ATTR = "data-trax-panel";
 
 /** Compile exactly these classes with Tailwind's default screens (the portal overrides none). */
 async function compile(classes: string): Promise<string> {
@@ -33,44 +43,30 @@ async function compile(classes: string): Promise<string> {
   return result.css;
 }
 
-/** Every rule in the CSS as [media query or "", selector, declarations], whitespace squashed. */
-function rules(css: string): Array<[string, string, string]> {
-  const out: Array<[string, string, string]> = [];
-  postcss.parse(css).walkRules((rule) => {
-    const parent = rule.parent as postcss.AtRule | undefined;
-    const media = parent?.type === "atrule" ? `${parent.name} ${parent.params}` : "";
-    out.push([media.replace(/\s+/g, " "), rule.selector.replace(/\s+/g, " "), rule.nodes.map(String).join("; ")]);
-  });
-  return out;
-}
-
-describe("SETTINGS_COLUMN_BESIDE_TRAX", () => {
-  it("only animates the column, or applies while the Trax panel is open on md and up", () => {
-    for (const cls of SETTINGS_COLUMN_BESIDE_TRAX.split(/\s+/)) {
-      const scoped = cls.startsWith(`md:${TRAX_OPEN}:`);
-      const motion = ["transition-[max-width]", "duration-200", "ease-linear", "motion-reduce:transition-none"].includes(cls);
-      expect(scoped || motion, cls).toBe(true);
-    }
+describe("the settings column does not move for the Trax panel", () => {
+  it("contributes no classes at all", () => {
+    expect(SETTINGS_COLUMN_BESIDE_TRAX).toBe("");
+    // `cn()` drops an empty string, so a column that interpolates this renders
+    // exactly the class list it would without it.
+    expect(SETTINGS_COLUMN_BESIDE_TRAX.split(/\s+/).filter(Boolean)).toEqual([]);
   });
 
-  it("compiles to a max-width behind md AND html[data-trax-panel=open]: 1160px at most, the room left of the panel, 20rem at least", async () => {
-    const css = rules(await compile(SETTINGS_COLUMN_BESIDE_TRAX));
-    const widths = css.filter(([, , decl]) => decl.startsWith("max-width"));
-    expect(widths).toHaveLength(1);
-    const [media, selector, decl] = widths[0];
-    expect(media).toBe("media (min-width: 768px)");
-    expect(selector.startsWith("html[data-trax-panel=open] ")).toBe(true);
-    // The floating panel's width (never the expanded overlay's), plus the 1rem
-    // `--trax-offset` adds, taken off the column's containing width.
-    expect(decl).toBe("max-width: min(1160px, max(20rem, calc(100% - var(--trax-width,440px) - 1rem)))");
-    // Nothing else changes the layout: only the transition rules remain.
-    const others = css.filter(([, , d]) => !d.startsWith("max-width"));
-    for (const [, , d] of others) expect(d).toMatch(/^transition-(property|duration|timing-function)/);
+  it("compiles to no CSS — nothing keyed on the panel, and no max-width", async () => {
+    const css = await compile(SETTINGS_COLUMN_BESIDE_TRAX || "sr-only");
+    // `sr-only` is a stand-in so Tailwind has something to emit; what matters
+    // is that nothing panel-scoped or width-related comes out.
+    expect(css).not.toContain(TRAX_ATTR);
+    expect(css).not.toContain("max-width: min(1160px");
+    expect(css).not.toContain("--trax-width");
   });
 });
 
-describe("SettingsRow beside the Trax panel", () => {
-  it("keeps its grid, and adds only rules scoped to an open Trax panel", () => {
+describe("a settings row keeps its grid whatever Trax is doing", () => {
+  it("stacking hook contributes nothing", () => {
+    expect(SETTINGS_ROW_STACKS_BESIDE_TRAX).toBe("");
+  });
+
+  it("keeps the two-column grid, with no panel-scoped rules on it", () => {
     const { container } = render(
       <SettingsRow label="Minimum driver age">
         <input aria-label="age" />
@@ -78,25 +74,26 @@ describe("SettingsRow beside the Trax panel", () => {
     );
     const grid = container.firstElementChild!.firstElementChild!;
     const classes = grid.className.split(/\s+/);
-    expect(classes).toEqual(expect.arrayContaining(["md:grid", "md:grid-cols-[minmax(0,420px)_minmax(0,1fr)]", "md:items-center"]));
-    expect(classes).toEqual(expect.arrayContaining(SETTINGS_ROW_STACKS_BESIDE_TRAX.split(" ")));
-    for (const cls of SETTINGS_ROW_STACKS_BESIDE_TRAX.split(" ")) expect(cls).toContain(`:${TRAX_OPEN}:`);
+    // The row's own layout is untouched by any of this.
+    expect(classes).toEqual(
+      expect.arrayContaining(["md:grid", "md:grid-cols-[minmax(0,420px)_minmax(0,1fr)]", "md:items-center"]),
+    );
+    // Nothing on the row reacts to the panel any more.
+    expect(grid.className).not.toContain(TRAX_ATTR);
   });
 
-  it("stacks (flex, full-width children) only while the panel is open on a screen up to 1440px wide", async () => {
-    const css = rules(await compile(SETTINGS_ROW_STACKS_BESIDE_TRAX));
-    expect(css.map(([media, selector, decl]) => [media, selector.split(" ")[0], decl])).toEqual([
-      ["media (max-width: 1440px)", "html[data-trax-panel=open]", "display: flex"],
-      ["media (max-width: 1440px)", "html[data-trax-panel=open]", "align-items: stretch"],
-    ]);
+  it("emits no display switch keyed on the panel", async () => {
+    const css = await compile(SETTINGS_ROW_STACKS_BESIDE_TRAX || "sr-only");
+    expect(css).not.toContain(TRAX_ATTR);
+    expect(css).not.toContain("display: flex");
   });
+});
 
-  it("wins over the md grid when both apply (a more specific selector)", async () => {
-    const css = rules(await compile(`md:grid md:items-center ${SETTINGS_ROW_STACKS_BESIDE_TRAX}`));
-    const grid = css.find(([, , d]) => d === "display: grid")!;
-    const stack = css.find(([, , d]) => d === "display: flex")!;
-    // .md\:grid is one class; the stacking rule is `html[attr] .class`.
-    expect(grid[1].split(" ")).toHaveLength(1);
-    expect(stack[1].split(" ")).toHaveLength(2);
+describe("the seam is still wired, so restoring the behaviour is one edit", () => {
+  it("both hooks are still exported, as strings", () => {
+    // If someone deletes these, ~21 call sites lose the hook silently — an
+    // empty string leaves no trace in the DOM to notice its absence by.
+    expect(typeof SETTINGS_COLUMN_BESIDE_TRAX).toBe("string");
+    expect(typeof SETTINGS_ROW_STACKS_BESIDE_TRAX).toBe("string");
   });
 });

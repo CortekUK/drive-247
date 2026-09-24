@@ -104,7 +104,7 @@
     "apps/portal/src/app/(dashboard)/settings/email-templates/[key]/page.tsx": "6082a7bdf408d09f45ca43057b35d70b6a2cf6bd3aa746e6e96bf84ef981a943",
     "apps/portal/src/app/(dashboard)/settings/email-templates/page.tsx": "b67460ee2ff7d6b8acf7e37860cdae08403a66ead681557aed1fe65774a23771",
     "apps/portal/src/app/(dashboard)/settings/lead-management/page.tsx": "882351ecc21a55ebdf057811202c6da3bea616cc2f3bbbd4cce7d72c5eacda1c",
-    "apps/portal/src/app/(dashboard)/settings/page.tsx": "61222ea71c0cf24f419c2214aa10e7a3701c7a14450247a15537cfafb435a210",
+    "apps/portal/src/app/(dashboard)/settings/page.tsx": "9f8ee17d4addefb809db6c807d44a3a5f25e469bf1a5e56d782a3a54693c4220",
     "apps/portal/src/app/(dashboard)/settings/reminders/page.tsx": "554ad4750b9b5dafaf8a18400eaa9ec26ec07b5499b7561700e7569cd4185c9e",
     "apps/portal/src/app/(dashboard)/settings/users/page.tsx": "576e9fbcf2777ded17e4e4cd9866d5546377c37b6d4813398f2114343cdba811",
     "apps/portal/src/app/(dashboard)/subscription/page.tsx": "580463f4d6157c9b1ec7eb75c714c1d733c2ada8a47356597d8dd6754deb450e",

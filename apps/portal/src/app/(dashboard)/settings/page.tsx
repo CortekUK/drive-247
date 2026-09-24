@@ -333,7 +333,18 @@ const V2_LOCKBOX_MESSAGES_HREF = `/settings?tab=templates#${settingsSectionId('l
  * While the floating Trax panel is open the column stops short of it, so the
  * panel never covers a section's controls or the save bar at the column's end.
  */
-const V2_SETTINGS_PAGE_COLUMN = `w-full max-w-[1160px] space-y-8 pb-6 md:pt-[26px] ${SETTINGS_COLUMN_BESIDE_TRAX}`;
+/**
+ * `min-h-full` is what keeps the save bar on the bottom edge.
+ *
+ * The bar is the column's last child at `sticky bottom-4`, and sticky only
+ * holds an element back while its container is taller than the scrollport. A
+ * short page — Lockbox is five rows — left the column ending halfway down, so
+ * the bar sat straight after the content with a band of empty page under it
+ * (user, Sep 24 2026: "the empty space below is still showing"). Full height
+ * gives sticky something to work against, and it is exactly the scrollport's
+ * content box, so `<main>`'s own `p-4` still fits and nothing scrolls.
+ */
+const V2_SETTINGS_PAGE_COLUMN = `w-full min-h-full max-w-[1160px] space-y-8 pb-6 md:pt-[26px] ${SETTINGS_COLUMN_BESIDE_TRAX}`;
 
 /**
  * Light → dark colour sync.

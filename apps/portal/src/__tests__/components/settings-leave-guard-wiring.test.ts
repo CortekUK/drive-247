@@ -90,15 +90,35 @@ describe("settings page (v2): the leave guard", () => {
     expect(v2).not.toContain("onBack=");
     expect(v2).not.toContain("md:pt-8");
     // The permission-wait skeleton and the page wrapper share one column, 26px
-    // from the top, which steps aside for the open Trax panel.
+    // from the top. (It no longer steps aside for the Trax panel — that
+    // behaviour was reversed on 2026-09-24 so Settings matches every other v2
+    // page, where the panel floats over the content. See settings-kit.tsx.)
     expect(v2.match(/<div className=\{V2_SETTINGS_PAGE_COLUMN\}>/g)).toHaveLength(2);
-    // `pb-6`, not `pb-16`: the sticky save bar is the column's LAST child and
-    // floats at `bottom-4`, so 64px of padding sat UNDER it — dead space at the
-    // end of every settings page, and enough to give a short page like Lockbox
-    // a scrollbar with nothing to scroll to.
-    expect(page).toContain(
-      "const V2_SETTINGS_PAGE_COLUMN = `w-full max-w-[1160px] space-y-8 pb-6 md:pt-[26px] ${SETTINGS_COLUMN_BESIDE_TRAX}`;",
-    );
+
+    /*
+     * The PARTS of the column, not the whole literal.
+     *
+     * This pinned the exact template string and broke twice in two days, on two
+     * changes that were both right and both unrelated to the leave guard this
+     * suite is about: `pb-16` → `pb-6` (64px of padding sat under a sticky save
+     * bar) and `min-h-full` (sticky needs a full-height container to hold the
+     * bar at the bottom edge). An exact match turns every future layout tweak
+     * into a failure here, so it checks what must actually hold instead.
+     */
+    const column = page.match(/const V2_SETTINGS_PAGE_COLUMN = `([^`]*)`/)?.[1];
+    expect(column, "V2_SETTINGS_PAGE_COLUMN is a template literal").toBeTruthy();
+    expect(column).toContain("max-w-[1160px]");
+    expect(column).toContain("md:pt-[26px]");
+    // Small bottom padding: the save bar is the column's last child.
+    expect(column).toMatch(/\bpb-[0-8]\b/);
+    /*
+     * The beside-Trax hook must stay interpolated even though it is an EMPTY
+     * string today. That is the whole reason this line is worth asserting: with
+     * nothing to see in the rendered class list, dropping the interpolation
+     * would be invisible until someone restored the panel behaviour and found
+     * it silently disconnected.
+     */
+    expect(column).toContain("${SETTINGS_COLUMN_BESIDE_TRAX}");
   });
 
   it("v1's tab switch handlers are back to their original form", () => {
