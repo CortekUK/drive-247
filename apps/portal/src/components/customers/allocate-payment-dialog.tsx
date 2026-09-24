@@ -203,7 +203,7 @@ export const AllocatePaymentDialog = ({ open, onOpenChange, payment, customerId 
         </DialogHeader>
 
         <div className="space-y-4 py-1">
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             {modeButton("account", <Banknote className="h-4 w-4" />, "Whole account")}
             {modeButton("rental", <Car className="h-4 w-4" />, "A rental")}
             {modeButton("item", <ListTree className="h-4 w-4" />, "A line item")}

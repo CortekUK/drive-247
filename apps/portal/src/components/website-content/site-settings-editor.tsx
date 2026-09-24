@@ -68,7 +68,7 @@ export function SiteSettingsEditor({
 
   return (
     <Tabs defaultValue="logo" className="w-full">
-      <TabsList className="grid w-full grid-cols-4">
+      <TabsList className="flex w-full overflow-x-auto [&>*]:shrink-0 sm:grid sm:grid-cols-4">
         <TabsTrigger value="logo" className="flex items-center gap-2">
           <Image className="h-4 w-4" />
           Logo

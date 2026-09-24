@@ -510,7 +510,7 @@ export function StageCustomer({ detail }: StageProps) {
 
         {images.length > 0 && (
           <>
-            <div className="mt-5 grid grid-cols-3 gap-2">
+            <div className="mt-5 grid grid-cols-2 sm:grid-cols-3 gap-2">
               {images.map((img) => (
                 <div key={img.label} className={cn(insetCls, "p-3")}>
                   {/* Blurred by default and revealed on click — the same

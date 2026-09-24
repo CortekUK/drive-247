@@ -262,7 +262,7 @@ export function CreatePayoutDialog({ open, onOpenChange, defaultOwnerId, onCreat
 
           {!manualMode && (
             <div className="rounded-md border p-3 bg-[#f8fafc] dark:bg-muted/40">
-              <div className="grid grid-cols-4 text-sm gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 text-sm gap-2">
                 <Stat label="Gross Revenue" value={formatCurrency(totals.gross, currency)} />
                 <Stat label="Commission" value={`- ${formatCurrency(totals.commission, currency)}`} />
                 <Stat label="Refund Adj." value={`- ${formatCurrency(totals.refund, currency)}`} />

@@ -468,7 +468,7 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
               />
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <FormField
                 control={form.control}
                 name="make"
@@ -524,7 +524,7 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
               />
             </div>
 
-            <div className={`grid gap-4 ${form.watch("acquisition_type") === "Purchase" ? "grid-cols-3" : "grid-cols-2"}`}>
+            <div className={`grid gap-4 ${form.watch("acquisition_type") === "Purchase" ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-1 sm:grid-cols-2"}`}>
               <FormField
                 control={form.control}
                 name="colour"
@@ -837,7 +837,7 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-4 items-start">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-start">
                 <FormField
                   control={form.control}
                   name="daily_mileage"
@@ -956,7 +956,7 @@ export const EditVehicleDialogEnhanced = ({ vehicle, open, onOpenChange }: EditV
                 )}
               />
 
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <FormField
                   control={form.control}
                   name="available_daily"

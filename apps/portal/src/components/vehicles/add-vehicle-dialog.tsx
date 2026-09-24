@@ -565,7 +565,7 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
                   />
                 </div>
 
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <FormField
                     control={form.control}
                     name="make"
@@ -623,7 +623,7 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
                   />
                 </div>
 
-                <div className={`grid gap-3 ${form.watch("acquisition_type") === "Purchase" ? "grid-cols-3" : "grid-cols-2"}`}>
+                <div className={`grid gap-3 ${form.watch("acquisition_type") === "Purchase" ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-1 sm:grid-cols-2"}`}>
                   <FormField
                     control={form.control}
                     name="colour"
@@ -856,7 +856,7 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
                   </div>
                 )}
 
-                <div className="grid grid-cols-3 gap-3 items-start">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-start">
                   <FormField
                     control={form.control}
                     name="daily_mileage"
@@ -955,7 +955,7 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
                   )}
                 />
 
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <FormField
                     control={form.control}
                     name="available_daily"
@@ -1295,7 +1295,7 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
 
                   {/* Photo previews grid */}
                   {photoPreviews.length > 0 ? (
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       {photoPreviews.map((preview, index) => (
                         <div key={index} className="relative w-full aspect-[4/3] bg-muted/30 rounded-lg border-2 border-muted-foreground/20 overflow-hidden">
                           <img

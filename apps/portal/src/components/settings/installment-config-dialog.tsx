@@ -290,7 +290,7 @@ export function InstallmentConfigDialog({
               <p className="text-xs text-muted-foreground">
                 What happens when the system tries to charge a customer's card and it doesn't go through
               </p>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label className="text-xs text-muted-foreground">Wait this many days before chasing</Label>
                   <Input

@@ -1757,7 +1757,7 @@ function VehicleDetail() {
                           </span>
                         </div>
                         {enabled && (
-                          <div className="grid grid-cols-3 gap-x-6 gap-y-1 pt-1">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-1 pt-1">
                             <div className="flex items-baseline justify-between">
                               <span className="text-[11px] text-muted-foreground">Daily</span>
                               <span className="text-xs font-medium">

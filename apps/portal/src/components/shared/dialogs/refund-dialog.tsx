@@ -312,7 +312,7 @@ export const RefundDialog = ({
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
             {/* Summary Row */}
             <div className="bg-muted/50 rounded-lg p-4">
-              <div className="grid grid-cols-3 gap-4 text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
                 <div>
                   <p className="text-muted-foreground text-xs">Total Charged</p>
                   <p className="font-semibold mt-0.5">{formatCurrency(totalAmount, tenant?.currency_code || 'USD')}</p>

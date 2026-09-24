@@ -5446,7 +5446,7 @@ const RentalDetail = () => {
               </div>
 
               {/* Summary Cards */}
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="text-center p-3 bg-green-500/10 rounded-lg">
                   <p className="text-xs text-muted-foreground">Paid</p>
                   <p className="text-lg font-bold text-green-600">{formatCurrency(installmentPlan.total_paid)}</p>

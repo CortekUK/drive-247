@@ -166,7 +166,7 @@ function VehicleInfo({ vehicle, currency }: { vehicle: VehicleLite; currency: st
       </div>
 
       {/* Rates */}
-      <div className="mt-5 grid grid-cols-3 gap-3">
+      <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-3">
         {rates.map((r) => (
           <div key={r.label} className="rounded-xl border p-3 text-center">
             <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{r.label}</p>

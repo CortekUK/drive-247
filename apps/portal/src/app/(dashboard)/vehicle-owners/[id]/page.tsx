@@ -118,7 +118,7 @@ export default function VehicleOwnerDetailPage() {
           </Card>
           <Card>
             <CardHeader><CardTitle>Commission & Payout</CardTitle></CardHeader>
-            <CardContent className="grid grid-cols-3 gap-4 text-sm">
+            <CardContent className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
               <Field
                 label="Commission"
                 value={

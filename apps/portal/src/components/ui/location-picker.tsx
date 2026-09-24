@@ -144,7 +144,7 @@ export function LocationPicker({
   return (
     <div className={cn("space-y-3", className)}>
       {/* Method cards */}
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
         {methods.map(({ key, label, description, icon: Icon, enabled, fee }) => {
           const isSelected = method === key;
           return (
