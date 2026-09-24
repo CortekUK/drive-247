@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { toast } from '@/components/ui/sonner';
 import { promoApi, type Claim } from './api';
-import { AttachReferralDialog } from './referrals-tab';
+import { AttachReferralDialog } from './referral-dialogs';
 
 /** "Someone joined because of me" claims from operators' Referrals pages (brief R6). */
 export function ClaimsTab({ canEdit }: { canEdit: boolean }) {

@@ -1,118 +1,19 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { Link2, Loader2, RefreshCw } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+// Attaching a referral by hand, and voiding one. Both are reached from an
+// operator's referral set-up (Referral Links -> View) and from a claim.
+
+import { useState } from 'react';
+import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/sonner';
-import { promoApi, SOURCE_LABEL, type Referral, type TenantLite } from './api';
+import { promoApi, type Referral, type TenantLite } from './api';
 import { TenantPicker } from './shared';
-
-export function ReferralsTab({ canEdit }: { canEdit: boolean }) {
-  const [rows, setRows] = useState<Referral[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [status, setStatus] = useState<'all' | 'active' | 'void'>('active');
-  const [search, setSearch] = useState('');
-  const [attaching, setAttaching] = useState(false);
-  const [voiding, setVoiding] = useState<Referral | null>(null);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await promoApi<{ referrals: Referral[] }>('list_referrals', {
-        ...(status !== 'all' ? { status } : {}),
-        ...(search.trim() ? { search } : {}),
-      });
-      setRows(res.referrals);
-    } catch (e) {
-      toast.error((e as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }, [status, search]);
-
-  useEffect(() => {
-    const t = setTimeout(load, search ? 300 : 0);
-    return () => clearTimeout(t);
-  }, [load, search]);
-
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="min-w-[200px] flex-1 space-y-1.5">
-          <Label htmlFor="ref-search">Search</Label>
-          <Input id="ref-search" placeholder="Operator name" value={search} onChange={e => setSearch(e.target.value)} />
-        </div>
-        <div className="space-y-1.5">
-          <Label>Status</Label>
-          <Select value={status} onValueChange={v => setStatus(v as typeof status)}>
-            <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="active">Live</SelectItem>
-              <SelectItem value="void">Voided</SelectItem>
-              <SelectItem value="all">All</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <Button variant="outline" size="icon" onClick={load} aria-label="Reload"><RefreshCw className="h-4 w-4" /></Button>
-        {canEdit && <Button className="gap-1.5" onClick={() => setAttaching(true)}><Link2 className="h-4 w-4" /> Attach referral</Button>}
-      </div>
-
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Referrer</TableHead>
-                <TableHead>New operator</TableHead>
-                <TableHead>How</TableHead>
-                <TableHead>Since</TableHead>
-                <TableHead>Counts toward tier</TableHead>
-                <TableHead className="text-right" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <TableRow><TableCell colSpan={6} className="py-10 text-center"><Loader2 className="mx-auto h-5 w-5 animate-spin text-muted-foreground" /></TableCell></TableRow>
-              ) : rows.length === 0 ? (
-                <TableRow><TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">No referrals yet.</TableCell></TableRow>
-              ) : rows.map(r => (
-                <TableRow key={r.id}>
-                  <TableCell className="text-sm font-medium">{r.referrer_name_snapshot}</TableCell>
-                  <TableCell className="text-sm">
-                    {r.referred_name_snapshot}
-                    {r.referee_discount_applied && <p className="text-xs text-muted-foreground">got the new-operator discount</p>}
-                  </TableCell>
-                  <TableCell className="text-sm">{SOURCE_LABEL[r.source]}{r.note && <p className="max-w-[240px] truncate text-xs text-muted-foreground" title={r.note}>{r.note}</p>}</TableCell>
-                  <TableCell className="text-sm">{new Date(r.attributed_at).toLocaleDateString()}</TableCell>
-                  <TableCell>
-                    {r.status === 'void'
-                      ? <Badge variant="outline" title={r.void_reason ?? ''}>Voided</Badge>
-                      : <Badge variant={r.counts ? 'success' : 'warning'}>{r.counts ? 'Yes' : 'Not subscribed'}</Badge>}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {canEdit && r.status === 'active' && <Button variant="ghost" size="sm" onClick={() => setVoiding(r)}>Void</Button>}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      {attaching && <AttachReferralDialog onClose={() => setAttaching(false)} onDone={async () => { setAttaching(false); await load(); }} />}
-      {voiding && <VoidReferralDialog referral={voiding} onClose={() => setVoiding(null)} onDone={async () => { setVoiding(null); await load(); }} />}
-    </div>
-  );
-}
 
 /** Manual fallback (brief §2.3): someone was referred but did not use the code. */
 export function AttachReferralDialog({

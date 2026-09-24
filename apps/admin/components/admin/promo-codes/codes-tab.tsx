@@ -13,15 +13,17 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/sonner';
 import { promoApi, type PromoCode } from './api';
-import { CopyValue, TermsFields, draftFromTerms, termsFromDraft, type TermsDraft } from './shared';
+import { TermsFields, draftFromTerms, termsFromDraft, type TermsDraft } from './shared';
 
-type Kind = 'all' | 'campaign' | 'referral';
 type Status = 'all' | 'active' | 'inactive' | 'superseded';
 
+/**
+ * Drive247's own campaign codes (LAUNCH50 and the like). Operators' referral
+ * codes are a list of their own — see the Referral Links tab.
+ */
 export function CodesTab({ canEdit }: { canEdit: boolean }) {
   const [codes, setCodes] = useState<PromoCode[]>([]);
   const [loading, setLoading] = useState(true);
-  const [kind, setKind] = useState<Kind>('all');
   const [status, setStatus] = useState<Status>('active');
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState<PromoCode | 'new' | null>(null);
@@ -31,7 +33,7 @@ export function CodesTab({ canEdit }: { canEdit: boolean }) {
     setLoading(true);
     try {
       const res = await promoApi<{ codes: PromoCode[] }>('list', {
-        ...(kind !== 'all' ? { kind } : {}),
+        kind: 'campaign',
         ...(status !== 'all' ? { status } : {}),
         ...(search.trim() ? { search: search.trim() } : {}),
       });
@@ -41,7 +43,7 @@ export function CodesTab({ canEdit }: { canEdit: boolean }) {
     } finally {
       setLoading(false);
     }
-  }, [kind, status, search]);
+  }, [status, search]);
 
   useEffect(() => {
     const t = setTimeout(load, search ? 300 : 0);
@@ -69,17 +71,6 @@ export function CodesTab({ canEdit }: { canEdit: boolean }) {
           <Input id="code-search" placeholder="SUNSET, LAUNCH50…" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         <div className="space-y-1.5">
-          <Label>Kind</Label>
-          <Select value={kind} onValueChange={v => setKind(v as Kind)}>
-            <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All codes</SelectItem>
-              <SelectItem value="campaign">Drive247 campaigns</SelectItem>
-              <SelectItem value="referral">Operator referral codes</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1.5">
           <Label>Status</Label>
           <Select value={status} onValueChange={v => setStatus(v as Status)}>
             <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
@@ -103,7 +94,6 @@ export function CodesTab({ canEdit }: { canEdit: boolean }) {
             <TableHeader>
               <TableRow>
                 <TableHead>Code</TableHead>
-                <TableHead>Owner</TableHead>
                 <TableHead>New operator gets</TableHead>
                 <TableHead>Used</TableHead>
                 <TableHead>Status</TableHead>
@@ -112,21 +102,14 @@ export function CodesTab({ canEdit }: { canEdit: boolean }) {
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={6} className="py-10 text-center"><Loader2 className="mx-auto h-5 w-5 animate-spin text-muted-foreground" /></TableCell></TableRow>
+                <TableRow><TableCell colSpan={5} className="py-10 text-center"><Loader2 className="mx-auto h-5 w-5 animate-spin text-muted-foreground" /></TableCell></TableRow>
               ) : codes.length === 0 ? (
-                <TableRow><TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">No codes match.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">No campaign codes match.</TableCell></TableRow>
               ) : codes.map(c => (
                 <TableRow key={c.id}>
                   <TableCell className="min-w-[220px]">
-                    <div className="space-y-1.5">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-sm font-semibold">{c.code}</span>
-                        <Badge variant={c.kind === 'campaign' ? 'info' : 'secondary'}>{c.kind === 'campaign' ? 'Campaign' : 'Referral'}</Badge>
-                      </div>
-                      {c.link && c.status === 'active' && <CopyValue value={c.link} label="Link" className="py-1" />}
-                    </div>
+                    <span className="font-mono text-sm font-semibold">{c.code}</span>
                   </TableCell>
-                  <TableCell className="text-sm">{c.ownerName ?? <span className="text-muted-foreground">Drive247</span>}</TableCell>
                   <TableCell className="text-sm">
                     {c.discountText} <span className="text-muted-foreground">{c.durationText}</span>
                     {c.expires_at && <p className="text-xs text-muted-foreground">Expires {new Date(c.expires_at).toLocaleDateString()}</p>}
@@ -161,7 +144,7 @@ export function CodesTab({ canEdit }: { canEdit: boolean }) {
       </Card>
 
       {editing && (
-        <CodeDialog
+        <CodeTermsDialog
           code={editing === 'new' ? null : editing}
           onClose={() => setEditing(null)}
           onSaved={async () => { setEditing(null); await load(); }}
@@ -171,7 +154,7 @@ export function CodesTab({ canEdit }: { canEdit: boolean }) {
   );
 }
 
-function CodeDialog({ code, onClose, onSaved }: { code: PromoCode | null; onClose: () => void; onSaved: () => Promise<void> }) {
+export function CodeTermsDialog({ code, onClose, onSaved }: { code: PromoCode | null; onClose: () => void; onSaved: () => Promise<void> }) {
   const isCampaign = !code || code.kind === 'campaign';
   const [codeText, setCodeText] = useState(code?.code ?? '');
   const [terms, setTerms] = useState<TermsDraft>(draftFromTerms(code ?? { discount_type: 'percent', discount_value: 50, duration: 'repeating', duration_months: 3 }));
