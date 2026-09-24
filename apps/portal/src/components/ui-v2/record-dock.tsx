@@ -99,13 +99,12 @@ export type DockBack = { href: string; label: string; icon: ComponentType<{ clas
  * The room the dock needs above it, as a class for the scrolling panel.
  *
  * Exported so the three record screens cannot each guess a different number
- * and leave their last row under the bar. It adds up the bar (3.5rem), the gap
- * it floats on (1rem), the part of the circle that rises above it (0.75rem)
- * and a little air, plus the phone's home indicator. Deliberately a touch more
- * than the sum: a last row that ends flush against the bar reads as cut off
- * even when it is whole.
+ * and leave their last row under the bar. Nothing rises above the bar any
+ * more, so it is the bar (3.5rem), the gap it floats on (1rem) and a little
+ * air, plus the phone's home indicator. Deliberately more than the sum: a last
+ * row ending flush against the bar reads as cut off even when it is whole.
  */
-export const DOCK_CLEARANCE = "pb-[calc(env(safe-area-inset-bottom,0px)+6rem)]";
+export const DOCK_CLEARANCE = "pb-[calc(env(safe-area-inset-bottom,0px)+5.5rem)]";
 
 /**
  * A flanking control. 44px, which is the touch target, with an 18px glyph
@@ -230,15 +229,17 @@ export function RecordDock({
             {left.map(panelButton)}
           </div>
 
-          {/* The focal point — and no more than that.
-              It was 56px lifted 20px clear, which read as a button parked on
-              top of the bar rather than part of it (Sep 25 2026: "too large,
-              stands out too aggressively"). At 48px lifted 12px it still leads
-              the eye and still clears the 44px target, but it sits INSIDE the
-              bar's silhouette instead of looming over it. The ring cuts a hole
-              in the bar around it so the two read as one piece; the coloured
-              shadow is half what it was, enough to lift it off the blur
-              without throwing a glow onto the content behind. */}
+          {/* The focal point, sitting IN the bar.
+              It started 56px and lifted 20px clear of the top edge, then 48px
+              and 8px. Both read as a button parked on the bar rather than part
+              of it (Sep 25 2026: "the icon comes in centre, not above"). No
+              lift at all now: 48px inside a 56px bar leaves 4px of bar above
+              and below it, so the bar is one unbroken shape and the circle is
+              simply the loudest thing in it.
+              The background ring went with the lift — it existed to cut a hole
+              in the bar where the circle crossed its edge, and with nothing
+              crossing it was just a pale halo. Colour, size and the press do
+              all the work now. */}
           <button
             type="button"
             onClick={() => setOpen(centre.id)}
@@ -246,10 +247,10 @@ export function RecordDock({
             aria-label={centre.label}
             title={centre.label}
             className={cn(
-              "mx-0.5 flex size-12 shrink-0 -translate-y-3 items-center justify-center rounded-full",
-              "bg-primary text-primary-foreground ring-4 ring-background",
-              "shadow-[0_6px_16px_-6px_hsl(var(--primary)_/_0.45)] transition-transform",
-              "active:scale-95 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring",
+              "mx-0.5 flex size-12 shrink-0 items-center justify-center rounded-full",
+              "bg-primary text-primary-foreground",
+              "shadow-[0_4px_12px_-4px_hsl(var(--primary)_/_0.45)] transition-transform",
+              "active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
             )}
           >
             <centre.icon className="size-5" />

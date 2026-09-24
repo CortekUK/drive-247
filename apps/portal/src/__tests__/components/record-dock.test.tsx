@@ -65,14 +65,17 @@ describe("the record dock", () => {
     expect(screen.queryByText("the timeline")).toBeNull();
   });
 
-  it("puts the record's own nav in the middle, raised and brand-coloured", () => {
+  it("puts the record's own nav in the middle, inside the bar and brand-coloured", () => {
     render(<RecordDock back={back} primary={stages} secondary={[context]} />);
     const centre = screen.getByRole("button", { name: /payments/i });
-    // The sketch: one circle, larger than its neighbours, breaking the bar's
-    // top edge. `-translate-y-5` is what lifts it; the ring cuts the hole.
-    // Toned down Sep 25 2026: still the focal point, no longer looming.
-    expect(centre.className).toContain("-translate-y-3");
+    // One circle, larger than its neighbours, sitting IN the bar. It was
+    // lifted clear of the top edge twice and read as a button parked on top
+    // both times (Sep 25 2026: "the icon comes in centre, not above"), so any
+    // lift at all is the regression this guards.
+    expect(centre.className).not.toMatch(/-translate-y-/);
     expect(centre.className).toContain("size-12");
+    // 48px inside a 56px bar is what keeps the bar one unbroken shape.
+    expect(screen.getByRole("navigation").className).toContain("h-14");
     // …and still a 44px target.
     expect(centre.className).not.toMatch(/size-(8|9|10|11)/);
     expect(centre.className).toContain("bg-primary");
@@ -100,7 +103,8 @@ describe("the record dock", () => {
     // The tablet case: the rail fits, the context column does not.
     render(<RecordDock back={back} secondary={[context]} />);
     const centre = screen.getByRole("button", { name: /activity/i });
-    expect(centre.className).toContain("-translate-y-3");
+    expect(centre.className).toContain("size-12");
+    expect(centre.className).not.toMatch(/-translate-y-/);
   });
 
   it("floats clear of the bottom edge and the phone's home indicator", () => {
