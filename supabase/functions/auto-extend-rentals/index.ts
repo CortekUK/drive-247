@@ -194,8 +194,75 @@ Deno.serve(async (req) => {
   let renewed = 0, linked = 0, paused = 0, skipped = 0, failed = 0;
   const errors: string[] = [];
 
+  // Adjustment-credit gate. A rental's own Adjustment credit (a NEGATIVE
+  // 'Adjustment' Charge row) is consumed only for tenants listed here —
+  // comma-separated tenant ids, or "*" for all. Unset/empty = off, in which case
+  // none of the autoext_* credit RPCs is ever called and behaviour is unchanged.
+  const adjCreditTenants = (Deno.env.get("AUTOEXT_ADJ_CREDIT_TENANTS") ?? "")
+    .split(",").map((t) => t.trim()).filter(Boolean);
+  const adjCreditEnabledFor = (tenantId: string): boolean =>
+    adjCreditTenants.includes("*") || adjCreditTenants.includes(tenantId);
+
   try {
     console.log(`[auto-extend] run at ${nowIso}`);
+
+    // ── ADJUSTMENT-CREDIT HEAL ───────────────────────────────────────────────
+    // A correcting credit can be written as a NEGATIVE 'Adjustment' Charge row
+    // (R-4c677b: -333.84 refunding four weeks billed at the pre-discount rate).
+    // Nothing else consumes that form — FIFO skips it and the credit loop in the
+    // renewal path only reads Credit/Partial PAYMENTS — so a customer in credit
+    // had a parked week showing unpaid, and the grace check paused them. Paused
+    // rentals never reach the main loop, so this pass has to find them itself.
+    //
+    // Each heal is ONE database transaction (autoext_heal_with_adjustment_credit):
+    // move credit into the outstanding Extension* charges, prove the week is
+    // settled, finalize it (rolls end_date), un-pause. Any failure rolls back all
+    // of it. It acts only when the credit FULLY covers what is owed, so it never
+    // charges or emails anyone; un-pausing lets the main loop bill the next week
+    // exactly as it would for a customer who had paid.
+    //
+    // Runs BEFORE reconcile, so reconcile can't then stamp a generic payment onto
+    // the extension this just settled. Best-effort, like reconcile.
+    if (adjCreditTenants.length > 0) {
+      const badGateEntries = adjCreditTenants.filter(
+        (t) => t !== "*" && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(t),
+      );
+      console.log(`[auto-extend][adj-credit] enabled for ${adjCreditTenants.includes("*") ? "all tenants" : `${adjCreditTenants.length} tenant(s)`}`);
+      if (badGateEntries.length > 0) {
+        console.error(`[auto-extend][adj-credit] AUTOEXT_ADJ_CREDIT_TENANTS entries are not tenant ids (slugs never match): ${badGateEntries.join(", ")}`);
+      }
+      try {
+        const { data: adjCandidates, error: adjFindErr } = await supabase.rpc(
+          "find_autoextend_adjcredit_candidates",
+          { p_only_rental_id: onlyRentalId },
+        );
+        if (adjFindErr) {
+          console.error("[auto-extend][adj-credit] candidate query failed:", adjFindErr.message);
+        } else {
+          for (const c of (adjCandidates ?? []) as any[]) {
+            if (!adjCreditEnabledFor(c.tenant_id)) {
+              console.log(`[auto-extend][adj-credit] candidate ${c.rental_id} skipped: tenant ${c.tenant_id} not enabled`);
+              continue;
+            }
+            const { data: heal, error: healErr } = await supabase.rpc(
+              "autoext_heal_with_adjustment_credit",
+              { p_rental_id: c.rental_id, p_pending_ext_id: c.pending_ext_id },
+            );
+            if (healErr) {
+              console.error("[auto-extend][adj-credit] heal failed (rolled back)", c.rental_id, healErr.message);
+              errors.push(`${String(c.rental_id).slice(0, 8)}: adjustment-credit heal failed (rolled back)`);
+            } else if (heal?.healed) {
+              console.log(`[auto-extend][adj-credit] healed ${c.rental_id}: ext ${c.pending_ext_id} settled with ${heal.applied} credit, un-paused`);
+            } else {
+              console.log(`[auto-extend][adj-credit] not healed ${c.rental_id}: ${heal?.reason ?? "unknown"}`);
+            }
+          }
+        }
+      } catch (adjFatal: any) {
+        console.error("[auto-extend][adj-credit] pass failed (non-fatal):", adjFatal?.message ?? adjFatal);
+      }
+    }
+    // ── end adjustment-credit heal ──────────────────────────────────────────
 
     // ── RECONCILE PASS ───────────────────────────────────────────────────────
     // Heal rentals whose parked renewal was PAID on the ledger but never
@@ -367,8 +434,9 @@ Deno.serve(async (req) => {
             // the portal's Resume button clears auto_extend_paused but leaves the
             // pending extension in place, so a rental resumed against a >48h-old
             // extension was re-paused on the very next tick — the operator's
-            // click silently undone. A resend or resume-then-remind now restores
-            // a real window.
+            // click silently undone. A resend now restores a real window, and so
+            // does Resume: trg_autoext_stamp_resume stamps auto_extend_resumed_at
+            // on the server when an operator resumes a rental with a pending week.
             const graceMs = (Number(tenant.auto_extend_grace_hours) || 48) * 3600 * 1000;
             const { data: lastNudge } = await supabase
               .from("auto_extension_reminders")
@@ -378,17 +446,48 @@ Deno.serve(async (req) => {
               .order("sent_at", { ascending: false })
               .limit(1)
               .maybeSingle();
+            // Read on its own, and fail-soft: if this column were ever missing
+            // (function deployed ahead of its migration, or the migration rolled
+            // back) only the Resume extension switches off for this tick — the
+            // global driver query above never names it, so the cron keeps running.
+            // Clamped to now: a bad value can only shorten the extra time, never
+            // hold a rental un-paused indefinitely.
+            const { data: resumeRow, error: resumeErr } = await supabase
+              .from("rentals").select("auto_extend_resumed_at").eq("id", r.id).maybeSingle();
+            if (resumeErr) {
+              console.warn(`[auto-extend] resumed_at unreadable for ${r.id}: ${resumeErr.message} — grace ignores Resume this tick`);
+            }
+            const resumedAtIso: string | null = resumeErr ? null : (resumeRow?.auto_extend_resumed_at ?? null);
+            const resumedAtRaw = resumedAtIso ? new Date(resumedAtIso).getTime() : 0;
+            const resumedAtMs = Number.isFinite(resumedAtRaw) ? Math.min(resumedAtRaw, now.getTime()) : 0;
             const askedAtMs = Math.max(
               pending?.created_at
                 ? new Date(pending.created_at).getTime()
                 : new Date(r.auto_extend_next_charge_at).getTime(),
               lastNudge?.sent_at ? new Date(lastNudge.sent_at).getTime() : 0,
+              resumedAtMs,
             );
             if (now.getTime() - askedAtMs > graceMs) {
-              await supabase.from("rentals").update({
+              // Latched: if a webhook/apply-payment cleared the pending week, or an
+              // operator resumed it (new resumed_at), since this run read the row,
+              // this matches nothing and the next tick decides on fresh values.
+              let pauseQ = supabase.from("rentals").update({
                 auto_extend_paused: true, auto_extend_paused_at: nowIso, auto_extend_status: "paused", updated_at: nowIso,
-              }).eq("id", r.id);
-              paused++;
+              }).eq("id", r.id)
+                .eq("auto_extend_pending_extension_id", r.auto_extend_pending_extension_id)
+                .eq("auto_extend_paused", false);
+              if (!resumeErr) {
+                pauseQ = resumedAtIso
+                  ? pauseQ.eq("auto_extend_resumed_at", resumedAtIso)
+                  : pauseQ.is("auto_extend_resumed_at", null);
+              }
+              const { data: pausedRows, error: pauseErr } = await pauseQ.select("id");
+              if (pauseErr) {
+                console.error(`[auto-extend] grace pause write failed ${r.id}: ${pauseErr.message} — retried next tick`);
+                errors.push(`${String(r.id).slice(0, 8)}: grace pause write failed (retried next tick)`);
+              }
+              if (pausedRows && pausedRows.length > 0) paused++;
+              else skipped++;
             } else {
               skipped++;
             }
@@ -512,6 +611,10 @@ Deno.serve(async (req) => {
         };
         let freshExtChg: any[];
         let extRemaining: number;
+        // Set only once autoext_apply_adjustment_credit has SUCCEEDED, so a rollback
+        // never calls the reverse RPC for credit that was never moved (or when the
+        // RPC doesn't exist yet).
+        let adjCreditApplied = false;
         try {
           const { data: creditPays, error: cpErr } = await supabase
             .from("payments").select("id")
@@ -526,6 +629,21 @@ Deno.serve(async (req) => {
             const { error: fifoErr } = await supabase.rpc("payment_apply_fifo_v2", { p_id: cp.id });
             if (fifoErr) throw fifoErr;
           }
+          // Then the rental's spendable Adjustment credit (a negative Charge row on a
+          // PAID week, net of that week's own open lines — see the migration). The
+          // payment loop above can't see it. Credit lands on THIS week's charges, so
+          // every rollback below reverses exactly what was moved. Throws into the
+          // catch below like any other credit failure.
+          if (adjCreditEnabledFor(r.tenant_id)) {
+            const { rem: afterPaymentCredit } = await readExtRemaining();
+            if (afterPaymentCredit > 0.001) {
+              const { error: adjApplyErr } = await supabase.rpc("autoext_apply_adjustment_credit", {
+                p_rental_id: r.id, p_target_extension_id: ext.id, p_source: "autoext_mint",
+              });
+              if (adjApplyErr) throw adjApplyErr;
+              adjCreditApplied = true;
+            }
+          }
           const fresh = await readExtRemaining();
           freshExtChg = fresh.rows;
           extRemaining = fresh.rem;
@@ -536,6 +654,21 @@ Deno.serve(async (req) => {
           // returns {error} and does NOT throw, so check it explicitly: if reverse
           // fails we must NOT delete (that would silently lose the credit) — pause the
           // rental for manual review instead.
+          // Adjustment credit first: it restores BOTH sides (the charge and the credit
+          // row) in one transaction, so if this fails nothing else has moved yet.
+          if (adjCreditApplied) {
+            const { error: adjRevErr } = await supabase.rpc("autoext_reverse_adjustment_credit", { p_extension_id: ext.id });
+            if (adjRevErr) {
+              await writeRentalState({
+                auto_extend_paused: true, auto_extend_paused_at: nowIso,
+                auto_extend_status: "paused", updated_at: nowIso,
+              }, "credit-apply adj-reverse-failed pause");
+              paused++;
+              console.error(`[auto-extend] credit-apply adjustment-credit reverse failed ${r.id} ext#${seq}: ${adjRevErr.message} — PAUSED for manual review`);
+              errors.push(`${String(r.id).slice(0, 8)}: credit-apply adjustment-credit reverse failed — PAUSED (manual review)`);
+              continue;
+            }
+          }
           const { error: revErr } = await supabase.rpc("reverse_extension_credit", { p_extension_id: ext.id });
           if (revErr) {
             await supabase.from("rentals").update({
@@ -768,6 +901,21 @@ Deno.serve(async (req) => {
             // Un-apply any prepaid store-credit the loop applied to this renewal BEFORE
             // deleting its charges, so it isn't orphaned. .rpc() returns {error} and does
             // NOT throw: on failure do NOT delete (would cascade-lose credit) — pause.
+            // Adjustment credit first: it restores BOTH sides (the charge and the credit
+            // row) in one transaction, so if this fails nothing else has moved yet.
+            if (adjCreditApplied) {
+              const { error: adjRevErr } = await supabase.rpc("autoext_reverse_adjustment_credit", { p_extension_id: ext.id });
+              if (adjRevErr) {
+                await writeRentalState({
+                  auto_extend_paused: true, auto_extend_paused_at: nowIso,
+                  auto_extend_status: "paused", updated_at: nowIso,
+                }, "auto-charge adj-reverse-failed pause");
+                paused++;
+                console.error(`[auto-extend] auto-charge adjustment-credit reverse failed ${r.id} ext#${seq}: ${adjRevErr.message} — PAUSED for manual review`);
+                errors.push(`${String(r.id).slice(0, 8)}: auto-charge adjustment-credit reverse failed — PAUSED (manual review)`);
+                continue;
+              }
+            }
             const { error: revErr } = await supabase.rpc("reverse_extension_credit", { p_extension_id: ext.id });
             if (revErr) {
               await writeRentalState({
@@ -820,29 +968,71 @@ Deno.serve(async (req) => {
         // 4b. PAY-LINK path — email a checkout link, park the pending extension
         if (ctx) {
           const origin = deriveBookingOrigin(tenant.slug || "app");
-          const session = await ctx.stripe.checkout.sessions.create({
-            payment_method_types: ["card"],
-            line_items: [{
-              price_data: {
-                currency: ctx.currencyCode.toLowerCase(),
-                product_data: { name: "Rental Renewal", description: `Renew ${r.end_date} → ${newEndDate}` },
-                unit_amount: Math.round(dueNow * 100),
+          // A throw here used to fall straight to the per-rental catch, leaving this
+          // week (and any credit applied to it) orphaned while end_date stayed put —
+          // so the next tick minted the SAME period again. Roll back instead, exactly
+          // as the no-Stripe-context path does, and retry next tick.
+          let session: any;
+          try {
+            session = await ctx.stripe.checkout.sessions.create({
+              payment_method_types: ["card"],
+              line_items: [{
+                price_data: {
+                  currency: ctx.currencyCode.toLowerCase(),
+                  product_data: { name: "Rental Renewal", description: `Renew ${r.end_date} → ${newEndDate}` },
+                  unit_amount: Math.round(dueNow * 100),
+                },
+                quantity: 1,
+              }],
+              mode: "payment",
+              customer_email: customer.email,
+              payment_intent_data: { setup_future_usage: "off_session" },
+              client_reference_id: r.id,
+              success_url: `${origin}/booking-success?session_id={CHECKOUT_SESSION_ID}&rental_id=${r.id}&type=invoice`,
+              cancel_url: `${origin}/portal/bookings/${r.id}`,
+              metadata: {
+                type: "extension", extension_id: ext.id, rental_id: r.id, customer_id: r.customer_id,
+                tenant_id: r.tenant_id, extension_days: String(days), new_end_date: newEndDate,
+                previous_end_date: r.end_date, source: "auto_extend",
+                target_categories: JSON.stringify(["Extension Rental", "Extension Tax", "Extension Service Fee", "Extension Add-on", "Extension Insurance"]),
               },
-              quantity: 1,
-            }],
-            mode: "payment",
-            customer_email: customer.email,
-            payment_intent_data: { setup_future_usage: "off_session" },
-            client_reference_id: r.id,
-            success_url: `${origin}/booking-success?session_id={CHECKOUT_SESSION_ID}&rental_id=${r.id}&type=invoice`,
-            cancel_url: `${origin}/portal/bookings/${r.id}`,
-            metadata: {
-              type: "extension", extension_id: ext.id, rental_id: r.id, customer_id: r.customer_id,
-              tenant_id: r.tenant_id, extension_days: String(days), new_end_date: newEndDate,
-              previous_end_date: r.end_date, source: "auto_extend",
-              target_categories: JSON.stringify(["Extension Rental", "Extension Tax", "Extension Service Fee", "Extension Add-on", "Extension Insurance"]),
-            },
-          }, ctx.options);
+            }, ctx.options);
+          } catch (sessionErr: any) {
+            // Adjustment credit first: it restores BOTH sides (the charge and the credit
+            // row) in one transaction, so if this fails nothing else has moved yet.
+            if (adjCreditApplied) {
+              const { error: adjRevErr } = await supabase.rpc("autoext_reverse_adjustment_credit", { p_extension_id: ext.id });
+              if (adjRevErr) {
+                await writeRentalState({
+                  auto_extend_paused: true, auto_extend_paused_at: nowIso,
+                  auto_extend_status: "paused", updated_at: nowIso,
+                }, "session-create adj-reverse-failed pause");
+                paused++;
+                console.error(`[auto-extend] pay-link session-create adjustment-credit reverse failed ${r.id} ext#${seq}: ${adjRevErr.message} — PAUSED for manual review`);
+                errors.push(`${String(r.id).slice(0, 8)}: pay-link session-create adjustment-credit reverse failed — PAUSED (manual review)`);
+                continue;
+              }
+            }
+            const { error: slRevErr } = await supabase.rpc("reverse_extension_credit", { p_extension_id: ext.id });
+            if (slRevErr) {
+              await writeRentalState({ auto_extend_paused: true, auto_extend_paused_at: nowIso, auto_extend_status: "paused", updated_at: nowIso }, "session-create reverse-failed pause");
+              paused++;
+              errors.push(`${String(r.id).slice(0, 8)}: pay-link session-create reverse failed — PAUSED (manual review)`);
+              continue;
+            }
+            const { error: slLedgerDelErr } = await supabase.from("ledger_entries").delete().eq("extension_id", ext.id);
+            const { error: slExtDelErr } = await supabase.from("rental_extensions").delete().eq("id", ext.id);
+            if (slLedgerDelErr || slExtDelErr) {
+              await writeRentalState({ auto_extend_paused: true, auto_extend_paused_at: nowIso, auto_extend_status: "paused", updated_at: nowIso }, "session-create rollback-delete-failed pause");
+              paused++;
+              errors.push(`${String(r.id).slice(0, 8)}: pay-link session-create rollback delete failed — PAUSED (orphan ext, manual review)`);
+              continue;
+            }
+            console.error(`[auto-extend] pay-link session create failed ${r.id} ext#${seq}: ${sessionErr?.message ?? sessionErr} — rolled back, will retry`);
+            errors.push(`${String(r.id).slice(0, 8)}: pay-link session create failed (rolled back)`);
+            failed++;
+            continue;
+          }
 
           await supabase.from("rental_extensions").update({
             stripe_checkout_session_id: session.id, checkout_url: session.url,
@@ -893,7 +1083,7 @@ Deno.serve(async (req) => {
               : `<p>Hi ${customer.name || "there"},</p><p>Your rental of <strong>${vehicle}</strong> with <strong>${tenant.company_name || "us"}</strong> is due to renew for another period (<strong>${r.end_date} → ${newEndDate}</strong>).</p><p>Please pay <strong>${total}</strong> upfront to continue:</p>`;
             // Itemised breakdown when extras / insurance ride on this renewal.
             const breakdownRows: string[] = [];
-            if (occExtras.length > 0 || insurancePremium > 0) {
+            if (occExtras.length > 0 || insurancePremium > 0 || dueNow < chargeTotal - 0.001) {
               breakdownRows.push(`<tr><td style="padding:4px 0;">Period</td><td style="padding:4px 0;text-align:right;">${fmtCurrency(bd.total, ctx.currencyCode)}</td></tr>`);
               for (const ex of occExtras) breakdownRows.push(`<tr><td style="padding:4px 0;color:#64748b;">${ex.label}</td><td style="padding:4px 0;text-align:right;color:#64748b;">${fmtCurrency(ex.amount, ctx.currencyCode)}</td></tr>`);
               if (insurancePremium > 0) breakdownRows.push(`<tr><td style="padding:4px 0;color:#64748b;">Insurance</td><td style="padding:4px 0;text-align:right;color:#64748b;">${fmtCurrency(insurancePremium, ctx.currencyCode)}</td></tr>`);
@@ -934,6 +1124,21 @@ Deno.serve(async (req) => {
 
         // No Stripe context — roll back and skip. Un-apply any prepaid credit FIRST
         // (else the ledger delete cascades its applications and silently loses it).
+        // Adjustment credit first: it restores BOTH sides (the charge and the credit
+        // row) in one transaction, so if this fails nothing else has moved yet.
+        if (adjCreditApplied) {
+          const { error: adjRevErr } = await supabase.rpc("autoext_reverse_adjustment_credit", { p_extension_id: ext.id });
+          if (adjRevErr) {
+            await writeRentalState({
+              auto_extend_paused: true, auto_extend_paused_at: nowIso,
+              auto_extend_status: "paused", updated_at: nowIso,
+            }, "no-ctx adj-reverse-failed pause");
+            paused++;
+            console.error(`[auto-extend] no-Stripe-context adjustment-credit reverse failed ${r.id} ext#${seq}: ${adjRevErr.message} — PAUSED for manual review`);
+            errors.push(`${String(r.id).slice(0, 8)}: no-Stripe-context adjustment-credit reverse failed — PAUSED (manual review)`);
+            continue;
+          }
+        }
         const { error: ncRevErr } = await supabase.rpc("reverse_extension_credit", { p_extension_id: ext.id });
         if (ncRevErr) {
           await writeRentalState({ auto_extend_paused: true, auto_extend_paused_at: nowIso, auto_extend_status: "paused", updated_at: nowIso }, "no-ctx reverse-failed pause");
