@@ -1061,7 +1061,6 @@ describe("settings page wiring for the Business-rules pages (v2 branch)", () => 
         "duration",
         "lockbox",
         "tax-and-deposit",
-        "booking-site",
         "templates",
         "pricing",
         "locations",

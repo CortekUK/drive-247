@@ -433,7 +433,7 @@ describe("buildLocationSettingsPayloadV2: no drift on a miles save", () => {
 /* -------------------------------------------------------------------------- */
 
 describe("v2 Locations page", () => {
-  it("two sections, each headed outside its panel with its line of help and a divider under the heading", () => {
+  it("two sections, each headed outside its panel with its line of help and no rule under the heading", () => {
     pickup.value = hook();
     renderPage();
     const sections = Array.from(container.querySelectorAll("[data-location-section]"));
@@ -441,13 +441,15 @@ describe("v2 Locations page", () => {
     sections.forEach((section) => {
       const heading = section.querySelector("h2")!;
       // Not inside a panel — and the panel under it draws no box either, so
-      // the heading, its divider and every option row share one left edge.
+      // the heading and every option row share one left edge.
       expect(heading.closest("[data-settings-rows]")).toBeNull();
       const panel = section.querySelector("[data-settings-rows]")!.parentElement!;
       for (const chrome of ["rounded-xl", "bg-card", "px-5", "divide-y"]) {
         expect(panel.className).not.toContain(chrome);
       }
-      expect(heading.parentElement!.className.split(/\s+/)).toContain("border-b");
+      // No rule under it either (team lead, Sep 24): the space below the
+      // description is what separates the heading from its first row.
+      expect(heading.parentElement!.className.split(/\s+/)).not.toContain("border-b");
     });
     // The heading pair is set like the kit's `SettingsSection` (settings-kit),
     // which is the 14px section description — not the 13px one, which belongs

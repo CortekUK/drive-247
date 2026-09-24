@@ -377,7 +377,7 @@ export function InstallmentSettings({ registerSave }: { registerSave?: RegisterS
                   belongs to the one above" went with the panel border
                   (settings-kit.tsx). Same 20px as locations-v2's `SubRow`. */}
               {config.weekly_enabled && (
-                <SettingsRow className="md:pl-5" label="Payments per week" description="How often the customer pays in each week of the rental.">
+                <SettingsRow label="Payments per week" description="How often the customer pays in each week of the rental.">
                   <PillButton active={config.weekly_payments_per_unit === 1} onClick={() => setConfig({ ...config, weekly_payments_per_unit: 1 })}>1×</PillButton>
                   <PillButton active={config.weekly_payments_per_unit === 2} onClick={() => setConfig({ ...config, weekly_payments_per_unit: 2 })}>2× (twice weekly)</PillButton>
                   <button
@@ -398,7 +398,7 @@ export function InstallmentSettings({ registerSave }: { registerSave?: RegisterS
                 />
               </SettingsRow>
               {config.monthly_enabled && (
-                <SettingsRow className="md:pl-5" label="Payments per month" description="How often the customer pays in each month of the rental.">
+                <SettingsRow label="Payments per month" description="How often the customer pays in each month of the rental.">
                   <PillButton active={config.monthly_payments_per_unit === 1} onClick={() => setConfig({ ...config, monthly_payments_per_unit: 1 })}>1×</PillButton>
                   <PillButton active={config.monthly_payments_per_unit === 2} onClick={() => setConfig({ ...config, monthly_payments_per_unit: 2 })}>2×</PillButton>
                   <PillButton active={config.monthly_payments_per_unit === 4} onClick={() => setConfig({ ...config, monthly_payments_per_unit: 4 })}>4×</PillButton>

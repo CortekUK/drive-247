@@ -274,7 +274,12 @@ describe("settings page (v2): General is three stacked sections; five sections l
     expect(tax).toContain("action={canEditPage && !canEditSettings(section.permTab) ? <SettingsReadOnlyNotice /> : undefined}");
     const site = pageCase("booking-site");
     expect(site).toContain("const canEditGeneral = canEditSettings('general');");
-    expect(site).toContain('sectionKey="booking-site-colours"');
+    // Only the four switches now: "Header and footer colour" was removed on
+    // Sep 24 2026 because the booking site's colours belong to the CMS, and two
+    // places to set one colour could only disagree.
+    expect(site).not.toContain("booking-site-colours");
+    expect(site).not.toContain("<ColorPicker");
+    expect(site).not.toContain("<SettingsPanel title=");
     const modules = pageCase("modules");
     expect(modules).toContain("disabled={savingFleetHealth || !canEditSettings('general') || !v2FleetHealthReady}");
     // The moved pages draw their switches and buttons with the v2 parts.
@@ -337,7 +342,6 @@ describe("settings page (v2): General is three stacked sections; five sections l
         "duration",
         "lockbox",
         "tax-and-deposit",
-        "booking-site",
         "templates",
         "pricing",
         "locations",

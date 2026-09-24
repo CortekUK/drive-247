@@ -61,10 +61,13 @@ describe("settings page (v2): the leave guard", () => {
     expect(page.indexOf("if (!v2Chrome && error && !settings) {")).toBeGreaterThan(at);
   });
 
-  it("saves a registered General panel and the booking-site colours once, through their own saves", () => {
+  it("saves a registered General panel once, through its own save", () => {
     expect(page).toContain("if (generalFormDirty && !(v2Chrome && v2SectionSaves.current['general-regional'])) {");
-    expect(page).toContain("if (brandingFormDirty && !(v2Chrome && v2SectionSaves.current['booking-site-colours'])) {");
-    expect(v2).toContain('sectionKey="booking-site-colours"');
+    // The booking-site colours used to register a save here too. The section
+    // was removed on Sep 24 2026 (the CMS owns those colours), so on v2 nothing
+    // makes the branding form dirty and the plain v1 branch is all that is left.
+    expect(page).toContain("if (brandingFormDirty) {");
+    expect(v2).not.toContain("booking-site-colours");
     // The regional panel (now General's first section) hands the page its save.
     const regional = v2.slice(v2.indexOf("<BusinessV2.BusinessRegionalPanel"), v2.indexOf("case 'driver-requirements':"));
     expect(regional).toMatch(/registerSave=\{registerV2SectionSave\}\s*\/>/);

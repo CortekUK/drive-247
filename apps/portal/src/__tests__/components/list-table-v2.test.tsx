@@ -653,7 +653,19 @@ describe('ListTable surface', () => {
     expect(surface.getAttribute('data-list-surface')).toBe('settings');
     expect(surface.className).toBe(LIST_SETTINGS_SURFACE);
     const cls = surface.className.split(/\s+/);
-    expect(cls).toEqual(expect.arrayContaining(['rounded-xl', 'border', 'bg-card', 'overflow-hidden']));
+    // Flush, not a card (team lead, Sep 24): a settings list starts on the same
+    // letter as the heading above it, so no border, no fill, and the outer
+    // cells give up their side padding.
+    expect(cls).toEqual(expect.arrayContaining(['overflow-hidden', 'text-sm']));
+    for (const box of ['rounded-xl', 'border', 'bg-card']) expect(cls).not.toContain(box);
+    expect(cls).toEqual(
+      expect.arrayContaining([
+        '[&_th:first-child]:pl-0',
+        '[&_td:first-child]:pl-0',
+        '[&_th:last-child]:pr-0',
+        '[&_td:last-child]:pr-0',
+      ]),
+    );
     // No card padding bands, no shadow or ring, no card radius.
     for (const gone of ['py-[var(--card-spacing)]', 'gap-[var(--card-spacing)]', 'shadow-md', 'ring-1', 'rounded-4xl']) {
       expect(cls).not.toContain(gone);

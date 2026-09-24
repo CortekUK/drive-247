@@ -119,7 +119,19 @@ export const LIST_ROW_ACTION = "-my-1.5 h-8 w-8 text-muted-foreground hover:text
  */
 export type ListSurface = "card" | "settings";
 
-export const LIST_SETTINGS_SURFACE = "overflow-hidden rounded-xl border bg-card text-sm";
+/**
+ * A list inside a settings page.
+ *
+ * Flush, not a card: the settings panels lost their box so every label starts
+ * on the page's own left edge, and a bordered table sitting in that column put
+ * its first column 13px further right than the heading above it (the card's
+ * border plus the cell's `px-3`). The team lead asked for the table to start on
+ * the same letter as its heading (Sep 24), so the surface carries no border or
+ * fill and the outer cells give up their side padding; the inner ones keep
+ * theirs, which is what still separates the columns.
+ */
+export const LIST_SETTINGS_SURFACE =
+  "overflow-hidden text-sm [&_td:first-child]:pl-0 [&_th:first-child]:pl-0 [&_td:last-child]:pr-0 [&_th:last-child]:pr-0";
 
 export interface ProgressiveRows<T> {
   /** The rows to render: the first `LIST_ROWS_PER_FILL × fills` of the set. */

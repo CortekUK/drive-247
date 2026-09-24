@@ -584,7 +584,7 @@ export function LocationsV2({
       <div className="space-y-6">
         {(["pickup", "return"] as const).map((side) => (
           <div key={side} className="space-y-3">
-            <div aria-hidden="true" className="space-y-1.5 border-b pb-2.5">
+            <div aria-hidden="true" className="space-y-1.5 pb-2.5">
               <Skeleton className="h-4 w-40 rounded-full" />
               <Skeleton className="h-3 w-56 max-w-full rounded-full" />
             </div>
@@ -894,7 +894,10 @@ function LocationSection({
 }) {
   return (
     <section aria-labelledby={id} data-location-section={id} className="space-y-3">
-      <div className="border-b pb-2.5">
+      {/* No rule under the heading: the lead has had every line taken out of
+          this UI (Sep 24), and the space below is what separates the heading
+          from its first row. */}
+      <div className="pb-2.5">
         <h2 id={id} className={SETTINGS_SECTION_TITLE}>
           {title}
         </h2>
@@ -978,19 +981,23 @@ function OptionRow({
 }
 
 /**
- * A row that belongs to the option above it: indented, its control at the end.
- * The 20px indent is now the ONLY thing saying so — the panel lost its row
- * dividers with its border (settings-kit.tsx), so `md:pl-10` (20px of panel
- * padding + 20px of indent) became `md:pl-5`, the same 20px measured from a
- * flush left edge.
+ * A row that belongs to the option above it, its control at the end.
+ *
+ * It used to be indented — `md:pl-10` while the panel had padding, then
+ * `md:pl-5` once the panel went flush — to say "this belongs to the row above".
+ * The team lead asked for one left edge instead (Sep 24): every label on the
+ * page, heading or row or table, starts at the same x. What a row belongs to is
+ * said by the option switch directly above it and by the fact that it only
+ * appears while that switch is on, which is the same thing the indent was
+ * saying twice.
  */
 function SubRow({ className, ...props }: ComponentProps<typeof SettingsRow>) {
-  return <SettingsRow align="end" {...props} className={cn("py-3 md:pl-5", className)} />;
+  return <SettingsRow align="end" {...props} className={cn("py-3", className)} />;
 }
 
-/** The locations table under its option, lined up with the sub-rows. */
+/** The locations table under its option, on the page's own left edge. */
 function ListArea({ children }: { children: ReactNode }) {
-  return <div className="space-y-3 pt-1 pb-3 md:pl-5">{children}</div>;
+  return <div className="space-y-3 pt-1 pb-3">{children}</div>;
 }
 
 /** The toned-down red for a field's problem. */
@@ -1191,7 +1198,7 @@ function AreaRows({
   return (
     <SettingsReadOnlyFieldset readOnly={readOnly}>
       {!full && (
-        <p className="py-2 text-[13px] leading-snug text-muted-foreground md:pl-5">
+        <p className="py-2 text-[13px] leading-snug text-muted-foreground">
           Uses the center point and price set under Pickup and delivery.
         </p>
       )}

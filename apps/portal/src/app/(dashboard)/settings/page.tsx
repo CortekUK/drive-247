@@ -295,7 +295,7 @@ const V2_PAGES_GATING_OWN_CONTROLS = new Set(['reminders', 'push', 'general', 'd
  * Optional modules' switches save as they flip. Notifications saves its drafts
  * ("notifications") and the email sender ("email-sender") here.
  */
-const V2_PAGES_WITH_SAVE_BAR = new Set(['general', 'duration', 'lockbox', 'tax-and-deposit', 'booking-site', 'templates', 'pricing', 'locations', 'installments', 'payg', 'auto-extend', 'notifications']);
+const V2_PAGES_WITH_SAVE_BAR = new Set(['general', 'duration', 'lockbox', 'tax-and-deposit', 'templates', 'pricing', 'locations', 'installments', 'payg', 'auto-extend', 'notifications']);
 
 /**
  * v2 pages whose rows put their control at the END of the row (team lead
@@ -1653,8 +1653,10 @@ const Settings = () => {
         })());
       }
 
-      // v2: the booking-site colours register their own save (below).
-      if (brandingFormDirty && !(v2Chrome && v2SectionSaves.current['booking-site-colours'])) {
+      // v1 only in practice since Sep 24 2026: the booking-site colours were
+      // the one thing on v2 that made this form dirty, and that section is
+      // gone (the CMS owns those colours). The v1 Branding tab still uses it.
+      if (brandingFormDirty) {
         saves.push((async () => {
           setIsSavingBranding(true);
           try {
@@ -3245,38 +3247,15 @@ const Settings = () => {
           );
 
         case 'booking-site': {
-          // Four switches that save as they flip, and the header and footer
-          // colours, saved by the page's save bar. General's permission.
+          // Four switches that save as they flip. General's permission.
+          //
+          // The header and footer colours lived here too, with their own dirty
+          // check, save and discard registered on the page's save bar. All of
+          // it went on Sep 24 2026 with the section itself — the CMS is where
+          // the booking site's colours are edited. Nothing else on this page
+          // registered a save, so the bar now only appears on the pages that
+          // still have one.
           const canEditGeneral = canEditSettings('general');
-          const v2BrandingState = queryClient.getQueryState(['tenant-branding', tenant?.id]);
-          const v2BrandingReady = v2BrandingState?.data !== undefined;
-          const v2BrandingFailed = !v2BrandingReady && v2BrandingState?.status === 'error';
-          const headerFooterDirty =
-            !!tenantBranding &&
-            (brandingForm.light_header_footer_color !== (tenantBranding.light_header_footer_color || '') ||
-              brandingForm.dark_header_footer_color !== (tenantBranding.dark_header_footer_color || ''));
-          // The same payloads as before, and it rejects on a failure so the bar
-          // says so (the page toasts it).
-          const saveHeaderFooter = async () => {
-            setIsSavingBranding(true);
-            try {
-              const colours = {
-                light_header_footer_color: brandingForm.light_header_footer_color || null,
-                dark_header_footer_color: brandingForm.dark_header_footer_color || null,
-              };
-              await updateTenantBranding(colours as any);
-              await updateOrgBranding(colours as any);
-              logAction({ action: "settings_updated", entityType: "settings", entityId: tenant?.id || "unknown", details: { section: "branding" } });
-            } finally {
-              setIsSavingBranding(false);
-            }
-          };
-          const discardHeaderFooter = () =>
-            setBrandingForm(prev => ({
-              ...prev,
-              light_header_footer_color: tenantBranding?.light_header_footer_color || '',
-              dark_header_footer_color: tenantBranding?.dark_header_footer_color || '',
-            }));
           return (
             <div className="space-y-6">
               {!tenant ? (
@@ -3347,63 +3326,13 @@ const Settings = () => {
               </SettingsPanel>
               )}
 
-              {!v2BrandingReady ? (
-                v2BrandingFailed ? (
-                  <SettingsLoadError
-                    thing="your header and footer colours"
-                    error={v2BrandingState?.error}
-                    onRetry={() => queryClient.refetchQueries({ queryKey: ['tenant-branding', tenant?.id] })}
-                    retrying={v2BrandingState?.fetchStatus === 'fetching'}
-                  />
-                ) : (
-                  <SettingsSectionSkeleton variant="form" rows={2} header label="Loading header and footer colours" />
-                )
-              ) : (
-              <SettingsPanel
-                title="Header and footer colour"
-                description="The top bar and footer of your booking site, and the sidebar of your customers' account area."
-                footer={
-                  canEditGeneral ? (
-                    <>
-                      <SectionSaveRegistration
-                        registerSave={registerV2SectionSave}
-                        sectionKey="booking-site-colours"
-                        isDirty={headerFooterDirty}
-                        save={saveHeaderFooter}
-                        discard={discardHeaderFooter}
-                      />
-                      <ButtonV2
-                        variant="ghost"
-                        size="sm"
-                        className="text-muted-foreground"
-                        onClick={() => setBrandingForm(prev => ({ ...prev, light_header_footer_color: '', dark_header_footer_color: '' }))}
-                      >
-                        Use default
-                      </ButtonV2>
-                    </>
-                  ) : undefined
-                }
-              >
-                <SettingsReadOnlyFieldset readOnly={!canEditGeneral}>
-                {/* No `px-5`: the panel around it is flush, so the two
-                    colour pickers start under the panel title (settings-kit.tsx). */}
-                <div className="grid gap-6 py-4 md:grid-cols-2">
-                  <ColorPicker
-                    label="Light mode"
-                    value={brandingForm.light_header_footer_color || '#1A2B25'}
-                    onChange={(color) => setBrandingForm(prev => ({ ...prev, light_header_footer_color: color }))}
-                    description="When a visitor's site is in light mode."
-                  />
-                  <ColorPicker
-                    label="Dark mode"
-                    value={brandingForm.dark_header_footer_color || '#1A2B25'}
-                    onChange={(color) => setBrandingForm(prev => ({ ...prev, dark_header_footer_color: color }))}
-                    description="When a visitor's site is in dark mode — what most visitors see."
-                  />
-                </div>
-                </SettingsReadOnlyFieldset>
-              </SettingsPanel>
-              )}
+              {/* "Header and footer colour" (the two booking-site colour
+                  pickers and their Use default) was here until Sep 24 2026.
+                  Removed from v2 at the user's request: the booking site's own
+                  colours are edited in the CMS, and a second place to set them
+                  in Settings only invited the two to disagree. The columns and
+                  the v1 Branding tab are untouched, so nothing a tenant saved
+                  is lost and every other portal still edits them as before. */}
             </div>
           );
         }
