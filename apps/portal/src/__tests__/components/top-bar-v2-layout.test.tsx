@@ -63,7 +63,7 @@ const isBefore = (a: Element, b: Element) =>
   Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
 
 describe('v2 top bar layout', () => {
-  it('orders the bar: search, Trax, then credits, messages, notifications', () => {
+  it('orders the bar: search, then credits, Trax, messages, notifications', () => {
     render(<TopBarV2 />);
     // The sm+ field is the first "Search" control; the phone icon button follows it.
     const [searchField] = screen.getAllByRole('button', { name: 'Search' });
@@ -72,18 +72,19 @@ describe('v2 top bar layout', () => {
     const messages = screen.getByRole('button', { name: 'Messages' });
     const bell = screen.getByRole('button', { name: 'Notifications' });
 
-    const order = [searchField, trax, credits, messages, bell];
+    const order = [searchField, credits, trax, messages, bell];
     for (let i = 0; i < order.length - 1; i++) {
       expect(isBefore(order[i], order[i + 1])).toBe(true);
     }
 
-    // Trax is outside the right-hand cluster; the three icons are inside it, and
-    // notifications is the cluster's last control.
+    // Trax moved INTO the right-hand cluster on Sep 24 2026, immediately before
+    // messages; notifications is still the cluster's last control.
     const cluster = credits.closest('div.ml-auto')!;
     expect(cluster).not.toBeNull();
-    expect(cluster.contains(trax)).toBe(false);
+    expect(cluster.contains(trax)).toBe(true);
     expect(cluster.contains(messages)).toBe(true);
     expect(cluster.contains(bell)).toBe(true);
+    expect(isBefore(trax, messages)).toBe(true);
     const controls = cluster.querySelectorAll('a, button');
     expect(controls[controls.length - 1]).toBe(bell);
   });

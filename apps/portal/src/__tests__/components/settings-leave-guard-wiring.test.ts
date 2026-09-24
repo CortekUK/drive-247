@@ -92,8 +92,12 @@ describe("settings page (v2): the leave guard", () => {
     // The permission-wait skeleton and the page wrapper share one column, 26px
     // from the top, which steps aside for the open Trax panel.
     expect(v2.match(/<div className=\{V2_SETTINGS_PAGE_COLUMN\}>/g)).toHaveLength(2);
+    // `pb-6`, not `pb-16`: the sticky save bar is the column's LAST child and
+    // floats at `bottom-4`, so 64px of padding sat UNDER it — dead space at the
+    // end of every settings page, and enough to give a short page like Lockbox
+    // a scrollbar with nothing to scroll to.
     expect(page).toContain(
-      "const V2_SETTINGS_PAGE_COLUMN = `w-full max-w-[1160px] space-y-8 pb-16 md:pt-[26px] ${SETTINGS_COLUMN_BESIDE_TRAX}`;",
+      "const V2_SETTINGS_PAGE_COLUMN = `w-full max-w-[1160px] space-y-8 pb-6 md:pt-[26px] ${SETTINGS_COLUMN_BESIDE_TRAX}`;",
     );
   });
 

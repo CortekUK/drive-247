@@ -245,7 +245,7 @@ export function EmailTemplatesListV2() {
           at 50 + 26 + 16 = 92, the sidebar switch's row (as on the Settings index).
           SETTINGS_COLUMN_BESIDE_TRAX: the same column the Settings page uses, so
           the open Trax panel never lands over the list. */}
-      <div className={cn("w-full max-w-[1160px] space-y-8 pb-16 md:pt-[26px]", SETTINGS_COLUMN_BESIDE_TRAX)}>
+      <div className={cn("w-full max-w-[1160px] space-y-8 pb-6 md:pt-[26px]", SETTINGS_COLUMN_BESIDE_TRAX)}>
         {header}
         {body}
       </div>

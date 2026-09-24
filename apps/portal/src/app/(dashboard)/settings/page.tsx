@@ -333,7 +333,7 @@ const V2_LOCKBOX_MESSAGES_HREF = `/settings?tab=templates#${settingsSectionId('l
  * While the floating Trax panel is open the column stops short of it, so the
  * panel never covers a section's controls or the save bar at the column's end.
  */
-const V2_SETTINGS_PAGE_COLUMN = `w-full max-w-[1160px] space-y-8 pb-16 md:pt-[26px] ${SETTINGS_COLUMN_BESIDE_TRAX}`;
+const V2_SETTINGS_PAGE_COLUMN = `w-full max-w-[1160px] space-y-8 pb-6 md:pt-[26px] ${SETTINGS_COLUMN_BESIDE_TRAX}`;
 
 /**
  * Light → dark colour sync.

@@ -706,6 +706,56 @@ body.v2-theme {
   display: none;
 }
 
+/* THE PAGE SCROLLBAR.
+ *
+ * `.scrollbar-thin` below already describes the house scrollbar — a transparent
+ * track and a rounded, translucent thumb — but nothing ever applied it to the
+ * one scrollbar an operator sees on every single page: the viewport's. That
+ * stayed the browser default, a square grey slab down the right edge of a
+ * design that has none anywhere else. Reported as "the side scroll looks too
+ * bad", which it did.
+ *
+ * Selected through `html:has(body.v2-theme)` for a reason that is easy to get
+ * wrong: the VIEWPORT scrollbar is painted from the ROOT element, and
+ * `v2-theme` lives on <body>, so styling the body here changes inner scrollers
+ * and leaves the page scrollbar exactly as it was. v1 bodies carry no
+ * `v2-theme`, so the other tenants keep the native bar.
+ *
+ * The colours are literal rather than `hsl(var(--muted-foreground) …)`: those
+ * tokens are declared on `.v2-theme`, i.e. on <body>, and custom properties
+ * inherit DOWN. On <html> they would not resolve, and the thumb would fall back
+ * to transparent — an invisible scrollbar, which is worse than an ugly one.
+ * This grey sits between the light page and the dark one, so one value serves
+ * both themes.
+ */
+html:has(body.v2-theme) {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(120 120 135 / 0.3) transparent;
+}
+html:has(body.v2-theme)::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+html:has(body.v2-theme)::-webkit-scrollbar-track {
+  background: transparent;
+}
+html:has(body.v2-theme)::-webkit-scrollbar-thumb {
+  background: rgb(120 120 135 / 0.3);
+  border-radius: 9999px;
+  /* The border + padding-box clip is what makes the thumb read as a slim pill
+     inside the 10px gutter instead of filling it edge to edge. */
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  transition: background 0.15s ease;
+}
+html:has(body.v2-theme)::-webkit-scrollbar-thumb:hover {
+  background: rgb(120 120 135 / 0.5);
+  background-clip: padding-box;
+}
+html:has(body.v2-theme)::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 /* Scrollbar utilities */
 .v2-theme .scrollbar-thin {
   scrollbar-width: thin;

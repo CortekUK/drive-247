@@ -24,8 +24,7 @@ import { usePageSearchSlot } from "@/components/shared/layout/page-search-slot";
  *
  * Modelled on the Stripe dashboard: a bar spanning the CONTENT column only
  * (right of the sidebar, never the full window), search on the left, a
- * right-aligned icon cluster (credits, messages, notifications), Trax beside
- * the search field.
+ * right-aligned cluster of credits, Trax, messages and notifications.
  *
  * ---------------------------------------------------------------------------
  * IT DOES NOT SCROLL, AND NOTHING SCROLLS UNDER IT (Sep 23 2026)
@@ -375,10 +374,13 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
         </button>
       )}
 
-      {/* TRAX — right after the search field, not at the far end of the icon
-          cluster (team lead, Sep 2026): the two are the ways to ask the portal
-          something, so they sit together. Named, not just an icon. Its own control rather than a mode of
-          the search field: only we know which search is global, so a magnifier
+      {/* TRAX — in the right-hand cluster, immediately before messages (user,
+          Sep 24 2026). It sat beside the search field until then, on the
+          reading that search and Trax are both ways to ask the portal
+          something; it now sits with the other things you reach for, which
+          also leaves the search field the whole left side of the bar.
+          Named, not just an icon. Its own control rather than a mode of the
+          search field: only we know which search is global, so a magnifier
           that sometimes answers as an AI is a guess the operator would have to
           make every time.
           The label is deliberate. An unlabelled glyph is discoverable only by
@@ -398,33 +400,6 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
           badge, and small enough to sit beside 13px text without outweighing
           it. The left padding matches the badge's top and bottom inset, so it
           sits in the hover pill like an avatar in a chip. */}
-      {trax && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              aria-label="Help, ask Trax"
-              aria-expanded={trax.sheetOpen}
-              onClick={trax.sheetOpen ? trax.closeSheet : trax.openSheet}
-              className={
-                "h-8 gap-1.5 pl-1.5 pr-2.5 text-[13px] font-medium text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] hover:bg-primary/10 hover:text-primary dark:hover:text-[hsl(var(--v2-link,var(--primary)))] aria-expanded:bg-primary/10 " +
-                "dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:aria-expanded:bg-[hsl(var(--v2-hover,var(--muted)))] " +
-                (trax.sheetOpen ? "bg-primary/10 dark:bg-[hsl(var(--v2-hover,var(--muted)))]" : "") +
-                // On a phone the open page field takes the row (see phoneField).
-                (phoneField ? " max-sm:hidden" : "")
-              }
-            >
-              <TraxMark size="xs" />
-              Help
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" sideOffset={8} className={TIP}>
-            Hi, I&apos;m Trax. How can I help?
-            <span className="ml-1.5 text-muted-foreground">⌘J</span>
-          </TooltipContent>
-        </Tooltip>
-      )}
 
       {/* gap-0.5, and 8px side padding on credits: the icons sit a little closer
           together (team lead, Sep 2026) while each keeps its full hover pill. */}
@@ -438,8 +413,10 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
           className="mx-1 hidden data-[orientation=vertical]:h-5 data-[orientation=vertical]:self-center sm:block"
         />
 
-        {/* Order, left to right: credits, messages, notifications. Notifications
-            sit at the extreme right (team lead, Sep 2026). */}
+        {/* Order, left to right: credits, Trax, messages, notifications.
+            Notifications sit at the extreme right (team lead, Sep 2026), and
+            Trax moved here from beside the search field on Sep 24 2026 — it
+            reads as one of the things you reach for, not as part of search. */}
         {/* CREDITS, deliberately on the face of every page.
             Presentation is v2's rather than reusing `CreditBalance`, which is the
             v1 pill: it hardcodes `text-[#404040]` and pulls the v1 Tooltip, both
@@ -466,6 +443,34 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={8} className={TIP}>
               {isLowBalance ? "Credits running low" : "Credits"}
+            </TooltipContent>
+          </Tooltip>
+        )}
+
+        {trax && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label="Help, ask Trax"
+                aria-expanded={trax.sheetOpen}
+                onClick={trax.sheetOpen ? trax.closeSheet : trax.openSheet}
+                className={
+                  "h-8 gap-1.5 pl-1.5 pr-2.5 text-[13px] font-medium text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] hover:bg-primary/10 hover:text-primary dark:hover:text-[hsl(var(--v2-link,var(--primary)))] aria-expanded:bg-primary/10 " +
+                  "dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:aria-expanded:bg-[hsl(var(--v2-hover,var(--muted)))] " +
+                  (trax.sheetOpen ? "bg-primary/10 dark:bg-[hsl(var(--v2-hover,var(--muted)))]" : "") +
+                  // On a phone the open page field takes the row (see phoneField).
+                  (phoneField ? " max-sm:hidden" : "")
+                }
+              >
+                <TraxMark size="xs" />
+                Help
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={8} className={TIP}>
+              Hi, I&apos;m Trax. How can I help?
+              <span className="ml-1.5 text-muted-foreground">⌘J</span>
             </TooltipContent>
           </Tooltip>
         )}

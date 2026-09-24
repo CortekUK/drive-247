@@ -298,10 +298,19 @@ export const SETTINGS_INDEX_SECTIONS: SettingsIndexSection[] = [
     items: [
       {
         title: "Customer messages",
-        description: "The return reminder, the emails customers receive, the lockbox code email and the rental agreement they sign.",
+        // No mention of the rental agreement: on v2 the agreement templates are
+        // not here any more. They moved to the Agreements tab (Agreements v2,
+        // D1), and /settings/agreement-templates redirects there when
+        // `useV2('agreements')` is on — so this card described a page that no
+        // longer holds that. `agreement`/`contract` are gone from `keywords`
+        // for the same reason: searching Settings for "agreement" should not
+        // land someone on the one page that no longer has them. The v1 copy in
+        // app/(dashboard)/settings/page.tsx still names the agreement, and
+        // correctly: v1 tenants are not redirected and still edit it there.
+        description: "The return reminder, the emails your customers receive and the lockbox code email with its instructions.",
         href: "/settings?tab=templates",
         tab: "templates",
-        keywords: "templates email agreement contract return reminder sms lockbox code instructions",
+        keywords: "templates email return reminder sms lockbox code instructions",
       },
       // Agreement templates left Settings for the Agreements tab (Agreements
       // v2, D1): /settings/agreement-templates redirects to /agreements?view=templates.
@@ -397,7 +406,7 @@ export function SettingsIndexV2({
   // open Trax panel never sits over the last column of entries.
   return (
     <div
-      className={cn("w-full max-w-[1160px] space-y-9 pb-16 md:pt-[26px]", SETTINGS_COLUMN_BESIDE_TRAX)}
+      className={cn("w-full max-w-[1160px] space-y-9 pb-6 md:pt-[26px]", SETTINGS_COLUMN_BESIDE_TRAX)}
       data-tour="settings-index"
     >
       <h1 className={SETTINGS_PAGE_TITLE}>Settings</h1>

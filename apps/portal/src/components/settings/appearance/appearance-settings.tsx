@@ -344,7 +344,7 @@ export function AppearanceSettings() {
   }
 
   return (
-    <div className="space-y-8 pb-16">
+    <div className="space-y-8 pb-6">
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-1">
@@ -537,7 +537,7 @@ const V2_PAGE_TITLE = 'Branding';
 // uses, so while the floating Trax panel is open this column stops short of it
 // instead of running under it. TraxPanel is mounted on every dashboard route,
 // so without it the panel covered the brand-colour controls and the save bar.
-const V2_PAGE_CLASS = `w-full max-w-[1160px] space-y-8 pb-16 md:pt-[26px] ${SETTINGS_COLUMN_BESIDE_TRAX}`;
+const V2_PAGE_CLASS = `w-full max-w-[1160px] space-y-8 pb-6 md:pt-[26px] ${SETTINGS_COLUMN_BESIDE_TRAX}`;
 /** Between the three sections: close enough to read as one page (was space-y-10). */
 const V2_SECTIONS_CLASS = 'space-y-8';
 
