@@ -190,7 +190,7 @@ function OperatorSetup({ setup, canEdit, onChanged }: { setup: Setup; canEdit: b
           <CardDescription>A referral counts while that operator stays subscribed.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="grid grid-cols-3 gap-3 text-center">
+          <div className="grid grid-cols-1 gap-3 text-center sm:grid-cols-3">
             <Stat label="Subscribed referrals" value={String(state?.active_referrals ?? 0)} />
             <Stat label="Referred in total" value={String(state?.total_referrals ?? setup.referralsMade.filter(r => r.status === 'active').length)} />
             <Stat label="Saved so far" value={money(setup.savedCents)} />

@@ -179,13 +179,19 @@ function NavGroupComponent({
                 href={item.href}
                 onClick={onNavigate}
                 className={cn(
-                  'flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition-all duration-200',
+                  /* Below `md` this sidebar is the sheet behind the header's
+                     menu and the only navigation on the screen, so its rows
+                     carry a 44px target and a readable label; from `md` up it
+                     is the desktop rail again at exactly the density it had.
+                     Same pair the portal's rail uses. */
+                  'flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 text-[15px] font-medium transition-all duration-200',
+                  'md:min-h-0 md:text-[13px]',
                   active
                     ? 'bg-primary/15 text-primary glow-purple'
                     : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
                 )}
               >
-                <Icon className={cn("h-4 w-4", active && "text-primary")} />
+                <Icon className={cn("size-[18px] md:size-4", active && "text-primary")} />
                 <span className="flex-1">{item.name}</span>
                 {showBadge && (
                   <span
@@ -255,7 +261,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             {user?.email?.[0]?.toUpperCase() || 'A'}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-[13px] font-medium text-sidebar-foreground truncate">
+            <p className="text-[15px] md:text-[13px] font-medium text-sidebar-foreground truncate">
               {user?.name || user?.email}
             </p>
             {user?.is_primary_super_admin && (
@@ -268,7 +274,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         <Separator className="mb-3 bg-sidebar-border" />
         <button
           onClick={() => logout()}
-          className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-[13px] font-medium text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-all"
+          className="flex min-h-11 md:min-h-0 items-center gap-2 w-full px-3 py-2 rounded-lg text-[15px] md:text-[13px] font-medium text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-all"
         >
           <LogOut className="h-4 w-4" />
           Sign out

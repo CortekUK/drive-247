@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { AlertCircle, ArrowLeft, Loader2, Lock, Mail, ShieldCheck } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Loader2, Lock, Mail } from 'lucide-react';
 
 import { PasswordInput } from '@/components/ui/password-input';
 import { cn } from '@/lib/utils';
@@ -81,13 +81,26 @@ export default function AdminLoginPage() {
       />
 
       <div className="relative z-10 m-auto w-full max-w-md motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-3 motion-safe:duration-500">
-        {/* Four distinct treatments rather than three stacked greys: a mark, the
-            wordmark in the app's own type, a tinted eyebrow chip, then
-            ink-and-muted copy inside the card. */}
+        {/* The product's own mark, a tinted eyebrow chip, then ink-and-muted
+            copy inside the card.
+
+            The mark used to be a generic shield in a gradient tile with the
+            word CORTEK under it. "CORTEK" appeared in exactly one place in
+            this app — right here — while the tab title is "Drive247 Admin
+            Portal" and the sidebar's own wordmark is "Drive247", so the login
+            screen was the one surface disagreeing with the rest of the app
+            about what this is. It now carries the real wordmark, the same file
+            the landing site and the operator portal's sign-in use
+            (`apps/web/public/logo-light.png`), rather than a second drawing of
+            the brand that has to be kept in step by hand. */}
         <header className="mb-7 flex flex-col items-center text-center">
-          <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-3xl bg-gradient-to-br from-primary to-chart-3 text-primary-foreground shadow-lg shadow-primary/25">
-            <ShieldCheck className="h-7 w-7" aria-hidden="true" />
-          </div>
+          <img
+            src="/drive247-logo-light.png"
+            alt="Drive247"
+            width={855}
+            height={195}
+            className="mb-5 h-9 w-auto object-contain sm:h-10"
+          />
 
           {/* Plain Manrope, the app's own typeface, at the same weight and
               tracking idiom as the "Sign in" heading below it.
@@ -102,11 +115,7 @@ export default function AdminLoginPage() {
               that it looked like a different font from the rest of the app.
               The real wordmark elsewhere is the sidebar's "Drive247":
               font-semibold, no gradient, no tracking. */}
-          <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-            CORTEK
-          </h1>
-
-          <p className="mt-3 inline-flex items-center rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">
+          <p className="inline-flex items-center rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">
             Super Admin Portal
           </p>
         </header>

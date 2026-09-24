@@ -272,7 +272,10 @@ export default function BlacklistPage() {
       </div>
 
       {/* Table */}
-      <div className="bg-dark-card rounded-lg shadow overflow-hidden border border-dark-border">
+      {/* `overflow-x-auto`, not `overflow-hidden`: this table is wider than a
+          phone and the card was CLIPPING the columns past the fold with no way
+          to reach them. Any non-visible overflow still rounds the corners. */}
+      <div className="bg-dark-card rounded-lg shadow overflow-x-auto border border-dark-border">
         <table className="min-w-full divide-y divide-dark-border">
           <thead className="bg-dark-bg">
             <tr>
