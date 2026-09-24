@@ -199,9 +199,9 @@ Deno.serve(async (req) => {
   // comma-separated tenant ids, or "*" for all. Unset/empty = off, in which case
   // none of the autoext_* credit RPCs is ever called and behaviour is unchanged.
   const adjCreditTenants = (Deno.env.get("AUTOEXT_ADJ_CREDIT_TENANTS") ?? "")
-    .split(",").map((t) => t.trim()).filter(Boolean);
+    .split(",").map((t) => t.trim().toLowerCase()).filter(Boolean);
   const adjCreditEnabledFor = (tenantId: string): boolean =>
-    adjCreditTenants.includes("*") || adjCreditTenants.includes(tenantId);
+    adjCreditTenants.includes("*") || adjCreditTenants.includes(String(tenantId).toLowerCase());
 
   try {
     console.log(`[auto-extend] run at ${nowIso}`);
@@ -450,16 +450,20 @@ Deno.serve(async (req) => {
             // (function deployed ahead of its migration, or the migration rolled
             // back) only the Resume extension switches off for this tick — the
             // global driver query above never names it, so the cron keeps running.
-            // Clamped to now: a bad value can only shorten the extra time, never
-            // hold a rental un-paused indefinitely.
             const { data: resumeRow, error: resumeErr } = await supabase
               .from("rentals").select("auto_extend_resumed_at").eq("id", r.id).maybeSingle();
             if (resumeErr) {
               console.warn(`[auto-extend] resumed_at unreadable for ${r.id}: ${resumeErr.message} — grace ignores Resume this tick`);
             }
             const resumedAtIso: string | null = resumeErr ? null : (resumeRow?.auto_extend_resumed_at ?? null);
+            // The trigger stamps it with the DB clock, so a legitimate value is never
+            // in the future; anything more than 5 minutes ahead is bad data and is
+            // ignored rather than clamped (clamping would re-anchor grace to "now"
+            // on every tick and the rental could never pause).
             const resumedAtRaw = resumedAtIso ? new Date(resumedAtIso).getTime() : 0;
-            const resumedAtMs = Number.isFinite(resumedAtRaw) ? Math.min(resumedAtRaw, now.getTime()) : 0;
+            const resumedAtMs = Number.isFinite(resumedAtRaw) && resumedAtRaw <= now.getTime() + 5 * 60 * 1000
+              ? Math.min(resumedAtRaw, now.getTime())
+              : 0;
             const askedAtMs = Math.max(
               pending?.created_at
                 ? new Date(pending.created_at).getTime()
@@ -637,11 +641,18 @@ Deno.serve(async (req) => {
           if (adjCreditEnabledFor(r.tenant_id)) {
             const { rem: afterPaymentCredit } = await readExtRemaining();
             if (afterPaymentCredit > 0.001) {
+              // p_min_due: when credit covers the week only partly, leave at least
+              // this much to pay — below the currency minimum Stripe refuses the
+              // Checkout session and the week would fail every tick.
               const { error: adjApplyErr } = await supabase.rpc("autoext_apply_adjustment_credit", {
-                p_rental_id: r.id, p_target_extension_id: ext.id, p_source: "autoext_mint",
+                p_rental_id: r.id, p_target_extension_id: ext.id, p_source: "autoext_mint", p_min_due: 2,
               });
+              // A database error carries a code and means the transaction rolled back
+              // (nothing moved). No code = the response was lost in transit and the
+              // move may have committed — treat it as applied so every rollback path
+              // reverses it (reversing nothing is a no-op).
+              if (!adjApplyErr || !adjApplyErr.code) adjCreditApplied = true;
               if (adjApplyErr) throw adjApplyErr;
-              adjCreditApplied = true;
             }
           }
           const fresh = await readExtRemaining();
@@ -1028,9 +1039,28 @@ Deno.serve(async (req) => {
               errors.push(`${String(r.id).slice(0, 8)}: pay-link session-create rollback delete failed — PAUSED (orphan ext, manual review)`);
               continue;
             }
-            console.error(`[auto-extend] pay-link session create failed ${r.id} ext#${seq}: ${sessionErr?.message ?? sessionErr} — rolled back, will retry`);
-            errors.push(`${String(r.id).slice(0, 8)}: pay-link session create failed (rolled back)`);
-            failed++;
+            // Bounded retries, exactly like the auto-charge failure path: space them
+            // across the grace window and pause after max retries, so a persistent
+            // Stripe refusal surfaces to the operator instead of looping forever.
+            const slAttempts = (r.auto_extend_failed_attempts || 0) + 1;
+            const slMaxRetries = Number(tenant.auto_extend_max_retries) || 3;
+            if (slAttempts >= slMaxRetries) {
+              await writeRentalState({
+                auto_extend_failed_attempts: slAttempts, auto_extend_paused: true,
+                auto_extend_paused_at: nowIso, auto_extend_status: "paused", updated_at: nowIso,
+              }, "session-create max-retries pause");
+              paused++;
+            } else {
+              const slGraceHrs = Number(tenant.auto_extend_grace_hours) || 48;
+              const slRetry = new Date(now.getTime() + (slGraceHrs / slMaxRetries) * 3600 * 1000);
+              await writeRentalState({
+                auto_extend_failed_attempts: slAttempts,
+                auto_extend_next_charge_at: slRetry.toISOString(), updated_at: nowIso,
+              }, "session-create retry-advance");
+              failed++;
+            }
+            console.error(`[auto-extend] pay-link session create failed ${r.id} ext#${seq}: ${sessionErr?.message ?? sessionErr} — rolled back (attempt ${slAttempts}/${slMaxRetries})`);
+            errors.push(`${String(r.id).slice(0, 8)}: pay-link session create failed (rolled back, attempt ${slAttempts}/${slMaxRetries})`);
             continue;
           }
 
@@ -1115,6 +1145,8 @@ Deno.serve(async (req) => {
             // interval` is trivially true and the 14:00 sweep would nudge a
             // rental parked at 13:50 ten minutes later.
             auto_extend_last_reminder_at: nowIso,
+            // A link went out, so any earlier session-create failures are over.
+            auto_extend_failed_attempts: 0,
             updated_at: nowIso,
           }, "pay-link park");
           linked++;
