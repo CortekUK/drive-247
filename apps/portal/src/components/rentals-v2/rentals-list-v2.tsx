@@ -613,7 +613,7 @@ export function RentalsListV2() {
                 the measured window fill, and replaces the 520px from md up. */}
             <CardContent
               ref={scrollRootRef}
-              className="p-0 overflow-x-auto max-h-[520px] overflow-y-auto no-scrollbar relative [&>[data-slot=table-container]]:overflow-visible md:overscroll-contain"
+              className="p-0 overflow-x-auto max-h-[520px] overflow-y-auto no-scrollbar-from-md relative [&>[data-slot=table-container]]:overflow-visible md:overscroll-contain"
               style={tableFillCap !== undefined ? { maxHeight: tableFillCap } : undefined}
             >
               {/* `table-fixed` with declared widths, so the five columns keep
