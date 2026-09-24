@@ -242,3 +242,62 @@ describe("what the customiser saves", () => {
     expect(text).not.toContain("Vehicles");
   });
 });
+
+/**
+ * Three columns, two scrollers.
+ *
+ * The grid used to be one scroll box holding all three columns, so reading to
+ * the bottom of "Your sidebar" scrolled the PREVIEW out of view — and the
+ * preview is the thing the operator is checking their changes against. The two
+ * working columns now scroll inside their own caps and the preview is left at
+ * its natural height, so it is always whole and never scrolls.
+ *
+ * jsdom does no layout, so these assert the classes that create the behaviour
+ * rather than measured overflow; the shape of the contract is what must not
+ * regress.
+ */
+describe("the columns scroll independently, and the preview never does", () => {
+  const columnFor = (heading: string): HTMLElement => {
+    const h = Array.from(document.querySelectorAll("h4")).find(
+      (el) => el.textContent?.trim() === heading,
+    );
+    expect(h, `no column headed "${heading}"`).toBeTruthy();
+    return h!.parentElement as HTMLElement;
+  };
+
+  it("gives 'Not shown' and 'Your sidebar' their own scroll area", async () => {
+    await open();
+    for (const heading of ["Not shown", "Your sidebar"]) {
+      const classes = columnFor(heading).className;
+      expect(classes, heading).toContain("sm:overflow-y-auto");
+      // Without `min-h-0` a grid item floors at its content height and never
+      // scrolls, however low the cap is set.
+      expect(classes, heading).toContain("sm:min-h-0");
+      expect(classes, heading).toMatch(/sm:max-h-\[\d+vh\]/);
+    }
+  });
+
+  it("leaves the preview uncapped and unscrolled", async () => {
+    await open();
+    const classes = preview().className;
+    expect(classes).not.toContain("overflow-y-auto");
+    expect(classes).not.toContain("overflow-auto");
+    expect(classes).not.toMatch(/max-h-/);
+  });
+
+  it("stops the grid itself scrolling above sm, so the three do not move together", async () => {
+    await open();
+    const grid = columnFor("Not shown").parentElement as HTMLElement;
+    expect(grid.className).toContain("grid");
+    expect(grid.className).toContain("sm:overflow-visible");
+    // Below sm the columns stack, where a single scroller is still right.
+    expect(grid.className).toContain("overflow-y-auto");
+  });
+
+  it("is wide enough for a real sidebar in the preview column", async () => {
+    await open();
+    expect(dialog().className).toContain("sm:max-w-6xl");
+    // The outer bound only engages for a sidebar taller than the screen.
+    expect(dialog().className).toContain("max-h-[92vh]");
+  });
+});

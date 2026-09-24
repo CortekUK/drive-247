@@ -531,9 +531,17 @@ export function SidebarCustomizerDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       {/* `sm:max-w-*`, not `max-w-*`: DialogContent's base carries
           `sm:max-w-md`, and an unprefixed utility loses to it above 640px —
-          which is every screen this dialog is used on. Widened from `4xl` to
-          `5xl` for the preview column. */}
-      <DialogContent className="gap-0 p-0 sm:max-w-5xl">
+          which is every screen this dialog is used on. Widened 4xl → 5xl → 6xl:
+          the preview is a real sidebar at its real width, so the column has to
+          fit one without wrapping its labels.
+
+          `max-h-[92vh]` with `overflow-y-auto` is the outer safety net, and it
+          is deliberately the LAST resort: the two working columns cap and
+          scroll themselves (below), and the preview is never capped, so this
+          only engages for a sidebar long enough to outgrow the screen on its
+          own. Without it such a preview would be clipped by the dialog edge
+          with no way to reach the rest. */}
+      <DialogContent className="gap-0 p-0 sm:max-w-6xl max-h-[92vh] overflow-y-auto">
         <DialogHeader className="border-b border-border px-7 py-5">
           <DialogTitle>Customise sidebar</DialogTitle>
           <DialogDescription>
@@ -553,9 +561,29 @@ export function SidebarCustomizerDialog({
             collisionDetection={collisionDetection}
             onDragEnd={handleDragEnd}
           >
-            <div className="grid max-h-[62vh] grid-cols-1 divide-y divide-border overflow-y-auto sm:grid-cols-[240px_1fr_240px] sm:divide-x sm:divide-y-0">
+            {/* ONE scroller became THREE, and the difference is what the
+                preview is for. This grid used to carry `max-h-[62vh]
+                overflow-y-auto`, so all three columns scrolled TOGETHER inside
+                one box: scrolling to the bottom of "Your sidebar" dragged the
+                preview out of view, and the preview — the thing you are
+                checking your changes against — could never be seen whole.
+
+                Now the two working columns cap and scroll themselves, and the
+                preview is left at its natural height so it never scrolls at
+                all. The columns still STRETCH to a shared row height (the grid
+                default) rather than each ending at its own content: the
+                dividers between them are the column borders, and ragged
+                half-height dividers look like a rendering fault. The caps do
+                the work instead — the row is as tall as the preview needs, and
+                the two working columns scroll inside it.
+
+                Below `sm` the columns stack into a single narrow page, where
+                three independent scroll areas would be worse than one: the
+                original single-scroller behaviour is kept for that case and
+                switched off at `sm`. */}
+            <div className="grid max-h-[62vh] grid-cols-1 divide-y divide-border overflow-y-auto sm:max-h-none sm:grid-cols-[260px_1fr_280px] sm:divide-x sm:divide-y-0 sm:overflow-visible">
               {/* Hidden / available pool */}
-              <div className="px-6 py-5">
+              <div className="px-6 py-5 sm:max-h-[68vh] sm:min-h-0 sm:overflow-y-auto sm:[scrollbar-width:thin] sm:[scrollbar-color:rgb(120_120_135_/_0.3)_transparent]">
                 <h4 className="mb-1 text-[13px] font-semibold">Not shown</h4>
                 <p className="mb-3 text-xs text-muted-foreground">
                   Links you&apos;ve removed, and the ones you can add.
@@ -585,7 +613,7 @@ export function SidebarCustomizerDialog({
               </div>
 
               {/* The sidebar itself */}
-              <div className="px-6 py-5">
+              <div className="px-6 py-5 sm:max-h-[68vh] sm:min-h-0 sm:overflow-y-auto sm:[scrollbar-width:thin] sm:[scrollbar-color:rgb(120_120_135_/_0.3)_transparent]">
                 <h4 className="mb-3.5 text-[13px] font-semibold">Your sidebar</h4>
 
                 <p className="mb-2 text-xs font-medium text-muted-foreground">
