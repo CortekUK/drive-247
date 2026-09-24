@@ -27,10 +27,17 @@ import {
   useProgressiveRows,
 } from '@/components/shared/list-table-v2';
 
+/*
+ * Line endings normalised, because the assertions below quote multi-line
+ * snippets and git hands this file out with CRLF on Windows. Without it the
+ * suite passes or fails on the checkout's line endings rather than on anything
+ * about the list — which it did, silently, until a file it reads happened to
+ * be rewritten with LF and the failure went away on its own.
+ */
 const rentalsSource = readFileSync(
   resolve(process.cwd(), 'src/components/rentals-v2/rentals-list-v2.tsx'),
   'utf8',
-);
+).replace(/\r\n/g, '\n');
 
 describe('list table kit matches the rentals list', () => {
   // Rentals writes each column's width into the middle of its head classes
