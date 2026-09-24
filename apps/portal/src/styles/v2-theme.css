@@ -706,6 +706,28 @@ body.v2-theme {
   display: none;
 }
 
+/* `no-scrollbar-from-md` — the same, but only where there is a pointer.
+ *
+ * A v2 list table is `min-w-[720px]` and scrolls sideways inside its card, so
+ * on a 390px screen a little under half a row is off to the right. Hiding the
+ * bar there hid the only thing saying so: a phone has no hover, no wheel and
+ * no visible track, so the rest of the row was reachable but not findable.
+ *
+ * Below `md` the browser's own overlay indicator comes back — it appears on
+ * touch, fades on its own, and takes up no layout — and from `md` up the
+ * design's bare scroll box is exactly as it was. Written as a media query
+ * rather than a `md:` variant because `no-scrollbar` is a hand-ported rule
+ * here, not a registered Tailwind utility, so no variant of it exists. */
+@media (min-width: 768px) {
+  .v2-theme .no-scrollbar-from-md {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .v2-theme .no-scrollbar-from-md::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 /* THE PAGE SCROLLBAR.
  *
  * `.scrollbar-thin` below already describes the house scrollbar — a transparent

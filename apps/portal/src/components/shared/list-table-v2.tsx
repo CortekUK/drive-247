@@ -43,7 +43,7 @@ export const LIST_ROWS_PER_FILL = 25;
 /** The rentals list's class strings, one place. */
 export const LIST_CLASSES = {
   scrollRoot:
-    "p-0 overflow-x-auto max-h-[520px] overflow-y-auto no-scrollbar relative [&>[data-slot=table-container]]:overflow-visible",
+    "p-0 overflow-x-auto max-h-[520px] overflow-y-auto no-scrollbar-from-md relative [&>[data-slot=table-container]]:overflow-visible",
   /**
    * Added to the scroll root of a list that fills the window (`fillViewport`).
    * Reaching the end of the rows does not hand the wheel on to the page, which
