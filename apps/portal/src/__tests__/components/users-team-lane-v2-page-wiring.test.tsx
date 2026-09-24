@@ -24,6 +24,8 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 import type { AppUser } from '@/stores/auth-store';
 
@@ -342,5 +344,42 @@ describe('/users on v2: the header pill, creating a user and the load error', PA
     fireEvent.click(within(alert).getByRole('button', { name: 'Try again' }));
     await waitFor(() => expect(container.querySelectorAll('tbody tr')).toHaveLength(2));
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+});
+
+/**
+ * Team is a SETTINGS page, so it uses the settings page column.
+ *
+ * It kept v1's `container mx-auto p-4 sm:p-6` after the v2 lane was built: a
+ * max-width that grows with the breakpoint (1536px at 2xl) against the flat
+ * 1160px every other v2 settings page uses, so on a wide screen the table ran
+ * half as wide again as the pages either side of it — one row of four columns
+ * reading as mostly empty space — and the title sat off the `md:pt-[26px]`
+ * baseline that lines every Settings heading up with the sidebar switch.
+ *
+ * Read from the source rather than the DOM because the column is chosen on
+ * `v2Chrome`, and the point is that the two branches differ: v1 must keep its
+ * container.
+ */
+describe('/users on v2: the page column', () => {
+  const source = readFileSync(
+    join(process.cwd(), 'src/app/(dashboard)/users/page.tsx'),
+    'utf8',
+  );
+
+  it('uses the 1160px settings column on v2, with the shared top offset', () => {
+    expect(source).toContain('w-full max-w-[1160px] space-y-8 pb-6 md:pt-[26px]');
+    // The beside-Trax hook is interpolated like every other settings column.
+    // It is an empty string today (settings-kit.tsx) — Settings no longer
+    // reflows for the panel — but the seam stays wired.
+    expect(source).toContain('SETTINGS_COLUMN_BESIDE_TRAX');
+  });
+
+  it('leaves v1 on its own container', () => {
+    expect(source).toContain('container mx-auto p-4 sm:p-6 space-y-6');
+  });
+
+  it('gives the access-denied screen the same column, so the title does not jump', () => {
+    expect(source).toContain('w-full max-w-[1160px] pb-6 md:pt-[26px] space-y-1');
   });
 });

@@ -52,7 +52,8 @@ import { useAuditLog } from '@/hooks/use-audit-log';
 import { useV2 } from '@/lib/v2-context';
 import { HEADER_ACTIONS_V2, HEADER_PRIMARY_V2 } from '@/components/shared/header-icon-button-v2';
 import { UsersTableV2 } from '@/components/admin-v2/users-table-v2';
-import { SETTINGS_PAGE_TITLE } from '@/components/settings-v2/settings-kit';
+import { SETTINGS_COLUMN_BESIDE_TRAX, SETTINGS_PAGE_TITLE } from '@/components/settings-v2/settings-kit';
+import { cn } from '@/lib/utils';
 
 interface UserCredentials {
   name: string;
@@ -399,7 +400,7 @@ export default function UsersManagement() {
     // box and no icon. Every hook above has already run, as on v1.
     if (v2Chrome) {
       return (
-        <div className="container mx-auto p-4 sm:p-6 space-y-1">
+        <div className={cn("w-full max-w-[1160px] pb-6 md:pt-[26px] space-y-1", SETTINGS_COLUMN_BESIDE_TRAX)}>
           <h1 className={SETTINGS_PAGE_TITLE}>Team</h1>
           <p className="text-muted-foreground text-sm sm:text-base">
             Only head admins can add people or change their access. Ask your head admin if something needs changing.
@@ -420,7 +421,26 @@ export default function UsersManagement() {
   }
 
   return (
-    <div className="container mx-auto p-4 sm:p-6 space-y-6">
+    /* v2 uses the SETTINGS PAGE COLUMN, not the v1 `container`.
+     *
+     * Team is opened from the Settings index and reads as one of its pages, but
+     * it kept v1's `container mx-auto p-4 sm:p-6`: a max-width that grows with
+     * the breakpoint (1536px at 2xl) against every other v2 settings page's
+     * flat 1160px. On a wide screen the table stretched half as wide again as
+     * the pages either side of it, which is what made one row of four columns
+     * read as mostly empty space — and `p-4 sm:p-6` put the title off the
+     * `md:pt-[26px]` baseline that lines every other Settings heading up with
+     * the sidebar's Portal/Website switch.
+     *
+     * Same string as email-templates-v2.tsx:248 and agreement-templates-v2.tsx,
+     * the other standalone v2 settings pages. v1 keeps its own container. */
+    <div
+      className={
+        v2Chrome
+          ? cn("w-full max-w-[1160px] space-y-8 pb-6 md:pt-[26px]", SETTINGS_COLUMN_BESIDE_TRAX)
+          : "container mx-auto p-4 sm:p-6 space-y-6"
+      }
+    >
       {v2Chrome ? (
         // v2: the Vehicles header (team lead, Settings walkthrough Sep 2026):
         // the title with no icon, one line under it, and the one labelled
