@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { formatCurrency, cn } from '@/lib/utils';
+import { Building2, Car, CircleDollarSign, ClipboardList, HeartPulse, TrendingUp, Users } from 'lucide-react';
+import { MetricCard } from '@/components/admin/metric-card';
 import { DashboardSkeleton } from '@/components/skeletons/DashboardSkeleton';
 
 // Live = real/production tenants; Test = sandbox/demo tenants. The whole
@@ -236,36 +238,32 @@ export default function DashboardPage() {
           title="Total Rental Companies"
           value={m.companies}
           subtitle={`${m.activeCompanies} active`}
-          icon=""
-          bgColor="bg-blue-500/10 border border-blue-500/25"
-          textColor="text-blue-600"
+          icon={Building2}
+          accent="brand"
         />
 
         <MetricCard
           title="Total Vehicles"
           value={m.vehicles}
           subtitle={`Across all ${tenantWord} companies`}
-          icon=""
-          bgColor="bg-green-500/10 border border-green-500/25"
-          textColor="text-green-600"
+          icon={Car}
+          accent="info"
         />
 
         <MetricCard
           title="Total Rentals"
           value={m.rentals}
           subtitle="All-time bookings"
-          icon=""
-          bgColor="bg-purple-500/10 border border-purple-500/25"
-          textColor="text-purple-600"
+          icon={ClipboardList}
+          accent="brand"
         />
 
         <MetricCard
           title="Total Customers"
           value={m.customers}
           subtitle={`${tenantWord} tenants`}
-          icon=""
-          bgColor="bg-yellow-500/10 border border-yellow-500/25"
-          textColor="text-yellow-600"
+          icon={Users}
+          accent="info"
         />
 
         {/* Drive247's OWN revenue — subscription fees. This is the platform's top line. */}
@@ -273,9 +271,8 @@ export default function DashboardPage() {
           title="Monthly Recurring Revenue"
           value={formatMoneyMap(m.mrr)}
           subtitle={`From tenant subscriptions · ${lifetimeLabel} collected all-time`}
-          icon=""
-          bgColor="bg-indigo-500/10 border border-indigo-500/25"
-          textColor="text-indigo-600"
+          icon={TrendingUp}
+          accent="success"
         />
 
         {/* Platform SCALE — gross rental value flowing to tenants, NOT Drive247 income. */}
@@ -283,28 +280,26 @@ export default function DashboardPage() {
           title="Booking Volume (GMV)"
           value={formatMoneyMap(m.bookingVolume)}
           subtitle={`Gross rental value · ${tenantWord} tenants · not Drive247 revenue`}
-          icon=""
-          bgColor="bg-cyan-500/10 border border-cyan-500/25"
-          textColor="text-cyan-600"
+          icon={CircleDollarSign}
+          accent="warning"
         />
 
         <MetricCard
           title="Platform Health"
           value="Operational"
           subtitle="All systems running"
-          icon=""
-          bgColor="bg-emerald-500/10 border border-emerald-500/25"
-          textColor="text-emerald-600"
+          icon={HeartPulse}
+          accent="success"
         />
       </div>
 
       <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-dark-card rounded-lg shadow p-6 border border-dark-border">
+        <div className="rounded-4xl bg-card p-6 shadow-sm ring-1 ring-foreground/5">
           <h2 className="text-lg font-semibold text-foreground mb-4">Recent Activity</h2>
           <p className="text-sm text-muted-foreground">Activity feed coming soon...</p>
         </div>
 
-        <div className="bg-dark-card rounded-lg shadow p-6 border border-dark-border">
+        <div className="rounded-4xl bg-card p-6 shadow-sm ring-1 ring-foreground/5">
           <h2 className="text-lg font-semibold text-foreground mb-4">Quick Actions</h2>
           <div className="space-y-2">
             <QuickActionButton href="/admin/rentals" text="Add New Rental Company" />
@@ -326,7 +321,9 @@ function ModeToggle({ mode, onChange }: { mode: DashboardMode; onChange: (m: Das
     <div
       role="tablist"
       aria-label="Data mode"
-      className="inline-flex items-center rounded-lg border border-dark-border bg-dark-card p-1"
+      /* The v2 segmented control is a pill on a pill, the same shape the
+         portal's Portal/Website switcher uses. */
+      className="inline-flex items-center rounded-full bg-card p-1 ring-1 ring-foreground/10"
     >
       {options.map((opt) => {
         const active = mode === opt.key;
@@ -337,7 +334,7 @@ function ModeToggle({ mode, onChange }: { mode: DashboardMode; onChange: (m: Das
             aria-selected={active}
             onClick={() => onChange(opt.key)}
             className={cn(
-              'flex items-center gap-2 rounded-md px-4 py-1.5 text-sm font-medium transition-colors',
+              'flex min-h-9 items-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium transition-colors',
               active ? opt.activeClass : 'text-muted-foreground hover:text-foreground'
             )}
           >
@@ -350,38 +347,15 @@ function ModeToggle({ mode, onChange }: { mode: DashboardMode; onChange: (m: Das
   );
 }
 
-function MetricCard({
-  title,
-  value,
-  subtitle,
-  icon,
-  bgColor,
-  textColor,
-}: {
-  title: string;
-  value: string | number;
-  subtitle: string;
-  icon: string;
-  bgColor: string;
-  textColor: string;
-}) {
-  return (
-    <div className={`${bgColor} rounded-lg p-6 shadow`}>
-      <div className="flex items-center justify-between mb-2">
-        <h3 className="text-sm font-medium text-muted-foreground">{title}</h3>
-        <span className="text-2xl">{icon}</span>
-      </div>
-      <div className={`text-3xl font-bold ${textColor}`}>{value}</div>
-      <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>
-    </div>
-  );
-}
-
 function QuickActionButton({ href, text }: { href: string; text: string }) {
   return (
     <a
       href={href}
-      className="block w-full px-4 py-2 text-sm font-medium text-indigo-600 bg-indigo-500/10 rounded-lg hover:bg-indigo-500/10 border border-indigo-500/25 transition-colors"
+      /* `primary`, not `indigo-600`: the brand token and the Tailwind palette
+         entry happen to be the same indigo today, and a literal is how they
+         quietly stop being the same later. A ring rather than a border, which
+         is the v2 surface idiom. */
+      className="block w-full rounded-2xl bg-primary/10 px-4 py-2.5 text-sm font-medium text-primary ring-1 ring-primary/20 transition-colors hover:bg-primary/15"
     >
       {text} →
     </a>
