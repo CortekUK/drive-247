@@ -830,10 +830,17 @@
       "document": "docs/trax/workflows/settings.md",
       "sources": [
         {
-          "path": "apps/portal/src/components/settings-v2/settings-index.tsx",
+          "path": "apps/portal/src/app/(dashboard)/settings/page.tsx",
           "symbols": [
-            "SETTINGS_INDEX_SECTIONS",
-            "tab: \"templates\""
+            "V2_SETTINGS_PAGES",
+            "templates: { section: 'Templates', title: 'Customer messages'",
+            "V2_LOCKBOX_MESSAGES_HREF"
+          ]
+        },
+        {
+          "path": "apps/portal/src/components/settings-v2/business-rules-pages.tsx",
+          "symbols": [
+            "templatesHref"
           ]
         }
       ],
@@ -1759,6 +1766,21 @@
           "path": "apps/portal/src/app/(dashboard)/integrations/_panels/boldsign.tsx",
           "symbols": [
             "All agreements"
+          ]
+        },
+        {
+          "path": "apps/portal/src/components/agreements-v2/agreements-table-v2.tsx",
+          "symbols": [
+            "Resend the agreement to",
+            "Download the signed PDF for",
+            "View the agreement for"
+          ]
+        },
+        {
+          "path": "apps/portal/src/components/agreements-v2/agreements-page-v2.tsx",
+          "symbols": [
+            "Send agreement",
+            "Sent agreements"
           ]
         }
       ],

@@ -142,9 +142,9 @@ describe("SettingsIndexV2 structure", () => {
   const entries = () =>
     Array.from(container.querySelectorAll("section a")).map((a) => [a.querySelector("span")?.textContent, a.getAttribute("href")]);
 
-  it("head admin: Business, Pricing (Tax and deposit first, Weekend and holiday pricing last), Payment plans, Notifications, Templates", () => {
+  it("head admin: Business, Pricing (Tax and deposit first, Weekend and holiday pricing last), Payment plans, Notifications", () => {
     render(<SettingsIndexV2 canView={() => true} tenantSlug="northwind" isHeadAdmin />);
-    expect(sectionTitles()).toEqual(["Business", "Pricing", "Payment plans", "Notifications", "Templates"]);
+    expect(sectionTitles()).toEqual(["Business", "Pricing", "Payment plans", "Notifications"]);
     expect(entries()).toEqual([
       ["General", "/settings?tab=general"],
       ["Branding", "/settings/appearance"],
@@ -169,22 +169,19 @@ describe("SettingsIndexV2 structure", () => {
       ["Pay as you go", "/settings?tab=payg"],
       ["Auto-extension", "/settings?tab=auto-extend"],
       ["Notifications", "/settings?tab=notifications"],
-      ["Customer messages", "/settings?tab=templates"],
-      // Agreement templates moved to the Agreements tab (Agreements v2, D1).
+      // Agreement templates moved to the Agreements tab (Agreements v2, D1), and
+      // Customer messages off the index entirely (Sep 24 2026) — it is edited
+      // from the tab that sends the message.
     ]);
   });
 
-  it("Notifications is one entry (Team emails and Push notifications are part of it); Templates follows it", async () => {
+  it("Notifications is one entry (Team emails and Push notifications are part of it), and the last group", async () => {
     const { SETTINGS_INDEX_SECTIONS } = await import("@/components/settings-v2/settings-index");
     const titles = SETTINGS_INDEX_SECTIONS.map((section) => section.title);
-    expect(titles.indexOf("Templates")).toBe(titles.indexOf("Notifications") + 1);
+    expect(titles.indexOf("Notifications")).toBe(titles.length - 1);
     const notifications = SETTINGS_INDEX_SECTIONS.find((section) => section.title === "Notifications")!;
     expect(notifications.items.map((item) => [item.title, item.href, item.tab])).toEqual([
       ["Notifications", "/settings?tab=notifications", "notifications"],
-    ]);
-    const templates = SETTINGS_INDEX_SECTIONS.find((section) => section.title === "Templates")!;
-    expect(templates.items.map((item) => [item.title, item.href, item.tab])).toEqual([
-      ["Customer messages", "/settings?tab=templates", "templates"],
     ]);
     render(<SettingsIndexV2 canView={() => true} tenantSlug="northwind" isHeadAdmin />);
     const hrefs = entries().map(([, href]) => href);
@@ -200,14 +197,22 @@ describe("SettingsIndexV2 structure", () => {
     }
   });
 
-  it("Notifications and the templates follow their own permissions", () => {
+  it("Notifications follows its own permission; the templates have no card to follow", () => {
     render(<SettingsIndexV2 canView={(tab) => tab === "notifications"} tenantSlug="northwind" isHeadAdmin={false} />);
     expect(entries()).toEqual([["Notifications", "/settings?tab=notifications"]]);
     act(() => root.unmount());
     root = createRoot(container);
+    /*
+     * The Templates card came off the index on Sep 24 2026: the messages are
+     * edited from the tab that sends them (Lockbox has its own Templates
+     * button), and a second door from the index only asked people to guess
+     * which one was current. Holding the templates permission and nothing else
+     * therefore shows an empty index here, NOT a Templates group. The page
+     * itself is untouched and ?tab=templates still opens it.
+     */
     render(<SettingsIndexV2 canView={(tab) => tab === "templates"} tenantSlug="northwind" isHeadAdmin={false} />);
-    expect(sectionTitles()).toEqual(["Templates"]);
-    expect(entries().map(([title]) => title)).toEqual(["Customer messages"]);
+    expect(sectionTitles()).toEqual([]);
+    expect(entries()).toEqual([]);
   });
 
   it("has no Agreement templates entry: the templates live on the Agreements tab (Agreements v2, D1)", async () => {
@@ -323,7 +328,9 @@ describe("SettingsIndexV2 structure", () => {
     type("buffer");
     expect(entries().map(([title]) => title)).toEqual(["Booking rules"]);
     type("lockbox");
-    expect(entries().map(([title]) => title)).toEqual(["Lockbox", "Customer messages"]);
+    // Customer messages used to answer this search too; it is off the index
+    // since Sep 24 2026, and the Lockbox page carries its own Templates button.
+    expect(entries().map(([title]) => title)).toEqual(["Lockbox"]);
     type("licence");
     expect(entries().map(([title]) => title)).toEqual(["General"]);
     type("monthly rate");
@@ -469,11 +476,15 @@ describe("SettingsIndexV2 structure", () => {
       expect(card.className).toContain("focus-visible:ring-3");
       expect(card.className).toContain("focus-visible:ring-ring/30");
     }
-    // The one link that IS inline in a sentence keeps its underline.
-    const inline = Array.from(container.querySelectorAll<HTMLAnchorElement>("p a"));
-    expect(inline.length).toBe(1);
-    expect(inline[0].getAttribute("href")).toBe("/integrations");
-    expect(inline[0].className).toContain("hover:underline");
+    /*
+     * There is no prose under the sections any more. The footer sentence
+     * ("Payments, insurance, e-signatures and text messages are set up in
+     * Integrations") came off on Sep 24 2026 — it was a rule to read rather
+     * than a place to go, and a search for any of those words already hands
+     * the reader straight to Integrations (see the handoff tests above).
+     */
+    expect(container.querySelectorAll("p a")).toHaveLength(0);
+    expect(container.textContent).not.toContain("are set up in");
   });
 
   it("every description is 95–120 characters and wraps in a 320px column", async () => {

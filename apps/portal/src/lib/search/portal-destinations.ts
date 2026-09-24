@@ -251,6 +251,29 @@ function v2SettingsDestinations(): PortalDestination[] {
       );
     }
   }
+  /*
+   * Customer messages, mirrored here instead of read from the list above.
+   *
+   * The Templates card came off the settings index on Sep 24 2026: each
+   * message is edited from the screen that sends it (Lockbox has its own
+   * Templates link), so a second door from the index only asked people to
+   * guess which one was current. The PAGE is untouched and still opens at
+   * `?tab=templates` under the same `templates` permission — so search must
+   * still take you there. The index list is what the index shows; it is not
+   * the list of pages that exist, and letting a card come off the index
+   * silently delete its search entry is the same failure as reading General
+   * alone (see the comment above).
+   */
+  out.push(
+    setting(
+      "v2:templates",
+      "Customer messages",
+      "The reminders, emails and agreement your customers receive, including the lockbox code email.",
+      "/settings?tab=templates",
+      "Templates template email templates sms message reminder lockbox code agreement",
+      { experience: "v2", settingsTabs: ["templates"] },
+    ),
+  );
   for (const [page, { sections }] of Object.entries(V2_SECTIONED_PAGES)) {
     const pageTitle = pageTitles.get(`/settings?tab=${page}`) ?? page;
     for (const s of sections) {

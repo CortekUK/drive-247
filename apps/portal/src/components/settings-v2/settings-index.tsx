@@ -27,7 +27,8 @@
  *    Customers). A `?tab=blacklist` link says it isn't part of the workspace.
  *  - Team emails and Push notifications — both are part of the one
  *    Notifications page now; `?tab=reminders` and `?tab=push` open it at the
- *    email and push setup. Customer messages moved to a Templates group.
+ *    email and push setup. Customer messages is edited from the tab that uses
+ *    it, not from this index (Sep 24 2026).
  *  - Agreement templates — they live on the Agreements tab now (Agreements
  *    v2, D1), and the old route redirects there.
  *
@@ -248,7 +249,7 @@ export const SETTINGS_INDEX_SECTIONS: SettingsIndexSection[] = [
   },
   {
     // How and when a customer pays. Not "Payments": the payment provider
-    // (Stripe, Square) is set up in Integrations, which the footer says.
+    // (Stripe, Square) is set up on the Integrations board, not here.
     title: "Payment plans",
     items: [
       {
@@ -292,30 +293,17 @@ export const SETTINGS_INDEX_SECTIONS: SettingsIndexSection[] = [
       },
     ],
   },
-  {
-    // The wording customers read outside the notifications themselves (D8).
-    title: "Templates",
-    items: [
-      {
-        title: "Customer messages",
-        // No mention of the rental agreement: on v2 the agreement templates are
-        // not here any more. They moved to the Agreements tab (Agreements v2,
-        // D1), and /settings/agreement-templates redirects there when
-        // `useV2('agreements')` is on — so this card described a page that no
-        // longer holds that. `agreement`/`contract` are gone from `keywords`
-        // for the same reason: searching Settings for "agreement" should not
-        // land someone on the one page that no longer has them. The v1 copy in
-        // app/(dashboard)/settings/page.tsx still names the agreement, and
-        // correctly: v1 tenants are not redirected and still edit it there.
-        description: "The return reminder, the emails your customers receive and the lockbox code email with its instructions.",
-        href: "/settings?tab=templates",
-        tab: "templates",
-        keywords: "templates email return reminder sms lockbox code instructions",
-      },
-      // Agreement templates left Settings for the Agreements tab (Agreements
-      // v2, D1): /settings/agreement-templates redirects to /agreements?view=templates.
-    ],
-  },
+  // The "Templates" group — one card, Customer messages — was here until Sep 24
+  // 2026. Taken off the index at the team lead's request: a message is edited
+  // from the screen that sends it (Lockbox's own Templates link opens the
+  // lockbox message), so a second way in from the index only asked people to
+  // guess which one was current.
+  //
+  // Nothing else changed. The page is untouched, `?tab=templates` still opens
+  // it under the same `templates` permission, so Lockbox's link and every link
+  // already in the wild still work — and the global search keeps its own entry
+  // for it (lib/search/portal-destinations.ts), because a card coming off this
+  // index must not delete the page from ⌘K.
 ];
 
 export function SettingsIndexV2({
@@ -461,14 +449,6 @@ export function SettingsIndexV2({
           </section>
         ))
       )}
-
-      <p className="border-t pt-6 text-[13px] text-muted-foreground">
-        Payments, insurance, e-signatures and text messages are set up in{" "}
-        <Link href="/integrations" className="font-medium text-primary hover:underline dark:text-[hsl(var(--v2-link,var(--primary)))]">
-          Integrations
-        </Link>
-        .
-      </p>
     </div>
   );
 }

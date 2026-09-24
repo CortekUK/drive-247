@@ -519,7 +519,13 @@ describe("settings page (v2): one Notifications page (D7, D8)", () => {
       description: "Every email, push and in-app message: when it is sent, what it says and who gets it.",
       permTab: "notifications",
     });
-    // Customer messages moved to the Templates section.
+    /*
+     * Customer messages keeps its own section label. The index stopped listing
+     * a Templates card on Sep 24 2026 (each message is edited from the screen
+     * that sends it), but `section` is documentation inside this map — nothing
+     * reads it at runtime — and the page is still its own thing, not part of
+     * Notifications. Folding it in here would say the opposite.
+     */
     expect(pageEntry(pagesDecl, "templates").section).toBe("Templates");
     // Team emails and Push keep their entries (the notices name them) and their cases (v1-era).
     expect(pagesDecl).toMatch(/^\s*reminders: \{ section:/m);

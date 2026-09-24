@@ -371,6 +371,25 @@ describe("the search does not fall behind the navigation", () => {
     expect(src).toContain('import { V2_SECTIONED_PAGES } from "@/components/settings-v2/settings-shell-state"');
   });
 
+  /*
+   * The Templates card came off the settings index on Sep 24 2026 (each
+   * message is edited from the screen that sends it). The page did not move,
+   * so ⌘K must still reach it — the index list is what the index shows, not
+   * the list of pages that exist. Without this, removing a card silently
+   * deletes its search entry.
+   */
+  it("Customer messages is searchable even though the index no longer lists it", () => {
+    const d = ALL_DESTINATIONS.find((x) => x.id === "setting:v2:templates");
+    expect(d).toBeDefined();
+    expect(d!.title).toBe("Customer messages");
+    expect(d!.href).toBe("/settings?tab=templates");
+    expect(d!.gate?.settingsTabs).toEqual(["templates"]);
+    expect(d!.gate?.experience).toBe("v2");
+    // Its own entry, not one the index loop produced.
+    const index = readRepoSource("apps/portal/src/components/settings-v2/settings-index.tsx");
+    expect(index).not.toContain('tab: "templates"');
+  });
+
   it("every section of every sectioned v2 page is its own destination, at its own link", () => {
     for (const [page, { sections }] of Object.entries(V2_SECTIONED_PAGES)) {
       for (const section of sections) {
