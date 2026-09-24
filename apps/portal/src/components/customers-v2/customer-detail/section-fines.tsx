@@ -72,7 +72,7 @@ export function SectionFines({ c, onJump, canEdit, currency }: SectionProps) {
                       {f.status}
                     </Pill>
                   </div>
-                  <div className="grid grid-cols-3 gap-3 border-t border-foreground/5 px-5 py-3">
+                  <div className="grid grid-cols-2 gap-3 border-t border-foreground/5 px-5 py-3 sm:grid-cols-3">
                     <Meta label="Issued" value={fmtDate(f.issuedOn)} />
                     <Meta label="Due" value={fmtDate(f.dueOn)} />
                     <Meta label="Liability" value={f.liability} />

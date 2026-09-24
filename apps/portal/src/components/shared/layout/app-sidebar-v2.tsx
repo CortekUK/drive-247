@@ -863,7 +863,20 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   // position as Trax, for the same hook-order reason.
   if (isSupportPage) return <SupportRail />;
 
-  if (isRentalDetailPage && rentalDetailId) {
+  /*
+   * A record rail REPLACES the nav on a desktop, where the record's own dock
+   * does not exist and the rail is the only way between a rental's stages.
+   *
+   * On a phone it must not: this sidebar is a closed sheet there, so the rail
+   * took the nav's place behind the one trigger in the top bar, and the only
+   * way out of a record was its Back link — Rentals, Vehicles, Settings and
+   * everything else were unreachable without leaving the record first.
+   *
+   * Below `md` the record's panels live on its dock (`ui-v2/record-dock.tsx`),
+   * so the sheet goes back to being the navigation, which is what a burger
+   * menu is for.
+   */
+  if (isRentalDetailPage && rentalDetailId && !isMobile) {
     const heroTitle = rentalDetail
       ? (rentalDetail.customerName ?? rentalDetail.rentalNumber ?? "Rental")
       : "Rental";
@@ -988,7 +1001,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   // on a record that already exists, with no answer to show. So this rail reads
   // no record state beyond the car's own identity, and looks identical on every
   // vehicle — which is what makes it findable by position.
-  if (isVehicleDetailPage && vehicleDetailId) {
+  if (isVehicleDetailPage && vehicleDetailId && !isMobile) {
     // Registration is hidden for operators who have turned it off fleet-wide, so
     // the subtitle falls back to the make and model rather than leaking a plate
     // into a rail that is on screen all day.
@@ -1145,7 +1158,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   // h-16 back-link header, title block, grouped nav, collapsed popover-free icon
   // list — so all four read as one piece of furniture wearing different
   // contents.
-  if (isCustomerDetailPage && customerDetailId) {
+  if (isCustomerDetailPage && customerDetailId && !isMobile) {
     return (
       <Sidebar collapsible="icon" className="transition-all duration-300 ease-in-out">
         <SidebarHeader className="h-16">

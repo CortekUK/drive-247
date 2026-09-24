@@ -186,7 +186,23 @@ export default async function RootLayout({
     <html lang="en" suppressHydrationWarning className={fontClass}>
       <head>
         <meta charSet="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        {/* v2 only, and the condition is the point: this document is shared,
+            and a v1 tenant's markup is held byte-for-byte by
+            `root-layout-v1-parity.test.tsx`.
+
+            `viewport-fit=cover` lets the page reach under a phone's rounded
+            corners and home indicator, and it is what makes
+            `env(safe-area-inset-*)` report anything but 0 — without it the v2
+            record dock sits under the home bar on an iPhone. v1 has no such
+            docked UI, so it keeps the viewport it always had. */}
+        <meta
+          name="viewport"
+          content={
+            v2Flags.theme
+              ? "width=device-width, initial-scale=1.0, viewport-fit=cover"
+              : "width=device-width, initial-scale=1.0"
+          }
+        />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
           href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"

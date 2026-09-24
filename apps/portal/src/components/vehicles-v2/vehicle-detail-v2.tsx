@@ -67,10 +67,11 @@ import { getSiteV2BaseUrl } from "@/lib/site-v2-url";
 import type { DistanceUnit } from "@/lib/format-utils";
 
 import { FormatProvider, daysBetween, daysUntil, todayISO } from "./kit";
-import { readSection, sectionHref, type SectionId } from "./sections";
+import { SECTIONS, SECTION_GROUPS, readSection, sectionHref, type SectionId } from "./sections";
 import { OverviewRail, type Attention, type Vital } from "./overview-rail";
 import { ConnectedTimeline } from "@/components/timeline-v2/connected-timeline";
-import { ResponsiveContextRail } from "@/components/timeline-v2/context-rail";
+import { Clock } from "lucide-react";
+import { ContextColumn, RecordDock, RecordDockNav, useWiderThan } from "@/components/ui-v2/record-dock";
 import { VehicleTab } from "./tab-vehicle";
 import { RatesTab } from "./tab-rates";
 import { AddonsTab } from "./tab-addons";
@@ -141,6 +142,8 @@ export function VehicleDetailV2({ vehicleId }: { vehicleId: string }) {
    * rather than on a blank screen.
    */
   const section = readSection(searchParams.get("section"));
+  /** The row the rail would be showing as current — the dock button wears it. */
+  const sectionMeta = SECTIONS.find((x) => x.id === section) ?? SECTIONS[0];
 
   /**
    * Move to another section.
@@ -157,6 +160,14 @@ export function VehicleDetailV2({ vehicleId }: { vehicleId: string }) {
     },
     [router, vehicleId],
   );
+
+  /* Which columns fit: the section rail is the app sidebar (a closed sheet
+     below `md`), the readout needs 1280. Whatever does not fit becomes a
+     button on the dock. Read here, above every early return below, because a
+     hook cannot be called conditionally. */
+  const railFits = useWiderThan(768);
+  const readoutFits = useWiderThan(1280);
+  const docked = !railFits || !readoutFits;
 
   /* ── data ───────────────────────────────────────────────────────────── */
 
@@ -685,7 +696,9 @@ export function VehicleDetailV2({ vehicleId }: { vehicleId: string }) {
           share nothing else. */}
       <div className="flex h-[calc(100dvh-1rem)] min-h-[600px]">
         {/* ── panel ─────────────────────────────────────────────────────── */}
-        <main className="relative min-w-0 flex-1 overflow-hidden px-8 py-6">
+        <main
+          className={`relative min-w-0 flex-1 overflow-hidden px-4 py-5 md:px-8 md:py-6${docked ? " pb-[calc(env(safe-area-inset-bottom,0px)+4.5rem)]" : ""}`}
+        >
           {/* The only trace of the write path on screen, and it earns its place:
               there is no Save button, so an operator who types into a field has
               nothing else telling them the keystroke was committed. It cannot
@@ -885,22 +898,78 @@ export function VehicleDetailV2({ vehicleId }: { vehicleId: string }) {
         {/* ── right rail — THE READOUT ────────────────────────────────────
             A matched pair with the left rail: same h-11 header row, the border
             flipped to `border-l` so the two frame the content between them. */}
-        <ResponsiveContextRail label="Timeline & vehicle overview" width={336}>
-          <OverviewRail<SectionId>
-            name={vehicleName}
-            plate={hidePlate ? "" : vehicle.reg}
-            coverSrc={photos[0]?.photo_url ?? vehicle.photo_url ?? null}
-            statusLabel={status.label}
-            statusTone={status.tone}
-            listingLine={listingLine}
-            attention={attention}
-            vitals={vitals}
-            events={events}
-            eventsLoading={eventsLoading}
-            onJump={goToSection}
-            timeline={<ConnectedTimeline scope={{ kind: "vehicle", id: vehicleId }} compact heading="Vehicle timeline" />}
-          />
-        </ResponsiveContextRail>
+        {readoutFits ? (
+          <ContextColumn label="Timeline & vehicle overview" width={336}>
+            <OverviewRail<SectionId>
+              name={vehicleName}
+              plate={hidePlate ? "" : vehicle.reg}
+              coverSrc={photos[0]?.photo_url ?? vehicle.photo_url ?? null}
+              statusLabel={status.label}
+              statusTone={status.tone}
+              listingLine={listingLine}
+              attention={attention}
+              vitals={vitals}
+              events={events}
+              eventsLoading={eventsLoading}
+              onJump={goToSection}
+              timeline={<ConnectedTimeline scope={{ kind: "vehicle", id: vehicleId }} compact heading="Vehicle timeline" />}
+            />
+          </ContextColumn>
+        ) : null}
+
+        <RecordDock
+          panels={[
+            ...(railFits
+              ? []
+              : [
+                  {
+                    id: "sections",
+                    label: sectionMeta.label,
+                    icon: sectionMeta.icon,
+                    description: "Every part of this vehicle's record. You are on " + sectionMeta.label + ".",
+                    content: (close: () => void) => (
+                      <RecordDockNav
+                        groups={SECTION_GROUPS}
+                        current={section}
+                        onSelect={goToSection}
+                        close={close}
+                      />
+                    ),
+                  },
+                ]),
+            ...(readoutFits
+              ? []
+              : [
+                  {
+                    id: "readout",
+                    label: "Overview",
+                    icon: Clock,
+                    description: "The timeline and this vehicle at a glance.",
+                    content: (close: () => void) => (
+                      <div className="h-[68svh] min-h-0">
+                        <OverviewRail<SectionId>
+                          name={vehicleName}
+                          plate={hidePlate ? "" : vehicle.reg}
+                          coverSrc={photos[0]?.photo_url ?? vehicle.photo_url ?? null}
+                          statusLabel={status.label}
+                          statusTone={status.tone}
+                          listingLine={listingLine}
+                          attention={attention}
+                          vitals={vitals}
+                          events={events}
+                          eventsLoading={eventsLoading}
+                          onJump={(next: SectionId) => {
+                            goToSection(next);
+                            close();
+                          }}
+                          timeline={<ConnectedTimeline scope={{ kind: "vehicle", id: vehicleId }} compact heading="Vehicle timeline" />}
+                        />
+                      </div>
+                    ),
+                  },
+                ]),
+          ]}
+        />
       </div>
     </FormatProvider>
   );

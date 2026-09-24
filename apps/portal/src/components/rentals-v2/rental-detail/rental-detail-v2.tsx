@@ -45,7 +45,7 @@
 import { useCallback } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, CalendarClock, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import { useRentalDetailV2 } from "./use-rental-detail-v2";
 import { STAGES, readStage, stageHref, type StageId, type StageProps } from "./stages";
@@ -58,7 +58,7 @@ import { StageAgreement } from "./stage-agreement";
 import { StageInsurance } from "./stage-insurance";
 import { StageHandover } from "./stage-handover";
 import { RightRail } from "./right-rail";
-import { ResponsiveContextRail } from "@/components/timeline-v2/context-rail";
+import { ContextColumn, RecordDock, RecordDockNav, useWiderThan } from "@/components/ui-v2/record-dock";
 import { EmptyHint, Panel } from "./_kit";
 
 /**
@@ -111,6 +111,14 @@ export function RentalDetailV2() {
     void refetch();
   }, [refetch]);
 
+  /* Which columns fit. The stage rail is the app sidebar, a closed sheet below
+     `md`; the context column needs 1280. Whatever does not fit becomes a button
+     on the dock instead. Read here, above the early returns below, because a
+     hook cannot be called conditionally. */
+  const railFits = useWiderThan(768);
+  const contextFits = useWiderThan(1280);
+  const docked = !railFits || !contextFits;
+
   /* ── the states before a stage can mount ────────────────────────────── */
 
   if (isLoading) {
@@ -152,13 +160,20 @@ export function RentalDetailV2() {
 
   const View = STAGE_VIEWS[stage];
   const meta = STAGES.find((s) => s.id === stage)!;
-
   return (
     <Frame>
       {/* Keyed on the stage so the scroll container is a NEW node each time.
           Without it the panel keeps the previous stage's scroll offset and you
-          land halfway down a screen you have never seen. */}
-      <div key={stage} className="flex min-w-0 flex-1 flex-col overflow-hidden pr-6">
+          land halfway down a screen you have never seen.
+
+          The right padding is the gutter to the context column, so it only
+          applies where that column is drawn. The bottom padding is the dock's
+          own height, so the last row of a stage clears the pill instead of
+          sitting under it. */}
+      <div
+        key={stage}
+        className={`flex min-w-0 flex-1 flex-col overflow-hidden md:pr-6${docked ? " pb-[calc(env(safe-area-inset-bottom,0px)+4.5rem)]" : ""}`}
+      >
         {View ? (
           <View detail={detail} onStage={onStage} refetch={onRefetch} />
         ) : (
@@ -171,10 +186,49 @@ export function RentalDetailV2() {
         )}
       </div>
 
-      {/* Context tabs stay in the right rail; smaller screens open the same tabs in a panel. */}
-      <ResponsiveContextRail label="Payment Plan & activity">
-        <RightRail detail={detail} refetch={onRefetch} />
-      </ResponsiveContextRail>
+      {contextFits ? (
+        <ContextColumn label="Payment Plan & activity">
+          <RightRail detail={detail} refetch={onRefetch} />
+        </ContextColumn>
+      ) : null}
+
+      <RecordDock
+        panels={[
+          ...(railFits
+            ? []
+            : [
+                {
+                  id: "stages",
+                  label: meta.label,
+                  icon: meta.icon,
+                  description: "Every stage of this rental. You are on " + meta.label + ".",
+                  content: (close: () => void) => (
+                    <RecordDockNav
+                      groups={[{ items: STAGES }]}
+                      current={stage}
+                      hrefFor={(next: StageId) => stageHref(id!, next)}
+                      close={close}
+                    />
+                  ),
+                },
+              ]),
+          ...(contextFits
+            ? []
+            : [
+                {
+                  id: "context",
+                  label: "Activity",
+                  icon: CalendarClock,
+                  description: "Payment plan, messages and everything that happened.",
+                  content: () => (
+                    <div className="h-[68svh] min-h-0">
+                      <RightRail detail={detail} refetch={onRefetch} />
+                    </div>
+                  ),
+                },
+              ]),
+        ]}
+      />
     </Frame>
   );
 }
