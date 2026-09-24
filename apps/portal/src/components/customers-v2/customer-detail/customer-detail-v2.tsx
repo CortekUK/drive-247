@@ -53,10 +53,10 @@
 import { useCallback } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { AlertTriangle, ArrowLeft, Loader2 } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Clock, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import { useCustomerDetailV2 } from "./use-customer-detail-v2";
-import { SECTIONS, readSectionFrom, sectionHref, type SectionId, type SectionProps } from "./sections";
+import { SECTIONS, SECTION_GROUPS, readSectionFrom, sectionHref, type SectionId, type SectionProps } from "./sections";
 import { SectionIdentity } from "./section-identity";
 import { SectionLicence } from "./section-licence";
 import { SectionDocuments } from "./section-documents";
@@ -69,7 +69,7 @@ import { SectionFines } from "./section-fines";
 import { SectionReviews } from "./section-reviews";
 import { SectionActivity } from "./section-activity";
 import { OverviewRail } from "./overview-rail";
-import { ResponsiveContextRail } from "@/components/timeline-v2/context-rail";
+import { ContextColumn, RecordDock, RecordDockNav, useWiderThan } from "@/components/ui-v2/record-dock";
 import { EmptyHint, Panel, expiryOf, fmtDate } from "./kit";
 import type { Drift } from "./kit";
 import type { CustomerRecord } from "./types";
@@ -129,6 +129,14 @@ export function CustomerDetailV2() {
     [id, router]
   );
 
+  /* Which columns fit: the section rail is the app sidebar (a closed sheet
+     below `md`), the overview needs 1400 (see the note on the rail below).
+     Whatever does not fit is a button on the dock. Above the early returns:
+     a hook cannot be called conditionally. */
+  const railFits = useWiderThan(768);
+  const overviewFits = useWiderThan(1400);
+  const docked = !railFits || !overviewFits;
+
   /* ── the states before a section can mount ──────────────────────────── */
 
   if (isLoading) {
@@ -174,7 +182,10 @@ export function CustomerDetailV2() {
       {/* Keyed on the section so the scroll container is a NEW node each time.
           Without it the panel keeps the previous section's scroll offset and
           you land halfway down a screen you have never seen. */}
-      <div key={section} className="flex min-w-0 flex-1 flex-col overflow-hidden pr-6">
+      <div
+        key={section}
+        className={`flex min-w-0 flex-1 flex-col overflow-hidden md:pr-6${docked ? " pb-[calc(env(safe-area-inset-bottom,0px)+4.5rem)]" : ""}`}
+      >
         {/* The one fact that changes what every other section means, so it
             follows the reader to all of them. Deliberately short: the right
             rail carries the full picture, and this strip exists only so a
@@ -229,16 +240,66 @@ export function CustomerDetailV2() {
           about 450px wide, and its field grids are viewport-keyed: they would
           stay two-up in a column too narrow to hold them. Below 1400 the rail
           drops out and the middle takes the space instead. */}
-      <ResponsiveContextRail label="Timeline & at a glance" breakpoint={1400} width={344}>
-        <OverviewRail
-          c={record}
-          verifyDrift={verifyDrift}
-          reviewDrift={reviewDrift}
-          onJump={onJump}
-          currency={currency}
-          saving={saving}
-        />
-      </ResponsiveContextRail>
+      {overviewFits ? (
+        <ContextColumn label="Timeline & at a glance" width={344}>
+          <OverviewRail
+            c={record}
+            verifyDrift={verifyDrift}
+            reviewDrift={reviewDrift}
+            onJump={onJump}
+            currency={currency}
+            saving={saving}
+          />
+        </ContextColumn>
+      ) : null}
+
+      <RecordDock
+        panels={[
+          ...(railFits
+            ? []
+            : [
+                {
+                  id: "sections",
+                  label: meta.label,
+                  icon: meta.icon,
+                  description: "Every part of this customer's record. You are on " + meta.label + ".",
+                  content: (close: () => void) => (
+                    <RecordDockNav
+                      groups={SECTION_GROUPS}
+                      current={section}
+                      hrefFor={(next: SectionId) => sectionHref(id, next)}
+                      close={close}
+                    />
+                  ),
+                },
+              ]),
+          ...(overviewFits
+            ? []
+            : [
+                {
+                  id: "overview",
+                  label: "At a glance",
+                  icon: Clock,
+                  description: "The timeline and everything derived from this record.",
+                  content: (close: () => void) => (
+                    <div className="h-[68svh] min-h-0">
+                      <OverviewRail
+                        c={record}
+                        verifyDrift={verifyDrift}
+                        reviewDrift={reviewDrift}
+                        onJump={(next: SectionId) => {
+                          onJump(next);
+                          close();
+                        }}
+                        currency={currency}
+                        saving={saving}
+                      />
+                    </div>
+                  ),
+                },
+              ]),
+        ]}
+      />
     </Frame>
   );
 }

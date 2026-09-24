@@ -193,7 +193,7 @@ export function RatesTab({
             />
           </List>
           {vehicle.unlimited_mileage_available && (
-            <div className="mt-3 grid grid-cols-3 gap-5 rounded-3xl bg-primary-light/50 p-5 ring-1 ring-primary/20">
+            <div className="mt-3 grid grid-cols-1 gap-5 rounded-3xl bg-primary-light/50 p-5 ring-1 ring-primary/20 sm:grid-cols-3">
               <Field label="Per daily hire">
                 <NumberInput
                   value={vehicle.unlimited_mileage_price_daily}

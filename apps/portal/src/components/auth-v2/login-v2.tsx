@@ -39,18 +39,27 @@ import { Loader2, AlertCircle } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useRateLimiting } from "@/hooks/use-rate-limiting";
 import { supabase } from "@/integrations/supabase/client";
-import { BrandLogo } from "@/components/shared/layout/brand-logo";
 import { HeroTypedHeadline } from "@/components/shared/layout/hero-typed-headline";
-import { ThemeToggle } from "@/components/shared/layout/theme-toggle";
 import { brandInk, brandSurface } from "@/components/auth-v2/brand-surface";
 import { useTenantBranding } from "@/hooks/use-tenant-branding";
 import { useTenant } from "@/contexts/TenantContext";
 import { useIsAreaHidden } from "@/lib/lean-context";
-import { useTheme } from "next-themes";
+import { usePinnedLightTheme } from "@/hooks/use-pinned-light-theme";
 
 import { PLATFORM_PRIVACY_URL, PLATFORM_TERMS_URL } from "@/lib/legal/urls";
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://hviqoaokxvlancmftwuo.supabase.co";
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2aXFvYW9reHZsYW5jbWZ0d3VvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIzNjM2NTcsImV4cCI6MjA3NzkzOTY1N30.jwpdtizfTxl3MeCNDu-mrLI7GNK4PYWYg5gsIZy0T_Q";
+
+/**
+ * The Drive247 wordmark, copied from the landing site's own asset
+ * (`apps/web/public/logo-*.png`) so the first screen of the product and the
+ * page that sold it carry the identical mark rather than two near-copies.
+ *
+ * Light/dark here names the GROUND the mark sits on, which is the landing
+ * site's convention too — not the app theme, which this page pins to light.
+ */
+const PLATFORM_LOGO_LIGHT_GROUND = "/drive247-logo-light.png";
+const PLATFORM_LOGO_DARK_GROUND = "/drive247-logo-dark.png";
 
 const loginSchema = z.object({
   email: z.string().min(1, "Email is required").email("Please enter a valid email address"),
@@ -144,12 +153,10 @@ const MOBILE_WASH_MASK = `linear-gradient(to bottom,
  * for the harder of the two. `hover` and the existing focus ring take it
  * further on contact rather than shouting at rest.
  *
- * V1 PARITY — the `dark:` half. On `improv/portal-side` this route was pinned
- * light by a `forcedTheme` in `providers.tsx`, so a single light treatment was
- * enough. That pin does not exist on `main`: `providers.tsx` here is
- * `defaultTheme="system"` with no override, and v1's login keeps a working
- * `ThemeToggle`. A white field on the deep panel would have been the same
- * unreadable-on-its-own-ground problem the light treatment exists to avoid.
+ * The `dark:` half is dormant, not dead. `usePinnedLightTheme` holds this page
+ * light, so nothing below `dark:` can match while that pin stands — it is kept
+ * so lifting the pin restores a readable dark treatment in one move rather
+ * than sending a white field onto a deep panel.
  */
 const FIELD_CLASS =
   "h-12 rounded-2xl border-slate-900/20 bg-white px-4 text-[15px] shadow-[0_1px_2px_rgb(15_23_42/0.04)] transition-colors placeholder:text-slate-400 hover:border-slate-900/30 dark:border-white/20 dark:bg-white/[0.06] dark:text-white dark:shadow-none dark:placeholder:text-white/40 dark:hover:border-white/30";
@@ -205,25 +212,17 @@ function LoginV2Content() {
   // Show policy checkbox if tenant has policy versions configured AND hasn't accepted yet
   const requiresPolicyAcceptance = !!(tenant?.privacy_policy_version || tenant?.terms_version) && !tenant?.policies_accepted_at;
 
-  const authLogoUrl = branding?.auth_logo_url;
   const appName = branding?.app_name || "Drive247";
 
-  // V1 PARITY — the theme is READ, not assumed.
+  // The page is light, so every colour below is resolved for a light ground.
   //
-  // The branch hardcoded `isDarkMode = false` because its `providers.tsx`
-  // pinned this route light with `forcedTheme`. `main` has no such pin — see
-  // `app/providers.tsx`, which is `defaultTheme="system" enableSystem` — so
-  // hardcoding it here would paint the pale tint and near-black type onto a
-  // dark page for every operator whose portal is in dark mode. v1 reads
-  // `resolvedTheme` for exactly this reason (its logo swap depends on it), and
-  // v1 wins.
-  //
-  // No hydration risk from reading it during render: `(auth)/layout.tsx` wraps
-  // this route in `DynamicThemeProvider`, which renders a skeleton until the
-  // tenant and its branding have loaded on the client, so this component's
-  // first paint is already a client paint.
-  const { resolvedTheme } = useTheme();
-  const isDarkMode = resolvedTheme === "dark";
+  // This used to read `resolvedTheme`, because at the time nothing pinned the
+  // route and painting a pale tint onto a dark document would have been
+  // unreadable. `usePinnedLightTheme` is that pin — the document cannot be dark
+  // here — so reading the theme would now answer a question the page has
+  // already settled, and answer it wrong for anyone whose portal is dark.
+  usePinnedLightTheme();
+  const isDarkMode = false;
 
   // ---- Brand colours ----
   //
@@ -279,13 +278,16 @@ function LoginV2Content() {
   const mobileOnDark = !hero.isLight;
   const mobileAccentInk = brandInk(accentSource, mobileOnDark);
 
-  // `auth_logo_url` and `dark_logo_url` are both drawn for a dark ground — that
-  // is the whole reason the old layout sat the logo on a hardcoded black
-  // square. On the pale panel they would be the same invisible-on-light problem
-  // one layer along, so the light-ground logo is the one that belongs there.
-  const heroLogo = heroOnDark
-    ? authLogoUrl || branding?.dark_logo_url || branding?.logo_url || null
-    : branding?.logo_url || authLogoUrl || null;
+  // The mark on this screen is the PLATFORM's, not the operator's (asked for,
+  // Sep 24 2026). The tenant's own logo is still what every screen behind the
+  // sign-in wears — see `BrandLogo` in the sidebar and top bar — this is the
+  // one page that says who built the product rather than who runs the fleet.
+  //
+  // Two files, one per ground, the same pair the landing page ships: the
+  // wordmark's "Drive" is near-black in one and white in the other, so either
+  // one on the wrong ground is a rectangle of nothing. `heroOnDark` is true
+  // over a tenant's hero photograph, false over the flat tint.
+  const heroLogo = heroOnDark ? PLATFORM_LOGO_DARK_GROUND : PLATFORM_LOGO_LIGHT_GROUND;
 
   // Role-based redirect logic
   const getRedirectPath = (): string => {
@@ -593,15 +595,12 @@ function LoginV2Content() {
         }}
       />
 
-      {/* V1 PARITY — the theme toggle.
-          The branch deleted this on the grounds that its `providers.tsx` pinned
-          the route light, so the control had nothing to switch. `main` has no
-          such pin, and v1's login carries this toggle in exactly this corner —
-          removing it would take a working affordance away from every operator
-          on the canary. Above the washes so it stays clickable. */}
-      <div className="absolute top-4 right-4 z-20">
-        <ThemeToggle />
-      </div>
+      {/* The theme toggle stood in this corner until Sep 24 2026. It went with
+          the light pin above it: a control that switches a page which is now
+          always light had nothing left to do, and the one thing it still did —
+          write `localStorage.theme` — changed the operator's portal from a
+          screen they had not signed into yet. The toggle in the portal's own
+          top bar is where the theme is chosen. */}
 
       {/* ---------- Left: hero content (lg and up) ----------
           Type colour follows the panel, not the app theme: in light mode the
@@ -611,16 +610,16 @@ function LoginV2Content() {
           heroOnDark ? "text-white" : "text-slate-900"
         }`}
       >
+        {/* No text fallback beside this any more: it existed for the tenant
+            who had uploaded no logo, and the mark is a file that ships with the
+            app rather than a URL out of their row, so there is no missing case
+            left to catch. */}
         <div className="relative z-10">
-          {heroLogo ? (
-            <img
-              src={heroLogo}
-              alt={appName}
-              className="h-14 w-auto max-w-[220px] object-contain"
-            />
-          ) : (
-            <span className="text-2xl font-semibold tracking-tight">{appName}</span>
-          )}
+          <img
+            src={heroLogo}
+            alt="Drive247"
+            className="h-14 w-auto max-w-[220px] object-contain"
+          />
         </div>
 
         {/* The whole middle band is one line of copy. The Trax chip and the
@@ -651,12 +650,23 @@ function LoginV2Content() {
           lets the form centre on its own and gives the page the same shape the
           desktop layout has: mark at the top, content in the middle.
 
-          `h-9` with a width cap rather than a fixed box: tenant logos range
-          from wide wordmarks to square marks, so height is what keeps them
-          optically equal and `max-w` stops the widest ones running to the
-          screen edges. */}
+          The platform mark, same as the hero column's — `BrandLogo` stood here
+          until Sep 24 2026 and drew the tenant's `logo_url` straight out of
+          their row. On a phone that was an uncompressed upload (Northwind's is
+          1.4 MB) loading over mobile data above the fold, and until it arrived
+          the page showed a broken-image glyph where the brand should be. A file
+          that ships with the app has no such failure mode.
+
+          `h-8` against the hero's `h-14`: the wordmark is 4.4:1, so the height
+          that reads as balanced in a 12-unit-padded column is too wide for a
+          390px screen. `w-auto` keeps the ratio and `max-w` catches the
+          narrowest phones. */}
       <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-center pt-8 lg:hidden">
-        <BrandLogo className="h-9 w-auto max-w-[168px]" />
+        <img
+          src={mobileOnDark ? PLATFORM_LOGO_DARK_GROUND : PLATFORM_LOGO_LIGHT_GROUND}
+          alt="Drive247"
+          className="h-8 w-auto max-w-[180px] object-contain"
+        />
       </div>
 
       {/* `min-h-screen` so the form centres on a phone too. Below `lg` the
