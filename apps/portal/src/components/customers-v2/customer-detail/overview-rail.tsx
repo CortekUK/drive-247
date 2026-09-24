@@ -35,15 +35,15 @@ import {
   Check,
   CreditCard,
   Gavel,
-  Gauge,
   Globe,
-  History,
   IdCard,
+  LayoutDashboard,
   Mail,
   MessageSquare,
   Minus,
   Smartphone,
   Star,
+  Waypoints,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -160,8 +160,8 @@ const MARK = {
  */
 export function customerRailTabs(props: React.ComponentProps<typeof CustomerOverview>): ContextTab[] {
   return [
-    { id: "overview", label: "At a glance", icon: Gauge, scroll: false, padded: false, content: <CustomerOverview {...props} /> },
-    { id: "timeline", label: "Timeline", icon: History, content: <ConnectedTimeline scope={{ kind: "customer", id: props.c.id }} compact heading="Customer timeline" /> },
+    { id: "overview", label: "At a glance", icon: LayoutDashboard, scroll: false, padded: false, content: <CustomerOverview {...props} /> },
+    { id: "timeline", label: "Timeline", icon: Waypoints, content: <ConnectedTimeline scope={{ kind: "customer", id: props.c.id }} compact heading="Customer timeline" /> },
   ];
 }
 

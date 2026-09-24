@@ -70,8 +70,11 @@ describe("the record dock", () => {
     const centre = screen.getByRole("button", { name: /payments/i });
     // The sketch: one circle, larger than its neighbours, breaking the bar's
     // top edge. `-translate-y-5` is what lifts it; the ring cuts the hole.
-    expect(centre.className).toContain("-translate-y-5");
-    expect(centre.className).toContain("size-14");
+    // Toned down Sep 25 2026: still the focal point, no longer looming.
+    expect(centre.className).toContain("-translate-y-3");
+    expect(centre.className).toContain("size-12");
+    // …and still a 44px target.
+    expect(centre.className).not.toMatch(/size-(8|9|10|11)/);
     expect(centre.className).toContain("bg-primary");
     expect(centre.className).toContain("rounded-full");
     // …and it is between the two flanks, not beside them.
@@ -97,7 +100,7 @@ describe("the record dock", () => {
     // The tablet case: the rail fits, the context column does not.
     render(<RecordDock back={back} secondary={[context]} />);
     const centre = screen.getByRole("button", { name: /activity/i });
-    expect(centre.className).toContain("-translate-y-5");
+    expect(centre.className).toContain("-translate-y-3");
   });
 
   it("floats clear of the bottom edge and the phone's home indicator", () => {
@@ -244,5 +247,51 @@ describe("the three record screens hand their columns to the dock", () => {
     const text = src("app/layout.tsx");
     expect(text).toContain("viewport-fit=cover");
     expect(text).toContain("v2Flags.theme");
+  });
+});
+
+/*
+ * No two icons on one bar.
+ *
+ * The circle wears the stage or section the operator is ON, and the flanks
+ * wear that record's context views. They are chosen in different files, so
+ * nothing stopped the same glyph appearing twice on the same bar — and it did:
+ * a rental's Payments stage and its Payment Plan view were both `CreditCard`,
+ * so standing on Payments put two identical marks side by side, one of which
+ * silently did something else.
+ *
+ * Read from source rather than by rendering, because the context views need a
+ * loaded record to build and this rule is about the CHOICE, not the render.
+ */
+describe("a record's icons are all different from each other", () => {
+  // Only entries that are a nav item or a context view: those carry an id AND
+  // a label. `MARK` and the other icon maps living in the same files carry
+  // neither, and counting them made this scan answer a different question.
+  const ENTRY = /\bid:\s*"[^"]+",\s*label:\s*"[^"]*",\s*icon:\s*([A-Z][A-Za-z0-9]*)/g;
+  const iconNames = (file: string) => [...src(file).matchAll(ENTRY)].map((m) => m[1]);
+  const iconsIn = (file: string) => new Set(iconNames(file));
+
+  const records = [
+    ["rental", "components/rentals-v2/rental-detail/stages.ts", "components/rentals-v2/rental-detail/right-rail.tsx"],
+    ["customer", "components/customers-v2/customer-detail/sections.ts", "components/customers-v2/customer-detail/overview-rail.tsx"],
+    ["vehicle", "components/vehicles-v2/sections.ts", "components/vehicles-v2/overview-rail.tsx"],
+  ] as const;
+
+  it.each(records)("a %s's context views share no icon with its stages or sections", (_r, navFile, railFile) => {
+    const nav = iconsIn(navFile);
+    const rail = iconsIn(railFile);
+    expect(nav.size).toBeGreaterThan(3); // the scan found the list at all
+    expect(rail.size).toBeGreaterThan(1);
+    expect([...rail].filter((icon) => nav.has(icon))).toEqual([]);
+  });
+
+  it.each(records)("a %s's context views are all different from each other", (_r, _navFile, railFile) => {
+    const names = iconNames(railFile);
+    expect(names.length).toBeGreaterThan(1);
+    expect(names.length).toBe(new Set(names).size);
+  });
+
+  it("and none of them is the Back arrow", () => {
+    for (const [, , railFile] of records) expect(iconsIn(railFile).has("ArrowLeft")).toBe(false);
   });
 });

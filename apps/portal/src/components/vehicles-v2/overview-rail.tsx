@@ -30,15 +30,14 @@ import {
   Car,
   ChevronRight,
   CircleCheck,
-  Activity as ActivityIcon,
   FileText,
-  Gauge,
   History,
   ImageIcon,
   LayoutDashboard,
   Plus,
   Receipt,
   Trash2,
+  Waypoints,
   Wrench,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -126,9 +125,9 @@ export function vehicleRailTabs<K extends string>({
   name, plate, coverSrc, statusLabel, statusTone, listingLine, attention, vitals, events, eventsLoading, onJump, timeline,
 }: OverviewRailProps<K>): ContextTab[] {
   return [
-    { id: "overview", label: "Overview", icon: Gauge, content: <Overview name={name} plate={plate} coverSrc={coverSrc} statusLabel={statusLabel} statusTone={statusTone} listingLine={listingLine} attention={attention} vitals={vitals} onJump={onJump} /> },
-    { id: "activity", label: "Activity", icon: ActivityIcon, content: <Activity events={events} loading={eventsLoading} /> },
-    ...(timeline ? [{ id: "timeline", label: "Timeline", icon: History, content: timeline }] : []),
+    { id: "overview", label: "Overview", icon: LayoutDashboard, content: <Overview name={name} plate={plate} coverSrc={coverSrc} statusLabel={statusLabel} statusTone={statusTone} listingLine={listingLine} attention={attention} vitals={vitals} onJump={onJump} /> },
+    { id: "activity", label: "Activity", icon: History, content: <Activity events={events} loading={eventsLoading} /> },
+    ...(timeline ? [{ id: "timeline", label: "Timeline", icon: Waypoints, content: timeline }] : []),
   ];
 }
 

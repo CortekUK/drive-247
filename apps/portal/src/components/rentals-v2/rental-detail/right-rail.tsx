@@ -3,7 +3,7 @@
 import type { RentalDetailV2 } from "./use-rental-detail-v2";
 import { RailMessages } from "./rail-messages";
 import { RailActivity } from "./rail-activity";
-import { Activity, CreditCard, MessageSquare } from "lucide-react";
+import { History, MessageSquare, ReceiptText } from "lucide-react";
 import { ContextTabs, type ContextTab } from "@/components/timeline-v2/context-rail";
 import { RentalPaymentPlan } from "@/components/timeline-v2/rental-plan";
 
@@ -16,10 +16,10 @@ import { RentalPaymentPlan } from "@/components/timeline-v2/rental-plan";
  */
 export function rentalRailTabs(detail: RentalDetailV2): ContextTab[] {
   return [
-    { id: "payment-plan", label: "Payment Plan", icon: CreditCard, keepMounted: true, content: <RentalPaymentPlan detail={detail} /> },
+    { id: "payment-plan", label: "Payment Plan", icon: ReceiptText, keepMounted: true, content: <RentalPaymentPlan detail={detail} /> },
     // Opening Messages joins the realtime room and marks messages read. Do not pre-mount it.
     { id: "messages", label: "Messages", icon: MessageSquare, scroll: false, content: <RailMessages detail={detail} /> },
-    { id: "activity", label: "Activity", icon: Activity, scroll: false, content: <RailActivity detail={detail} /> },
+    { id: "activity", label: "Activity", icon: History, scroll: false, content: <RailActivity detail={detail} /> },
   ];
 }
 

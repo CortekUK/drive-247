@@ -19,7 +19,7 @@
  * absent, so this page shows it unconditionally instead.
  */
 
-import { Activity as ActivityIcon, ArrowLeft, Car, CreditCard, FileSignature, KeyRound, MapPin, MessageSquare, PackagePlus, ShieldCheck, User } from "lucide-react";
+import { ArrowLeft, Car, CreditCard, FileSignature, History, KeyRound, MapPin, MessageSquare, PackagePlus, ReceiptText, ShieldCheck, User } from "lucide-react";
 import { RecordDock, RecordDockNav, contextTabPanels } from "@/components/ui-v2/record-dock";
 
 /** The rental screen's stages, near enough to the real `STAGES` to judge by. */
@@ -88,9 +88,9 @@ export default function RecordDockPlayground() {
            glance / Timeline. Each opens its own view — there is no tab strip
            inside the sheet. */
         secondary={contextTabPanels([
-          { id: "payment-plan", label: "Payment Plan", icon: CreditCard, content: <FakeView name="Payment Plan" /> },
+          { id: "payment-plan", label: "Payment Plan", icon: ReceiptText, content: <FakeView name="Payment Plan" /> },
           { id: "messages", label: "Messages", icon: MessageSquare, content: <FakeView name="Messages" /> },
-          { id: "activity", label: "Activity", icon: ActivityIcon, content: <FakeView name="Activity" /> },
+          { id: "activity", label: "Activity", icon: History, content: <FakeView name="Activity" /> },
         ])}
       />
     </main>

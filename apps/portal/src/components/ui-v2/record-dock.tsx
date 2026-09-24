@@ -100,16 +100,30 @@ export type DockBack = { href: string; label: string; icon: ComponentType<{ clas
  *
  * Exported so the three record screens cannot each guess a different number
  * and leave their last row under the bar. It adds up the bar (3.5rem), the gap
- * it floats on (1rem), the part of the circle that rises above it (1.25rem)
- * and a little air, plus the phone's home indicator.
+ * it floats on (1rem), the part of the circle that rises above it (0.75rem)
+ * and a little air, plus the phone's home indicator. Deliberately a touch more
+ * than the sum: a last row that ends flush against the bar reads as cut off
+ * even when it is whole.
  */
 export const DOCK_CLEARANCE = "pb-[calc(env(safe-area-inset-bottom,0px)+6rem)]";
 
-/** 44px — the touch target every control on this bar meets. */
+/**
+ * A flanking control. 44px, which is the touch target, with an 18px glyph
+ * inside it — the box stays thumb-sized while the mark itself reads as
+ * secondary to the circle rather than competing with it.
+ *
+ * Resting colour is `muted-foreground`, the same weight as every other
+ * secondary control in the v2 chrome, and the fill only appears on contact.
+ * `active:scale-95` is the circle's own press, so the whole bar answers a tap
+ * the same way.
+ */
 const ICON_BUTTON =
-  "flex size-11 shrink-0 items-center justify-center rounded-full text-foreground/70 transition-colors " +
-  "hover:bg-foreground/5 hover:text-foreground active:bg-foreground/10 " +
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+  "flex size-11 shrink-0 items-center justify-center rounded-full text-muted-foreground " +
+  "transition-[color,background-color,transform] hover:bg-foreground/[0.06] hover:text-foreground " +
+  "active:scale-95 active:bg-foreground/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+/** The glyph inside one, and inside the circle. */
+const ICON_GLYPH = "size-[18px]";
 
 export function RecordDock({
   back,
@@ -170,7 +184,7 @@ export function RecordDock({
       title={panel.label}
       className={ICON_BUTTON}
     >
-      <panel.icon className="size-5" />
+      <panel.icon className={ICON_GLYPH} />
     </button>
   );
 
@@ -201,7 +215,7 @@ export function RecordDock({
              it. `h-14` leaves the circle room to rise out of the top edge
              without the bar growing to contain it. */
           className={cn(
-            "pointer-events-auto relative flex h-14 max-w-full items-center gap-1 rounded-full px-2",
+            "pointer-events-auto relative flex h-14 max-w-full items-center gap-0.5 rounded-full px-1.5",
             "border border-foreground/10 bg-background/80 shadow-[0_8px_30px_rgb(0_0_0/0.12)] backdrop-blur-xl",
           )}
         >
@@ -210,15 +224,21 @@ export function RecordDock({
           <div className="flex flex-1 basis-0 items-center justify-end gap-1">
             {back ? (
               <Link href={back.href} aria-label={back.label} title={back.label} className={ICON_BUTTON}>
-                <back.icon className="size-5" />
+                <back.icon className={ICON_GLYPH} />
               </Link>
             ) : null}
             {left.map(panelButton)}
           </div>
 
-          {/* The focal point. `-translate-y-5` lifts it clear of the bar's top
-              edge and the background ring cuts a clean hole around it, so the
-              two read as one piece rather than a button dropped on a bar. */}
+          {/* The focal point — and no more than that.
+              It was 56px lifted 20px clear, which read as a button parked on
+              top of the bar rather than part of it (Sep 25 2026: "too large,
+              stands out too aggressively"). At 48px lifted 12px it still leads
+              the eye and still clears the 44px target, but it sits INSIDE the
+              bar's silhouette instead of looming over it. The ring cuts a hole
+              in the bar around it so the two read as one piece; the coloured
+              shadow is half what it was, enough to lift it off the blur
+              without throwing a glow onto the content behind. */}
           <button
             type="button"
             onClick={() => setOpen(centre.id)}
@@ -226,13 +246,13 @@ export function RecordDock({
             aria-label={centre.label}
             title={centre.label}
             className={cn(
-              "flex size-14 shrink-0 -translate-y-5 items-center justify-center rounded-full",
+              "mx-0.5 flex size-12 shrink-0 -translate-y-3 items-center justify-center rounded-full",
               "bg-primary text-primary-foreground ring-4 ring-background",
-              "shadow-[0_10px_25px_-5px_hsl(var(--primary)_/_0.5)] transition-transform",
+              "shadow-[0_6px_16px_-6px_hsl(var(--primary)_/_0.45)] transition-transform",
               "active:scale-95 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring",
             )}
           >
-            <centre.icon className="size-6" />
+            <centre.icon className="size-5" />
           </button>
 
           <div className="flex flex-1 basis-0 items-center justify-start gap-1">
