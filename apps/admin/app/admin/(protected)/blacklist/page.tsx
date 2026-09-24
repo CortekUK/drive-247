@@ -227,7 +227,7 @@ export default function BlacklistPage() {
   if (loading) {
     return (
       <div className="p-8">
-        <h1 className="text-3xl font-bold text-foreground mb-2">Blocked Customers</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-2">Blocked Customers</h1>
         <p className="text-muted-foreground mb-8">All blocked customers across every tenant</p>
         <div className="text-xl text-muted-foreground text-center py-12">Loading...</div>
       </div>
@@ -238,7 +238,7 @@ export default function BlacklistPage() {
     <div className="p-8">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-foreground">Blocked Customers</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">Blocked Customers</h1>
         <p className="mt-2 text-muted-foreground">
           All blocked customers across every tenant
         </p>
@@ -279,23 +279,23 @@ export default function BlacklistPage() {
         <table className="min-w-full divide-y divide-dark-border">
           <thead className="bg-dark-bg">
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase w-8" />
-              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+              <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground w-8" />
+              <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Customer
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+              <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Tenant
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+              <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Reason
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+              <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Blocked At
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+              <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Status
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+              <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Actions
               </th>
             </tr>

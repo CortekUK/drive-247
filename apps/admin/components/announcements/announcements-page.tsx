@@ -480,7 +480,7 @@ export function AnnouncementsPage() {
             <Megaphone className="h-5 w-5 text-primary" />
           </div>
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold tracking-tight">Announcements</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Announcements</h1>
             <p className="text-sm text-muted-foreground">
               Feature cards on the dashboard and system messages for tenants&apos; portals.
             </p>

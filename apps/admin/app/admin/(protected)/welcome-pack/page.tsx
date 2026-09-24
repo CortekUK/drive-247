@@ -291,7 +291,7 @@ export default function WelcomePackAdminPage() {
       <div className="flex items-center gap-3">
         <BookOpen className="h-6 w-6 text-primary" />
         <div>
-          <h1 className="text-2xl font-semibold">Welcome Pack</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Welcome Pack</h1>
           <p className="text-sm text-muted-foreground">
             The onboarding document every operator sees. Global — one pack for all tenants.
           </p>

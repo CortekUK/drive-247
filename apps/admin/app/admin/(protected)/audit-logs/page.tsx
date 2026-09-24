@@ -687,7 +687,7 @@ export default function AuditLogsPage() {
             <ScrollText className="h-5 w-5 text-primary" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Audit Logs</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Audit Logs</h1>
             <p className="text-sm text-muted-foreground">
               Global activity log across all tenants · <span className="tabular-nums">{totalCount.toLocaleString()}</span> entries
             </p>

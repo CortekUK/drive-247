@@ -228,7 +228,7 @@ export default function OnboardingQuestionsAdmin() {
           <ListChecks className="size-5" />
         </span>
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold">Onboarding Questions</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Onboarding Questions</h1>
           <p className="text-sm text-muted-foreground">
             What every new operator is asked the first time they open the portal.
           </p>

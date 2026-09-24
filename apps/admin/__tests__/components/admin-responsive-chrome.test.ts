@@ -10,7 +10,7 @@
  * there is no way to mount one of these in a test without standing up auth.
  */
 import { describe, it, expect } from "vitest";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 
 const ROOT = resolve(__dirname, "../..");
@@ -128,5 +128,52 @@ describe("what the portal's dock did NOT port", () => {
     const asides = ["app/admin/(protected)/signup-plans/page.tsx"];
     expect(src("components/support/AdminSupportWorkspace.tsx").split("\n").length).toBeLessThan(120);
     for (const page of asides) expect((src(page).match(/<aside/g) ?? []).length).toBeLessThanOrEqual(1);
+  });
+});
+
+/*
+ * One page title, one table head.
+ *
+ * Ported from the operator portal Sep 25 2026, against its reference screens.
+ * Before this the app had six title treatments across 22 pages — `text-2xl
+ * font-bold tracking-tight`, `text-2xl font-semibold`, `text-3xl font-bold
+ * text-foreground` and three more — and four table-head treatments. Nothing
+ * was broken; it just did not read as one product, which is most of what
+ * "matching the theme" means at a glance.
+ *
+ * The values are Northwind's own, not a new house style:
+ *   title  apps/portal/src/app/(dashboard)/vehicles/page.tsx
+ *   head   apps/portal/src/components/shared/list-table-v2.tsx (LIST_CLASSES)
+ */
+describe("the admin pages wear Northwind's type scale", () => {
+  const pages = readdirSync(resolve(ROOT, "app/admin/(protected)"), { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => `app/admin/(protected)/${e.name}/page.tsx`)
+    .filter((p) => existsSync(resolve(ROOT, p)));
+
+  it("finds the pages at all", () => {
+    expect(pages.length).toBeGreaterThan(15);
+  });
+
+  it("gives every page title the one scale", () => {
+    const offenders = pages.filter((p) => {
+      const titles = [...src(p).matchAll(/<h1 className="([^"]*)"/g)].map((m) => m[1]);
+      return titles.some((t) => !/text-2xl sm:text-3xl font-bold/.test(t));
+    });
+    expect(offenders).toEqual([]);
+  });
+
+  it("gives every table head the one treatment", () => {
+    // 11px semibold with `tracking-wider` — the letterspacing is what makes a
+    // column head read as Northwind's rather than as a small grey label.
+    const offenders: string[] = [];
+    for (const p of pages) {
+      for (const m of src(p).matchAll(/<th className="([^"]*)"/g)) {
+        const cls = m[1];
+        if (!/uppercase/.test(cls)) continue; // a plain cell head, not a label
+        if (!/text-\[11px\]/.test(cls) || !/tracking-wider/.test(cls)) offenders.push(`${p}: ${cls}`);
+      }
+    }
+    expect(offenders).toEqual([]);
   });
 });

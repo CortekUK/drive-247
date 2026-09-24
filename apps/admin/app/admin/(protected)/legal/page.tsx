@@ -227,7 +227,7 @@ export default function LegalPagesAdmin() {
           <Scale className="size-5" />
         </span>
         <div>
-          <h1 className="text-2xl font-semibold">Legal Pages</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Legal Pages</h1>
           <p className="text-sm text-muted-foreground">
             The Terms and Privacy Policy served at drive-247.com. Not tenant rental terms.
           </p>

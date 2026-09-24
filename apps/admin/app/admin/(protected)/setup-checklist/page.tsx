@@ -523,7 +523,7 @@ export default function SetupChecklistAdmin() {
           <ListChecks className="size-5" />
         </span>
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold">Setup Checklist</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Setup Checklist</h1>
           <p className="text-sm text-muted-foreground">
             The features every operator has to sit down with once — each with the video or the
             written guide that explains it.

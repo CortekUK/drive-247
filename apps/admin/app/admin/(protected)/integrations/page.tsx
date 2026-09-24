@@ -291,7 +291,7 @@ export default function IntegrationsAdminPage() {
           <Plug className="size-5" />
         </span>
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold">Integrations</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Integrations</h1>
           <p className="text-sm text-muted-foreground">
             Choose which integrations are premium and what they cost each month, and how each one
             appears on the operator&rsquo;s Integrations page. A premium price is added to the

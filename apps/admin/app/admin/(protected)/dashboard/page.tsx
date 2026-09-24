@@ -225,7 +225,7 @@ export default function DashboardPage() {
     <div className="p-8">
       <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Platform Dashboard</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">Platform Dashboard</h1>
           <p className="mt-2 text-muted-foreground">
             Showing {isLive ? 'live (production)' : 'test / sandbox'} rental companies and platform metrics
           </p>

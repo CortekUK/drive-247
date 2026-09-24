@@ -77,7 +77,7 @@ export default function ContactRequestsPage() {
   return (
     <div className="p-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-foreground">Contact Requests</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">Contact Requests</h1>
         <p className="mt-2 text-muted-foreground">Manage inquiries from potential rental companies</p>
       </div>
 
@@ -104,25 +104,25 @@ export default function ContactRequestsPage() {
         <table className="min-w-full divide-y divide-dark-border">
           <thead className="bg-dark-bg">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+              <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Company
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+              <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Contact
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+              <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Email
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+              <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Phone
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+              <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Status
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+              <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Submitted
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+              <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Actions
               </th>
             </tr>

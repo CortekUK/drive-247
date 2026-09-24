@@ -204,12 +204,12 @@ export function TenantCreditsTab({ tenantId }: { tenantId: string }) {
           <table className="w-full">
             <thead>
               <tr className="border-b border-dark-border">
-                <th className="text-left py-2.5 px-4 text-xs font-semibold text-dark-text-secondary uppercase">Date</th>
-                <th className="text-left py-2.5 px-4 text-xs font-semibold text-dark-text-secondary uppercase">Type</th>
-                <th className="text-left py-2.5 px-4 text-xs font-semibold text-dark-text-secondary uppercase">Description</th>
-                <th className="text-left py-2.5 px-4 text-xs font-semibold text-dark-text-secondary uppercase">Category</th>
-                <th className="text-right py-2.5 px-4 text-xs font-semibold text-dark-text-secondary uppercase">Amount</th>
-                <th className="text-right py-2.5 px-4 text-xs font-semibold text-dark-text-secondary uppercase">Balance</th>
+                <th className="text-left py-2.5 px-4 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Date</th>
+                <th className="text-left py-2.5 px-4 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Type</th>
+                <th className="text-left py-2.5 px-4 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Description</th>
+                <th className="text-left py-2.5 px-4 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Category</th>
+                <th className="text-right py-2.5 px-4 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Amount</th>
+                <th className="text-right py-2.5 px-4 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Balance</th>
               </tr>
             </thead>
             <tbody>

@@ -163,7 +163,7 @@ export default function PlatformRentalsPage() {
             <Activity className="h-5 w-5 text-primary" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Platform Rentals</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Platform Rentals</h1>
             <p className="text-sm text-muted-foreground">
               Every rental ever created across all tenants ·{' '}
               <span className="tabular-nums">{rows.length}</span> all-time

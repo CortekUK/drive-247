@@ -436,7 +436,7 @@ export default function FeedbacksPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground flex items-center gap-2">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground flex items-center gap-2">
             <MessageSquareText className="h-6 w-6 text-primary" />
             Feedbacks
           </h1>

@@ -22,7 +22,7 @@ export function TableSkeleton({
         <div>
           {title ? (
             <>
-              <h1 className="text-2xl font-bold">{title}</h1>
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{title}</h1>
               {subtitle && <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>}
             </>
           ) : (

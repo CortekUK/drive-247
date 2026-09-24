@@ -226,7 +226,7 @@ export default function RequestsPage() {
             <Rocket className="h-5 w-5 text-primary" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Mode Requests</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Mode Requests</h1>
             <p className="text-sm text-muted-foreground">
               Manage tenant requests to switch integration modes ·{' '}
               <span className="tabular-nums">{requests.length}</span> total

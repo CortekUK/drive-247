@@ -155,7 +155,7 @@ export default function ManageAdminsPage() {
     <div className="p-8">
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Manage Super Admins</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">Manage Super Admins</h1>
           <p className="mt-2 text-muted-foreground">Add and manage super admin accounts</p>
           <p className="mt-1 text-sm text-red-600">Primary super admin access only</p>
         </div>
@@ -182,19 +182,19 @@ export default function ManageAdminsPage() {
         <table className="min-w-full divide-y divide-dark-border">
           <thead className="bg-dark-bg">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+              <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Name
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+              <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Email
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+              <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Role
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+              <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Created
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+              <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Actions
               </th>
             </tr>

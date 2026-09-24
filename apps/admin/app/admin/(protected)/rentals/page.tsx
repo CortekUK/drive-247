@@ -852,7 +852,7 @@ export default function RentalCompaniesPage() {
             <Building2 className="h-5 w-5 text-primary" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Rental Companies</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Rental Companies</h1>
             <p className="text-sm text-muted-foreground">
               Manage all rental companies · {tenants.length} total
             </p>

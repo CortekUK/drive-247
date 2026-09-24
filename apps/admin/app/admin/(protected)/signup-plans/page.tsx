@@ -538,7 +538,7 @@ export default function SignupPlansPage() {
             <BadgeDollarSign className="h-5 w-5 text-primary" />
           </div>
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold tracking-tight">Signup Plans</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Signup Plans</h1>
             {/*
               This used to read "Changes go live immediately", which is not true and
               cost real debugging time: the public page is ISR-cached, so an admin
