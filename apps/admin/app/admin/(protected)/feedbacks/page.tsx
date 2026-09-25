@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/authStore';
 import { toast } from '@/components/ui/sonner';
+import { FilterPanel } from '@/components/admin/filter-panel';
 import { TableSkeleton } from '@/components/skeletons/TableSkeleton';
 import {
   Dialog,
@@ -431,6 +432,17 @@ export default function FeedbacksPage() {
     [insight]
   );
 
+  /* What the Filters button counts. Read off the very same state the list
+     filters on, so the badge cannot say 2 while three filters are narrowing
+     the table. */
+  const activeFilterCount =
+    (categoryFilter !== 'all' ? 1 : 0) +
+    (statusFilter !== 'all' ? 1 : 0) +
+    (tenantFilter !== 'all' ? 1 : 0) +
+    (fromDate ? 1 : 0) +
+    (toDate ? 1 : 0) +
+    (search.trim() ? 1 : 0);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -563,7 +575,15 @@ export default function FeedbacksPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-2 items-end">
+      {/* Folded away until asked for, the way the portal does it: the row of
+          labelled controls used to sit here permanently, between the title and
+          the data, on screen whether or not anyone was filtering.
+
+          `FilterPanel` owns only the button, the open state and the card. Every
+          value below is still this page's own `useState` and every handler is
+          unchanged — the controls simply moved inside. */}
+      <FilterPanel count={activeFilterCount}>
+      <div className="flex flex-wrap gap-3 items-end pr-10">
         <div className="w-44">
           <Label className="text-xs text-muted-foreground mb-1 block">Category</Label>
           <Select value={categoryFilter} onValueChange={setCategoryFilter}>
@@ -616,6 +636,7 @@ export default function FeedbacksPage() {
           />
         </div>
       </div>
+      </FilterPanel>
 
       {/* Table */}
       <div className="rounded-lg border border-dark-border bg-dark-card overflow-hidden">

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { FilterPanel } from '@/components/admin/filter-panel';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
@@ -154,6 +155,11 @@ export default function PlatformRentalsPage() {
     ? selected!.creation_context.reasons
     : [];
 
+  /* The badge on the Filters button, read off the same three pieces of state
+     the list filters on above, so it cannot disagree with the table. */
+  const activeFilterCount =
+    (searchQuery.trim() ? 1 : 0) + (tenantFilter !== 'all' ? 1 : 0) + (sevFilter !== 'all' ? 1 : 0);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -239,8 +245,8 @@ export default function PlatformRentalsPage() {
       </div>
 
       {/* Filters */}
-      <Card>
-        <CardContent className="pt-6">
+      <FilterPanel count={activeFilterCount}>
+        <div className="pr-10">
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -273,8 +279,8 @@ export default function PlatformRentalsPage() {
               </Button>
             )}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </FilterPanel>
 
       {/* Table */}
       <Card>

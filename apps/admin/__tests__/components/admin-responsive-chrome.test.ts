@@ -280,8 +280,12 @@ describe("the shell scrolls like a desktop app", () => {
     // …main is the scroll container and is marked for the scrollbar rule…
     expect(layout).toContain("data-scrollport");
     expect(layout).toContain("overflow-y-auto");
-    // …and the sidebar brings its own, independently of it.
-    expect(src("components/admin/Sidebar.tsx")).toContain("<ScrollArea");
+    // …and the sidebar scrolls independently of it, showing no bar, which is
+    // what Northwind's rail does. This asserted `<ScrollArea` at first — the
+    // implementation rather than the rule — and broke the moment that Radix
+    // component was swapped for a plain scroller that could hide its bar.
+    const sidebar = src("components/admin/Sidebar.tsx");
+    expect(sidebar).toMatch(/no-scrollbar[^"]*overflow-y-auto|overflow-y-auto[^"]*no-scrollbar/);
   });
 
   it("paints the house scrollbar on both elements that can show one", () => {

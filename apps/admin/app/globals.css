@@ -203,6 +203,20 @@
   }
 }
 
+/* `no-scrollbar` — for a container that scrolls but must not show a bar.
+ *
+ * The portal's sidebar body uses this and Northwind's rail shows no bar at
+ * all; this app's used a Radix ScrollArea, which renders a visible one down
+ * the inside edge of the navigation. Reported directly: "in side bar there is
+ * no scroll bar" in Northwind, and there was one here. */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* ===========================================================================
  * THE SCROLLBAR.
  *

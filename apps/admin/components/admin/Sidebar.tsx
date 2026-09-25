@@ -7,7 +7,6 @@ import { useAuthStore } from '@/store/authStore';
 import { useSidebar } from './SidebarContext';
 import { useAdminSupport } from '@/lib/use-support-messaging';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import {
@@ -243,7 +242,10 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       </div>
 
       {/* Navigation */}
-      <ScrollArea className="flex-1 py-4">
+      {/* A plain scroller, not a Radix ScrollArea: that renders a visible
+          bar down the inside edge of the navigation, and Northwind's rail
+          shows none. Same `no-scrollbar` the portal's sidebar body uses. */}
+      <div className="no-scrollbar flex-1 overflow-y-auto py-4">
         {groups.map((group) => (
           <NavGroupComponent
             key={group.label}
@@ -252,7 +254,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             onNavigate={onNavigate}
           />
         ))}
-      </ScrollArea>
+      </div>
 
       {/* Footer */}
       <div className="border-t border-sidebar-border p-4">
