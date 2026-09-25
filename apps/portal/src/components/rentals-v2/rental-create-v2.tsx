@@ -11,6 +11,7 @@ import { clampToBonzahStart } from "@/lib/bonzah-dates";
 import BonzahAvailabilityNotice from "@/components/rentals/bonzah-availability-notice";
 import { resolveVehicleStatus } from "@/components/vehicles/vehicle-status-badge";
 import { supabase, supabaseUntyped } from "@/integrations/supabase/client";
+import { useDurationPromo, type AppliedPromo } from "@/hooks/use-duration-promo";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -286,12 +287,7 @@ export const RentalCreateV2 = () => {
   // Promo code state
   const [promoLoading, setPromoLoading] = useState(false);
   const [promoError, setPromoError] = useState<string | null>(null);
-  const [promoDetails, setPromoDetails] = useState<{
-    code: string;
-    type: 'percentage' | 'fixed_amount';
-    value: number;
-    id: string;
-  } | null>(null);
+  const [promoDetails, setPromoDetails] = useState<AppliedPromo | null>(null);
 
   // Per-period rate state — admin edits rate, total is derived
   const [perPeriodRate, setPerPeriodRate] = useState<number | null>(null);
@@ -468,7 +464,9 @@ export const RentalCreateV2 = () => {
         code: data.code,
         type: data.type === 'value' ? 'fixed_amount' : 'percentage',
         value: data.value,
-        id: data.id
+        id: data.id,
+        // Typed by the agent: `useDurationPromo` leaves this alone.
+        source: 'manual',
       });
       toast({
         title: "Promo code applied!",
@@ -661,6 +659,33 @@ export const RentalCreateV2 = () => {
   const watchedMonthlyAmount = form.watch("monthly_amount");
   const watchedPickupLocation = form.watch("pickup_location");
   const watchedPromoCode = form.watch("promo_code");
+
+  /*
+   * Long-rental discounts, applied here as well as on the booking site.
+   *
+   * This screen already refuses a duration code if it is typed, and hides it
+   * from the promo picker, both on the grounds that it "applies
+   * automatically". Nothing here applied it. `useDurationPromo` is the other
+   * half of that rule — see the hook for the report that found it missing.
+   *
+   * Pay-in-full only, matching the booking site: an instalment plan withdraws
+   * it, and PAYG and auto-extend rentals have no fixed length to price off.
+   */
+  const promoRentalDays =
+    watchedStartDate && watchedEndDate
+      ? Math.max(1, differenceInDays(watchedEndDate, watchedStartDate))
+      : 0;
+
+  useDurationPromo({
+    tenantId: tenant?.id,
+    rentalDays: promoRentalDays,
+    payInFull:
+      !isPayAsYouGo &&
+      !isAutoExtend &&
+      (installmentPlanType === 'full' || !rentalSettings?.installments_enabled),
+    promo: promoDetails,
+    setPromo: setPromoDetails,
+  });
 
   // Fetch booked dates for the selected vehicle (Pending/Active rentals + 1 buffer day)
   const { bookedDatesArray: vehicleBookedDatesArray, bookedRentals: vehicleBookedRentals, occupancyMap, occupancyModifiers } = useVehicleBookedDates(selectedVehicleId || undefined);
