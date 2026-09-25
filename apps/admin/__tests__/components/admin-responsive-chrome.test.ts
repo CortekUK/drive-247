@@ -416,6 +416,7 @@ describe("multi-section pages publish their sections to the sidebar", () => {
   const registering = [
     "app/admin/(protected)/promo-codes/page.tsx",
     "app/admin/(protected)/welcome-pack/page.tsx",
+    "app/admin/(protected)/rentals/[id]/page.tsx",
   ];
 
   it.each(registering)("%s registers its sections and keeps no tab strip", (page) => {
@@ -424,8 +425,11 @@ describe("multi-section pages publish their sections to the sidebar", () => {
     expect(s).not.toContain("<TabsList");
     expect(s).not.toContain("<TabsTrigger");
     // `Tabs` stays: it is what mounts the panel for `value`, so dropping it
-    // would have meant rewriting every panel on the page.
-    expect(s).toContain("<Tabs value={tab} onValueChange={setTab}>");
+    // would have meant rewriting every panel on the page. Asserted on the
+    // PROPS, not the exact tag — the first version demanded the tag end right
+    // after `setTab}` and failed on a page that also passes a className.
+    expect(s).toMatch(/<Tabs[^>]*value=\{tab\}/);
+    expect(s).toMatch(/<Tabs[^>]*onValueChange=\{setTab\}/);
   });
 
   it("leaves a two-way strip alone", () => {
@@ -435,6 +439,22 @@ describe("multi-section pages publish their sections to the sidebar", () => {
     const s = src("app/admin/(protected)/bonzah-onboarding/page.tsx");
     expect(s).toContain("<TabsList>");
     expect((s.match(/<TabsTrigger/g) ?? []).length).toBe(2);
+  });
+
+  it("a record page names the rail after the record, not the list", () => {
+    // Northwind's customer rail says "Haris Zahid", not "Customers". A rail
+    // that reads the same on every tenant cannot tell you which one is open.
+    const s = src("app/admin/(protected)/rentals/[id]/page.tsx");
+    expect(s).toContain("tenant?.company_name ?? 'Rental company'");
+  });
+
+  it("keeps the deep link that other screens send", () => {
+    // `?tab=payments` was the uncontrolled `defaultValue`; making the tabs
+    // controlled must not drop it, or every link into a tenant's payments
+    // lands on Details instead.
+    const s = src("app/admin/(protected)/rentals/[id]/page.tsx");
+    expect(s).toContain("get('tab') === 'payments'");
+    expect(s).toContain("const [tab, setTab] = useState(");
   });
 
   it("promo codes registers its five and keeps no tab strip", () => {

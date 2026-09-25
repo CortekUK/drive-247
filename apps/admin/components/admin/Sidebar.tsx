@@ -305,8 +305,9 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
      belong to — which is where the rail's title comes from. */
   const sections = useSidebarSections();
   const [showNav, setShowNav] = useState(false);
+  /* The record's own name if it gave one, else the nav item's. */
   const sectionTitle = sections
-    ? groups.flatMap((g) => g.items).find((i) => i.href === sections.href)?.name
+    ? sections.title ?? groups.flatMap((g) => g.items).find((i) => i.href === sections.href)?.name
     : undefined;
 
   /* Leaving the page takes its sections with it, so the rail must not stay

@@ -38,7 +38,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
+import { useRegisterSidebarSections } from '@/components/admin/sidebar-sections';
 import {
   ChartContainer,
   ChartTooltip,
@@ -1620,6 +1621,41 @@ export default function TenantDetailsPage() {
     );
   }
 
+  /*
+   * The six tabs move into the rail, the way Promo Codes' five did and the way
+   * Northwind puts a customer's sections there.
+   *
+   * `Tabs` was uncontrolled, with a `defaultValue` that read `?tab=payments`
+   * off the URL — a link other admin screens send. That seed is kept exactly,
+   * just moved into state so the rail can set the section too. Nothing else
+   * about the tab behaviour changes.
+   *
+   * The title is the COMPANY's name, not "Rental Companies": this is a record
+   * page, and a rail that says the same thing on every tenant cannot tell you
+   * which one you have open.
+   */
+  const [tab, setTab] = useState(() =>
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('tab') === 'payments'
+      ? 'payments'
+      : 'details',
+  );
+  useRegisterSidebarSections(
+    '/admin/rentals',
+    [
+      { id: 'details', label: 'Details' },
+      { id: 'management', label: 'Management' },
+      { id: 'payments', label: 'Payments' },
+      { id: 'analytics', label: 'Analytics' },
+      /* Finance Sync keeps the same per-tenant gate the tab had. */
+      ...(!isLeanTenant(tenant?.slug ?? '') ? [{ id: 'finance', label: 'Finance Sync' }] : []),
+      { id: 'todos', label: 'Todos' },
+    ],
+    tab,
+    setTab,
+    tenant?.company_name ?? 'Rental company',
+  );
+
   return (
     <div className="p-6 lg:p-8 space-y-6 h-full overflow-auto">
       {/* Back button */}
@@ -1695,31 +1731,8 @@ export default function TenantDetailsPage() {
       </div>
 
       {/* Tabs */}
-      <Tabs
-        defaultValue={
-          typeof window !== 'undefined' &&
-          new URLSearchParams(window.location.search).get('tab') === 'payments'
-            ? 'payments'
-            : 'details'
-        }
-        className="space-y-6"
-      >
-        <TabsList>
-          <TabsTrigger value="details">Details</TabsTrigger>
-          <TabsTrigger value="management">Management</TabsTrigger>
-          <TabsTrigger value="payments">Payments</TabsTrigger>
-          <TabsTrigger value="analytics">Analytics</TabsTrigger>
-          {/* Finance Sync is the per-tenant view of the parked Accounting
-              integration, so it follows the same gate as the tenant's own
-              Settings > Accounting tab. This is the ONLY tenant-scoped
-              accounting surface in the admin console; nothing cross-tenant is
-              gated, because the console is otherwise a view ACROSS tenants and
-              the park is per-tenant. */}
-          {!isLeanTenant(tenant.slug) && (
-            <TabsTrigger value="finance">Finance Sync</TabsTrigger>
-          )}
-          <TabsTrigger value="todos">Todos</TabsTrigger>
-        </TabsList>
+      <Tabs value={tab} onValueChange={setTab} className="space-y-6">
+        {/* No `TabsList`: the six triggers are rows in the rail. */}
 
         {/* Details Tab */}
         <TabsContent value="details" className="space-y-6">

@@ -37,6 +37,13 @@ export type SidebarSection = {
 type Registration = {
   /** The nav item these belong under, e.g. `/admin/promo-codes`. */
   href: string;
+  /**
+   * What the rail calls itself. A settings-shaped page can leave this out and
+   * take its nav item's name; a RECORD page passes the record's own — the
+   * company, not "Rental Companies" — which is what Northwind's customer rail
+   * shows and the only way to tell two records apart from the navigation.
+   */
+  title?: string;
   sections: SidebarSection[];
   active: string;
   onSelect: (id: string) => void;
@@ -94,17 +101,18 @@ export function useRegisterSidebarSections(
   sections: SidebarSection[],
   active: string,
   onSelect: (id: string) => void,
+  title?: string,
 ) {
   const register = useContext(SectionsDispatch);
   const key = sections.map((s) => `${s.id}:${s.label}`).join('|');
 
   useEffect(() => {
     if (!register) return;
-    register({ href, sections, active, onSelect });
+    register({ href, title, sections, active, onSelect });
     return () => register(null);
     // `key` stands in for `sections`, which every page rebuilds inline on each
     // render. `register` is a `useState` setter and never changes identity —
     // depending on the whole context object here is what caused the loop.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [register, href, key, active, onSelect]);
+  }, [register, href, title, key, active, onSelect]);
 }

@@ -77,7 +77,12 @@ describe("the record dock", () => {
     // 48px inside a 56px bar is what keeps the bar one unbroken shape.
     expect(screen.getByRole("navigation").className).toContain("h-14");
     // …and still a 44px target.
-    expect(centre.className).not.toMatch(/size-(8|9|10|11)/);
+    /* This regex carried a literal BACKSPACE where the word-boundary escape
+       belonged, written through a shell heredoc where that escape is a control
+       character. The pattern could never match, so `not.toMatch` passed on any
+       input at all — a vacuous assertion, which is worse than none because it
+       reads like a guarantee. */
+    expect(centre.className).not.toMatch(/size-(8|9|10|11)\b/);
     expect(centre.className).toContain("bg-primary");
     expect(centre.className).toContain("rounded-full");
     // …and it is between the two flanks, not beside them.
