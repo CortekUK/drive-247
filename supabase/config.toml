@@ -524,3 +524,28 @@ verify_jwt = false
 # only fixed GET reads run, using the existing Stripe secrets by name.
 [functions.trax-stripe-read]
 verify_jwt = false
+
+# ---------------------------------------------------------------------------
+# Payment plans (Plan B, slice 1 — docs/PAYMENT_PLANS_DESIGN.md §8).
+
+# The stable /pay/plan/<token> link a customer opens from an email. The
+# customer is not signed in: the 32-byte random TOKEN is the credential (only
+# its SHA-256 is stored). With verify_jwt on, the gateway would 401 every
+# customer before the function ran. It derives every amount itself and only
+# ever mints a Checkout Session for what the occurrence and rental still owe.
+[functions.payment-plan-pay]
+verify_jwt = false
+
+# The payment-plans cron. pg_cron carries no user JWT, so the gateway check is
+# off and the function authenticates itself: the x-platform-secret header
+# (platform_verify_secret RPC) or a super-admin user JWT, 401 otherwise. It
+# deliberately does NOT accept the service-role bearer (see refresh-deposit-holds).
+[functions.run-payment-plans]
+verify_jwt = false
+
+# Every operator action on a plan. Only ever called by a signed-in operator
+# from the portal; it charges cards and sends payment links, so it must never
+# become callable anonymously. Listed explicitly (true is the default) so it
+# is not mistaken for a cron target like run-payment-plans above.
+[functions.payment-plan-manage]
+verify_jwt = true

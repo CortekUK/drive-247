@@ -9,6 +9,7 @@ import { formatCurrency } from '../_shared/format-utils.ts';
 import { getStripeClientForAccount, getWebhookSecretCandidates, readHoldCaptureFacts } from '../_shared/stripe-client.ts';
 import { notifyOperatorsInApp } from '../_shared/notify-inapp.ts';
 import { sendEmail, getTenantNotificationRecipient, isOperatorEmailEnabled } from '../_shared/resend-service.ts';
+import { recordPlanCheckoutSession } from '../_shared/payment-plans-deno/checkout.ts';
 
 // Initialize Stripe with LIVE secret key (legacy UK platform)
 const ukStripe = new Stripe(Deno.env.get("STRIPE_LIVE_SECRET_KEY") || "", {
@@ -370,6 +371,27 @@ serve(async (req) => {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
         console.log("Checkout session completed:", session.id);
+
+        // PAYMENT PLAN (payment-plan-pay / _shared/payment-plans). Handled
+        // first and on its own: a plan session carries no client_reference_id,
+        // no preauth / installment / extension flags and no pre-created
+        // payments row, and it must never reach the branches below — the
+        // generic "payment captured" path would insert a SECOND payments row
+        // for the same money and run FIFO on it. recordPlanCheckoutSession →
+        // pp_record_success is idempotent on the attempt (a redelivery writes
+        // nothing) and throws only when a retry could help (→ 500 → Stripe
+        // redelivers). No other session sets metadata.type = 'payment_plan'.
+        if (session.metadata?.type === "payment_plan") {
+          const planResult = await recordPlanCheckoutSession(supabase, session, {
+            stripe,
+            stripeOptions,
+            mode: "live",
+            platformAccount,
+            paidAt: new Date((event.created || Math.floor(Date.now() / 1000)) * 1000).toISOString(),
+          });
+          console.log("[LIVE MODE] payment plan checkout:", session.id, planResult.status);
+          break;
+        }
 
         const rentalId = session.client_reference_id || session.metadata?.rental_id;
         const isPreAuth = session.metadata?.preauth_mode === "true";

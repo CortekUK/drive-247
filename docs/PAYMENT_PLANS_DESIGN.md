@@ -249,8 +249,12 @@ paid      → partially_paid | due            (refunds only)
 skipped   → due                             (operator undo)
 superseded, cancelled, waived: terminal
 ```
-Any other transition raises. **Auto-charge eligibility** (D12): `status='due'
-AND attempt_no=0`, or `status='failed' AND next_attempt_at ≤ now`.
+Any other transition raises. **Auto-charge eligibility** (D12): the occurrence
+is `due`/`partially_paid` and no *card* attempt has been made on it yet (manual
+records and never-sent links do not count), or it is `failed` with
+`next_attempt_at ≤ now`. An occurrence re-opened by a refund is never
+auto-charged, not even by the operator's Retry — it is collected by a link or a
+manual record. `waived` is reserved: nothing reaches it in slice 1.
 
 ---
 
@@ -277,7 +281,7 @@ simulator.
      | needs_customer | authentication_required, authentication_not_handled, payment_intent_authentication_failure | `requires_action`; fallback link if enabled |
      | needs_new_card | expired_card, incorrect/invalid_number, lost/stolen/pickup/restricted_card, revocation_*, transaction_not_allowed, card_not_supported, currency_not_supported, pin_try_exceeded, payment_method_restricted | `failed`, no retry; fallback link |
      | retry_later | insufficient_funds, card_velocity_exceeded, withdrawal_count_limit_exceeded, card_decline_rate_limit_exceeded | `failed` + next_attempt_at = local(today + retryAfterDays) 10:00 while attempt_no < maxAttempts; else fallback link |
-     | transient | processing_error, issuer_not_available, reenter_transaction, approve_with_id, lock_timeout, rate_limit | `failed` + next_attempt_at = +1 h |
+     | transient | processing_error, issuer_not_available, reenter_transaction, approve_with_id, lock_timeout, rate_limit | `failed` + next_attempt_at = +1 h, counted against maxAttempts, then fallback link |
      | opaque | do_not_honor, generic_decline, call_issuer, … | `failed`, no retry; fallback link |
      | integration_bug | billing_invalid_mandate, missing, livemode_mismatch, testmode_charges_only, payment_intent_unexpected_state, duplicate_transaction | `failed`, **pause plan**, alert (never a customer email) |
      | indeterminate | HTTP 5xx, timeout | `indeterminate`; recovery replays |
@@ -433,6 +437,40 @@ fields or store methods), reported in its hand-back. Nobody edits
 `apps/portal/src/lib/payment-plans/` by hand — it is generated.
 
 ---
+
+## 12a. Revisions after the build (Sep 25 2026)
+
+Found while building; the code follows these, and so does this document now.
+
+- **Claims.** Only an `auto_charge` claim moves the occurrence to
+  `processing`. A manual claim may take a `scheduled` occurrence (an early
+  payment). `pp_collect_due` also returns `partially_paid` rows.
+- **Refunds re-settle in production** through a trigger on `payments`
+  (refund amount or status changes on a row linked to an occurrence) — without
+  it the webhook's refund path left the occurrence `paid`.
+- **Manual records keep who and why:** `pp_record_success` takes the note and
+  the actor.
+- **Auth.** `run-payment-plans` accepts the platform secret (read from
+  `private.platform_config`, never a literal in `cron.job`) or a super-admin
+  JWT — not the service-role bearer. `payment-plan-manage` also refuses tenants
+  outside `PAYMENT_PLANS_TENANT_SLUGS` (default `northwind`) server-side.
+- **Square tenants are manual-only** in slice 1 (card and link refused at
+  creation).
+- **Cards.** The tenant's current platform account is charged and the Stripe
+  customer is resolved at charge time; a card saved on the other platform
+  account fails as "needs a new card" → link. Until a plan Checkout saves a
+  card, the customer's default card is used.
+- **Links.** Every reminder or re-send mints a fresh token, so an older
+  email's link stops working and the page says so. Plan sessions never set
+  `client_reference_id`, because the existing expiry branch would cancel the
+  rental.
+- **Webhook failures that a retry cannot fix** (unknown attempt, invalid
+  record) raise an operator alert and return 200, so they do not burn the
+  endpoint's auto-disable budget.
+- **Known follow-ups:** the existing `payment_intent.payment_failed` branch
+  also rings an operator bell for a plan charge (two bells for one failure);
+  `payment_intent.succeeded` flips plan payment rows `Completed → Applied`
+  (harmless: settle counts both).
 
 ## 13. Not in slice 1 (and why)
 
