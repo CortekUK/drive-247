@@ -343,7 +343,7 @@ export default function IntegrationsAdminPage() {
               {saving ? 'Saving…' : 'Save'}
             </button>
           </div>
-          <div className="overflow-x-auto rounded-xl border border-border bg-card">
+          <div className="overflow-x-auto rounded-4xl bg-card shadow-sm ring-1 ring-foreground/10">
             <table className="w-full min-w-[860px] text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/40 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -467,7 +467,7 @@ export default function IntegrationsAdminPage() {
                 No operator has subscribed to a premium integration yet.
               </p>
             ) : (
-              <div className="overflow-x-auto rounded-xl border border-border bg-card">
+              <div className="overflow-x-auto rounded-4xl bg-card shadow-sm ring-1 ring-foreground/10">
                 <table className="w-full min-w-[720px] text-sm">
                   <thead>
                     <tr className="border-b border-border bg-muted/40 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">

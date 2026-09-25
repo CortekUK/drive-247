@@ -1111,7 +1111,7 @@ export default function RentalCompaniesPage() {
       )}
 
       {/* Table */}
-      <Card>
+      <Card className="overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow className="bg-primary/5 hover:bg-primary/5">

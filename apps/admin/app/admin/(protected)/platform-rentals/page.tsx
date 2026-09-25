@@ -310,7 +310,7 @@ export default function PlatformRentalsPage() {
       />
 
       {/* Table */}
-      <Card>
+      <Card className="overflow-hidden">
         <CardContent className="p-0">
           <Table>
             <TableHeader>

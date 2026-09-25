@@ -128,7 +128,7 @@ export function ReferralLinksTab({
         </FilterShell>
       </FilterReveal>
 
-      <Card>
+      <Card className="overflow-hidden">
         <CardContent className="p-0">
           <Table>
             <TableHeader>

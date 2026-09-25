@@ -30,7 +30,7 @@ export function LeaderboardTab({ onOpen }: { onOpen: (t: TenantLite) => void }) 
   if (rows.length === 0) return <p className="text-sm text-muted-foreground">No referrers yet.</p>;
 
   return (
-    <Card>
+    <Card className="overflow-hidden">
       <CardContent className="p-0">
         <Table>
           <TableHeader>

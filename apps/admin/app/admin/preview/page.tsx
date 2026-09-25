@@ -34,6 +34,9 @@ import { Header } from '@/components/admin/Header';
 import { SidebarProvider } from '@/components/admin/SidebarContext';
 import { SidebarSectionsProvider, useRegisterSidebarSections } from '@/components/admin/sidebar-sections';
 import { useState } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
 
 export default function AdminPreviewPage() {
   /* The real sidebar, beside the real surfaces.
@@ -124,6 +127,48 @@ export default function AdminPreviewPage() {
       </section>
 
       <SectionsDemo />
+
+      {/* A LIST TABLE, the shape every module's data sits in.
+
+          The tinted header row is the reason this is here: it paints a solid
+          rectangle to the card's edges, so if the card does not clip, the
+          radius is drawn under a square corner and the table reads as an
+          unstyled slab running across the viewport. Reported Sep 25 2026 with
+          both top corners circled in red. */}
+      <section aria-label="List table" className="mt-8">
+        <h2 className="mb-3 text-sm font-medium text-muted-foreground">List table</h2>
+        <Card className="overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-primary/5 hover:bg-primary/5">
+                <TableHead>Company</TableHead>
+                <TableHead>Owner</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Created</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {[
+                ["Mahadi's Rentals", 'Stafa', 'Active'],
+                ['Haris Rentals', 'Haris', 'Active'],
+                ['MyCarzUSA', 'Joris', 'Active'],
+                ['Godnayshun Rentals', 'Honour', 'Suspended'],
+              ].map(([company, owner, status]) => (
+                <TableRow key={company}>
+                  <TableCell className="font-medium">{company}</TableCell>
+                  <TableCell>{owner}</TableCell>
+                  <TableCell><Badge variant="secondary">Production</Badge></TableCell>
+                  <TableCell>
+                    <Badge variant={status === 'Active' ? 'default' : 'destructive'}>{status}</Badge>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">Sep 23, 2026</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
+      </section>
       </div>
       </main>
       </div>

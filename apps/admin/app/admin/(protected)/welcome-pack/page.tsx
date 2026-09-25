@@ -331,7 +331,7 @@ export default function WelcomePackAdminPage() {
               <Plus className="mr-2 h-4 w-4" /> New page
             </Button>
           </div>
-          <Card>
+          <Card className="overflow-hidden">
             <CardContent className="p-0">
               <Table>
                 <TableHeader>
@@ -402,7 +402,7 @@ export default function WelcomePackAdminPage() {
               <Plus className="mr-2 h-4 w-4" /> New question
             </Button>
           </div>
-          <Card>
+          <Card className="overflow-hidden">
             <CardContent className="p-0">
               <Table>
                 <TableHeader>
@@ -461,7 +461,7 @@ export default function WelcomePackAdminPage() {
               <Plus className="mr-2 h-4 w-4" /> New chapter
             </Button>
           </div>
-          <Card>
+          <Card className="overflow-hidden">
             <CardContent className="p-0">
               <Table>
                 <TableHeader>
@@ -579,7 +579,7 @@ export default function WelcomePackAdminPage() {
 
         {/* ---------------------------------------------------- readership */}
         <TabsContent value="readership" className="mt-4">
-          <Card>
+          <Card className="overflow-hidden">
             <CardContent className="p-0">
               <Table>
                 <TableHeader>

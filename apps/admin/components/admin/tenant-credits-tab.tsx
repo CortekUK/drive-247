@@ -194,7 +194,7 @@ export function TenantCreditsTab({ tenantId }: { tenantId: string }) {
       </div>
 
       {/* Transaction History */}
-      <div className="bg-dark-card rounded-lg border border-dark-border">
+      <div className="overflow-hidden rounded-4xl bg-card shadow-sm ring-1 ring-foreground/10">
         <div className="px-5 py-4 border-b border-dark-border">
           <h3 className="text-lg font-semibold text-foreground">Transaction History</h3>
           <p className="text-sm text-dark-text-secondary mt-0.5">Recent credit activity for this tenant</p>

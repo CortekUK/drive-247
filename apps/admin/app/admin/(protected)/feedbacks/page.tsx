@@ -474,7 +474,7 @@ export default function FeedbacksPage() {
           { label: 'This week', value: stats.week },
           { label: 'Top category this week', value: stats.topCategory },
         ].map((s) => (
-          <div key={s.label} className="rounded-lg border border-dark-border bg-dark-card p-4">
+          <div key={s.label} className="rounded-4xl bg-card p-4 shadow-sm ring-1 ring-foreground/10">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">{s.label}</p>
             <p className="mt-1 text-2xl font-semibold text-foreground">{s.value}</p>
           </div>
@@ -482,7 +482,7 @@ export default function FeedbacksPage() {
       </div>
 
       {/* AI Insights */}
-      <div className="rounded-lg border border-dark-border bg-dark-card p-5 space-y-4">
+      <div className="rounded-4xl bg-card p-5 space-y-4 shadow-sm ring-1 ring-foreground/10">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
@@ -685,7 +685,7 @@ export default function FeedbacksPage() {
       </FilterReveal>
 
       {/* Table */}
-      <div className="rounded-lg border border-dark-border bg-dark-card overflow-hidden">
+      <div className="overflow-hidden rounded-4xl bg-card shadow-sm ring-1 ring-foreground/10">
         {loading ? (
           <TableSkeleton />
         ) : items.length === 0 ? (
