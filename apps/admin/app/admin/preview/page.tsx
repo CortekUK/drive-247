@@ -28,11 +28,27 @@ import {
 } from 'lucide-react';
 import { MetricCard } from '@/components/admin/metric-card';
 import { FilterGroup, FilterPanel, FilterPill } from '@/components/admin/filter-panel';
+import Sidebar from '@/components/admin/Sidebar';
+import { SidebarProvider } from '@/components/admin/SidebarContext';
+import { SidebarSectionsProvider, useRegisterSidebarSections } from '@/components/admin/sidebar-sections';
 import { useState } from 'react';
 
 export default function AdminPreviewPage() {
+  /* The real sidebar, beside the real surfaces.
+     Every page behind the sign-in redirects without a session, so the rail was
+     the one piece of this app nobody could look at — which is how a render
+     loop in its sections reached production. It renders here against the same
+     providers the protected layout gives it. No session, so it shows the
+     signed-out navigation; that is enough to judge the surface, the active
+     pill, the group behaviour and the sub-rows. */
   return (
-    <div className="min-h-screen bg-app-gradient p-4 sm:p-8">
+    <SidebarProvider>
+    <SidebarSectionsProvider>
+    <div className="flex min-h-screen bg-app-gradient">
+      <div className="hidden w-[280px] shrink-0 border-r border-border md:block">
+        <Sidebar />
+      </div>
+      <div className="min-w-0 flex-1 p-4 sm:p-8">
       <header className="mb-8">
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">Design preview</h1>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -93,7 +109,40 @@ export default function AdminPreviewPage() {
           </div>
         </div>
       </section>
+
+      <SectionsDemo />
+      </div>
     </div>
+    </SidebarSectionsProvider>
+    </SidebarProvider>
+  );
+}
+
+/** Publishes sections so the rail shows its sub-rows, as a real page does. */
+function SectionsDemo() {
+  const [tab, setTab] = useState('codes');
+  useRegisterSidebarSections(
+    '/admin/promo-codes',
+    [
+      { id: 'codes', label: 'Codes' },
+      { id: 'referral-links', label: 'Referral Links' },
+      { id: 'claims', label: 'Claims' },
+      { id: 'leaderboard', label: 'Leaderboard' },
+      { id: 'settings', label: 'Settings' },
+    ],
+    tab,
+    setTab,
+  );
+  return (
+    <section aria-label="Sidebar sections" className="mt-8">
+      <h2 className="mb-3 text-sm font-medium text-muted-foreground">Sidebar sections</h2>
+      <div className="rounded-4xl bg-card p-6 shadow-sm ring-1 ring-foreground/10">
+        <p className="text-sm text-muted-foreground">
+          Promo Codes&rsquo; sections are published to the rail. Current section:{' '}
+          <span className="font-medium text-foreground">{tab}</span> — press a row under Promo Codes to change it.
+        </p>
+      </div>
+    </section>
   );
 }
 

@@ -152,9 +152,23 @@ function NavGroupComponent({
   isActive: (href: string) => boolean;
   onNavigate?: () => void;
 }) {
-  const [isOpen, setIsOpen] = useState(true);
   /* Which item, if any, has a page underneath it publishing its sections. */
   const sections = useSidebarSections();
+
+  /*
+   * A group opens because you are IN it, not because everything is open.
+   *
+   * All four started expanded, which put every section's items on screen at
+   * once — and once a page began publishing its own sub-options underneath an
+   * item, that was a sidebar with open menus everywhere. Only the group
+   * holding the current page expands now; the rest stay shut until asked for.
+   *
+   * `useState` with an initial value rather than an effect: this is the
+   * starting position, not a rule. Once you open or close a group by hand it
+   * stays as you left it for as long as the sidebar is mounted, which is what
+   * makes it a sidebar rather than an accordion that fights you.
+   */
+  const [isOpen, setIsOpen] = useState(() => group.items.some((item) => isActive(item.href)));
 
   return (
     <div className="mb-2">
