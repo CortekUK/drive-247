@@ -1,5 +1,6 @@
 'use client';
 
+import { FilterPanel } from '@/components/admin/filter-panel';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
@@ -217,6 +218,9 @@ export default function RequestsPage() {
 
   // ── Render ────────────────────────────────────────────────────────────────
 
+  /* The badge on the Filters button, off the same state the list narrows on. */
+  const activeFilterCount = (filter !== 'all' ? 1 : 0) + (searchQuery.trim() ? 1 : 0);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -302,8 +306,8 @@ export default function RequestsPage() {
       </div>
 
       {/* Search & Filters */}
-      <Card>
-        <CardContent className="pt-6">
+      <FilterPanel count={activeFilterCount}>
+        <div className="pr-10">
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -350,8 +354,8 @@ export default function RequestsPage() {
               )}
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </FilterPanel>
 
       {/* Table */}
       <Card>

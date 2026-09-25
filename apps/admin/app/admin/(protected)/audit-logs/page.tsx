@@ -1,5 +1,6 @@
 'use client';
 
+import { FilterPanel } from '@/components/admin/filter-panel';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -678,6 +679,16 @@ export default function AuditLogsPage() {
 
   // ── Render ────────────────────────────────────────────────────────────────
 
+  /* The badge on the Filters button, read off the same state the query uses
+     below, so it cannot disagree with the rows on screen. */
+  const activeFilterCount =
+    (tenantFilter !== 'all' ? 1 : 0) +
+    (entityTypeFilter !== 'all' ? 1 : 0) +
+    (actionFilter !== 'all' ? 1 : 0) +
+    (searchQuery.trim() ? 1 : 0) +
+    (dateFrom ? 1 : 0) +
+    (dateTo ? 1 : 0);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -714,8 +725,8 @@ export default function AuditLogsPage() {
       </div>
 
       {/* Filters */}
-      <Card>
-        <CardContent className="pt-6">
+      <FilterPanel count={activeFilterCount}>
+        <div className="pr-10">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
             {/* Search */}
             <div className="relative xl:col-span-2">
@@ -762,8 +773,8 @@ export default function AuditLogsPage() {
               placeholder="To date"
             />
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </FilterPanel>
 
       {/* Table */}
       <Card>

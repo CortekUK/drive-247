@@ -335,3 +335,67 @@ describe("filters fold away until asked for", () => {
     expect(panel()).toContain("count > 0");
   });
 });
+
+/*
+ * Every list page that has filters, folds them.
+ *
+ * The first pass built `FilterPanel` and wired it into the design preview
+ * only, which meant nothing in the app changed — reported as "no filter
+ * flipper". This is the list of pages that actually render it, so a page
+ * cannot quietly go back to a permanent row of controls.
+ *
+ * Two pages are deliberately absent. `openai-usage` has a single range picker
+ * sitting in its header, which is where Northwind keeps "Last 30 days" too, so
+ * folding it would move it AWAY from the reference. `welcome-pack` has no
+ * filters at all.
+ */
+describe("list pages fold their filters", () => {
+  const folded = [
+    "app/admin/(protected)/feedbacks/page.tsx",
+    "app/admin/(protected)/platform-rentals/page.tsx",
+    "app/admin/(protected)/audit-logs/page.tsx",
+    "app/admin/(protected)/requests/page.tsx",
+  ];
+
+  it.each(folded)("%s renders the panel", (page) => {
+    const s = src(page);
+    expect(s).toContain("<FilterPanel count={activeFilterCount}>");
+    expect(s).toContain("from '@/components/admin/filter-panel'");
+  });
+
+  it.each(folded)("%s counts its filters from its own state", (page) => {
+    const s = src(page);
+    const decl = s.match(/const activeFilterCount =[\s\S]*?;/)?.[0] ?? "";
+    expect(decl).not.toBe("");
+    // Every name the badge reads must be a `useState` on this page. The first
+    // attempt at this counted `search` and `statusFilter` on a page that has
+    // neither — the dev server still returned 200, because Turbopack does not
+    // typecheck.
+    const names = [...decl.matchAll(/\b([a-z][A-Za-z0-9]*)\s*(?:!==|\.trim\(\)|\?)/g)].map((m) => m[1]);
+    expect(names.length).toBeGreaterThan(0);
+    for (const n of names) {
+      // A plain string, not a built regex: `[` needs escaping in one and not
+      // the other, and the escape did not survive being written here.
+      expect(s.includes(`const [${n},`)).toBe(true);
+    }
+  });
+});
+
+describe("the sidebar reads like Northwind's rail", () => {
+  const sidebar = () => src("components/admin/Sidebar.tsx");
+
+  it("gives a group caption full muted ink, not a fraction of it", () => {
+    // The portal measured this label under 4.5:1 at a fraction and moved it to
+    // full muted (`v2-cursor-hover-polish`: "the 'More' label is full muted
+    // text"). This was at /70 for the same reason it was wrong there.
+    expect(sidebar()).toContain("uppercase tracking-widest text-muted-foreground hover:text-foreground");
+    expect(sidebar()).not.toContain("text-muted-foreground/70");
+  });
+
+  it("marks the active row with the rail's inset rim, not an outset glow", () => {
+    const s = sidebar();
+    expect(s).toContain("bg-sidebar-accent");
+    expect(s).toContain("shadow-[inset_0_0_0_1px_hsl(var(--primary)_/_0.12)");
+    expect(s).not.toContain("glow-purple'");
+  });
+});
