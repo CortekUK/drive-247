@@ -278,15 +278,6 @@ export default function WelcomePackAdminPage() {
 
   /* --------------------------------------------------------------- render */
 
-  if (loading) {
-    return (
-      <div className="space-y-4">
-        <Skeleton className="h-10 w-64" />
-        <Skeleton className="h-96 w-full" />
-      </div>
-    );
-  }
-
   /* Five sections in a strip across the top, same as Promo Codes had. They
      are rows in the sidebar now. `Tabs` was uncontrolled (`defaultValue`),
      so it takes a value here — the only behavioural difference is that the
@@ -307,6 +298,16 @@ export default function WelcomePackAdminPage() {
     tab,
     setTab,
   );
+
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-10 w-64" />
+        <Skeleton className="h-96 w-full" />
+      </div>
+    );
+  }
+
 
   return (
     <div className="space-y-6">

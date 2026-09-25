@@ -1595,32 +1595,6 @@ export default function TenantDetailsPage() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="p-6 lg:p-8 space-y-6">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-4 w-96" />
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Skeleton className="h-64" />
-          <Skeleton className="h-64" />
-        </div>
-      </div>
-    );
-  }
-
-  if (!tenant) {
-    return (
-      <div className="p-6 lg:p-8">
-        <div className="text-center py-12">
-          <p className="text-muted-foreground text-lg">Tenant not found</p>
-          <Button variant="link" onClick={() => router.push('/admin/rentals')} className="mt-4">
-            Back to Rental Companies
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
   /*
    * The six tabs move into the rail, the way Promo Codes' five did and the way
    * Northwind puts a customer's sections there.
@@ -1655,6 +1629,33 @@ export default function TenantDetailsPage() {
     setTab,
     tenant?.company_name ?? 'Rental company',
   );
+
+  if (loading) {
+    return (
+      <div className="p-6 lg:p-8 space-y-6">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-4 w-96" />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Skeleton className="h-64" />
+          <Skeleton className="h-64" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!tenant) {
+    return (
+      <div className="p-6 lg:p-8">
+        <div className="text-center py-12">
+          <p className="text-muted-foreground text-lg">Tenant not found</p>
+          <Button variant="link" onClick={() => router.push('/admin/rentals')} className="mt-4">
+            Back to Rental Companies
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
 
   return (
     <div className="p-6 lg:p-8 space-y-6 h-full overflow-auto">
