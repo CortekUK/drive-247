@@ -409,6 +409,30 @@ describe("the sidebar reads like Northwind's rail", () => {
  * carries a page's sub-pages in the navigation instead.
  */
 describe("multi-section pages publish their sections to the sidebar", () => {
+  const registering = [
+    "app/admin/(protected)/promo-codes/page.tsx",
+    "app/admin/(protected)/welcome-pack/page.tsx",
+  ];
+
+  it.each(registering)("%s registers its sections and keeps no tab strip", (page) => {
+    const s = src(page);
+    expect(s).toContain("useRegisterSidebarSections(");
+    expect(s).not.toContain("<TabsList");
+    expect(s).not.toContain("<TabsTrigger");
+    // `Tabs` stays: it is what mounts the panel for `value`, so dropping it
+    // would have meant rewriting every panel on the page.
+    expect(s).toContain("<Tabs value={tab} onValueChange={setTab}>");
+  });
+
+  it("leaves a two-way strip alone", () => {
+    // `bonzah-onboarding` has two tabs. Two do not wrap, and pushing them into
+    // the sidebar buys a level of navigation depth for nothing — Northwind's
+    // own two-way switch (Portal / Website) is a strip too.
+    const s = src("app/admin/(protected)/bonzah-onboarding/page.tsx");
+    expect(s).toContain("<TabsList>");
+    expect((s.match(/<TabsTrigger/g) ?? []).length).toBe(2);
+  });
+
   it("promo codes registers its five and keeps no tab strip", () => {
     const s = src("app/admin/(protected)/promo-codes/page.tsx");
     expect(s).toContain("useRegisterSidebarSections(");

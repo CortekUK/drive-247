@@ -36,7 +36,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
+import { useRegisterSidebarSections } from '@/components/admin/sidebar-sections';
 import {
   Table,
   TableBody,
@@ -286,6 +287,27 @@ export default function WelcomePackAdminPage() {
     );
   }
 
+  /* Five sections in a strip across the top, same as Promo Codes had. They
+     are rows in the sidebar now. `Tabs` was uncontrolled (`defaultValue`),
+     so it takes a value here — the only behavioural difference is that the
+     section can now be set from outside, which is the point.
+
+     The counts stay in the labels: they are the reason to look at a section
+     before opening it. */
+  const [tab, setTab] = useState('sections');
+  useRegisterSidebarSections(
+    '/admin/welcome-pack',
+    [
+      { id: 'sections', label: `Pages (${sections.length})` },
+      { id: 'faqs', label: `Questions (${faqs.length})` },
+      { id: 'chapters', label: `Chapters (${groups.length})` },
+      { id: 'settings', label: 'Settings' },
+      { id: 'readership', label: 'Readership' },
+    ],
+    tab,
+    setTab,
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
@@ -298,14 +320,8 @@ export default function WelcomePackAdminPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="sections">
-        <TabsList>
-          <TabsTrigger value="sections">Pages ({sections.length})</TabsTrigger>
-          <TabsTrigger value="faqs">Questions ({faqs.length})</TabsTrigger>
-          <TabsTrigger value="chapters">Chapters ({groups.length})</TabsTrigger>
-          <TabsTrigger value="settings">Settings</TabsTrigger>
-          <TabsTrigger value="readership">Readership</TabsTrigger>
-        </TabsList>
+      {/* No `TabsList`: the triggers are rows in the sidebar. */}
+      <Tabs value={tab} onValueChange={setTab}>
 
         {/* --------------------------------------------------------- pages */}
         <TabsContent value="sections" className="mt-4 space-y-4">
