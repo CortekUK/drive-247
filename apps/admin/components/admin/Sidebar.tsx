@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { Fragment } from 'react';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { useAuthStore } from '@/store/authStore';
@@ -9,6 +10,7 @@ import { useAdminSupport } from '@/lib/use-support-messaging';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
+import { useSidebarSections, type SidebarSection } from '@/components/admin/sidebar-sections';
 import {
   LayoutDashboard,
   Building2,
@@ -151,6 +153,8 @@ function NavGroupComponent({
   onNavigate?: () => void;
 }) {
   const [isOpen, setIsOpen] = useState(true);
+  /* Which item, if any, has a page underneath it publishing its sections. */
+  const sections = useSidebarSections();
 
   return (
     <div className="mb-2">
@@ -173,8 +177,8 @@ function NavGroupComponent({
             const active = isActive(item.href);
             const showBadge = (item.badgeCount ?? 0) > 0 || item.badgeUnavailable;
             return (
+              <Fragment key={item.name}>
               <Link
-                key={item.name}
                 href={item.href}
                 onClick={onNavigate}
                 className={cn(
@@ -206,10 +210,57 @@ function NavGroupComponent({
                   </span>
                 )}
               </Link>
+              {/* Only under the item whose page registered them. */}
+              {sections?.href === item.href && <SectionLinks onNavigate={onNavigate} />}
+              </Fragment>
             );
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * A page's own sections, nested under its nav item.
+ *
+ * Rendered only for the item the registering page named, and only while that
+ * page is mounted — see `sidebar-sections.tsx` for why this is a context
+ * rather than a route per section. The rail carries a record's sub-pages in
+ * Northwind; this is the same idea for a settings-shaped page.
+ *
+ * Buttons, not links: these switch a section on a page that is already open,
+ * so there is nothing to navigate to. The indent and the left rule are what
+ * say "inside the item above" without a second icon column.
+ */
+function SectionLinks({ onNavigate }: { onNavigate?: () => void }) {
+  const registration = useSidebarSections();
+  if (!registration) return null;
+
+  return (
+    <div className="ml-6 mt-0.5 space-y-0.5 border-l border-sidebar-border pl-3">
+      {registration.sections.map((section: SidebarSection) => {
+        const current = section.id === registration.active;
+        return (
+          <button
+            key={section.id}
+            type="button"
+            aria-current={current ? 'page' : undefined}
+            onClick={() => {
+              registration.onSelect(section.id);
+              onNavigate?.();
+            }}
+            className={cn(
+              'flex min-h-10 w-full items-center rounded-lg px-3 text-left text-[14px] transition-colors md:min-h-8 md:text-[13px]',
+              current
+                ? 'bg-sidebar-accent font-medium text-primary'
+                : 'text-muted-foreground hover:bg-secondary hover:text-foreground',
+            )}
+          >
+            {section.label}
+          </button>
+        );
+      })}
     </div>
   );
 }

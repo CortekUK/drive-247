@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { TicketPercent } from 'lucide-react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
+import { useRegisterSidebarSections } from '@/components/admin/sidebar-sections';
 import { useAuthStore } from '@/store/authStore';
 import { CodesTab } from '@/components/admin/promo-codes/codes-tab';
 import { ReferralLinksTab } from '@/components/admin/promo-codes/referral-links-tab';
@@ -24,6 +25,24 @@ export default function PromoCodesPage() {
   /** The operator whose referral set-up is open under Referral Links, if any. */
   const [operator, setOperator] = useState<string | null>(null);
 
+  /* The five sections live in the sidebar, not in a strip across the top —
+     which is where Northwind's rail keeps a page's sub-pages, and which this
+     page needed more than most: its `TabsList` wrapped onto two lines on a
+     narrow window. The state, the handlers and the panels below are all
+     exactly as they were; only where you press to change section has moved. */
+  useRegisterSidebarSections(
+    '/admin/promo-codes',
+    [
+      { id: 'codes', label: 'Codes' },
+      { id: 'referral-links', label: 'Referral Links' },
+      ...(canEdit ? [{ id: 'claims', label: 'Claims' }] : []),
+      { id: 'leaderboard', label: 'Leaderboard' },
+      ...(canEdit ? [{ id: 'settings', label: 'Settings' }] : []),
+    ],
+    tab,
+    setTab,
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex items-start gap-3">
@@ -40,23 +59,19 @@ export default function PromoCodesPage() {
         </div>
       </div>
 
+      {/* No `TabsList`: the triggers are in the sidebar. `Tabs` itself stays,
+          because it is what mounts the right panel for `value` — and keeping it
+          means every panel below is untouched. */}
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="flex-wrap">
-          <TabsTrigger value="codes">Codes</TabsTrigger>
-          <TabsTrigger value="referral-links">Referral Links</TabsTrigger>
-          {canEdit && <TabsTrigger value="claims">Claims</TabsTrigger>}
-          <TabsTrigger value="leaderboard">Leaderboard</TabsTrigger>
-          {canEdit && <TabsTrigger value="settings">Settings</TabsTrigger>}
-        </TabsList>
-        <TabsContent value="codes" className="mt-4"><CodesTab canEdit={canEdit} /></TabsContent>
-        <TabsContent value="referral-links" className="mt-4">
+        <TabsContent value="codes"><CodesTab canEdit={canEdit} /></TabsContent>
+        <TabsContent value="referral-links">
           <ReferralLinksTab canEdit={canEdit} viewing={operator} onView={setOperator} />
         </TabsContent>
-        {canEdit && <TabsContent value="claims" className="mt-4"><ClaimsTab canEdit={canEdit} /></TabsContent>}
-        <TabsContent value="leaderboard" className="mt-4">
+        {canEdit && <TabsContent value="claims"><ClaimsTab canEdit={canEdit} /></TabsContent>}
+        <TabsContent value="leaderboard">
           <LeaderboardTab onOpen={t => { setOperator(t.id); setTab('referral-links'); }} />
         </TabsContent>
-        {canEdit && <TabsContent value="settings" className="mt-4"><SettingsTab canEdit={canEdit} /></TabsContent>}
+        {canEdit && <TabsContent value="settings"><SettingsTab canEdit={canEdit} /></TabsContent>}
       </Tabs>
     </div>
   );

@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import Sidebar from '@/components/admin/Sidebar';
 import { SidebarProvider } from '@/components/admin/SidebarContext';
+import { SidebarSectionsProvider } from '@/components/admin/sidebar-sections';
 import { Header } from '@/components/admin/Header';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -93,6 +94,9 @@ export default function ProtectedLayout({
   return (
     <TooltipProvider>
       <SidebarProvider>
+        {/* A page's own sections render in the sidebar rather than as tabs
+            across the top; this is what carries them there. */}
+        <SidebarSectionsProvider>
         <SupportRailProvider>
         {/* The brand wash, on every page behind the sign-in — not just the
             login screen, which is where it used to stop. This is the layer
@@ -119,6 +123,7 @@ export default function ProtectedLayout({
           </div>
         </div>
         </SupportRailProvider>
+        </SidebarSectionsProvider>
       </SidebarProvider>
     </TooltipProvider>
   );

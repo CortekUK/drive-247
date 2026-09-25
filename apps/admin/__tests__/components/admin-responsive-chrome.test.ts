@@ -399,3 +399,58 @@ describe("the sidebar reads like Northwind's rail", () => {
     expect(s).not.toContain("glow-purple'");
   });
 });
+
+/*
+ * A page's sections live in the sidebar, not in a strip across the top.
+ *
+ * Asked for Sep 25 2026: "if the page has multiple options like promo codes,
+ * shift that to the sidebar". Promo Codes carried five triggers in a
+ * `TabsList` that wrapped onto two lines on a narrow window; Northwind's rail
+ * carries a page's sub-pages in the navigation instead.
+ */
+describe("multi-section pages publish their sections to the sidebar", () => {
+  it("promo codes registers its five and keeps no tab strip", () => {
+    const s = src("app/admin/(protected)/promo-codes/page.tsx");
+    expect(s).toContain("useRegisterSidebarSections(");
+    expect(s).toContain("'/admin/promo-codes'");
+    // The strip is gone…
+    expect(s).not.toContain("<TabsList");
+    expect(s).not.toContain("<TabsTrigger");
+    // …and `Tabs` stays, because it is what mounts the panel for `value`.
+    // Dropping it would have meant rewriting all five panels.
+    expect(s).toContain("<Tabs value={tab} onValueChange={setTab}>");
+    for (const id of ['codes', 'referral-links', 'claims', 'leaderboard', 'settings']) {
+      expect(s).toContain(`<TabsContent value="${id}">`);
+    }
+  });
+
+  it("registers exactly the sections it renders panels for", () => {
+    // A section in the sidebar with no panel behind it is a dead row.
+    const s = src("app/admin/(protected)/promo-codes/page.tsx");
+    const registered = [...s.matchAll(/\{ id: '([a-z-]+)', label:/g)].map((m) => m[1]).sort();
+    const panels = [...s.matchAll(/<TabsContent value="([a-z-]+)">/g)].map((m) => m[1]).sort();
+    expect(registered).toEqual(panels);
+  });
+
+  it("changes nothing about navigation", () => {
+    // The whole reason this is a context and not a route per section: no URL
+    // means anything new, and nothing that was bookmarkable has stopped being
+    // so. If this ever becomes routes, that is a decision to take on purpose.
+    // Checked on the IMPORTS, not the prose: the file's own comment explains
+    // why it does not reach for the router, and the first version of this test
+    // matched that explanation and failed.
+    const s = src("components/admin/sidebar-sections.tsx");
+    expect(s).not.toContain("from 'next/navigation'");
+    expect(s).not.toContain('from "next/navigation"');
+    expect(s).toContain("createContext");
+  });
+
+  it("clears itself when the page unmounts", () => {
+    // Otherwise the sections of a page you have left stay under its nav item.
+    expect(src("components/admin/sidebar-sections.tsx")).toContain("return () => store.register(null);");
+  });
+
+  it("renders them only under the item the page named", () => {
+    expect(src("components/admin/Sidebar.tsx")).toContain("sections?.href === item.href");
+  });
+});
