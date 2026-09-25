@@ -821,8 +821,8 @@ describe("every refund path — the P&L revenue nothing reverses", () => {
   });
 });
 
-// @usecase Any auto-extension carrying an occurrence extra fails outright after the renewal has already been decided — not one missing add-on row, but the entire extension's Rental, Tax, Service Fee and Insurance charges, because they go in as one multi-row insert that throws.
-describe("auto-extend-rentals — the ledger category three separate lists have never admitted", () => {
+// @usecase Until 20260925120000, any auto-extension carrying an occurrence extra failed outright after the renewal had already been decided — not one missing add-on row, but the entire extension's Rental, Tax, Service Fee and Insurance charges, because they go in as one multi-row insert that throws. That migration admits the category, ranks it for FIFO and books it to P&L as 'Extras'. (Measured Sep 25 2026: no live rental carried a priced extra, so it had never fired.)
+describe("auto-extend-rentals — the ledger category three separate lists did not admit", () => {
   const src = readEdgeFunctionSource("auto-extend-rentals");
 
   /** The ledgerRows array, index.ts:481-487. */
@@ -857,27 +857,39 @@ describe("auto-extend-rentals — the ledger category three separate lists have 
     ]);
   });
 
-  it("is absent from the latest ledger category CHECK, which does list the other four", () => {
-    expect(latestLedgerCategoryMigration).toBe("20260503090449_add_unlimited_mileage_upgrade.sql");
+  it("was absent from the ledger category CHECK until the payment-plans prerequisites admitted it", () => {
+    // History: the CHECK before the fix listed the other four and not this one.
+    const before = migration("20260503090449_add_unlimited_mileage_upgrade.sql");
+    const BEFORE = arrayLiteralsAfter(before.slice(before.indexOf("ADD CONSTRAINT ledger_entries_category_check")), "CHECK");
     for (const c of ["Extension Rental", "Extension Tax", "Extension Service Fee", "Extension Insurance"]) {
-      expect(LEDGER_CATEGORIES).toContain(c);
+      expect(BEFORE).toContain(c);
     }
-    expect(LEDGER_CATEGORIES).not.toContain("Extension Add-on");
-    // Not a stale first draft either: the string appears in no migration at all.
-    expect(migrationsMentioning("Extension Add-on")).toEqual([]);
+    expect(BEFORE).not.toContain("Extension Add-on");
+    // The fix: the latest CHECK is the prerequisites migration, and it admits all five.
+    expect(latestLedgerCategoryMigration).toBe("20260925120000_ledger_allocation_prerequisites.sql");
+    for (const c of CATEGORIES_WRITTEN) expect(LEDGER_CATEGORIES).toContain(c);
   });
 
-  it("is absent from the latest P&L category CHECK as well", () => {
+  it("is absent from the latest P&L category CHECK — so FIFO books it to P&L as 'Extras' instead", () => {
     expect(latestPnlCategoryMigration).toBe("20260602120200_allow_expenses_pnl_category.sql");
     expect(PNL_CATEGORIES).toContain("Extension Insurance");
     expect(PNL_CATEGORIES).not.toContain("Extension Add-on");
+    expect(PNL_CATEGORIES).toContain("Extras");
+    // Without this mapping, admitting the charge to FIFO would abort every
+    // payment that reached it on the P&L CHECK — the money taken, nothing recorded.
+    expect(migration("20260925120000_ledger_allocation_prerequisites.sql")).toContain("WHEN 'Extension Add-on' THEN 'Extras'");
   });
 
-  it("is unranked by the FIFO allocator, so even a widened CHECK would leave the charge unsettleable", () => {
-    const fifo = migration("20260603120000_fifo_v2_generic_pays_extension.sql");
-    const catOrder = fifo.slice(fifo.indexOf("WITH cat_order AS ("), fifo.indexOf("SELECT le.id, le.remaining_amount"));
-    expect(catOrder).toContain("'Extension Insurance', 11");
-    expect(catOrder).not.toContain("Extension Add-on");
+  it("was unranked by the FIFO allocator, and is ranked (after Other) by the prerequisites' definition", () => {
+    const old = migration("20260603120000_fifo_v2_generic_pays_extension.sql");
+    const oldOrder = old.slice(old.indexOf("WITH cat_order AS ("), old.indexOf("SELECT le.id, le.remaining_amount"));
+    expect(oldOrder).toContain("'Extension Insurance', 11");
+    expect(oldOrder).not.toContain("Extension Add-on");
+    const fifo = migration("20260925120000_ledger_allocation_prerequisites.sql");
+    const catOrder = fifo.slice(fifo.indexOf("WITH cat_order(cat, pri) AS ("), fifo.indexOf("LEFT JOIN cat_order"));
+    expect(catOrder).toMatch(/\('Extension Add-on',\s+13\.2\)/);
+    // And an unlisted category now falls to a fallback rank instead of vanishing.
+    expect(fifo).toContain("LEFT JOIN cat_order co ON co.cat = le.category");
   });
 
   it("takes the whole extension down with it, because all five rows go in as one insert that throws", () => {
@@ -909,10 +921,8 @@ describe("auto-extend-rentals — the ledger category three separate lists have 
     );
   });
 
-  it.fails("should keep the ledger CHECK admitting every category auto-extend-rentals writes", () => {
-    // Remove the .fails marker once supabase/functions/auto-extend-rentals/index.ts:486
-    // and supabase/functions/sandbox-auto-extend-rentals/index.ts:388 are fixed
-    // (or a migration widens ledger_entries_category_check to admit them).
+  it("keeps the ledger CHECK admitting every category auto-extend-rentals writes", () => {
+    // Was an it.fails watchdog; 20260925120000 widened ledger_entries_category_check.
     expect(CATEGORIES_WRITTEN.filter((c) => !LEDGER_CATEGORIES.includes(c))).toEqual([]);
   });
 });
