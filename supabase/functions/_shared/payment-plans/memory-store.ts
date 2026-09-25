@@ -73,6 +73,9 @@ import type {
 import { PlanStoreError } from "./errors.ts";
 import { addDays, compareInstants, dueAtUtc, isISODate, localDateInZone, secondsBetween } from "./dates.ts";
 
+/** payments_payment_provider_check. */
+const RECORDABLE_PROVIDERS: readonly string[] = ["stripe", "square"];
+
 export const TRANSITIONS: Readonly<Record<OccurrenceStatus, readonly OccurrenceStatus[]>> = {
   scheduled: ["due", "paid", "partially_paid", "skipped", "superseded", "cancelled"],
   due: ["processing", "paid", "partially_paid", "requires_action", "failed", "skipped", "superseded", "cancelled"],
@@ -669,11 +672,13 @@ export class MemoryPlanStore implements PlanStore, PlanOperations, PlanLookups, 
     if (a.method === "auto_charge" && input.amountCents !== a.amountCents) {
       throw new PlanStoreError("invalid_input", `pp_record_success: attempt ${a.id} claimed ${a.amountCents} cents, provider reported ${input.amountCents}`);
     }
-    if (input.paymentProvider !== "stripe" && input.paymentProvider !== "square") {
+    // Mirrors payments_payment_provider_check and the provider-handle
+    // exclusivity CHECK: only a Stripe payment can carry a Checkout Session.
+    if (!RECORDABLE_PROVIDERS.includes(input.paymentProvider)) {
       throw new PlanStoreError("invalid_input", `pp_record_success: payment_provider must be stripe or square (got ${String(input.paymentProvider)})`);
     }
-    if (input.paymentProvider === "square" && input.checkoutSessionId) {
-      throw new PlanStoreError("invalid_input", "pp_record_success: a Square payment has no Stripe checkout session");
+    if (input.paymentProvider !== "stripe" && input.checkoutSessionId) {
+      throw new PlanStoreError("invalid_input", "pp_record_success: only a Stripe payment has a Stripe checkout session");
     }
     if (!input.method || !input.method.trim()) throw new PlanStoreError("invalid_input", "pp_record_success: method is required");
     if (!canAttemptTransition(a.status, "succeeded")) {

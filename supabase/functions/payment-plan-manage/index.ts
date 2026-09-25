@@ -31,7 +31,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { handleCors, jsonResponse } from "../_shared/cors.ts";
 import { authorizePlanStaff } from "../_shared/payment-plans-deno/auth.ts";
-import { buildEngineDeps, isPaymentPlansTenant, loadTenantPlanContext, type TenantPlanContext } from "../_shared/payment-plans-deno/context.ts";
+import { buildEngineDeps, isPaymentPlansTenant, loadTenantPlanContext, planEngineCollects, type TenantPlanContext } from "../_shared/payment-plans-deno/context.ts";
 import { SupabasePlanStore } from "../_shared/payment-plans-deno/supabase-store.ts";
 import {
   collectOccurrenceNow,
@@ -127,7 +127,7 @@ Deno.serve(async (req) => {
       if (!tenant.timezone) {
         throw new HttpError(422, "Set your company's timezone in Settings before creating a payment plan — due dates are charged in it.", "timezone_missing");
       }
-      if (tenant.paymentProvider === "square" && form.collectionMethod !== "manual") {
+      if (!planEngineCollects(tenant.paymentProvider) && form.collectionMethod !== "manual") {
         throw new HttpError(422, "Card charges and payment links are not available for Square yet. Choose “I'll record it”.", "provider_not_supported");
       }
       const owedCents = await store.rentalOwedCents(rental.id);

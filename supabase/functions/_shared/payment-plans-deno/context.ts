@@ -28,6 +28,25 @@ import { SupabasePlanStore, type PlanDbClient } from "./supabase-store.ts";
 import { StripePaymentProvider, UnavailableProvider } from "./stripe-provider.ts";
 import { DenoNotifier } from "./notifier.ts";
 import { DenoLinkMinter } from "./link-minter.ts";
+import { STRIPE, SQUARE } from "../payments/predicates.ts";
+import type { ProviderId } from "../payments/types.ts";
+
+/**
+ * The processors the plan engine has a provider adapter for — ONE declaration,
+ * read by the cron (below) and by payment-plan-manage. Slice 1 has
+ * stripe-provider.ts only. Square's manifest would allow an emailed link
+ * (supportsHostedCheckout) but not an unattended card charge
+ * (canChargeOffSession), and neither is built for plans yet, so a Square
+ * tenant's plan collects by manual record only. Adding a Square adapter means
+ * adding it here, not another name comparison at a call site
+ * (tests/integrations/square/adapter-depth.test.ts counts those).
+ */
+export const PLAN_COLLECTING_PROVIDERS: readonly ProviderId[] = [STRIPE];
+
+/** Can the engine charge a card or send a link for this processor? */
+export function planEngineCollects(provider: ProviderId): boolean {
+  return PLAN_COLLECTING_PROVIDERS.includes(provider);
+}
 
 export interface TenantPlanContext {
   tenantId: string;
@@ -72,13 +91,13 @@ export async function loadTenantPlanContext(db: PlanDbClient, tenantId: string):
   if (!tenant) throw new Error(`tenant ${tenantId} not found`);
 
   const mode: "test" | "live" = tenant.stripe_mode === "live" ? "live" : "test";
-  const paymentProvider: "stripe" | "square" = tenant.payment_provider === "square" ? "square" : "stripe";
+  const paymentProvider: ProviderId = tenant.payment_provider === SQUARE ? SQUARE : STRIPE;
   const platformAccount = getChargePlatformAccount(tenant);
   let unavailable: string | null = null;
   let connectAccountId: string | null = null;
   let stripe: Stripe | null = null;
 
-  if (paymentProvider === "square") {
+  if (!planEngineCollects(paymentProvider)) {
     unavailable = "Payment plans cannot charge Square tenants yet — record payments by hand.";
   } else {
     try {

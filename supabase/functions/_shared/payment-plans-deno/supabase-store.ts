@@ -219,6 +219,11 @@ export class SupabasePlanStore implements PlanStore, PlanOperations, PlanLookups
       p_payment_date: input.paymentDate,
       p_method: input.method,
       p_checkout_session_id: input.checkoutSessionId ?? null,
+      // Who recorded a manual payment, and why (design §12a). p_actor is an
+      // app_users.id foreign key — payment-plan-manage passes caller.appUserId,
+      // never the auth user's id, which would fail the FK and lose the record.
+      p_note: input.note ?? null,
+      p_actor: input.actorId ?? null,
     });
     if (!paymentId) throw new PlanStoreError("refused", `pp_record_success returned no payment id for attempt ${input.attemptId}`);
     return { paymentId };
