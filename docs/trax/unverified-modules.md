@@ -14,6 +14,7 @@ The generated report enumerates portal pages, permission keys, feature coverage,
 | Group | What operators use it for | Missing verification |
 | --- | --- | --- |
 | Payments, invoices, credits, fines, expenses, owner payouts | Collecting, allocating, invoicing and reconciling money | Finance-read policy; currency units; historical processor routing; permissions and reconciliation scenarios |
+| Payment plans (canary) | Collecting a rental's balance on a schedule — card, emailed link or recorded by hand | Canary-only and hidden until its migration and edge functions are applied; collection, reminders, provider routing and permissions are not deployed or verified |
 | Reports, Insights, P&L | Reviewing operational/financial aggregates and exporting | Complete query scope; financial entitlement; partial results; enabled variants |
 | Insurance, agreements, documents | Completing coverage, signature and document requirements | Provider-specific states and callbacks, identity-field exposure and failure recovery |
 | Leads, enquiries, automations | Customer acquisition and follow-up | Tenant flags, state transitions, side effects, consent and role enforcement |

@@ -88,7 +88,15 @@ import {
   validateAdditionalDrivers,
   type AdditionalDriverInput,
 } from "@/components/rentals/additional-drivers-form";
-import { BookingModeGrid, type BookingMode } from "@/components/rentals-v2/booking-mode-selector";
+import { BookingModeGrid, bookingModesFor, type BookingMode } from "@/components/rentals-v2/booking-mode-selector";
+// Payment plans — canary only, behind usePaymentPlansFeature (tenant slug AND
+// the tables exist). Every use below is guarded by `paymentPlansOn`.
+import { CalendarClock } from "lucide-react";
+import { draftBody, invokePaymentPlanManage, usePaymentPlansFeature } from "@/hooks/use-payment-plan";
+import { PaymentPlanComposer } from "@/components/payment-plans/payment-plan-composer";
+import { defaultPlanForm, type PlanContext, type PlanDraft, type PlanFormState } from "@/lib/payment-plans-ui/plan-form-model";
+import { computePreview } from "@/lib/payment-plans-ui/preview";
+import { todayInZone } from "@/lib/payment-plans-ui/format";
 import { RentalOnboardingShell } from "@/components/rentals-v2/rental-onboarding-shell";
 import { CustomerList } from "@/components/rentals-v2/customer-step";
 import { VehicleList } from "@/components/rentals-v2/vehicle-step";
@@ -254,6 +262,20 @@ export const RentalCreateV2 = () => {
     "mode" | "customer" | "vehicle" | "form"
   >("mode");
 
+  /**
+   * Payment plans (canary only — `usePaymentPlansFeature`: the northwind slug
+   * AND the payment-plan tables exist). "Payment plan" is a REGULAR rental —
+   * dates, invoice and charges exactly as Fixed — whose balance is then
+   * collected by a plan created as soon as the rental exists. So it rides the
+   * regular path: isPayAsYouGo / isAutoExtend stay false and legacy
+   * installments stay 'full'. For every other tenant `paymentPlansOn` is false
+   * and none of this is reachable.
+   */
+  const { enabled: paymentPlansOn } = usePaymentPlansFeature();
+  const [paymentPlanChosen, setPaymentPlanChosen] = useState(false);
+  // null = the operator hasn't touched it: defaults follow the rental's dates.
+  const [planForm, setPlanForm] = useState<PlanFormState | null>(null);
+
   // Bonzah insurance state
   const [bonzahCoverage, setBonzahCoverage] = useState<CoverageOptions>({
     cdw: false, rcli: false, sli: false, pai: false,
@@ -324,6 +346,9 @@ export const RentalCreateV2 = () => {
   const [isAutoExtend, setIsAutoExtend] = useState(false);
   const [autoExtendChargeMode, setAutoExtendChargeMode] = useState<'auto_charge' | 'pay_link'>('pay_link');
   const [autoExtendMaxPeriods, setAutoExtendMaxPeriods] = useState<number | null>(null);
+
+  /** The canary chose "Payment plan" and nothing has since switched the rental to PAYG / auto-extend. */
+  const paymentPlanActive = paymentPlansOn && paymentPlanChosen && !isPayAsYouGo && !isAutoExtend;
 
   // Per-rental gig-driver flag. Defaults to the selected customer's flag, but the
   // operator can override per-rental (e.g., a customer who hasn't yet self-declared
@@ -1649,6 +1674,18 @@ export const RentalCreateV2 = () => {
         throw new Error(addlDriversValidationError);
       }
 
+      // Payment plan (canary only). Checked BEFORE the rental exists, so a plan
+      // that cannot be built never leaves a rental behind without one.
+      let planDraftForCreate: PlanDraft | null = null;
+      if (paymentPlanActive) {
+        const planCtx = planContextFor(data.start_date, data.end_date ?? undefined);
+        const planCheck = computePreview(planForm ?? defaultPlanForm(planCtx), planCtx, todayInZone(tenant?.timezone));
+        if (planCheck.ok === false) {
+          throw new Error(`Payment plan: ${planCheck.message}`);
+        }
+        planDraftForCreate = planCheck.plan;
+      }
+
       // PAYG vs regular mode validation
       // Regular rentals require end_date + return_location + return_time + pickup_time;
       // PAYG just requires pickup_time (anchor for the daily accrual window).
@@ -2532,6 +2569,19 @@ export const RentalCreateV2 = () => {
         }
       }
 
+      // Payment plan (canary only). The rental and its charges exist now, so the
+      // server sizes the plan from the real ledger (pp_rental_owed_cents), not
+      // from the figure the form previewed.
+      let paymentPlanError: string | null = null;
+      if (planDraftForCreate) {
+        try {
+          await invokePaymentPlanManage('create', { rentalId: rental.id, ...draftBody(planDraftForCreate) });
+        } catch (planErr: any) {
+          paymentPlanError = planErr?.message || 'The payment plan could not be set up.';
+          console.error('Error setting up payment plan:', planErr);
+        }
+      }
+
       setCreationProgress(6); // Step 6: Sending notifications
 
       // Send booking notification emails
@@ -2655,7 +2705,21 @@ export const RentalCreateV2 = () => {
 
       // If installment plan was selected, skip payment/invoice dialogs — go straight to rental detail.
       // PAYG also skips: there is no upfront amount to collect — charges accrue daily.
-      if (isInstallmentRental) {
+      if (planDraftForCreate) {
+        // Canary: the plan collects the balance, so there is no upfront payment
+        // dialog. Land on Payments, where the plan now lives.
+        toast(paymentPlanError
+          ? {
+              title: "Rental created — payment plan not set up",
+              description: `${paymentPlanError} Set it up from the rental's Payments.`,
+              variant: "destructive",
+            }
+          : {
+              title: "Rental created with a payment plan",
+              description: `${customerName} • ${vehicleReg}. The schedule is on the rental's Payments.`,
+            });
+        router.push(`/rentals/${rental.id}?stage=payments`);
+      } else if (isInstallmentRental) {
         const planLabel = installmentPlanType === 'weekly'
           ? 'Weekly'
           : installmentPlanType === 'semiweekly'
@@ -2707,6 +2771,38 @@ export const RentalCreateV2 = () => {
 
   // Form validation state
   const isFormValid = form.formState.isValid;
+
+  /**
+   * What a payment plan would divide: the rental's total WITHOUT the deposit —
+   * the same `subtotal` the Rental Preview's Financial Summary shows (a plan
+   * never collects the deposit; the server's pp_rental_owed_cents excludes it).
+   * A preview figure only: on submit the server sizes the plan from the real
+   * ledger, which exists by then.
+   */
+  const planBalanceEstimateCents = (): number => {
+    const rentalAmount = watchedMonthlyAmount || 0;
+    const discountAmt = promoDetails ? calculateDiscount(rentalAmount) : 0;
+    const discountedAmount = rentalAmount - discountAmt;
+    const showTax = rentalSettings?.tax_enabled && (rentalSettings?.tax_percentage ?? 0) > 0;
+    const showServiceFee = rentalSettings?.service_fee_enabled;
+    const autoTax = showTax ? Math.round(calculateTaxAmount(discountedAmount) * 100) / 100 : 0;
+    const autoServiceFee = showServiceFee ? Math.round(calculateServiceFee(discountedAmount) * 100) / 100 : 0;
+    const effectiveTax = taxOverride !== null ? taxOverride : autoTax;
+    const effectiveServiceFee = serviceFeeOverride !== null ? serviceFeeOverride : autoServiceFee;
+    const prevDeliveryFee = deliveryFeeOverride !== null ? deliveryFeeOverride : deliveryFee;
+    const prevCollectionFee = sameAsPickup ? 0 : (collectionFeeOverride !== null ? collectionFeeOverride : collectionFee);
+    const extrasDays = (watchedStartDate && watchedEndDate) ? Math.max(1, differenceInDays(watchedEndDate, watchedStartDate)) : 1;
+    const extrasTotal = calcExtrasTotal(selectedExtras, (activeExtras || []) as any[], extrasDays);
+    const subtotal = discountedAmount + (showTax ? effectiveTax : 0) + (showServiceFee && autoServiceFee > 0 ? effectiveServiceFee : 0) + bonzahPremium + extrasTotal + prevDeliveryFee + (sameAsPickup ? 0 : prevCollectionFee);
+    return Math.max(0, Math.round(subtotal * 100));
+  };
+
+  const planContextFor = (start: Date | undefined, end: Date | undefined): PlanContext => ({
+    rentalStart: start ? format(start, 'yyyy-MM-dd') : '',
+    rentalEnd: end ? format(end, 'yyyy-MM-dd') : null,
+    balanceCents: planBalanceEstimateCents(),
+    zeroBalanceMessage: "Enter the rental's price first — the payments are sized from it.",
+  });
   const yearAgo = subYears(new Date(), 1);
 
   // Check if start date is in the past
@@ -2900,6 +2996,7 @@ export const RentalCreateV2 = () => {
     setExcessRateOverride(null);
     setInstallmentPlanType('full');
     setInstallmentAmountOverride(null);
+    setPlanForm(null);
     setDeliveryMethod('in_person');
     setLockboxCodeInput('');
     setPickupMethod('fixed');
@@ -2922,12 +3019,15 @@ export const RentalCreateV2 = () => {
       regular rental here, not a fourth mode, so it is never offered — selecting
       it would put the grid in a state the submit handler has no concept of. */
   const availableBookingModes = useMemo(
-    () => [
-      'fixed' as const,
-      ...((rentalSettings as any)?.pay_as_you_go_enabled ? ['payg' as const] : []),
-      ...((rentalSettings as any)?.auto_extend_enabled ? ['auto_extend' as const] : []),
-    ],
-    [rentalSettings]
+    () =>
+      bookingModesFor({
+        paygEnabled: !!(rentalSettings as any)?.pay_as_you_go_enabled,
+        autoExtendEnabled: !!(rentalSettings as any)?.auto_extend_enabled,
+        // False for every tenant but the canary — the list is then exactly the
+        // one this memo always returned (pinned by payment-plans-entry.test).
+        paymentPlans: paymentPlansOn,
+      }),
+    [rentalSettings, paymentPlansOn]
   );
 
   /**
@@ -2941,6 +3041,13 @@ export const RentalCreateV2 = () => {
    */
   const applyBookingMode = (mode: BookingMode) => {
     setBookingMode(mode);
+    // Canary only: "Payment plan" is the regular path plus a plan (see
+    // paymentPlanChosen). Every other mode clears it.
+    setPaymentPlanChosen(mode === 'payment_plan');
+    if (mode === 'payment_plan') {
+      setInstallmentPlanType('full');
+      setInstallmentAmountOverride(null);
+    }
     // The grid calls the standard mode "fixed"; this page has always called it
     // "regular", and the submit path keys off that name.
     const val = mode === 'fixed' ? 'regular' : mode;
@@ -3048,10 +3155,13 @@ export const RentalCreateV2 = () => {
                   ? 'auto_extend'
                   : isPayAsYouGo
                     ? 'payg'
-                    : 'fixed'
+                    : paymentPlanActive
+                      ? 'payment_plan'
+                      : 'fixed'
                 : null
             }
             available={availableBookingModes}
+            copy={paymentPlansOn ? { fixed: { title: 'Fixed dates', tagline: 'Pay in full' } } : undefined}
             onSelect={applyBookingMode}
           />
         </RentalOnboardingShell>
@@ -3917,7 +4027,7 @@ export const RentalCreateV2 = () => {
               )}
 
               {/* ── Payment Mode: Regular vs Pay As You Go vs Auto-Extend (positioned after Customer & Vehicle) ──────── */}
-              {((rentalSettings as any)?.pay_as_you_go_enabled || (rentalSettings as any)?.auto_extend_enabled) && selectedVehicleId && (
+              {((rentalSettings as any)?.pay_as_you_go_enabled || (rentalSettings as any)?.auto_extend_enabled || paymentPlansOn) && selectedVehicleId && (
                 <div className="rounded-xl border bg-card shadow-sm">
                   <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
                     <div className="flex items-center justify-center h-7 w-7 rounded-md bg-primary/20 text-primary">
@@ -3927,8 +4037,14 @@ export const RentalCreateV2 = () => {
                   </div>
                   <div className="p-5 space-y-4">
                     <RadioGroup
-                      value={isAutoExtend ? 'auto_extend' : isPayAsYouGo ? 'payg' : 'regular'}
+                      value={isAutoExtend ? 'auto_extend' : isPayAsYouGo ? 'payg' : paymentPlanActive ? 'payment_plan' : 'regular'}
                       onValueChange={(val) => {
+                        // Canary only ('payment_plan' is offered only when paymentPlansOn).
+                        setPaymentPlanChosen(val === 'payment_plan');
+                        if (val === 'payment_plan') {
+                          setInstallmentPlanType('full');
+                          setInstallmentAmountOverride(null);
+                        }
                         setIsPayAsYouGo(val === 'payg');
                         setIsAutoExtend(val === 'auto_extend');
                         if (val === 'auto_extend') {
@@ -3968,14 +4084,23 @@ export const RentalCreateV2 = () => {
                       }}
                       className="space-y-2"
                     >
-                      <label className={cn("flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors", !isPayAsYouGo ? "border-primary bg-primary/5" : "hover:border-primary/40 hover:bg-primary/5 dark:hover:border-[hsl(var(--v2-link,var(--primary))_/_0.4)] dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]")}>
+                      <label className={cn("flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors", !isPayAsYouGo && !paymentPlanActive ? "border-primary bg-primary/5" : "hover:border-primary/40 hover:bg-primary/5 dark:hover:border-[hsl(var(--v2-link,var(--primary))_/_0.4)] dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]")}>
                         <RadioGroupItem value="regular" />
                         <div>
                           <span className="text-sm font-medium">Regular</span>
-                          <p className="text-xs text-muted-foreground">Standard payment — pay upfront or via installments</p>
+                          <p className="text-xs text-muted-foreground">{paymentPlansOn ? 'Standard payment — the full amount up front' : 'Standard payment — pay upfront or via installments'}</p>
                         </div>
                       </label>
-                      {(rentalSettings as any)?.pay_as_you_go_enabled && (
+                      {paymentPlansOn && (
+                        <label className={cn("flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors", paymentPlanActive ? "border-primary bg-primary/5" : "hover:border-primary/40 hover:bg-primary/5 dark:hover:border-[hsl(var(--v2-link,var(--primary))_/_0.4)] dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]")}>
+                          <RadioGroupItem value="payment_plan" />
+                          <div>
+                            <span className="text-sm font-medium">Payment plan</span>
+                            <p className="text-xs text-muted-foreground">Collect the total over time, on the schedule you set below</p>
+                          </div>
+                        </label>
+                      )}
+                      {(rentalSettings as any)?.pay_as_you_go_enabled && !paymentPlansOn && (
                         <label className={cn("flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors", isPayAsYouGo ? "border-primary bg-primary/5" : "hover:border-primary/40 hover:bg-primary/5 dark:hover:border-[hsl(var(--v2-link,var(--primary))_/_0.4)] dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]")}>
                           <RadioGroupItem value="payg" />
                           <div>
@@ -4932,8 +5057,48 @@ export const RentalCreateV2 = () => {
                 );
               })()}
 
+              {/* ── Payment plan (canary only) ───────────────────────
+                  Takes the Installment Plan's place: on the canary the plan
+                  form replaces installments (and PAYG) entirely. */}
+              {paymentPlanActive && selectedVehicleId && (() => {
+                const today = todayInZone(tenant?.timezone);
+                const shell = (body: React.ReactNode) => (
+                  <div className="rounded-xl border bg-card shadow-sm" data-create-payment-plan="">
+                    <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
+                      <div className="flex items-center justify-center h-7 w-7 rounded-md bg-primary/20 text-primary">
+                        <CalendarClock className="h-4 w-4" />
+                      </div>
+                      <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Payment Plan</h2>
+                    </div>
+                    <div className="p-5 space-y-4">{body}</div>
+                  </div>
+                );
+                if (!watchedStartDate || !watchedEndDate) {
+                  return shell(<p className="text-sm text-muted-foreground">Set the rental&rsquo;s dates above — the payment dates are built from them.</p>);
+                }
+                const planCtx = planContextFor(watchedStartDate, watchedEndDate);
+                const planState = planForm ?? defaultPlanForm(planCtx);
+                return shell(
+                  <>
+                    <p className="text-sm text-muted-foreground">
+                      How this rental&rsquo;s total is collected. The plan is set up the moment the rental is created, and nothing is charged before its first date.
+                    </p>
+                    <PaymentPlanComposer
+                      state={planState}
+                      onChange={setPlanForm}
+                      preview={computePreview(planState, planCtx, today)}
+                      ctx={planCtx}
+                      currency={tenant?.currency_code || 'USD'}
+                      today={today}
+                      layout="stacked"
+                      balanceLabel="rental total"
+                    />
+                  </>
+                );
+              })()}
+
               {/* ── Installment Plan ──────────────────────────────── */}
-              {!isPayAsYouGo && (() => {
+              {!isPayAsYouGo && !paymentPlansOn && (() => {
                 const installmentConfig = rentalSettings?.installment_config;
                 const installmentsEnabled = rentalSettings?.installments_enabled && installmentConfig;
                 if (!installmentsEnabled) return null;

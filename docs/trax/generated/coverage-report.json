@@ -160,6 +160,13 @@
       "limits": "Default disabled. No historical currency/account guesses, automatic reconciliation, native payment mutations or complete rental balance. Explicit staff policy and live integration verification still required."
     },
     {
+      "id": "payment_plans",
+      "title": "Payment plans",
+      "status": "requiring_confirmation",
+      "scope": "Canary-only (northwind) V2 payment plans: the one schedule form in New Rental and on the rental's Payments stage, the plan card, and the Developer-tab simulator. Hidden until its migration and edge functions are applied; no collection, reminder or provider behaviour is deployed or verified.",
+      "limits": "Not eligible for Phase 1 retrieval or navigation until the migration, edge functions and collection paths are applied, verified and reviewed."
+    },
+    {
       "id": "invoices",
       "title": "Invoices",
       "status": "partially_documented",
@@ -325,7 +332,7 @@
     "verified": 6,
     "partially_documented": 21,
     "unsupported": 1,
-    "requiring_confirmation": 17
+    "requiring_confirmation": 18
   },
   "permissionKeys": [
     "vehicles",

@@ -8,6 +8,7 @@ import { Button } from '@/components/ui-v2/button';
 import { EmptyStatePreview } from '@/components/dev/empty-state-preview';
 import { MessagesPreview } from '@/components/dev/messages-preview';
 import { BillingPreview } from '@/components/dev/billing-preview';
+import { PaymentPlanSimulator } from '@/components/dev/payment-plan-simulator';
 import { useTenant } from '@/contexts/TenantContext';
 import { supabase } from '@/integrations/supabase/client';
 import { NORTHWIND } from '@/lib/v2';
@@ -42,6 +43,11 @@ import {
  * rest is localStorage on the operator's own machine. That is the whole blast
  * radius, and it is why this was judged safe to ship. Add a further action to
  * this page and that sentence stops being true.
+ *
+ * The payment plan simulator (Sep 25 2026) keeps it true: it runs the plan
+ * engine against an in-memory store in the tab and a simulated card, imports no
+ * Supabase client and calls no edge function. It writes nothing anywhere; its
+ * only output is a JSON file the tester chooses to download.
  *
  * TENANT  `tenant.slug === NORTHWIND`, and nothing else, decided below.
  *
@@ -347,6 +353,7 @@ export function DevPageBody() {
 
       <MessagesPreview />
       <BillingPreview />
+      <PaymentPlanSimulator />
     </div>
   );
 }

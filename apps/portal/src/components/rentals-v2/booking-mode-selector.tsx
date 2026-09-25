@@ -7,7 +7,12 @@ import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui-v2/dialog";
 import { SAMPLE_EXPLAINER_URL } from "@/lib/explainers";
 
-export type BookingMode = "fixed" | "auto_extend" | "installments" | "payg";
+/**
+ * `payment_plan` is the canary's fusion of pay-as-you-go and installments
+ * (docs/PAYMENT_PLANS_DESIGN.md §9). It is only ever offered through
+ * `available` — see `bookingModesFor` below — so no other tenant sees it.
+ */
+export type BookingMode = "fixed" | "auto_extend" | "installments" | "payg" | "payment_plan";
 
 interface InfoPage {
   heading: string;
@@ -51,6 +56,32 @@ const MODES: ModeOption[] = [
       {
         heading: "When to use it",
         body: "Best when both you and the customer know the exact return date. It's the simplest, most predictable option: one agreement, one charge, a clear end date.",
+      },
+    ],
+  },
+  {
+    // Canary only (offered via `available`). Its copy never names "pay as you
+    // go" or "installments": the lead's rule is that the operator is never
+    // told which of the two a plan is — it is one thing, a payment plan.
+    id: "payment_plan",
+    title: "Payment plan",
+    tagline: "Collect over time",
+    description:
+      "Set how the customer pays for this rental — weekly, twice a week, monthly or on dates you pick — by card, emailed link or payments you record.",
+    bestFor: "Customers paying in stages",
+    videoUrl: SAMPLE_VIDEO, // TODO: replace with a real payment plan explainer
+    infoPages: [
+      {
+        heading: "What it is",
+        body: "A rental with set dates whose total is collected over time instead of all at once. You describe the schedule in one sentence — how much, how often, from when, until when, and how — and see every date before anything is saved.",
+      },
+      {
+        heading: "How collecting works",
+        body: "On each date the customer's card is charged, or they're emailed a payment link, or you're reminded to record what they paid you. A payment that fails says what happened and how to recover it, right on the rental.",
+      },
+      {
+        heading: "Changing it later",
+        body: "Move a date, skip one, record money you received, pause the plan or change the whole schedule at any time. Payments already made never change, and a plan never collects more than the rental owes.",
       },
     ],
   },
@@ -144,16 +175,53 @@ interface BookingModeGridProps {
    * everything.
    */
   available?: BookingMode[];
+  /**
+   * Per-mode copy overrides. Used only by the payment-plans canary, where the
+   * fixed card sits beside "Payment plan" and has to say it is paid in full.
+   * Omitted everywhere else, so every other tenant's copy is unchanged.
+   */
+  copy?: Partial<Record<BookingMode, Partial<Pick<ModeOption, "title" | "tagline" | "description" | "bestFor">>>>;
 }
 
-export function BookingModeGrid({ selected, onSelect, available }: BookingModeGridProps) {
+/**
+ * Which cards a tenant is offered, in grid order. Pure, and the one place the
+ * list is decided, so a test can prove that a tenant WITHOUT payment plans
+ * gets exactly the list it always had:
+ *
+ *   fixed, then payg if the tenant has it on, then auto-extend if on.
+ *
+ * With payment plans on (the canary, once its tables exist) the PAYG card is
+ * replaced by "Payment plan" — the fusion of PAYG and installments — and the
+ * list becomes fixed, payment plan, then auto-extend if on (kept until slice 3).
+ * `installments` is never a card: it has always been a plan inside a regular
+ * rental, not a mode.
+ */
+export function bookingModesFor(opts: {
+  paygEnabled: boolean;
+  autoExtendEnabled: boolean;
+  paymentPlans: boolean;
+}): BookingMode[] {
+  if (opts.paymentPlans) {
+    return ["fixed", "payment_plan", ...(opts.autoExtendEnabled ? (["auto_extend"] as const) : [])];
+  }
+  return [
+    "fixed",
+    ...(opts.paygEnabled ? (["payg"] as const) : []),
+    ...(opts.autoExtendEnabled ? (["auto_extend"] as const) : []),
+  ];
+}
+
+export function BookingModeGrid({ selected, onSelect, available, copy }: BookingModeGridProps) {
   const [videoMode, setVideoMode] = useState<ModeOption | null>(null);
   const [infoMode, setInfoMode] = useState<ModeOption | null>(null);
   const [infoPage, setInfoPage] = useState(0);
 
-  const modes = available
+  // Without `available` the grid shows what it always showed: the payment plan
+  // card is only ever reached by naming it.
+  const modes = (available
     ? MODES.filter((mode) => available.includes(mode.id))
-    : MODES;
+    : MODES.filter((mode) => mode.id !== "payment_plan")
+  ).map((mode) => (copy?.[mode.id] ? { ...mode, ...copy[mode.id] } : mode));
 
   const openInfo = (mode: ModeOption) => {
     setInfoPage(0);
@@ -171,6 +239,7 @@ export function BookingModeGrid({ selected, onSelect, available }: BookingModeGr
             return (
               <motion.div
                 key={mode.id}
+                data-mode={mode.id}
                 role="button"
                 tabIndex={0}
                 onClick={() => onSelect(mode.id)}

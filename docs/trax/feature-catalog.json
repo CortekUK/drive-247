@@ -1452,6 +1452,72 @@
       "limits": "Default disabled. No historical currency/account guesses, automatic reconciliation, native payment mutations or complete rental balance. Explicit staff policy and live integration verification still required."
     },
     {
+      "id": "payment_plans",
+      "title": "Payment plans",
+      "status": "requiring_confirmation",
+      "scope": "Canary-only (northwind) V2 payment plans: the one schedule form in New Rental and on the rental's Payments stage, the plan card, and the Developer-tab simulator. Hidden until its migration and edge functions are applied; no collection, reminder or provider behaviour is deployed or verified.",
+      "routePrefixes": [],
+      "permissionKeys": [
+        "rentals"
+      ],
+      "document": "docs/trax/unverified-modules.md",
+      "sources": [
+        {
+          "path": "apps/portal/src/lib/payment-plans-ui/feature.ts",
+          "symbols": [
+            "isPaymentPlansTenant",
+            "isMissingRelation"
+          ]
+        },
+        {
+          "path": "apps/portal/src/hooks/use-payment-plan.ts",
+          "symbols": [
+            "usePaymentPlansFeature",
+            "payment-plan-manage"
+          ]
+        },
+        {
+          "path": "apps/portal/src/components/payment-plans/payment-plan-form.tsx",
+          "symbols": [
+            "PaymentPlanForm"
+          ]
+        },
+        {
+          "path": "apps/portal/src/components/payment-plans/payment-plan-card.tsx",
+          "symbols": [
+            "PaymentPlanCard",
+            "Send a payment link",
+            "Record a payment"
+          ]
+        },
+        {
+          "path": "apps/portal/src/components/payment-plans/rental-payment-plan.tsx",
+          "symbols": [
+            "RentalPaymentPlanSection",
+            "Set up a payment plan"
+          ]
+        },
+        {
+          "path": "apps/portal/src/components/rentals-v2/booking-mode-selector.tsx",
+          "symbols": [
+            "bookingModesFor"
+          ]
+        },
+        {
+          "path": "apps/portal/src/components/dev/payment-plan-simulator.tsx",
+          "symbols": [
+            "PaymentPlanSimulator"
+          ]
+        }
+      ],
+      "tests": [
+        "apps/portal/src/__tests__/components/payment-plans-entry.test.tsx",
+        "apps/portal/src/__tests__/lib/payment-plans-ui-dashboard-link.test.ts"
+      ],
+      "guides": [],
+      "limits": "Not eligible for Phase 1 retrieval or navigation until the migration, edge functions and collection paths are applied, verified and reviewed."
+    },
+    {
       "id": "invoices",
       "title": "Invoices",
       "status": "partially_documented",

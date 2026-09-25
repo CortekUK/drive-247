@@ -54,6 +54,7 @@ const KEPT: Record<string, string> = {
   "components/rentals/cadence-editor-dialog.tsx:95": "a week",
   "components/rentals/cadence-editor-dialog.tsx:98": "a week",
   "components/vehicles/vehicle-daily-pricing-calendar.tsx:141": "a week",
+  "components/payment-plans/schedule-preview.tsx:261": "a week (the payment plan preview calendar)",
   "components/shared/featured-card-art-v2.tsx:299": "a drawing of a week",
   "components/shared/featured-card-art-v2.tsx:304": "a drawing of a week",
 

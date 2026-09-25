@@ -93,6 +93,7 @@ import {
   type Payment,
 } from "./payments-model";
 import { PaymentActions, type ActionRequest } from "./payments-actions";
+import { RentalPaymentPlanSection } from "@/components/payment-plans/rental-payment-plan";
 
 /* Stable identities, so the ledger is not rebuilt on every render. */
 const NO_ROWS: any[] = [];
@@ -418,6 +419,19 @@ export function StagePayments({ detail, refetch }: StageProps) {
           </p>
         </div>
       )}
+
+      {/* ═══ the payment plan — canary only ═════════════════════════════════
+          Renders nothing unless payment plans are on for this tenant AND the
+          tables exist (usePaymentPlansFeature), so every other tenant's
+          Payments stage is exactly what it was. The balance handed in is what
+          the plan server-side calls "owed": charges outstanding (the deposit
+          never enters these totals) less money received but not applied. */}
+      <RentalPaymentPlanSection
+        rentalId={rentalId}
+        rentalStart={detail.rental.start_date}
+        rentalEnd={detail.rental.end_date}
+        balanceCents={Math.max(0, t.outstanding - t.unapplied)}
+      />
 
       {/* ═══ the ledger — two lists ═════════════════════════════════════════ */}
       <div className={cn(cardCls, "space-y-8 p-6")}>

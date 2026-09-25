@@ -534,7 +534,9 @@ describe('v2 dark hovers stay visible and readable', () => {
     expect(count('app/(dashboard)/integrations/integrations-board.tsx')).toBe(1);
     expect(count('components/ui-v2/badge.tsx')).toBe(2);
     const rc = classStrings(read('components/rentals-v2/rental-create-v2.tsx')).filter((str) => /hover:border-primary\/40/.test(str) && V2_DARK.test(str));
-    expect(rc.length).toBe(6);
+    // 7 since Sep 25 2026: the payments canary's "Payment plan" option in the
+    // Payment Mode radio group, a copy of its neighbours' polished row.
+    expect(rc.length).toBe(7);
   });
 });
 
