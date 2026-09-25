@@ -27,6 +27,8 @@ import {
   Users,
 } from 'lucide-react';
 import { MetricCard } from '@/components/admin/metric-card';
+import { FilterGroup, FilterPanel, FilterPill } from '@/components/admin/filter-panel';
+import { useState } from 'react';
 
 export default function AdminPreviewPage() {
   return (
@@ -63,6 +65,11 @@ export default function AdminPreviewPage() {
         </div>
       </section>
 
+      <section aria-label="Filters" className="mt-8">
+        <h2 className="mb-3 text-sm font-medium text-muted-foreground">Filters</h2>
+        <FilterDemo />
+      </section>
+
       <section aria-label="Panels" className="mt-8">
         <h2 className="mb-3 text-sm font-medium text-muted-foreground">Panels and controls</h2>
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -87,5 +94,34 @@ export default function AdminPreviewPage() {
         </div>
       </section>
     </div>
+  );
+}
+
+/** The filter panel, driven by local state so the pills actually move. */
+function FilterDemo() {
+  const [status, setStatus] = useState('All');
+  const [payment, setPayment] = useState('All');
+
+  const active = (status !== 'All' ? 1 : 0) + (payment !== 'All' ? 1 : 0);
+
+  return (
+    <FilterPanel count={active}>
+      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <FilterGroup label="Status">
+          {['All', 'Active', 'Upcoming', 'Pending', 'Completed'].map((s) => (
+            <FilterPill key={s} active={status === s} onClick={() => setStatus(s)}>
+              {s}
+            </FilterPill>
+          ))}
+        </FilterGroup>
+        <FilterGroup label="Payment">
+          {['All', 'Regular', 'Pay-as-you-go'].map((s) => (
+            <FilterPill key={s} active={payment === s} onClick={() => setPayment(s)}>
+              {s}
+            </FilterPill>
+          ))}
+        </FilterGroup>
+      </div>
+    </FilterPanel>
   );
 }

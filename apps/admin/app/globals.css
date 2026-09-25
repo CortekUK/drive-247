@@ -203,6 +203,67 @@
   }
 }
 
+/* ===========================================================================
+ * THE SCROLLBAR.
+ *
+ * Ported from the operator portal, where this exact complaint was raised and
+ * fixed: "the side scroll looks too bad". Everything else in this app is
+ * rounded and soft and then the one bar an operator sees on every page was the
+ * browser default — a square grey slab down the right edge of a design that
+ * has none anywhere else.
+ *
+ * Two selectors, because two different elements paint a bar that LOOKS like
+ * the page's:
+ *
+ *   html              the viewport's own, on any route not inside the fixed
+ *                     frame (the login screen, the preview).
+ *   [data-scrollport] `<main>` in `(protected)/layout.tsx`. The frame is
+ *                     `h-screen overflow-hidden`, so the document never
+ *                     scrolls there at all; main is the scroll container and,
+ *                     because it runs to the right edge of the window, its bar
+ *                     reads as the page's. Styling html alone would have left
+ *                     the visible one untouched on every page behind the
+ *                     sign-in.
+ *
+ * The greys are literals rather than `hsl(var(--muted-foreground) / …)`: on
+ * <html> the tokens declared on `:root`/body do resolve, but keeping both
+ * rules identical matters more than deriving one of them, and this grey sits
+ * between a light page and a dark one so a single value serves both. The
+ * border plus `background-clip: padding-box` is what makes the thumb read as a
+ * slim pill inside the 10px gutter rather than filling it edge to edge.
+ * =========================================================================== */
+html,
+[data-scrollport] {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(120 120 135 / 0.3) transparent;
+}
+html::-webkit-scrollbar,
+[data-scrollport]::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+html::-webkit-scrollbar-track,
+[data-scrollport]::-webkit-scrollbar-track {
+  background: transparent;
+}
+html::-webkit-scrollbar-thumb,
+[data-scrollport]::-webkit-scrollbar-thumb {
+  background: rgb(120 120 135 / 0.3);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  transition: background 0.15s ease;
+}
+html::-webkit-scrollbar-thumb:hover,
+[data-scrollport]::-webkit-scrollbar-thumb:hover {
+  background: rgb(120 120 135 / 0.5);
+  background-clip: padding-box;
+}
+html::-webkit-scrollbar-corner,
+[data-scrollport]::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 @layer utilities {
   .text-balance {
     text-wrap: balance;

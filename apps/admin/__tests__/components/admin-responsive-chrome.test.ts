@@ -266,3 +266,68 @@ describe("the header shows a trail or nothing", () => {
     expect(s).toContain("href: `/${parentPath}`");
   });
 });
+
+/*
+ * The scroll frame, and filters that fold away.
+ *
+ * Both asked for Sep 25 2026 against the Northwind screens.
+ */
+describe("the shell scrolls like a desktop app", () => {
+  it("scrolls only the main panel and the sidebar, never the document", () => {
+    const layout = src("app/admin/(protected)/layout.tsx");
+    // The frame is one viewport tall and cannot scroll…
+    expect(layout).toContain("h-screen overflow-hidden");
+    // …main is the scroll container and is marked for the scrollbar rule…
+    expect(layout).toContain("data-scrollport");
+    expect(layout).toContain("overflow-y-auto");
+    // …and the sidebar brings its own, independently of it.
+    expect(src("components/admin/Sidebar.tsx")).toContain("<ScrollArea");
+  });
+
+  it("paints the house scrollbar on both elements that can show one", () => {
+    // `html` covers the routes outside the fixed frame (login, preview);
+    // `[data-scrollport]` covers every page behind the sign-in, where the
+    // document never scrolls and main's bar is the one on screen. Styling
+    // only the first would have left the visible one untouched.
+    const css = src("app/globals.css");
+    expect(css).toMatch(/html,\s*\n\[data-scrollport\]/);
+    expect(css).toContain("scrollbar-width: thin");
+    expect(css).toContain("background-clip: padding-box");
+  });
+});
+
+describe("filters fold away until asked for", () => {
+  const panel = () => src("components/admin/filter-panel.tsx");
+
+  it("is closed until the button is pressed, and says so", () => {
+    const s = panel();
+    expect(s).toContain("useState(false)");
+    expect(s).toContain("aria-expanded={open}");
+    expect(s).toContain("aria-controls={panelId}");
+  });
+
+  it("animates to the panel's own height without measuring it", () => {
+    // `0fr -> 1fr` on a grid row is the one CSS-only way to transition to
+    // `auto`. A `max-h-[Npx]` would clip the day a filter is added.
+    const s = panel();
+    expect(s).toContain("grid-rows-[1fr]");
+    expect(s).toContain("grid-rows-[0fr]");
+    expect(s).toContain("min-h-0 overflow-hidden");
+    expect(s).not.toMatch(/max-h-\[\d+px\]/);
+    // …and it respects a system that has asked for less movement.
+    expect(s).toContain("motion-reduce:transition-none");
+  });
+
+  it("owns no filter state of its own", () => {
+    // The page keeps every value and passes the controls in as children. That
+    // is what makes this safe to drop onto a working list: nothing about what
+    // a filter does, or when it applies, passes through this component.
+    const s = panel();
+    expect(s).toContain("children: ReactNode");
+    expect(s).not.toMatch(/onChange|useEffect|fetch\(/);
+  });
+
+  it("shows how many filters are set, since a folded filter is forgettable", () => {
+    expect(panel()).toContain("count > 0");
+  });
+});
