@@ -320,8 +320,20 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     return !!pathname?.startsWith(href);
   };
 
+  /*
+   * The rail paints NO background of its own.
+   *
+   * The shell paints `bg-app-gradient` with `background-attachment: fixed`, so
+   * leaving this transparent means it shows the SAME pixels of the same wash
+   * the main panel does — not a colour chosen to match, which is a match that
+   * drifts the moment either side is adjusted.
+   *
+   * It was `bg-sidebar` (a pale lavender), then pure white when that was asked
+   * for, and both drew a visible seam down the middle of the page. Northwind
+   * has no seam: its rail and its content are one surface.
+   */
   return (
-    <div className="flex flex-col h-full bg-sidebar">
+    <div className="flex flex-col h-full">
       {/* Logo */}
       <div className="flex items-center gap-3 h-16 px-5 border-b border-sidebar-border">
         <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-primary/15 glow-purple-sm">
@@ -418,8 +430,14 @@ export default function Sidebar({ desktop = true }: { desktop?: boolean } = {}) 
 
   if (!desktop) return null;
 
+  /*
+   * No `border-r`. With the rail transparent the wash already runs through it,
+   * and a hairline down the middle is the very seam that was meant to go — the
+   * rail and the content are one surface in Northwind, with nothing ruled
+   * between them.
+   */
   return (
-    <div className="hidden md:flex flex-col h-screen w-[260px] border-r border-sidebar-border flex-shrink-0">
+    <div className="hidden md:flex flex-col h-screen w-[260px] flex-shrink-0">
       <SidebarContent />
     </div>
   );

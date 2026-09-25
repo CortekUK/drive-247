@@ -45,7 +45,7 @@ export default function AdminPreviewPage() {
     <SidebarProvider>
     <SidebarSectionsProvider>
     <div className="flex min-h-screen bg-app-gradient">
-      <div className="hidden w-[280px] shrink-0 border-r border-border md:block">
+      <div className="hidden w-[280px] shrink-0 md:block">
         <Sidebar />
       </div>
       <div className="min-w-0 flex-1 p-4 sm:p-8">

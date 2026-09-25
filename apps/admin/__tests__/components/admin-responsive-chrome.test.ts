@@ -495,3 +495,41 @@ describe("multi-section pages publish their sections to the sidebar", () => {
     expect(s).toContain("setShowNav(false);");
   });
 });
+
+/*
+ * One surface, no seam.
+ *
+ * Asked for Sep 25 2026 with both screens side by side: "in northwind the side
+ * bar colour and main panel colours are same, but the super admin panel have
+ * white colour". This went the wrong way twice — the rail was a pale lavender,
+ * then pure white when that was asked for — and both drew a visible line down
+ * the middle of the page.
+ *
+ * The answer is not a matching colour, it is NO colour: the shell paints
+ * `bg-app-gradient` with `background-attachment: fixed`, so a transparent rail
+ * shows the same pixels of the same wash the content does. A chosen match
+ * drifts the moment either side is adjusted; this one cannot.
+ */
+describe('the rail and the page are one surface', () => {
+  it('paints no background on either rail', () => {
+    const sidebar = src('components/admin/Sidebar.tsx');
+    const support = src('components/support/AdminSupportRail.tsx');
+    // `bg-sidebar-accent` is the active pill and stays; a bare `bg-sidebar` is
+    // the surface and must not come back.
+    expect(sidebar).not.toMatch(/className="[^"]*\bbg-sidebar\b[^-][^"]*"/);
+    expect(support).not.toMatch(/className="[^"]*\bbg-sidebar\b[^-][^"]*"/);
+  });
+
+  it('rules no line between them', () => {
+    const sidebar = src('components/admin/Sidebar.tsx');
+    const support = src('components/support/AdminSupportRail.tsx');
+    expect(sidebar).not.toContain('border-r border-sidebar-border');
+    expect(support).not.toContain('border-r border-sidebar-border');
+  });
+
+  it('keeps the wash fixed to the viewport, which is what makes them identical', () => {
+    // Without `fixed` the gradient would be positioned per element and the two
+    // surfaces would show different parts of it.
+    expect(src('app/globals.css')).toContain('background-attachment: fixed');
+  });
+});

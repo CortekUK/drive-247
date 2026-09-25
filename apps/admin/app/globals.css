@@ -84,13 +84,13 @@
 
     /* Sidebar — tinted with the indigo canvas hue so it reads as part of the
        app gradient rather than a standalone white slab. */
-    /* Pure white, so the rail reads as a clean panel against the washed
-       page rather than as a second, slightly-different tint beside it. It was
-       248 44% 98% — the portal's computed value — and at that lightness the
-       difference from the main panel's white is not a design, it is a seam.
-       The accent below stays branded; it is the active pill, which should be
-       lavender. */
-    --sidebar-background: 0 0% 100%;
+    /* Nothing paints with this any more: both rails are transparent and show
+       the page's own wash, which is the only way two surfaces match exactly
+       rather than approximately. Kept at the portal's computed value — the
+       brand hue at saturation minus 24, 98% lightness — rather than the white
+       it was briefly set to, so that if anything does reach for it again it
+       gets the design system's answer and not a leftover. */
+    --sidebar-background: 248 44% 98%;
     --sidebar-foreground: 0 0% 3.9%;
     --sidebar-primary: 247 92% 60%;
     --sidebar-primary-foreground: 226 100% 97%;

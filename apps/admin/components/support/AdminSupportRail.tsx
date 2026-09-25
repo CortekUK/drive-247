@@ -26,7 +26,7 @@ export function AdminSupportRail() {
 
   const who = user?.name || user?.email || 'Support';
   return (
-    <aside aria-label="Support" className="flex h-screen w-[304px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
+    <aside aria-label="Support" className="flex h-screen w-[304px] shrink-0 flex-col">
       <div className="flex h-14 shrink-0 items-center border-b border-sidebar-border px-3">
         <Link href="/admin/dashboard" className="flex h-8 items-center gap-2 rounded-md px-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
           <ArrowLeft className="h-4 w-4" aria-hidden />
