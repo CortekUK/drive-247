@@ -91,6 +91,19 @@ export function Header() {
         </Button>
       )}
 
+      {/* A trail, or nothing.
+
+          On a top-level page this produced exactly one crumb — the page's own
+          name, with no href, sitting directly above an <h1> that says the same
+          thing. Two labels for one page, and the top one not even clickable.
+
+          A detail page is the case worth keeping: there the first crumb
+          carries an href back to the list, which is the only way up from a
+          record other than the browser's own Back. So the trail renders when
+          it IS a trail, and the duplicate label is gone everywhere else.
+
+          The spacer keeps the right-hand cluster right-aligned either way. */}
+      {breadcrumbs.length > 1 ? (
       <Breadcrumb className="flex-1">
         <BreadcrumbList>
           {breadcrumbs.map((crumb, index) => (
@@ -109,6 +122,9 @@ export function Header() {
           ))}
         </BreadcrumbList>
       </Breadcrumb>
+      ) : (
+        <div className="flex-1" />
+      )}
     </header>
   );
 }

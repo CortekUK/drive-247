@@ -233,3 +233,36 @@ describe("the admin shell pads once", () => {
     expect(cls).toContain("h-14");
   });
 });
+
+/*
+ * No label that only repeats the page's own title.
+ *
+ * Asked for Sep 25 2026 ("remove these name like dashboards"). On every
+ * top-level page the header rendered a single breadcrumb — the page's own
+ * name, with no href — directly above an <h1> saying the same thing.
+ *
+ * The trail survives where it IS a trail: on a detail route the first crumb
+ * carries an href back to the list, which is the only way up from a record
+ * other than the browser's Back button. Removing that would have been taking
+ * navigation away, not tidying.
+ */
+describe("the header shows a trail or nothing", () => {
+  const header = () => src("components/admin/Header.tsx");
+
+  it("renders the breadcrumb only when there is more than one crumb", () => {
+    expect(header()).toContain("breadcrumbs.length > 1");
+  });
+
+  it("keeps the spacer, so the right-hand cluster stays put either way", () => {
+    expect(header()).toContain('<div className="flex-1" />');
+  });
+
+  it("still builds a two-crumb trail for a detail route", () => {
+    // The builder's own branch: a nested path pushes the parent WITH an href
+    // and then "Details". If that goes, the rule above starts hiding a real
+    // back link rather than a duplicate.
+    const s = header();
+    expect(s).toContain("crumbs.push({ label: 'Details' })");
+    expect(s).toContain("href: `/${parentPath}`");
+  });
+});
