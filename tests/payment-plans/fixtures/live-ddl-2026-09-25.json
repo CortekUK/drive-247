@@ -1,0 +1,5532 @@
+{
+ "columns": [
+  {
+   "table": "app_users",
+   "column": "id",
+   "type": "uuid",
+   "nullable": "NO",
+   "default": "gen_random_uuid()"
+  },
+  {
+   "table": "app_users",
+   "column": "auth_user_id",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "app_users",
+   "column": "email",
+   "type": "text",
+   "nullable": "NO",
+   "default": null
+  },
+  {
+   "table": "app_users",
+   "column": "name",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "app_users",
+   "column": "role",
+   "type": "text",
+   "nullable": "NO",
+   "default": null
+  },
+  {
+   "table": "app_users",
+   "column": "is_active",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "true"
+  },
+  {
+   "table": "app_users",
+   "column": "must_change_password",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "true"
+  },
+  {
+   "table": "app_users",
+   "column": "created_at",
+   "type": "timestamp with time zone",
+   "nullable": "NO",
+   "default": "now()"
+  },
+  {
+   "table": "app_users",
+   "column": "updated_at",
+   "type": "timestamp with time zone",
+   "nullable": "NO",
+   "default": "now()"
+  },
+  {
+   "table": "app_users",
+   "column": "tenant_id",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "app_users",
+   "column": "is_super_admin",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "app_users",
+   "column": "is_primary_super_admin",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "app_users",
+   "column": "avatar_url",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "app_users",
+   "column": "forwarding_number",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "app_users",
+   "column": "is_bonzah_partner",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "false"
+  },
+  {
+   "table": "app_users",
+   "column": "is_sales_agent",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "false"
+  },
+  {
+   "table": "app_users",
+   "column": "feedback_last_prompted_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "customers",
+   "column": "id",
+   "type": "uuid",
+   "nullable": "NO",
+   "default": "gen_random_uuid()"
+  },
+  {
+   "table": "customers",
+   "column": "type",
+   "type": "text",
+   "nullable": "NO",
+   "default": null
+  },
+  {
+   "table": "customers",
+   "column": "name",
+   "type": "text",
+   "nullable": "NO",
+   "default": null
+  },
+  {
+   "table": "customers",
+   "column": "email",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "customers",
+   "column": "phone",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "customers",
+   "column": "whatsapp_opt_in",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "customers",
+   "column": "status",
+   "type": "text",
+   "nullable": "YES",
+   "default": "'Active'::text"
+  },
+  {
+   "table": "customers",
+   "column": "created_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": "now()"
+  },
+  {
+   "table": "customers",
+   "column": "updated_at",
+   "type": "timestamp with time zone",
+   "nullable": "NO",
+   "default": "now()"
+  },
+  {
+   "table": "customers",
+   "column": "customer_type",
+   "type": "text",
+   "nullable": "YES",
+   "default": "'Individual'::text"
+  },
+  {
+   "table": "customers",
+   "column": "high_switcher",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "customers",
+   "column": "nok_full_name",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "customers",
+   "column": "nok_relationship",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "customers",
+   "column": "nok_phone",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "customers",
+   "column": "nok_email",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "customers",
+   "column": "nok_address",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "customers",
+   "column": "identity_verification_status",
+   "type": "text",
+   "nullable": "YES",
+   "default": "'unverified'::text"
+  },
+  {
+   "table": "customers",
+   "column": "license_number",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "customers",
+   "column": "id_number",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "customers",
+   "column": "is_blocked",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "customers",
+   "column": "blocked_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "customers",
+   "column": "blocked_reason",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "customers",
+   "column": "rejection_reason",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "customers",
+   "column": "rejected_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "customers",
+   "column": "rejected_by",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "customers",
+   "column": "tenant_id",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "customers",
+   "column": "profile_photo_url",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "customers",
+   "column": "stripe_customer_id",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "customers",
+   "column": "date_of_birth",
+   "type": "date",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "customers",
+   "column": "timezone",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "customers",
+   "column": "address_street",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "customers",
+   "column": "address_city",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "customers",
+   "column": "address_state",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "customers",
+   "column": "address_zip",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "customers",
+   "column": "license_state",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "customers",
+   "column": "is_gig_driver",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "customers",
+   "column": "company_name",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "customers",
+   "column": "company_registration",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "customers",
+   "column": "sms_consent",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "false"
+  },
+  {
+   "table": "customers",
+   "column": "sms_consent_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "customers",
+   "column": "stripe_customer_id_uk",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "customers",
+   "column": "stripe_customer_id_uae",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "customers",
+   "column": "turo_guest_ref",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "customers",
+   "column": "turo_promotion_batch_id",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "ledger_entries",
+   "column": "id",
+   "type": "uuid",
+   "nullable": "NO",
+   "default": "gen_random_uuid()"
+  },
+  {
+   "table": "ledger_entries",
+   "column": "customer_id",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "ledger_entries",
+   "column": "rental_id",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "ledger_entries",
+   "column": "vehicle_id",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "ledger_entries",
+   "column": "entry_date",
+   "type": "date",
+   "nullable": "NO",
+   "default": null
+  },
+  {
+   "table": "ledger_entries",
+   "column": "type",
+   "type": "text",
+   "nullable": "NO",
+   "default": null
+  },
+  {
+   "table": "ledger_entries",
+   "column": "category",
+   "type": "text",
+   "nullable": "NO",
+   "default": null
+  },
+  {
+   "table": "ledger_entries",
+   "column": "amount",
+   "type": "numeric(12,2)",
+   "nullable": "NO",
+   "default": null
+  },
+  {
+   "table": "ledger_entries",
+   "column": "due_date",
+   "type": "date",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "ledger_entries",
+   "column": "remaining_amount",
+   "type": "numeric(12,2)",
+   "nullable": "NO",
+   "default": "0"
+  },
+  {
+   "table": "ledger_entries",
+   "column": "created_at",
+   "type": "timestamp with time zone",
+   "nullable": "NO",
+   "default": "now()"
+  },
+  {
+   "table": "ledger_entries",
+   "column": "updated_at",
+   "type": "timestamp with time zone",
+   "nullable": "NO",
+   "default": "now()"
+  },
+  {
+   "table": "ledger_entries",
+   "column": "payment_id",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "ledger_entries",
+   "column": "reference",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "ledger_entries",
+   "column": "tenant_id",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "ledger_entries",
+   "column": "extension_id",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "payment_applications",
+   "column": "id",
+   "type": "uuid",
+   "nullable": "NO",
+   "default": "gen_random_uuid()"
+  },
+  {
+   "table": "payment_applications",
+   "column": "payment_id",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "payment_applications",
+   "column": "charge_entry_id",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "payment_applications",
+   "column": "amount_applied",
+   "type": "numeric(12,2)",
+   "nullable": "NO",
+   "default": null
+  },
+  {
+   "table": "payment_applications",
+   "column": "tenant_id",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "payments",
+   "column": "id",
+   "type": "uuid",
+   "nullable": "NO",
+   "default": "gen_random_uuid()"
+  },
+  {
+   "table": "payments",
+   "column": "customer_id",
+   "type": "uuid",
+   "nullable": "NO",
+   "default": null
+  },
+  {
+   "table": "payments",
+   "column": "rental_id",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "payments",
+   "column": "vehicle_id",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "payments",
+   "column": "amount",
+   "type": "numeric(12,2)",
+   "nullable": "NO",
+   "default": null
+  },
+  {
+   "table": "payments",
+   "column": "payment_date",
+   "type": "date",
+   "nullable": "NO",
+   "default": "(now())::date"
+  },
+  {
+   "table": "payments",
+   "column": "method",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "payments",
+   "column": "payment_type",
+   "type": "text",
+   "nullable": "NO",
+   "default": "'Payment'::text"
+  },
+  {
+   "table": "payments",
+   "column": "is_early",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "false"
+  },
+  {
+   "table": "payments",
+   "column": "apply_from_date",
+   "type": "date",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "payments",
+   "column": "status",
+   "type": "text",
+   "nullable": "YES",
+   "default": "'Applied'::text"
+  },
+  {
+   "table": "payments",
+   "column": "remaining_amount",
+   "type": "numeric",
+   "nullable": "YES",
+   "default": "0"
+  },
+  {
+   "table": "payments",
+   "column": "created_at",
+   "type": "timestamp with time zone",
+   "nullable": "NO",
+   "default": "now()"
+  },
+  {
+   "table": "payments",
+   "column": "updated_at",
+   "type": "timestamp with time zone",
+   "nullable": "NO",
+   "default": "now()"
+  },
+  {
+   "table": "payments",
+   "column": "verification_status",
+   "type": "text",
+   "nullable": "YES",
+   "default": "'auto_approved'::text"
+  },
+  {
+   "table": "payments",
+   "column": "verified_by",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "payments",
+   "column": "verified_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "payments",
+   "column": "rejection_reason",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "payments",
+   "column": "is_manual_mode",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "payments",
+   "column": "stripe_payment_intent_id",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "payments",
+   "column": "stripe_checkout_session_id",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "payments",
+   "column": "capture_status",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "payments",
+   "column": "preauth_expires_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "payments",
+   "column": "booking_source",
+   "type": "text",
+   "nullable": "YES",
+   "default": "'admin'::text"
+  },
+  {
+   "table": "payments",
+   "column": "refund_status",
+   "type": "text",
+   "nullable": "YES",
+   "default": "'none'::text"
+  },
+  {
+   "table": "payments",
+   "column": "refund_scheduled_date",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "payments",
+   "column": "refund_amount",
+   "type": "numeric(10,2)",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "payments",
+   "column": "refund_reason",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "payments",
+   "column": "refund_processed_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "payments",
+   "column": "stripe_refund_id",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "payments",
+   "column": "refund_scheduled_by",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "payments",
+   "column": "tenant_id",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "payments",
+   "column": "target_categories",
+   "type": "jsonb",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "payments",
+   "column": "extension_id",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "payments",
+   "column": "paid_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "payments",
+   "column": "platform_account",
+   "type": "text",
+   "nullable": "NO",
+   "default": "'uk'::text"
+  },
+  {
+   "table": "payments",
+   "column": "square_order_id",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "payments",
+   "column": "square_payment_id",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "payments",
+   "column": "square_refund_id",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "payments",
+   "column": "payment_provider",
+   "type": "text",
+   "nullable": "NO",
+   "default": "'stripe'::text"
+  },
+  {
+   "table": "payments",
+   "column": "square_payment_link_id",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "payments",
+   "column": "square_idempotency_key",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "pnl_entries",
+   "column": "id",
+   "type": "uuid",
+   "nullable": "NO",
+   "default": "gen_random_uuid()"
+  },
+  {
+   "table": "pnl_entries",
+   "column": "vehicle_id",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "pnl_entries",
+   "column": "entry_date",
+   "type": "date",
+   "nullable": "NO",
+   "default": null
+  },
+  {
+   "table": "pnl_entries",
+   "column": "side",
+   "type": "text",
+   "nullable": "NO",
+   "default": null
+  },
+  {
+   "table": "pnl_entries",
+   "column": "category",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "pnl_entries",
+   "column": "amount",
+   "type": "numeric(12,2)",
+   "nullable": "NO",
+   "default": null
+  },
+  {
+   "table": "pnl_entries",
+   "column": "source_ref",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "pnl_entries",
+   "column": "payment_id",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "pnl_entries",
+   "column": "rental_id",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "pnl_entries",
+   "column": "customer_id",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "pnl_entries",
+   "column": "reference",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "pnl_entries",
+   "column": "tenant_id",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rental_extensions",
+   "column": "id",
+   "type": "uuid",
+   "nullable": "NO",
+   "default": "gen_random_uuid()"
+  },
+  {
+   "table": "rental_extensions",
+   "column": "rental_id",
+   "type": "uuid",
+   "nullable": "NO",
+   "default": null
+  },
+  {
+   "table": "rental_extensions",
+   "column": "tenant_id",
+   "type": "uuid",
+   "nullable": "NO",
+   "default": null
+  },
+  {
+   "table": "rental_extensions",
+   "column": "sequence_number",
+   "type": "integer",
+   "nullable": "NO",
+   "default": null
+  },
+  {
+   "table": "rental_extensions",
+   "column": "status",
+   "type": "text",
+   "nullable": "NO",
+   "default": "'pending'::text"
+  },
+  {
+   "table": "rental_extensions",
+   "column": "previous_end_date",
+   "type": "date",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rental_extensions",
+   "column": "new_end_date",
+   "type": "date",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rental_extensions",
+   "column": "extension_days",
+   "type": "integer",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rental_extensions",
+   "column": "rental_amount",
+   "type": "numeric(12,2)",
+   "nullable": "NO",
+   "default": "0"
+  },
+  {
+   "table": "rental_extensions",
+   "column": "tax_amount",
+   "type": "numeric(12,2)",
+   "nullable": "NO",
+   "default": "0"
+  },
+  {
+   "table": "rental_extensions",
+   "column": "service_fee_amount",
+   "type": "numeric(12,2)",
+   "nullable": "NO",
+   "default": "0"
+  },
+  {
+   "table": "rental_extensions",
+   "column": "insurance_amount",
+   "type": "numeric(12,2)",
+   "nullable": "NO",
+   "default": "0"
+  },
+  {
+   "table": "rental_extensions",
+   "column": "total_amount",
+   "type": "numeric(12,2)",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rental_extensions",
+   "column": "paid_amount",
+   "type": "numeric(12,2)",
+   "nullable": "NO",
+   "default": "0"
+  },
+  {
+   "table": "rental_extensions",
+   "column": "refunded_amount",
+   "type": "numeric(12,2)",
+   "nullable": "NO",
+   "default": "0"
+  },
+  {
+   "table": "rental_extensions",
+   "column": "stripe_checkout_session_id",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rental_extensions",
+   "column": "checkout_url",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rental_extensions",
+   "column": "stripe_payment_intent_id",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rental_extensions",
+   "column": "bonzah_policy_id",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rental_extensions",
+   "column": "bonzah_confirmed_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rental_extensions",
+   "column": "requested_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rental_extensions",
+   "column": "approved_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rental_extensions",
+   "column": "paid_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rental_extensions",
+   "column": "cancelled_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rental_extensions",
+   "column": "created_at",
+   "type": "timestamp with time zone",
+   "nullable": "NO",
+   "default": "now()"
+  },
+  {
+   "table": "rental_extensions",
+   "column": "updated_at",
+   "type": "timestamp with time zone",
+   "nullable": "NO",
+   "default": "now()"
+  },
+  {
+   "table": "rentals",
+   "column": "id",
+   "type": "uuid",
+   "nullable": "NO",
+   "default": "gen_random_uuid()"
+  },
+  {
+   "table": "rentals",
+   "column": "customer_id",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "vehicle_id",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "start_date",
+   "type": "date",
+   "nullable": "NO",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "end_date",
+   "type": "date",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "monthly_amount",
+   "type": "numeric(12,2)",
+   "nullable": "NO",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "schedule",
+   "type": "text",
+   "nullable": "YES",
+   "default": "'Monthly'::text"
+  },
+  {
+   "table": "rentals",
+   "column": "status",
+   "type": "text",
+   "nullable": "YES",
+   "default": "'Active'::text"
+  },
+  {
+   "table": "rentals",
+   "column": "created_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": "now()"
+  },
+  {
+   "table": "rentals",
+   "column": "updated_at",
+   "type": "timestamp with time zone",
+   "nullable": "NO",
+   "default": "now()"
+  },
+  {
+   "table": "rentals",
+   "column": "rental_number",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "docusign_envelope_id",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "document_status",
+   "type": "text",
+   "nullable": "YES",
+   "default": "'pending'::text"
+  },
+  {
+   "table": "rentals",
+   "column": "signed_document_id",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "envelope_created_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "envelope_sent_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "envelope_completed_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "rental_period_type",
+   "type": "text",
+   "nullable": "YES",
+   "default": "'Monthly'::text"
+  },
+  {
+   "table": "rentals",
+   "column": "tenant_id",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "pickup_location",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "pickup_location_id",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "return_location",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "return_location_id",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "pickup_time",
+   "type": "time without time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "return_time",
+   "type": "time without time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "driver_age_range",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "promo_code",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "insurance_status",
+   "type": "text",
+   "nullable": "YES",
+   "default": "'pending'::text"
+  },
+  {
+   "table": "rentals",
+   "column": "source",
+   "type": "text",
+   "nullable": "YES",
+   "default": "'portal'::text"
+  },
+  {
+   "table": "rentals",
+   "column": "payment_mode",
+   "type": "text",
+   "nullable": "YES",
+   "default": "'manual'::text"
+  },
+  {
+   "table": "rentals",
+   "column": "approval_status",
+   "type": "text",
+   "nullable": "YES",
+   "default": "'pending'::text"
+  },
+  {
+   "table": "rentals",
+   "column": "payment_status",
+   "type": "text",
+   "nullable": "YES",
+   "default": "'pending'::text"
+  },
+  {
+   "table": "rentals",
+   "column": "cancellation_reason",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "discount_applied",
+   "type": "numeric",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "uses_delivery_service",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "rentals",
+   "column": "delivery_location_id",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "delivery_address",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "delivery_fee",
+   "type": "numeric(10,2)",
+   "nullable": "YES",
+   "default": "0.00"
+  },
+  {
+   "table": "rentals",
+   "column": "collection_location_id",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "collection_address",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "collection_fee",
+   "type": "numeric(10,2)",
+   "nullable": "YES",
+   "default": "0.00"
+  },
+  {
+   "table": "rentals",
+   "column": "has_installment_plan",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "rentals",
+   "column": "installment_plan_id",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "insurance_premium",
+   "type": "numeric(12,2)",
+   "nullable": "YES",
+   "default": "0"
+  },
+  {
+   "table": "rentals",
+   "column": "bonzah_policy_id",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "delivery_option",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "is_extended",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "rentals",
+   "column": "previous_end_date",
+   "type": "date",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "cancellation_requested",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "rentals",
+   "column": "renewed_from_rental_id",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "extension_checkout_url",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "delivery_method",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "is_gig_driver",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "rentals",
+   "column": "boldsign_mode",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "daily_mileage_override",
+   "type": "integer",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "weekly_mileage_override",
+   "type": "integer",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "monthly_mileage_override",
+   "type": "integer",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "excess_mileage_rate_override",
+   "type": "numeric",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "extension_amount",
+   "type": "numeric",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "original_end_date",
+   "type": "date",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "lockbox_sent_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "deposit_hold_payment_intent_id",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "deposit_hold_status",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "deposit_hold_amount",
+   "type": "numeric(10,2)",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "deposit_hold_placed_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "deposit_hold_expires_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "deposit_hold_payment_method_id",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "deposit_hold_stripe_customer_id",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "return_reminder_sent_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "approved_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "is_pay_as_you_go",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "false"
+  },
+  {
+   "table": "rentals",
+   "column": "payg_reminder_interval_days",
+   "type": "integer",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "payg_start_ts",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "payg_last_accrual_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "payg_next_accrual_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "payg_accrual_day_count",
+   "type": "integer",
+   "nullable": "NO",
+   "default": "0"
+  },
+  {
+   "table": "rentals",
+   "column": "payg_last_reminder_sent_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "payg_reminder_count",
+   "type": "integer",
+   "nullable": "NO",
+   "default": "0"
+  },
+  {
+   "table": "rentals",
+   "column": "payg_paused",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "false"
+  },
+  {
+   "table": "rentals",
+   "column": "payg_paused_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "payg_closed_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "payg_max_duration_alerted",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "false"
+  },
+  {
+   "table": "rentals",
+   "column": "is_unlimited_mileage",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "false"
+  },
+  {
+   "table": "rentals",
+   "column": "unlimited_mileage_total",
+   "type": "numeric(10,2)",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "unlimited_mileage_tier",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "payg_auto_reminders_enabled",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "true"
+  },
+  {
+   "table": "rentals",
+   "column": "deposit_amount_override",
+   "type": "numeric(10,2)",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "auto_extend_enabled",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "false"
+  },
+  {
+   "table": "rentals",
+   "column": "auto_extend_charge_mode",
+   "type": "text",
+   "nullable": "NO",
+   "default": "'pay_link'::text"
+  },
+  {
+   "table": "rentals",
+   "column": "auto_extend_period_unit",
+   "type": "text",
+   "nullable": "NO",
+   "default": "'Weekly'::text"
+  },
+  {
+   "table": "rentals",
+   "column": "auto_extend_next_charge_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "auto_extend_lead_hours",
+   "type": "integer",
+   "nullable": "NO",
+   "default": "0"
+  },
+  {
+   "table": "rentals",
+   "column": "auto_extend_charge_count",
+   "type": "integer",
+   "nullable": "NO",
+   "default": "0"
+  },
+  {
+   "table": "rentals",
+   "column": "auto_extend_max_periods",
+   "type": "integer",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "auto_extend_last_charge_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "auto_extend_paused",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "false"
+  },
+  {
+   "table": "rentals",
+   "column": "auto_extend_paused_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "auto_extend_failed_attempts",
+   "type": "integer",
+   "nullable": "NO",
+   "default": "0"
+  },
+  {
+   "table": "rentals",
+   "column": "auto_extend_pending_extension_id",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "auto_extend_status",
+   "type": "text",
+   "nullable": "NO",
+   "default": "'active'::text"
+  },
+  {
+   "table": "rentals",
+   "column": "auto_extend_reminder_enabled",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "true"
+  },
+  {
+   "table": "rentals",
+   "column": "auto_extend_reminder_interval_days",
+   "type": "integer",
+   "nullable": "NO",
+   "default": "2"
+  },
+  {
+   "table": "rentals",
+   "column": "auto_extend_reminder_max",
+   "type": "integer",
+   "nullable": "NO",
+   "default": "3"
+  },
+  {
+   "table": "rentals",
+   "column": "auto_extend_reminder_count",
+   "type": "integer",
+   "nullable": "NO",
+   "default": "0"
+  },
+  {
+   "table": "rentals",
+   "column": "auto_extend_last_reminder_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "auto_extend_interval_count",
+   "type": "integer",
+   "nullable": "NO",
+   "default": "1"
+  },
+  {
+   "table": "rentals",
+   "column": "auto_extend_exceptions",
+   "type": "jsonb",
+   "nullable": "NO",
+   "default": "'{\"moves\": {}, \"skips\": []}'::jsonb"
+  },
+  {
+   "table": "rentals",
+   "column": "auto_extend_overrides",
+   "type": "jsonb",
+   "nullable": "NO",
+   "default": "'{}'::jsonb"
+  },
+  {
+   "table": "rentals",
+   "column": "creation_context",
+   "type": "jsonb",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "health_severity",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "sms_consent",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "false"
+  },
+  {
+   "table": "rentals",
+   "column": "sms_consent_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "auto_extend_reminder_send_weekday",
+   "type": "smallint",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "platform_account",
+   "type": "text",
+   "nullable": "NO",
+   "default": "'uk'::text"
+  },
+  {
+   "table": "rentals",
+   "column": "deposit_hold_connect_account_id",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "deposit_hold_stripe_mode",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "deposit_hold_currency",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "deposit_hold_status_changed_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "deposit_hold_attempt_seq",
+   "type": "integer",
+   "nullable": "NO",
+   "default": "0"
+  },
+  {
+   "table": "rentals",
+   "column": "deposit_hold_failure_count",
+   "type": "integer",
+   "nullable": "NO",
+   "default": "0"
+  },
+  {
+   "table": "rentals",
+   "column": "deposit_hold_last_error",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "deposit_hold_last_error_code",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "deposit_hold_next_retry_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "deposit_hold_verified_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "deposit_hold_release_requested_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "deposit_hold_expiry_source",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "deposit_hold_extended_auth",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "deposit_hold_window_seconds",
+   "type": "integer",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "deposit_hold_chain_expires_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "deposit_hold_card_brand",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "deposit_hold_card_last4",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "deposit_hold_card_exp_month",
+   "type": "smallint",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "deposit_hold_card_exp_year",
+   "type": "smallint",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "deposit_hold_card_funding",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "deposit_hold_target_amount",
+   "type": "numeric(10,2)",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "disclosed_hold_amount",
+   "type": "numeric(10,2)",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "disclosed_hold_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "disclosed_hold_version",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "disclosed_hold_source",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "id_verification_waived",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "false"
+  },
+  {
+   "table": "rentals",
+   "column": "id_verification_waived_reason",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "id_verification_waived_by",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "id_verification_waived_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "deposit_hold_platform_account",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "turo_reservation_id",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "turo_promoted_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "turo_promotion_batch_id",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "turo_total_amount",
+   "type": "numeric(12,2)",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "turo_vehicle_match",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "rentals",
+   "column": "auto_extend_resumed_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "id",
+   "type": "uuid",
+   "nullable": "NO",
+   "default": "gen_random_uuid()"
+  },
+  {
+   "table": "tenants",
+   "column": "slug",
+   "type": "text",
+   "nullable": "NO",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "company_name",
+   "type": "text",
+   "nullable": "NO",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "status",
+   "type": "text",
+   "nullable": "NO",
+   "default": "'active'::text"
+  },
+  {
+   "table": "tenants",
+   "column": "master_password_hash",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "created_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": "now()"
+  },
+  {
+   "table": "tenants",
+   "column": "updated_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": "now()"
+  },
+  {
+   "table": "tenants",
+   "column": "contact_email",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "contact_phone",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "subscription_plan",
+   "type": "text",
+   "nullable": "YES",
+   "default": "'basic'::text"
+  },
+  {
+   "table": "tenants",
+   "column": "trial_ends_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "app_name",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "primary_color",
+   "type": "text",
+   "nullable": "YES",
+   "default": "'#223331'::text"
+  },
+  {
+   "table": "tenants",
+   "column": "secondary_color",
+   "type": "text",
+   "nullable": "YES",
+   "default": "'#223331'::text"
+  },
+  {
+   "table": "tenants",
+   "column": "accent_color",
+   "type": "text",
+   "nullable": "YES",
+   "default": "'#E9B63E'::text"
+  },
+  {
+   "table": "tenants",
+   "column": "light_primary_color",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "light_secondary_color",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "light_accent_color",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "light_background_color",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "dark_primary_color",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "dark_secondary_color",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "dark_accent_color",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "dark_background_color",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "light_header_footer_color",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "dark_header_footer_color",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "logo_url",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "favicon_url",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "meta_title",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "meta_description",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "og_image_url",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "hero_background_url",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "phone",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "address",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "business_hours",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "google_maps_url",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "facebook_url",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "instagram_url",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "twitter_url",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "linkedin_url",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "currency_code",
+   "type": "text",
+   "nullable": "YES",
+   "default": "'USD'::text"
+  },
+  {
+   "table": "tenants",
+   "column": "timezone",
+   "type": "text",
+   "nullable": "YES",
+   "default": "'America/New_York'::text"
+  },
+  {
+   "table": "tenants",
+   "column": "date_format",
+   "type": "text",
+   "nullable": "YES",
+   "default": "'MM/DD/YYYY'::text"
+  },
+  {
+   "table": "tenants",
+   "column": "min_rental_days",
+   "type": "integer",
+   "nullable": "YES",
+   "default": "1"
+  },
+  {
+   "table": "tenants",
+   "column": "max_rental_days",
+   "type": "integer",
+   "nullable": "YES",
+   "default": "90"
+  },
+  {
+   "table": "tenants",
+   "column": "booking_lead_time_hours",
+   "type": "integer",
+   "nullable": "YES",
+   "default": "24"
+  },
+  {
+   "table": "tenants",
+   "column": "require_identity_verification",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "true"
+  },
+  {
+   "table": "tenants",
+   "column": "require_insurance_upload",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "payment_mode",
+   "type": "text",
+   "nullable": "YES",
+   "default": "'automated'::text"
+  },
+  {
+   "table": "tenants",
+   "column": "stripe_account_id",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "stripe_onboarding_complete",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "stripe_account_status",
+   "type": "text",
+   "nullable": "YES",
+   "default": "'pending'::text"
+  },
+  {
+   "table": "tenants",
+   "column": "admin_email",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "pickup_location_mode",
+   "type": "text",
+   "nullable": "YES",
+   "default": "'custom'::text"
+  },
+  {
+   "table": "tenants",
+   "column": "return_location_mode",
+   "type": "text",
+   "nullable": "YES",
+   "default": "'custom'::text"
+  },
+  {
+   "table": "tenants",
+   "column": "fixed_pickup_address",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "fixed_return_address",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "minimum_rental_age",
+   "type": "integer",
+   "nullable": "YES",
+   "default": "18"
+  },
+  {
+   "table": "tenants",
+   "column": "tenant_type",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "admin_name",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "integration_canopy",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "integration_veriff",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "integration_bonzah",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "tax_enabled",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "tax_percentage",
+   "type": "numeric(5,2)",
+   "nullable": "YES",
+   "default": "0"
+  },
+  {
+   "table": "tenants",
+   "column": "service_fee_enabled",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "service_fee_amount",
+   "type": "numeric(10,2)",
+   "nullable": "YES",
+   "default": "0"
+  },
+  {
+   "table": "tenants",
+   "column": "deposit_mode",
+   "type": "text",
+   "nullable": "YES",
+   "default": "'global'::text"
+  },
+  {
+   "table": "tenants",
+   "column": "global_deposit_amount",
+   "type": "numeric(10,2)",
+   "nullable": "YES",
+   "default": "0"
+  },
+  {
+   "table": "tenants",
+   "column": "pickup_area_radius_km",
+   "type": "numeric(5,1)",
+   "nullable": "YES",
+   "default": "25"
+  },
+  {
+   "table": "tenants",
+   "column": "return_area_radius_km",
+   "type": "numeric(5,1)",
+   "nullable": "YES",
+   "default": "25"
+  },
+  {
+   "table": "tenants",
+   "column": "area_center_lat",
+   "type": "numeric(10,6)",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "area_center_lon",
+   "type": "numeric(10,6)",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "working_hours_enabled",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "true"
+  },
+  {
+   "table": "tenants",
+   "column": "working_hours_open",
+   "type": "time without time zone",
+   "nullable": "YES",
+   "default": "'09:00:00'::time without time zone"
+  },
+  {
+   "table": "tenants",
+   "column": "working_hours_close",
+   "type": "time without time zone",
+   "nullable": "YES",
+   "default": "'17:00:00'::time without time zone"
+  },
+  {
+   "table": "tenants",
+   "column": "working_hours_always_open",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "service_fee_type",
+   "type": "text",
+   "nullable": "YES",
+   "default": "'fixed_amount'::text"
+  },
+  {
+   "table": "tenants",
+   "column": "service_fee_value",
+   "type": "numeric(10,2)",
+   "nullable": "YES",
+   "default": "0"
+  },
+  {
+   "table": "tenants",
+   "column": "stripe_mode",
+   "type": "text",
+   "nullable": "NO",
+   "default": "'test'::text"
+  },
+  {
+   "table": "tenants",
+   "column": "monday_enabled",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "true"
+  },
+  {
+   "table": "tenants",
+   "column": "monday_open",
+   "type": "time without time zone",
+   "nullable": "YES",
+   "default": "'09:00:00'::time without time zone"
+  },
+  {
+   "table": "tenants",
+   "column": "monday_close",
+   "type": "time without time zone",
+   "nullable": "YES",
+   "default": "'17:00:00'::time without time zone"
+  },
+  {
+   "table": "tenants",
+   "column": "tuesday_enabled",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "true"
+  },
+  {
+   "table": "tenants",
+   "column": "tuesday_open",
+   "type": "time without time zone",
+   "nullable": "YES",
+   "default": "'09:00:00'::time without time zone"
+  },
+  {
+   "table": "tenants",
+   "column": "tuesday_close",
+   "type": "time without time zone",
+   "nullable": "YES",
+   "default": "'17:00:00'::time without time zone"
+  },
+  {
+   "table": "tenants",
+   "column": "wednesday_enabled",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "true"
+  },
+  {
+   "table": "tenants",
+   "column": "wednesday_open",
+   "type": "time without time zone",
+   "nullable": "YES",
+   "default": "'09:00:00'::time without time zone"
+  },
+  {
+   "table": "tenants",
+   "column": "wednesday_close",
+   "type": "time without time zone",
+   "nullable": "YES",
+   "default": "'17:00:00'::time without time zone"
+  },
+  {
+   "table": "tenants",
+   "column": "thursday_enabled",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "true"
+  },
+  {
+   "table": "tenants",
+   "column": "thursday_open",
+   "type": "time without time zone",
+   "nullable": "YES",
+   "default": "'09:00:00'::time without time zone"
+  },
+  {
+   "table": "tenants",
+   "column": "thursday_close",
+   "type": "time without time zone",
+   "nullable": "YES",
+   "default": "'17:00:00'::time without time zone"
+  },
+  {
+   "table": "tenants",
+   "column": "friday_enabled",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "true"
+  },
+  {
+   "table": "tenants",
+   "column": "friday_open",
+   "type": "time without time zone",
+   "nullable": "YES",
+   "default": "'09:00:00'::time without time zone"
+  },
+  {
+   "table": "tenants",
+   "column": "friday_close",
+   "type": "time without time zone",
+   "nullable": "YES",
+   "default": "'17:00:00'::time without time zone"
+  },
+  {
+   "table": "tenants",
+   "column": "saturday_enabled",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "saturday_open",
+   "type": "time without time zone",
+   "nullable": "YES",
+   "default": "'10:00:00'::time without time zone"
+  },
+  {
+   "table": "tenants",
+   "column": "saturday_close",
+   "type": "time without time zone",
+   "nullable": "YES",
+   "default": "'14:00:00'::time without time zone"
+  },
+  {
+   "table": "tenants",
+   "column": "sunday_enabled",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "sunday_open",
+   "type": "time without time zone",
+   "nullable": "YES",
+   "default": "'10:00:00'::time without time zone"
+  },
+  {
+   "table": "tenants",
+   "column": "sunday_close",
+   "type": "time without time zone",
+   "nullable": "YES",
+   "default": "'14:00:00'::time without time zone"
+  },
+  {
+   "table": "tenants",
+   "column": "delivery_enabled",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "collection_enabled",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "installments_enabled",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "installment_config",
+   "type": "jsonb",
+   "nullable": "YES",
+   "default": "jsonb_build_object('weekly_enabled', false, 'weekly_payments_per_unit', 1, 'monthly_enabled', false, 'monthly_payments_per_unit', 1)"
+  },
+  {
+   "table": "tenants",
+   "column": "fixed_address_enabled",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "true"
+  },
+  {
+   "table": "tenants",
+   "column": "multiple_locations_enabled",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "area_around_enabled",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "area_delivery_fee",
+   "type": "numeric(10,2)",
+   "nullable": "YES",
+   "default": "0.00"
+  },
+  {
+   "table": "tenants",
+   "column": "pickup_fixed_enabled",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "true"
+  },
+  {
+   "table": "tenants",
+   "column": "return_fixed_enabled",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "true"
+  },
+  {
+   "table": "tenants",
+   "column": "pickup_multiple_locations_enabled",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "return_multiple_locations_enabled",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "pickup_area_enabled",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "return_area_enabled",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "bonzah_mode",
+   "type": "text",
+   "nullable": "NO",
+   "default": "'test'::text"
+  },
+  {
+   "table": "tenants",
+   "column": "bonzah_username",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "bonzah_password",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "distance_unit",
+   "type": "text",
+   "nullable": "YES",
+   "default": "'miles'::text"
+  },
+  {
+   "table": "tenants",
+   "column": "stripe_subscription_customer_id",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "subscription_stripe_mode",
+   "type": "text",
+   "nullable": "NO",
+   "default": "'test'::text"
+  },
+  {
+   "table": "tenants",
+   "column": "setup_completed_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "dark_logo_url",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "lockbox_enabled",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "lockbox_code_length",
+   "type": "integer",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "lockbox_notification_methods",
+   "type": "jsonb",
+   "nullable": "YES",
+   "default": "'[\"email\"]'::jsonb"
+  },
+  {
+   "table": "tenants",
+   "column": "booking_lead_time_unit",
+   "type": "text",
+   "nullable": "YES",
+   "default": "'hours'::text"
+  },
+  {
+   "table": "tenants",
+   "column": "privacy_policy_version",
+   "type": "text",
+   "nullable": "YES",
+   "default": "'1.0'::text"
+  },
+  {
+   "table": "tenants",
+   "column": "terms_version",
+   "type": "text",
+   "nullable": "YES",
+   "default": "'1.0'::text"
+  },
+  {
+   "table": "tenants",
+   "column": "weekend_surcharge_percent",
+   "type": "numeric",
+   "nullable": "YES",
+   "default": "0"
+  },
+  {
+   "table": "tenants",
+   "column": "weekend_days",
+   "type": "jsonb",
+   "nullable": "YES",
+   "default": "'[6, 0]'::jsonb"
+  },
+  {
+   "table": "tenants",
+   "column": "policies_accepted_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "boldsign_live_brand_id",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "lockbox_default_instructions",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "min_rental_hours",
+   "type": "integer",
+   "nullable": "NO",
+   "default": "1"
+  },
+  {
+   "table": "tenants",
+   "column": "boldsign_mode",
+   "type": "text",
+   "nullable": "NO",
+   "default": "'test'::text"
+  },
+  {
+   "table": "tenants",
+   "column": "boldsign_test_brand_id",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "auth_logo_url",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "twilio_account_sid",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "twilio_auth_token",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "twilio_phone_number",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "twilio_phone_number_sid",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "integration_twilio_sms",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "meta_whatsapp_waba_id",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "meta_whatsapp_phone_number_id",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "meta_whatsapp_access_token",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "meta_whatsapp_phone_number",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "integration_whatsapp",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "maintenance_banner_enabled",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "maintenance_banner_message",
+   "type": "text",
+   "nullable": "NO",
+   "default": "'We are currently performing scheduled maintenance. Some features may be temporarily unavailable.'::text"
+  },
+  {
+   "table": "tenants",
+   "column": "accepted_verification_document",
+   "type": "text",
+   "nullable": "NO",
+   "default": "'drivers_license'::text"
+  },
+  {
+   "table": "tenants",
+   "column": "security_deposit_enabled",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "true"
+  },
+  {
+   "table": "tenants",
+   "column": "verification_document_type",
+   "type": "text",
+   "nullable": "NO",
+   "default": "'driving_license'::text"
+  },
+  {
+   "table": "tenants",
+   "column": "monthly_tier_days",
+   "type": "integer",
+   "nullable": "NO",
+   "default": "30"
+  },
+  {
+   "table": "tenants",
+   "column": "twilio_messaging_service_sid",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "custom_booking_domain",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "custom_portal_domain",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "integration_tesla_fleet",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "tesla_fleet_token_expires_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "lockbox_send_offset_minutes",
+   "type": "integer",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "buffer_time_minutes",
+   "type": "integer",
+   "nullable": "NO",
+   "default": "0"
+  },
+  {
+   "table": "tenants",
+   "column": "return_reminder_enabled",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "return_reminder_hours",
+   "type": "integer",
+   "nullable": "NO",
+   "default": "24"
+  },
+  {
+   "table": "tenants",
+   "column": "twilio_twiml_app_sid",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "twilio_api_key_sid",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "twilio_api_key_secret",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "twilio_voice_enabled",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "twilio_voice_webhook_configured",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "pay_as_you_go_enabled",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "twilio_whatsapp_number",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "integration_twilio_whatsapp",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "twilio_whatsapp_lockbox_template_sid",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "bonzah_brochure_url",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "blog_enabled",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "twilio_connection_verified_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "payg_reminder_interval_days",
+   "type": "integer",
+   "nullable": "NO",
+   "default": "4"
+  },
+  {
+   "table": "tenants",
+   "column": "payg_grace_period_days",
+   "type": "integer",
+   "nullable": "NO",
+   "default": "2"
+  },
+  {
+   "table": "tenants",
+   "column": "payg_max_reminders",
+   "type": "integer",
+   "nullable": "NO",
+   "default": "10"
+  },
+  {
+   "table": "tenants",
+   "column": "payg_preauth_days",
+   "type": "integer",
+   "nullable": "NO",
+   "default": "2"
+  },
+  {
+   "table": "tenants",
+   "column": "payg_max_duration_days",
+   "type": "integer",
+   "nullable": "NO",
+   "default": "90"
+  },
+  {
+   "table": "tenants",
+   "column": "call_forwarding_enabled",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "voicemail_enabled",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "voicemail_greeting_url",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "forwarding_number",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "call_recording_enabled",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "payg_auto_reminders_enabled",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "true"
+  },
+  {
+   "table": "tenants",
+   "column": "enquiries_enabled",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "true"
+  },
+  {
+   "table": "tenants",
+   "column": "forwarding_caller_id_mode",
+   "type": "text",
+   "nullable": "NO",
+   "default": "'caller'::text"
+  },
+  {
+   "table": "tenants",
+   "column": "payg_accrual_window_seconds",
+   "type": "integer",
+   "nullable": "NO",
+   "default": "86400"
+  },
+  {
+   "table": "tenants",
+   "column": "payg_upfront_required",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "tesla_fleet_api_token_secret_id",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "tesla_fleet_refresh_token_secret_id",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "lead_management_enabled",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "automations_enabled",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "lead_stale_threshold_hours",
+   "type": "integer",
+   "nullable": "NO",
+   "default": "48"
+  },
+  {
+   "table": "tenants",
+   "column": "lead_auto_lost_threshold_hours",
+   "type": "integer",
+   "nullable": "NO",
+   "default": "168"
+  },
+  {
+   "table": "tenants",
+   "column": "communication_tone",
+   "type": "text",
+   "nullable": "NO",
+   "default": "'friendly'::text"
+  },
+  {
+   "table": "tenants",
+   "column": "ai_monthly_quota",
+   "type": "integer",
+   "nullable": "NO",
+   "default": "1000"
+  },
+  {
+   "table": "tenants",
+   "column": "cross_tenant_blacklist_enabled",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "vehicle_owners_enabled",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "integration_xero",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "integration_zoho_books",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "auto_extend_enabled",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "auto_extend_default_charge_mode",
+   "type": "text",
+   "nullable": "NO",
+   "default": "'pay_link'::text"
+  },
+  {
+   "table": "tenants",
+   "column": "auto_extend_default_lead_hours",
+   "type": "integer",
+   "nullable": "NO",
+   "default": "0"
+  },
+  {
+   "table": "tenants",
+   "column": "auto_extend_grace_hours",
+   "type": "integer",
+   "nullable": "NO",
+   "default": "48"
+  },
+  {
+   "table": "tenants",
+   "column": "auto_extend_max_retries",
+   "type": "integer",
+   "nullable": "NO",
+   "default": "3"
+  },
+  {
+   "table": "tenants",
+   "column": "revenue_optimiser_enabled",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "delivery_tiers_enabled",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "delivery_distance_tiers",
+   "type": "jsonb",
+   "nullable": "NO",
+   "default": "'[]'::jsonb"
+  },
+  {
+   "table": "tenants",
+   "column": "subscription_gate_disabled",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "delivery_max_distance_km",
+   "type": "numeric",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "gig_driver_enabled",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "true"
+  },
+  {
+   "table": "tenants",
+   "column": "payment_model",
+   "type": "text",
+   "nullable": "NO",
+   "default": "'own'::text"
+  },
+  {
+   "table": "tenants",
+   "column": "subscription_account",
+   "type": "text",
+   "nullable": "NO",
+   "default": "'uae'::text"
+  },
+  {
+   "table": "tenants",
+   "column": "own_stripe_account_id",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "own_stripe_test_account_id",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "own_stripe_connected_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "own_stripe_test_connected_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "subscription_billing_anchor",
+   "type": "date",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "email_notifications_enabled",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "notification_recipient_email",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "stack_surcharges",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "migration_blocker",
+   "type": "text",
+   "nullable": "NO",
+   "default": "'off'::text"
+  },
+  {
+   "table": "tenants",
+   "column": "migration_blocker_dismissed_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "migration_blocker_dismiss_count",
+   "type": "integer",
+   "nullable": "NO",
+   "default": "0"
+  },
+  {
+   "table": "tenants",
+   "column": "migration_reward_granted_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "stripe_charges_enabled",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "stripe_payouts_enabled",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "stripe_account_disabled_reason",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "stripe_requirements_due",
+   "type": "jsonb",
+   "nullable": "YES",
+   "default": "'[]'::jsonb"
+  },
+  {
+   "table": "tenants",
+   "column": "stripe_status_synced_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "uae_customer_id",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "ga_measurement_id",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "customer_theme_mode",
+   "type": "text",
+   "nullable": "NO",
+   "default": "'dark'::text"
+  },
+  {
+   "table": "tenants",
+   "column": "show_effective_daily_rate",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "hide_checkout_price_breakdown",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "bonzah_sandbox_override",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "integration_inshur",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "inshur_mode",
+   "type": "text",
+   "nullable": "YES",
+   "default": "'mock'::text"
+  },
+  {
+   "table": "tenants",
+   "column": "inshur_username",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "inshur_password",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "inshur_customer_number",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "inshur_policy_number",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "inshur_2fa_token",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "inshur_states_allowed",
+   "type": "jsonb",
+   "nullable": "YES",
+   "default": "'[]'::jsonb"
+  },
+  {
+   "table": "tenants",
+   "column": "inshur_states_synced_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "inshur_billing_mode",
+   "type": "text",
+   "nullable": "YES",
+   "default": "'host_absorbs'::text"
+  },
+  {
+   "table": "tenants",
+   "column": "inshur_endpoint_overrides",
+   "type": "jsonb",
+   "nullable": "YES",
+   "default": "'{}'::jsonb"
+  },
+  {
+   "table": "tenants",
+   "column": "platform_tos_accepted_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "platform_tos_version",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "platform_tos_accepted_by",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "platform_tos_accepted_by_email",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "platform_tos_accepted_ip",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "allow_rental_without_id_verification",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "hide_vehicle_registration",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "fleet_health_enabled",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "push_notifications_enabled",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "booking_v2_enabled",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "deposit_charge_enabled",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "true"
+  },
+  {
+   "table": "tenants",
+   "column": "bonzah_partner_id",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "bonzah_partner_id_set_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "bonzah_partner_id_set_by",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "payment_provider",
+   "type": "text",
+   "nullable": "NO",
+   "default": "'stripe'::text"
+  },
+  {
+   "table": "tenants",
+   "column": "square_mode",
+   "type": "text",
+   "nullable": "NO",
+   "default": "'test'::text"
+  },
+  {
+   "table": "tenants",
+   "column": "country",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "payment_provider_locked_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "custom_site_accent_color",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "custom_site_eligible",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "custom_site_theme",
+   "type": "jsonb",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "tenants",
+   "column": "turo_bridge_enabled",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "false"
+  },
+  {
+   "table": "tenants",
+   "column": "portal_experience",
+   "type": "text",
+   "nullable": "NO",
+   "default": "'v1'::text"
+  },
+  {
+   "table": "vehicles",
+   "column": "id",
+   "type": "uuid",
+   "nullable": "NO",
+   "default": "gen_random_uuid()"
+  },
+  {
+   "table": "vehicles",
+   "column": "reg",
+   "type": "text",
+   "nullable": "NO",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "make",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "model",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "colour",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "acquisition_type",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "purchase_price",
+   "type": "numeric(12,2)",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "acquisition_date",
+   "type": "date",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "status",
+   "type": "text",
+   "nullable": "YES",
+   "default": "'Available'::text"
+  },
+  {
+   "table": "vehicles",
+   "column": "created_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": "now()"
+  },
+  {
+   "table": "vehicles",
+   "column": "color",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "updated_at",
+   "type": "timestamp with time zone",
+   "nullable": "NO",
+   "default": "now()"
+  },
+  {
+   "table": "vehicles",
+   "column": "monthly_payment",
+   "type": "numeric",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "initial_payment",
+   "type": "numeric",
+   "nullable": "YES",
+   "default": "0"
+  },
+  {
+   "table": "vehicles",
+   "column": "term_months",
+   "type": "integer",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "balloon",
+   "type": "numeric",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "finance_start_date",
+   "type": "date",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "mot_due_date",
+   "type": "date",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "tax_due_date",
+   "type": "date",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "last_service_date",
+   "type": "date",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "last_service_mileage",
+   "type": "integer",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "has_tracker",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "vehicles",
+   "column": "has_remote_immobiliser",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "vehicles",
+   "column": "security_notes",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "is_disposed",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "vehicles",
+   "column": "disposal_date",
+   "type": "date",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "sale_proceeds",
+   "type": "numeric",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "disposal_buyer",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "disposal_notes",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "photo_url",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "year",
+   "type": "integer",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "has_logbook",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "false"
+  },
+  {
+   "table": "vehicles",
+   "column": "warranty_start_date",
+   "type": "date",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "warranty_end_date",
+   "type": "date",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "has_service_plan",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "vehicles",
+   "column": "has_spare_key",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "vehicles",
+   "column": "spare_key_holder",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "spare_key_notes",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "daily_rent",
+   "type": "numeric(10,2)",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "weekly_rent",
+   "type": "numeric(10,2)",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "monthly_rent",
+   "type": "numeric(10,2)",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "description",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "fuel_type",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "tenant_id",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "vin",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "security_deposit",
+   "type": "numeric(10,2)",
+   "nullable": "YES",
+   "default": "NULL::numeric"
+  },
+  {
+   "table": "vehicles",
+   "column": "current_mileage",
+   "type": "integer",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "lockbox_code",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "lockbox_instructions",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "excess_mileage_rate",
+   "type": "numeric(10,2)",
+   "nullable": "YES",
+   "default": "NULL::numeric"
+  },
+  {
+   "table": "vehicles",
+   "column": "available_daily",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "true"
+  },
+  {
+   "table": "vehicles",
+   "column": "available_weekly",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "true"
+  },
+  {
+   "table": "vehicles",
+   "column": "available_monthly",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "true"
+  },
+  {
+   "table": "vehicles",
+   "column": "daily_mileage",
+   "type": "integer",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "weekly_mileage",
+   "type": "integer",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "monthly_mileage",
+   "type": "integer",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "tesla_fleet_enabled",
+   "type": "boolean",
+   "nullable": "YES",
+   "default": "false"
+  },
+  {
+   "table": "vehicles",
+   "column": "tesla_fleet_vehicle_id",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "unlimited_mileage_available",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "false"
+  },
+  {
+   "table": "vehicles",
+   "column": "unlimited_mileage_price_daily",
+   "type": "numeric(10,2)",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "unlimited_mileage_price_weekly",
+   "type": "numeric(10,2)",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "unlimited_mileage_price_monthly",
+   "type": "numeric(10,2)",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "owner_id",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "ownership_assigned_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "commission_type_override",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "commission_value_override",
+   "type": "numeric(12,2)",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "flat_fee_period_override",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "category",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "pickup_location_id",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "garaging_state",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "is_paused",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "false"
+  },
+  {
+   "table": "vehicles",
+   "column": "paused_reason",
+   "type": "text",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "paused_at",
+   "type": "timestamp with time zone",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "paused_by",
+   "type": "uuid",
+   "nullable": "YES",
+   "default": null
+  },
+  {
+   "table": "vehicles",
+   "column": "show_on_website",
+   "type": "boolean",
+   "nullable": "NO",
+   "default": "true"
+  }
+ ],
+ "constraints": [
+  {
+   "table": "ledger_entries",
+   "name": "fk_ledger_entries_payment_id",
+   "def": "FOREIGN KEY (payment_id) REFERENCES payments(id) ON DELETE SET NULL"
+  },
+  {
+   "table": "ledger_entries",
+   "name": "ledger_entries_category_check",
+   "def": "CHECK ((category = ANY (ARRAY['Rental'::text, 'InitialFee'::text, 'Initial Fees'::text, 'Fine'::text, 'Fines'::text, 'Adjustment'::text, 'Tax'::text, 'Service Fee'::text, 'Security Deposit'::text, 'Extension'::text, 'Extension Rental'::text, 'Extension Tax'::text, 'Extension Service Fee'::text, 'Extension Insurance'::text, 'Excess Mileage'::text, 'Unlimited Mileage'::text, 'Insurance'::text, 'Delivery Fee'::text, 'Collection Fee'::text, 'Extras'::text, 'Supercharger'::text, 'Other'::text])))"
+  },
+  {
+   "table": "ledger_entries",
+   "name": "ledger_entries_customer_id_fkey",
+   "def": "FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE"
+  },
+  {
+   "table": "ledger_entries",
+   "name": "ledger_entries_extension_id_fkey",
+   "def": "FOREIGN KEY (extension_id) REFERENCES rental_extensions(id) ON DELETE SET NULL"
+  },
+  {
+   "table": "ledger_entries",
+   "name": "ledger_entries_pkey",
+   "def": "PRIMARY KEY (id)"
+  },
+  {
+   "table": "ledger_entries",
+   "name": "ledger_entries_rental_id_fkey",
+   "def": "FOREIGN KEY (rental_id) REFERENCES rentals(id) ON DELETE CASCADE"
+  },
+  {
+   "table": "ledger_entries",
+   "name": "ledger_entries_tenant_id_fkey",
+   "def": "FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE"
+  },
+  {
+   "table": "ledger_entries",
+   "name": "ledger_entries_type_check",
+   "def": "CHECK ((type = ANY (ARRAY['Charge'::text, 'Payment'::text, 'Refund'::text])))"
+  },
+  {
+   "table": "ledger_entries",
+   "name": "ledger_entries_vehicle_id_fkey",
+   "def": "FOREIGN KEY (vehicle_id) REFERENCES vehicles(id) ON DELETE SET NULL"
+  },
+  {
+   "table": "payments",
+   "name": "payments_booking_source_check",
+   "def": "CHECK ((booking_source = ANY (ARRAY['admin'::text, 'website'::text])))"
+  },
+  {
+   "table": "payments",
+   "name": "payments_capture_status_check",
+   "def": "CHECK (((capture_status IS NULL) OR (capture_status = ANY (ARRAY['requires_capture'::text, 'captured'::text, 'cancelled'::text, 'expired'::text]))))"
+  },
+  {
+   "table": "payments",
+   "name": "payments_customer_id_fkey",
+   "def": "FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE"
+  },
+  {
+   "table": "payments",
+   "name": "payments_extension_id_fkey",
+   "def": "FOREIGN KEY (extension_id) REFERENCES rental_extensions(id) ON DELETE SET NULL"
+  },
+  {
+   "table": "payments",
+   "name": "payments_payment_provider_check",
+   "def": "CHECK ((payment_provider = ANY (ARRAY['stripe'::text, 'square'::text])))"
+  },
+  {
+   "table": "payments",
+   "name": "payments_payment_type_check",
+   "def": "CHECK ((payment_type = ANY (ARRAY['Payment'::text, 'InitialFee'::text])))"
+  },
+  {
+   "table": "payments",
+   "name": "payments_pkey",
+   "def": "PRIMARY KEY (id)"
+  },
+  {
+   "table": "payments",
+   "name": "payments_platform_account_check",
+   "def": "CHECK ((platform_account = ANY (ARRAY['uk'::text, 'uae'::text])))"
+  },
+  {
+   "table": "payments",
+   "name": "payments_provider_handle_exclusivity_check",
+   "def": "CHECK ((((payment_provider <> 'square'::text) OR ((stripe_checkout_session_id IS NULL) AND (stripe_payment_intent_id IS NULL) AND (stripe_refund_id IS NULL))) AND ((payment_provider <> 'stripe'::text) OR ((square_order_id IS NULL) AND (square_payment_id IS NULL) AND (square_refund_id IS NULL)))))"
+  },
+  {
+   "table": "payments",
+   "name": "payments_refund_amount_check",
+   "def": "CHECK ((refund_amount >= (0)::numeric))"
+  },
+  {
+   "table": "payments",
+   "name": "payments_refund_scheduled_by_fkey",
+   "def": "FOREIGN KEY (refund_scheduled_by) REFERENCES app_users(id) ON DELETE SET NULL"
+  },
+  {
+   "table": "payments",
+   "name": "payments_refund_status_check",
+   "def": "CHECK ((refund_status = ANY (ARRAY['none'::text, 'scheduled'::text, 'processing'::text, 'completed'::text, 'failed'::text])))"
+  },
+  {
+   "table": "payments",
+   "name": "payments_rental_id_fkey",
+   "def": "FOREIGN KEY (rental_id) REFERENCES rentals(id)"
+  },
+  {
+   "table": "payments",
+   "name": "payments_status_check",
+   "def": "CHECK ((status = ANY (ARRAY['Applied'::text, 'Credit'::text, 'Partial'::text, 'Reversed'::text, 'Pending'::text, 'Completed'::text, 'Refunded'::text, 'Partial Refund'::text])))"
+  },
+  {
+   "table": "payments",
+   "name": "payments_tenant_id_fkey",
+   "def": "FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE"
+  },
+  {
+   "table": "payments",
+   "name": "payments_vehicle_id_fkey",
+   "def": "FOREIGN KEY (vehicle_id) REFERENCES vehicles(id) ON DELETE SET NULL"
+  },
+  {
+   "table": "payments",
+   "name": "payments_verification_status_check",
+   "def": "CHECK ((verification_status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text, 'auto_approved'::text])))"
+  },
+  {
+   "table": "payments",
+   "name": "payments_verified_by_fkey",
+   "def": "FOREIGN KEY (verified_by) REFERENCES app_users(id)"
+  },
+  {
+   "table": "payment_applications",
+   "name": "payment_applications_charge_entry_id_fkey",
+   "def": "FOREIGN KEY (charge_entry_id) REFERENCES ledger_entries(id) ON DELETE CASCADE"
+  },
+  {
+   "table": "payment_applications",
+   "name": "payment_applications_payment_id_fkey",
+   "def": "FOREIGN KEY (payment_id) REFERENCES payments(id) ON DELETE CASCADE"
+  },
+  {
+   "table": "payment_applications",
+   "name": "payment_applications_pkey",
+   "def": "PRIMARY KEY (id)"
+  },
+  {
+   "table": "payment_applications",
+   "name": "payment_applications_tenant_id_fkey",
+   "def": "FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE"
+  },
+  {
+   "table": "payment_applications",
+   "name": "ux_payment_app_unique",
+   "def": "UNIQUE (payment_id, charge_entry_id)"
+  },
+  {
+   "table": "payment_applications",
+   "name": "ux_payment_applications_unique",
+   "def": "UNIQUE (payment_id, charge_entry_id)"
+  },
+  {
+   "table": "pnl_entries",
+   "name": "chk_pnl_category_valid",
+   "def": "CHECK ((category = ANY (ARRAY['Initial Fees'::text, 'Rental'::text, 'Acquisition'::text, 'Finance'::text, 'Service'::text, 'Fines'::text, 'Other'::text, 'Disposal'::text, 'Plates'::text, 'Insurance'::text, 'Delivery Fee'::text, 'Collection Fee'::text, 'Extras'::text, 'Security Deposit'::text, 'Extension'::text, 'Extension Rental'::text, 'Extension Tax'::text, 'Extension Service Fee'::text, 'Extension Insurance'::text, 'Excess Mileage'::text, 'Unlimited Mileage'::text, 'Tax'::text, 'Service Fee'::text, 'Expenses'::text])))"
+  },
+  {
+   "table": "pnl_entries",
+   "name": "pnl_entries_pkey",
+   "def": "PRIMARY KEY (id)"
+  },
+  {
+   "table": "pnl_entries",
+   "name": "pnl_entries_side_check",
+   "def": "CHECK ((side = ANY (ARRAY['Revenue'::text, 'Cost'::text])))"
+  },
+  {
+   "table": "pnl_entries",
+   "name": "pnl_entries_tenant_id_fkey",
+   "def": "FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE"
+  },
+  {
+   "table": "pnl_entries",
+   "name": "pnl_entries_vehicle_id_fkey",
+   "def": "FOREIGN KEY (vehicle_id) REFERENCES vehicles(id) ON DELETE CASCADE"
+  },
+  {
+   "table": "pnl_entries",
+   "name": "ux_pnl_entries_reference",
+   "def": "UNIQUE (reference)"
+  },
+  {
+   "table": "pnl_entries",
+   "name": "ux_pnl_initial_fee_once",
+   "def": "UNIQUE (payment_id, category)"
+  },
+  {
+   "table": "pnl_entries",
+   "name": "ux_pnl_vehicle_category_source",
+   "def": "UNIQUE (vehicle_id, category, source_ref)"
+  }
+ ],
+ "indexes": [
+  {
+   "table": "ledger_entries",
+   "name": "ledger_entries_pkey",
+   "def": "CREATE UNIQUE INDEX ledger_entries_pkey ON public.ledger_entries USING btree (id)"
+  },
+  {
+   "table": "ledger_entries",
+   "name": "ix_ledger_rental_due",
+   "def": "CREATE INDEX ix_ledger_rental_due ON public.ledger_entries USING btree (rental_id, type, due_date)"
+  },
+  {
+   "table": "ledger_entries",
+   "name": "ix_ledger_vehicle",
+   "def": "CREATE INDEX ix_ledger_vehicle ON public.ledger_entries USING btree (vehicle_id, type, category)"
+  },
+  {
+   "table": "ledger_entries",
+   "name": "idx_ledger_customer_due",
+   "def": "CREATE INDEX idx_ledger_customer_due ON public.ledger_entries USING btree (customer_id, due_date, id)"
+  },
+  {
+   "table": "ledger_entries",
+   "name": "idx_ledger_rental_due",
+   "def": "CREATE INDEX idx_ledger_rental_due ON public.ledger_entries USING btree (rental_id, due_date, id)"
+  },
+  {
+   "table": "ledger_entries",
+   "name": "ux_initialfee_ledger_unique",
+   "def": "CREATE UNIQUE INDEX ux_initialfee_ledger_unique ON public.ledger_entries USING btree (rental_id, customer_id, vehicle_id, entry_date, amount) WHERE ((type = 'Payment'::text) AND (category = 'InitialFee'::text))"
+  },
+  {
+   "table": "ledger_entries",
+   "name": "idx_ledger_rental_open",
+   "def": "CREATE INDEX idx_ledger_rental_open ON public.ledger_entries USING btree (rental_id, due_date) WHERE ((type = 'Charge'::text) AND (category = 'Rental'::text) AND (remaining_amount > (0)::numeric))"
+  },
+  {
+   "table": "ledger_entries",
+   "name": "ux_ledger_payment_reference",
+   "def": "CREATE UNIQUE INDEX ux_ledger_payment_reference ON public.ledger_entries USING btree (reference) WHERE ((reference IS NOT NULL) AND (type = 'Payment'::text))"
+  },
+  {
+   "table": "ledger_entries",
+   "name": "idx_ledger_entries_rental_charges",
+   "def": "CREATE INDEX idx_ledger_entries_rental_charges ON public.ledger_entries USING btree (rental_id, type, category, remaining_amount, due_date, entry_date) WHERE ((type = 'Charge'::text) AND (category = 'Rental'::text) AND (remaining_amount > (0)::numeric))"
+  },
+  {
+   "table": "ledger_entries",
+   "name": "idx_ledger_entries_type",
+   "def": "CREATE INDEX idx_ledger_entries_type ON public.ledger_entries USING btree (type)"
+  },
+  {
+   "table": "ledger_entries",
+   "name": "idx_ledger_entries_entry_date",
+   "def": "CREATE INDEX idx_ledger_entries_entry_date ON public.ledger_entries USING btree (entry_date)"
+  },
+  {
+   "table": "ledger_entries",
+   "name": "idx_ledger_entries_type_entry_date",
+   "def": "CREATE INDEX idx_ledger_entries_type_entry_date ON public.ledger_entries USING btree (type, entry_date)"
+  },
+  {
+   "table": "ledger_entries",
+   "name": "idx_ledger_entries_customer_type",
+   "def": "CREATE INDEX idx_ledger_entries_customer_type ON public.ledger_entries USING btree (customer_id, type)"
+  },
+  {
+   "table": "ledger_entries",
+   "name": "ux_ledger_entries_payment_id",
+   "def": "CREATE UNIQUE INDEX ux_ledger_entries_payment_id ON public.ledger_entries USING btree (payment_id) WHERE (payment_id IS NOT NULL)"
+  },
+  {
+   "table": "ledger_entries",
+   "name": "idx_ledger_entries_payment_id",
+   "def": "CREATE UNIQUE INDEX idx_ledger_entries_payment_id ON public.ledger_entries USING btree (payment_id) WHERE (payment_id IS NOT NULL)"
+  },
+  {
+   "table": "ledger_entries",
+   "name": "ux_ledger_payg_charge_reference",
+   "def": "CREATE UNIQUE INDEX ux_ledger_payg_charge_reference ON public.ledger_entries USING btree (reference) WHERE ((reference IS NOT NULL) AND (reference ~~ 'payg-%'::text) AND (type = 'Charge'::text))"
+  },
+  {
+   "table": "ledger_entries",
+   "name": "idx_ledger_entries_tenant_id",
+   "def": "CREATE INDEX idx_ledger_entries_tenant_id ON public.ledger_entries USING btree (tenant_id)"
+  },
+  {
+   "table": "ledger_entries",
+   "name": "idx_ledger_entries_extension_id",
+   "def": "CREATE INDEX idx_ledger_entries_extension_id ON public.ledger_entries USING btree (extension_id) WHERE (extension_id IS NOT NULL)"
+  },
+  {
+   "table": "ledger_entries",
+   "name": "idx_ledger_payment_unique",
+   "def": "CREATE UNIQUE INDEX idx_ledger_payment_unique ON public.ledger_entries USING btree (payment_id) WHERE ((type = 'Payment'::text) AND (payment_id IS NOT NULL))"
+  },
+  {
+   "table": "ledger_entries",
+   "name": "ux_rental_charge_unique",
+   "def": "CREATE UNIQUE INDEX ux_rental_charge_unique ON public.ledger_entries USING btree (rental_id, due_date, type, category, COALESCE((extension_id)::text, ''::text), COALESCE(reference, ''::text))"
+  },
+  {
+   "table": "payment_applications",
+   "name": "payment_applications_pkey",
+   "def": "CREATE UNIQUE INDEX payment_applications_pkey ON public.payment_applications USING btree (id)"
+  },
+  {
+   "table": "payment_applications",
+   "name": "idx_payment_applications_payment",
+   "def": "CREATE INDEX idx_payment_applications_payment ON public.payment_applications USING btree (payment_id)"
+  },
+  {
+   "table": "payment_applications",
+   "name": "idx_payment_applications_payment_id",
+   "def": "CREATE INDEX idx_payment_applications_payment_id ON public.payment_applications USING btree (payment_id)"
+  },
+  {
+   "table": "payment_applications",
+   "name": "idx_payment_applications_charge_entry_id",
+   "def": "CREATE INDEX idx_payment_applications_charge_entry_id ON public.payment_applications USING btree (charge_entry_id)"
+  },
+  {
+   "table": "payment_applications",
+   "name": "ux_payment_applications_unique",
+   "def": "CREATE UNIQUE INDEX ux_payment_applications_unique ON public.payment_applications USING btree (payment_id, charge_entry_id)"
+  },
+  {
+   "table": "payment_applications",
+   "name": "ux_payment_app_unique",
+   "def": "CREATE UNIQUE INDEX ux_payment_app_unique ON public.payment_applications USING btree (payment_id, charge_entry_id)"
+  },
+  {
+   "table": "payment_applications",
+   "name": "idx_payment_applications_tenant_id",
+   "def": "CREATE INDEX idx_payment_applications_tenant_id ON public.payment_applications USING btree (tenant_id)"
+  },
+  {
+   "table": "payments",
+   "name": "payments_pkey",
+   "def": "CREATE UNIQUE INDEX payments_pkey ON public.payments USING btree (id)"
+  },
+  {
+   "table": "payments",
+   "name": "ix_payments_rental_date",
+   "def": "CREATE INDEX ix_payments_rental_date ON public.payments USING btree (rental_id, payment_date)"
+  },
+  {
+   "table": "payments",
+   "name": "ix_payments_payment_date",
+   "def": "CREATE INDEX ix_payments_payment_date ON public.payments USING btree (payment_date)"
+  },
+  {
+   "table": "payments",
+   "name": "ix_payments_apply_from_date",
+   "def": "CREATE INDEX ix_payments_apply_from_date ON public.payments USING btree (apply_from_date)"
+  },
+  {
+   "table": "payments",
+   "name": "idx_payments_customer_date",
+   "def": "CREATE INDEX idx_payments_customer_date ON public.payments USING btree (customer_id, payment_date DESC)"
+  },
+  {
+   "table": "payments",
+   "name": "idx_payments_verification_status",
+   "def": "CREATE INDEX idx_payments_verification_status ON public.payments USING btree (verification_status)"
+  },
+  {
+   "table": "payments",
+   "name": "idx_payments_is_manual_mode",
+   "def": "CREATE INDEX idx_payments_is_manual_mode ON public.payments USING btree (is_manual_mode)"
+  },
+  {
+   "table": "payments",
+   "name": "idx_payments_processing",
+   "def": "CREATE INDEX idx_payments_processing ON public.payments USING btree (customer_id, rental_id, payment_date, status)"
+  },
+  {
+   "table": "payments",
+   "name": "ux_payments_rental_initial_fee",
+   "def": "CREATE UNIQUE INDEX ux_payments_rental_initial_fee ON public.payments USING btree (rental_id, payment_type) WHERE (payment_type = 'InitialFee'::text)"
+  },
+  {
+   "table": "payments",
+   "name": "idx_payments_refund_scheduled_date",
+   "def": "CREATE INDEX idx_payments_refund_scheduled_date ON public.payments USING btree (refund_scheduled_date) WHERE (refund_status = 'scheduled'::text)"
+  },
+  {
+   "table": "payments",
+   "name": "idx_payments_tenant_id",
+   "def": "CREATE INDEX idx_payments_tenant_id ON public.payments USING btree (tenant_id)"
+  },
+  {
+   "table": "payments",
+   "name": "idx_payments_stripe_payment_intent",
+   "def": "CREATE INDEX idx_payments_stripe_payment_intent ON public.payments USING btree (stripe_payment_intent_id)"
+  },
+  {
+   "table": "payments",
+   "name": "idx_payments_capture_status",
+   "def": "CREATE INDEX idx_payments_capture_status ON public.payments USING btree (capture_status)"
+  },
+  {
+   "table": "payments",
+   "name": "idx_payments_booking_source",
+   "def": "CREATE INDEX idx_payments_booking_source ON public.payments USING btree (booking_source)"
+  },
+  {
+   "table": "payments",
+   "name": "idx_payments_preauth_expires",
+   "def": "CREATE INDEX idx_payments_preauth_expires ON public.payments USING btree (preauth_expires_at) WHERE (capture_status = 'requires_capture'::text)"
+  },
+  {
+   "table": "payments",
+   "name": "idx_payments_extension_id",
+   "def": "CREATE INDEX idx_payments_extension_id ON public.payments USING btree (extension_id) WHERE (extension_id IS NOT NULL)"
+  },
+  {
+   "table": "payments",
+   "name": "idx_payments_square_order_id",
+   "def": "CREATE INDEX idx_payments_square_order_id ON public.payments USING btree (square_order_id) WHERE (square_order_id IS NOT NULL)"
+  },
+  {
+   "table": "payments",
+   "name": "idx_payments_square_payment_id",
+   "def": "CREATE INDEX idx_payments_square_payment_id ON public.payments USING btree (square_payment_id) WHERE (square_payment_id IS NOT NULL)"
+  },
+  {
+   "table": "payments",
+   "name": "ux_payments_square_idempotency_key",
+   "def": "CREATE UNIQUE INDEX ux_payments_square_idempotency_key ON public.payments USING btree (square_idempotency_key) WHERE (square_idempotency_key IS NOT NULL)"
+  },
+  {
+   "table": "payments",
+   "name": "idx_payments_pending_stripe_recovery",
+   "def": "CREATE INDEX idx_payments_pending_stripe_recovery ON public.payments USING btree (created_at DESC) WHERE ((status = 'Pending'::text) AND (payment_provider = 'stripe'::text) AND (stripe_checkout_session_id IS NOT NULL))"
+  },
+  {
+   "table": "payments",
+   "name": "idx_payments_stranded_credit_recovery",
+   "def": "CREATE INDEX idx_payments_stranded_credit_recovery ON public.payments USING btree (created_at DESC) WHERE ((status = 'Credit'::text) AND (payment_provider = 'stripe'::text) AND (stripe_checkout_session_id IS NOT NULL))"
+  },
+  {
+   "table": "pnl_entries",
+   "name": "pnl_entries_pkey",
+   "def": "CREATE UNIQUE INDEX pnl_entries_pkey ON public.pnl_entries USING btree (id)"
+  },
+  {
+   "table": "pnl_entries",
+   "name": "ix_pnl_vehicle_date",
+   "def": "CREATE INDEX ix_pnl_vehicle_date ON public.pnl_entries USING btree (vehicle_id, entry_date, side)"
+  },
+  {
+   "table": "pnl_entries",
+   "name": "idx_pnl_entries_reference_unique",
+   "def": "CREATE UNIQUE INDEX idx_pnl_entries_reference_unique ON public.pnl_entries USING btree (reference) WHERE (reference IS NOT NULL)"
+  },
+  {
+   "table": "pnl_entries",
+   "name": "ux_pnl_vehicle_category_source",
+   "def": "CREATE UNIQUE INDEX ux_pnl_vehicle_category_source ON public.pnl_entries USING btree (vehicle_id, category, source_ref)"
+  },
+  {
+   "table": "pnl_entries",
+   "name": "idx_pnl_reference_unique",
+   "def": "CREATE UNIQUE INDEX idx_pnl_reference_unique ON public.pnl_entries USING btree (reference) WHERE (reference IS NOT NULL)"
+  },
+  {
+   "table": "pnl_entries",
+   "name": "ux_pnl_initial_fee_once",
+   "def": "CREATE UNIQUE INDEX ux_pnl_initial_fee_once ON public.pnl_entries USING btree (payment_id, category)"
+  },
+  {
+   "table": "pnl_entries",
+   "name": "ux_pnl_reference",
+   "def": "CREATE UNIQUE INDEX ux_pnl_reference ON public.pnl_entries USING btree (reference) WHERE (reference IS NOT NULL)"
+  },
+  {
+   "table": "pnl_entries",
+   "name": "ux_pnl_source_reference",
+   "def": "CREATE UNIQUE INDEX ux_pnl_source_reference ON public.pnl_entries USING btree (source_ref) WHERE (source_ref IS NOT NULL)"
+  },
+  {
+   "table": "pnl_entries",
+   "name": "ux_pnl_payment_reference",
+   "def": "CREATE UNIQUE INDEX ux_pnl_payment_reference ON public.pnl_entries USING btree (reference) WHERE (reference IS NOT NULL)"
+  },
+  {
+   "table": "pnl_entries",
+   "name": "ux_pnl_entries_reference",
+   "def": "CREATE UNIQUE INDEX ux_pnl_entries_reference ON public.pnl_entries USING btree (reference)"
+  },
+  {
+   "table": "pnl_entries",
+   "name": "idx_pnl_entries_reference",
+   "def": "CREATE UNIQUE INDEX idx_pnl_entries_reference ON public.pnl_entries USING btree (reference) WHERE (reference IS NOT NULL)"
+  },
+  {
+   "table": "pnl_entries",
+   "name": "idx_pnl_entries_tenant_id",
+   "def": "CREATE INDEX idx_pnl_entries_tenant_id ON public.pnl_entries USING btree (tenant_id)"
+  }
+ ],
+ "triggers": [
+  {
+   "table": "ledger_entries",
+   "name": "auto_allocate_payments_on_new_charge",
+   "def": "CREATE TRIGGER auto_allocate_payments_on_new_charge AFTER INSERT ON public.ledger_entries FOR EACH ROW EXECUTE FUNCTION trigger_auto_allocate_payments()"
+  },
+  {
+   "table": "ledger_entries",
+   "name": "auto_settle_payg_on_ledger_drain",
+   "def": "CREATE TRIGGER auto_settle_payg_on_ledger_drain AFTER UPDATE OF remaining_amount ON public.ledger_entries FOR EACH ROW EXECUTE FUNCTION trigger_payg_settle_on_ledger_drain()"
+  },
+  {
+   "table": "ledger_entries",
+   "name": "enqueue_financial_event_on_ledger_insert",
+   "def": "CREATE TRIGGER enqueue_financial_event_on_ledger_insert AFTER INSERT ON public.ledger_entries FOR EACH ROW EXECUTE FUNCTION enqueue_financial_event_for_ledger_entry()"
+  },
+  {
+   "table": "ledger_entries",
+   "name": "ledger_entries_set_updated_at",
+   "def": "CREATE TRIGGER ledger_entries_set_updated_at BEFORE UPDATE ON public.ledger_entries FOR EACH ROW EXECUTE FUNCTION set_updated_at()"
+  },
+  {
+   "table": "ledger_entries",
+   "name": "set_ledger_entry_tenant_trigger",
+   "def": "CREATE TRIGGER set_ledger_entry_tenant_trigger BEFORE INSERT ON public.ledger_entries FOR EACH ROW EXECUTE FUNCTION set_ledger_entry_tenant_id()"
+  },
+  {
+   "table": "ledger_entries",
+   "name": "trg_sync_fine_status_on_settle",
+   "def": "CREATE TRIGGER trg_sync_fine_status_on_settle AFTER UPDATE OF remaining_amount ON public.ledger_entries FOR EACH ROW EXECUTE FUNCTION sync_fine_status_on_charge_settled()"
+  },
+  {
+   "table": "payments",
+   "name": "auto_fifo_on_payment_completed",
+   "def": "CREATE TRIGGER auto_fifo_on_payment_completed AFTER UPDATE OF status ON public.payments FOR EACH ROW EXECUTE FUNCTION trigger_apply_fifo_on_payment_completed()"
+  },
+  {
+   "table": "payments",
+   "name": "auto_fifo_on_payment_insert",
+   "def": "CREATE TRIGGER auto_fifo_on_payment_insert AFTER INSERT ON public.payments FOR EACH ROW EXECUTE FUNCTION trigger_apply_fifo_on_payment_insert()"
+  },
+  {
+   "table": "payments",
+   "name": "on_payment_received_notify",
+   "def": "CREATE TRIGGER on_payment_received_notify AFTER INSERT OR UPDATE OF status ON public.payments FOR EACH ROW EXECUTE FUNCTION notify_payment_received()"
+  },
+  {
+   "table": "payments",
+   "name": "on_refund_processed_notify",
+   "def": "CREATE TRIGGER on_refund_processed_notify AFTER INSERT OR UPDATE OF status ON public.payments FOR EACH ROW EXECUTE FUNCTION notify_refund_processed()"
+  },
+  {
+   "table": "payments",
+   "name": "payments_rag_trigger",
+   "def": "CREATE TRIGGER payments_rag_trigger AFTER INSERT OR DELETE OR UPDATE ON public.payments FOR EACH ROW EXECUTE FUNCTION queue_for_rag()"
+  },
+  {
+   "table": "payments",
+   "name": "payments_set_updated_at",
+   "def": "CREATE TRIGGER payments_set_updated_at BEFORE UPDATE ON public.payments FOR EACH ROW EXECUTE FUNCTION set_updated_at()"
+  },
+  {
+   "table": "payments",
+   "name": "settle_ghost_paid_payg_on_payment_insert",
+   "def": "CREATE TRIGGER settle_ghost_paid_payg_on_payment_insert AFTER INSERT ON public.payments FOR EACH ROW EXECUTE FUNCTION trigger_settle_ghost_paid_payg_accruals()"
+  },
+  {
+   "table": "payments",
+   "name": "settle_ghost_paid_payg_on_payment_update",
+   "def": "CREATE TRIGGER settle_ghost_paid_payg_on_payment_update AFTER UPDATE OF status ON public.payments FOR EACH ROW EXECUTE FUNCTION trigger_settle_ghost_paid_payg_accruals()"
+  },
+  {
+   "table": "payments",
+   "name": "trg_payments_payment_provider_immutable",
+   "def": "CREATE TRIGGER trg_payments_payment_provider_immutable BEFORE UPDATE OF payment_provider ON public.payments FOR EACH ROW EXECUTE FUNCTION payments_payment_provider_immutable()"
+  },
+  {
+   "table": "payment_applications",
+   "name": "enforce_payment_target_categories_trigger",
+   "def": "CREATE TRIGGER enforce_payment_target_categories_trigger BEFORE INSERT ON public.payment_applications FOR EACH ROW EXECUTE FUNCTION enforce_payment_target_categories()"
+  },
+  {
+   "table": "payment_applications",
+   "name": "set_payment_application_tenant_trigger",
+   "def": "CREATE TRIGGER set_payment_application_tenant_trigger BEFORE INSERT ON public.payment_applications FOR EACH ROW EXECUTE FUNCTION set_payment_application_tenant_id()"
+  }
+ ],
+ "functions": [
+  {
+   "name": "enforce_payment_target_categories",
+   "def": "CREATE OR REPLACE FUNCTION public.enforce_payment_target_categories()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_target_categories jsonb;\n  v_charge_category   text;\nBEGIN\n  -- Defensive: payment_applications.payment_id and .charge_entry_id are nullable\n  -- in schema. Skip the check when either is null \u2014 the FK / app code handles\n  -- those cases elsewhere.\n  IF NEW.payment_id IS NULL OR NEW.charge_entry_id IS NULL THEN\n    RETURN NEW;\n  END IF;\n\n  SELECT target_categories INTO v_target_categories\n  FROM public.payments\n  WHERE id = NEW.payment_id;\n\n  -- No target_categories means \"universal FIFO\" mode is intentional (booking\n  -- flow, customer pays a generic amount). Allow any allocation.\n  IF v_target_categories IS NULL\n     OR jsonb_typeof(v_target_categories) <> 'array'\n     OR jsonb_array_length(v_target_categories) = 0\n  THEN\n    RETURN NEW;\n  END IF;\n\n  SELECT category INTO v_charge_category\n  FROM public.ledger_entries\n  WHERE id = NEW.charge_entry_id;\n\n  -- Charge row missing? Let the FK do its job, don't double-fault.\n  IF v_charge_category IS NULL THEN\n    RETURN NEW;\n  END IF;\n\n  -- @> checks whether the jsonb array contains the given value.\n  -- to_jsonb('Tax'::text) produces \"Tax\" (a JSON string), so this matches\n  -- a string element inside the array.\n  IF NOT (v_target_categories @> to_jsonb(v_charge_category)) THEN\n    RAISE EXCEPTION\n      'payment_applications: payment % is targeted to % but charge % has category %',\n      NEW.payment_id, v_target_categories::text, NEW.charge_entry_id, v_charge_category\n      USING ERRCODE = 'check_violation';\n  END IF;\n\n  RETURN NEW;\nEND;\n$function$\n"
+  },
+  {
+   "name": "enqueue_financial_event_for_ledger_entry",
+   "def": "CREATE OR REPLACE FUNCTION public.enqueue_financial_event_for_ledger_entry()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_event_type text;\n  v_amount_cents integer;\n  v_currency text;\n  v_description text;\nBEGIN\n  -- Skip rows without a tenant_id (legacy / malformed entries).\n  IF NEW.tenant_id IS NULL THEN\n    RETURN NEW;\n  END IF;\n\n  -- Map ledger row \u2192 financial_event_type.\n  IF NEW.type = 'Payment' THEN\n    v_event_type := 'payment_receipt';\n  ELSIF NEW.type = 'Charge' THEN\n    v_event_type := CASE LOWER(COALESCE(NEW.category, ''))\n      WHEN 'rental'              THEN 'rental_charge'\n      WHEN 'tax'                 THEN 'rental_charge'\n      WHEN 'service fee'         THEN 'rental_charge'\n      WHEN 'initial fees'        THEN 'rental_charge'\n      WHEN 'unlimited mileage'   THEN 'mileage_charge'\n      WHEN 'late fee'            THEN 'late_fee'\n      WHEN 'damage'              THEN 'damage_charge'\n      WHEN 'mileage'             THEN 'mileage_charge'\n      WHEN 'charging'            THEN 'charging_cost'\n      WHEN 'insurance'           THEN 'insurance_charge'\n      WHEN 'fines'               THEN 'late_fee'\n      -- Refundable money held on the renter's behalf, NOT revenue. It maps to\n      -- deposit_capture rather than rental_charge so the accounting layer books\n      -- it against the deposit account, not income.\n      WHEN 'security deposit'    THEN 'deposit_capture'\n      ELSE NULL\n    END;\n  ELSE\n    RETURN NEW;\n  END IF;\n\n  -- Unmapped category \u2014 skip silently.\n  IF v_event_type IS NULL THEN\n    RETURN NEW;\n  END IF;\n\n  -- Resolve currency from tenant (default USD).\n  SELECT COALESCE(currency_code, 'USD') INTO v_currency\n    FROM public.tenants WHERE id = NEW.tenant_id;\n\n  -- amount_cents: ledger payment amounts are stored negative (-540.00) \u2192 flip sign.\n  v_amount_cents := ROUND(ABS(COALESCE(NEW.amount, 0))::numeric * 100)::integer;\n  IF v_amount_cents = 0 THEN\n    RETURN NEW;\n  END IF;\n\n  -- Friendly description for the sync log.\n  v_description := CASE\n    WHEN NEW.type = 'Payment' THEN 'Payment received'\n    WHEN LOWER(COALESCE(NEW.category, '')) = 'security deposit' THEN 'Security deposit (refundable)'\n    ELSE COALESCE(NEW.category, 'Charge') || ' charge'\n  END;\n\n  -- Fire and forget. enqueue_financial_event handles the per-provider\n  -- sync_state row fan-out. Wrapped in a sub-block so a failure here\n  -- never bubbles up and aborts the parent rental/payment transaction.\n  BEGIN\n    PERFORM public.enqueue_financial_event(\n      p_tenant_id    := NEW.tenant_id,\n      p_event_type   := v_event_type::public.financial_event_type,\n      p_amount_cents := v_amount_cents,\n      p_currency     := v_currency,\n      p_rental_id    := NEW.rental_id,\n      p_customer_id  := NEW.customer_id,\n      p_vehicle_id   := NEW.vehicle_id,\n      p_source_table := 'ledger_entries',\n      p_source_id    := NEW.id,\n      p_description  := v_description,\n      p_tax_cents    := 0,\n      p_metadata     := jsonb_build_object(\n        'ledger_type',     NEW.type,\n        'ledger_category', NEW.category,\n        'entry_date',      NEW.entry_date\n      )\n    );\n  EXCEPTION WHEN OTHERS THEN\n    -- Best-effort. Don't crash the parent transaction over a sync hiccup.\n    RAISE WARNING 'enqueue_financial_event_for_ledger_entry failed: %', SQLERRM;\n  END;\n\n  RETURN NEW;\nEND;\n$function$\n"
+  },
+  {
+   "name": "finalize_rental_extension",
+   "def": "CREATE OR REPLACE FUNCTION public.finalize_rental_extension(p_extension_id uuid, p_payment_id uuid)\n RETURNS TABLE(out_extension_id uuid, out_rental_id uuid, out_previous_end_date date, out_new_end_date date, out_status text, out_end_date_updated boolean)\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n    v_ext_rental_id UUID;\n    v_ext_previous_end DATE;\n    v_ext_new_end DATE;\n    v_ext_status TEXT;\n    v_payment_intent TEXT;\n    v_payment_extension_id UUID;\n    v_payment_amount NUMERIC;\n    v_current_end DATE;\n    v_updated_end BOOLEAN := false;\nBEGIN\n    SELECT re.rental_id, re.previous_end_date, re.new_end_date, re.status\n    INTO v_ext_rental_id, v_ext_previous_end, v_ext_new_end, v_ext_status\n    FROM public.rental_extensions re\n    WHERE re.id = p_extension_id\n    FOR UPDATE;\n\n    IF NOT FOUND THEN\n        RAISE EXCEPTION 'rental_extension % not found', p_extension_id;\n    END IF;\n\n    SELECT p.stripe_payment_intent_id, p.extension_id, p.amount\n    INTO v_payment_intent, v_payment_extension_id, v_payment_amount\n    FROM public.payments p\n    WHERE p.id = p_payment_id;\n\n    IF NOT FOUND THEN\n        RAISE EXCEPTION 'payment % not found', p_payment_id;\n    END IF;\n\n    IF v_payment_extension_id IS NULL THEN\n        UPDATE public.payments\n        SET extension_id = p_extension_id,\n            updated_at = now()\n        WHERE id = p_payment_id;\n    END IF;\n\n    UPDATE public.rental_extensions re\n    SET status = CASE WHEN re.status = 'refunded' THEN 'refunded' ELSE 'paid' END,\n        paid_at = COALESCE(re.paid_at, now()),\n        paid_amount = GREATEST(re.paid_amount, v_payment_amount),\n        stripe_payment_intent_id = COALESCE(re.stripe_payment_intent_id, v_payment_intent),\n        updated_at = now()\n    WHERE re.id = p_extension_id;\n\n    IF v_ext_new_end IS NOT NULL THEN\n        SELECT r.end_date INTO v_current_end\n        FROM public.rentals r\n        WHERE r.id = v_ext_rental_id\n        FOR UPDATE;\n\n        IF v_current_end IS NULL OR v_ext_new_end > v_current_end THEN\n            UPDATE public.rentals r\n            SET end_date = v_ext_new_end,\n                is_extended = false,\n                extension_checkout_url = NULL,\n                extension_amount = NULL,\n                previous_end_date = COALESCE(r.previous_end_date, v_ext_previous_end),\n                original_end_date = COALESCE(r.original_end_date, v_ext_previous_end),\n                updated_at = now()\n            WHERE r.id = v_ext_rental_id;\n            v_updated_end := true;\n        ELSE\n            UPDATE public.rentals\n            SET is_extended = false,\n                extension_checkout_url = NULL,\n                extension_amount = NULL,\n                updated_at = now()\n            WHERE id = v_ext_rental_id;\n        END IF;\n    ELSE\n        UPDATE public.rentals\n        SET is_extended = false,\n            extension_checkout_url = NULL,\n            extension_amount = NULL,\n            updated_at = now()\n        WHERE id = v_ext_rental_id;\n    END IF;\n\n    RETURN QUERY\n    SELECT p_extension_id,\n           v_ext_rental_id,\n           v_ext_previous_end,\n           v_ext_new_end,\n           'paid'::text,\n           v_updated_end;\nEND;\n$function$\n"
+  },
+  {
+   "name": "get_user_tenant_id",
+   "def": "CREATE OR REPLACE FUNCTION public.get_user_tenant_id()\n RETURNS uuid\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  SELECT tenant_id FROM app_users WHERE auth_user_id = auth.uid() LIMIT 1;\n$function$\n"
+  },
+  {
+   "name": "installment_settle_invoice",
+   "def": "CREATE OR REPLACE FUNCTION public.installment_settle_invoice(p_payment_id uuid, p_installment_id uuid)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_plan_id            uuid;\n  v_installment_number integer;\n  v_already_paid       boolean;\n  v_target_categories  jsonb;\nBEGIN\n  -- NEW GUARD (added in migration add_payment_category_guard_and_installment_rpc_guard):\n  -- refuse to settle an installment slot when the payment is category-targeted\n  -- to a list that doesn't include 'Rental'. This stops a Tax / Service Fee /\n  -- Insurance / etc. payment from accidentally settling an installment (which\n  -- would corrupt the plan by flipping upfront_paid=true and stamping the\n  -- wrong upfront_payment_id). Mirrors the guards in apply-payment +\n  -- stripe-webhook-test + stripe-webhook-live + process-pending-payment.\n  SELECT target_categories INTO v_target_categories\n  FROM public.payments\n  WHERE id = p_payment_id;\n\n  IF v_target_categories IS NOT NULL\n     AND jsonb_typeof(v_target_categories) = 'array'\n     AND jsonb_array_length(v_target_categories) > 0\n     AND NOT (v_target_categories @> to_jsonb('Rental'::text))\n  THEN\n    RAISE EXCEPTION\n      'installment_settle_invoice refused: payment % is targeted to % (Rental not in list)',\n      p_payment_id, v_target_categories::text\n      USING ERRCODE = 'check_violation';\n  END IF;\n\n  -- Resolve the target installment + check current state\n  SELECT installment_plan_id, installment_number, (invoice_status = 'paid')\n    INTO v_plan_id, v_installment_number, v_already_paid\n  FROM public.scheduled_installments\n  WHERE id = p_installment_id\n  FOR UPDATE;\n\n  IF v_plan_id IS NULL THEN\n    RAISE EXCEPTION 'installment % not found', p_installment_id;\n  END IF;\n\n  -- Idempotency: if already paid by this same payment, do nothing\n  IF v_already_paid THEN\n    RETURN;\n  END IF;\n\n  -- Mark target as paid\n  UPDATE public.scheduled_installments\n  SET invoice_status = 'paid',\n      paid_at = now(),\n      settling_payment_id = p_payment_id,\n      payment_id = p_payment_id,\n      status = 'paid',\n      updated_at = now()\n  WHERE id = p_installment_id;\n\n  -- Supersede all earlier 'open' installments on the same plan\n  UPDATE public.scheduled_installments\n  SET invoice_status = 'superseded',\n      superseded_by_installment_id = p_installment_id,\n      updated_at = now()\n  WHERE installment_plan_id = v_plan_id\n    AND installment_number < v_installment_number\n    AND invoice_status = 'open';\n\n  -- Roll plan-level counters\n  UPDATE public.installment_plans\n  SET paid_installments = (\n        SELECT COUNT(*) FROM public.scheduled_installments\n        WHERE installment_plan_id = v_plan_id AND invoice_status = 'paid'\n      ),\n      total_paid = (\n        SELECT COALESCE(SUM(amount), 0) FROM public.scheduled_installments\n        WHERE installment_plan_id = v_plan_id AND invoice_status = 'paid'\n      ),\n      consecutive_sca_failures = 0,\n      updated_at = now()\n  WHERE id = v_plan_id;\n\n  -- Log a settlement event for the timeline UI\n  INSERT INTO public.installment_notifications(\n    installment_id, installment_plan_id, tenant_id,\n    notification_type, status, payment_id, message, sent_at, created_at\n  )\n  SELECT\n    p_installment_id,\n    v_plan_id,\n    si.tenant_id,\n    'payment_settled',\n    'success',\n    p_payment_id,\n    'Payment settled installment #' || v_installment_number,\n    now(),\n    now()\n  FROM public.scheduled_installments si\n  WHERE si.id = p_installment_id;\nEND;\n$function$\n"
+  },
+  {
+   "name": "is_super_admin",
+   "def": "CREATE OR REPLACE FUNCTION public.is_super_admin()\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  SELECT COALESCE(\n    (SELECT is_super_admin FROM app_users WHERE auth_user_id = auth.uid() LIMIT 1),\n    false\n  );\n$function$\n"
+  },
+  {
+   "name": "payg_settle_invoice",
+   "def": "CREATE OR REPLACE FUNCTION public.payg_settle_invoice(p_payment_id uuid, p_accrual_id uuid)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_rental_id uuid;\n  v_day_index integer;\nBEGIN\n  SELECT rental_id, accrual_day_index\n    INTO v_rental_id, v_day_index\n    FROM public.payg_accruals\n   WHERE id = p_accrual_id;\n\n  IF v_rental_id IS NULL THEN\n    RAISE NOTICE 'payg_settle_invoice: accrual % not found', p_accrual_id;\n    RETURN;\n  END IF;\n\n  UPDATE public.payg_accruals\n     SET invoice_status     = 'paid',\n         paid_at            = now(),\n         settling_payment_id = p_payment_id\n   WHERE id = p_accrual_id\n     AND invoice_status = 'open';\n\n  -- Supersede earlier OPEN accruals (original behaviour)\n  -- AND earlier 'paid' accruals that were settled by the SAME payment\n  -- (consolidates a multi-accrual single-Stripe-payment batch into the latest\n  -- accrual, which becomes the canonical \"paid invoice\" carrying the cumulative).\n  UPDATE public.payg_accruals\n     SET invoice_status          = 'superseded',\n         superseded_by_accrual_id = p_accrual_id\n   WHERE rental_id = v_rental_id\n     AND accrual_day_index < v_day_index\n     AND id != p_accrual_id\n     AND (\n       invoice_status = 'open'\n       OR (invoice_status = 'paid' AND settling_payment_id = p_payment_id)\n     );\nEND;\n$function$\n"
+  },
+  {
+   "name": "payment_apply_fifo_v2",
+   "def": "CREATE OR REPLACE FUNCTION public.payment_apply_fifo_v2(p_id uuid)\n RETURNS void\n LANGUAGE plpgsql\nAS $function$\nDECLARE\n  v_amt NUMERIC;\n  v_already NUMERIC;\n  v_left NUMERIC;\n  v_rental UUID;\n  v_customer UUID;\n  v_vehicle UUID;\n  v_tenant UUID;\n  v_pay_date DATE;\n  v_is_early BOOLEAN;\n  v_extension UUID;\n  v_targets_jsonb JSONB;\n  v_targets TEXT[];\n  c RECORD;\n  to_apply NUMERIC;\n  next_due_date DATE;\nBEGIN\n  SELECT amount, rental_id, customer_id, vehicle_id, payment_date, is_early, extension_id, target_categories, tenant_id\n    INTO v_amt, v_rental, v_customer, v_vehicle, v_pay_date, v_is_early, v_extension, v_targets_jsonb, v_tenant\n  FROM payments WHERE id = p_id;\n\n  IF v_customer IS NULL THEN RETURN; END IF;\n\n  -- Belt-and-braces: a payment row missing tenant_id would otherwise orphan\n  -- every P&L row it writes (invisible to the tenant-scoped P&L dashboard).\n  IF v_tenant IS NULL AND v_vehicle IS NOT NULL THEN\n    SELECT tenant_id INTO v_tenant FROM vehicles WHERE id = v_vehicle;\n  END IF;\n\n  IF v_targets_jsonb IS NOT NULL AND jsonb_typeof(v_targets_jsonb) = 'array' THEN\n    SELECT ARRAY(SELECT jsonb_array_elements_text(v_targets_jsonb)) INTO v_targets;\n  END IF;\n\n  SELECT COALESCE(SUM(amount_applied), 0) INTO v_already\n  FROM payment_applications WHERE payment_id = p_id;\n\n  v_left := v_amt - v_already;\n  IF v_left <= 0 THEN\n    UPDATE payments SET status = 'Applied', remaining_amount = 0 WHERE id = p_id;\n    RETURN;\n  END IF;\n\n  IF NOT v_is_early THEN\n    SELECT MIN(due_date) INTO next_due_date\n    FROM ledger_entries\n    WHERE customer_id = v_customer AND type='Charge' AND category='Rental' AND remaining_amount > 0;\n\n    IF next_due_date IS NOT NULL AND v_pay_date < next_due_date THEN\n      v_is_early := TRUE;\n      UPDATE payments SET is_early = TRUE WHERE id = p_id;\n    END IF;\n  END IF;\n\n  FOR c IN\n    WITH cat_order AS (\n      SELECT 'Rental'::text AS cat, 1 AS pri UNION ALL\n      SELECT 'Tax', 2 UNION ALL\n      SELECT 'Service Fee', 3 UNION ALL\n      SELECT 'Delivery Fee', 4 UNION ALL\n      SELECT 'Collection Fee', 5 UNION ALL\n      SELECT 'Insurance', 6 UNION ALL\n      SELECT 'Extras', 7 UNION ALL\n      SELECT 'Extension Rental', 8 UNION ALL\n      SELECT 'Extension Tax', 9 UNION ALL\n      SELECT 'Extension Service Fee', 10 UNION ALL\n      SELECT 'Extension Insurance', 11 UNION ALL\n      SELECT 'Fine', 12 UNION ALL\n      SELECT 'Fines', 12 UNION ALL\n      SELECT 'Other', 13 UNION ALL\n      -- Deliberately last: refundable money, not earned money. See header.\n      SELECT 'Security Deposit', 14\n    )\n    SELECT le.id, le.remaining_amount, le.due_date, le.category, co.pri\n      FROM ledger_entries le\n      JOIN cat_order co ON co.cat = le.category\n     WHERE le.customer_id = v_customer\n       AND le.type = 'Charge'\n       AND le.remaining_amount > 0\n       AND (v_rental IS NULL OR le.rental_id = v_rental)\n       AND (v_extension IS NULL OR le.extension_id = v_extension OR le.category NOT LIKE 'Extension%')\n       AND (v_targets IS NULL OR cardinality(v_targets) = 0 OR le.category = ANY(v_targets))\n     ORDER BY co.pri ASC, le.due_date ASC, le.entry_date ASC, le.id ASC\n  LOOP\n    EXIT WHEN v_left <= 0;\n    to_apply := LEAST(c.remaining_amount, v_left);\n\n    INSERT INTO payment_applications(payment_id, charge_entry_id, amount_applied)\n    VALUES (p_id, c.id, to_apply)\n    ON CONFLICT ON CONSTRAINT ux_payment_app_unique DO NOTHING;\n\n    UPDATE ledger_entries\n       SET remaining_amount = remaining_amount - to_apply\n     WHERE id = c.id;\n\n    -- A security deposit is a LIABILITY, not revenue: it is the renter's money\n    -- held against damage, refundable in full or in part at the end of the\n    -- rental. Booking it as Revenue overstates earnings now and would need a\n    -- negative correction at refund time. chk_pnl_category_valid ALLOWS\n    -- 'Security Deposit', so nothing but this guard stops it. The ledger is the\n    -- sole record of deposits; P&L sees them only if they are forfeited, which\n    -- is recorded separately as a Fine/Other charge.\n    IF c.category <> 'Security Deposit' THEN\n      -- P&L keeps fine revenue under 'Fines' (plural) to match existing pnl_entries\n      -- data and the chk_pnl_category_valid constraint, even though the ledger\n      -- charge category is 'Fine' (singular). Only the display name is normalized;\n      -- the amount/allocation is unchanged.\n      INSERT INTO pnl_entries(vehicle_id, tenant_id, entry_date, side, category, amount, source_ref)\n      VALUES (v_vehicle, v_tenant, c.due_date, 'Revenue',\n              CASE WHEN c.category = 'Fine' THEN 'Fines' ELSE c.category END,\n              to_apply, p_id::text || '_' || c.id::text)\n      ON CONFLICT (vehicle_id, category, source_ref)\n      DO UPDATE SET amount = pnl_entries.amount + EXCLUDED.amount;\n    END IF;\n\n    v_left := v_left - to_apply;\n  END LOOP;\n\n  IF v_left <= 0 THEN\n    UPDATE payments SET status = 'Applied', remaining_amount = 0 WHERE id = p_id;\n  ELSIF v_left = v_amt THEN\n    UPDATE payments SET status = 'Credit', remaining_amount = v_left WHERE id = p_id;\n  ELSE\n    UPDATE payments SET status = 'Partial', remaining_amount = v_left WHERE id = p_id;\n  END IF;\nEND;\n$function$\n"
+  },
+  {
+   "name": "payments_payment_provider_immutable",
+   "def": "CREATE OR REPLACE FUNCTION public.payments_payment_provider_immutable()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'public'\nAS $function$\nBEGIN\n  IF NEW.payment_provider IS DISTINCT FROM OLD.payment_provider THEN\n    RAISE EXCEPTION 'payments.payment_provider is immutable (% -> %)',\n      OLD.payment_provider, NEW.payment_provider USING ERRCODE = '23514';\n  END IF;\n  RETURN NEW;\nEND $function$\n"
+  },
+  {
+   "name": "set_ledger_entry_tenant_id",
+   "def": "CREATE OR REPLACE FUNCTION public.set_ledger_entry_tenant_id()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nBEGIN\n  -- If tenant_id is not set, try to get it from the rental\n  IF NEW.tenant_id IS NULL AND NEW.rental_id IS NOT NULL THEN\n    SELECT tenant_id INTO NEW.tenant_id\n    FROM rentals\n    WHERE id = NEW.rental_id;\n  END IF;\n\n  -- If still null and customer_id is set, try to get from customer\n  IF NEW.tenant_id IS NULL AND NEW.customer_id IS NOT NULL THEN\n    SELECT tenant_id INTO NEW.tenant_id\n    FROM customers\n    WHERE id = NEW.customer_id;\n  END IF;\n\n  RETURN NEW;\nEND;\n$function$\n"
+  },
+  {
+   "name": "set_payment_application_tenant_id",
+   "def": "CREATE OR REPLACE FUNCTION public.set_payment_application_tenant_id()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nBEGIN\n  -- If tenant_id is not set, try to get it from the payment\n  IF NEW.tenant_id IS NULL AND NEW.payment_id IS NOT NULL THEN\n    SELECT tenant_id INTO NEW.tenant_id\n    FROM payments\n    WHERE id = NEW.payment_id;\n  END IF;\n\n  RETURN NEW;\nEND;\n$function$\n"
+  },
+  {
+   "name": "set_updated_at",
+   "def": "CREATE OR REPLACE FUNCTION public.set_updated_at()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nBEGIN\n  NEW.updated_at = now();\n  RETURN NEW;\nEND;\n$function$\n"
+  },
+  {
+   "name": "sync_fine_status_on_charge_settled",
+   "def": "CREATE OR REPLACE FUNCTION public.sync_fine_status_on_charge_settled()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nBEGIN\n  IF NEW.type = 'Charge'\n     AND NEW.category = 'Fine'\n     AND NEW.reference LIKE 'FINE-%'\n     AND substring(NEW.reference from 6) ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'\n     AND COALESCE(NEW.remaining_amount, 0) <= 0\n     AND COALESCE(OLD.remaining_amount, 1) > 0\n  THEN\n    UPDATE public.fines\n       SET status = 'Paid'\n     WHERE id = substring(NEW.reference from 6)::uuid\n       AND status IN ('Open', 'Charged');\n  END IF;\n  RETURN NEW;\nEND;\n$function$\n"
+  },
+  {
+   "name": "trigger_apply_fifo_on_payment_completed",
+   "def": "CREATE OR REPLACE FUNCTION public.trigger_apply_fifo_on_payment_completed()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nBEGIN\n  -- Only fire on the transition INTO Completed (not already Completed before)\n  -- Only for customer-facing Payment rows (not InitialFee / Fine refund / etc)\n  -- Only when there's still money to allocate (avoid no-op work)\n  IF NEW.status = 'Completed'\n     AND (OLD.status IS DISTINCT FROM 'Completed')\n     AND COALESCE(NEW.payment_type, 'Payment') = 'Payment'\n     AND COALESCE(NEW.remaining_amount, NEW.amount) > 0 THEN\n    PERFORM public.payment_apply_fifo_v2(NEW.id);\n  END IF;\n  RETURN NEW;\nEND;\n$function$\n"
+  },
+  {
+   "name": "trigger_apply_fifo_on_payment_insert",
+   "def": "CREATE OR REPLACE FUNCTION public.trigger_apply_fifo_on_payment_insert()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nBEGIN\n  IF NEW.status = 'Completed'\n     AND COALESCE(NEW.payment_type, 'Payment') = 'Payment'\n     AND COALESCE(NEW.remaining_amount, NEW.amount) > 0 THEN\n    PERFORM public.payment_apply_fifo_v2(NEW.id);\n  END IF;\n  RETURN NEW;\nEND;\n$function$\n"
+  },
+  {
+   "name": "trigger_auto_allocate_payments",
+   "def": "CREATE OR REPLACE FUNCTION public.trigger_auto_allocate_payments()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nBEGIN\n  -- Only trigger on rental charges\n  IF NEW.type = 'Charge' AND NEW.category = 'Rental' AND NEW.remaining_amount > 0 THEN\n    DECLARE\n      credit_payment RECORD;\n    BEGIN\n      FOR credit_payment IN\n        SELECT p.id\n        FROM payments p\n        WHERE p.customer_id = NEW.customer_id\n          AND p.status IN ('Credit', 'Partial')\n          AND p.remaining_amount > 0\n        ORDER BY p.payment_date ASC, p.id ASC\n      LOOP\n        PERFORM payment_apply_fifo_v2(credit_payment.id);\n\n        SELECT remaining_amount INTO NEW.remaining_amount\n        FROM ledger_entries\n        WHERE id = NEW.id;\n\n        EXIT WHEN NEW.remaining_amount <= 0;\n      END LOOP;\n    END;\n  END IF;\n\n  RETURN NEW;\nEND;\n$function$\n"
+  },
+  {
+   "name": "trigger_payg_settle_on_ledger_drain",
+   "def": "CREATE OR REPLACE FUNCTION public.trigger_payg_settle_on_ledger_drain()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_accrual record;\n  v_all_paid boolean;\n  v_payment_id uuid;\nBEGIN\n  IF NEW.remaining_amount IS NULL OR NEW.remaining_amount > 0 THEN\n    RETURN NEW;\n  END IF;\n  IF OLD.remaining_amount IS NOT NULL AND OLD.remaining_amount = 0 THEN\n    RETURN NEW;\n  END IF;\n  IF NEW.type IS DISTINCT FROM 'Charge' THEN\n    RETURN NEW;\n  END IF;\n  IF NEW.category NOT IN ('Rental', 'Tax', 'Service Fee') THEN\n    RETURN NEW;\n  END IF;\n  IF NEW.rental_id IS NULL THEN\n    RETURN NEW;\n  END IF;\n\n  SELECT id, ledger_entry_ids\n  INTO v_accrual\n  FROM public.payg_accruals\n  WHERE rental_id = NEW.rental_id\n    AND invoice_status = 'open'\n    AND NEW.id = ANY(ledger_entry_ids)\n  ORDER BY accrual_day_index DESC\n  LIMIT 1;\n\n  IF v_accrual.id IS NULL THEN\n    RETURN NEW;\n  END IF;\n\n  SELECT NOT EXISTS (\n    SELECT 1 FROM public.ledger_entries le\n    WHERE le.id = ANY(v_accrual.ledger_entry_ids) AND COALESCE(le.remaining_amount, 0) > 0\n  ) INTO v_all_paid;\n\n  IF NOT v_all_paid THEN\n    RETURN NEW;\n  END IF;\n\n  -- Most recent payment that contributed to any of these ledger entries.\n  -- Join to payments for a real timestamp, then fall back to any rental payment.\n  SELECT p.id INTO v_payment_id\n  FROM public.payment_applications pa\n  JOIN public.payments p ON p.id = pa.payment_id\n  WHERE pa.charge_entry_id = ANY(v_accrual.ledger_entry_ids)\n  ORDER BY p.created_at DESC NULLS LAST, p.id DESC\n  LIMIT 1;\n\n  IF v_payment_id IS NULL THEN\n    SELECT p.id INTO v_payment_id\n    FROM public.payments p\n    WHERE p.rental_id = NEW.rental_id\n      AND p.status IN ('Applied','Partial','Credit','Completed')\n    ORDER BY p.created_at DESC\n    LIMIT 1;\n  END IF;\n\n  IF v_payment_id IS NULL THEN\n    RETURN NEW;\n  END IF;\n\n  PERFORM public.payg_settle_invoice(v_payment_id, v_accrual.id);\n  RETURN NEW;\nEND;\n$function$\n"
+  },
+  {
+   "name": "trigger_settle_ghost_paid_payg_accruals",
+   "def": "CREATE OR REPLACE FUNCTION public.trigger_settle_ghost_paid_payg_accruals()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_acc record;\nBEGIN\n  IF NEW.rental_id IS NULL THEN RETURN NEW; END IF;\n  IF NEW.status NOT IN ('Completed', 'Applied', 'Credit', 'Partial') THEN\n    RETURN NEW;\n  END IF;\n  -- Only on the meaningful transition: new row, or status changed to one of these\n  IF TG_OP = 'UPDATE' AND OLD.status = NEW.status THEN\n    RETURN NEW;\n  END IF;\n\n  FOR v_acc IN\n    SELECT a.id AS accrual_id, a.ledger_entry_ids\n    FROM public.payg_accruals a\n    WHERE a.rental_id = NEW.rental_id\n      AND a.invoice_status = 'open'\n      AND COALESCE(array_length(a.ledger_entry_ids, 1), 0) > 0\n      AND NOT EXISTS (\n        SELECT 1 FROM public.ledger_entries le\n        WHERE le.id = ANY(a.ledger_entry_ids) AND COALESCE(le.remaining_amount, 0) > 0\n      )\n    ORDER BY a.accrual_day_index ASC\n  LOOP\n    PERFORM public.payg_settle_invoice(NEW.id, v_acc.accrual_id);\n  END LOOP;\n\n  RETURN NEW;\nEND;\n$function$\n"
+  }
+ ],
+ "rls": [
+  {
+   "table": "installment_plans",
+   "policy": "Anon can insert installment_plans for bookings",
+   "cmd": "INSERT",
+   "roles": [
+    "anon"
+   ],
+   "qual": null,
+   "with_check": "true"
+  },
+  {
+   "table": "installment_plans",
+   "policy": "Anon can view installment_plans",
+   "cmd": "SELECT",
+   "roles": [
+    "anon"
+   ],
+   "qual": "true",
+   "with_check": null
+  },
+  {
+   "table": "installment_plans",
+   "policy": "Customers can read own installment_plans",
+   "cmd": "SELECT",
+   "roles": [
+    "public"
+   ],
+   "qual": "(EXISTS ( SELECT 1\n   FROM customer_users cu\n  WHERE ((cu.customer_id = installment_plans.customer_id) AND (cu.auth_user_id = auth.uid()))))",
+   "with_check": null
+  },
+  {
+   "table": "installment_plans",
+   "policy": "Service role can manage installment_plans",
+   "cmd": "ALL",
+   "roles": [
+    "service_role"
+   ],
+   "qual": "true",
+   "with_check": "true"
+  },
+  {
+   "table": "installment_plans",
+   "policy": "Tenant users can insert installment_plans",
+   "cmd": "INSERT",
+   "roles": [
+    "authenticated"
+   ],
+   "qual": null,
+   "with_check": "(tenant_id IN ( SELECT au.tenant_id\n   FROM app_users au\n  WHERE (au.auth_user_id = auth.uid())))"
+  },
+  {
+   "table": "installment_plans",
+   "policy": "Tenant users can update their installment_plans",
+   "cmd": "UPDATE",
+   "roles": [
+    "authenticated"
+   ],
+   "qual": "(tenant_id IN ( SELECT au.tenant_id\n   FROM app_users au\n  WHERE (au.auth_user_id = auth.uid())))",
+   "with_check": "(tenant_id IN ( SELECT au.tenant_id\n   FROM app_users au\n  WHERE (au.auth_user_id = auth.uid())))"
+  },
+  {
+   "table": "installment_plans",
+   "policy": "Tenant users can view their installment_plans",
+   "cmd": "SELECT",
+   "roles": [
+    "authenticated"
+   ],
+   "qual": "(tenant_id IN ( SELECT au.tenant_id\n   FROM app_users au\n  WHERE (au.auth_user_id = auth.uid())))",
+   "with_check": null
+  },
+  {
+   "table": "payment_applications",
+   "policy": "Allow all operations for app users",
+   "cmd": "ALL",
+   "roles": [
+    "public"
+   ],
+   "qual": "true",
+   "with_check": "true"
+  },
+  {
+   "table": "payments",
+   "policy": "Allow all operations for app users",
+   "cmd": "ALL",
+   "roles": [
+    "public"
+   ],
+   "qual": "true",
+   "with_check": "true"
+  },
+  {
+   "table": "payments",
+   "policy": "Users can delete payments for their tenant or super admin",
+   "cmd": "DELETE",
+   "roles": [
+    "authenticated"
+   ],
+   "qual": "((tenant_id = get_user_tenant_id()) OR is_super_admin())",
+   "with_check": null
+  },
+  {
+   "table": "payments",
+   "policy": "Users can insert payments for their tenant or super admin",
+   "cmd": "INSERT",
+   "roles": [
+    "authenticated"
+   ],
+   "qual": null,
+   "with_check": "((tenant_id = get_user_tenant_id()) OR is_super_admin())"
+  },
+  {
+   "table": "payments",
+   "policy": "Users can update payments for their tenant or super admin",
+   "cmd": "UPDATE",
+   "roles": [
+    "authenticated"
+   ],
+   "qual": "((tenant_id = get_user_tenant_id()) OR is_super_admin())",
+   "with_check": null
+  },
+  {
+   "table": "payments",
+   "policy": "Users can view payments for their tenant or super admin",
+   "cmd": "SELECT",
+   "roles": [
+    "authenticated"
+   ],
+   "qual": "((tenant_id = get_user_tenant_id()) OR is_super_admin())",
+   "with_check": null
+  },
+  {
+   "table": "payments",
+   "policy": "allow_all_delete",
+   "cmd": "DELETE",
+   "roles": [
+    "public"
+   ],
+   "qual": "(auth.uid() IS NOT NULL)",
+   "with_check": null
+  },
+  {
+   "table": "payments",
+   "policy": "allow_all_insert",
+   "cmd": "INSERT",
+   "roles": [
+    "public"
+   ],
+   "qual": null,
+   "with_check": "(auth.uid() IS NOT NULL)"
+  },
+  {
+   "table": "payments",
+   "policy": "allow_all_select",
+   "cmd": "SELECT",
+   "roles": [
+    "public"
+   ],
+   "qual": "(auth.uid() IS NOT NULL)",
+   "with_check": null
+  },
+  {
+   "table": "payments",
+   "policy": "allow_all_update",
+   "cmd": "UPDATE",
+   "roles": [
+    "public"
+   ],
+   "qual": "(auth.uid() IS NOT NULL)",
+   "with_check": null
+  },
+  {
+   "table": "payments",
+   "policy": "tenant_isolation_payments",
+   "cmd": "ALL",
+   "roles": [
+    "public"
+   ],
+   "qual": "((tenant_id = get_user_tenant_id()) OR is_super_admin())",
+   "with_check": "((tenant_id = get_user_tenant_id()) OR is_super_admin())"
+  },
+  {
+   "table": "scheduled_installments",
+   "policy": "Anon can insert scheduled_installments for bookings",
+   "cmd": "INSERT",
+   "roles": [
+    "anon"
+   ],
+   "qual": null,
+   "with_check": "true"
+  },
+  {
+   "table": "scheduled_installments",
+   "policy": "Anon can view scheduled_installments",
+   "cmd": "SELECT",
+   "roles": [
+    "anon"
+   ],
+   "qual": "true",
+   "with_check": null
+  },
+  {
+   "table": "scheduled_installments",
+   "policy": "Customers can read own scheduled_installments",
+   "cmd": "SELECT",
+   "roles": [
+    "public"
+   ],
+   "qual": "(EXISTS ( SELECT 1\n   FROM customer_users cu\n  WHERE ((cu.customer_id = scheduled_installments.customer_id) AND (cu.auth_user_id = auth.uid()))))",
+   "with_check": null
+  },
+  {
+   "table": "scheduled_installments",
+   "policy": "Service role can manage scheduled_installments",
+   "cmd": "ALL",
+   "roles": [
+    "service_role"
+   ],
+   "qual": "true",
+   "with_check": "true"
+  },
+  {
+   "table": "scheduled_installments",
+   "policy": "Tenant users can insert scheduled_installments",
+   "cmd": "INSERT",
+   "roles": [
+    "authenticated"
+   ],
+   "qual": null,
+   "with_check": "(tenant_id IN ( SELECT au.tenant_id\n   FROM app_users au\n  WHERE (au.auth_user_id = auth.uid())))"
+  },
+  {
+   "table": "scheduled_installments",
+   "policy": "Tenant users can update their scheduled_installments",
+   "cmd": "UPDATE",
+   "roles": [
+    "authenticated"
+   ],
+   "qual": "(tenant_id IN ( SELECT au.tenant_id\n   FROM app_users au\n  WHERE (au.auth_user_id = auth.uid())))",
+   "with_check": "(tenant_id IN ( SELECT au.tenant_id\n   FROM app_users au\n  WHERE (au.auth_user_id = auth.uid())))"
+  },
+  {
+   "table": "scheduled_installments",
+   "policy": "Tenant users can view their scheduled_installments",
+   "cmd": "SELECT",
+   "roles": [
+    "authenticated"
+   ],
+   "qual": "(tenant_id IN ( SELECT au.tenant_id\n   FROM app_users au\n  WHERE (au.auth_user_id = auth.uid())))",
+   "with_check": null
+  }
+ ]
+}
