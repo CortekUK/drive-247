@@ -1,6 +1,7 @@
 'use client';
 
-import { FilterPanel } from '@/components/admin/filter-panel';
+import { FilterChip, FilterSearch, FilterSection, FilterShell } from '@/components/admin/filter-primitives';
+import { OverviewFlip } from '@/components/admin/overview-flip';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
@@ -8,7 +9,6 @@ import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -41,14 +41,13 @@ import {
 } from '@/components/ui/tooltip';
 import {
   Rocket,
-  Search,
+  Filter,
   ArrowRight,
   Clock,
   CheckCircle2,
   XCircle,
   AlertCircle,
   MessageSquare,
-  RotateCcw,
   Loader2,
 } from 'lucide-react';
 
@@ -117,6 +116,8 @@ export default function RequestsPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  /* Which face of the overview card is showing. Filters start hidden. */
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   // Confirm dialog state
@@ -242,8 +243,25 @@ export default function RequestsPage() {
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {/* Search, with the filter toggle inside the field — then the overview,
+          whose other face IS the filter panel. Northwind gives the two a single
+          slot and turns the card over between them rather than dropping a
+          second surface underneath, so the stats and the filters never compete
+          for the same eye at the same time. */}
+      <FilterSearch
+        value={searchQuery}
+        onChange={setSearchQuery}
+        placeholder="Search by tenant, requester, or integration..."
+        open={filtersOpen}
+        onOpenChange={setFiltersOpen}
+        activeCount={activeFilterCount}
+      />
+
+      <OverviewFlip
+        flipped={filtersOpen}
+        onFlipBack={() => setFiltersOpen(false)}
+        front={
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card
           className={cn(
             'cursor-pointer transition-all',
@@ -303,59 +321,34 @@ export default function RequestsPage() {
             </div>
           </CardContent>
         </Card>
-      </div>
-
-      {/* Search & Filters */}
-      <FilterPanel count={activeFilterCount}>
-        <div className="pr-10">
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search by tenant, requester, or integration..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-
-            <div className="flex items-center gap-1.5">
-              {(['all', 'pending', 'approved', 'rejected'] as const).map((status) => (
-                <button
-                  key={status}
-                  onClick={() => setFilter(status)}
-                  className={cn(
-                    'px-3 py-2 rounded-md text-xs font-semibold transition-all capitalize border',
-                    filter === status
-                      ? status === 'pending'
-                        ? 'bg-warning/15 text-amber-600 border-warning/30'
-                        : status === 'approved'
-                        ? 'bg-success/15 text-emerald-600 border-success/30'
-                        : status === 'rejected'
-                        ? 'bg-destructive/15 text-red-600 border-destructive/30'
-                        : 'bg-primary/15 text-primary border-primary/30'
-                      : 'bg-secondary text-muted-foreground border-transparent hover:bg-secondary/80'
-                  )}
-                >
-                  {status}
-                </button>
-              ))}
-
-              {(filter !== 'all' || searchQuery) && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => { setFilter('all'); setSearchQuery(''); }}
-                  className="gap-1.5 ml-1"
-                >
-                  <RotateCcw className="h-3.5 w-3.5" />
-                  Reset
-                </Button>
-              )}
-            </div>
           </div>
-        </div>
-      </FilterPanel>
+        }
+        back={
+          <FilterShell
+            activeCount={activeFilterCount}
+            onClear={() => { setFilter('all'); setSearchQuery(''); }}
+            onClose={() => setFiltersOpen(false)}
+          >
+            {/* The four status buttons carried their own per-status colour and
+                sat permanently under the search box. They are `FilterChip`s on
+                the card's back face now — the status colour is still on every
+                row in the table below. */}
+            <FilterSection
+              icon={<Filter className="size-3 text-primary" />}
+              tint="bg-primary/10"
+              title="Status"
+            >
+              <div className="flex flex-wrap gap-1.5">
+                {(['all', 'pending', 'approved', 'rejected'] as const).map((status) => (
+                  <FilterChip key={status} active={filter === status} onClick={() => setFilter(status)}>
+                    <span className="capitalize">{status === 'all' ? 'Any status' : status}</span>
+                  </FilterChip>
+                ))}
+              </div>
+            </FilterSection>
+          </FilterShell>
+        }
+      />
 
       {/* Table */}
       <Card>

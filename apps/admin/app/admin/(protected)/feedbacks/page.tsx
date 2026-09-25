@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/authStore';
 import { toast } from '@/components/ui/sonner';
-import { FilterPanel } from '@/components/admin/filter-panel';
+import { FilterChip, FilterSearch, FilterSection, FilterShell } from '@/components/admin/filter-primitives';
+import { FilterReveal } from '@/components/admin/overview-flip';
 import { TableSkeleton } from '@/components/skeletons/TableSkeleton';
 import {
   Dialog,
@@ -42,6 +43,8 @@ import {
   ImageIcon,
   Loader2,
   Megaphone,
+  Building2,
+  CalendarDays,
 } from 'lucide-react';
 
 const PAGE_SIZE = 50;
@@ -103,6 +106,8 @@ export default function FeedbacksPage() {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [search, setSearch] = useState('');
+  /* Whether the filter panel is showing. Filters start hidden. */
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const [tenants, setTenants] = useState<{ id: string; company_name: string | null; slug: string | null }[]>([]);
 
@@ -574,69 +579,110 @@ export default function FeedbacksPage() {
         </div>
       </div>
 
-      {/* Filters */}
-      {/* Folded away until asked for, the way the portal does it: the row of
-          labelled controls used to sit here permanently, between the title and
-          the data, on screen whether or not anyone was filtering.
+      {/* Search, with the filter toggle inside the field. The row of labelled
+          controls used to sit here permanently, between the title and the data,
+          on screen whether or not anyone was filtering.
 
-          `FilterPanel` owns only the button, the open state and the card. Every
-          value below is still this page's own `useState` and every handler is
-          unchanged — the controls simply moved inside. */}
-      <FilterPanel count={activeFilterCount}>
-      <div className="flex flex-wrap gap-3 items-end pr-10">
-        <div className="w-44">
-          <Label className="text-xs text-muted-foreground mb-1 block">Category</Label>
-          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All categories</SelectItem>
-              {(Object.keys(CATEGORY_META) as Category[]).map((c) => (
-                <SelectItem key={c} value={c}>{CATEGORY_META[c].label}</SelectItem>
+          Every value below is still this page's own `useState` and every
+          handler is unchanged — the controls simply moved onto the panel. */}
+      <FilterSearch
+        value={search}
+        onChange={setSearch}
+        placeholder="Search message text..."
+        open={filtersOpen}
+        onOpenChange={setFiltersOpen}
+        activeCount={activeFilterCount}
+      />
+
+      <FilterReveal open={filtersOpen}>
+        <FilterShell
+          activeCount={activeFilterCount}
+          onClear={() => {
+            setStatusFilter('all');
+            setCategoryFilter('all');
+            setTenantFilter('all');
+            setFromDate('');
+            setToDate('');
+            setSearch('');
+          }}
+          onClose={() => setFiltersOpen(false)}
+        >
+          {/* Status is two states plus "all", so it is chips. Category and
+              tenant are open-ended lists and stay Selects. */}
+          <FilterSection
+            icon={<Check className="size-3 text-success" />}
+            tint="bg-success/10"
+            title="Status"
+          >
+            <div className="flex flex-wrap gap-1.5">
+              {(['all', 'open', 'resolved'] as const).map((status) => (
+                <FilterChip
+                  key={status}
+                  active={statusFilter === status}
+                  onClick={() => setStatusFilter(status)}
+                >
+                  <span className="capitalize">{status === 'all' ? 'Any' : status}</span>
+                </FilterChip>
               ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="w-36">
-          <Label className="text-xs text-muted-foreground mb-1 block">Status</Label>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All</SelectItem>
-              <SelectItem value="open">Open</SelectItem>
-              <SelectItem value="resolved">Resolved</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="w-52">
-          <Label className="text-xs text-muted-foreground mb-1 block">Tenant</Label>
-          <Select value={tenantFilter} onValueChange={setTenantFilter}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All tenants</SelectItem>
-              {tenants.map((t) => (
-                <SelectItem key={t.id} value={t.id}>{t.company_name || t.slug}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="w-40">
-          <Label className="text-xs text-muted-foreground mb-1 block">From</Label>
-          <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
-        </div>
-        <div className="w-40">
-          <Label className="text-xs text-muted-foreground mb-1 block">To</Label>
-          <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
-        </div>
-        <div className="flex-1 min-w-[200px]">
-          <Label className="text-xs text-muted-foreground mb-1 block">Search</Label>
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search message text..."
-          />
-        </div>
-      </div>
-      </FilterPanel>
+            </div>
+          </FilterSection>
+
+          <FilterSection
+            icon={<StickyNote className="size-3 text-primary" />}
+            tint="bg-primary/10"
+            title="Category"
+          >
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger className="h-8 w-full text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All categories</SelectItem>
+                {(Object.keys(CATEGORY_META) as Category[]).map((c) => (
+                  <SelectItem key={c} value={c}>{CATEGORY_META[c].label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FilterSection>
+
+          <FilterSection
+            icon={<Building2 className="size-3 text-[hsl(var(--chart-3))]" />}
+            tint="bg-[hsl(var(--chart-3))]/10"
+            title="Tenant"
+          >
+            <Select value={tenantFilter} onValueChange={setTenantFilter}>
+              <SelectTrigger className="h-8 w-full text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All tenants</SelectItem>
+                {tenants.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>{t.company_name || t.slug}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FilterSection>
+
+          <FilterSection
+            icon={<CalendarDays className="size-3 text-warning" />}
+            tint="bg-warning/10"
+            title="Date range"
+          >
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Input
+                type="date"
+                value={fromDate}
+                onChange={(e) => setFromDate(e.target.value)}
+                className="h-8 w-[8.75rem] text-xs"
+                aria-label="From date"
+              />
+              <Input
+                type="date"
+                value={toDate}
+                onChange={(e) => setToDate(e.target.value)}
+                className="h-8 w-[8.75rem] text-xs"
+                aria-label="To date"
+              />
+            </div>
+          </FilterSection>
+        </FilterShell>
+      </FilterReveal>
 
       {/* Table */}
       <div className="rounded-lg border border-dark-border bg-dark-card overflow-hidden">

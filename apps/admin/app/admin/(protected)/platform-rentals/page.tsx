@@ -1,13 +1,13 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { FilterPanel } from '@/components/admin/filter-panel';
+import { FilterChip, FilterSearch, FilterSection, FilterShell } from '@/components/admin/filter-primitives';
+import { OverviewFlip } from '@/components/admin/overview-flip';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
@@ -32,13 +32,13 @@ import {
 } from '@/components/ui/dialog';
 import {
   Activity,
-  Search,
+  Building2,
+  HeartPulse,
   AlertOctagon,
   AlertTriangle,
   CheckCircle2,
   RefreshCw,
   ArrowRight,
-  X,
 } from 'lucide-react';
 
 type Severity = 'ok' | 'warning' | 'critical';
@@ -89,6 +89,8 @@ export default function PlatformRentalsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [tenantFilter, setTenantFilter] = useState<string>('all');
   const [sevFilter, setSevFilter] = useState<Severity | 'all'>('all');
+  /* Which face of the overview card is showing. Filters start hidden. */
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [selected, setSelected] = useState<RentalRow | null>(null);
 
   const load = async () => {
@@ -190,8 +192,22 @@ export default function PlatformRentalsPage() {
         </Button>
       </div>
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {/* Search, with the filter toggle inside the field — then the health
+          cards, whose other face IS the filter panel. */}
+      <FilterSearch
+        value={searchQuery}
+        onChange={setSearchQuery}
+        placeholder="Search by rental ref, customer, or tenant..."
+        open={filtersOpen}
+        onOpenChange={setFiltersOpen}
+        activeCount={activeFilterCount}
+      />
+
+      <OverviewFlip
+        flipped={filtersOpen}
+        onFlipBack={() => setFiltersOpen(false)}
+        front={
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card
           className={cn('cursor-pointer transition-all', sevFilter === 'critical' && 'border-destructive/40 bg-destructive/5')}
           onClick={() => setSevFilter(sevFilter === 'critical' ? 'all' : 'critical')}
@@ -242,45 +258,56 @@ export default function PlatformRentalsPage() {
             </div>
           </CardContent>
         </Card>
-      </div>
-
-      {/* Filters */}
-      <FilterPanel count={activeFilterCount}>
-        <div className="pr-10">
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search by rental ref, customer, or tenant..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-            <Select value={tenantFilter} onValueChange={setTenantFilter}>
-              <SelectTrigger className="sm:w-56">
-                <SelectValue placeholder="All tenants" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All tenants</SelectItem>
-                {tenants.map(([id, name]) => (
-                  <SelectItem key={id} value={id}>{name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {(searchQuery || tenantFilter !== 'all' || sevFilter !== 'all') && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="gap-1.5"
-                onClick={() => { setSearchQuery(''); setTenantFilter('all'); setSevFilter('all'); }}
-              >
-                <X className="h-4 w-4" /> Clear
-              </Button>
-            )}
           </div>
-        </div>
-      </FilterPanel>
+        }
+        back={
+          <FilterShell
+            activeCount={activeFilterCount}
+            onClear={() => { setSearchQuery(''); setTenantFilter('all'); setSevFilter('all'); }}
+            onClose={() => setFiltersOpen(false)}
+          >
+            {/* Tenants stay a Select: the list is however many companies exist,
+                which is not a chip row. Health is a fixed four and is chips —
+                the same state the cards on the front face toggle, reachable
+                from here too rather than only by clicking a card. */}
+            <FilterSection
+              icon={<Building2 className="size-3 text-primary" />}
+              tint="bg-primary/10"
+              title="Tenant"
+            >
+              <Select value={tenantFilter} onValueChange={setTenantFilter}>
+                <SelectTrigger className="h-8 w-full text-xs">
+                  <SelectValue placeholder="All tenants" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All tenants</SelectItem>
+                  {tenants.map(([id, name]) => (
+                    <SelectItem key={id} value={id}>{name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FilterSection>
+
+            <FilterSection
+              icon={<HeartPulse className="size-3 text-success" />}
+              tint="bg-success/10"
+              title="Health"
+            >
+              <div className="flex flex-wrap gap-1.5">
+                {(['all', 'critical', 'warning', 'ok'] as const).map((sev) => (
+                  <FilterChip
+                    key={sev}
+                    active={sevFilter === sev}
+                    onClick={() => setSevFilter(sev as Severity | 'all')}
+                  >
+                    <span className="capitalize">{sev === 'all' ? 'Any' : sev}</span>
+                  </FilterChip>
+                ))}
+              </div>
+            </FilterSection>
+          </FilterShell>
+        }
+      />
 
       {/* Table */}
       <Card>

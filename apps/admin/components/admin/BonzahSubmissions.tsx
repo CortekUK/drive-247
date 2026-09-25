@@ -4,9 +4,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
+import { FilterChip, FilterSearch, FilterSection, FilterShell } from '@/components/admin/filter-primitives';
+import { OverviewFlip } from '@/components/admin/overview-flip';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -115,7 +116,11 @@ export default function BonzahSubmissions() {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<FilterStatus>('all');
+  /* Which face of the stat card is showing. Filters start hidden. */
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  /* What the badge counts: every axis currently narrowing the list. */
+  const activeFilterCount = (filter !== 'all' ? 1 : 0) + (searchQuery.trim() ? 1 : 0);
   const [selected, setSelected] = useState<Submission | null>(null);
   const [rowAction, setRowAction] = useState<{ id: string; kind: 'pdf' | 'zip' } | null>(null);
 
@@ -211,8 +216,23 @@ export default function BonzahSubmissions() {
 
   return (
     <div className="space-y-6">
-      {/* Stat cards (clickable filters) */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {/* Search with the toggle inside it, then the stat cards — whose other
+          face is the filter panel. The status buttons and the search box used
+          to sit in a Card of their own below the stats, permanently on screen. */}
+      <FilterSearch
+        value={searchQuery}
+        onChange={setSearchQuery}
+        placeholder="Search by business name, contact email, EIN, or tenant..."
+        open={filtersOpen}
+        onOpenChange={setFiltersOpen}
+        activeCount={activeFilterCount}
+      />
+
+      <OverviewFlip
+        flipped={filtersOpen}
+        onFlipBack={() => setFiltersOpen(false)}
+        front={
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {(
           [
             { key: 'pending', icon: Clock, label: 'Pending', count: counts.pending, accent: 'warning' },
@@ -240,47 +260,31 @@ export default function BonzahSubmissions() {
               </div>
             </CardContent>
           </Card>
-        ))}
-      </div>
-
-      {/* Search & Filters */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search by business name, contact email, EIN, or tenant..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-            <div className="flex items-center gap-1.5">
-              {(['all', 'pending', 'approved', 'rejected'] as const).map((status) => (
-                <button
-                  key={status}
-                  onClick={() => setFilter(status)}
-                  className={cn(
-                    'px-3 py-2 rounded-md text-xs font-semibold transition-all capitalize border',
-                    filter === status
-                      ? status === 'pending'
-                        ? 'bg-warning/15 text-amber-400 border-warning/30'
-                        : status === 'approved'
-                        ? 'bg-success/15 text-success border-success/30'
-                        : status === 'rejected'
-                        ? 'bg-destructive/15 text-destructive border-destructive/30'
-                        : 'bg-primary/15 text-primary border-primary/30'
-                      : 'bg-transparent text-muted-foreground border-border hover:text-foreground',
-                  )}
-                >
-                  {status}
-                </button>
-              ))}
-            </div>
+            ))}
           </div>
-        </CardContent>
-      </Card>
+        }
+        back={
+          <FilterShell
+            activeCount={activeFilterCount}
+            onClear={() => { setFilter('all'); setSearchQuery(''); }}
+            onClose={() => setFiltersOpen(false)}
+          >
+            <FilterSection
+              icon={<FileText className="size-3 text-primary" />}
+              tint="bg-primary/10"
+              title="Status"
+            >
+              <div className="flex flex-wrap gap-1.5">
+                {(['all', 'pending', 'approved', 'rejected'] as const).map((status) => (
+                  <FilterChip key={status} active={filter === status} onClick={() => setFilter(status)}>
+                    <span className="capitalize">{status === 'all' ? 'Any status' : status}</span>
+                  </FilterChip>
+                ))}
+              </div>
+            </FilterSection>
+          </FilterShell>
+        }
+      />
 
       {/* Table */}
       <Card>

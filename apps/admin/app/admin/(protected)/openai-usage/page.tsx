@@ -14,13 +14,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { FilterChip, FilterSection, FilterShell, FilterToggle } from '@/components/admin/filter-primitives';
+import { OverviewFlip } from '@/components/admin/overview-flip';
 import {
   BarChart,
   Bar,
@@ -30,7 +25,7 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from 'recharts';
-import { Sparkles, RotateCcw, AlertTriangle, DollarSign, Activity, Hash, TrendingUp } from 'lucide-react';
+import { Sparkles, RotateCcw, AlertTriangle, DollarSign, Activity, Hash, TrendingUp, CalendarDays } from 'lucide-react';
 import { format, subDays, startOfDay } from 'date-fns';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -94,6 +89,8 @@ function functionBadgeColor(fn: string): string {
 
 export default function OpenAIUsagePage() {
   const [range, setRange] = useState<RangeKey>('7d');
+  /* Which face of the stat row is showing. Filters start hidden. */
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [logs, setLogs] = useState<UsageLog[]>([]);
   const [tenantNames, setTenantNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -219,16 +216,16 @@ export default function OpenAIUsagePage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Select value={range} onValueChange={(v) => setRange(v as RangeKey)}>
-            <SelectTrigger className="w-[140px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="24h">Last 24 hours</SelectItem>
-              <SelectItem value="7d">Last 7 days</SelectItem>
-              <SelectItem value="30d">Last 30 days</SelectItem>
-            </SelectContent>
-          </Select>
+          {/* The range picker used to sit here as a 140px Select. It is the one
+              thing narrowing this page, so it belongs on the filter panel with
+              every other list's filters — and the toggle shows which range is
+              set once it is closed. */}
+          <FilterToggle
+            open={filtersOpen}
+            onOpenChange={setFiltersOpen}
+            activeCount={range !== '7d' ? 1 : 0}
+            standalone
+          />
           <Button variant="outline" size="sm" onClick={fetchLogs} disabled={loading} className="gap-1.5">
             <RotateCcw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
             Refresh
@@ -236,8 +233,12 @@ export default function OpenAIUsagePage() {
         </div>
       </div>
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {/* Stat cards, whose other face is the filter panel. */}
+      <OverviewFlip
+        flipped={filtersOpen}
+        onFlipBack={() => setFiltersOpen(false)}
+        front={
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard
           icon={<DollarSign className="h-4 w-4" />}
           label="Total Spend"
@@ -266,7 +267,34 @@ export default function OpenAIUsagePage() {
           loading={loading}
           accent="amber"
         />
-      </div>
+          </div>
+        }
+        back={
+          <FilterShell
+            activeCount={range !== '7d' ? 1 : 0}
+            onClear={() => setRange('7d')}
+            onClose={() => setFiltersOpen(false)}
+          >
+            <FilterSection
+              icon={<CalendarDays className="size-3 text-primary" />}
+              tint="bg-primary/10"
+              title="Range"
+            >
+              <div className="flex flex-wrap gap-1.5">
+                {([
+                  ['24h', 'Last 24 hours'],
+                  ['7d', 'Last 7 days'],
+                  ['30d', 'Last 30 days'],
+                ] as const).map(([value, label]) => (
+                  <FilterChip key={value} active={range === value} onClick={() => setRange(value)}>
+                    {label}
+                  </FilterChip>
+                ))}
+              </div>
+            </FilterSection>
+          </FilterShell>
+        }
+      />
 
       {/* Alerts */}
       {(totals.errorCount > 0 || totals.fallbackCount > 0) && !loading && (

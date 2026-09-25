@@ -1,6 +1,7 @@
 'use client';
 
-import { FilterPanel } from '@/components/admin/filter-panel';
+import { FilterSearch, FilterSection, FilterShell } from '@/components/admin/filter-primitives';
+import { FilterReveal } from '@/components/admin/overview-flip';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -31,6 +32,8 @@ import {
 import {
   ScrollText,
   Search,
+  Boxes,
+  CalendarDays,
   ChevronLeft,
   ChevronRight,
   Info,
@@ -355,6 +358,8 @@ export default function AuditLogsPage() {
   const [tenantFilter, setTenantFilter] = useState('all');
   const [entityTypeFilter, setEntityTypeFilter] = useState('all');
   const [actionFilter, setActionFilter] = useState('all');
+  /* Whether the filter panel is showing. Filters start hidden. */
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [dateFrom, setDateFrom] = useState<Date | undefined>();
   const [dateTo, setDateTo] = useState<Date | undefined>();
@@ -724,31 +729,44 @@ export default function AuditLogsPage() {
         </div>
       </div>
 
-      {/* Filters */}
-      <FilterPanel count={activeFilterCount}>
-        <div className="pr-10">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
-            {/* Search */}
-            <div className="relative xl:col-span-2">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search logs..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9"
-              />
-            </div>
+      {/* Search, with the filter toggle inside the field. */}
+      <FilterSearch
+        value={searchQuery}
+        onChange={setSearchQuery}
+        placeholder="Search logs..."
+        open={filtersOpen}
+        onOpenChange={setFiltersOpen}
+        activeCount={activeFilterCount}
+      />
 
-            {/* Tenant filter — searchable */}
+      <FilterReveal open={filtersOpen}>
+        <FilterShell
+          activeCount={activeFilterCount}
+          onClear={resetFilters}
+          onClose={() => setFiltersOpen(false)}
+        >
+          {/* Every control here is an open-ended list or a date, so none of
+              them become chips — the sections just give each one the label it
+              used to carry only as placeholder text. */}
+          <FilterSection
+            icon={<Building2 className="size-3 text-primary" />}
+            tint="bg-primary/10"
+            title="Tenant"
+          >
             <TenantPicker
               tenants={tenants}
               value={tenantFilter}
               onChange={setTenantFilter}
             />
+          </FilterSection>
 
-            {/* Entity type filter */}
+          <FilterSection
+            icon={<Boxes className="size-3 text-[hsl(var(--chart-3))]" />}
+            tint="bg-[hsl(var(--chart-3))]/10"
+            title="Entity"
+          >
             <Select value={entityTypeFilter} onValueChange={setEntityTypeFilter}>
-              <SelectTrigger>
+              <SelectTrigger className="h-8 w-full text-xs">
                 <SelectValue placeholder="All Entities" />
               </SelectTrigger>
               <SelectContent>
@@ -760,21 +778,33 @@ export default function AuditLogsPage() {
                 ))}
               </SelectContent>
             </Select>
+          </FilterSection>
 
-            {/* Date range */}
+          <FilterSection
+            icon={<CalendarDays className="size-3 text-warning" />}
+            tint="bg-warning/10"
+            title="From"
+          >
             <DatePicker
               value={dateFrom}
               onChange={setDateFrom}
               placeholder="From date"
             />
+          </FilterSection>
+
+          <FilterSection
+            icon={<CalendarDays className="size-3 text-warning" />}
+            tint="bg-warning/10"
+            title="To"
+          >
             <DatePicker
               value={dateTo}
               onChange={setDateTo}
               placeholder="To date"
             />
-          </div>
-        </div>
-      </FilterPanel>
+          </FilterSection>
+        </FilterShell>
+      </FilterReveal>
 
       {/* Table */}
       <Card>

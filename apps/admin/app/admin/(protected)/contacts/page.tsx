@@ -4,6 +4,9 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { toast } from '@/components/ui/sonner';
 import { TableSkeleton } from '@/components/skeletons/TableSkeleton';
+import { FilterChip, FilterSection, FilterShell, FilterToggle } from '@/components/admin/filter-primitives';
+import { FilterReveal } from '@/components/admin/overview-flip';
+import { Inbox } from 'lucide-react';
 
 interface ContactRequest {
   id: string;
@@ -21,6 +24,8 @@ export default function ContactRequestsPage() {
   const [requests, setRequests] = useState<ContactRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>('all');
+  /* Whether the filter panel is showing. Filters start hidden. */
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   useEffect(() => {
     loadRequests();
@@ -81,20 +86,43 @@ export default function ContactRequestsPage() {
         <p className="mt-2 text-muted-foreground">Manage inquiries from potential rental companies</p>
       </div>
 
-      <div className="mb-6 flex space-x-2">
-        {['all', 'pending', 'contacted', 'converted', 'rejected'].map((status) => (
-          <button
-            key={status}
-            onClick={() => setFilter(status)}
-            className={`px-4 py-2 rounded-lg font-medium capitalize ${
-              filter === status
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-dark-card text-muted-foreground hover:bg-dark-hover border border-dark-border'
-            }`}
+      {/* Five status buttons used to sit here permanently. This page has
+          nothing to search, so the toggle stands on its own row rather than
+          inside a field — the panel it opens is the same one every other list
+          in this app uses. */}
+      <div className="mb-6 space-y-3">
+        <FilterToggle
+          open={filtersOpen}
+          onOpenChange={setFiltersOpen}
+          activeCount={filter !== 'all' ? 1 : 0}
+          standalone
+        />
+
+        <FilterReveal open={filtersOpen}>
+          <FilterShell
+            activeCount={filter !== 'all' ? 1 : 0}
+            onClear={() => setFilter('all')}
+            onClose={() => setFiltersOpen(false)}
           >
-            {status}
-          </button>
-        ))}
+            <FilterSection
+              icon={<Inbox className="size-3 text-primary" />}
+              tint="bg-primary/10"
+              title="Status"
+            >
+              <div className="flex flex-wrap gap-1.5">
+                {['all', 'pending', 'contacted', 'converted', 'rejected'].map((status) => (
+                  <FilterChip
+                    key={status}
+                    active={filter === status}
+                    onClick={() => setFilter(status)}
+                  >
+                    <span className="capitalize">{status === 'all' ? 'Any status' : status}</span>
+                  </FilterChip>
+                ))}
+              </div>
+            </FilterSection>
+          </FilterShell>
+        </FilterReveal>
       </div>
 
       {/* `overflow-x-auto`, not `overflow-hidden`: this table is wider than a

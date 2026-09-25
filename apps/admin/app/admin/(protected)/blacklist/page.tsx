@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useState } from 'react';
 import { supabase, supabaseUrl } from '@/lib/supabase';
 import { toast } from '@/components/ui/sonner';
+import { FilterSearch } from '@/components/admin/filter-primitives';
 
 interface BlockedCustomer {
   id: string;
@@ -260,14 +261,17 @@ export default function BlacklistPage() {
         </div>
       </div>
 
-      {/* Search Bar */}
+      {/* Search Bar.
+
+          The same field every other list in this app wears, rather than the
+          hand-rolled `<input>` that used to be here with its own border and
+          focus ring. NO filter toggle: this page narrows by search alone, and
+          a toggle that opened an empty panel would be a button that lies. */}
       <div className="mb-6">
-        <input
-          type="text"
-          placeholder="Search by name, email, or tenant..."
+        <FilterSearch
           value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full max-w-md px-4 py-2 rounded-lg bg-dark-card border border-dark-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
+          onChange={setSearchQuery}
+          placeholder="Search by name, email, or tenant..."
         />
       </div>
 

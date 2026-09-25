@@ -8,10 +8,11 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/sonner';
+import { FilterChip, FilterSearch, FilterSection, FilterShell } from '@/components/admin/filter-primitives';
+import { FilterReveal } from '@/components/admin/overview-flip';
 import { promoApi, type PromoCode } from './api';
 import { TermsFields, draftFromTerms, termsFromDraft, type TermsDraft } from './shared';
 
@@ -26,6 +27,10 @@ export function CodesTab({ canEdit }: { canEdit: boolean }) {
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<Status>('active');
   const [search, setSearch] = useState('');
+  /* Whether the filter panel is showing. Filters start hidden. */
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  /* 'active' is the default view, so it is not counted as a narrowing. */
+  const activeFilterCount = (status !== 'active' ? 1 : 0) + (search.trim() ? 1 : 0);
   const [editing, setEditing] = useState<PromoCode | 'new' | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -65,28 +70,51 @@ export function CodesTab({ canEdit }: { canEdit: boolean }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="min-w-[200px] flex-1 space-y-1.5">
-          <Label htmlFor="code-search">Search</Label>
-          <Input id="code-search" placeholder="SUNSET, LAUNCH50…" value={search} onChange={e => setSearch(e.target.value)} />
-        </div>
-        <div className="space-y-1.5">
-          <Label>Status</Label>
-          <Select value={status} onValueChange={v => setStatus(v as Status)}>
-            <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="inactive">Switched off</SelectItem>
-              <SelectItem value="superseded">Old versions</SelectItem>
-              <SelectItem value="all">All</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+      {/* Search with the toggle inside it, and the status choices behind it —
+          the same surface every list in this app now uses. The pair used to sit
+          here permanently as two labelled controls. */}
+      <div className="flex flex-wrap items-center gap-3">
+        <FilterSearch
+          value={search}
+          onChange={setSearch}
+          placeholder="SUNSET, LAUNCH50…"
+          open={filtersOpen}
+          onOpenChange={setFiltersOpen}
+          activeCount={activeFilterCount}
+          className="min-w-[200px] flex-1"
+        />
         <Button variant="outline" size="icon" onClick={load} aria-label="Reload"><RefreshCw className="h-4 w-4" /></Button>
         {canEdit && (
           <Button className="gap-1.5" onClick={() => setEditing('new')}><Plus className="h-4 w-4" /> New campaign code</Button>
         )}
       </div>
+
+      <FilterReveal open={filtersOpen}>
+        <FilterShell
+          activeCount={activeFilterCount}
+          onClear={() => { setStatus('active'); setSearch(''); }}
+          onClose={() => setFiltersOpen(false)}
+        >
+          <FilterSection
+            icon={<Power className="size-3 text-primary" />}
+            tint="bg-primary/10"
+            title="Status"
+          >
+            <div className="flex flex-wrap gap-1.5">
+              {([
+                ['active', 'Active'],
+                ['inactive', 'Switched off'],
+                ['superseded', 'Old versions'],
+                ['all', 'All'],
+              ] as const).map(([value, label]) => (
+                <FilterChip key={value} active={status === value} onClick={() => setStatus(value)}>
+                  {label}
+                </FilterChip>
+              ))}
+            </div>
+          </FilterSection>
+        </FilterShell>
+      </FilterReveal>
 
       <Card>
         <CardContent className="p-0">

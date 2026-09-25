@@ -27,7 +27,8 @@ import {
   Users,
 } from 'lucide-react';
 import { MetricCard } from '@/components/admin/metric-card';
-import { FilterGroup, FilterPanel, FilterPill } from '@/components/admin/filter-panel';
+import { FilterChip, FilterSearch, FilterSection, FilterShell } from '@/components/admin/filter-primitives';
+import { OverviewFlip } from '@/components/admin/overview-flip';
 import Sidebar from '@/components/admin/Sidebar';
 import { SidebarProvider } from '@/components/admin/SidebarContext';
 import { SidebarSectionsProvider, useRegisterSidebarSections } from '@/components/admin/sidebar-sections';
@@ -146,31 +147,80 @@ function SectionsDemo() {
   );
 }
 
-/** The filter panel, driven by local state so the pills actually move. */
+/**
+ * The filter surface as the list pages draw it: a search field with the toggle
+ * INSIDE it, and an overview row whose other face is the panel. Pressing the
+ * toggle turns the card over — stat cards on the front, filters on the back —
+ * which is the whole point of this preview existing, since every real page is
+ * behind a sign-in and cannot be looked at without one.
+ */
 function FilterDemo() {
   const [status, setStatus] = useState('All');
   const [payment, setPayment] = useState('All');
+  const [search, setSearch] = useState('');
+  const [open, setOpen] = useState(false);
 
   const active = (status !== 'All' ? 1 : 0) + (payment !== 'All' ? 1 : 0);
 
   return (
-    <FilterPanel count={active}>
-      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        <FilterGroup label="Status">
-          {['All', 'Active', 'Upcoming', 'Pending', 'Completed'].map((s) => (
-            <FilterPill key={s} active={status === s} onClick={() => setStatus(s)}>
-              {s}
-            </FilterPill>
-          ))}
-        </FilterGroup>
-        <FilterGroup label="Payment">
-          {['All', 'Regular', 'Pay-as-you-go'].map((s) => (
-            <FilterPill key={s} active={payment === s} onClick={() => setPayment(s)}>
-              {s}
-            </FilterPill>
-          ))}
-        </FilterGroup>
-      </div>
-    </FilterPanel>
+    <div className="space-y-4">
+      <FilterSearch
+        value={search}
+        onChange={setSearch}
+        placeholder="Search by name, slug, or email…"
+        open={open}
+        onOpenChange={setOpen}
+        activeCount={active}
+      />
+
+      <OverviewFlip
+        flipped={open}
+        onFlipBack={() => setOpen(false)}
+        front={
+          <div className="grid gap-4 sm:grid-cols-3">
+            <MetricCard title="Active Rentals" value={312} subtitle="Right now" icon={ClipboardList} />
+            <MetricCard title="Due Back Today" value={28} subtitle="Across all tenants" icon={Car} accent="warning" />
+            <MetricCard title="Overdue" value={4} subtitle="Needs chasing" icon={HeartPulse} accent="success" />
+          </div>
+        }
+        back={
+          <FilterShell
+            activeCount={active}
+            onClear={() => {
+              setStatus('All');
+              setPayment('All');
+            }}
+            onClose={() => setOpen(false)}
+          >
+            <FilterSection
+              icon={<ClipboardList className="size-3 text-primary" />}
+              tint="bg-primary/10"
+              title="Status"
+            >
+              <div className="flex flex-wrap gap-1.5">
+                {['All', 'Active', 'Upcoming', 'Pending', 'Completed'].map((s) => (
+                  <FilterChip key={s} active={status === s} onClick={() => setStatus(s)}>
+                    {s}
+                  </FilterChip>
+                ))}
+              </div>
+            </FilterSection>
+            <FilterSection
+              icon={<Car className="size-3 text-success" />}
+              tint="bg-success/10"
+              title="Payment"
+            >
+              <div className="flex flex-wrap gap-1.5">
+                {['All', 'Regular', 'Pay-as-you-go'].map((s) => (
+                  <FilterChip key={s} active={payment === s} onClick={() => setPayment(s)}>
+                    {s}
+                  </FilterChip>
+                ))}
+              </div>
+            </FilterSection>
+          </FilterShell>
+        }
+      />
+    </div>
   );
 }

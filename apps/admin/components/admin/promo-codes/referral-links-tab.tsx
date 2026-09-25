@@ -5,11 +5,10 @@ import { Eye, Link2, Loader2, Pencil, Power, RefreshCw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from '@/components/ui/sonner';
+import { FilterChip, FilterSearch, FilterSection, FilterShell } from '@/components/admin/filter-primitives';
+import { FilterReveal } from '@/components/admin/overview-flip';
 import { promoApi, type PromoCode } from './api';
 import { CopyValue } from './shared';
 import { CodeTermsDialog } from './codes-tab';
@@ -36,6 +35,10 @@ export function ReferralLinksTab({
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<Status>('active');
   const [search, setSearch] = useState('');
+  /* Whether the filter panel is showing. Filters start hidden. */
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  /* 'active' is the default view, so it is not counted as a narrowing. */
+  const activeFilterCount = (status !== 'active' ? 1 : 0) + (search.trim() ? 1 : 0);
   const [editing, setEditing] = useState<PromoCode | null>(null);
   const [attaching, setAttaching] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -81,28 +84,49 @@ export function ReferralLinksTab({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="min-w-[200px] flex-1 space-y-1.5">
-          <Label htmlFor="link-search">Search</Label>
-          <Input id="link-search" placeholder="NORTHWIND, KEYWAY…" value={search} onChange={e => setSearch(e.target.value)} />
-        </div>
-        <div className="space-y-1.5">
-          <Label>Status</Label>
-          <Select value={status} onValueChange={v => setStatus(v as Status)}>
-            <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="inactive">Switched off</SelectItem>
-              <SelectItem value="superseded">Old versions</SelectItem>
-              <SelectItem value="all">All</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+      {/* Same surface as the Codes tab beside it, and as every list page. */}
+      <div className="flex flex-wrap items-center gap-3">
+        <FilterSearch
+          value={search}
+          onChange={setSearch}
+          placeholder="NORTHWIND, KEYWAY…"
+          open={filtersOpen}
+          onOpenChange={setFiltersOpen}
+          activeCount={activeFilterCount}
+          className="min-w-[200px] flex-1"
+        />
         <Button variant="outline" size="icon" onClick={load} aria-label="Reload"><RefreshCw className="h-4 w-4" /></Button>
         {canEdit && (
           <Button className="gap-1.5" onClick={() => setAttaching(true)}><Link2 className="h-4 w-4" /> Attach referral</Button>
         )}
       </div>
+
+      <FilterReveal open={filtersOpen}>
+        <FilterShell
+          activeCount={activeFilterCount}
+          onClear={() => { setStatus('active'); setSearch(''); }}
+          onClose={() => setFiltersOpen(false)}
+        >
+          <FilterSection
+            icon={<Power className="size-3 text-primary" />}
+            tint="bg-primary/10"
+            title="Status"
+          >
+            <div className="flex flex-wrap gap-1.5">
+              {([
+                ['active', 'Active'],
+                ['inactive', 'Switched off'],
+                ['superseded', 'Old versions'],
+                ['all', 'All'],
+              ] as const).map(([value, label]) => (
+                <FilterChip key={value} active={status === value} onClick={() => setStatus(value)}>
+                  {label}
+                </FilterChip>
+              ))}
+            </div>
+          </FilterSection>
+        </FilterShell>
+      </FilterReveal>
 
       <Card>
         <CardContent className="p-0">

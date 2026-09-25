@@ -4,9 +4,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
+import { FilterChip, FilterSearch, FilterSection, FilterShell } from '@/components/admin/filter-primitives';
+import { FilterReveal } from '@/components/admin/overview-flip';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -18,23 +19,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import CreateTenantDialog from '@/components/admin/CreateTenantDialog';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
-  Plus,
-  Search,
-  Star,
-  Building2,
-  ArrowLeftRight,
-  ChevronDown,
-  AlertTriangle,
-  CreditCard,
-} from 'lucide-react';
+import { Plus, Star, Building2, AlertTriangle, Boxes, Activity, Eye } from 'lucide-react';
 
 interface Tenant {
   id: string;
@@ -387,6 +372,8 @@ export default function RentalCompaniesPage() {
   /** Re-renders the freshness label once a second without refetching. */
   const [nowTick, setNowTick] = useState(() => Date.now());
   const [searchQuery, setSearchQuery] = useState('');
+  /* Which face the filter surface is showing. Filters start hidden. */
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [favorites, setFavorites] = useState<Set<string>>(() => {
     if (typeof window !== 'undefined') {
@@ -843,6 +830,14 @@ export default function RentalCompaniesPage() {
     );
   }
 
+  /* What the Filters button counts: every axis that is currently narrowing the
+     list, read off the same state the filter below uses. */
+  const activeFilterCount =
+    (showFavoritesOnly ? 1 : 0) +
+    (typeFilter !== 'all' ? 1 : 0) +
+    (statusFilter !== 'all' ? 1 : 0) +
+    (viewMode !== 'default' ? 1 : 0);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -864,128 +859,112 @@ export default function RentalCompaniesPage() {
         </Button>
       </div>
 
-      {/* Search & Filters */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex flex-col sm:flex-row gap-3">
-            {/* Search */}
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search by name, slug, or email..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9"
-              />
-            </div>
+      {/* Search, with the filter toggle inside the field.
 
-            {/* Favorites toggle */}
-            <button
+          This was an inline cluster: a Favorites toggle, three type pills,
+          three status pills, two dividers and a dropdown, all on screen at all
+          times under the search field. Northwind keeps the header clean and
+          puts every one of those behind the one toggle that lives in the
+          search box itself.
+
+          Nothing about what a filter DOES changed. Every value below is the
+          same piece of state with the same setter it had inline; only where
+          you press to change it has moved. */}
+      <FilterSearch
+        value={searchQuery}
+        onChange={setSearchQuery}
+        placeholder="Search by name, slug, or email..."
+        open={filtersOpen}
+        onOpenChange={setFiltersOpen}
+        activeCount={activeFilterCount}
+      />
+
+      {/* No stat row on this page, so there is no card to turn over — the panel
+          arrives underneath instead. Same shell, same chips as the pages that
+          flip; only the way it appears differs. */}
+      <FilterReveal open={filtersOpen}>
+        <FilterShell
+          activeCount={activeFilterCount}
+          onClear={() => {
+            setShowFavoritesOnly(false);
+            setTypeFilter('all');
+            setStatusFilter('all');
+            setViewMode('default' as ViewMode);
+            setSubStatusFilter(null);
+          }}
+          onClose={() => setFiltersOpen(false)}
+        >
+          <FilterSection
+            icon={<Star className="size-3 text-warning" />}
+            tint="bg-warning/10"
+            title="Shortlist"
+          >
+            <FilterChip
+              active={showFavoritesOnly}
               onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
-              className={cn(
-                'flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all border',
-                showFavoritesOnly
-                  ? 'bg-amber-500/15 text-amber-600 border-amber-500/30 glow-amber'
-                  : 'bg-secondary text-muted-foreground border-transparent hover:bg-secondary/80'
-              )}
             >
-              <Star className={cn('h-4 w-4', showFavoritesOnly && 'fill-amber-400')} />
-              Favorites{favorites.size > 0 && ` (${favorites.size})`}
-            </button>
+              {`Favourites${favorites.size > 0 ? ` (${favorites.size})` : ''}`}
+            </FilterChip>
+          </FilterSection>
 
-            {/* Type pills (production/test) */}
-            <div className="flex items-center gap-1.5">
+          <FilterSection
+            icon={<Boxes className="size-3 text-primary" />}
+            tint="bg-primary/10"
+            title="Type"
+          >
+            <div className="flex flex-wrap gap-1.5">
               {(['all', 'production', 'test'] as const).map((type) => (
-                <button
-                  key={type}
-                  onClick={() => setTypeFilter(type)}
-                  className={cn(
-                    'px-3 py-2 rounded-md text-xs font-semibold transition-all capitalize border',
-                    typeFilter === type
-                      ? type === 'production'
-                        ? 'bg-sky-500/15 text-sky-600 border-sky-500/30'
-                        : type === 'test'
-                        ? 'bg-warning/15 text-amber-600 border-warning/30'
-                        : 'bg-primary/15 text-primary border-primary/30'
-                      : 'bg-secondary text-muted-foreground border-transparent hover:bg-secondary/80'
-                  )}
-                >
-                  {type}
-                </button>
+                <FilterChip key={type} active={typeFilter === type} onClick={() => setTypeFilter(type)}>
+                  <span className="capitalize">{type}</span>
+                </FilterChip>
               ))}
             </div>
+          </FilterSection>
 
-            {/* Divider between the two independent filter axes */}
-            <div className="hidden sm:block w-px self-stretch bg-border" />
-
-            {/* Status pills (active/suspended) — combines with type via AND */}
-            <div className="flex items-center gap-1.5">
+          <FilterSection
+            icon={<Activity className="size-3 text-success" />}
+            tint="bg-success/10"
+            title="Status"
+          >
+            <div className="flex flex-wrap gap-1.5">
               {(['all', 'active', 'suspended'] as const).map((status) => (
-                <button
-                  key={status}
-                  onClick={() => setStatusFilter(status)}
-                  className={cn(
-                    'px-3 py-2 rounded-md text-xs font-semibold transition-all capitalize border',
-                    statusFilter === status
-                      ? status === 'active'
-                        ? 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30'
-                        : status === 'suspended'
-                        ? 'bg-destructive/15 text-destructive border-destructive/30'
-                        : 'bg-primary/15 text-primary border-primary/30'
-                      : 'bg-secondary text-muted-foreground border-transparent hover:bg-secondary/80'
-                  )}
-                >
-                  {status === 'all' ? 'Any status' : status}
-                </button>
+                <FilterChip key={status} active={statusFilter === status} onClick={() => setStatusFilter(status)}>
+                  <span className="capitalize">{status === 'all' ? 'Any status' : status}</span>
+                </FilterChip>
               ))}
             </div>
+          </FilterSection>
 
-            {/* Divider before the view-mode picker */}
-            <div className="hidden sm:block w-px self-stretch bg-border" />
-
-            {/* View focus — migration and subscription are separate concerns and
-                are mutually exclusive, so a radio group rather than two toggles. */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  className={cn(
-                    'flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all border whitespace-nowrap',
-                    viewMode !== 'default'
-                      ? 'bg-primary/15 text-primary border-primary/30'
-                      : 'bg-secondary text-muted-foreground border-transparent hover:bg-secondary/80'
-                  )}
+          {/* Was a dropdown. Three mutually exclusive choices are chips in the
+              Northwind panel, and a menu inside the panel is a second layer to
+              open. Still sets the same two pieces of state together, because a
+              view change has to clear the sub-status it filtered by. */}
+          <FilterSection
+            icon={<Eye className="size-3 text-[hsl(var(--chart-3))]" />}
+            tint="bg-[hsl(var(--chart-3))]/10"
+            title="Show status"
+          >
+            <div className="flex flex-wrap gap-1.5">
+              {([
+                ['default', 'None'],
+                ['migration', 'Migration'],
+                ['subscription', 'Subscription'],
+              ] as const).map(([mode, label]) => (
+                <FilterChip
+                  key={mode}
+                  active={viewMode === mode}
+                  onClick={() => {
+                    setViewMode(mode as ViewMode);
+                    setSubStatusFilter(null);
+                  }}
                 >
-                  {viewMode === 'subscription' ? (
-                    <CreditCard className="h-4 w-4" />
-                  ) : (
-                    <ArrowLeftRight className="h-4 w-4" />
-                  )}
-                  {viewMode === 'migration'
-                    ? 'Migration status'
-                    : viewMode === 'subscription'
-                    ? 'Subscription status'
-                    : 'Show status'}
-                  <ChevronDown className="h-4 w-4 opacity-60" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuRadioGroup
-                  value={viewMode}
-                  onValueChange={(v) => { setViewMode(v as ViewMode); setSubStatusFilter(null); }}
-                >
-                  <DropdownMenuRadioItem value="default">None</DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="migration">
-                    Show migration status
-                  </DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="subscription">
-                    Show Subscription Status
-                  </DropdownMenuRadioItem>
-                </DropdownMenuRadioGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </CardContent>
-      </Card>
+                  {label}
+                </FilterChip>
+              ))}
+            </div>
+          </FilterSection>
+        </FilterShell>
+      </FilterReveal>
 
       {/* Subscription roll-up — the numbers George is chasing, before he
           starts reading rows. Only rendered in the subscription view. */}

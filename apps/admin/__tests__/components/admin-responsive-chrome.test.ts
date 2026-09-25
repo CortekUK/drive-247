@@ -300,58 +300,196 @@ describe("the shell scrolls like a desktop app", () => {
   });
 });
 
-describe("filters fold away until asked for", () => {
-  const panel = () => src("components/admin/filter-panel.tsx");
+/*
+ * The filter surface is Northwind's, not one of our own.
+ *
+ * The first build of this invented its own: a round toggle sitting BESIDE the
+ * search field, and a card that expanded downward on a partial `rotateX`.
+ * Reported as "no no i am saying use that design in super admin" — and the
+ * report was right. Northwind puts the toggle inside the field and makes the
+ * filters the far face of the overview card, which turns over.
+ *
+ * These assertions are written against the PORTAL's file as well as this app's,
+ * so the two cannot drift: if someone restyles the chip here, the comparison
+ * against `apps/portal/.../filter-primitives.tsx` fails.
+ */
+describe("the filter surface matches Northwind's", () => {
+  const primitives = () => src("components/admin/filter-primitives.tsx");
+  const portalPrimitives = () =>
+    readFileSync(
+      resolve(ROOT, "../portal/src/components/shared/filter-primitives.tsx"),
+      "utf8",
+    );
 
-  it("is closed until the button is pressed, and says so", () => {
-    const s = panel();
-    expect(s).toContain("useState(false)");
-    expect(s).toContain("aria-expanded={open}");
-    expect(s).toContain("aria-controls={panelId}");
+  it("puts the toggle INSIDE the search field, not beside it", () => {
+    const s = primitives();
+    // Absolutely positioned against the field's right edge, and square —
+    // a round button outside the field is the shape that was rejected.
+    expect(s).toContain("absolute right-1.5 top-1/2");
+    expect(s).toContain("size-7");
+    expect(s).toContain("rounded-lg");
+    expect(s).toContain("SlidersHorizontal");
+    // Which is only possible if the field is drawn by this component.
+    expect(s).toMatch(/pl-9 pr-11/);
   });
 
-  it("animates to the panel's own height without measuring it", () => {
-    // `0fr -> 1fr` on a grid row is the one CSS-only way to transition to
-    // `auto`. A `max-h-[Npx]` would clip the day a filter is added.
-    const s = panel();
-    expect(s).toContain("grid-rows-[1fr]");
-    expect(s).toContain("grid-rows-[0fr]");
-    expect(s).toContain("min-h-0 overflow-hidden");
-    expect(s).not.toMatch(/max-h-\[\d+px\]/);
-    // …and it respects a system that has asked for less movement.
-    expect(s).toContain("motion-reduce:transition-none");
+  it("hides the count while the panel is open, because the chips say it better", () => {
+    expect(primitives()).toContain("{!open && activeCount > 0 && (");
+  });
+
+  it("carries the same chip and section shapes as the portal", () => {
+    const here = primitives();
+    const there = portalPrimitives();
+    for (const shape of [
+      "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+      'text-[10px] font-semibold uppercase tracking-wide text-muted-foreground',
+      "flex size-5 shrink-0 items-center justify-center rounded",
+      "grid flex-1 content-center gap-x-8 gap-y-4 px-5 pb-4 pt-1 sm:grid-cols-2 lg:grid-cols-4",
+    ]) {
+      expect(there).toContain(shape);
+      expect(here).toContain(shape);
+    }
+  });
+
+  it("offers Reset only when there is something to reset", () => {
+    expect(primitives()).toContain("{activeCount > 0 && (");
   });
 
   it("owns no filter state of its own", () => {
     // The page keeps every value and passes the controls in as children. That
     // is what makes this safe to drop onto a working list: nothing about what
-    // a filter does, or when it applies, passes through this component.
-    const s = panel();
+    // a filter does, or when it applies, passes through here.
+    const s = primitives();
     expect(s).toContain("children: ReactNode");
-    // Narrowed: this forbade `useEffect` outright as a proxy for "owns no
-    // filter state", and then the panel grew one — to take the folded card out
-    // of the tab order, which is focus management, not filtering. The rule is
-    // that no filter VALUE and no fetching lives here.
-    expect(s).not.toMatch(/onChange=|fetch\(|useQuery|supabase/);
+    expect(s).not.toMatch(/fetch\(|useQuery|supabase/);
+  });
+});
+
+/*
+ * The overview card turns over; it does not expand downward.
+ */
+describe("the overview flips to reveal the filters", () => {
+  const flip = () => src("components/admin/overview-flip.tsx");
+  const portalFlip = () =>
+    readFileSync(
+      resolve(ROOT, "../portal/src/components/rentals-v2/rentals-overview-flip.tsx"),
+      "utf8",
+    );
+
+  it("is a real 180° turn on the horizontal axis", () => {
+    const s = flip();
+    expect(s).toContain("rotateX: reduceMotion ? 0 : flipped ? 180 : 0");
+    expect(s).toContain('transformStyle: "preserve-3d"'.replace(/"/g, "'"));
+    expect(s).toContain("backfaceVisibility: 'hidden'");
   });
 
-  it("shows how many filters are set, since a folded filter is forgettable", () => {
-    expect(panel()).toContain("count > 0");
+  it("puts perspective on the WRAPPER, never on the rotating element", () => {
+    const s = flip();
+    // `perspective` is the viewer's distance from the card. On the card itself
+    // it travels with it and the turn goes flat.
+    const wrapper = s.slice(s.indexOf("<motion.div"), s.indexOf("<motion.div", s.indexOf("<motion.div") + 1));
+    expect(wrapper).toContain("perspective: 1100");
+    expect(s).not.toMatch(/preserve-3d[\s\S]{0,200}perspective:/);
+  });
+
+  it("animates height on the SAME transition as the rotation", () => {
+    // Different curves and the card finishes turning while the box is still
+    // resizing under it — the exact broken look the component exists to avoid.
+    const s = flip();
+    expect(s).toContain("const FLIP = { duration: 0.62");
+    expect(s).toMatch(/animate=\{\{ height: target \?\? 'auto' \}\}/);
+    expect(s).toContain("transition={hasFlipped ? (reduceMotion ? FADE : FLIP)");
+  });
+
+  it("takes the hidden face out of the tab order", () => {
+    const s = flip();
+    expect(s).toContain("inert");
+    expect(s).toContain("invisible");
+  });
+
+  it("keeps the same timing as the portal's", () => {
+    expect(portalFlip()).toContain("duration: 0.62");
+    expect(flip()).toContain("duration: 0.62");
+  });
+});
+
+/*
+ * NOTHING in this app filters its own way.
+ *
+ * This has now been reported twice. First "no filter flipper", when the panel
+ * existed but was wired only into the design preview. Then "promo codes also
+ * have the filters and more pages have filters" — because the five obvious
+ * list pages had been done and the filtering surfaces that live INSIDE
+ * components had not. Promo Codes keeps its filters in
+ * `components/admin/promo-codes/*-tab.tsx`, so every check that walked
+ * `app/**` and stopped there declared the job finished while two tabs still
+ * wore a labelled Search box next to a Status dropdown.
+ *
+ * So this scans for the STATE rather than the markup: anything that narrows a
+ * list has to hold the value that narrows it, and holding one obliges you to
+ * use the shared primitives. The allow-list below is every false positive,
+ * each with the reason it is not a filter — a new one has to be justified in
+ * writing before this test goes green again.
+ */
+describe("every filtering surface uses the shared primitives", () => {
+  /* `setStatus` on something that is NOT a list filter. */
+  const NOT_FILTERS = new Set([
+    // A status MESSAGE — "Loading signup plans…", "Could not load…".
+    "app/admin/(protected)/signup-plans/page.tsx",
+    // A todo's own status field, set by a form inside a dialog.
+    "components/admin-todos/todo-create-dialog.tsx",
+    "components/admin-todos/todo-detail-dialog.tsx",
+  ]);
+
+  const tsxFiles = (dir: string): string[] =>
+    readdirSync(resolve(ROOT, dir), { withFileTypes: true }).flatMap((e) => {
+      const rel = `${dir}/${e.name}`;
+      if (e.isDirectory()) return e.name === "node_modules" ? [] : tsxFiles(rel);
+      return e.name.endsWith(".tsx") ? [rel] : [];
+    });
+
+  const narrowsAList = /set[A-Z][A-Za-z]*Filter\(|setFilter\(|setRange\(|setStatus\(|setSearchQuery\(|setSearch\(/;
+
+  it("finds the surfaces at all", () => {
+    const all = tsxFiles("app").concat(tsxFiles("components"));
+    expect(all.length).toBeGreaterThan(50);
+    const filtering = all.filter((f) => narrowsAList.test(src(f)));
+    // If this drops to nothing the regex has stopped matching and every
+    // assertion below would pass vacuously.
+    expect(filtering.length).toBeGreaterThan(5);
+  });
+
+  it("leaves no surface filtering on its own terms", () => {
+    const all = tsxFiles("app").concat(tsxFiles("components"));
+    const offenders = all.filter((f) => {
+      if (NOT_FILTERS.has(f)) return false;
+      const s = src(f);
+      if (!narrowsAList.test(s)) return false;
+      return !s.includes("@/components/admin/filter-primitives");
+    });
+    expect(offenders).toEqual([]);
+  });
+
+  it("has no hand-rolled status pill row left anywhere", () => {
+    // The exact shape that was removed from four separate files: a `<button>`
+    // per status, coloured by which status it is. Chips carry one active
+    // treatment, set in the primitives, so this shape means someone rebuilt
+    // the thing rather than importing it.
+    const all = tsxFiles("app").concat(tsxFiles("components"));
+    const offenders = all.filter((f) =>
+      /rounded-md text-xs font-semibold transition-all capitalize border/.test(src(f)),
+    );
+    expect(offenders).toEqual([]);
   });
 });
 
 /*
  * Every list page that has filters, folds them.
  *
- * The first pass built `FilterPanel` and wired it into the design preview
- * only, which meant nothing in the app changed — reported as "no filter
- * flipper". This is the list of pages that actually render it, so a page
- * cannot quietly go back to a permanent row of controls.
- *
- * Two pages are deliberately absent. `openai-usage` has a single range picker
- * sitting in its header, which is where Northwind keeps "Last 30 days" too, so
- * folding it would move it AWAY from the reference. `welcome-pack` has no
- * filters at all.
+ * `welcome-pack` is deliberately absent: its Selects pick a chapter inside a
+ * form, and it has no list to narrow. `blacklist` is absent from THIS list but
+ * covered below — it searches without filtering, so it has a field and no
+ * toggle.
  */
 describe("list pages fold their filters", () => {
   const folded = [
@@ -359,15 +497,88 @@ describe("list pages fold their filters", () => {
     "app/admin/(protected)/platform-rentals/page.tsx",
     "app/admin/(protected)/audit-logs/page.tsx",
     "app/admin/(protected)/requests/page.tsx",
+    "app/admin/(protected)/rentals/page.tsx",
+    "app/admin/(protected)/openai-usage/page.tsx",
+    "app/admin/(protected)/contacts/page.tsx",
+    "components/admin/BonzahSubmissions.tsx",
+    "components/admin/promo-codes/codes-tab.tsx",
+    "components/admin/promo-codes/referral-links-tab.tsx",
   ];
 
-  it.each(folded)("%s renders the panel", (page) => {
+  it.each(folded)("%s uses the shared Northwind primitives", (page) => {
     const s = src(page);
-    expect(s).toContain("<FilterPanel count={activeFilterCount}>");
-    expect(s).toContain("from '@/components/admin/filter-panel'");
+    expect(s).toContain("from '@/components/admin/filter-primitives'");
+    expect(s).toContain("<FilterShell");
+    expect(s).toContain("activeCount=");
   });
 
-  it.each(folded)("%s counts its filters from its own state", (page) => {
+  /*
+   * The search field belongs on the SEARCH ROW, not inside the panel.
+   *
+   * The first version put every control inside the panel, search included — so
+   * finding a record by name meant opening the filters first. Northwind keeps
+   * the field visible with the toggle inside it, which is what `FilterSearch`
+   * draws.
+   *
+   * Two surfaces have nothing to search — Contact Requests and OpenAI Usage
+   * both narrow without a query — so they render the toggle on its own via
+   * `standalone`. What every surface shares is that the toggle is reachable
+   * WITHOUT first opening anything, and that no page hand-rolls a second
+   * search box beside the one the primitive owns.
+   */
+  it.each(folded)("%s exposes the toggle without opening anything first", (page) => {
+    const s = src(page);
+    const hasField = s.includes("<FilterSearch");
+    const standalone = /<FilterToggle[\s\S]*?standalone/.test(s);
+    expect(hasField || standalone).toBe(true);
+    expect(s).toMatch(/open=\{filtersOpen\}/);
+    expect(s).toMatch(/onOpenChange=\{setFiltersOpen\}/);
+    expect(s).not.toMatch(/<Input[\s\S]{0,200}placeholder="Search/);
+  });
+
+  /*
+   * Closed on arrival. A list page does not open wearing its filters — that
+   * was the whole complaint the panel exists to answer.
+   */
+  it.each(folded)("%s starts with the filters hidden", (page) => {
+    const s = src(page);
+    expect(s).toMatch(/const \[filtersOpen, setFiltersOpen\] = useState\(false\)/);
+  });
+
+  /*
+   * Where the panel appears depends on whether the page has an overview to
+   * turn over. Both are Northwind's — the flip is its rentals list, the reveal
+   * is its filter bar used uncontrolled — and a page must use exactly one.
+   */
+  it.each(folded)("%s puts the panel on a flip or a reveal, not both", (page) => {
+    const s = src(page);
+    const flips = s.includes("<OverviewFlip");
+    const reveals = s.includes("<FilterReveal");
+    expect(flips || reveals).toBe(true);
+    expect(flips && reveals).toBe(false);
+    if (flips) {
+      // A flip needs a front face, and the way back from it.
+      expect(s).toContain("front={");
+      expect(s).toContain("back={");
+      expect(s).toMatch(/onFlipBack=\{\(\) => setFiltersOpen\(false\)\}/);
+    }
+  });
+
+  /*
+   * The badge reads real state, not a literal.
+   *
+   * Only for the surfaces that declare an `activeFilterCount`. Contact
+   * Requests and OpenAI Usage each narrow on exactly one axis and pass the
+   * expression inline (`range !== '7d' ? 1 : 0`), which is the same thing
+   * written shorter and has no declaration to inspect.
+   */
+  const counted = folded.filter((p) => /const activeFilterCount =/.test(src(p)));
+
+  it("most surfaces declare a filter count", () => {
+    expect(counted.length).toBeGreaterThanOrEqual(folded.length - 2);
+  });
+
+  it.each(counted)("%s counts its filters from its own state", (page) => {
     const s = src(page);
     const decl = s.match(/const activeFilterCount =[\s\S]*?;/)?.[0] ?? "";
     expect(decl).not.toBe("");
