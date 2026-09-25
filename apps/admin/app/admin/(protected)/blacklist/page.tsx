@@ -229,7 +229,7 @@ export default function BlacklistPage() {
     return (
       <div>
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-2">Blocked Customers</h1>
-        <p className="text-muted-foreground mb-8">All blocked customers across every tenant</p>
+        <p className="text-muted-foreground mb-6">All blocked customers across every tenant</p>
         <div className="text-xl text-muted-foreground text-center py-12">Loading...</div>
       </div>
     );
@@ -238,15 +238,34 @@ export default function BlacklistPage() {
   return (
     <div>
       {/* Header */}
-      <div className="mb-8">
+      <div className="mb-6">
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">Blocked Customers</h1>
         <p className="mt-2 text-muted-foreground">
           All blocked customers across every tenant
         </p>
       </div>
 
+      {/* Search Bar, ABOVE the stats — title, then search, then the data.
+
+          It used to sit below the stat cards, which put two rows between the
+          heading and the first thing you can type into. Every other list in
+          this app reads title → search → data, and on the pages whose stats
+          flip, the search is what turns them over, so it has to come first.
+
+          The same field every other list wears, too, rather than the
+          hand-rolled `<input>` that used to be here with its own border and
+          focus ring. NO filter toggle: this page narrows by search alone, and
+          a toggle that opened an empty panel would be a button that lies. */}
+      <div className="mb-6">
+        <FilterSearch
+          value={searchQuery}
+          onChange={setSearchQuery}
+          placeholder="Search by name, email, or tenant..."
+        />
+      </div>
+
       {/* Stats Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <div className="rounded-4xl bg-card p-5 shadow-sm ring-1 ring-foreground/10">
           <p className="text-sm text-muted-foreground">Total Blocked</p>
           <p className="text-2xl font-bold text-red-600 mt-1">{totalBlocked}</p>
@@ -259,20 +278,6 @@ export default function BlacklistPage() {
           <p className="text-sm text-muted-foreground">Tenants Affected</p>
           <p className="text-2xl font-bold text-foreground mt-1">{uniqueTenants}</p>
         </div>
-      </div>
-
-      {/* Search Bar.
-
-          The same field every other list in this app wears, rather than the
-          hand-rolled `<input>` that used to be here with its own border and
-          focus ring. NO filter toggle: this page narrows by search alone, and
-          a toggle that opened an empty panel would be a button that lies. */}
-      <div className="mb-6">
-        <FilterSearch
-          value={searchQuery}
-          onChange={setSearchQuery}
-          placeholder="Search by name, email, or tenant..."
-        />
       </div>
 
       {/* Table */}

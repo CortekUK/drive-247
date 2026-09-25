@@ -30,6 +30,7 @@ import { MetricCard } from '@/components/admin/metric-card';
 import { FilterChip, FilterSearch, FilterSection, FilterShell } from '@/components/admin/filter-primitives';
 import { OverviewFlip } from '@/components/admin/overview-flip';
 import Sidebar from '@/components/admin/Sidebar';
+import { Header } from '@/components/admin/Header';
 import { SidebarProvider } from '@/components/admin/SidebarContext';
 import { SidebarSectionsProvider, useRegisterSidebarSections } from '@/components/admin/sidebar-sections';
 import { useState } from 'react';
@@ -45,12 +46,23 @@ export default function AdminPreviewPage() {
   return (
     <SidebarProvider>
     <SidebarSectionsProvider>
-    <div className="flex min-h-screen bg-app-gradient">
+    {/* The SHELL, not an approximation of it.
+
+        This used to be a `p-4 sm:p-8` div with its own heading, which meant
+        the one thing nobody could look at was the chrome every page actually
+        renders inside — and the dead space at the top of every page lived in
+        exactly that gap. It is now the protected layout's own arrangement:
+        `Header`, then a scroll port with the same padding, so what this page
+        shows is what a signed-in page gets. */}
+    <div className="flex h-screen overflow-hidden bg-app-gradient">
       <div className="hidden w-[280px] shrink-0 md:block">
         <Sidebar />
       </div>
-      <div className="min-w-0 flex-1 p-4 sm:p-8">
-      <header className="mb-8">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+      <Header />
+      <main data-scrollport className="flex-1 overflow-y-auto">
+      <div className="p-4 sm:p-6">
+      <header className="mb-6">
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">Design preview</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           The Super Admin surfaces in the v2 language. Fixed numbers, no live data.
@@ -112,6 +124,8 @@ export default function AdminPreviewPage() {
       </section>
 
       <SectionsDemo />
+      </div>
+      </main>
       </div>
     </div>
     </SidebarSectionsProvider>

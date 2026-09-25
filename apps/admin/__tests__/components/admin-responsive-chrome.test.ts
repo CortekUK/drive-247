@@ -226,11 +226,28 @@ describe("the admin shell pads once", () => {
 
   it("leaves the top bar unpainted so the wash runs to the top edge", () => {
     const header = src("components/admin/Header.tsx");
-    const cls = [...header.matchAll(/className="([^"]*)"/g)].map((m) => m[1])[0] ?? "";
-    for (const paint of ["bg-background", "border-b", "backdrop-blur"]) {
-      expect(cls).not.toContain(paint);
+    /*
+     * The header's own classes, both branches of them.
+     *
+     * This used to take the FIRST `className="…"` in the file, which worked
+     * only while the header element carried a literal one. It now picks its
+     * class by whether the page gave it a breadcrumb trail, so the first
+     * literal in the file became the menu button's and this asserted paint
+     * rules against the wrong element entirely.
+     *
+     * Selecting on `sticky top-0` instead: that is the header and nothing
+     * else, and it catches every branch rather than whichever is written
+     * first.
+     */
+    const own = [...header.matchAll(/'([^']*sticky top-0[^']*)'/g)].map((m) => m[1]);
+    expect(own.length).toBeGreaterThan(0);
+    for (const cls of own) {
+      for (const paint of ["bg-background", "border-b", "backdrop-blur"]) {
+        expect(cls).not.toContain(paint);
+      }
+      // Still a 56px row wherever it renders at all.
+      expect(cls).toContain("h-14");
     }
-    expect(cls).toContain("h-14");
   });
 });
 

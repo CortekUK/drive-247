@@ -63,8 +63,12 @@ function useBreadcrumbs() {
 }
 
 export function Header() {
-  const { isMobile, toggle } = useSidebar();
+  const { toggle } = useSidebar();
   const breadcrumbs = useBreadcrumbs();
+
+  /* A trail is two crumbs or more — see the comment on the render below. With
+     fewer, this row has nothing on it at all on a desktop. */
+  const hasTrail = breadcrumbs.length > 1;
 
   return (
     <header
@@ -76,20 +80,37 @@ export function Header() {
          Safe to leave bare because nothing ever passes under it: this is a
          non-scrolling row in a `h-screen` flex column, and `<main>` below is
          the only scroll container. The `sticky` stays only because it costs
-         nothing on an element that cannot scroll. */
-      className="sticky top-0 z-30 flex h-14 items-center gap-4 px-4 sm:px-6"
+         nothing on an element that cannot scroll.
+
+         AND IT GOES AWAY ENTIRELY when it has nothing to carry.
+
+         Reported Sep 25 2026 as dead space at the top of every page. On a
+         top-level page on a desktop this row rendered the mobile menu button
+         (hidden), no trail, and a `flex-1` spacer — 56px of nothing, pushing
+         every page title down the screen for no reason. A bare header is not
+         the same as an empty one.
+
+         On a phone it stays: the menu button is the only way to the navigation
+         there. On a detail page it stays at every width, because the first
+         crumb is the link back to the list. `md:hidden` rather than the
+         `isMobile` flag, because that flag is false on the first client render
+         and flips in an effect — gating a 56px row on it would drop the menu
+         button in after hydration and shove the page down as it lands. */
+      className={
+        hasTrail
+          ? 'sticky top-0 z-30 flex h-14 items-center gap-4 px-4 sm:px-6'
+          : 'sticky top-0 z-30 flex h-14 items-center gap-4 px-4 sm:px-6 md:hidden'
+      }
     >
-      {isMobile && (
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={toggle}
-          className="-ml-2 text-muted-foreground h-8 w-8"
-          aria-label="Toggle menu"
-        >
-          <Menu className="h-4 w-4" />
-        </Button>
-      )}
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={toggle}
+        className="-ml-2 h-8 w-8 text-muted-foreground md:hidden"
+        aria-label="Toggle menu"
+      >
+        <Menu className="h-4 w-4" />
+      </Button>
 
       {/* A trail, or nothing.
 

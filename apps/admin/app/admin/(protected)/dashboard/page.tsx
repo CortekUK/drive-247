@@ -223,7 +223,7 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">Platform Dashboard</h1>
           <p className="mt-2 text-muted-foreground">

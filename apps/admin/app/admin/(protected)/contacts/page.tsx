@@ -81,7 +81,7 @@ export default function ContactRequestsPage() {
 
   return (
     <div>
-      <div className="mb-8">
+      <div className="mb-6">
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">Contact Requests</h1>
         <p className="mt-2 text-muted-foreground">Manage inquiries from potential rental companies</p>
       </div>
