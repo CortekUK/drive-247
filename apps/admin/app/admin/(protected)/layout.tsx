@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import Sidebar from '@/components/admin/Sidebar';
@@ -52,6 +53,7 @@ export default function ProtectedLayout({
   const router = useRouter();
   const pathname = usePathname();
   const { user, loading, checkAuth } = useAuthStore();
+  const [queryClient] = useState(() => new QueryClient());
 
   useEffect(() => {
     checkAuth();
@@ -92,6 +94,21 @@ export default function ProtectedLayout({
   }
 
   return (
+    /*
+     * react-query has one consumer in this app — `FinanceEventsTab`, behind
+     * Finance Sync on a rental company — and until now there was no
+     * `QueryClientProvider` anywhere in the tree at all. Opening that section
+     * threw "No QueryClient set" and took the whole page down with a
+     * client-side exception. It has been that way since finance-sync was
+     * built (792bf44c); it only became obvious when the section moved from a
+     * tab into the rail and someone pressed it.
+     *
+     * The client is made once per mount and held in state rather than at
+     * module scope: a module-level client is shared across every render of
+     * every user on a server, which is how one account ends up reading
+     * another's cached rows.
+     */
+    <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <SidebarProvider>
         {/* A page's own sections render in the sidebar rather than as tabs
@@ -126,5 +143,6 @@ export default function ProtectedLayout({
         </SidebarSectionsProvider>
       </SidebarProvider>
     </TooltipProvider>
+    </QueryClientProvider>
   );
 }
