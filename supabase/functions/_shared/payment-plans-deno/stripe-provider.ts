@@ -110,6 +110,8 @@ export class StripePaymentProvider implements PaymentProvider {
   private readonly stripe: Stripe;
   private readonly db: Db;
   private readonly tenantId: string;
+  /** Connect request options — a field, not a getter: scripts/check-edge-function-scopes.mjs does not see accessor declarations and reports `options` as undeclared. */
+  private readonly options: { stripeAccount: string } | undefined;
 
   constructor(opts: { stripe: Stripe; mode: "test" | "live"; account: string | null; platformAccount: PlatformAccount; db: Db; tenantId: string }) {
     this.stripe = opts.stripe;
@@ -118,10 +120,7 @@ export class StripePaymentProvider implements PaymentProvider {
     this.platformAccount = opts.platformAccount;
     this.db = opts.db;
     this.tenantId = opts.tenantId;
-  }
-
-  private get options(): { stripeAccount: string } | undefined {
-    return this.account ? { stripeAccount: this.account } : undefined;
+    this.options = opts.account ? { stripeAccount: opts.account } : undefined;
   }
 
   /**
