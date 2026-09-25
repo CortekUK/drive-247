@@ -26,7 +26,7 @@
  * A page that registers nothing gets exactly the sidebar it had.
  */
 
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 
 export type SidebarSection = {
   /** Matches the page's own tab value. */
@@ -42,22 +42,43 @@ type Registration = {
   onSelect: (id: string) => void;
 };
 
-type Store = {
-  registration: Registration | null;
-  register: (r: Registration | null) => void;
-};
-
-const SidebarSectionsContext = createContext<Store | null>(null);
+/*
+ * TWO contexts, not one, and this is the whole reason the file is shaped this
+ * way rather than the obvious way.
+ *
+ * The first version held `{ registration, register }` in a single value
+ * memoised on `registration`, and the registering effect depended on that
+ * object. Registering changed the value, which changed the object, which
+ * re-ran the effect, which registered again: an infinite render loop that took
+ * `/admin/promo-codes` down in production with a client-side exception.
+ *
+ * Nothing caught it. `tsc --noEmit` was clean, the dev server answered 200,
+ * and every page in this app redirects to the sign-in without a session — so
+ * the component never actually rendered in any check that was run. The guard
+ * for it is `__tests__/components/sidebar-sections.test.tsx`, which mounts
+ * this for real and counts renders; on the broken version that test hangs.
+ *
+ * Splitting the contexts fixes it by construction. The dispatch half never
+ * changes identity — a `useState` setter is stable for the life of the
+ * provider — so an effect can depend on it safely. The value half changes as
+ * often as it likes, because only the sidebar reads it and the sidebar never
+ * writes back.
+ */
+const SectionsValue = createContext<Registration | null>(null);
+const SectionsDispatch = createContext<((r: Registration | null) => void) | null>(null);
 
 export function SidebarSectionsProvider({ children }: { children: ReactNode }) {
   const [registration, register] = useState<Registration | null>(null);
-  const value = useMemo(() => ({ registration, register }), [registration]);
-  return <SidebarSectionsContext.Provider value={value}>{children}</SidebarSectionsContext.Provider>;
+  return (
+    <SectionsDispatch.Provider value={register}>
+      <SectionsValue.Provider value={registration}>{children}</SectionsValue.Provider>
+    </SectionsDispatch.Provider>
+  );
 }
 
 /** Read by the sidebar. Null everywhere no page has registered anything. */
 export function useSidebarSections(): Registration | null {
-  return useContext(SidebarSectionsContext)?.registration ?? null;
+  return useContext(SectionsValue);
 }
 
 /**
@@ -74,15 +95,16 @@ export function useRegisterSidebarSections(
   active: string,
   onSelect: (id: string) => void,
 ) {
-  const store = useContext(SidebarSectionsContext);
+  const register = useContext(SectionsDispatch);
   const key = sections.map((s) => `${s.id}:${s.label}`).join('|');
 
   useEffect(() => {
-    if (!store) return;
-    store.register({ href, sections, active, onSelect });
-    return () => store.register(null);
-    // `key` stands in for `sections`; `onSelect` is a setter, stable in
-    // practice, and re-registering on a new one costs nothing.
+    if (!register) return;
+    register({ href, sections, active, onSelect });
+    return () => register(null);
+    // `key` stands in for `sections`, which every page rebuilds inline on each
+    // render. `register` is a `useState` setter and never changes identity —
+    // depending on the whole context object here is what caused the loop.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [store, href, key, active, onSelect]);
+  }, [register, href, key, active, onSelect]);
 }

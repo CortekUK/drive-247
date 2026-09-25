@@ -469,10 +469,13 @@ describe("multi-section pages publish their sections to the sidebar", () => {
     expect(s).toContain("createContext");
   });
 
-  it("clears itself when the page unmounts", () => {
-    // Otherwise the sections of a page you have left stay under its nav item.
-    expect(src("components/admin/sidebar-sections.tsx")).toContain("return () => store.register(null);");
-  });
+  /* Unmount clearing, the render loop and the round trip from rail row to
+     panel are all proved by MOUNTING the thing, in
+     `sidebar-sections.test.tsx`. This file used to grep the source for the
+     cleanup line, which asserted one particular spelling of the fix and broke
+     the moment the fix changed shape — while saying nothing about whether it
+     worked. A behavioural test beside a brittle textual one is just the
+     brittle one. */
 
   it("renders them only under the item the page named", () => {
     expect(src("components/admin/Sidebar.tsx")).toContain("sections?.href === item.href");
