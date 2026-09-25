@@ -330,7 +330,7 @@ export default function BlacklistPage() {
                   <td className="px-4 py-4 whitespace-nowrap">
                     <div className="flex flex-col gap-1">
                       {customer.is_tenant_blocked && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-500/10 text-red-600 border border-red-700 w-fit">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-destructive/10 text-destructive border border-red-700 w-fit">
                           Blocked
                         </span>
                       )}
@@ -340,7 +340,7 @@ export default function BlacklistPage() {
                         </span>
                       )}
                       {customer.is_whitelisted && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-500/10 text-green-600 border border-green-700 w-fit">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-success/10 text-success border border-green-700 w-fit">
                           Whitelisted
                         </span>
                       )}
@@ -353,7 +353,7 @@ export default function BlacklistPage() {
                           e.stopPropagation();
                           openDialog('whitelist', customer.email);
                         }}
-                        className="text-xs px-3 py-1.5 rounded-lg bg-green-500/10 text-green-600 border border-green-700 hover:bg-green-500/10 transition-colors"
+                        className="text-xs px-3 py-1.5 rounded-lg bg-success/10 text-success border border-green-700 hover:bg-green-500/10 transition-colors"
                       >
                         Whitelist
                       </button>
@@ -364,7 +364,7 @@ export default function BlacklistPage() {
                           e.stopPropagation();
                           openDialog('re-blacklist', customer.email);
                         }}
-                        className="text-xs px-3 py-1.5 rounded-lg bg-red-500/10 text-red-600 border border-red-700 hover:bg-red-500/10 transition-colors"
+                        className="text-xs px-3 py-1.5 rounded-lg bg-destructive/10 text-destructive border border-red-700 hover:bg-red-500/10 transition-colors"
                       >
                         Re-blacklist
                       </button>

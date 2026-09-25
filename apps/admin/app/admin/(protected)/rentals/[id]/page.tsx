@@ -3579,7 +3579,7 @@ export default function TenantDetailsPage() {
           <DialogHeader>
             <DialogTitle>Delete Tenant</DialogTitle>
           </DialogHeader>
-          <div className="rounded-lg px-4 py-3 text-sm bg-red-500/10 border border-red-500/30 text-red-600 space-y-2">
+          <div className="rounded-lg px-4 py-3 text-sm bg-destructive/10 text-destructive ring-1 ring-destructive/25 space-y-2">
             <p>
               This will permanently delete <strong>{tenant.company_name}</strong> and ALL associated data including vehicles, customers, rentals, payments, and users.
             </p>

@@ -327,7 +327,7 @@ export default function SettingsPage() {
                 <Label className="mb-2 block">Preview</Label>
                 <div className={cn(
                   "rounded-md px-4 py-3 text-sm font-medium border",
-                  settings.maintenance_banner_type === 'info' && 'bg-blue-500/10 border-blue-500/30 text-blue-600',
+                  settings.maintenance_banner_type === 'info' && 'bg-[hsl(var(--chart-3))]/10 text-[hsl(var(--chart-3))] ring-1 ring-[hsl(var(--chart-3))]/25',
                   settings.maintenance_banner_type === 'warning' && 'bg-warning/10 border-warning/30 text-warning',
                   settings.maintenance_banner_type === 'critical' && 'bg-destructive/10 border-destructive/30 text-destructive'
                 )}>

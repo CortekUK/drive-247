@@ -214,7 +214,7 @@ export default function ManageAdminsPage() {
                       Primary Admin
                     </span>
                   ) : (
-                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-500/10 text-blue-600 border border-blue-500/25">
+                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-[hsl(var(--chart-3))]/10 text-[hsl(var(--chart-3))] border border-blue-500/25">
                       Super Admin
                     </span>
                   )}

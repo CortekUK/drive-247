@@ -261,8 +261,8 @@ export default function LegalPagesAdmin() {
             notice.tone === 'error'
               ? 'bg-destructive/10 text-destructive'
               : notice.tone === 'setup'
-                ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
-                : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+                ? 'bg-warning/10 text-warning'
+                : 'bg-success/10 text-success'
           }`}
         >
           {notice.text}
@@ -270,7 +270,7 @@ export default function LegalPagesAdmin() {
       )}
 
       {versionDrift && (
-        <p className="flex items-start gap-2 rounded-lg bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">
+        <p className="flex items-start gap-2 rounded-lg bg-warning/10 px-3 py-2 text-sm text-warning">
           <AlertTriangle className="mt-0.5 size-4 shrink-0" />
           <span>
             This version is <strong>{doc.version}</strong>, but checkout records{' '}
