@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { Fragment } from 'react';
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { useSidebar } from './SidebarContext';
 import { useAdminSupport } from '@/lib/use-support-messaging';
@@ -12,6 +12,7 @@ import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { useSidebarSections, type SidebarSection } from '@/components/admin/sidebar-sections';
 import {
+  ArrowLeft,
   LayoutDashboard,
   Building2,
   Ban,
@@ -152,9 +153,6 @@ function NavGroupComponent({
   isActive: (href: string) => boolean;
   onNavigate?: () => void;
 }) {
-  /* Which item, if any, has a page underneath it publishing its sections. */
-  const sections = useSidebarSections();
-
   /*
    * A group opens because you are IN it, not because everything is open.
    *
@@ -224,8 +222,6 @@ function NavGroupComponent({
                   </span>
                 )}
               </Link>
-              {/* Only under the item whose page registered them. */}
-              {sections?.href === item.href && <SectionLinks onNavigate={onNavigate} />}
               </Fragment>
             );
           })}
@@ -236,45 +232,64 @@ function NavGroupComponent({
 }
 
 /**
- * A page's own sections, nested under its nav item.
+ * A page's sections, as the whole rail.
  *
- * Rendered only for the item the registering page named, and only while that
- * page is mounted — see `sidebar-sections.tsx` for why this is a context
- * rather than a route per section. The rail carries a record's sub-pages in
- * Northwind; this is the same idea for a settings-shaped page.
+ * Modelled on Northwind's record rail: a way back at the top, the thing you
+ * are inside of, then its own sections — and nothing else. The navigation is
+ * not beside it, because the point is that this IS the navigation while the
+ * page is open.
  *
  * Buttons, not links: these switch a section on a page that is already open,
- * so there is nothing to navigate to. The indent and the left rule are what
- * say "inside the item above" without a second icon column.
+ * so there is nothing to navigate to.
  */
-function SectionLinks({ onNavigate }: { onNavigate?: () => void }) {
-  const registration = useSidebarSections();
-  if (!registration) return null;
-
+function SectionRail({
+  registration,
+  title,
+  onBack,
+  onNavigate,
+}: {
+  registration: NonNullable<ReturnType<typeof useSidebarSections>>;
+  title: string;
+  onBack: () => void;
+  onNavigate?: () => void;
+}) {
   return (
-    <div className="ml-6 mt-0.5 space-y-0.5 border-l border-sidebar-border pl-3">
-      {registration.sections.map((section: SidebarSection) => {
-        const current = section.id === registration.active;
-        return (
-          <button
-            key={section.id}
-            type="button"
-            aria-current={current ? 'page' : undefined}
-            onClick={() => {
-              registration.onSelect(section.id);
-              onNavigate?.();
-            }}
-            className={cn(
-              'flex min-h-10 w-full items-center rounded-lg px-3 text-left text-[14px] transition-colors md:min-h-8 md:text-[13px]',
-              current
-                ? 'bg-sidebar-accent font-medium text-primary'
-                : 'text-muted-foreground hover:bg-secondary hover:text-foreground',
-            )}
-          >
-            {section.label}
-          </button>
-        );
-      })}
+    <div className="px-3">
+      <button
+        type="button"
+        onClick={onBack}
+        className="mb-3 flex min-h-11 w-full items-center gap-2 rounded-lg px-2 text-[15px] font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground md:min-h-10 md:text-[13px]"
+      >
+        <ArrowLeft className="size-4 shrink-0" aria-hidden="true" />
+        All sections
+      </button>
+
+      <p className="px-2 pb-2 text-sm font-semibold text-sidebar-foreground">{title}</p>
+
+      <div className="space-y-0.5">
+        {registration.sections.map((section: SidebarSection) => {
+          const current = section.id === registration.active;
+          return (
+            <button
+              key={section.id}
+              type="button"
+              aria-current={current ? 'page' : undefined}
+              onClick={() => {
+                registration.onSelect(section.id);
+                onNavigate?.();
+              }}
+              className={cn(
+                'flex min-h-11 w-full items-center rounded-lg px-3 text-left text-[15px] transition-colors md:min-h-9 md:text-[13px]',
+                current
+                  ? 'bg-sidebar-accent font-medium text-primary shadow-[inset_0_0_0_1px_hsl(var(--primary)_/_0.12)]'
+                  : 'text-muted-foreground hover:bg-secondary hover:text-foreground',
+              )}
+            >
+              {section.label}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -285,6 +300,20 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const groups = useNavigation();
 
   const salesOnly = !!user?.is_sales_agent && !user?.is_super_admin;
+
+  /* The page's own sections, if it published any, and the nav item they
+     belong to — which is where the rail's title comes from. */
+  const sections = useSidebarSections();
+  const [showNav, setShowNav] = useState(false);
+  const sectionTitle = sections
+    ? groups.flatMap((g) => g.items).find((i) => i.href === sections.href)?.name
+    : undefined;
+
+  /* Leaving the page takes its sections with it, so the rail must not stay
+     open over the navigation of wherever you landed. */
+  useEffect(() => {
+    setShowNav(false);
+  }, [pathname]);
 
   const isActive = (href: string) => {
     if (href === '/admin/dashboard') return pathname === href;
@@ -311,14 +340,36 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           bar down the inside edge of the navigation, and Northwind's rail
           shows none. Same `no-scrollbar` the portal's sidebar body uses. */}
       <div className="no-scrollbar flex-1 overflow-y-auto py-4">
-        {groups.map((group) => (
-          <NavGroupComponent
-            key={group.label}
-            group={group}
-            isActive={isActive}
+        {/* A page with its own sections TAKES the rail, rather than hanging
+            them off a nav item.
+
+            This is what Northwind does on a record: open a customer and the
+            navigation goes, replaced by that customer's own sections with a
+            way back above them. The first attempt here nested the rows under
+            the item instead, which left the whole nav on screen underneath
+            and read as clutter rather than as context.
+
+            `showNav` is the way out. Northwind's back link is a real
+            navigation — "All customers" goes to the list — but a top-level
+            page like Promo Codes has no list above it, so going back here
+            means showing the navigation again rather than leaving the page. */}
+        {sections && !showNav ? (
+          <SectionRail
+            registration={sections}
+            title={sectionTitle ?? 'Sections'}
+            onBack={() => setShowNav(true)}
             onNavigate={onNavigate}
           />
-        ))}
+        ) : (
+          groups.map((group) => (
+            <NavGroupComponent
+              key={group.label}
+              group={group}
+              isActive={isActive}
+              onNavigate={onNavigate}
+            />
+          ))
+        )}
       </div>
 
       {/* Footer */}

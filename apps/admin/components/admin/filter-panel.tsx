@@ -34,7 +34,7 @@
  * has asked their system for less movement.
  */
 
-import { useId, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { SlidersHorizontal, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -50,6 +50,20 @@ export function FilterPanel({
 }) {
   const [open, setOpen] = useState(false);
   const panelId = useId();
+
+  /*
+   * The card stays mounted so a CSS transition has something to animate, which
+   * means its controls are in the document while it is folded away. Without
+   * this, Tab walks into a panel nobody can see and focus vanishes.
+   *
+   * `inert` is set as a DOM property rather than a JSX attribute: React 18
+   * does not know it, so `inert={true}` warns and `inert=""` is dropped as
+   * falsy. Neither ever reaches the element.
+   */
+  const cardRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (cardRef.current) (cardRef.current as unknown as { inert: boolean }).inert = !open;
+  }, [open]);
 
   return (
     <div className={cn('space-y-3', className)}>
@@ -73,17 +87,59 @@ export function FilterPanel({
         )}
       </button>
 
-      {/* The 0fr/1fr grid. The wrapper is what transitions; the inner div is
-          the clip. Nothing here measures the content. */}
+      {/*
+        It TURNS OVER rather than sliding down.
+
+        Asked for Sep 25 2026: "it flip the particular area and show filter
+        option just like used in northwind rentals". The portal's panel is the
+        back face of its overview row and rotates on X; this is the same motion
+        for a panel with no front face to turn away from — it comes in edge-on
+        and settles flat, so the area reads as turned rather than pushed open.
+
+        A CSS transition, not framer-motion. The first version used
+        `AnimatePresence` + `motion.div`, and a frame captured 110ms into the
+        turn showed the card already flat: framer 12 drives transforms through
+        the Web Animations API, which never produced the rotation here and left
+        only the opacity fade. A plain transition is measurable, composited,
+        and one dependency lighter.
+
+        `perspective` belongs on the wrapper, never on the element that
+        rotates: applied to the rotating element it lands after the transform
+        and the depth is lost. That is the detail the portal's own flip warns
+        about hardest.
+
+        Height still comes from the 0fr/1fr grid, so nothing measures the
+        content and no `max-h` can clip it when a filter is added.
+      */}
       <div
         id={panelId}
+        style={{ perspective: 1200 }}
         className={cn(
           'grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none',
           open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
         )}
       >
         <div className="min-h-0 overflow-hidden">
-          <div className="relative rounded-4xl bg-card p-5 shadow-sm ring-1 ring-foreground/10">
+          <div
+            ref={cardRef}
+            aria-hidden={!open}
+            /* Hinged on the edge it is attached to. */
+            style={{
+              transformOrigin: 'top center',
+              transform: open ? 'rotateX(0deg)' : 'rotateX(-82deg)',
+              /* Inline, not `duration-[420ms]`. The utility class lost to the
+                 150ms default that `transition-*` carries — computed style read
+                 back 0.15s, which is why a frame captured 120ms into the turn
+                 showed the card already flat. An inline duration cannot be
+                 out-ordered in the stylesheet. */
+              transitionDuration: '420ms',
+            }}
+            className={cn(
+              'relative rounded-4xl bg-card p-5 shadow-sm ring-1 ring-foreground/10',
+              'transition-[transform,opacity] ease-out motion-reduce:transition-none',
+              open ? 'opacity-100' : 'opacity-0',
+            )}
+          >
             <button
               type="button"
               onClick={() => setOpen(false)}

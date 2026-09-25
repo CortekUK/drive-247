@@ -328,7 +328,11 @@ describe("filters fold away until asked for", () => {
     // a filter does, or when it applies, passes through this component.
     const s = panel();
     expect(s).toContain("children: ReactNode");
-    expect(s).not.toMatch(/onChange|useEffect|fetch\(/);
+    // Narrowed: this forbade `useEffect` outright as a proxy for "owns no
+    // filter state", and then the panel grew one — to take the folded card out
+    // of the tab order, which is focus management, not filtering. The rule is
+    // that no filter VALUE and no fetching lives here.
+    expect(s).not.toMatch(/onChange=|fetch\(|useQuery|supabase/);
   });
 
   it("shows how many filters are set, since a folded filter is forgettable", () => {
@@ -477,7 +481,17 @@ describe("multi-section pages publish their sections to the sidebar", () => {
      worked. A behavioural test beside a brittle textual one is just the
      brittle one. */
 
-  it("renders them only under the item the page named", () => {
-    expect(src("components/admin/Sidebar.tsx")).toContain("sections?.href === item.href");
+  it("gives the whole rail over to the page's sections", () => {
+    // This used to assert the sections were nested UNDER their nav item. They
+    // are not any more: a page with sections takes the rail, the way opening a
+    // customer in Northwind replaces the navigation with that customer's own
+    // sections. The nav comes back through the rail's own way out.
+    const s = src("components/admin/Sidebar.tsx");
+    expect(s).toContain("sections && !showNav ? (");
+    expect(s).toContain("<SectionRail");
+    expect(s).toContain("All sections");
+    // …and leaving the page must drop the rail, or it sits over the navigation
+    // of wherever you landed.
+    expect(s).toContain("setShowNav(false);");
   });
 });
