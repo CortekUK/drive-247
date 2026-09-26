@@ -18,7 +18,8 @@
  *      payment_apply_fifo_v2 (the live one — the repo copy is stale), the FIFO
  *      triggers, get_user_tenant_id, is_super_admin, …
  *   4. Stubs for what the fixture does not contain (listed in STUBS below).
- *   5. BOTH migrations, verbatim from supabase/migrations/.
+ *   5. The payment-plan migrations (MIGRATION_FILES), verbatim from
+ *      supabase/migrations/.
  *   6. Test-only: pp_clock() is replaced so a test can drive the calendar
  *      (setNow). Production's pp_clock() is now().
  *
@@ -37,6 +38,7 @@ const FIXTURE_DIR = path.resolve(here, "../fixtures");
 export const MIGRATION_FILES = [
   "20260925120000_ledger_allocation_prerequisites.sql",
   "20260925120100_payment_plans.sql",
+  "20260925120200_payment_plans_one_engine_per_rental.sql",
 ] as const;
 
 export function migrationPath(file: string): string {
@@ -108,6 +110,19 @@ CREATE TABLE public.payg_accruals (
   accrual_day_index integer, paid_at timestamptz, settling_payment_id uuid, superseded_by_accrual_id uuid);
 -- Read by sync_fine_status_on_charge_settled.
 CREATE TABLE public.fines (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), status text);
+-- installment_plans: the one-engine-per-rental migration (20260925120200) puts
+-- triggers on it and reads its status. NOT in the live dump, so this is the
+-- repo's own DDL (20260201100000_add_installments_feature.sql), cut to the
+-- columns a legacy-mechanism check touches, with the repo's status CHECK.
+CREATE TABLE public.installment_plans (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  rental_id uuid NOT NULL REFERENCES public.rentals(id) ON DELETE CASCADE,
+  tenant_id uuid NOT NULL REFERENCES public.tenants(id) ON DELETE CASCADE,
+  customer_id uuid NOT NULL REFERENCES public.customers(id) ON DELETE CASCADE,
+  plan_type text NOT NULL DEFAULT 'weekly',
+  status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','active','completed','cancelled','overdue')),
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now());
 `;
 
 /** Test-only clock: pp_clock() reads pp_test.now when a test has set it. */

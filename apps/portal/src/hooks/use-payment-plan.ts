@@ -28,6 +28,7 @@ import { extractFunctionError } from "@/lib/edge-error";
 import type { CollectionMethod, ISODate, OccurrenceDraft } from "@/lib/payment-plans/types";
 import { isPaymentPlansTenant, probePaymentPlans, type ProbeClient } from "@/lib/payment-plans-ui/feature";
 import type { DashboardAccounts } from "@/lib/payment-plans-ui/dashboard-link";
+import { LIVE_INSTALLMENT_STATUSES } from "@/lib/payment-plans-ui/legacy-mechanism";
 import { draftToPlanForm, type PlanDraft } from "@/lib/payment-plans-ui/plan-form-model";
 import { attemptFromRow, eventFromRow, occurrenceFromRow, planFromRow } from "@/lib/payment-plans-ui/rows";
 import type { PlanBundle, PlanView, RecordPaymentInput } from "@/lib/payment-plans-ui/view-types";
@@ -180,6 +181,36 @@ export function usePaymentPlanAccounts() {
     },
   });
   return q.data ?? null;
+}
+
+/* ── one engine per rental ───────────────────────────────────────────────── */
+
+/**
+ * Does this rental have an installment plan that still collects money
+ * (pending, active or overdue)? Read from the table, not from
+ * `rentals.has_installment_plan`, because that flag outlives a cancelled plan
+ * and the database's own refusal (pp__legacy_mechanism) reads the table.
+ * `enabled` is false once a payment plan is live — the question only matters
+ * before one is set up.
+ */
+export function useLiveInstallmentPlan(rentalId: string | null | undefined, enabled: boolean) {
+  const { tenant } = useTenant();
+  const { enabled: featureOn } = usePaymentPlansFeature();
+  return useQuery({
+    queryKey: ["payment-plan-live-installment", tenant?.id, rentalId],
+    enabled: !!tenant && featureOn && !!rentalId && enabled,
+    queryFn: async (): Promise<boolean> => {
+      const { data, error } = await supabaseUntyped
+        .from("installment_plans")
+        .select("id")
+        .eq("tenant_id", tenant!.id)
+        .eq("rental_id", rentalId)
+        .in("status", [...LIVE_INSTALLMENT_STATUSES])
+        .limit(1);
+      if (error) throw error;
+      return (data ?? []).length > 0;
+    },
+  });
 }
 
 /* ── operator actions ────────────────────────────────────────────────────── */

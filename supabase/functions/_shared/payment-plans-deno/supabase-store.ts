@@ -32,7 +32,7 @@ import {
   type RecordFailureInput,
   type RecordSuccessInput,
 } from "../payment-plans/types.ts";
-import { PlanStoreError, type PlanStoreErrorCode } from "../payment-plans/errors.ts";
+import { LEGACY_MECHANISM_ERROR_PREFIX, PlanStoreError, type PlanStoreErrorCode } from "../payment-plans/errors.ts";
 import { decimalToCents } from "../payment-plans/amounts.ts";
 import { dueAtUtc } from "../payment-plans/dates.ts";
 
@@ -56,7 +56,8 @@ interface DbError {
  * pp_* functions raise with (see the migration): P0002 not found, 40001
  * version conflict, 55000 refused-in-this-state, 22023 bad input, 23505 a
  * unique index (one live plan per rental, one attempt in flight), 23514 the
- * state-machine triggers.
+ * state-machine triggers, P0001 `legacy_mechanism_active:…` the rental is
+ * still on an old billing mechanism (20260925120200, one engine per rental).
  */
 export function toStoreError(where: string, error: DbError): PlanStoreError {
   const msg = `${where}: ${error.message ?? "database error"}`;
@@ -88,6 +89,9 @@ export function toStoreError(where: string, error: DbError): PlanStoreError {
     case "22008":
     case "42501":
       code = "invalid_input";
+      break;
+    case "P0001":
+      code = text.includes(LEGACY_MECHANISM_ERROR_PREFIX) ? "legacy_mechanism_active" : "refused";
       break;
     default:
       code = "refused";

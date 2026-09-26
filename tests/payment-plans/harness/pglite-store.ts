@@ -29,7 +29,7 @@ import type {
   RecordFailureInput,
   RecordSuccessInput,
 } from "@fn/_shared/payment-plans/types.ts";
-import { PlanStoreError } from "@fn/_shared/payment-plans/errors.ts";
+import { LEGACY_MECHANISM_ERROR_PREFIX, PlanStoreError } from "@fn/_shared/payment-plans/errors.ts";
 import { toCents, type Db } from "./pglite";
 
 type Row = Record<string, any>;
@@ -92,6 +92,7 @@ function mapError(e: any): Error {
   if (code === "55000" && /charge in flight|open attempt/.test(msg)) return new PlanStoreError("attempt_in_flight", msg);
   if (code === "55000") return new PlanStoreError("refused", msg);
   if (code === "22023" || code === "22P02" || code === "23514" || code === "42501") return new PlanStoreError("invalid_input", msg);
+  if (code === "P0001" && msg.includes(LEGACY_MECHANISM_ERROR_PREFIX)) return new PlanStoreError("legacy_mechanism_active", msg);
   return e instanceof Error ? e : new Error(msg);
 }
 

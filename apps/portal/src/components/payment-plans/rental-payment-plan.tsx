@@ -12,11 +12,17 @@
  *   no plan, money owed   → "Set up a payment plan"
  *   no plan, nothing owed → nothing (there is nothing to plan)
  *
+ * One engine per rental: a rental still on auto-extend, an open pay-as-you-go
+ * or a live installment plan keeps "Set up a plan" DISABLED, with the sentence
+ * the server would refuse with (lib/payment-plans-ui/legacy-mechanism.ts). The
+ * database refuses it regardless (migration 20260925120200); this only says so
+ * before the operator fills in a form.
+ *
  * Who can act: anyone with edit rights on rentals. A read-only role sees the
  * card and no buttons. The edge function enforces the same rule server-side.
  */
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { CalendarClock, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import { cardCls } from "@/components/rentals-v2/rental-detail/_kit";
@@ -29,7 +35,9 @@ import {
   usePaymentPlanAccounts,
   usePaymentPlanActions,
   usePaymentPlansFeature,
+  useLiveInstallmentPlan,
 } from "@/hooks/use-payment-plan";
+import { legacyMechanismForRental, legacyMechanismReason, type LegacyRentalFlags } from "@/lib/payment-plans-ui/legacy-mechanism";
 import { formatMoney, todayInZone, type ISODate } from "@/lib/payment-plans-ui/format";
 import type { PlanContext } from "@/lib/payment-plans-ui/plan-form-model";
 import { PaymentPlanCard } from "./payment-plan-card";
@@ -40,16 +48,19 @@ export function RentalPaymentPlanSection({
   rentalStart,
   rentalEnd,
   balanceCents,
+  rental,
 }: {
   rentalId: string;
   rentalStart: ISODate;
   rentalEnd: ISODate | null;
   /** What the rental owes now (charges outstanding, deposit excluded, less unapplied credit). */
   balanceCents: number;
+  /** The rental row's old-mechanism flags (auto-extend, PAYG). */
+  rental?: LegacyRentalFlags | null;
 }) {
   const { enabled } = usePaymentPlansFeature();
   if (!enabled) return null;
-  return <Section rentalId={rentalId} rentalStart={rentalStart} rentalEnd={rentalEnd} balanceCents={balanceCents} />;
+  return <Section rentalId={rentalId} rentalStart={rentalStart} rentalEnd={rentalEnd} balanceCents={balanceCents} rental={rental} />;
 }
 
 function Section({
@@ -57,11 +68,13 @@ function Section({
   rentalStart,
   rentalEnd,
   balanceCents,
+  rental,
 }: {
   rentalId: string;
   rentalStart: ISODate;
   rentalEnd: ISODate | null;
   balanceCents: number;
+  rental?: LegacyRentalFlags | null;
 }) {
   const { tenant } = useTenant();
   const { canEdit } = useManagerPermissions();
@@ -78,6 +91,16 @@ function Section({
   const live = plan && (plan.status === "active" || plan.status === "paused");
   const today = todayInZone(plan?.timezone ?? tenant?.timezone);
   const ctx: PlanContext = { rentalStart: rentalStart.slice(0, 10), rentalEnd: rentalEnd ? rentalEnd.slice(0, 10) : null, balanceCents };
+
+  // One engine per rental: is this rental still billed by an old mechanism?
+  const offersSetup = !q.isLoading && !q.error && !live && balanceCents > 0;
+  const installment = useLiveInstallmentPlan(rentalId, offersSetup);
+  const mechanism = legacyMechanismForRental(rental, installment.data === true);
+  const blockedReason = legacyMechanismReason(mechanism);
+  // While the installment read is in flight the answer is unknown; a failed
+  // read leaves the button on (the server still refuses, in the same words).
+  const checkingInstallment = offersSetup && installment.isLoading;
+  const reasonId = useId();
 
   if (q.isLoading) {
     return (
@@ -114,10 +137,22 @@ function Section({
                 This rental owes {formatMoney(balanceCents, currency)}. Collect it over time — weekly, monthly or on the dates you pick — by
                 card, emailed link or payments you record.
               </p>
+              {blockedReason && (
+                <p id={reasonId} className="mt-1.5 text-xs font-medium leading-relaxed text-foreground" data-plan-setup-blocked={mechanism ?? ""}>
+                  {blockedReason}
+                </p>
+              )}
             </div>
           </div>
           {mayAct && (
-            <Button type="button" onClick={() => setSetUpOpen(true)}>
+            <Button
+              type="button"
+              onClick={() => setSetUpOpen(true)}
+              disabled={!!blockedReason || checkingInstallment}
+              title={blockedReason ?? undefined}
+              aria-describedby={blockedReason ? reasonId : undefined}
+              data-plan-setup-button=""
+            >
               Set up a plan
             </Button>
           )}

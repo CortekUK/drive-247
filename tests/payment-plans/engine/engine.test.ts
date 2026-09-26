@@ -236,6 +236,64 @@ describe("reminders are deduplicated per occurrence and offset", () => {
   });
 });
 
+describe("reminders around the due work (S19's mechanics)", () => {
+  // UTC, due 2031-03-03 10:00Z; one reminder, two days after; a card that
+  // fails, a retry two days later at 10:00 — the reminder's own day.
+  async function retryWorld(opts: { maxAttempts: number }) {
+    const store = new MemoryPlanStore({ rentals: [{ id: "rent", tenantId: "ten", customerId: "cus", owedCents: 70000 }], now: "2031-02-01T00:00:00.000Z" });
+    const provider = new SimulatedProvider({ account: "acct_mech" });
+    const notifier = new RecordingNotifier();
+    const links = new SimulatedLinkMinter();
+    const deps: EngineDeps = { store, provider, notifier, links };
+    const draft = planFormToRowAndSchedule(
+      {
+        freq: "daily",
+        interval: 7,
+        anchor: "2031-03-03",
+        firstOccurrence: "on_anchor",
+        end: { kind: "count", count: 2 },
+        amountMode: "split_total",
+        collectionMethod: "auto_charge",
+        fallbackToLink: true,
+        maxAttempts: opts.maxAttempts,
+        retryAfterDays: 2,
+        reminderOffsets: [2],
+      },
+      { tenantId: "ten", rentalId: "rent", customerId: "cus", rentalEnd: null, timezone: "UTC", currency: "USD", paymentProvider: "stripe", owedCents: 70000 },
+    );
+    const planId = await store.createPlan({ plan: draft.plan, occurrences: draft.occurrences });
+    const [occ] = await store.listOccurrences(planId);
+    return { store, provider, notifier, links, deps, planId, occ };
+  }
+  const RETRY = "2031-03-05T10:00:00.000Z";
+
+  it("a fallback link sent by the retry and the +2 reminder in the SAME tick carry the same, still-valid link", async () => {
+    const w = await retryWorld({ maxAttempts: 2 });
+    w.provider.queue(w.occ.id, [{ decline: "insufficient_funds" }, { decline: "insufficient_funds" }]);
+    await runTick(w.deps, { asOf: DAY1 });
+    expect((await w.store.getOccurrence(w.occ.id))!.nextAttemptAt).toBe(RETRY);
+    await runTick(w.deps, { asOf: RETRY }); // attempt 2 fails, retries exhausted → fallback link, then the +2 reminder
+    const link = w.notifier.sent.find((n) => n.kind === "link" && n.occurrenceId === w.occ.id);
+    const reminder = w.notifier.sent.find((n) => n.kind === "reminder" && n.occurrenceId === w.occ.id);
+    expect(link?.url).toBeTruthy();
+    // One token minted, so the link email's URL is the live one — not killed a
+    // moment later by a reminder minting a fresh token.
+    expect(w.links.minted.map((m) => m.url)).toEqual([link!.url]);
+    expect(reminder?.url).toBe(link!.url);
+    expect(w.store.findByLinkTokenHash(w.links.minted[0].tokenHash)?.id).toBe(w.occ.id);
+  });
+
+  it("a plan the retry paused (an integration bug) sends no \"still unpaid\" reminder in that tick", async () => {
+    const w = await retryWorld({ maxAttempts: 3 });
+    w.provider.queue(w.occ.id, [{ decline: "insufficient_funds" }, { decline: "billing_invalid_mandate" }]);
+    await runTick(w.deps, { asOf: DAY1 });
+    await runTick(w.deps, { asOf: RETRY });
+    expect((await w.store.getPlan(w.planId))!.status).toBe("paused");
+    expect((await w.store.listEvents(w.planId)).filter((e) => e.kind === "reminder")).toEqual([]);
+    expect(w.notifier.sent.filter((n) => n.to === "customer")).toEqual([]);
+  });
+});
+
 describe("isAutoEligible", () => {
   const occ = (over: Partial<OccurrenceRow>): OccurrenceRow => ({
     id: "o",

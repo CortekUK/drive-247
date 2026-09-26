@@ -14,7 +14,8 @@
  *      Older, or on a plan that is no longer active → look the charge up by
  *      metadata; found → record it, not found → abandoned. NEVER a new key
  *      without a lookup: a new key is a new charge.
- *   2. REMINDERS. For each open occurrence and each offset where due_date +
+ *   2. REMINDERS BEFORE DUE WORK — offsets ≤ 0 only ("due Friday", "charging
+ *      today"). For each open occurrence and each such offset where due_date +
  *      offset is the plan-local today: record the event with dedupe key
  *      reminder:{occ}:{offset} and send only if that insert won — so two ticks
  *      in one day send one email.
@@ -22,6 +23,14 @@
  *      mark in flight (write-ahead), charge with the key, classify; checkout
  *      link → claim, mint the stable URL, email it; manual → an
  *      occurrence_due event and an operator notification. Nothing charged.
+ *   4. REMINDERS AFTER DUE WORK — offsets > 0 only ("still unpaid"), and only
+ *      for occurrences the due work left open. A card retry lands on a later
+ *      day than the due date (retry_after_days), so "+2 days, still unpaid"
+ *      and the retry often fall on the same tick; sent first, the customer was
+ *      told they were overdue minutes before being charged successfully (S19).
+ *      For the same reason an occurrence whose card retry is still to come
+ *      later TODAY is held until that retry's tick — the cron ticks from local
+ *      midnight, hours before a 10:00 retry. Same dedupe keys as step 2.
  *
  * Every occurrence is processed in its own try/catch: one bad row is reported
  * in TickResult.errors and the tick carries on.
@@ -699,7 +708,13 @@ async function recoverAttempt(deps: EngineDeps, att: AttemptRow, asOf: string, f
 // Reminders & due work
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function sendReminder(deps: EngineDeps, plan: PlanRow, occ: OccurrenceRow, offset: number): Promise<boolean> {
+/**
+ * @param linkUrlThisTick the payment URL the due work of THIS tick already
+ *   emailed for this occurrence (a link, or a card's fallback link). Reused so
+ *   the reminder does not mint a fresh token — which would kill the link in
+ *   the email the customer received a moment earlier.
+ */
+async function sendReminder(deps: EngineDeps, plan: PlanRow, occ: OccurrenceRow, offset: number, linkUrlThisTick?: string): Promise<boolean> {
   const inserted = await deps.store.recordEvent({
     planId: plan.id,
     occurrenceId: occ.id,
@@ -715,7 +730,9 @@ async function sendReminder(deps: EngineDeps, plan: PlanRow, occ: OccurrenceRow,
   // link always works; payment-plan-pay tells an old one to use it.
   let url: string | undefined;
   const openLink = (await openAttempts(deps.store, occ.id)).find((a) => a.method === "checkout_link");
-  if (openLink) {
+  if (openLink && linkUrlThisTick) {
+    url = linkUrlThisTick;
+  } else if (openLink) {
     const minted = await deps.links.mint(occ.id);
     await deps.store.setLinkToken(occ.id, minted.tokenHash);
     url = minted.url;
@@ -795,28 +812,47 @@ export async function runTick(deps: EngineDeps, opts: { asOf: string; tenantId?:
     }
   }
 
-  // 2. Reminders.
-  let forReminders: OccurrenceRow[] = [];
-  try {
-    forReminders = await deps.store.listForReminders(asOf, REMINDER_HORIZON_DAYS, filter);
-  } catch (e) {
-    result.errors.push({ stage: "reminders", message: message(e) });
-  }
-  for (const occ of forReminders) {
+  // One reminder pass. `which` picks the offsets: ≤ 0 before the due work,
+  // > 0 after it. Each pass lists what is open AT THAT MOMENT, so the second
+  // one never reminds about an occurrence the due work has just settled.
+  const remind = async (which: "before_due" | "after_due", planOfPass: (id: string) => Promise<PlanRow>, linkUrls: Map<string, string>) => {
+    let forReminders: OccurrenceRow[] = [];
     try {
-      if (occ.status === "processing") continue; // a card charge is running right now
-      const plan = await planOf(occ.planId);
-      if (plan.status !== "active") continue;
-      const today = localDateInZone(asOf, plan.timezone);
-      for (const offset of plan.reminderOffsets ?? []) {
-        if (addDays(occ.dueDate, offset) !== today) continue;
-        const sent = await sendReminder(deps, plan, occ, offset);
-        result.reminders.push({ occurrenceId: occ.id, planId: plan.id, offset, sent });
-      }
+      forReminders = await deps.store.listForReminders(asOf, REMINDER_HORIZON_DAYS, filter);
     } catch (e) {
-      result.errors.push({ stage: "reminders", occurrenceId: occ.id, message: message(e) });
+      result.errors.push({ stage: "reminders", message: message(e) });
     }
-  }
+    for (const occ of forReminders) {
+      try {
+        if (occ.status === "processing") continue; // a card charge is running right now
+        const plan = await planOfPass(occ.planId);
+        if (plan.status !== "active") continue;
+        const today = localDateInZone(asOf, plan.timezone);
+        // A card retry still to come TODAY decides whether "still unpaid" is
+        // true. The cron ticks all day, so without this the first tick after
+        // local midnight would send it hours before a 10:00 retry succeeds.
+        // The retry's own tick (later today) sends it if the retry fails.
+        const retryLaterToday =
+          which === "after_due" &&
+          occ.status === "failed" &&
+          !!occ.nextAttemptAt &&
+          compareInstants(occ.nextAttemptAt, asOf) > 0 &&
+          localDateInZone(occ.nextAttemptAt, plan.timezone) === today;
+        for (const offset of plan.reminderOffsets ?? []) {
+          if (which === "before_due" ? offset > 0 : offset <= 0) continue;
+          if (retryLaterToday) continue;
+          if (addDays(occ.dueDate, offset) !== today) continue;
+          const sent = await sendReminder(deps, plan, occ, offset, linkUrls.get(occ.id));
+          result.reminders.push({ occurrenceId: occ.id, planId: plan.id, offset, sent });
+        }
+      } catch (e) {
+        result.errors.push({ stage: "reminders", occurrenceId: occ.id, message: message(e) });
+      }
+    }
+  };
+
+  // 2. Reminders that come before the money: "due in two days", "charging today".
+  await remind("before_due", planOf, new Map());
 
   // 3. Due work.
   let due: OccurrenceRow[] = [];
@@ -835,6 +871,18 @@ export async function runTick(deps: EngineDeps, opts: { asOf: string; tenantId?:
       result.errors.push({ stage: "due", occurrenceId: occ.id, message: message(e) });
     }
   }
+
+  // 4. Reminders that say "still unpaid" — only now, after this tick's retry
+  //    has had its chance, and only for what it left open. A plan the due
+  //    work touched is re-read: it may have paused it (an integration bug),
+  //    and a paused plan sends no reminders.
+  for (const occ of due) plans.delete(occ.planId);
+  const linkUrls = new Map<string, string>();
+  for (const a of result.actions) {
+    const url = a.url ?? a.fallback?.url;
+    if (url) linkUrls.set(a.occurrenceId, url);
+  }
+  await remind("after_due", planOf, linkUrls);
   return result;
 }
 

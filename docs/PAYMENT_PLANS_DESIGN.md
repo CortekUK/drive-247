@@ -269,9 +269,16 @@ simulator.
    same idempotency key with the same parameters**; older → look the charge up
    by metadata (`attempt_id`); found → `recordSuccess`, not found →
    `abandoned`. **Never a new key without a lookup.**
-2. **Reminders.** For each open occurrence and each offset where
-   `due_date + offset == plan-local today`: `recordEvent({kind:'reminder',
-   dedupeKey:'reminder:{occ}:{offset}'})` — send only if it inserted.
+2. **Reminders, before and on the due date** (offsets ≤ 0). For each open
+   occurrence and each such offset where `due_date + offset == plan-local
+   today`: `recordEvent({kind:'reminder', dedupeKey:'reminder:{occ}:{offset}'})`
+   — send only if it inserted.
+4. **Reminders after the due date** (offsets > 0), run AFTER due work and only
+   for occurrences still open once it has run; held while a card retry is
+   still to come later the same local day (the retry's own tick decides); a
+   link emailed earlier in the same tick is reused, never re-minted. Without
+   this a customer got "still unpaid" hours or minutes before a retry that
+   succeeded (S19).
 3. **Due work** (`collectDue`), per method:
    - **auto_charge** (eligible per §6): `claim` → `markInFlight` → provider
      charge with the key → classify:
@@ -403,6 +410,8 @@ account `acct_sim`.
 | S16 pause | pause 10-05, resume 10-12 | no charge at 10-09; occ2 charged at the first tick after resume |
 | S17 reminders | method manual; ticks twice each day 09-30 → 10-06 | reminder events: occ1 on 09-30 (−2), 10-02 (0), 10-04 (+2, if unpaid) — each **once** despite two ticks a day |
 | S18 exhausted | insufficient_funds every time | attempts 1, 2, 3 at 10-02, 10-04, 10-06 14:00Z; then occ1 failed, next_attempt_at null, fallback link sent |
+| S19a overdue reminder waits for the retry — retry succeeds | occ1 → insufficient_funds at 10-02T14:00Z; ticks 10-04T04:15Z and 13:45Z; attempt 2 succeeds 10-04T14:00Z; ticks 10-04T20:00Z, 10-05, 10-06 | no +2 reminder before the retry; attempt `…:2` succeeded; occ1 paid, 1 payment of 20000; **no `reminder` event with offset 2 for occ1, ever** |
+| S19b — retry fails | same, attempt 2 → insufficient_funds | no +2 reminder before the retry; **exactly one** `reminder:{occ1}:2`, created 10-04T14:00Z (the retry's tick); later ticks deduped |
 
 ---
 
@@ -467,6 +476,11 @@ Found while building; the code follows these, and so does this document now.
 - **Webhook failures that a retry cannot fix** (unknown attempt, invalid
   record) raise an operator alert and return 200, so they do not burn the
   endpoint's auto-disable budget.
+- **One engine per rental** (migration `20260925120200`): a plan cannot be
+  created on a rental still on auto-extend, open PAYG or a live installment
+  plan (SQLSTATE P0001 `legacy_mechanism_active:<mechanism>:` → HTTP 409 with a
+  plain sentence), and none of those can be turned on while a plan is live
+  (`payment_plan_active:`). Both directions lock the rental row.
 - **Known follow-ups:** the existing `payment_intent.payment_failed` branch
   also rings an operator bell for a plan charge (two bells for one failure);
   `payment_intent.succeeded` flips plan payment rows `Completed → Applied`

@@ -1,5 +1,5 @@
 /**
- * §10.1 scenarios S1–S18 — the identical list the /dev simulator runs — on
+ * §10.1 scenarios S1–S19 — the identical list the /dev simulator runs — on
  * BOTH stores:
  *   memory — MemoryPlanStore (the engine agent's; what the browser runs)
  *   pglite — PglitePlanStore: the pp_* SQL functions on real Postgres, with the
@@ -95,8 +95,8 @@ for (const s of SCENARIOS) {
 }
 
 describe("the scenario list itself", () => {
-  it("is S1…S18, in order, each with a why", () => {
-    expect(SCENARIOS.map((s) => s.id)).toEqual(Array.from({ length: 18 }, (_, i) => `S${i + 1}`));
+  it("is S1…S18 then S19a, S19b, in order, each with a why", () => {
+    expect(SCENARIOS.map((s) => s.id)).toEqual([...Array.from({ length: 18 }, (_, i) => `S${i + 1}`), "S19a", "S19b"]);
     expect(SCENARIOS.every((s) => s.why.length > 20)).toBe(true);
   });
 });

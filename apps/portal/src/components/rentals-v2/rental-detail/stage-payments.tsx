@@ -425,12 +425,19 @@ export function StagePayments({ detail, refetch }: StageProps) {
           tables exist (usePaymentPlansFeature), so every other tenant's
           Payments stage is exactly what it was. The balance handed in is what
           the plan server-side calls "owed": charges outstanding (the deposit
-          never enters these totals) less money received but not applied. */}
+          never enters these totals) less money received but not applied. The
+          flags keep "Set up a plan" off while an old mechanism (auto-extend,
+          open PAYG) still bills this rental — one engine per rental. */}
       <RentalPaymentPlanSection
         rentalId={rentalId}
         rentalStart={detail.rental.start_date}
         rentalEnd={detail.rental.end_date}
         balanceCents={Math.max(0, t.outstanding - t.unapplied)}
+        rental={{
+          auto_extend_enabled: detail.rental.auto_extend_enabled,
+          is_pay_as_you_go: detail.rental.is_pay_as_you_go,
+          payg_closed_at: detail.rental.payg_closed_at,
+        }}
       />
 
       {/* ═══ the ledger — two lists ═════════════════════════════════════════ */}

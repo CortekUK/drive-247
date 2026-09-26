@@ -70,7 +70,7 @@ import type {
   RecordFailureInput,
   RecordSuccessInput,
 } from "./types.ts";
-import { PlanStoreError } from "./errors.ts";
+import { legacyMechanismMessage, PAYMENT_PLAN_ACTIVE_ERROR_PREFIX, PAYMENT_PLAN_ACTIVE_REASON, PlanStoreError, type LegacyMechanism } from "./errors.ts";
 import { addDays, compareInstants, dueAtUtc, isISODate, localDateInZone, secondsBetween } from "./dates.ts";
 
 /** payments_payment_provider_check. */
@@ -124,6 +124,22 @@ export interface MemoryRental {
   customerId: string;
   /** What the rental still owes, in cents. Negative = unapplied credit. */
   owedCents: number;
+  /**
+   * The old billing mechanism this rental is still on, if any — the memory
+   * model of rentals.auto_extend_enabled, an open PAYG (is_pay_as_you_go with
+   * payg_closed_at null) and a live installment_plans row. A rental on one
+   * cannot get a payment plan (one engine per rental).
+   */
+  legacy: LegacyMechanism | null;
+}
+
+/** What a scenario or test seeds a rental with. `legacy` is optional (additive). */
+export interface MemoryRentalSeed {
+  id: string;
+  tenantId: string;
+  customerId: string;
+  owedCents: number;
+  legacy?: LegacyMechanism | null;
 }
 
 export interface MemoryPayment {
@@ -252,7 +268,7 @@ export class MemoryPlanStore implements PlanStore, PlanOperations, PlanLookups, 
   private readonly counters = { plan: 0, occ: 0, att: 0, pay: 0, evt: 0, rev: 0 };
 
   constructor(opts?: {
-    rentals?: { id: string; tenantId: string; customerId: string; owedCents: number }[];
+    rentals?: MemoryRentalSeed[];
     /** The store's "now" until setNow is called. */
     now?: string;
     /**
@@ -280,9 +296,28 @@ export class MemoryPlanStore implements PlanStore, PlanOperations, PlanLookups, 
     return this.clock;
   }
 
-  addRental(r: { id: string; tenantId: string; customerId: string; owedCents: number }): void {
+  addRental(r: MemoryRentalSeed): void {
     if (!Number.isSafeInteger(r.owedCents)) throw new RangeError("owedCents must be whole cents");
-    this.rentals.set(r.id, { id: r.id, tenantId: r.tenantId, customerId: r.customerId, owedCents: r.owedCents });
+    this.rentals.set(r.id, { id: r.id, tenantId: r.tenantId, customerId: r.customerId, owedCents: r.owedCents, legacy: r.legacy ?? null });
+  }
+
+  /**
+   * Switch a rental's old billing mechanism on (or off, with null) — the
+   * memory model of the BEFORE triggers in
+   * 20260925120200_payment_plans_one_engine_per_rental.sql. Turning one ON
+   * while the rental has an active or paused plan is refused, exactly as the
+   * triggers raise `payment_plan_active: …`; turning one off always works.
+   */
+  setRentalLegacy(rentalId: string, legacy: LegacyMechanism | null): void {
+    const rental = this.requireRental(rentalId);
+    if (legacy && legacy !== rental.legacy) {
+      for (const p of this.plans.values()) {
+        if (p.rentalId === rentalId && (p.status === "active" || p.status === "paused")) {
+          throw new PlanStoreError("refused", `${PAYMENT_PLAN_ACTIVE_ERROR_PREFIX} ${PAYMENT_PLAN_ACTIVE_REASON[legacy]}`);
+        }
+      }
+    }
+    rental.legacy = legacy;
   }
 
   /** A new charge posted to the rental outside the plan (or a credit, negative). */
@@ -826,6 +861,9 @@ export class MemoryPlanStore implements PlanStore, PlanOperations, PlanLookups, 
     const rental = this.requireRental(p.rentalId);
     if (rental.tenantId !== p.tenantId) throw new PlanStoreError("invalid_input", `pp_create_plan: rental ${p.rentalId} does not belong to tenant ${p.tenantId}`);
     if (rental.customerId !== p.customerId) throw new PlanStoreError("invalid_input", `pp_create_plan: rental ${p.rentalId} does not belong to customer ${p.customerId}`);
+    // One engine per rental: pp_trg_plan_one_engine refuses the INSERT (before
+    // the one-live-plan index is checked, as a BEFORE trigger is).
+    if (rental.legacy) throw new PlanStoreError("legacy_mechanism_active", legacyMechanismMessage(rental.legacy));
     for (const existing of this.plans.values()) {
       if (existing.rentalId === p.rentalId && (existing.status === "active" || existing.status === "paused")) {
         throw new PlanStoreError("plan_exists", `Rental ${p.rentalId} already has a live plan (${existing.id})`);

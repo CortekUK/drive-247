@@ -366,7 +366,7 @@ const planStatus = async (ctx: ScenarioContext, planId: string) => (await ctx.st
 const sorted = (xs: number[]) => [...xs].sort((a, b) => a - b);
 
 // ─────────────────────────────────────────────────────────────────────────────
-// S1–S18
+// S1–S18 (S19a/b follow them)
 // ─────────────────────────────────────────────────────────────────────────────
 
 const S1 = define("S1", "Happy path", "The card works every time: three charges, one key each, the plan completes and the rental owes nothing.", async (ctx, r) => {
@@ -656,4 +656,68 @@ const S18 = define("S18", "Retries exhausted", "insufficient_funds every time: a
   r.check("no 4th card attempt", 3, cardCalls(ctx, ids[0]).length);
 });
 
-export const SCENARIOS: Scenario[] = [S1, S2, S3, S4, S5, S6, S7, S8, S9, S10, S11, S12, S13, S14, S15, S16, S17, S18];
+// ─────────────────────────────────────────────────────────────────────────────
+// S19 — the "+2 days, still unpaid" reminder waits for that day's card retry
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Traced case: the card fails Friday (insufficient funds), the retry is Sunday
+// 10:00 — the same local day as the +2 reminder. The reminder used to go out
+// first (the reminders stage ran before the due work, and the cron's first
+// Sunday tick is just after midnight), so the customer was told they were
+// overdue and then charged successfully. Two variants of one script, each on a
+// fresh store: the retry succeeds (a) or fails again (b).
+//
+// Expected values, hand-derived from the base fixture: occ1 due 2026-10-02,
+// 10:00 New York = 14:00Z (EDT); attempt 1 → insufficient_funds → retry at
+// local(10-02 + retryAfterDays 2) 10:00 = 2026-10-04T14:00Z; the +2 reminder's
+// day is 10-02 + 2 = 10-04, the retry's day. 04:15Z and 13:45Z on 10-04 are
+// 00:15 and 09:45 New York — the cron's ticks before the retry.
+
+const S19_TICKS_BEFORE_RETRY = ["2026-10-04T04:15:00.000Z", "2026-10-04T13:45:00.000Z"] as const;
+const S19_RETRY = "2026-10-04T14:00:00.000Z";
+const S19_TICKS_AFTER_RETRY = ["2026-10-04T20:00:00.000Z", "2026-10-05T14:00:00.000Z", "2026-10-06T14:00:00.000Z"] as const;
+
+const plusTwoReminders = async (ctx: ScenarioContext, planId: string, occId: string) =>
+  (await eventsOf(ctx, planId, occId, "reminder")).filter((e) => e.dedupeKey === `reminder:${occId}:2`).map((e) => [e.dedupeKey, e.createdAt]);
+const plusTwoEmails = (ctx: ScenarioContext, occId: string) =>
+  ctx.notifier.sent.filter((n) => n.kind === "reminder" && n.occurrenceId === occId && (n.detail as { offset?: number } | undefined)?.offset === 2).length;
+
+function s19(id: string, title: string, why: string, second: "succeeds" | "fails"): Scenario {
+  return define(id, title, why, async (ctx, r) => {
+    const { planId, rental, ids } = await setup(ctx, r);
+    ctx.provider.queue(ids[0], second === "succeeds" ? [{ decline: "insufficient_funds" }, "succeed"] : [{ decline: "insufficient_funds" }, { decline: "insufficient_funds" }]);
+    await r.tick(BASE_DUE_AT[0]);
+    const o1 = await occOf(ctx, ids[0]);
+    r.check("10-02T14:00Z: occ1 attempt 1 insufficient_funds → failed, next attempt 10-04T14:00Z", ["failed", "2026-10-04T14:00:00.000Z"], [o1.status, o1.nextAttemptAt]);
+    for (const t of S19_TICKS_BEFORE_RETRY) await r.tick(t);
+    r.check("10-04 00:15 and 09:45 New York (before the retry): no +2 reminder for occ1", [], await plusTwoReminders(ctx, planId, ids[0]));
+    await r.tick(S19_RETRY);
+    for (const t of S19_TICKS_AFTER_RETRY) await r.tick(t);
+    const a2 = (await attemptsOf(ctx, ids[0])).find((a) => a.attemptNo === 2);
+    if (second === "succeeds") {
+      r.check("attempt 2 (key …:2) succeeded at 10-04T14:00Z", [`pp:acct_sim:${ids[0]}:2`, "succeeded"], [a2?.idempotencyKey ?? null, a2?.status ?? null]);
+      r.check("occ1 paid, exactly 1 payment of 20000", ["paid", [20000]], [await statusOf(ctx, ids[0]), (await paymentsOf(ctx, rental.rentalId, ids[0])).map((p) => p.amountCents)]);
+      r.check("NO +2 reminder event for occ1, ever", [], await plusTwoReminders(ctx, planId, ids[0]));
+      r.check("no +2 reminder email for occ1", 0, plusTwoEmails(ctx, ids[0]));
+    } else {
+      r.check("attempt 2 (key …:2) failed at 10-04T14:00Z", [`pp:acct_sim:${ids[0]}:2`, "failed"], [a2?.idempotencyKey ?? null, a2?.status ?? null]);
+      r.check("exactly ONE +2 reminder event for occ1, dated the retry's tick (10-04T14:00Z)", [[`reminder:${ids[0]}:2`, S19_RETRY]], await plusTwoReminders(ctx, planId, ids[0]));
+      r.check("exactly one +2 reminder email for occ1 (the 20:00Z tick is deduped)", 1, plusTwoEmails(ctx, ids[0]));
+    }
+  });
+}
+
+const S19a = s19(
+  "S19a",
+  "Overdue reminder waits for the retry — retry succeeds",
+  "The +2 reminder falls on the retry's day. The retry succeeds at 10:00, so the customer is never told they are overdue — not at midnight, not minutes before the charge.",
+  "succeeds",
+);
+const S19b = s19(
+  "S19b",
+  "Overdue reminder waits for the retry — retry fails",
+  "The +2 reminder falls on the retry's day. The retry fails again, so the reminder goes out once, at the retry's tick — after the charge was tried, never before.",
+  "fails",
+);
+
+export const SCENARIOS: Scenario[] = [S1, S2, S3, S4, S5, S6, S7, S8, S9, S10, S11, S12, S13, S14, S15, S16, S17, S18, S19a, S19b];

@@ -26,7 +26,9 @@
 //
 // Errors: a rule the operator can fix → 422 { error, code } (PlanRuleError
 // codes from types.ts); a state that forbids the action → 409 { error, code };
-// not found → 404; anything else → 500.
+// a rental still on auto-extend / PAYG / an installment plan → 409 { error,
+// code: 'legacy_mechanism_active', mechanism } with the operator's sentence
+// (errors.ts LEGACY_MECHANISM_REASON); not found → 404; anything else → 500.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { handleCors, jsonResponse } from "../_shared/cors.ts";
@@ -42,7 +44,7 @@ import {
   sendOccurrenceLink,
   type PlanForm,
 } from "../_shared/payment-plans/engine.ts";
-import { PlanRuleError, PlanStoreError } from "../_shared/payment-plans/errors.ts";
+import { legacyMechanismRefusal, PlanRuleError, PlanStoreError } from "../_shared/payment-plans/errors.ts";
 import type { CollectionMethod } from "../_shared/payment-plans/types.ts";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -67,6 +69,12 @@ function requireForm(value: unknown): PlanForm {
 function errorOut(e: unknown): Response {
   if (e instanceof HttpError) return jsonResponse({ error: e.message, ...(e.code ? { code: e.code } : {}) }, e.status);
   if (e instanceof PlanRuleError) return jsonResponse({ error: e.message, code: e.code }, 422);
+  if (e instanceof PlanStoreError && e.code === "legacy_mechanism_active") {
+    // One engine per rental (migration 20260925120200): the rental is still on
+    // auto-extend, an open PAYG or a live installment plan, whose own cron
+    // would charge it too. Say which, in the operator's words.
+    return jsonResponse(legacyMechanismRefusal(e.message), 409);
+  }
   if (e instanceof PlanStoreError) {
     const status = e.code === "not_found" ? 404 : e.code === "invalid_input" ? 400 : 409;
     return jsonResponse({ error: e.message, code: e.code }, status);

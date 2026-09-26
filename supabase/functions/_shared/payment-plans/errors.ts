@@ -37,7 +37,8 @@ export type PlanStoreErrorCode =
   | "plan_exists" // a second active/paused plan on one rental
   | "attempt_in_flight" // an operation that must wait for a card attempt to finish
   | "invalid_input"
-  | "refused"; // a documented refusal (skip on the last occurrence, …)
+  | "refused" // a documented refusal (skip on the last occurrence, …)
+  | "legacy_mechanism_active"; // the rental is still on an old billing mechanism (one engine per rental)
 
 export class PlanStoreError extends Error {
   readonly code: PlanStoreErrorCode;
@@ -46,4 +47,91 @@ export class PlanStoreError extends Error {
     this.name = "PlanStoreError";
     this.code = code;
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// One engine per rental
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The billing mechanisms that predate payment plans and still run their own
+ * crons. A rental on one of them must not also get a payment plan, or two
+ * crons could charge it for the same days
+ * (migration 20260925120200_payment_plans_one_engine_per_rental.sql):
+ *   auto_extend — rentals.auto_extend_enabled
+ *   payg        — rentals.is_pay_as_you_go, while payg_closed_at is null
+ *   installment — an installment_plans row that is pending, active or overdue
+ */
+export type LegacyMechanism = "auto_extend" | "payg" | "installment";
+
+export const LEGACY_MECHANISMS: readonly LegacyMechanism[] = ["auto_extend", "payg", "installment"];
+
+/**
+ * pp_create_plan refuses with SQLSTATE P0001 and a message that starts
+ * `legacy_mechanism_active:<mechanism>: `. A store may put its own prefix in
+ * front (the Supabase store writes "pp_create_plan: …"), so the marker is
+ * searched for, not only matched at position 0.
+ */
+export const LEGACY_MECHANISM_ERROR_PREFIX = "legacy_mechanism_active:";
+
+/**
+ * The reverse direction: turning a legacy mechanism ON while a payment plan is
+ * active or paused raises SQLSTATE P0001 with a message that starts
+ * `payment_plan_active:`. Nothing in the plan engine catches it — it reaches
+ * whichever screen or function tried to switch the old mechanism on.
+ */
+export const PAYMENT_PLAN_ACTIVE_ERROR_PREFIX = "payment_plan_active:";
+
+/**
+ * What an operator is told, word for word, wherever a plan is refused for this
+ * reason: the 409 from payment-plan-manage, the disabled "Set up a plan"
+ * button, and the SQL's own RAISE text (a PGlite test pins that all three
+ * agree).
+ */
+export const LEGACY_MECHANISM_REASON: Readonly<Record<LegacyMechanism, string>> = {
+  auto_extend: "This rental renews automatically. Turn auto-extend off before setting up a payment plan.",
+  payg: "This rental is on pay-as-you-go. Close pay-as-you-go before setting up a payment plan.",
+  installment: "This rental has an installment plan. Cancel the installment plan before setting up a payment plan.",
+};
+
+/**
+ * The reverse direction's sentence per mechanism — what the old mechanism's own
+ * screen shows when a payment plan is in the way. The SQL triggers raise
+ * exactly `payment_plan_active: ` + this.
+ */
+export const PAYMENT_PLAN_ACTIVE_REASON: Readonly<Record<LegacyMechanism, string>> = {
+  auto_extend: "This rental has a payment plan. Cancel the payment plan before turning on auto-extend.",
+  payg: "This rental has a payment plan. Cancel the payment plan before turning on pay-as-you-go.",
+  installment: "This rental has a payment plan. Cancel the payment plan before setting up an installment plan.",
+};
+
+/** The message a store throws for this refusal: the marker, the mechanism, the sentence. */
+export function legacyMechanismMessage(mechanism: LegacyMechanism): string {
+  return `${LEGACY_MECHANISM_ERROR_PREFIX}${mechanism}: ${LEGACY_MECHANISM_REASON[mechanism]}`;
+}
+
+/** Said when a refusal carries the marker but names no mechanism this code knows. */
+export const LEGACY_MECHANISM_FALLBACK_REASON = "This rental is still on another billing method. Turn it off before setting up a payment plan.";
+
+/**
+ * The body payment-plan-manage answers a `legacy_mechanism_active` refusal
+ * with (HTTP 409): the operator's sentence, the stable code, and which
+ * mechanism — so a screen can say it without parsing English.
+ */
+export function legacyMechanismRefusal(message: string | null | undefined): {
+  error: string;
+  code: "legacy_mechanism_active";
+  mechanism: LegacyMechanism | null;
+} {
+  const mechanism = legacyMechanismOf(message);
+  return { error: mechanism ? LEGACY_MECHANISM_REASON[mechanism] : LEGACY_MECHANISM_FALLBACK_REASON, code: "legacy_mechanism_active", mechanism };
+}
+
+/** Which mechanism a refusal names, or null when the message is not this refusal. */
+export function legacyMechanismOf(message: string | null | undefined): LegacyMechanism | null {
+  if (!message) return null;
+  const at = message.indexOf(LEGACY_MECHANISM_ERROR_PREFIX);
+  if (at === -1) return null;
+  const rest = message.slice(at + LEGACY_MECHANISM_ERROR_PREFIX.length);
+  return LEGACY_MECHANISMS.find((m) => rest.startsWith(`${m}:`)) ?? null;
 }
