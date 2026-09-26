@@ -12,11 +12,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuPortal,
-  DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
@@ -397,117 +392,103 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         )}
       </div>
 
-      {/* Footer — the account row IS the menu.
+      {/* The footer is whichever of two things the page needs.
 
-          Asked for Sep 26 2026: sign out belongs inside the Super Admin label,
-          the way the portal does it. It used to be a permanent row of its own
-          under a divider, so the most destructive control in the rail sat in
-          the open, one stray click from the navigation above it.
+          ON A RECORD it is that company's controls, and ONLY those. Asked for
+          Sep 26 2026: "the admin tab in which sign out option is available —
+          do not show that in this page." Which also settles a line from the
+          earlier brief that had read as a contradiction: the account options
+          belong to the dashboard and the lists, not to an open record.
 
-          `side="top"` because this is the last thing in the rail — a menu
-          opening downward would leave the viewport. */}
+          EVERYWHERE ELSE it is the account row, and sign out lives in it.
+
+          Sign out is the ONLY one in this app — there is no second path — so
+          it is moved, never removed. From a record it is one click away: the
+          rail's own "All sections" brings the navigation back, and every page
+          there carries it.
+
+          `side="top"` on both, because this is the last thing in the rail and
+          a menu opening downward would leave the viewport. */}
       <div className="border-t border-sidebar-border p-2">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              className="flex min-h-11 md:min-h-0 w-full items-center gap-3 rounded-lg p-2 text-left outline-none transition-colors hover:bg-sidebar-accent focus-visible:bg-sidebar-accent"
-              aria-label="Account menu"
-            >
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-bold text-primary">
-                {user?.email?.[0]?.toUpperCase() || 'A'}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-[15px] font-medium text-sidebar-foreground md:text-[13px]">
-                  {user?.name || user?.email}
-                </p>
-                {/* The email, as the portal shows it. The Primary Admin badge
-                    moves into the menu, where there is room for it beside the
-                    address rather than under a truncated name. */}
-                <p className="truncate text-[12px] leading-tight text-muted-foreground md:text-[11px]">
-                  {user?.email}
-                </p>
-              </div>
-              <ChevronsUpDown className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-            </button>
-          </DropdownMenuTrigger>
-
-          <DropdownMenuContent side="top" align="start" className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-56 p-0">
-            {/* NO user block in here.
-
-                It repeated the row you just pressed — same avatar, same name,
-                same address, directly above it. Removed Sep 26 2026: the
-                trigger is two pixels below and says all of it already.
-
-                The Primary Admin badge went with it. It had been moved in
-                here when the row got the email, and there is nowhere left in
-                this menu it does not look like clutter. The role is on the
-                Admins page, which is where it is administered. */}
-
-            {/* What the open record lets you do.
-
-                Asked for Sep 26 2026, with an arrow drawn from the buttons
-                beside the page title down to this row. They used to sit in
-                the header; a rental company's type switch, Suspend and Delete
-                now live here instead.
-
-                Present only while a page has registered some, so this group
-                is absent on the dashboard and every list — the actions belong
-                to a record, and there is no record open on those pages. The
-                account items below are always there. */}
-            {sections?.actions?.length ? (
-              <>
-                <div className="p-1.5">
-                  {/* ONE row that opens the rest.
-
-                      They were listed flat here at first, under the record's
-                      name as a heading. Four of them — two of which change
-                      what a live company IS, and one of which deletes it —
-                      sat directly above Sign out, in a menu whose job is the
-                      signed-in person, not the record. Reported the same day:
-                      group them behind a single "Rental Settings" row.
-
-                      A submenu rather than an inline expander, because Radix
-                      gives the trigger `aria-haspopup` and roving focus for
-                      free, and because a menu that changes height under the
-                      cursor moves Sign out while you are reaching for it. */}
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger className="cursor-pointer rounded-lg px-2.5 py-1.5 text-[15px] md:text-[13px]">
-                      <Building2 className="mr-2.5 h-4 w-4 text-muted-foreground" />
-                      <span>Rental Settings</span>
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuPortal>
-                      <DropdownMenuSubContent className="min-w-52 p-1.5">
-                        {/* Which company these belong to. Inside the submenu
-                            it is a heading; outside it was noise. */}
-                        <p className="px-2.5 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                          {sectionTitle ?? 'This record'}
-                        </p>
-                        {sections.actions.map((action) => (
-                          <DropdownMenuItem
-                            key={action.id}
-                            onClick={() => sections.onAction?.(action.id)}
-                            className={cn(
-                              'cursor-pointer rounded-lg px-2.5 py-1.5 text-[15px] md:text-[13px]',
-                              action.tone === 'destructive' &&
-                                'text-destructive focus:bg-destructive/10 focus:text-destructive',
-                              action.tone === 'active' && 'bg-primary/10 font-medium text-primary',
-                            )}
-                          >
-                            <span>{action.label}</span>
-                            {action.tone === 'active' && (
-                              <Check className="ml-auto h-4 w-4" aria-hidden="true" />
-                            )}
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuSubContent>
-                    </DropdownMenuPortal>
-                  </DropdownMenuSub>
+        {sections?.actions?.length ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="flex min-h-11 w-full items-center gap-3 rounded-lg p-2 text-left outline-none transition-colors hover:bg-sidebar-accent focus-visible:bg-sidebar-accent md:min-h-0"
+                aria-label="Rental settings"
+              >
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
+                  <Building2 className="h-4 w-4" aria-hidden="true" />
                 </div>
-                <DropdownMenuSeparator className="m-0" />
-              </>
-            ) : null}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[15px] font-medium text-sidebar-foreground md:text-[13px]">
+                    Rental Settings
+                  </p>
+                  {/* Whose settings these are. On a record the rail is already
+                      titled with the company, but the footer is the one part
+                      that does not scroll, so it says so too. */}
+                  <p className="truncate text-[12px] leading-tight text-muted-foreground md:text-[11px]">
+                    {sectionTitle}
+                  </p>
+                </div>
+                <ChevronsUpDown className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              </button>
+            </DropdownMenuTrigger>
 
-            <div className="p-1.5">
+            {/* The actions directly, with no intermediate row: the trigger IS
+                "Rental Settings" now, so nesting them behind a second one
+                would be the same label twice. */}
+            <DropdownMenuContent
+              side="top"
+              align="start"
+              className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-56 p-1.5"
+            >
+              {sections.actions.map((action) => (
+                <DropdownMenuItem
+                  key={action.id}
+                  onClick={() => sections.onAction?.(action.id)}
+                  className={cn(
+                    'cursor-pointer rounded-lg px-2.5 py-1.5 text-[15px] md:text-[13px]',
+                    action.tone === 'destructive' &&
+                      'text-destructive focus:bg-destructive/10 focus:text-destructive',
+                    action.tone === 'active' && 'bg-primary/10 font-medium text-primary',
+                  )}
+                >
+                  <span>{action.label}</span>
+                  {action.tone === 'active' && (
+                    <Check className="ml-auto h-4 w-4" aria-hidden="true" />
+                  )}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="flex min-h-11 w-full items-center gap-3 rounded-lg p-2 text-left outline-none transition-colors hover:bg-sidebar-accent focus-visible:bg-sidebar-accent md:min-h-0"
+                aria-label="Account menu"
+              >
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-bold text-primary">
+                  {user?.email?.[0]?.toUpperCase() || 'A'}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[15px] font-medium text-sidebar-foreground md:text-[13px]">
+                    {user?.name || user?.email}
+                  </p>
+                  <p className="truncate text-[12px] leading-tight text-muted-foreground md:text-[11px]">
+                    {user?.email}
+                  </p>
+                </div>
+                <ChevronsUpDown className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              </button>
+            </DropdownMenuTrigger>
+
+            <DropdownMenuContent
+              side="top"
+              align="start"
+              className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-56 p-1.5"
+            >
               <DropdownMenuItem
                 onClick={() => logout()}
                 className="cursor-pointer rounded-lg px-2.5 py-1.5 text-[15px] text-destructive focus:bg-destructive/10 focus:text-destructive md:text-[13px]"
@@ -515,9 +496,9 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                 <LogOut className="mr-2.5 h-4 w-4" />
                 <span>Sign out</span>
               </DropdownMenuItem>
-            </div>
-          </DropdownMenuContent>
-        </DropdownMenu>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
     </div>
   );

@@ -161,23 +161,27 @@ describe('the row stays reachable on every page', () => {
 });
 
 /**
- * Company controls sit behind one row, not loose in the account menu.
+ * On a record the footer is that company's controls, and nothing else.
  *
- * They were listed flat at first, under the record's name as a heading. Four
- * of them — two that change what a live company IS, and one that deletes it —
- * sat directly above Sign out, in a menu whose subject is the signed-in
- * person rather than the record. Asked the same day to group them behind a
- * single "Rental Settings" row.
+ * Asked for Sep 26 2026: "the admin tab in which sign out option is available
+ * — do not show that in this page." It also settles a line from the earlier
+ * brief that had read as a contradiction — the account options belong to the
+ * dashboard and the lists, not to an open record.
+ *
+ * Sign out is the ONLY one in this app. There is no second path, so it is
+ * moved rather than removed, and the last test here is the one that matters:
+ * it still exists everywhere a record is not open.
  */
-describe('company controls are grouped behind Rental Settings', () => {
+describe('the footer swaps for the page it is on', () => {
   const ACTIONS = [
     { id: 'production', label: 'Mark as Production', tone: 'active' as const },
     { id: 'test', label: 'Mark as Test' },
     { id: 'status', label: 'Suspend company' },
+    { id: 'force-logout', label: 'Force Logout All Users' },
     { id: 'delete', label: 'Delete company', tone: 'destructive' as const },
   ];
 
-  function Harness({ onAction }: { onAction: (id: string) => void }) {
+  function Register({ onAction }: { onAction: (id: string) => void }) {
     useRegisterSidebarSections(
       '/admin/rentals',
       [{ id: 'details', label: 'Details' }],
@@ -190,11 +194,11 @@ describe('company controls are grouped behind Rental Settings', () => {
     return null;
   }
 
-  function mountWithRecord(onAction = vi.fn()) {
+  function mountOnRecord(onAction = vi.fn()) {
     render(
       <SidebarProvider>
         <SidebarSectionsProvider>
-          <Harness onAction={onAction} />
+          <Register onAction={onAction} />
           <Sidebar />
         </SidebarSectionsProvider>
       </SidebarProvider>,
@@ -202,75 +206,66 @@ describe('company controls are grouped behind Rental Settings', () => {
     return onAction;
   }
 
-  async function openAccountMenu() {
+  async function press(name: RegExp) {
     await act(async () => {
-      fireEvent.pointerDown(
-        screen.getAllByRole('button', { name: /account menu/i })[0],
-        { ctrlKey: false, button: 0 },
-      );
+      fireEvent.pointerDown(screen.getAllByRole('button', { name })[0], {
+        ctrlKey: false,
+        button: 0,
+      });
     });
   }
 
-  it('shows one row, not the four actions', async () => {
-    mountWithRecord();
-    await openAccountMenu();
-
-    await waitFor(() => expect(screen.getByText('Rental Settings')).toBeTruthy());
-    // None of them is loose in the top level of the menu.
-    for (const a of ACTIONS) {
-      expect(screen.queryByRole('menuitem', { name: a.label })).toBeNull();
-    }
-    // Sign out is still right there, one press away.
-    expect(screen.getByRole('menuitem', { name: /sign out/i })).toBeTruthy();
+  it('shows Rental Settings on a record, not the account row', async () => {
+    mountOnRecord();
+    expect(screen.getAllByRole('button', { name: /rental settings/i })[0]).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /account menu/i })).toBeNull();
+    // The signed-in person's address is not on the footer here at all.
+    expect(screen.queryByText('owner@cortek.io')).toBeNull();
   });
 
-  it('reveals them when that row is opened, under the company name', async () => {
-    mountWithRecord();
-    await openAccountMenu();
+  it('names the company whose settings they are', () => {
+    mountOnRecord();
+    const trigger = screen.getAllByRole('button', { name: /rental settings/i })[0];
+    expect(trigger.textContent).toContain("Mahadi's Rentals");
+  });
 
-    const trigger = await screen.findByText('Rental Settings');
-    await act(async () => {
-      fireEvent.pointerDown(trigger, { ctrlKey: false, button: 0 });
-      fireEvent.click(trigger);
-    });
+  it('opens straight onto the actions, with no second Rental Settings row', async () => {
+    mountOnRecord();
+    await press(/rental settings/i);
 
-    await waitFor(() => {
-      expect(screen.getByRole('menuitem', { name: /mark as production/i })).toBeTruthy();
-    });
+    await waitFor(() =>
+      expect(screen.getByRole('menuitem', { name: /mark as production/i })).toBeTruthy(),
+    );
     for (const a of ACTIONS) {
       expect(screen.getByRole('menuitem', { name: a.label }), a.label).toBeTruthy();
     }
-    // Which company they belong to — a heading inside, noise outside.
-    //
-    // Scoped to the submenu on purpose: the name also titles the rail itself,
-    // so a bare `getByText` finds two and throws. Two is CORRECT here — the
-    // rail says whose page this is, the submenu says whose settings these are.
-    const submenu = screen
-      .getByRole('menuitem', { name: /mark as production/i })
-      .closest('[role="menu"]');
-    expect(submenu).not.toBeNull();
-    expect(submenu!.textContent).toContain("Mahadi's Rentals");
+    // The trigger IS "Rental Settings", so nesting them behind a second row
+    // of the same name would say it twice.
+    expect(screen.queryByRole('menuitem', { name: /^rental settings$/i })).toBeNull();
   });
 
-  it('still dispatches the action that was chosen', async () => {
-    const onAction = mountWithRecord();
-    await openAccountMenu();
-
-    const trigger = await screen.findByText('Rental Settings');
-    await act(async () => {
-      fireEvent.pointerDown(trigger, { ctrlKey: false, button: 0 });
-      fireEvent.click(trigger);
-    });
-
-    const suspend = await screen.findByRole('menuitem', { name: 'Suspend company' });
-    await act(async () => {
-      fireEvent.click(suspend);
-    });
-    expect(onAction).toHaveBeenCalledWith('status');
+  it('offers no way to sign out from a record page', async () => {
+    mountOnRecord();
+    await press(/rental settings/i);
+    await waitFor(() =>
+      expect(screen.getByRole('menuitem', { name: /delete company/i })).toBeTruthy(),
+    );
+    expect(screen.queryByRole('menuitem', { name: /sign out/i })).toBeNull();
   });
 
-  it('offers no Rental Settings row when no record is open', async () => {
-    // The dashboard and every list register no actions.
+  it('still dispatches the action chosen', async () => {
+    const onAction = mountOnRecord();
+    await press(/rental settings/i);
+    const item = await screen.findByRole('menuitem', { name: 'Force Logout All Users' });
+    await act(async () => {
+      fireEvent.click(item);
+    });
+    expect(onAction).toHaveBeenCalledWith('force-logout');
+  });
+
+  it('gives sign out back the moment no record is open', async () => {
+    // The load-bearing one. Sign out has no other home in this app, so if
+    // this ever fails nobody can leave.
     render(
       <SidebarProvider>
         <SidebarSectionsProvider>
@@ -278,8 +273,10 @@ describe('company controls are grouped behind Rental Settings', () => {
         </SidebarSectionsProvider>
       </SidebarProvider>,
     );
-    await openAccountMenu();
-    await waitFor(() => expect(screen.getByRole('menuitem', { name: /sign out/i })).toBeTruthy());
-    expect(screen.queryByText('Rental Settings')).toBeNull();
+    expect(screen.queryByRole('button', { name: /rental settings/i })).toBeNull();
+    await press(/account menu/i);
+    await waitFor(() =>
+      expect(screen.getByRole('menuitem', { name: /sign out/i })).toBeTruthy(),
+    );
   });
 });
