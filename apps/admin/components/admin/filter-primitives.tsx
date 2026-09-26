@@ -251,12 +251,25 @@ export function FilterSearch({
 
   return (
     <div className={cn('group relative w-full sm:max-w-md', className)}>
-      <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground transition-colors group-focus-within:text-primary" />
+      {/* The icon is brand-coloured at rest, not grey. In the portal the whole
+          field reads as one tinted object — rim, fill and glyph all drawn from
+          `primary` — and a grey magnifier in a lavender field breaks that. */}
+      <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-primary" />
       <Input
         value={debounceMs > 0 ? draft : value}
         onChange={(e) => (debounceMs > 0 ? setDraft(e.target.value) : onChange(e.target.value))}
         placeholder={placeholder}
-        className="border-border/60 bg-card pl-9 pr-11 shadow-sm transition-all placeholder:text-muted-foreground/70 hover:border-primary/30 focus-visible:border-primary focus-visible:bg-background"
+        /*
+         * The lavender fill, taken from the portal's own search field
+         * (`top-bar-v2.tsx`, the `FIELD` constant): a 7% wash of `primary`
+         * inside a 25% rim, deepening to 10% on hover and focus.
+         *
+         * Asked for Sep 26 2026 — admin's field was `bg-card`, so it was a
+         * white box on a white page and the two products did not look like
+         * one. The numbers are copied rather than eyeballed; they are low
+         * enough that placeholder text keeps its contrast against the tint.
+         */
+        className="border-primary/25 bg-primary/[0.07] pl-9 pr-11 shadow-sm transition-colors placeholder:text-muted-foreground/70 hover:border-primary/40 hover:bg-primary/10 focus-visible:border-primary/50 focus-visible:bg-primary/10"
       />
       {onOpenChange && (
         <FilterToggle open={open} onOpenChange={onOpenChange} activeCount={activeCount} />

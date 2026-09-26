@@ -157,12 +157,12 @@ export function TenantPickerDialog({
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
           <div className="shrink-0 space-y-3 border-b border-border px-5 py-4 sm:px-6">
             <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-primary" />
               <Input
                 placeholder="Search by name, slug, or email..."
                 value={filters.search}
                 onChange={(e) => patch({ search: e.target.value })}
-                className="pl-9"
+                className="border-primary/25 bg-primary/[0.07] pl-9 transition-colors hover:border-primary/40 hover:bg-primary/10 focus-visible:border-primary/50 focus-visible:bg-primary/10"
                 aria-label="Search tenants"
               />
             </div>

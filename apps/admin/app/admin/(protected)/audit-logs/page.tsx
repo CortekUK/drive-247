@@ -287,7 +287,7 @@ function TenantPicker({
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search tenants..."
-                className="w-full rounded-md bg-background border border-input px-8 py-1.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                className="w-full rounded-md border border-primary/25 bg-primary/[0.07] px-8 py-1.5 text-sm transition-colors placeholder:text-muted-foreground focus:border-primary/50 focus:bg-primary/10 focus:outline-none focus:ring-1 focus:ring-ring"
               />
               {search && (
                 <button
