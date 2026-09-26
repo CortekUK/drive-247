@@ -19,6 +19,8 @@
  *    nothing. Customisation can hide, never reveal.
  */
 
+import { repointLegacyFinanceOrder } from "@/lib/finances-nav";
+
 export interface NavPreferences {
   /** Ordered hrefs for the top-level rail. */
   topLevelOrder: string[];
@@ -227,14 +229,24 @@ export function applyNavPreferences({
     (item) => !hidden.has(item.href) && !offByDefault(item)
   );
 
+  // An order saved before Payments, Invoices and Fines became one Finances row
+  // (the `finances` canary) names rows that no longer exist; Finances takes the
+  // first one's place. A no-op wherever no Finances row is on screen, which is
+  // every tenant but the canary. See `repointLegacyFinanceOrder`.
+  const onScreen = new Set([...visibleTopLevel, ...visibleMore].map((item) => item.href));
+
   return {
     topLevel: applyOrder(
       visibleTopLevel,
       (item) => item.href,
-      preferences.topLevelOrder ?? []
+      repointLegacyFinanceOrder(preferences.topLevelOrder ?? [], onScreen)
     ),
     groups: applyOrder(visibleGroups, (group) => group.label, preferences.groupOrder ?? []),
-    more: applyOrder(visibleMore, (item) => item.href, preferences.moreOrder ?? []),
+    more: applyOrder(
+      visibleMore,
+      (item) => item.href,
+      repointLegacyFinanceOrder(preferences.moreOrder ?? [], onScreen)
+    ),
   };
 }
 

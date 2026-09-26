@@ -15,7 +15,9 @@ const V2_AREAS = {
     turo: [NORTHWIND],
     agreements: [NORTHWIND],
     referrals: [NORTHWIND],
+    finances: [NORTHWIND],
 };
+export const SLUG_ONLY_AREAS = new Set(['finances']);
 export const V2_AREA_LIST = Object.keys(V2_AREAS);
 const V2_EXPERIENCE = 'v2';
 export function isV2Experience(portalExperience) {
@@ -24,7 +26,7 @@ export function isV2Experience(portalExperience) {
 export function isV2(area, tenantSlug, onV2 = false) {
     if (!tenantSlug)
         return false;
-    if (onV2)
+    if (onV2 && !SLUG_ONLY_AREAS.has(area))
         return true;
     return V2_AREAS[area]?.includes(tenantSlug) ?? false;
 }

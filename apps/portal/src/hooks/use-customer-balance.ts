@@ -1,8 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
-import { parseLocalDate } from "@/lib/date-utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { formatCurrency } from "@/lib/format-utils";
+// The balance RULE lives in lib/finances/balance.ts so this hook, the customer
+// page and Finances can never disagree. The functions there keep this file's
+// exact arithmetic (a parity test runs the original inline code against them).
+import {
+  sumAvailableCredit,
+  sumLedgerBalance,
+  sumPaygAccruals,
+  summarizeCustomerLedger,
+} from "@/lib/finances/balance";
 
 // PAYG rentals: source of truth for outstanding is payg_accruals (the rental
 // detail page's Balance Due tile uses exactly this — sum of dayTotal on rows
@@ -31,12 +39,7 @@ async function fetchPaygOutstandingForCustomer(
     return 0;
   }
 
-  let total = 0;
-  (data as any[])?.forEach(a => {
-    if (a.rental_id && excludedRentalIds.has(a.rental_id)) return;
-    total += Number(a.daily_rate || 0) + Number(a.tax_amount || 0) + Number(a.service_fee_amount || 0);
-  });
-  return total;
+  return sumPaygAccruals(data as any[], excludedRentalIds);
 }
 
 // Return the set of rental IDs flagged is_pay_as_you_go for this customer.
@@ -101,16 +104,9 @@ export const useCustomerBalance = (customerId: string | undefined) => {
       // Sum remaining_amount for charges that are currently due, excluding
       // cancelled/rejected rentals AND PAYG rentals (PAYG outstanding comes
       // from payg_accruals — counting both double-charges open PAYG days).
-      const ledgerBalance = data.reduce((sum, entry) => {
-        if (entry.rental_id && excludedRentalIds.has(entry.rental_id)) return sum;
-        if (entry.rental_id && paygRentalIds.has(entry.rental_id)) return sum;
-        // For rental charges, only include if currently due (due_date <= today)
-        if (entry.category === 'Rental' && entry.due_date && parseLocalDate(entry.due_date) > new Date()) {
-          return sum;
-        }
-        // Include all other charges (fines, etc.) regardless of due date
-        return sum + (entry.remaining_amount || 0);
-      }, 0);
+      // Rental charges count only once due (due_date <= today); every other
+      // charge (fines, etc.) counts regardless of due date.
+      const ledgerBalance = sumLedgerBalance(data, excludedRentalIds, paygRentalIds);
 
       const paygBalance = await fetchPaygOutstandingForCustomer(
         customerId,
@@ -166,58 +162,19 @@ export const useCustomerBalanceWithStatus = (customerId: string | undefined) => 
 
       if (paymentsError) throw paymentsError;
 
-      // Calculate totals, excluding charges from cancelled/rejected rentals
-      let totalCharges = 0;
-      let totalPayments = 0;
-      let outstandingDebt = 0; // Sum of remaining_amount on due charges
-      let availableCredit = 0; // Sum of unapplied payment amounts
-
-      ledgerData.forEach(entry => {
-        if (entry.type === 'Charge') {
-          // Skip charges from cancelled/rejected rentals
-          if (entry.rental_id && excludedRentalIds.has(entry.rental_id)) return;
-
-          totalCharges += entry.amount;
-
-          // Skip ledger contribution from PAYG rentals — payg_accruals is the
-          // authoritative source for those and gets added separately below.
-          // Including both sums the same open day twice.
-          if (entry.rental_id && paygRentalIds.has(entry.rental_id)) return;
-
-          // For rental charges, only include remaining if currently due
-          if (entry.category === 'Rental' && entry.due_date && parseLocalDate(entry.due_date) > new Date()) {
-            // Future charge - don't add to outstanding
-            return;
-          }
-          // Add remaining amount to outstanding debt
-          outstandingDebt += (entry.remaining_amount || 0);
-        } else if (entry.type === 'Payment') {
-          totalPayments += Math.abs(entry.amount);
-        }
-      });
-
-      // Sum up unapplied payment amounts (credit available). ONLY captured,
-      // settled money counts. Whitelist the settled statuses — matching the
-      // booking app (portal/bookings/[id]/page.tsx uses
-      // .in('status', ['Applied','Credit','Partial'])) — so this excludes BOTH
-      // uncaptured Stripe holds (status='Pending' / capture_status=
-      // 'requires_capture', which carry remaining_amount = the full amount but
-      // are NOT real money) AND Refunded/Cancelled rows that reject-rental can
-      // leave with remaining_amount > 0. Counting any of those inflated
-      // availableCredit and, because netBalance = outstandingDebt - availableCredit,
-      // could flip a customer who actually owed money into a bogus "In Credit" —
-      // hiding the debt (e.g. a $147 debtor shown as ~$1,577 credit from stale holds).
-      const CAPTURED_CREDIT_STATUSES = ['Applied', 'Credit', 'Partial'];
-      paymentsData?.forEach((payment: any) => {
-        if (!CAPTURED_CREDIT_STATUSES.includes(payment.status)) return;
-        // Belt-and-suspenders: a genuinely captured payment never keeps
-        // capture_status='requires_capture'. Excluding it too means a hold
-        // mislabeled with a captured-looking status (e.g. Credit/Partial that is
-        // still requires_capture) can't inflate credit either — the status
-        // whitelist alone would miss those.
-        if (payment.capture_status === 'requires_capture') return;
-        availableCredit += (payment.remaining_amount || 0);
-      });
+      // Calculate totals, excluding charges from cancelled/rejected rentals.
+      // outstandingDebt = remaining_amount on due charges, skipping PAYG rentals
+      // (payg_accruals is their authority, added below); availableCredit =
+      // unapplied remainder on CAPTURED payments only (Applied/Credit/Partial,
+      // never requires_capture — an uncaptured hold is not money, and counting
+      // it once showed a $147 debtor as ~$1,577 in credit). See
+      // lib/finances/balance.ts for the rule and its history.
+      let { totalCharges, totalPayments, outstandingDebt } = summarizeCustomerLedger(
+        ledgerData,
+        excludedRentalIds,
+        paygRentalIds,
+      );
+      const availableCredit = sumAvailableCredit(paymentsData);
 
       // Add PAYG outstanding from open accruals (the ledger doesn't reflect this
       // for PAYG rentals because the auto-allocate trigger drains remaining_amount

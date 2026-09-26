@@ -72,7 +72,8 @@ export type V2Area =
   | 'availability'
   | 'turo'
   | 'agreements'
-  | 'referrals';
+  | 'referrals'
+  | 'finances';
 
 /**
  * One entry per v2 area. Today every list is just the canary.
@@ -158,7 +159,36 @@ const V2_AREAS: Record<V2Area, readonly string[]> = {
    * operators, and the page says so to anyone else.
    */
   referrals: [NORTHWIND],
+  /**
+   * `/finances` — one tab over payments, invoices, fines and payment plans
+   * (docs/FINANCES_DESIGN.md). On the canary the sidebar's Payments, Invoices
+   * and Fines rows become one Finances row, and the three old routes redirect
+   * into it (`proxy.ts`, `lib/finances-nav.ts`).
+   *
+   * SLUG ONLY — listed in `SLUG_ONLY_AREAS` below, so `portal_experience = 'v2'`
+   * does NOT widen it. The real v2 tenants (nasir, squad, every self-serve
+   * signup) keep their three tabs until this has been reviewed on northwind.
+   */
+  finances: [NORTHWIND],
 };
+
+/**
+ * Areas the row flag (`tenants.portal_experience = 'v2'`) does NOT widen.
+ *
+ * Every other area is on for a tenant whose row says v2 — that is how a
+ * self-serve signup lands on the whole v2 product. An area listed here is on
+ * for the slugs in its `V2_AREAS` entry and nobody else, whatever the row says.
+ *
+ * It exists for areas that replace a screen live v2 operators already use: a
+ * row-flagged tenant is a real business, not a canary, and it must not be
+ * moved onto a screen that has only been proved on northwind. Leaving the list
+ * is the widening step — delete the area from here once the canary has run it
+ * long enough, and the row flag starts to apply like it does everywhere else.
+ *
+ * Kept as a Set of `V2Area`, so a typo is a compile error rather than an area
+ * that quietly stays row-widened.
+ */
+export const SLUG_ONLY_AREAS: ReadonlySet<V2Area> = new Set<V2Area>(['finances']);
 
 /**
  * Every area, for the one place that has to resolve them all: the root layout.
@@ -212,6 +242,8 @@ export function isV2Experience(portalExperience: string | null | undefined): boo
  * rule to state: no resolved tenant, no v2. A gate that fails *open* puts all
  * 57 tenants on unfinished code at once, which is the one outcome this whole
  * model exists to prevent.
+ *
+ * An area in `SLUG_ONLY_AREAS` ignores `onV2`: only its slug list opens it.
  */
 export function isV2(
   area: V2Area,
@@ -219,6 +251,6 @@ export function isV2(
   onV2: boolean = false,
 ): boolean {
   if (!tenantSlug) return false;
-  if (onV2) return true;
+  if (onV2 && !SLUG_ONLY_AREAS.has(area)) return true;
   return V2_AREAS[area]?.includes(tenantSlug) ?? false;
 }

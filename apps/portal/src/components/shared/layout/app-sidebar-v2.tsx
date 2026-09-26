@@ -65,6 +65,7 @@ import {
   Newspaper,
   Plug,
   Gift,
+  Landmark,
 } from "lucide-react";
 // CRITICAL: `ui/sidebar` and `ui-v2/sidebar` each define their OWN React
 // context. The dashboard layout pairs this component with ui-v2's
@@ -98,7 +99,8 @@ import { useTenantSubscription } from "@/hooks/use-tenant-subscription";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useCMSPages } from "@/hooks/use-cms-pages";
 import { useCmsOutline } from "@/stores/cms-outline-store";
-import { ROUTE_TO_TAB } from "@/lib/permissions";
+import { ROUTE_ALSO_ALLOWED_BY, ROUTE_TO_TAB } from "@/lib/permissions";
+import { FINANCES_HREF, LEGACY_FINANCE_HREFS } from "@/lib/finances-nav";
 import { UserMenuV2, SettingsLinkV2 } from "@/components/shared/layout/user-menu-v2";
 import { OrgSwitcher } from "@/components/shared/layout/org-switcher";
 import { SidebarPromo } from "@/components/shared/layout/sidebar-promo";
@@ -552,8 +554,22 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   // because a rail needs a name and a line of contact, not twelve subscriptions.
   const customerRail = useCustomerRailHeader(isCustomerDetailPage ? customerDetailId : null);
 
+  // Finances (the `finances` area, northwind by slug only): Payments, Invoices
+  // and Fines are ONE row there. Off for every other tenant, whose rail is
+  // exactly what it was. See `lib/finances-nav.ts`.
+  const financesOn = useV2("finances");
+
   const isActive = (path: string) => {
     if (path === "/") return pathname === "/";
+    // A payment's or a fine's own page still lives at its old address; on the
+    // canary it belongs to Finances, so that row stays lit while it is open.
+    if (
+      path === FINANCES_HREF &&
+      financesOn &&
+      LEGACY_FINANCE_HREFS.some((href) => pathname?.startsWith(`${href}/`))
+    ) {
+      return true;
+    }
     return pathname?.startsWith(path) || false;
   };
 
@@ -571,7 +587,11 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
     if (item.headAdminOnly && appUser?.role !== "head_admin") return false;
     if (isManager) {
       const tabKey = ROUTE_TO_TAB[item.href];
-      if (tabKey && !canView(tabKey)) return false;
+      // `ROUTE_ALSO_ALLOWED_BY`: a row the route guard would let this manager
+      // through must not be missing from the rail. Only `/finances` among the
+      // rows here has an entry, so every other row answers exactly as before.
+      const alsoAllowedBy = ROUTE_ALSO_ALLOWED_BY[item.href] ?? [];
+      if (tabKey && !canView(tabKey) && !alsoAllowedBy.some((key) => canView(key))) return false;
     }
     return true;
   };
@@ -629,9 +649,16 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
     // `/blocked-dates` is the route; "Availability" is what the page is FOR,
     // which is why the two do not match.
     { name: "Availability", href: "/blocked-dates", icon: CalendarDays },
-    { name: "Payments", href: "/payments", icon: CreditCard },
-    { name: "Invoices", href: "/invoices", icon: Receipt },
-    { name: "Fines", href: "/fines", icon: BadgeAlert },
+    // On the Finances canary these three are one row (docs/FINANCES_DESIGN.md
+    // §1); their old routes redirect into its views. Everyone else keeps the
+    // three rows exactly as they were.
+    ...(financesOn
+      ? [{ name: "Finances", href: FINANCES_HREF, icon: Landmark }]
+      : [
+          { name: "Payments", href: "/payments", icon: CreditCard },
+          { name: "Invoices", href: "/invoices", icon: Receipt },
+          { name: "Fines", href: "/fines", icon: BadgeAlert },
+        ]),
     // Support — moved here from the profile menu so it is one click away, with its
     // unread-message badge. Same destination as TRAX's Support control. Not given a
     // ROUTE_TO_TAB entry: every staff role may reach its own tickets, and the

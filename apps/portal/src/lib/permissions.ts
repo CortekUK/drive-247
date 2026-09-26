@@ -182,6 +182,14 @@ export const ROUTE_TO_TAB: Record<string, string> = {
   '/payments': 'payments',
   '/invoices': 'invoices',
   '/fines': 'fines',
+  // Finances (v2, northwind-only — the `finances` area) is ONE tab over the
+  // three above. Its primary key is 'payments'; ROUTE_ALSO_ALLOWED_BY below
+  // also opens it on 'invoices' or 'fines', so a manager who could reach ANY
+  // of the three old tabs can reach the tab that replaced them. Each view
+  // inside it is still gated on its own key (components/finances). No new key,
+  // so nothing to mirror into ALLOWED_TAB_KEYS and nothing to backfill.
+  // REQUIRED, not cosmetic: an unmapped route is ALLOWED for every manager.
+  '/finances': 'payments',
   '/expenses': 'expenses',
   '/insurances': 'insurances',
   '/agreements': 'agreements',
@@ -269,6 +277,12 @@ export function getTabKeyForRoute(pathname: string): string | null {
  */
 export const ROUTE_ALSO_ALLOWED_BY: Record<string, readonly string[]> = {
   '/integrations': ['settings.payments'],
+  // Finances replaced Payments, Invoices and Fines on the canary (and the old
+  // routes redirect into it), so any of the three grants opens it. Which VIEWS
+  // a manager sees inside is decided by each view's own key — this only lets
+  // them through the door. It cannot widen v1 access: `/finances` answers 404
+  // for every tenant not on the `finances` area.
+  '/finances': ['invoices', 'fines'],
 };
 
 /**

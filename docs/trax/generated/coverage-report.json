@@ -167,6 +167,13 @@
       "limits": "Not eligible for Phase 1 retrieval or navigation until the migration, edge functions and collection paths are applied, verified and reviewed."
     },
     {
+      "id": "finances",
+      "title": "Finances",
+      "status": "requiring_confirmation",
+      "scope": "Canary-only (northwind, by slug; not widened by portal_experience) V2 Finances tab: one screen over bills, payments received, plan payments and fines, laid out like the other hero tabs (a Collected graph and an owed card that turn over to a filter panel), with Needs attention and a side panel. On the canary the Payments, Invoices and Fines rows become one Finances row and their list routes redirect into it. Every action reuses an existing money path; nothing is verified end to end.",
+      "limits": "Not eligible for Phase 1 retrieval or navigation. Canary-only until reviewed on northwind; the model's figures, the redirects and the reused money actions have not been verified against production data."
+    },
+    {
       "id": "invoices",
       "title": "Invoices",
       "status": "partially_documented",
@@ -332,7 +339,7 @@
     "verified": 6,
     "partially_documented": 21,
     "unsupported": 1,
-    "requiring_confirmation": 18
+    "requiring_confirmation": 19
   },
   "permissionKeys": [
     "vehicles",
@@ -552,6 +559,12 @@
       "source": "apps/portal/src/app/(dashboard)/expenses/page.tsx",
       "feature": "expenses",
       "status": "partially_documented"
+    },
+    {
+      "route": "/finances",
+      "source": "apps/portal/src/app/(dashboard)/finances/page.tsx",
+      "feature": "finances",
+      "status": "requiring_confirmation"
     },
     {
       "route": "/fines/[id]",

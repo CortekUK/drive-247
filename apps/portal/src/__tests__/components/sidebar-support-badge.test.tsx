@@ -38,7 +38,10 @@ vi.mock('@/hooks/use-nav-preferences', () => ({ useNavPreferences: () => ({ pref
 // `usePortalExperience` (lib/lean-context.tsx), so the mock has to answer that
 // too. A v2 tenant is also lean: onV2 and lean both true, as for northwind.
 vi.mock('@/lib/v2-context', () => ({
-  useV2: () => true,
+  // Every v2 area on except `finances`: that canary folds Payments, Invoices and
+  // Fines into one Finances row (finances-sidebar.test.tsx), and this file pins
+  // the rail every other v2 tenant sees.
+  useV2: (area: string) => area !== 'finances',
   usePortalExperience: () => ({ onV2: true, lean: true }),
   usePortalOnV2: () => true,
 }));

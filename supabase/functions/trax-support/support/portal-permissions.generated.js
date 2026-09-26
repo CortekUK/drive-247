@@ -127,6 +127,7 @@ export const ROUTE_TO_TAB = {
     '/payments': 'payments',
     '/invoices': 'invoices',
     '/fines': 'fines',
+    '/finances': 'payments',
     '/expenses': 'expenses',
     '/insurances': 'insurances',
     '/agreements': 'agreements',
@@ -152,6 +153,7 @@ export function getTabKeyForRoute(pathname) {
 }
 export const ROUTE_ALSO_ALLOWED_BY = {
     '/integrations': ['settings.payments'],
+    '/finances': ['invoices', 'fines'],
 };
 export function getTabKeysForRoute(pathname) {
     const primary = getTabKeyForRoute(pathname);

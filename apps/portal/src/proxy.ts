@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { isV2 } from '@/lib/v2';
+import { financesRedirectFor } from '@/lib/finances-nav';
 
 
 // Domains that belong to us — NOT custom tenant domains
@@ -75,6 +77,18 @@ export async function proxy(request: NextRequest) {
     request.nextUrl.pathname.startsWith('/playground')
   ) {
     tenantSlug = 'northwind';
+  }
+
+  // 4. Finances (the `finances` v2 area — northwind, by slug only).
+  //
+  // On the canary, Payments, Invoices and Fines are one tab, so their three
+  // LIST routes redirect into it (docs/FINANCES_DESIGN.md §1). Exact paths only:
+  // `/payments/[id]`, `/fines/[id]`, `/fines/new` and the analytics pages are
+  // untouched. Slug only, so this needs no tenant-row read here; for every
+  // other tenant `isV2` answers false and the request goes on exactly as before.
+  if (isV2('finances', tenantSlug)) {
+    const target = financesRedirectFor(request.nextUrl.pathname, request.nextUrl.searchParams);
+    if (target) return NextResponse.redirect(new URL(target, request.url));
   }
 
   // Add tenant context to headers so it's available in server components.

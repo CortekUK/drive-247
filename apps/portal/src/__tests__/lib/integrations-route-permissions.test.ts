@@ -96,6 +96,9 @@ describe('/integrations accepts either grant', () => {
   it('no other route gained an alternative grant by accident', () => {
     // If this list grows, it should grow deliberately: every entry is a route
     // that can be opened by a grant written for a DIFFERENT screen.
-    expect(Object.keys(ROUTE_ALSO_ALLOWED_BY)).toEqual(['/integrations']);
+    // `/finances` joined deliberately (Sep 25 2026): it replaced Payments,
+    // Invoices and Fines on the canary, so any of the three grants opens it —
+    // pinned in finances-permissions.test.ts.
+    expect(Object.keys(ROUTE_ALSO_ALLOWED_BY)).toEqual(['/integrations', '/finances']);
   });
 });

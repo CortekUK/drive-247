@@ -15,6 +15,7 @@ The generated report enumerates portal pages, permission keys, feature coverage,
 | --- | --- | --- |
 | Payments, invoices, credits, fines, expenses, owner payouts | Collecting, allocating, invoicing and reconciling money | Finance-read policy; currency units; historical processor routing; permissions and reconciliation scenarios |
 | Payment plans (canary) | Collecting a rental's balance on a schedule — card, emailed link or recorded by hand | Canary-only and hidden until its migration and edge functions are applied; collection, reminders, provider routing and permissions are not deployed or verified |
+| Finances (canary) | One tab for what is owed, what came in, what is coming and what needs the operator; on the canary it replaces the Payments, Invoices and Fines rows | Canary-only by slug; figures, redirects, per-view permissions and the reused payment, refund, plan and fine actions are not verified end to end |
 | Reports, Insights, P&L | Reviewing operational/financial aggregates and exporting | Complete query scope; financial entitlement; partial results; enabled variants |
 | Insurance, agreements, documents | Completing coverage, signature and document requirements | Provider-specific states and callbacks, identity-field exposure and failure recovery |
 | Leads, enquiries, automations | Customer acquisition and follow-up | Tenant flags, state transitions, side effects, consent and role enforcement |

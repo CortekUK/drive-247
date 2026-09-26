@@ -30,6 +30,7 @@ import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import {
   isV2,
   isV2Experience,
+  SLUG_ONLY_AREAS,
   V2_AREA_LIST,
   NORTHWIND,
   type V2Area,
@@ -69,6 +70,15 @@ const EVERY_AREA: V2Area[] = [
   'referrals',
 ];
 
+/**
+ * Areas the row flag deliberately does NOT widen (`SLUG_ONLY_AREAS`): the
+ * canary only, whatever `portal_experience` says. They are left out of
+ * `EVERY_AREA` because every assertion below about "the whole v2 product" is
+ * about the row-widened areas; the slug-only ones are pinned in
+ * `finances-canary-gate.test.ts`.
+ */
+const SLUG_ONLY: V2Area[] = ['finances'];
+
 /** Live operators. None of these may ever be moved by this change. */
 const V1_OPERATORS = [
   'revtekrentals',
@@ -90,7 +100,11 @@ const FLAGGED = 'wings';
 
 describe('the area list this file asserts against is the real one', () => {
   it('covers every member of V2_AREA_LIST, and nothing that is not one', () => {
-    expect(new Set(V2_AREA_LIST)).toEqual(new Set(EVERY_AREA));
+    expect(new Set(V2_AREA_LIST)).toEqual(new Set([...EVERY_AREA, ...SLUG_ONLY]));
+  });
+
+  it('knows exactly which areas the row flag does not widen', () => {
+    expect(new Set(SLUG_ONLY_AREAS)).toEqual(new Set(SLUG_ONLY));
   });
 });
 

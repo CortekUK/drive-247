@@ -1518,6 +1518,108 @@
       "limits": "Not eligible for Phase 1 retrieval or navigation until the migration, edge functions and collection paths are applied, verified and reviewed."
     },
     {
+      "id": "finances",
+      "title": "Finances",
+      "status": "requiring_confirmation",
+      "scope": "Canary-only (northwind, by slug; not widened by portal_experience) V2 Finances tab: one screen over bills, payments received, plan payments and fines, laid out like the other hero tabs (a Collected graph and an owed card that turn over to a filter panel), with Needs attention and a side panel. On the canary the Payments, Invoices and Fines rows become one Finances row and their list routes redirect into it. Every action reuses an existing money path; nothing is verified end to end.",
+      "routePrefixes": [
+        "/finances"
+      ],
+      "permissionKeys": [
+        "payments",
+        "invoices",
+        "fines"
+      ],
+      "document": "docs/trax/unverified-modules.md",
+      "sources": [
+        {
+          "path": "apps/portal/src/app/(dashboard)/finances/page.tsx",
+          "symbols": [
+            "serverIsV2('finances')",
+            "FinancesView"
+          ]
+        },
+        {
+          "path": "apps/portal/src/components/finances/finances-view.tsx",
+          "symbols": [
+            "FinancesView",
+            "Record payment",
+            "OverviewFlip",
+            "countActiveFinanceFilters"
+          ]
+        },
+        {
+          "path": "apps/portal/src/components/finances/finances-overview.tsx",
+          "symbols": [
+            "FinancesOverview",
+            "ageingToDraw",
+            "HeroChart"
+          ]
+        },
+        {
+          "path": "apps/portal/src/components/finances/finances-filter-panel.tsx",
+          "symbols": [
+            "FinancesFilterPanel",
+            "FilterShell"
+          ]
+        },
+        {
+          "path": "apps/portal/src/components/finances/finance-side-panel.tsx",
+          "symbols": [
+            "FinanceSidePanel",
+            "dashboardLinkFor",
+            "PaymentPlanCard"
+          ]
+        },
+        {
+          "path": "apps/portal/src/components/finances/needs-attention.tsx",
+          "symbols": [
+            "NeedsAttention",
+            "attentionFixes"
+          ]
+        },
+        {
+          "path": "apps/portal/src/lib/finances-nav.ts",
+          "symbols": [
+            "financesRedirectFor",
+            "FINANCE_VIEW_TAB_KEY",
+            "repointLegacyFinanceOrder"
+          ]
+        },
+        {
+          "path": "apps/portal/src/lib/v2.ts",
+          "symbols": [
+            "SLUG_ONLY_AREAS",
+            "finances: [NORTHWIND]"
+          ]
+        },
+        {
+          "path": "apps/portal/src/lib/permissions.ts",
+          "symbols": [
+            "'/finances': 'payments'",
+            "'/finances': ['invoices', 'fines']"
+          ]
+        },
+        {
+          "path": "apps/portal/src/proxy.ts",
+          "symbols": [
+            "financesRedirectFor"
+          ]
+        }
+      ],
+      "tests": [
+        "apps/portal/src/__tests__/lib/finances-canary-gate.test.ts",
+        "apps/portal/src/__tests__/lib/finances-permissions.test.ts",
+        "apps/portal/src/__tests__/lib/finances-nav-preferences.test.ts",
+        "apps/portal/src/__tests__/components/finances-sidebar.test.tsx",
+        "apps/portal/src/__tests__/components/finances-view.test.tsx",
+        "apps/portal/src/__tests__/components/finances-url-and-rules.test.ts",
+        "apps/portal/src/__tests__/components/finances-render-path.test.tsx"
+      ],
+      "guides": [],
+      "limits": "Not eligible for Phase 1 retrieval or navigation. Canary-only until reviewed on northwind; the model's figures, the redirects and the reused money actions have not been verified against production data."
+    },
+    {
       "id": "invoices",
       "title": "Invoices",
       "status": "partially_documented",

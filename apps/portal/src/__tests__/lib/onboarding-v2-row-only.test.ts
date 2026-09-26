@@ -28,7 +28,10 @@
  */
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 
-import { isV2, V2_AREA_LIST, NORTHWIND, type V2Area } from '@/lib/v2';
+import { isV2, SLUG_ONLY_AREAS, V2_AREA_LIST, NORTHWIND, type V2Area } from '@/lib/v2';
+
+/** Every area the row flag widens: all of them but the canary-only ones. */
+const ROW_WIDENED = V2_AREA_LIST.filter((area) => !SLUG_ONLY_AREAS.has(area));
 import {
   isAreaHidden,
   isLeanTenant,
@@ -90,8 +93,14 @@ describe('a row-flagged tenant is in NO slug list — proved by executing the ga
   });
 
   it.each(ROW_ONLY)('%s gets the WHOLE v2 product from the row flag alone', (slug) => {
-    for (const area of V2_AREA_LIST) expect(isV2(area, slug, true)).toBe(true);
+    for (const area of ROW_WIDENED) expect(isV2(area, slug, true)).toBe(true);
     expect(isLeanTenant(slug, true)).toBe(true);
+  });
+
+  it.each(ROW_ONLY)('%s does NOT get the canary-only areas from the row flag', (slug) => {
+    // `SLUG_ONLY_AREAS` (lib/v2.ts): screens that replace ones live v2
+    // operators already use stay on the canary until reviewed there.
+    for (const area of SLUG_ONLY_AREAS) expect(isV2(area, slug, true)).toBe(false);
   });
 });
 
@@ -372,8 +381,10 @@ describe('/integrations, executed — the route a self-serve tenant must be able
     for (const area of ['login', 'chrome', 'theme', 'dashboard'] as V2Area[]) {
       expect(gates.flags[area]).toBe(true);
     }
-    // And the rest, so "v2" means the whole product rather than a subset.
-    for (const area of V2_AREA_LIST) expect(gates.flags[area]).toBe(true);
+    // And the rest, so "v2" means the whole product rather than a subset —
+    // every area except the canary-only ones (`SLUG_ONLY_AREAS`).
+    for (const area of ROW_WIDENED) expect(gates.flags[area]).toBe(true);
+    for (const area of SLUG_ONLY_AREAS) expect(gates.flags[area]).toBe(false);
   });
 
   it.each([
