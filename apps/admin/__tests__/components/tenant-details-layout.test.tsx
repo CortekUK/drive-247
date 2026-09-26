@@ -334,7 +334,7 @@ describe('Management is split into Subscriptions and Integrations', () => {
 
   it('puts every other card in Integrations', () => {
     const t = tab(page(), 'integrations');
-    for (const card of ['Manage Credits', 'Stripe Connect', 'Bonzah', 'Tesla Fleet', 'BoldSign', 'custom_site_eligible']) {
+    for (const card of ['setShowCreditsDetail', 'Stripe Connect', 'Bonzah', 'Tesla Fleet', 'BoldSign', 'custom_site_eligible']) {
       expect(t, `${card} missing from Integrations`).toContain(card);
     }
     expect(t).not.toContain('Generate subscription link');

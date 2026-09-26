@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { toast } from '@/components/ui/sonner';
@@ -107,6 +107,77 @@ const tenantBookingUrl = (slug: string) =>
   IS_DEV ? `http://${slug}.localhost:3000` : `https://${slug}.drive-247.com`;
 const tenantPortalUrl = (slug: string) =>
   IS_DEV ? `http://${slug}.portal.localhost:3001` : `https://${slug}.portal.drive-247.com`;
+
+/*
+ * Integrations tiles, drawn to match the operator portal's board
+ * (`apps/portal/src/app/(dashboard)/integrations/integrations-board.tsx`):
+ * brand logos from the same logo.dev CDN with the same publishable key, the
+ * same centred card, and one status pill.
+ */
+const LOGO_DEV_TOKEN = 'pk_EmodMTbiSPiHDa2fIPUo3w';
+const brandLogo = (domain: string) =>
+  `https://img.logo.dev/${domain}?token=${LOGO_DEV_TOKEN}&size=128&format=png`;
+
+function IntegrationLogo({ src, alt, size = 64 }: { src: string; alt: string; size?: number }) {
+  return <img src={src} alt={alt} className="object-contain" style={{ height: size, width: size }} />;
+}
+
+type StatusTone = 'success' | 'warning' | 'info' | 'neutral';
+
+function IntegrationStatus({ tone, label }: { tone: StatusTone; label: string }) {
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium',
+        tone === 'success' && 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
+        tone === 'warning' && 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400',
+        tone === 'info' && 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-400',
+        tone === 'neutral' && 'border-border bg-transparent text-muted-foreground',
+      )}
+    >
+      <span
+        className={cn(
+          'size-1.5 rounded-full',
+          tone === 'success' && 'bg-emerald-500',
+          tone === 'warning' && 'bg-amber-500',
+          tone === 'info' && 'bg-sky-500',
+          tone === 'neutral' && 'bg-muted-foreground/50',
+        )}
+      />
+      {label}
+    </span>
+  );
+}
+
+function IntegrationTile({
+  logo,
+  name,
+  description,
+  status,
+  onOpen,
+}: {
+  logo: ReactNode;
+  /** Omitted when the logo is a wordmark that already says it (Bonzah). */
+  name?: string;
+  description: string;
+  status: ReactNode;
+  onOpen: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="group flex flex-col items-center gap-2 rounded-4xl bg-card py-6 text-center shadow-sm ring-1 ring-foreground/10 transition-all duration-200 hover:ring-primary/30 hover:bg-gradient-to-br hover:from-primary/15 hover:via-primary/5 hover:to-transparent focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+    >
+      <div className="flex h-20 items-center justify-center px-6">{logo}</div>
+      <div className="flex-1 space-y-1 px-6 pt-1">
+        {name && <p className="text-base font-semibold text-foreground">{name}</p>}
+        <p className="text-sm text-muted-foreground">{description}</p>
+      </div>
+      <div className="px-6 pb-0.5">{status}</div>
+    </button>
+  );
+}
 
 interface TenantSubscription {
   id: string;
@@ -293,6 +364,8 @@ export default function TenantDetailsPage() {
   const [pendingModeChange, setPendingModeChange] = useState<{ type: 'stripe' | 'bonzah' | 'boldsign' | 'subscription_stripe'; newMode: 'test' | 'live' } | null>(null);
   const [showSubscriptionDetail, setShowSubscriptionDetail] = useState(false);
   const [showCreditsDetail, setShowCreditsDetail] = useState(false);
+  // Which Integrations tile has its detail dialog open.
+  const [openIntegration, setOpenIntegration] = useState<'booking-site' | 'stripe' | 'bonzah' | 'tesla' | 'boldsign' | null>(null);
   // One-time subscription discount (Stripe coupon, duration:once → next invoice only)
   const [showDiscountModal, setShowDiscountModal] = useState(false);
   const [discountType, setDiscountType] = useState<'percent' | 'amount'>('percent');
@@ -1950,326 +2023,330 @@ export default function TenantDetailsPage() {
 
         {/* Integrations Tab */}
         <TabsContent value="integrations" className="space-y-6">
-          {/* These six stay FULL WIDTH, and that is deliberate.
+          {/* Tiles, then a dialog. Matches the operator portal's own
+              Integrations board (Sep 26 2026, by request): the same brand
+              logos, the same card shape, one status pill per tile.
 
-              They were briefly put in a 2-up/3-up grid to use the empty
-              right half of the page. It broke them: each card lays its
-              own facts out with `grid-cols-2 md:grid-cols-4`, and `md:` is
-              a VIEWPORT breakpoint, not a container one. On a wide screen
-              the page is wide, so `md:` is satisfied and every card still
-              rendered FOUR internal columns — inside a 380px cell. Labels
-              and values landed on top of each other: 'Disabled' over an
-              email address, 'Switch' over the note beside it.
+              The detail rows inside each integration still lay themselves
+              out with `grid-cols-2 md:grid-cols-4`, and `md:` is a
+              VIEWPORT breakpoint, not a container one. They were once put
+              straight into a 2-up/3-up page grid and rendered four columns
+              inside a 380px cell, labels landing on top of values. So the
+              tiles carry only logo, name and status; the detail rows open
+              in a dialog as wide as the portal's (`sm:max-w-4xl`), where
+              four columns fit. See `narrow-column-safety.test.ts`. */}
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            {tenant.custom_site_eligible && (
+              <IntegrationTile
+                logo={<LayoutTemplate size={64} className="text-violet-600" />}
+                name="Booking Site Design"
+                description="Serve this tenant's custom website instead of the legacy site."
+                status={<IntegrationStatus tone={tenant.booking_v2_enabled ? 'success' : 'neutral'} label={tenant.booking_v2_enabled ? 'Custom site' : 'Legacy'} />}
+                onOpen={() => setOpenIntegration('booking-site')}
+              />
+            )}
+            <IntegrationTile
+              logo={<Coins size={64} className="text-amber-500" />}
+              name="Credits"
+              description="Verification credit wallet and transaction history."
+              status={<IntegrationStatus tone="neutral" label="Manage balance" />}
+              onOpen={() => setShowCreditsDetail(true)}
+            />
+            <IntegrationTile
+              logo={<IntegrationLogo src={brandLogo('stripe.com')} alt="Stripe" />}
+              name="Stripe Connect"
+              description="Accept booking payments, deposits & payouts."
+              status={
+                <IntegrationStatus
+                  tone={tenant.stripe_account_id ? (tenant.stripe_onboarding_complete ? 'success' : 'warning') : 'neutral'}
+                  label={tenant.stripe_account_id ? (tenant.stripe_onboarding_complete ? 'Connected' : 'Onboarding') : 'Not connected'}
+                />
+              }
+              onOpen={() => setOpenIntegration('stripe')}
+            />
+            <IntegrationTile
+              logo={
+                <>
+                  <img src="/bonzah-logo.svg" alt="Bonzah" className="h-10 w-auto dark:hidden" />
+                  <img src="/bonzah-logo-dark.svg" alt="Bonzah" className="hidden h-10 w-auto dark:block" />
+                </>
+              }
+              description="Per-rental insurance coverage at checkout."
+              status={<IntegrationStatus tone={tenant.integration_bonzah ? 'success' : 'neutral'} label={tenant.integration_bonzah ? 'Enabled' : 'Not connected'} />}
+              onOpen={() => setOpenIntegration('bonzah')}
+            />
+            <IntegrationTile
+              logo={<IntegrationLogo src={brandLogo('tesla.com')} alt="Tesla" />}
+              name="Tesla"
+              description="Supercharging & vehicle data via the Fleet API."
+              status={<IntegrationStatus tone={tenant.integration_tesla_fleet ? 'success' : 'neutral'} label={tenant.integration_tesla_fleet ? 'Enabled' : 'Disabled'} />}
+              onOpen={() => setOpenIntegration('tesla')}
+            />
+            <IntegrationTile
+              logo={<IntegrationLogo src={brandLogo('boldsign.com')} alt="BoldSign" />}
+              name="BoldSign"
+              description="E-signature for rental agreements."
+              status={<IntegrationStatus tone={tenant.boldsign_mode === 'live' ? 'success' : 'info'} label={tenant.boldsign_mode === 'live' ? 'Production' : 'Sandbox'} />}
+              onOpen={() => setOpenIntegration('boldsign')}
+            />
+          </div>
 
-              Narrowing a card is only safe when its insides can reflow.
-              These cannot, until those inner grids are container-relative
-              rather than viewport-relative. Until then, width is what they
-              need. See `tenant-details-layout.test.tsx`. */}
-          {/* Booking site design. Only offered to tenants the platform has made
-              eligible; everyone else stays on the legacy site with no switch to
-              find. The database refuses the change regardless. */}
-          {tenant.custom_site_eligible && (
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex items-start gap-3">
-                  <LayoutTemplate className="h-6 w-6 text-violet-600 shrink-0" />
-                  <div>
-                    <h3 className="text-base font-semibold">Booking site design</h3>
-                    <p className="text-xs text-muted-foreground mt-0.5 max-w-xl">
-                      Serve this tenant&apos;s <span className="font-medium text-foreground">custom website</span>{' '}
-                      instead of the legacy booking site. It draws its fleet, rates, content and
-                      branding from this tenant&apos;s own portal data, and shares the same booking
-                      funnel and customer portal.
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-2 max-w-xl">
-                      Turning this on also reveals{' '}
-                      <span className="font-medium text-foreground">Website Content &rarr; New Website Content</span>{' '}
-                      in their portal, where they edit the custom site.
-                    </p>
-                    {tenant.slug && (
-                      <a
-                        href={`${tenantBookingUrl(tenant.slug)}/custom-booking-page`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline mt-2"
-                      >
-                        Preview it without switching <ExternalLink className="h-3 w-3" />
-                      </a>
-                    )}
-                  </div>
-                </div>
-                <label className="flex items-center cursor-pointer shrink-0">
-                  <div className="relative">
-                    <input
-                      type="checkbox"
-                      checked={!!tenant.booking_v2_enabled}
-                      disabled={bookingV2Updating}
-                      onChange={(e) => handleToggleBookingV2(e.target.checked)}
-                      className="sr-only"
-                    />
-                    <div className={cn(
-                      "w-11 h-6 rounded-full transition-colors",
-                      tenant.booking_v2_enabled ? 'bg-violet-500' : 'bg-muted'
-                    )}>
-                      <div className={cn(
-                        "absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-md ring-1 ring-black/5 transition-transform",
-                        tenant.booking_v2_enabled && 'translate-x-5'
-                      )} />
+          {/* One dialog for every tile. Its bodies are the detail rows and
+              controls the stacked cards used to carry, unchanged. */}
+          <Dialog open={openIntegration !== null} onOpenChange={(o) => { if (!o) setOpenIntegration(null); }}>
+            <DialogContent className="max-h-[88vh] overflow-y-auto p-8 sm:max-w-4xl">
+              {openIntegration === 'booking-site' && (
+                <>
+                  <DialogHeader>
+                    <div className="mb-2 flex h-16 items-center"><LayoutTemplate size={48} className="text-violet-600" /></div>
+                    <DialogTitle>Booking Site Design</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        Serve this tenant&apos;s <span className="font-medium text-foreground">custom website</span>{' '}
+                        instead of the legacy booking site. It draws its fleet, rates, content and
+                        branding from this tenant&apos;s own portal data, and shares the same booking
+                        funnel and customer portal.
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Turning this on also reveals{' '}
+                        <span className="font-medium text-foreground">Website Content &rarr; New Website Content</span>{' '}
+                        in their portal, where they edit the custom site.
+                      </p>
+                      {tenant.slug && (
+                        <a
+                          href={`${tenantBookingUrl(tenant.slug)}/custom-booking-page`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline mt-2"
+                        >
+                          Preview it without switching <ExternalLink className="h-3 w-3" />
+                        </a>
+                      )}
                     </div>
+                    <label className="flex items-center cursor-pointer">
+                      <div className="relative">
+                        <input
+                          type="checkbox"
+                          checked={!!tenant.booking_v2_enabled}
+                          disabled={bookingV2Updating}
+                          onChange={(e) => handleToggleBookingV2(e.target.checked)}
+                          className="sr-only"
+                        />
+                        <div className={cn(
+                          "w-11 h-6 rounded-full transition-colors",
+                          tenant.booking_v2_enabled ? 'bg-violet-500' : 'bg-muted'
+                        )}>
+                          <div className={cn(
+                            "absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-md ring-1 ring-black/5 transition-transform",
+                            tenant.booking_v2_enabled && 'translate-x-5'
+                          )} />
+                        </div>
+                      </div>
+                      <Badge variant={tenant.booking_v2_enabled ? 'success' : 'outline'} className="ml-2 whitespace-nowrap">
+                        {tenant.booking_v2_enabled ? 'Custom site' : 'Legacy'}
+                      </Badge>
+                    </label>
                   </div>
-                  <Badge variant={tenant.booking_v2_enabled ? 'success' : 'outline'} className="ml-2 whitespace-nowrap">
-                    {tenant.booking_v2_enabled ? 'Custom site' : 'Legacy'}
-                  </Badge>
-                </label>
-              </div>
-            </CardContent>
-          </Card>
-          )}
-          {/* Credits */}
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <Coins className="h-6 w-6 text-amber-600" />
-                  <div>
-                    <h3 className="text-base font-semibold">Credits</h3>
-                    <p className="text-xs text-muted-foreground">Verification credit wallet — adjust balance and view transaction history</p>
-                  </div>
-                </div>
-                <Button size="sm" onClick={() => setShowCreditsDetail(true)}>
-                  Manage Credits
+                </>
+              )}
+              {openIntegration === 'stripe' && (
+                <>
+                  <DialogHeader>
+                    <div className="mb-2 flex h-16 items-center"><IntegrationLogo src={brandLogo('stripe.com')} alt="Stripe" size={48} /></div>
+                    <DialogTitle>Stripe Connect</DialogTitle>
+                    <DialogDescription>Payment processing for customer bookings via Stripe Connect</DialogDescription>
+                  </DialogHeader>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
+            <div className="space-y-1.5">
+              <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Account ID</span>
+              {tenant.stripe_account_id ? (
+                <p className="text-sm font-mono text-foreground">{tenant.stripe_account_id}</p>
+              ) : (
+                <p className="text-sm text-muted-foreground">Not set up</p>
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Onboarding</span>
+              {tenant.stripe_account_id ? (
+                <p className={cn("text-sm font-medium", tenant.stripe_onboarding_complete ? "text-success" : "text-warning")}>
+                  {tenant.stripe_onboarding_complete ? 'Complete' : 'Incomplete'}
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground">—</p>
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Account Status</span>
+              <p className="text-sm font-medium capitalize">{tenant.stripe_account_status || <span className="text-muted-foreground">—</span>}</p>
+            </div>
+            <div className="space-y-1.5">
+              <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Mode</span>
+              <div className="flex items-center gap-2">
+                <Badge variant={tenant.stripe_mode === 'live' ? 'success' : 'warning'} className="capitalize">
+                  {tenant.stripe_mode}
+                </Badge>
+                <Button
+                  variant="ghost" size="sm" className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground"
+                  disabled={modeUpdating}
+                  onClick={() => handleModeToggle('stripe', tenant.stripe_mode === 'test' ? 'live' : 'test')}
+                >
+                  <ArrowRightLeft className="h-3 w-3" />
+                  Switch
                 </Button>
               </div>
-            </CardContent>
-          </Card>
-          {/* Stripe Connect */}
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-start justify-between mb-5">
-                <div className="flex items-center gap-3">
-                  <img src="/stripe-logo.svg" alt="Stripe" className="h-5 w-auto" />
-                  <div>
-                    <h3 className="text-base font-semibold">Stripe Connect</h3>
-                    <p className="text-xs text-muted-foreground">Payment processing for customer bookings via Stripe Connect</p>
-                  </div>
-                </div>
-                <Badge variant={tenant.stripe_account_id && tenant.stripe_onboarding_complete ? 'success' : tenant.stripe_account_id ? 'warning' : 'secondary'}>
-                  {tenant.stripe_account_id ? (tenant.stripe_onboarding_complete ? 'Connected' : 'Onboarding') : 'Not connected'}
-                </Badge>
+            </div>
+          </div>
+                </>
+              )}
+              {openIntegration === 'bonzah' && (
+                <>
+                  <DialogHeader>
+                    <div className="mb-2 flex h-16 items-center">
+                      <img src="/bonzah-logo.svg" alt="Bonzah" className="h-8 w-auto dark:hidden" />
+                      <img src="/bonzah-logo-dark.svg" alt="Bonzah" className="hidden h-8 w-auto dark:block" />
+                    </div>
+                    <DialogTitle>Bonzah Insurance</DialogTitle>
+                    <DialogDescription>Customer insurance coverage and premium calculation</DialogDescription>
+                  </DialogHeader>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
+            <div className="space-y-1.5">
+              <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Integration</span>
+              <div className="flex items-center gap-2">
+                <span className={cn("inline-block h-2 w-2 rounded-full", tenant.integration_bonzah ? "bg-emerald-400" : "bg-muted-foreground/40")} />
+                <span className="text-sm font-medium">{tenant.integration_bonzah ? 'Active' : 'Inactive'}</span>
+                <Button
+                  variant="ghost" size="sm" className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground"
+                  onClick={() => handleToggleIntegration('bonzah', !tenant.integration_bonzah)}
+                >
+                  {tenant.integration_bonzah ? 'Disable' : 'Enable'}
+                </Button>
               </div>
-              <Separator className="mb-5" />
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
-                <div className="space-y-1.5">
-                  <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Account ID</span>
-                  {tenant.stripe_account_id ? (
-                    <p className="text-sm font-mono text-foreground">{tenant.stripe_account_id}</p>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">Not set up</p>
-                  )}
-                </div>
-                <div className="space-y-1.5">
-                  <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Onboarding</span>
-                  {tenant.stripe_account_id ? (
-                    <p className={cn("text-sm font-medium", tenant.stripe_onboarding_complete ? "text-success" : "text-warning")}>
-                      {tenant.stripe_onboarding_complete ? 'Complete' : 'Incomplete'}
-                    </p>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">—</p>
-                  )}
-                </div>
-                <div className="space-y-1.5">
-                  <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Account Status</span>
-                  <p className="text-sm font-medium capitalize">{tenant.stripe_account_status || <span className="text-muted-foreground">—</span>}</p>
-                </div>
-                <div className="space-y-1.5">
-                  <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Mode</span>
-                  <div className="flex items-center gap-2">
-                    <Badge variant={tenant.stripe_mode === 'live' ? 'success' : 'warning'} className="capitalize">
-                      {tenant.stripe_mode}
-                    </Badge>
+            </div>
+            <div className="space-y-1.5">
+              <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Credentials</span>
+              <p className="text-sm font-medium">{tenant.bonzah_username || <span className="text-muted-foreground">Not configured</span>}</p>
+            </div>
+            <div className="space-y-1.5">
+              <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Mode</span>
+              <div className="flex items-center gap-2">
+                <Badge variant={(tenant.bonzah_mode || 'test') === 'live' ? 'success' : 'warning'} className="capitalize">
+                  {tenant.bonzah_mode || 'test'}
+                </Badge>
+                <Button
+                  variant="ghost" size="sm" className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground"
+                  disabled={modeUpdating}
+                  onClick={() => handleModeToggle('bonzah', (tenant.bonzah_mode || 'test') === 'test' ? 'live' : 'test')}
+                >
+                  <ArrowRightLeft className="h-3 w-3" />
+                  Switch
+                </Button>
+              </div>
+            </div>
+            {/* Selling is blocked in test mode: a sandbox policy is not real
+                cover, yet the customer can still be charged real money for it.
+                The override exists only for internal/demo tenants. */}
+            <div className="space-y-1.5 sm:col-span-2">
+              <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+                Selling new policies
+              </span>
+              <div className="flex flex-wrap items-center gap-2">
+                {tenant.integration_bonzah &&
+                ((tenant.bonzah_mode || 'test') === 'live' || tenant.bonzah_sandbox_override) ? (
+                  <Badge variant="success">Allowed</Badge>
+                ) : (
+                  <Badge variant="warning">Blocked</Badge>
+                )}
+                {(tenant.bonzah_mode || 'test') === 'test' && (
+                  <>
+                    <span className="text-xs text-muted-foreground">
+                      {tenant.bonzah_sandbox_override
+                        ? 'Sandbox override ON — this tenant can sell sandbox policies. Internal/demo use only.'
+                        : 'Test mode issues sandbox policies, so selling is blocked.'}
+                    </span>
                     <Button
                       variant="ghost" size="sm" className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground"
                       disabled={modeUpdating}
-                      onClick={() => handleModeToggle('stripe', tenant.stripe_mode === 'test' ? 'live' : 'test')}
+                      onClick={() => handleToggleSandboxOverride(!tenant.bonzah_sandbox_override)}
                     >
                       <ArrowRightLeft className="h-3 w-3" />
-                      Switch
+                      {tenant.bonzah_sandbox_override ? 'Disable override' : 'Allow sandbox selling'}
                     </Button>
-                  </div>
-                </div>
+                  </>
+                )}
               </div>
-            </CardContent>
-          </Card>
-          {/* Bonzah Insurance */}
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-start justify-between mb-5">
-                <div className="flex items-center gap-3">
-                  <img src="/bonzah-logo.svg" alt="Bonzah" className="h-6 w-auto" />
-                  <div>
-                    <h3 className="text-base font-semibold">Bonzah Insurance</h3>
-                    <p className="text-xs text-muted-foreground">Customer insurance coverage and premium calculation</p>
-                  </div>
-                </div>
-                <Badge variant={tenant.integration_bonzah ? 'success' : 'secondary'}>
-                  {tenant.integration_bonzah ? 'Enabled' : 'Disabled'}
+            </div>
+          </div>
+                </>
+              )}
+              {openIntegration === 'tesla' && (
+                <>
+                  <DialogHeader>
+                    <div className="mb-2 flex h-16 items-center"><IntegrationLogo src={brandLogo('tesla.com')} alt="Tesla" size={48} /></div>
+                    <DialogTitle>Tesla Fleet API</DialogTitle>
+                    <DialogDescription>Supercharger billing tracking for Tesla vehicles</DialogDescription>
+                  </DialogHeader>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
+            <div className="space-y-1.5">
+              <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Integration</span>
+              <div className="flex items-center gap-2">
+                <span className={cn("inline-block h-2 w-2 rounded-full", tenant.integration_tesla_fleet ? "bg-emerald-400" : "bg-muted-foreground/40")} />
+                <span className="text-sm font-medium">{tenant.integration_tesla_fleet ? 'Active' : 'Inactive'}</span>
+                <Button
+                  variant="ghost" size="sm" className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground"
+                  onClick={() => handleToggleIntegration('tesla_fleet', !tenant.integration_tesla_fleet)}
+                >
+                  {tenant.integration_tesla_fleet ? 'Disable' : 'Enable'}
+                </Button>
+              </div>
+            </div>
+          </div>
+                </>
+              )}
+              {openIntegration === 'boldsign' && (
+                <>
+                  <DialogHeader>
+                    <div className="mb-2 flex h-16 items-center"><IntegrationLogo src={brandLogo('boldsign.com')} alt="BoldSign" size={48} /></div>
+                    <DialogTitle>BoldSign</DialogTitle>
+                    <DialogDescription>Electronic signatures for rental agreements and contracts</DialogDescription>
+                  </DialogHeader>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
+            <div className="space-y-1.5">
+              <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Environment</span>
+              <p className={cn("text-sm font-medium", tenant.boldsign_mode === 'live' ? "text-success" : "text-sky-600")}>
+                {tenant.boldsign_mode === 'live' ? 'Production' : 'Sandbox'}
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Mode</span>
+              <div className="flex items-center gap-2">
+                <Badge variant={tenant.boldsign_mode === 'live' ? 'success' : 'warning'} className="capitalize">
+                  {tenant.boldsign_mode || 'test'}
                 </Badge>
+                <Button
+                  variant="ghost" size="sm" className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground"
+                  disabled={modeUpdating}
+                  onClick={() => handleModeToggle('boldsign', tenant.boldsign_mode === 'live' ? 'test' : 'live')}
+                >
+                  <ArrowRightLeft className="h-3 w-3" />
+                  Switch
+                </Button>
               </div>
-              <Separator className="mb-5" />
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
-                <div className="space-y-1.5">
-                  <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Integration</span>
-                  <div className="flex items-center gap-2">
-                    <span className={cn("inline-block h-2 w-2 rounded-full", tenant.integration_bonzah ? "bg-emerald-400" : "bg-muted-foreground/40")} />
-                    <span className="text-sm font-medium">{tenant.integration_bonzah ? 'Active' : 'Inactive'}</span>
-                    <Button
-                      variant="ghost" size="sm" className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground"
-                      onClick={() => handleToggleIntegration('bonzah', !tenant.integration_bonzah)}
-                    >
-                      {tenant.integration_bonzah ? 'Disable' : 'Enable'}
-                    </Button>
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Credentials</span>
-                  <p className="text-sm font-medium">{tenant.bonzah_username || <span className="text-muted-foreground">Not configured</span>}</p>
-                </div>
-                <div className="space-y-1.5">
-                  <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Mode</span>
-                  <div className="flex items-center gap-2">
-                    <Badge variant={(tenant.bonzah_mode || 'test') === 'live' ? 'success' : 'warning'} className="capitalize">
-                      {tenant.bonzah_mode || 'test'}
-                    </Badge>
-                    <Button
-                      variant="ghost" size="sm" className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground"
-                      disabled={modeUpdating}
-                      onClick={() => handleModeToggle('bonzah', (tenant.bonzah_mode || 'test') === 'test' ? 'live' : 'test')}
-                    >
-                      <ArrowRightLeft className="h-3 w-3" />
-                      Switch
-                    </Button>
-                  </div>
-                </div>
-                {/* Selling is blocked in test mode: a sandbox policy is not real
-                    cover, yet the customer can still be charged real money for it.
-                    The override exists only for internal/demo tenants. */}
-                <div className="space-y-1.5 sm:col-span-2">
-                  <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-                    Selling new policies
-                  </span>
-                  <div className="flex flex-wrap items-center gap-2">
-                    {tenant.integration_bonzah &&
-                    ((tenant.bonzah_mode || 'test') === 'live' || tenant.bonzah_sandbox_override) ? (
-                      <Badge variant="success">Allowed</Badge>
-                    ) : (
-                      <Badge variant="warning">Blocked</Badge>
-                    )}
-                    {(tenant.bonzah_mode || 'test') === 'test' && (
-                      <>
-                        <span className="text-xs text-muted-foreground">
-                          {tenant.bonzah_sandbox_override
-                            ? 'Sandbox override ON — this tenant can sell sandbox policies. Internal/demo use only.'
-                            : 'Test mode issues sandbox policies, so selling is blocked.'}
-                        </span>
-                        <Button
-                          variant="ghost" size="sm" className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground"
-                          disabled={modeUpdating}
-                          onClick={() => handleToggleSandboxOverride(!tenant.bonzah_sandbox_override)}
-                        >
-                          <ArrowRightLeft className="h-3 w-3" />
-                          {tenant.bonzah_sandbox_override ? 'Disable override' : 'Allow sandbox selling'}
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          {/* Tesla Fleet API */}
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-start justify-between mb-5">
-                <div className="flex items-center gap-3">
-                  <svg viewBox="0 0 278.7 300" width={24} height={24} fill="currentColor" className="text-red-500"><path d="M139.3 300L0 87.5c0 0 42.4-31.6 139.3-31.6S278.7 87.5 278.7 87.5L139.3 300zM139.3 38.5c-48.4 0-82.6 10.3-100.6 17.8l100.6 0 100.6 0C221.9 48.8 187.7 38.5 139.3 38.5zM252.1 44.8c-14.9-9.4-47.8-23.7-112.8-23.7S41.5 35.4 26.6 44.8C6.6 34.3 0 28.6 0 28.6 30.2 8.5 83.5 0 139.3 0c55.8 0 109.1 8.5 139.3 28.6C278.7 28.6 272.1 34.3 252.1 44.8z" /></svg>
-                  <div>
-                    <h3 className="text-base font-semibold">Tesla Fleet API</h3>
-                    <p className="text-xs text-muted-foreground">Supercharger billing tracking for Tesla vehicles</p>
-                  </div>
-                </div>
-                <Badge variant={tenant.integration_tesla_fleet ? 'success' : 'secondary'}>
-                  {tenant.integration_tesla_fleet ? 'Enabled' : 'Disabled'}
-                </Badge>
-              </div>
-              <Separator className="mb-5" />
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
-                <div className="space-y-1.5">
-                  <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Integration</span>
-                  <div className="flex items-center gap-2">
-                    <span className={cn("inline-block h-2 w-2 rounded-full", tenant.integration_tesla_fleet ? "bg-emerald-400" : "bg-muted-foreground/40")} />
-                    <span className="text-sm font-medium">{tenant.integration_tesla_fleet ? 'Active' : 'Inactive'}</span>
-                    <Button
-                      variant="ghost" size="sm" className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground"
-                      onClick={() => handleToggleIntegration('tesla_fleet', !tenant.integration_tesla_fleet)}
-                    >
-                      {tenant.integration_tesla_fleet ? 'Disable' : 'Enable'}
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          {/* BoldSign */}
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-start justify-between mb-5">
-                <div className="flex items-center gap-3">
-                  <img src="/boldsign-logo.svg" alt="BoldSign" className="h-6 w-auto" />
-                  <div>
-                    <h3 className="text-base font-semibold">BoldSign</h3>
-                    <p className="text-xs text-muted-foreground">Electronic signatures for rental agreements and contracts</p>
-                  </div>
-                </div>
-                <Badge variant={tenant.boldsign_mode === 'live' ? 'success' : 'info'}>
-                  {tenant.boldsign_mode === 'live' ? 'Production' : 'Sandbox'}
-                </Badge>
-              </div>
-              <Separator className="mb-5" />
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
-                <div className="space-y-1.5">
-                  <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Environment</span>
-                  <p className={cn("text-sm font-medium", tenant.boldsign_mode === 'live' ? "text-success" : "text-sky-600")}>
-                    {tenant.boldsign_mode === 'live' ? 'Production' : 'Sandbox'}
-                  </p>
-                </div>
-                <div className="space-y-1.5">
-                  <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Mode</span>
-                  <div className="flex items-center gap-2">
-                    <Badge variant={tenant.boldsign_mode === 'live' ? 'success' : 'warning'} className="capitalize">
-                      {tenant.boldsign_mode || 'test'}
-                    </Badge>
-                    <Button
-                      variant="ghost" size="sm" className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground"
-                      disabled={modeUpdating}
-                      onClick={() => handleModeToggle('boldsign', tenant.boldsign_mode === 'live' ? 'test' : 'live')}
-                    >
-                      <ArrowRightLeft className="h-3 w-3" />
-                      Switch
-                    </Button>
-                  </div>
-                </div>
-                <div className="col-span-2 space-y-1.5">
-                  <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Note</span>
-                  <p className="text-xs text-muted-foreground">
-                    {tenant.boldsign_mode === 'live'
-                      ? 'Production documents are legally binding and stored permanently'
-                      : 'Sandbox documents are watermarked and auto-deleted after 14 days'}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+            </div>
+            <div className="col-span-2 space-y-1.5">
+              <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Note</span>
+              <p className="text-xs text-muted-foreground">
+                {tenant.boldsign_mode === 'live'
+                  ? 'Production documents are legally binding and stored permanently'
+                  : 'Sandbox documents are watermarked and auto-deleted after 14 days'}
+              </p>
+            </div>
+          </div>
+                </>
+              )}
+            </DialogContent>
+          </Dialog>
         </TabsContent>
 
         {/* Payments, Analytics, Finance Sync and Todos were removed from

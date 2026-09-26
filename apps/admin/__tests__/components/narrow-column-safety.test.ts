@@ -102,6 +102,20 @@ describe("the integration cards keep the width their insides assume", () => {
     expect(pageGrids).toEqual([]);
   });
 
+  it('keeps the four-column detail rows out of the tiles and in the wide dialog', () => {
+    // Since Sep 26 2026 the tab is a 4-up tile grid, like the portal's board.
+    // That is only safe because the tiles hold logo, name and status, and the
+    // viewport-gridded detail rows render in a dialog wide enough for them.
+    // Comments explain the rule by quoting the classes, so read markup only.
+    const tab = integrationsTab(page()).replace(/\{\/\*[\s\S]*?\*\/\}/g, '');
+    const tiles = tab.slice(0, tab.indexOf('<Dialog'));
+    const dialog = tab.slice(tab.indexOf('<Dialog'));
+    expect(tiles).toContain('sm:grid-cols-2 lg:grid-cols-4');
+    expect(tiles).not.toContain('md:grid-cols-4');
+    expect(dialog).toContain('sm:max-w-4xl');
+    expect(dialog).toContain('md:grid-cols-4');
+  });
+
   it('records why, so the empty space is not "fixed" again', () => {
     expect(integrationsTab(page())).toContain('VIEWPORT breakpoint, not a container one');
   });
