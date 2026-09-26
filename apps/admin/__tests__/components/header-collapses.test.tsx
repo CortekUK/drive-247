@@ -55,36 +55,41 @@ function mountAt(path: string) {
 describe('the top bar does not hold empty space open', () => {
   afterEach(cleanup);
 
-  it('collapses on a desktop when a top-level page gives it no trail', () => {
-    const header = mountAt('/admin/rentals');
-    // Rental Companies is one crumb — its own name, with no href, directly
-    // above an <h1> that says the same thing. Nothing worth 56px.
-    expect(header.className).toContain('md:hidden');
+  /*
+   * This used to be four tests about WHEN the row collapsed: hidden on a
+   * top-level page, kept on a detail page so the first crumb could be the way
+   * back, and the menu button gated by CSS rather than by the `isMobile` flag.
+   *
+   * Breadcrumbs were removed globally on Sep 26 2026, so there is no longer a
+   * route where the row has anything to show. It is `md:hidden` outright, and
+   * the phone keeps it for the menu button. The "detail page keeps its trail"
+   * case is gone with the trail.
+   */
+  it('collapses on every desktop route, because it has nothing to carry', () => {
+    for (const path of ['/admin/rentals', '/admin/rentals/tenant-1', '/admin/dashboard']) {
+      cleanup();
+      expect(mountAt(path).className, path).toContain('md:hidden');
+    }
   });
 
-  it('stays on a detail page, where the first crumb is the way back', () => {
-    const header = mountAt('/admin/rentals/tenant-1');
-    expect(header.className).not.toContain('md:hidden');
-    // And it really is a link, not a label.
-    expect(screen.getByRole('link', { name: /rental companies/i })).toBeTruthy();
+  it('keeps the phone its menu button', () => {
+    mountAt('/admin/rentals');
+    expect(screen.getByRole('button', { name: /toggle menu/i })).toBeTruthy();
   });
 
-  it('keeps its height class so the trail has a row to sit in', () => {
-    expect(mountAt('/admin/rentals/tenant-1').className).toContain('h-14');
+  it('shows no breadcrumb on any route', () => {
+    for (const path of ['/admin/rentals', '/admin/rentals/tenant-1']) {
+      cleanup();
+      const header = mountAt(path);
+      expect(header.querySelector('nav'), path).toBeNull();
+      expect(header.textContent?.trim(), path).toBe('');
+    }
   });
 
-  it('always renders the menu button, gated by CSS rather than by JS', () => {
-    // `useIsMobile` is false on the first client render and flips in an
-    // effect. Gating the button on it dropped a 56px row in after hydration
-    // and shoved the page down as it landed — so the button is always in the
-    // DOM and `md:hidden` decides whether it shows.
-    const header = mountAt('/admin/rentals');
-    const menu = screen.getByRole('button', { name: /toggle menu/i });
-    expect(header.contains(menu)).toBe(true);
-    expect(menu.className).toContain('md:hidden');
-
-    const source = src('components/admin/Header.tsx');
-    expect(source).not.toMatch(/\{isMobile &&/);
+  it('does not gate the row on a flag that flips after hydration', () => {
+    // `useIsMobile` is false on the first client render. Gating a 56px row on
+    // it dropped the button in after hydration and shoved the page down.
+    expect(src('components/admin/Header.tsx')).not.toMatch(/\{isMobile &&/);
   });
 });
 

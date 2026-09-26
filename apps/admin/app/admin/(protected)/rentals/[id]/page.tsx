@@ -1406,6 +1406,11 @@ export default function TenantDetailsPage() {
    * page, and a rail that says the same thing on every tenant cannot tell you
    * which one you have open.
    */
+  /* Restored Sep 26 2026: the controls moved into the account menu rather
+     than being dropped. The dialog they open is unchanged. */
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirmName, setDeleteConfirmName] = useState('');
+  const [deleting, setDeleting] = useState(false);
   const [tab, setTab] = useState(() =>
     typeof window !== 'undefined' &&
     new URLSearchParams(window.location.search).get('tab') === 'payments'
@@ -1420,6 +1425,91 @@ export default function TenantDetailsPage() {
    * operator's own portal is a separate application (`apps/portal`) and is
    * untouched, so nothing a tenant sees or uses changes.
    */
+  const handleUpdateStatus = async (newStatus: string) => {
+    if (!tenant) return;
+
+    try {
+      const { error } = await supabase
+        .from('tenants')
+        .update({ status: newStatus })
+        .eq('id', tenant.id);
+
+      if (error) throw error;
+
+      setTenant({ ...tenant, status: newStatus });
+      toast.success(`Tenant ${newStatus === 'active' ? 'activated' : 'suspended'} successfully!`);
+    } catch (error: any) {
+      toast.error(`Error updating status: ${error.message}`);
+    }
+  };
+
+  const handleUpdateType = async (newType: 'production' | 'test') => {
+    if (!tenant) return;
+
+    try {
+      const { error } = await supabase
+        .from('tenants')
+        .update({ tenant_type: newType })
+        .eq('id', tenant.id);
+
+      if (error) throw error;
+
+      setTenant({ ...tenant, tenant_type: newType });
+      toast.success(`Tenant marked as ${newType}!`);
+    } catch (error: any) {
+      toast.error(`Error updating tenant type: ${error.message}`);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!tenant || deleteConfirmName !== tenant.company_name) {
+      toast.error('Company name does not match');
+      return;
+    }
+
+    setDeleting(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-delete-tenant', {
+        body: { tenant_id: tenant.id }
+      });
+
+      // supabase-js collapses ANY non-2xx into a generic FunctionsHttpError
+      // ("Edge Function returned a non-2xx status code") and hides the response
+      // body — which is exactly where admin-delete-tenant puts the actionable
+      // reason (invalid session / not a super admin / the Postgres error, plus
+      // per-table deletionResults). Read it back instead of throwing the useless
+      // generic message.
+      if (error) {
+        let detail = error.message;
+        const res = (error as any)?.context;
+        if (res && typeof res.json === 'function') {
+          try {
+            const body = await res.clone().json();
+            if (body?.error) detail = String(body.error);
+            const failed = Object.entries(body?.deletionResults ?? {})
+              .filter(([, v]) => typeof v === 'string')
+              .map(([table, v]) => `${table}: ${v}`);
+            if (failed.length) detail += ` — failed: ${failed.join('; ')}`;
+          } catch {
+            // body wasn't JSON (e.g. a boot failure) — keep the generic message
+          }
+        }
+        throw new Error(detail);
+      }
+
+      if (data?.error) {
+        throw new Error(data.error);
+      }
+
+      toast.success('Tenant and all associated data deleted successfully!');
+      router.push('/admin/rentals');
+    } catch (error: any) {
+      toast.error(`Error deleting tenant: ${error.message}`);
+      setDeleting(false);
+    }
+  };
+
   useRegisterSidebarSections(
     '/admin/rentals',
     [
@@ -1429,6 +1519,25 @@ export default function TenantDetailsPage() {
     tab,
     setTab,
     tenant?.company_name ?? 'Rental company',
+    /*
+     * What this company lets you do, offered in the account menu at the foot
+     * of the rail. These were four buttons beside the page title until
+     * Sep 26 2026.
+     *
+     * `active` marks the type currently in force, so the pair reads as a
+     * choice rather than as two separate commands.
+     */
+    [
+      { id: 'production', label: 'Mark as Production', tone: tenant?.tenant_type === 'production' ? 'active' : 'default' },
+      { id: 'test', label: 'Mark as Test', tone: tenant?.tenant_type === 'test' ? 'active' : 'default' },
+      { id: 'status', label: tenant?.status === 'active' ? 'Suspend company' : 'Activate company' },
+      { id: 'delete', label: 'Delete company', tone: 'destructive' },
+    ],
+    (id) => {
+      if (id === 'production' || id === 'test') return void handleUpdateType(id);
+      if (id === 'status') return void handleUpdateStatus(tenant?.status === 'active' ? 'suspended' : 'active');
+      if (id === 'delete') setShowDeleteConfirm(true);
+    },
   );
 
   if (loading) {
@@ -1460,17 +1569,11 @@ export default function TenantDetailsPage() {
 
   return (
     <div className="p-6 lg:p-8 space-y-6 h-full overflow-auto">
-      {/* Back button */}
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => router.push('/admin/rentals')}
-        className="text-muted-foreground hover:text-foreground -ml-2"
-      >
-        <ArrowLeft className="w-4 h-4 mr-2" />
-        Back to Rental Companies
-      </Button>
+      {/* No back button, and no breadcrumb above it — both removed Sep 26
+          2026 ("remove all breadcrumbs globally").
 
+          The way back is the rail: All sections → Rental Companies. Two
+          clicks where there was one, and nobody is stranded. */}
       {/* Page header.
 
           The title and everything you can DO to this company on ONE line.
@@ -3189,6 +3292,42 @@ export default function TenantDetailsPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Delete Confirmation */}
+      <Dialog open={showDeleteConfirm} onOpenChange={(open) => { if (!open) { setShowDeleteConfirm(false); setDeleteConfirmName(''); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete Tenant</DialogTitle>
+          </DialogHeader>
+          <div className="rounded-lg px-4 py-3 text-sm bg-destructive/10 text-destructive ring-1 ring-destructive/25 space-y-2">
+            <p>
+              This will permanently delete <strong>{tenant.company_name}</strong> and ALL associated data including vehicles, customers, rentals, payments, and users.
+            </p>
+            <p className="font-semibold">This action cannot be undone!</p>
+          </div>
+          <div className="space-y-2">
+            <Label>
+              Type <strong className="text-foreground">{tenant.company_name}</strong> to confirm:
+            </Label>
+            <Input
+              value={deleteConfirmName}
+              onChange={(e) => setDeleteConfirmName(e.target.value)}
+              placeholder="Enter company name"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmName(''); }}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={deleting || deleteConfirmName !== tenant.company_name}
+            >
+              {deleting ? 'Deleting...' : 'Delete Permanently'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

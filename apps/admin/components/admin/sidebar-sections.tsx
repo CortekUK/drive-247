@@ -26,12 +26,42 @@
  * A page that registers nothing gets exactly the sidebar it had.
  */
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 
 export type SidebarSection = {
   /** Matches the page's own tab value. */
   id: string;
   label: string;
+};
+
+/**
+ * Something a page lets you DO to the record it is showing, offered in the
+ * account menu at the foot of the rail rather than beside the page title.
+ *
+ * Asked for Sep 26 2026, with an arrow drawn from the buttons to the account
+ * row. They are deliberately DATA, not `ReactNode`: the registration lives in
+ * a context that a `useEffect` writes to, and a freshly-built element every
+ * render would change identity every render and re-register forever. That is
+ * not hypothetical — a single memoised context here once did exactly that and
+ * took `/admin/promo-codes` down. The sidebar renders these; the page only
+ * describes them.
+ */
+export type SidebarAction = {
+  id: string;
+  label: string;
+  /**
+   * `active` marks the choice currently in force (the tenant's live type, say)
+   * so a pair of mutually exclusive actions can show which one is on.
+   */
+  tone?: 'default' | 'active' | 'destructive';
 };
 
 type Registration = {
@@ -47,6 +77,10 @@ type Registration = {
   sections: SidebarSection[];
   active: string;
   onSelect: (id: string) => void;
+  /** Empty or absent on a page with nothing to act on. */
+  actions?: SidebarAction[];
+  /** One dispatcher for all of them, switched on `id`. */
+  onAction?: (id: string) => void;
 };
 
 /*
@@ -102,17 +136,43 @@ export function useRegisterSidebarSections(
   active: string,
   onSelect: (id: string) => void,
   title?: string,
+  actions?: SidebarAction[],
+  onAction?: (id: string) => void,
 ) {
   const register = useContext(SectionsDispatch);
   const key = sections.map((s) => `${s.id}:${s.label}`).join('|');
+  const actionKey = (actions ?? []).map((a) => `${a.id}:${a.label}:${a.tone ?? ''}`).join('|');
+
+  /*
+   * `onAction` is held in a ref and reached through a STABLE wrapper.
+   *
+   * Pages pass an inline arrow — `(id) => { switch (id) { … } }` — which is a
+   * new function on every render. Depending on it the way this depends on
+   * `onSelect` (which pages pass as a `useState` setter, so it is stable)
+   * would re-register on every render and loop. Going through a ref means the
+   * registered function never changes identity while always running the
+   * current closure, so the handler cannot go stale either.
+   */
+  const onActionRef = useRef(onAction);
+  onActionRef.current = onAction;
+  const stableOnAction = useCallback((id: string) => onActionRef.current?.(id), []);
 
   useEffect(() => {
     if (!register) return;
-    register({ href, title, sections, active, onSelect });
+    register({
+      href,
+      title,
+      sections,
+      active,
+      onSelect,
+      actions,
+      onAction: stableOnAction,
+    });
     return () => register(null);
-    // `key` stands in for `sections`, which every page rebuilds inline on each
-    // render. `register` is a `useState` setter and never changes identity —
-    // depending on the whole context object here is what caused the loop.
+    // `key` and `actionKey` stand in for `sections` and `actions`, which every
+    // page rebuilds inline on each render. `register` is a `useState` setter
+    // and never changes identity — depending on the whole context object here
+    // is what caused the loop.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [register, href, title, key, active, onSelect]);
+  }, [register, href, title, key, actionKey, active, onSelect, stableOnAction]);
 }

@@ -77,27 +77,62 @@ describe('the header carries the title and its state, and nothing else', () => {
     expect(markup).toContain('{tenant.status}');
   });
 
-  it('no longer offers the controls that were removed from Super Admin', () => {
-    // Sep 26 2026: the Production/Test switch, Suspend and Delete were taken
-    // off this page. The operator's own portal is a separate app and keeps
-    // everything it had.
+  it('offers none of the tenant controls in the header any more', () => {
+    // Sep 26 2026, take two. They were briefly removed outright; the follow-up
+    // brief, with an arrow drawn from the buttons to the account row, moved
+    // them into the account menu instead. So they are gone from HERE, and the
+    // test below proves they are somewhere.
     const markup = headerMarkup(page());
     expect(markup).not.toContain('handleUpdateType');
     expect(markup).not.toContain('handleUpdateStatus');
     expect(markup).not.toContain('setShowDeleteConfirm');
   });
 
-  it('leaves nothing behind that could still reach them', () => {
-    // A dialog with no way to open it is dead code that reads as a feature.
-    //
-    // Whole-word matching, because `handleDeletePlan` — which deletes a
-    // SUBSCRIPTION PLAN in Management and is staying — contains
-    // `handleDelete` as a substring. A plain `toContain` failed on it and
-    // would have had me deleting the wrong function.
+  it('carries no back link above the title', () => {
     const s = page();
-    for (const gone of ['handleDelete', 'showDeleteConfirm', 'handleUpdateType', 'handleUpdateStatus']) {
-      expect(s, `${gone} still present`).not.toMatch(new RegExp(`\\b${gone}\\b`));
+    expect(s).not.toContain('Back button');
+    // The one surviving "Back to Rental Companies" is on the "Tenant not
+    // found" screen — error recovery, the only way off a dead page, and the
+    // brief's "remove breadcrumbs" did not mean strand people on an error.
+    const backLinks = s.match(/Back to Rental Companies/g) ?? [];
+    expect(backLinks).toHaveLength(1);
+    expect(s.slice(s.indexOf('Back to Rental Companies') - 400, s.indexOf('Back to Rental Companies')))
+      .toContain('Tenant not found');
+  });
+});
+
+describe('the tenant controls moved into the account menu', () => {
+  function registration(src: string): string {
+    const start = src.indexOf('useRegisterSidebarSections(');
+    expect(start).toBeGreaterThan(-1);
+    return src.slice(start, src.indexOf('if (loading)', start));
+  }
+
+  it('registers all four, so none was lost in the move', () => {
+    const reg = registration(page());
+    for (const id of ['production', 'test', 'status', 'delete']) {
+      expect(reg, `action '${id}' missing`).toContain(`id: '${id}'`);
     }
+  });
+
+  it('marks the type currently in force, so the pair reads as a choice', () => {
+    const reg = registration(page());
+    expect(reg).toContain("tenant?.tenant_type === 'production' ? 'active'");
+    expect(reg).toContain("tenant?.tenant_type === 'test' ? 'active'");
+  });
+
+  it('labels the status action by what pressing it will do', () => {
+    // "Suspend company" on a live one, "Activate company" on a suspended one.
+    expect(registration(page())).toContain("tenant?.status === 'active' ? 'Suspend company' : 'Activate company'");
+  });
+
+  it('keeps the handlers and the confirm dialog they drive', () => {
+    const s = page();
+    for (const kept of ['handleUpdateType', 'handleUpdateStatus', 'handleDelete', 'showDeleteConfirm']) {
+      expect(s, `${kept} missing`).toMatch(new RegExp(`\\b${kept}\\b`));
+    }
+    // Deleting a company still demands its name typed back.
+    expect(s).toContain('deleteConfirmName !== tenant.company_name');
   });
 });
 

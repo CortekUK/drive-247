@@ -1,151 +1,48 @@
 'use client';
 
-import { Fragment } from 'react';
-import { usePathname } from 'next/navigation';
-import Link from 'next/link';
 import { useSidebar } from './SidebarContext';
 import { Button } from '@/components/ui/button';
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from '@/components/ui/breadcrumb';
 import { Menu } from 'lucide-react';
 
-function useBreadcrumbs() {
-  const pathname = usePathname();
-
-  const routeLabels: Record<string, string> = {
-    '/admin/dashboard': 'Dashboard',
-    '/admin/rentals': 'Rental Companies',
-    '/admin/signup-plans': 'Signup Plans',
-    '/admin/blacklist': 'Global Blacklist',
-    '/admin/contacts': 'Contact Requests',
-    '/admin/settings': 'Settings',
-    '/admin/admins': 'Manage Admins',
-    '/admin/audit-logs': 'Audit Logs',
-    '/admin/requests': 'Mode Requests',
-    '/admin/announcements': 'Announcements',
-  };
-
-  const segments = pathname.split('/').filter(Boolean);
-  const crumbs: { label: string; href?: string }[] = [];
-
-  let currentPath = '';
-  for (let i = 0; i < segments.length; i++) {
-    currentPath += `/${segments[i]}`;
-
-    if (currentPath === '/admin') continue;
-
-    const label = routeLabels[currentPath];
-    if (label) {
-      crumbs.push({
-        label,
-        href: currentPath === pathname ? undefined : currentPath,
-      });
-    } else if (i >= 2) {
-      const parentPath = segments.slice(0, i).join('/');
-      const parentLabel = routeLabels[`/${parentPath}`];
-      if (!crumbs.find((c) => c.label === parentLabel)) {
-        crumbs.push({
-          label: parentLabel || segments[i - 1],
-          href: `/${parentPath}`,
-        });
-      }
-      crumbs.push({ label: 'Details' });
-    }
-  }
-
-  return crumbs;
-}
-
+/**
+ * The top bar, which on a desktop is now nothing at all.
+ *
+ * It used to compute and render a breadcrumb trail. Those were removed
+ * Sep 26 2026 — "remove all breadcrumbs globally, keep headers clean and
+ * minimalist" — and with the trail gone there was nothing left for this row to
+ * carry but the phone's menu button.
+ *
+ * So the row IS the menu button, and only on a phone. Two earlier rounds of
+ * this same header are worth remembering:
+ *
+ *   1. It painted `bg-background/80 backdrop-blur-xl border-b`, an opaque
+ *      white band that cut the app's wash off at the top of every page.
+ *   2. Once bare, it still reserved `h-14` on a desktop while rendering
+ *      nothing — 56 pixels of empty space above every page title, which is
+ *      what "remove this white space" was about.
+ *
+ * Both are avoided here by construction: no fill, and the element is
+ * `md:hidden`, so on a desktop it contributes no height at all rather than
+ * an empty row.
+ *
+ * `md:hidden` rather than the `isMobile` flag: that flag is false on the first
+ * client render and flips in an effect, so gating on it would drop a 56px row
+ * in after hydration and shove the page down as it landed.
+ */
 export function Header() {
   const { toggle } = useSidebar();
-  const breadcrumbs = useBreadcrumbs();
-
-  /* A trail is two crumbs or more — see the comment on the render below. With
-     fewer, this row has nothing on it at all on a desktop. */
-  const hasTrail = breadcrumbs.length > 1;
 
   return (
-    <header
-      /* No fill, no border, no blur — it sits straight on the app gradient,
-         the way the portal's top bar does. It used to be `bg-background/80
-         backdrop-blur-xl border-b`, which painted an opaque white band across
-         the top of every page and cut the wash off at the header.
-
-         Safe to leave bare because nothing ever passes under it: this is a
-         non-scrolling row in a `h-screen` flex column, and `<main>` below is
-         the only scroll container. The `sticky` stays only because it costs
-         nothing on an element that cannot scroll.
-
-         AND IT GOES AWAY ENTIRELY when it has nothing to carry.
-
-         Reported Sep 25 2026 as dead space at the top of every page. On a
-         top-level page on a desktop this row rendered the mobile menu button
-         (hidden), no trail, and a `flex-1` spacer — 56px of nothing, pushing
-         every page title down the screen for no reason. A bare header is not
-         the same as an empty one.
-
-         On a phone it stays: the menu button is the only way to the navigation
-         there. On a detail page it stays at every width, because the first
-         crumb is the link back to the list. `md:hidden` rather than the
-         `isMobile` flag, because that flag is false on the first client render
-         and flips in an effect — gating a 56px row on it would drop the menu
-         button in after hydration and shove the page down as it lands. */
-      className={
-        hasTrail
-          ? 'sticky top-0 z-30 flex h-14 items-center gap-4 px-4 sm:px-6'
-          : 'sticky top-0 z-30 flex h-14 items-center gap-4 px-4 sm:px-6 md:hidden'
-      }
-    >
+    <header className="sticky top-0 z-30 flex h-14 items-center gap-4 px-4 sm:px-6 md:hidden">
       <Button
         variant="ghost"
         size="icon"
         onClick={toggle}
-        className="-ml-2 h-8 w-8 text-muted-foreground md:hidden"
+        className="-ml-2 h-8 w-8 text-muted-foreground"
         aria-label="Toggle menu"
       >
         <Menu className="h-4 w-4" />
       </Button>
-
-      {/* A trail, or nothing.
-
-          On a top-level page this produced exactly one crumb — the page's own
-          name, with no href, sitting directly above an <h1> that says the same
-          thing. Two labels for one page, and the top one not even clickable.
-
-          A detail page is the case worth keeping: there the first crumb
-          carries an href back to the list, which is the only way up from a
-          record other than the browser's own Back. So the trail renders when
-          it IS a trail, and the duplicate label is gone everywhere else.
-
-          The spacer keeps the right-hand cluster right-aligned either way. */}
-      {breadcrumbs.length > 1 ? (
-      <Breadcrumb className="flex-1">
-        <BreadcrumbList>
-          {breadcrumbs.map((crumb, index) => (
-            <Fragment key={`${crumb.href ?? crumb.label}-${index}`}>
-              {index > 0 && <BreadcrumbSeparator />}
-              <BreadcrumbItem>
-                {crumb.href ? (
-                  <BreadcrumbLink asChild>
-                    <Link href={crumb.href}>{crumb.label}</Link>
-                  </BreadcrumbLink>
-                ) : (
-                  <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
-                )}
-              </BreadcrumbItem>
-            </Fragment>
-          ))}
-        </BreadcrumbList>
-      </Breadcrumb>
-      ) : (
-        <div className="flex-1" />
-      )}
     </header>
   );
 }

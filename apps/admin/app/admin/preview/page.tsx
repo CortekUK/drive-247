@@ -192,6 +192,20 @@ function SectionsDemo() {
     ],
     tab,
     setTab,
+    undefined,
+    /* Record actions, so the account menu's second group is inspectable here
+       too. On a real record these are the tenant's own — Production/Test,
+       Suspend, Delete — and they appear in the menu at the foot of the rail
+       only while a page has registered some. */
+    [
+      { id: 'production', label: 'Mark as Production', tone: 'active' },
+      { id: 'test', label: 'Mark as Test' },
+      { id: 'status', label: 'Suspend company' },
+      { id: 'delete', label: 'Delete company', tone: 'destructive' },
+    ],
+    () => {
+      /* Fixed data, no live records — pressing one does nothing on purpose. */
+    },
   );
   return (
     <section aria-label="Sidebar sections" className="mt-8">

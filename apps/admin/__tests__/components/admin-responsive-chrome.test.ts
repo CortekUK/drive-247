@@ -239,7 +239,7 @@ describe("the admin shell pads once", () => {
      * else, and it catches every branch rather than whichever is written
      * first.
      */
-    const own = [...header.matchAll(/'([^']*sticky top-0[^']*)'/g)].map((m) => m[1]);
+    const own = [...header.matchAll(/"([^"]*sticky top-0[^"]*)"/g)].map((m) => m[1]);
     expect(own.length).toBeGreaterThan(0);
     for (const cls of own) {
       for (const paint of ["bg-background", "border-b", "backdrop-blur"]) {
@@ -263,24 +263,59 @@ describe("the admin shell pads once", () => {
  * other than the browser's Back button. Removing that would have been taking
  * navigation away, not tidying.
  */
-describe("the header shows a trail or nothing", () => {
+/*
+ * No breadcrumbs, anywhere.
+ *
+ * Removed Sep 26 2026: "remove all breadcrumbs globally, keep headers clean
+ * and minimalist." This replaces three tests that asserted the OPPOSITE — how
+ * the trail was built, when it rendered, and that a spacer held its place.
+ * They are gone rather than adapted, because there is nothing left to
+ * describe.
+ *
+ * The header now carries the phone's menu button and nothing else.
+ */
+describe("the header carries no trail", () => {
   const header = () => src("components/admin/Header.tsx");
 
-  it("renders the breadcrumb only when there is more than one crumb", () => {
-    expect(header()).toContain("breadcrumbs.length > 1");
-  });
-
-  it("keeps the spacer, so the right-hand cluster stays put either way", () => {
-    expect(header()).toContain('<div className="flex-1" />');
-  });
-
-  it("still builds a two-crumb trail for a detail route", () => {
-    // The builder's own branch: a nested path pushes the parent WITH an href
-    // and then "Details". If that goes, the rule above starts hiding a real
-    // back link rather than a duplicate.
+  it("builds no breadcrumbs and imports none", () => {
     const s = header();
-    expect(s).toContain("crumbs.push({ label: 'Details' })");
-    expect(s).toContain("href: `/${parentPath}`");
+    expect(s).not.toContain("Breadcrumb");
+    expect(s).not.toContain("useBreadcrumbs");
+    expect(s).not.toContain("routeLabels");
+  });
+
+  it("contributes no height on a desktop, rather than an empty row", () => {
+    // Twice before, this row reserved 56px while rendering nothing. Hiding
+    // the element outright is the only version that cannot regress to that.
+    expect(header()).toContain("md:hidden");
+  });
+
+  it("leaves the phone its way into the navigation", () => {
+    const s = header();
+    expect(s).toContain('aria-label="Toggle menu"');
+    expect(s).toContain("toggle");
+  });
+
+  it("is gone from every page, not just this component", () => {
+    const files: string[] = [];
+    const walk = (dir: string) => {
+      for (const e of readdirSync(resolve(ROOT, dir), { withFileTypes: true })) {
+        const rel = `${dir}/${e.name}`;
+        if (e.isDirectory()) { if (e.name !== "node_modules") walk(rel); }
+        else if (e.name.endsWith(".tsx")) files.push(rel);
+      }
+    };
+    walk("app");
+    walk("components");
+    const offenders = files.filter((f) => {
+      // The primitive itself may stay in `components/ui`; nothing may USE it.
+      if (f === "components/ui/breadcrumb.tsx") return false;
+      return /<Breadcrumb|BreadcrumbList|Back to Rental Companies/.test(src(f));
+    });
+    // "Tenant not found" keeps a recovery link, which is not a breadcrumb —
+    // it is the only way off a dead page. It reads "Back to Rental
+    // Companies", so it is listed rather than matched loosely.
+    expect(offenders.filter((f) => !f.includes("rentals/[id]"))).toEqual([]);
   });
 });
 

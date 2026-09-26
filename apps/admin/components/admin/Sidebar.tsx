@@ -27,6 +27,7 @@ import {
   Users,
   ChevronDown,
   LogOut,
+  Check,
   ChevronsUpDown,
   ScrollText,
   Scale,
@@ -447,6 +448,45 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                 </span>
               )}
             </div>
+
+            {/* What the open record lets you do.
+
+                Asked for Sep 26 2026, with an arrow drawn from the buttons
+                beside the page title down to this row. They used to sit in
+                the header; a rental company's type switch, Suspend and Delete
+                now live here instead.
+
+                Present only while a page has registered some, so this group
+                is absent on the dashboard and every list — the actions belong
+                to a record, and there is no record open on those pages. The
+                account items below are always there. */}
+            {sections?.actions?.length ? (
+              <>
+                <DropdownMenuSeparator className="m-0" />
+                <div className="p-1.5">
+                  <p className="px-2.5 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    {sectionTitle ?? 'This record'}
+                  </p>
+                  {sections.actions.map((action) => (
+                    <DropdownMenuItem
+                      key={action.id}
+                      onClick={() => sections.onAction?.(action.id)}
+                      className={cn(
+                        'cursor-pointer rounded-lg px-2.5 py-1.5 text-[15px] md:text-[13px]',
+                        action.tone === 'destructive' &&
+                          'text-destructive focus:bg-destructive/10 focus:text-destructive',
+                        action.tone === 'active' && 'bg-primary/10 font-medium text-primary',
+                      )}
+                    >
+                      <span>{action.label}</span>
+                      {action.tone === 'active' && (
+                        <Check className="ml-auto h-4 w-4" aria-hidden="true" />
+                      )}
+                    </DropdownMenuItem>
+                  ))}
+                </div>
+              </>
+            ) : null}
 
             <DropdownMenuSeparator className="m-0" />
 
