@@ -272,7 +272,7 @@ export default function OnboardingQuestionsAdmin() {
         <>
           <div className="space-y-4">
             {rows.map((r, i) => (
-              <div key={r.id ?? `new-${i}`} className="space-y-3 rounded-xl border border-border bg-card p-4">
+              <div key={r.id ?? `new-${i}`} className="space-y-3 rounded-4xl bg-card p-4 shadow-sm ring-1 ring-foreground/10">
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
                     Question {i + 1}

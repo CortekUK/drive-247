@@ -566,7 +566,7 @@ export default function SetupChecklistAdmin() {
             {rows.map((r, i) => (
               <div
                 key={r.id ?? `new-${i}`}
-                className="space-y-3 rounded-xl border border-border bg-card p-4"
+                className="space-y-3 rounded-4xl bg-card p-4 shadow-sm ring-1 ring-foreground/10"
               >
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">

@@ -289,7 +289,7 @@ export default function LegalPagesAdmin() {
           <Loader2 className="size-4 animate-spin" /> Loading…
         </p>
       ) : (
-        <div className="space-y-4 rounded-xl border border-border bg-card p-5">
+        <div className="space-y-4 rounded-4xl bg-card p-5 shadow-sm ring-1 ring-foreground/10">
           <div className="grid gap-4 sm:grid-cols-3">
             <label className="sm:col-span-2 block text-sm">
               <span className="mb-1.5 block font-medium">Title</span>

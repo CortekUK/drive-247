@@ -289,7 +289,7 @@ export function SystemNotificationsPage({ className }: SystemNotificationsPagePr
                 </h3>
                 <p className="text-[13px] text-muted-foreground">{category.description}</p>
               </div>
-              <div className="overflow-hidden rounded-xl border border-border bg-card">
+              <div className="overflow-hidden rounded-4xl bg-card shadow-sm ring-1 ring-foreground/10">
                 <div
                   aria-hidden="true"
                   className="hidden items-center justify-end gap-2 border-b border-border px-5 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground md:flex"
