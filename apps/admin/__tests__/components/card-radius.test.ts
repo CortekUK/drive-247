@@ -40,8 +40,6 @@ function tsxFiles(dir: string): string[] {
 const NESTED_BY_DESIGN: Record<string, string> = {
   // An empty-state line INSIDE the integrations card.
   'app/admin/(protected)/integrations/page.tsx:466': 'nested in a card',
-  // The Production/Test segmented control — a 28px-tall switch, not a panel.
-  'app/admin/(protected)/rentals/[id]/page.tsx:1702': 'a control, not a surface',
   // FilterShell is a verbatim port of the portal's own filter panel. Its
   // `rounded-2xl` is Northwind's, and `admin-responsive-chrome` asserts the
   // two files agree — changing it here would break that parity on purpose.

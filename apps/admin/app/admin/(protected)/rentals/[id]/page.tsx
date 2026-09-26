@@ -6,7 +6,6 @@ import { supabase } from '@/lib/supabase';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { KPICard } from '@/components/ui/kpi-card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -40,26 +39,12 @@ import {
 } from '@/components/ui/dialog';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { useRegisterSidebarSections } from '@/components/admin/sidebar-sections';
-import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-  type ChartConfig,
-} from '@/components/ui/chart';
-import { Area, AreaChart, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { DatePicker } from '@/components/ui/date-picker';
 import { CardBrandIcon } from '@/components/ui/card-brand-icon';
-import { BarChart3 } from 'lucide-react';
 import { TenantCreditsTab } from '@/components/admin/tenant-credits-tab';
-import { TenantPaymentsTab } from '@/components/admin/tenant-payments-tab';
-import { FinanceEventsTab } from '@/components/admin/finance-events-tab';
 import { LinkPromoPicker } from '@/components/admin/promo-codes/link-promo-picker';
-import { AdminTodosTab } from '@/components/admin-todos/admin-todos-tab';
-import { isLeanTenant } from '@/lib/lean-tenants';
 import {
   ArrowLeft,
   Pencil,
-  Trash2,
   Copy,
   ExternalLink,
   Download,
@@ -206,11 +191,6 @@ interface TenantStats {
   completedRentals: number;
 }
 
-interface MonthlyData {
-  month: string;
-  bookings: number;
-  revenue: number;
-}
 
 interface StaffUser {
   id: string;
@@ -322,9 +302,6 @@ export default function TenantDetailsPage() {
   const [saving, setSaving] = useState(false);
 
   // Delete state
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [deleteConfirmName, setDeleteConfirmName] = useState('');
-  const [deleting, setDeleting] = useState(false);
 
   // Force logout state
   const [showForceLogoutConfirm, setShowForceLogoutConfirm] = useState(false);
@@ -373,15 +350,6 @@ export default function TenantDetailsPage() {
   // Stats, charts, staff, activity state
   const [stats, setStats] = useState<TenantStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
-  const [bookingsData, setBookingsData] = useState<MonthlyData[]>([]);
-  const [revenueData, setRevenueData] = useState<MonthlyData[]>([]);
-  const [bookingsChartLoading, setBookingsChartLoading] = useState(true);
-  const [revenueChartLoading, setRevenueChartLoading] = useState(true);
-  const [analyticsPeriod, setAnalyticsPeriod] = useState('12m');
-  const [analyticsFromDate, setAnalyticsFromDate] = useState<Date | undefined>(() => {
-    const d = new Date(); d.setMonth(d.getMonth() - 11); d.setDate(1); return d;
-  });
-  const [analyticsToDate, setAnalyticsToDate] = useState<Date | undefined>(new Date());
   const [staffUsers, setStaffUsers] = useState<StaffUser[]>([]);
   const [staffLoading, setStaffLoading] = useState(true);
   const [recentActivity, setRecentActivity] = useState<AuditEntry[]>([]);
@@ -891,96 +859,8 @@ export default function TenantDetailsPage() {
     }
   };
 
-  const loadChartData = async (
-    tenantId: string,
-    from: Date | undefined,
-    to: Date | undefined,
-    type: 'bookings' | 'revenue',
-  ) => {
-    const setLoading = type === 'bookings' ? setBookingsChartLoading : setRevenueChartLoading;
-    const setData = type === 'bookings' ? setBookingsData : setRevenueData;
-    setLoading(true);
-    try {
-      const startDate = from || new Date(new Date().setMonth(new Date().getMonth() - 11));
-      const endDate = to || new Date();
-      // Set end date to end of day
-      const endOfDay = new Date(endDate);
-      endOfDay.setHours(23, 59, 59, 999);
 
-      let query = supabase
-        .from('rentals')
-        .select('created_at, monthly_amount, collection_fee, delivery_fee, insurance_premium, discount_applied')
-        .eq('tenant_id', tenantId)
-        .gte('created_at', startDate.toISOString())
-        .lte('created_at', endOfDay.toISOString())
-        .order('created_at', { ascending: true });
 
-      const { data, error } = await query;
-      if (error) throw error;
-
-      // Build month keys between start and end
-      const monthMap: Record<string, { bookings: number; revenue: number }> = {};
-      const cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
-      const endMonth = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
-      while (cursor <= endMonth) {
-        const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`;
-        monthMap[key] = { bookings: 0, revenue: 0 };
-        cursor.setMonth(cursor.getMonth() + 1);
-      }
-
-      (data || []).forEach((r: any) => {
-        if (!r.created_at) return;
-        const d = new Date(r.created_at);
-        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-        if (!monthMap[key]) return;
-        monthMap[key].bookings += 1;
-        const total = (r.monthly_amount || 0) + (r.collection_fee || 0) + (r.delivery_fee || 0) + (r.insurance_premium || 0) - (r.discount_applied || 0);
-        monthMap[key].revenue += Math.max(0, total);
-      });
-
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      setData(
-        Object.entries(monthMap).map(([key, val]) => {
-          const [y, m] = key.split('-');
-          return {
-            month: `${months[parseInt(m) - 1]} ${y.slice(2)}`,
-            bookings: val.bookings,
-            revenue: Math.round(val.revenue * 100) / 100,
-          };
-        })
-      );
-    } catch (error) {
-      console.error(`Error loading ${type} data:`, error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Load charts when tenant or date filters change
-  useEffect(() => {
-    if (tenant?.id) {
-      loadChartData(tenant.id, analyticsFromDate, analyticsToDate, 'bookings');
-      loadChartData(tenant.id, analyticsFromDate, analyticsToDate, 'revenue');
-    }
-  }, [tenant?.id, analyticsFromDate, analyticsToDate]);
-
-  const handlePeriodChange = (period: string) => {
-    setAnalyticsPeriod(period);
-    const now = new Date();
-    const from = new Date();
-    switch (period) {
-      case '7d': from.setDate(now.getDate() - 7); break;
-      case '30d': from.setDate(now.getDate() - 30); break;
-      case '3m': from.setMonth(now.getMonth() - 3); break;
-      case '6m': from.setMonth(now.getMonth() - 6); break;
-      case '12m': from.setMonth(now.getMonth() - 11); from.setDate(1); break;
-      case 'ytd': from.setMonth(0); from.setDate(1); break;
-      case 'all': from.setFullYear(2020, 0, 1); break;
-      case 'custom': return; // don't change dates
-    }
-    setAnalyticsFromDate(from);
-    setAnalyticsToDate(now);
-  };
 
   const loadStaffUsers = async (tenantId: string) => {
     setStaffLoading(true);
@@ -1398,41 +1278,7 @@ export default function TenantDetailsPage() {
     toast.success(`${label} copied to clipboard!`);
   };
 
-  const handleUpdateStatus = async (newStatus: string) => {
-    if (!tenant) return;
 
-    try {
-      const { error } = await supabase
-        .from('tenants')
-        .update({ status: newStatus })
-        .eq('id', tenant.id);
-
-      if (error) throw error;
-
-      setTenant({ ...tenant, status: newStatus });
-      toast.success(`Tenant ${newStatus === 'active' ? 'activated' : 'suspended'} successfully!`);
-    } catch (error: any) {
-      toast.error(`Error updating status: ${error.message}`);
-    }
-  };
-
-  const handleUpdateType = async (newType: 'production' | 'test') => {
-    if (!tenant) return;
-
-    try {
-      const { error } = await supabase
-        .from('tenants')
-        .update({ tenant_type: newType })
-        .eq('id', tenant.id);
-
-      if (error) throw error;
-
-      setTenant({ ...tenant, tenant_type: newType });
-      toast.success(`Tenant marked as ${newType}!`);
-    } catch (error: any) {
-      toast.error(`Error updating tenant type: ${error.message}`);
-    }
-  };
 
   const handleToggleIntegration = async (integration: 'bonzah' | 'tesla_fleet', enabled: boolean) => {
     if (!tenant) return;
@@ -1546,54 +1392,6 @@ export default function TenantDetailsPage() {
     }
   };
 
-  const handleDelete = async () => {
-    if (!tenant || deleteConfirmName !== tenant.company_name) {
-      toast.error('Company name does not match');
-      return;
-    }
-
-    setDeleting(true);
-
-    try {
-      const { data, error } = await supabase.functions.invoke('admin-delete-tenant', {
-        body: { tenant_id: tenant.id }
-      });
-
-      // supabase-js collapses ANY non-2xx into a generic FunctionsHttpError
-      // ("Edge Function returned a non-2xx status code") and hides the response
-      // body — which is exactly where admin-delete-tenant puts the actionable
-      // reason (invalid session / not a super admin / the Postgres error, plus
-      // per-table deletionResults). Read it back instead of throwing the useless
-      // generic message.
-      if (error) {
-        let detail = error.message;
-        const res = (error as any)?.context;
-        if (res && typeof res.json === 'function') {
-          try {
-            const body = await res.clone().json();
-            if (body?.error) detail = String(body.error);
-            const failed = Object.entries(body?.deletionResults ?? {})
-              .filter(([, v]) => typeof v === 'string')
-              .map(([table, v]) => `${table}: ${v}`);
-            if (failed.length) detail += ` — failed: ${failed.join('; ')}`;
-          } catch {
-            // body wasn't JSON (e.g. a boot failure) — keep the generic message
-          }
-        }
-        throw new Error(detail);
-      }
-
-      if (data?.error) {
-        throw new Error(data.error);
-      }
-
-      toast.success('Tenant and all associated data deleted successfully!');
-      router.push('/admin/rentals');
-    } catch (error: any) {
-      toast.error(`Error deleting tenant: ${error.message}`);
-      setDeleting(false);
-    }
-  };
 
   /*
    * The six tabs move into the rail, the way Promo Codes' five did and the way
@@ -1614,16 +1412,19 @@ export default function TenantDetailsPage() {
       ? 'payments'
       : 'details',
   );
+  /*
+   * Two sections, not six.
+   *
+   * Payments, Analytics, Finance Sync and Todos were removed from Super Admin
+   * on Sep 26 2026 by request. This takes them off THIS page only — the rental
+   * operator's own portal is a separate application (`apps/portal`) and is
+   * untouched, so nothing a tenant sees or uses changes.
+   */
   useRegisterSidebarSections(
     '/admin/rentals',
     [
       { id: 'details', label: 'Details' },
       { id: 'management', label: 'Management' },
-      { id: 'payments', label: 'Payments' },
-      { id: 'analytics', label: 'Analytics' },
-      /* Finance Sync keeps the same per-tenant gate the tab had. */
-      ...(!isLeanTenant(tenant?.slug ?? '') ? [{ id: 'finance', label: 'Finance Sync' }] : []),
-      { id: 'todos', label: 'Todos' },
     ],
     tab,
     setTab,
@@ -1696,45 +1497,16 @@ export default function TenantDetailsPage() {
           </Badge>
         </div>
 
-        {/* Type, status and deletion: the three things this page exists to
-            change, now sitting in the space the title was wasting. */}
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-1 rounded-lg border border-border/40 bg-card p-1">
-            <Button
-              variant={tenant.tenant_type === 'production' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => handleUpdateType('production')}
-              className="h-7 text-xs"
-            >
-              Production
-            </Button>
-            <Button
-              variant={tenant.tenant_type === 'test' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => handleUpdateType('test')}
-              className="h-7 text-xs"
-            >
-              Test
-            </Button>
-          </div>
+        {/* The Production/Test switch, Suspend and Delete were removed from
+            Super Admin on Sep 26 2026 by request. The header now carries the
+            title and its state badges only.
 
-          <Button
-            variant={tenant.status === 'active' ? 'outline' : 'default'}
-            size="sm"
-            onClick={() => handleUpdateStatus(tenant.status === 'active' ? 'suspended' : 'active')}
-          >
-            {tenant.status === 'active' ? 'Suspend' : 'Activate'}
-          </Button>
+            The badges stay: they still REPORT the tenant's type and status,
+            which is what the rest of this page is read for. Only the
+            controls that changed them are gone.
 
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={() => setShowDeleteConfirm(true)}
-          >
-            <Trash2 className="w-3.5 h-3.5 mr-1" />
-            Delete
-          </Button>
-        </div>
+            Nothing here reached the operator's own portal — that is a
+            separate application (`apps/portal`). */}
       </div>
 
       {/* Tabs */}
@@ -2759,227 +2531,19 @@ export default function TenantDetailsPage() {
           </Card>
         </TabsContent>
 
-        {/* Payments / Migration Tab */}
-        <TabsContent value="payments" className="space-y-6">
-          <TenantPaymentsTab tenantId={params.id as string} />
-        </TabsContent>
+        {/* Payments, Analytics, Finance Sync and Todos were removed from
+            Super Admin on Sep 26 2026 by request.
 
-        {/* Analytics Tab */}
-        <TabsContent value="analytics" className="space-y-6">
-          {/* Stats Overview */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <KPICard
-              title="Vehicles"
-              value={stats?.totalVehicles ?? 0}
-              isLoading={statsLoading}
-            />
-            <KPICard
-              title="Active Rentals"
-              value={stats?.activeRentals ?? 0}
-              isLoading={statsLoading}
-              subtitle={stats ? `${stats.completedRentals} completed` : undefined}
-            />
-            <KPICard
-              title="Customers"
-              value={stats?.totalCustomers ?? 0}
-              isLoading={statsLoading}
-            />
-            <KPICard
-              title="Staff Users"
-              value={stats?.staffUsers ?? 0}
-              isLoading={statsLoading}
-            />
-          </div>
+            The PANELS go with the rail rows deliberately. `Tabs` honours a
+            `?tab=` query and a programmatic `value` even when no trigger
+            exists, so leaving the panels behind would have kept them
+            reachable to anyone who had bookmarked or typed the URL — the
+            same reasoning the old Finance Sync gate carried, in its own
+            comment, for gating the panel as well as its trigger.
 
-          {/* Shared date filter bar */}
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <div className="flex items-center gap-2">
-              <BarChart3 className="h-4 w-4 text-primary" />
-              <h2 className="text-lg font-semibold">Performance</h2>
-            </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <Select value={analyticsPeriod} onValueChange={handlePeriodChange}>
-                <SelectTrigger className="w-[140px] h-9 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="7d">Last 7 days</SelectItem>
-                  <SelectItem value="30d">Last 30 days</SelectItem>
-                  <SelectItem value="3m">Last 3 months</SelectItem>
-                  <SelectItem value="6m">Last 6 months</SelectItem>
-                  <SelectItem value="12m">Last 12 months</SelectItem>
-                  <SelectItem value="ytd">Year to date</SelectItem>
-                  <SelectItem value="all">All time</SelectItem>
-                  <SelectItem value="custom">Custom range</SelectItem>
-                </SelectContent>
-              </Select>
-              {analyticsPeriod === 'custom' && (
-                <>
-                  <DatePicker
-                    value={analyticsFromDate}
-                    onChange={setAnalyticsFromDate}
-                    placeholder="From"
-                    className="w-[150px] h-9 text-xs"
-                  />
-                  <span className="text-xs text-muted-foreground">to</span>
-                  <DatePicker
-                    value={analyticsToDate}
-                    onChange={setAnalyticsToDate}
-                    placeholder="To"
-                    className="w-[150px] h-9 text-xs"
-                  />
-                </>
-              )}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            {/* Bookings Chart */}
-            <Card className="overflow-hidden">
-              <CardHeader className="pb-2">
-                <div className="flex items-center gap-2">
-                  <div className="h-2.5 w-2.5 rounded-full bg-cyan-400" />
-                  <CardTitle className="text-base">Bookings</CardTitle>
-                </div>
-                <CardDescription>Monthly booking volume</CardDescription>
-              </CardHeader>
-              <CardContent className="pt-0">
-                {bookingsChartLoading ? (
-                  <Skeleton className="h-[280px] w-full" />
-                ) : bookingsData.every((d) => d.bookings === 0) ? (
-                  <div className="h-[280px] flex items-center justify-center text-muted-foreground text-sm">
-                    No bookings in this period
-                  </div>
-                ) : (
-                  <ChartContainer
-                    config={{
-                      bookings: { label: 'Bookings', color: 'hsl(185, 80%, 55%)' },
-                    } satisfies ChartConfig}
-                    className="aspect-auto h-[280px] w-full"
-                  >
-                    <AreaChart data={bookingsData} margin={{ top: 10, right: 10, bottom: 0, left: -15 }}>
-                      <defs>
-                        <linearGradient id="bookingsGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="hsl(185, 80%, 55%)" stopOpacity={0.35} />
-                          <stop offset="60%" stopColor="hsl(185, 80%, 55%)" stopOpacity={0.08} />
-                          <stop offset="100%" stopColor="hsl(185, 80%, 55%)" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="hsl(var(--border))" strokeOpacity={0.4} />
-                      <XAxis
-                        dataKey="month"
-                        tickLine={false}
-                        axisLine={false}
-                        tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
-                      />
-                      <YAxis
-                        tickLine={false}
-                        axisLine={false}
-                        tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
-                        allowDecimals={false}
-                      />
-                      <ChartTooltip content={<ChartTooltipContent />} />
-                      <Area
-                        type="monotone"
-                        dataKey="bookings"
-                        stroke="hsl(185, 80%, 55%)"
-                        strokeWidth={2.5}
-                        fill="url(#bookingsGradient)"
-                        dot={{ fill: 'hsl(185, 80%, 55%)', strokeWidth: 0, r: 3 }}
-                        activeDot={{ fill: 'hsl(185, 80%, 55%)', stroke: 'hsl(185, 80%, 55%)', strokeWidth: 2, strokeOpacity: 0.3, r: 6 }}
-                        style={{ filter: 'drop-shadow(0 0 6px hsl(185 80% 55% / 0.5))' }}
-                      />
-                    </AreaChart>
-                  </ChartContainer>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Revenue Chart */}
-            <Card className="overflow-hidden">
-              <CardHeader className="pb-2">
-                <div className="flex items-center gap-2">
-                  <div className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
-                  <CardTitle className="text-base">Revenue</CardTitle>
-                </div>
-                <CardDescription>Monthly revenue breakdown</CardDescription>
-              </CardHeader>
-              <CardContent className="pt-0">
-                {revenueChartLoading ? (
-                  <Skeleton className="h-[280px] w-full" />
-                ) : revenueData.every((d) => d.revenue === 0) ? (
-                  <div className="h-[280px] flex items-center justify-center text-muted-foreground text-sm">
-                    No revenue in this period
-                  </div>
-                ) : (
-                  <ChartContainer
-                    config={{
-                      revenue: { label: 'Revenue', color: 'hsl(155, 70%, 50%)' },
-                    } satisfies ChartConfig}
-                    className="aspect-auto h-[280px] w-full"
-                  >
-                    <AreaChart data={revenueData} margin={{ top: 10, right: 10, bottom: 0, left: -15 }}>
-                      <defs>
-                        <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="hsl(155, 70%, 50%)" stopOpacity={0.35} />
-                          <stop offset="60%" stopColor="hsl(155, 70%, 50%)" stopOpacity={0.08} />
-                          <stop offset="100%" stopColor="hsl(155, 70%, 50%)" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="hsl(var(--border))" strokeOpacity={0.4} />
-                      <XAxis
-                        dataKey="month"
-                        tickLine={false}
-                        axisLine={false}
-                        tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
-                      />
-                      <YAxis
-                        tickLine={false}
-                        axisLine={false}
-                        tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
-                        tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`}
-                      />
-                      <ChartTooltip
-                        content={
-                          <ChartTooltipContent
-                            formatter={(value: number) => [`\u00A3${value.toLocaleString()}`, 'Revenue']}
-                          />
-                        }
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="revenue"
-                        stroke="hsl(155, 70%, 50%)"
-                        strokeWidth={2.5}
-                        fill="url(#revenueGradient)"
-                        dot={{ fill: 'hsl(155, 70%, 50%)', strokeWidth: 0, r: 3 }}
-                        activeDot={{ fill: 'hsl(155, 70%, 50%)', stroke: 'hsl(155, 70%, 50%)', strokeWidth: 2, strokeOpacity: 0.3, r: 6 }}
-                        style={{ filter: 'drop-shadow(0 0 6px hsl(155 70% 50% / 0.5))' }}
-                      />
-                    </AreaChart>
-                  </ChartContainer>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        {/* Finance Sync Tab — super-admin debug view into the financial_events
-            ledger. Gated alongside its trigger, not just the trigger: Tabs
-            keeps `?tab=` and programmatic `value` changes working even when no
-            trigger is rendered, so gating the trigger alone would still serve
-            the panel to anyone who typed or bookmarked the tab. */}
-        {!isLeanTenant(tenant.slug) && (
-          <TabsContent value="finance" className="space-y-6">
-            <FinanceEventsTab tenantId={tenant.id} />
-          </TabsContent>
-        )}
-
-        {/* Todos Tab — per-tenant Kanban board (visible only on this tenant's page) */}
-        <TabsContent value="todos" className="space-y-6">
-          <AdminTodosTab tenantId={tenant.id} tenantName={tenant.company_name} />
-        </TabsContent>
-
+            This is the Super Admin page only. The rental operator's own
+            portal is a separate application (`apps/portal`) and keeps
+            every one of these features. */}
       </Tabs>
 
       {/* Subscription Detail Dialog */}
@@ -3625,42 +3189,6 @@ export default function TenantDetailsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation */}
-      <Dialog open={showDeleteConfirm} onOpenChange={(open) => { if (!open) { setShowDeleteConfirm(false); setDeleteConfirmName(''); } }}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Delete Tenant</DialogTitle>
-          </DialogHeader>
-          <div className="rounded-lg px-4 py-3 text-sm bg-destructive/10 text-destructive ring-1 ring-destructive/25 space-y-2">
-            <p>
-              This will permanently delete <strong>{tenant.company_name}</strong> and ALL associated data including vehicles, customers, rentals, payments, and users.
-            </p>
-            <p className="font-semibold">This action cannot be undone!</p>
-          </div>
-          <div className="space-y-2">
-            <Label>
-              Type <strong className="text-foreground">{tenant.company_name}</strong> to confirm:
-            </Label>
-            <Input
-              value={deleteConfirmName}
-              onChange={(e) => setDeleteConfirmName(e.target.value)}
-              placeholder="Enter company name"
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmName(''); }}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDelete}
-              disabled={deleting || deleteConfirmName !== tenant.company_name}
-            >
-              {deleting ? 'Deleting...' : 'Delete Permanently'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

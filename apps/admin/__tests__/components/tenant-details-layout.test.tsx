@@ -49,19 +49,55 @@ function main(src: string): string {
   return body.slice(0, body.indexOf('<aside'));
 }
 
-describe('the header stops holding empty space open', () => {
-  it('puts the title and the actions on one row', () => {
+describe('the header carries the title and its state, and nothing else', () => {
+  /**
+   * Comments count as matches, so read the header with them stripped.
+   *
+   * This bit me: the controls were removed and the explanatory comment left
+   * behind mentions "Production", "Test" and "Delete" by name — so an
+   * assertion looking for those words in the header kept passing after the
+   * buttons were gone. A test that a comment can satisfy is not a test.
+   */
+  function headerMarkup(src: string): string {
+    const header = src.slice(src.indexOf('{/* Page header'), src.indexOf('{/* Tabs */}'));
+    return header.replace(/\{\/\*[\s\S]*?\*\/\}/g, '');
+  }
+
+  it('is one row, not a stack with an empty half', () => {
     const s = page();
-    // The single-child justify-between is gone.
     expect(s).not.toContain('<div className="space-y-4">\n        <div className="flex items-start justify-between flex-wrap gap-4">');
-    const header = s.slice(s.indexOf('{/* Page header'), s.indexOf('{/* Tabs */}'));
-    expect(header).toContain('flex flex-wrap items-start justify-between gap-4');
-    // Title and every action button live inside that one row.
-    for (const control of ['{tenant.company_name}', 'Production', 'Test', 'Delete']) {
-      expect(header).toContain(control);
+    expect(headerMarkup(s)).toContain('flex flex-wrap items-start justify-between gap-4');
+  });
+
+  it('still names the company and reports its type and status', () => {
+    const markup = headerMarkup(page());
+    expect(markup).toContain('{tenant.company_name}');
+    // The badges REPORT these; only the controls that changed them are gone.
+    expect(markup).toContain('{tenant.tenant_type');
+    expect(markup).toContain('{tenant.status}');
+  });
+
+  it('no longer offers the controls that were removed from Super Admin', () => {
+    // Sep 26 2026: the Production/Test switch, Suspend and Delete were taken
+    // off this page. The operator's own portal is a separate app and keeps
+    // everything it had.
+    const markup = headerMarkup(page());
+    expect(markup).not.toContain('handleUpdateType');
+    expect(markup).not.toContain('handleUpdateStatus');
+    expect(markup).not.toContain('setShowDeleteConfirm');
+  });
+
+  it('leaves nothing behind that could still reach them', () => {
+    // A dialog with no way to open it is dead code that reads as a feature.
+    //
+    // Whole-word matching, because `handleDeletePlan` — which deletes a
+    // SUBSCRIPTION PLAN in Management and is staying — contains
+    // `handleDelete` as a substring. A plain `toContain` failed on it and
+    // would have had me deleting the wrong function.
+    const s = page();
+    for (const gone of ['handleDelete', 'showDeleteConfirm', 'handleUpdateType', 'handleUpdateStatus']) {
+      expect(s, `${gone} still present`).not.toMatch(new RegExp(`\\b${gone}\\b`));
     }
-    // And the buttons are no longer on a row of their own.
-    expect(header).not.toContain('{/* Action buttons */}');
   });
 });
 
@@ -106,5 +142,58 @@ describe('what you can change sits apart from what you can only read', () => {
     // a single column written the long way round.
     const body = detailsBody(page());
     expect(body).not.toContain('lg:col-span-2');
+  });
+});
+
+describe('the rail carries two sections, not six', () => {
+  /*
+   * Payments, Analytics, Finance Sync and Todos were removed from Super Admin
+   * on Sep 26 2026. Removing the rail rows alone would not have been enough:
+   * `Tabs` honours a `?tab=` query and a programmatic `value` even with no
+   * trigger rendered, so the panels had to go too or they stayed reachable to
+   * anyone who had bookmarked the URL. The old Finance Sync gate carried that
+   * exact warning in its own comment, which is where the reasoning came from.
+   */
+  const GONE = ['payments', 'analytics', 'finance', 'todos'];
+
+  it('registers only Details and Management', () => {
+    const s = page();
+    const reg = s.slice(s.indexOf('useRegisterSidebarSections('), s.indexOf('if (loading)'));
+    expect(reg).toContain("id: 'details'");
+    expect(reg).toContain("id: 'management'");
+    for (const id of GONE) expect(reg).not.toContain(`id: '${id}'`);
+  });
+
+  it('renders no panel for the removed sections', () => {
+    const s = page();
+    for (const id of GONE) {
+      expect(s, `<TabsContent value="${id}"> still rendered`).not.toContain(`<TabsContent value="${id}"`);
+    }
+  });
+
+  it('imports none of the components they used', () => {
+    // Left behind, these would be dead imports that still ship in the bundle.
+    const s = page();
+    for (const c of ['TenantPaymentsTab', 'FinanceEventsTab', 'AdminTodosTab', 'KPICard']) {
+      expect(s, `${c} still imported`).not.toContain(c);
+    }
+  });
+
+  it('drops the analytics chart machinery that fed the removed tab', () => {
+    const s = page();
+    for (const sym of ['loadChartData', 'handlePeriodChange', 'analyticsFromDate', 'MonthlyData']) {
+      expect(s, `${sym} still present`).not.toContain(sym);
+    }
+  });
+
+  it('leaves the tenant portal alone, which is a different app entirely', () => {
+    // The ask was explicit: remove from Super Admin, not from the operator's
+    // own site. They are separate Next apps, so this is true by construction —
+    // asserted anyway, because "separate app" is the whole reason this removal
+    // was safe to make.
+    const { existsSync } = require('node:fs') as typeof import('node:fs');
+    const { resolve } = require('node:path') as typeof import('node:path');
+    expect(existsSync(resolve(ROOT, '../portal/src/app'))).toBe(true);
+    expect(existsSync(resolve(ROOT, 'app/admin'))).toBe(true);
   });
 });
