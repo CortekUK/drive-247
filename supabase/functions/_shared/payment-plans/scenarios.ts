@@ -29,12 +29,16 @@ import type {
   PlanOperations,
   PlanRow,
   PlanStore,
+  RenewalCoverage,
+  RenewalOperations,
   ScheduleRule,
 } from "./types.ts";
 import { MemoryPlanStore } from "./memory-store.ts";
-import { RecordingNotifier, SimulatedLinkMinter, SimulatedProvider, type ChargeRequest } from "./providers.ts";
-import { onLinkPaid, recordManualPayment, runTick, type EngineDeps, type TickResult } from "./engine.ts";
+import { RecordingNotifier, SimulatedInsurer, SimulatedLinkMinter, SimulatedProvider, type ChargeRequest } from "./providers.ts";
+import { onLinkPaid, planFormToRowAndSchedule, recordManualPayment, runTick, type EngineDeps, type PlanForm, type TickResult } from "./engine.ts";
 import { buildSchedule } from "./schedule.ts";
+import { extendPlan, type RenewalStore } from "./renewals.ts";
+import { shadowCompare } from "./renewal-shadow.ts";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // The pinned API
@@ -72,7 +76,37 @@ export interface ScenarioPayment {
   providerRef: string | null;
 }
 
-export type ScenarioStore = PlanStore & PlanOperations & PlanLookups & LedgerFixture;
+export type ScenarioStore = PlanStore & PlanOperations & PlanLookups & RenewalOperations & LedgerFixture;
+
+/** A rental a renewal scenario plans against (S20+): its end date, rate and tenant pricing. */
+export interface RenewalRentalSeed {
+  /** rentals.end_date — the paid-through date. */
+  endDate: string;
+  /** rentals.monthly_amount (dollars): the pre-discount per-period rate. */
+  monthlyAmount: number;
+  /** rentals.discount_applied (dollars). */
+  discountApplied: number;
+  /** tenants.tax_percentage (tax on when > 0). */
+  taxPercentage: number;
+  /** A fixed service fee in dollars (tenants.service_fee_type 'fixed_amount'; on when > 0). */
+  serviceFeeFixed: number;
+}
+
+/** A rental_extensions row and its Extension* charges, as the scenarios read them (both stores). */
+export interface ScenarioExtension {
+  sequenceNumber: number;
+  status: string;
+  previousEndDate: string;
+  newEndDate: string;
+  days: number;
+  rentalCents: number;
+  taxCents: number;
+  serviceFeeCents: number;
+  insuranceCents: number;
+  bonzahPolicyId: string | null;
+  /** [category, amount, remaining] in the order the live FIFO pays them. */
+  charges: [string, number, number][];
+}
 
 export interface ScenarioContext {
   store: ScenarioStore;
@@ -94,6 +128,15 @@ export interface ScenarioContext {
   payments(rentalId: string): Promise<ScenarioPayment[]>;
   /** payment_plan_revisions rows for a plan. */
   revisionCount(planId: string): Promise<number>;
+  // ── Additive (Wave 3, renewals).
+  /** The simulated Bonzah the renewal stage buys policies from. */
+  insurer: SimulatedInsurer;
+  /** A rental with an end date, a per-period rate and tenant tax/fee settings, owing nothing. */
+  seedRenewalRental(seed: RenewalRentalSeed): Promise<ScenarioRental>;
+  /** rentals.end_date now. */
+  rentalEndDate(rentalId: string): Promise<string | null>;
+  /** The rental's extensions, by sequence number. */
+  extensions(rentalId: string): Promise<ScenarioExtension[]>;
 }
 
 export interface Scenario {
@@ -119,6 +162,10 @@ export interface ScenarioEvidence {
   refunds: { providerRef: string; amountCents: number }[];
   notifications: unknown[];
   links: unknown[];
+  /** Additive (Wave 3): the rental's extensions and end date, and every insurer call. */
+  extensions: ScenarioExtension[];
+  rentalEndDate: string | null;
+  insurerCalls: unknown[];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -126,7 +173,7 @@ export interface ScenarioEvidence {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function engineDeps(ctx: ScenarioContext): EngineDeps {
-  return { store: ctx.store, provider: ctx.provider, notifier: ctx.notifier, links: ctx.links };
+  return { store: ctx.store, provider: ctx.provider, notifier: ctx.notifier, links: ctx.links, insurer: ctx.insurer };
 }
 
 /** MemoryPlanStore + SimulatedProvider('acct_sim') + recorders. Writes nothing anywhere. */
@@ -135,6 +182,7 @@ export function createMemoryContext(): ScenarioContext {
   const provider = new SimulatedProvider({ account: "acct_sim", mode: "test", fallback: "succeed" });
   const notifier = new RecordingNotifier();
   const links = new SimulatedLinkMinter();
+  const insurer = new SimulatedInsurer();
   let n = 0;
   const ctx: ScenarioContext = {
     kind: "memory",
@@ -142,6 +190,7 @@ export function createMemoryContext(): ScenarioContext {
     provider,
     notifier,
     links,
+    insurer,
     tick: (asOf) => runTick(engineDeps(ctx), { asOf }),
     at: (asOf) => {
       store.setNow(asOf);
@@ -165,6 +214,45 @@ export function createMemoryContext(): ScenarioContext {
         })),
       ),
     revisionCount: (planId) => Promise.resolve(store.snapshot().revisions.filter((r) => r.planId === planId).length),
+    seedRenewalRental: (seed) => {
+      n += 1;
+      const r = {
+        id: `rental-${n}`,
+        tenantId: "tenant-1",
+        customerId: `customer-${n}`,
+        owedCents: 0,
+        endDate: seed.endDate,
+        monthlyAmount: seed.monthlyAmount,
+        discountApplied: seed.discountApplied,
+        tenantPricing: {
+          tax_enabled: seed.taxPercentage > 0,
+          tax_percentage: seed.taxPercentage,
+          service_fee_enabled: seed.serviceFeeFixed > 0,
+          service_fee_type: "fixed_amount",
+          service_fee_value: seed.serviceFeeFixed,
+          service_fee_amount: 0,
+        },
+      };
+      store.addRental(r);
+      return Promise.resolve({ rentalId: r.id, tenantId: r.tenantId, customerId: r.customerId });
+    },
+    rentalEndDate: (rentalId) => Promise.resolve(store.rentalEndDate(rentalId)),
+    extensions: (rentalId) =>
+      Promise.resolve(
+        store.listExtensions(rentalId).map((e) => ({
+          sequenceNumber: e.sequenceNumber,
+          status: e.status,
+          previousEndDate: e.previousEndDate,
+          newEndDate: e.newEndDate,
+          days: e.days,
+          rentalCents: e.rentalCents,
+          taxCents: e.taxCents,
+          serviceFeeCents: e.serviceFeeCents,
+          insuranceCents: e.insuranceCents,
+          bonzahPolicyId: e.bonzahPolicyId,
+          charges: e.charges.map((c) => [c.category, c.amountCents, c.remainingCents] as [string, number, number]),
+        })),
+      ),
   };
   return ctx;
 }
@@ -265,6 +353,9 @@ async function collectEvidence(ctx: ScenarioContext, r: Rec, ticks: TickResult[]
     refunds: [...ctx.provider.refunds],
     notifications: jsonSafe(ctx.notifier.sent) as unknown[],
     links: jsonSafe(ctx.links.minted) as unknown[],
+    extensions: [],
+    rentalEndDate: null,
+    insurerCalls: jsonSafe(ctx.insurer.calls) as unknown[],
   };
   try {
     if (r.planId) {
@@ -274,7 +365,11 @@ async function collectEvidence(ctx: ScenarioContext, r: Rec, ticks: TickResult[]
       ev.keys = ev.attempts.map((a) => a.idempotencyKey);
       ev.events = await ctx.store.listEvents(r.planId);
     }
-    if (r.rentalId) ev.payments = await ctx.payments(r.rentalId);
+    if (r.rentalId) {
+      ev.payments = await ctx.payments(r.rentalId);
+      ev.extensions = await ctx.extensions(r.rentalId);
+      ev.rentalEndDate = await ctx.rentalEndDate(r.rentalId);
+    }
   } catch (e) {
     ev.error = `${ev.error ?? ""} evidence: ${e instanceof Error ? e.message : String(e)}`.trim();
   }
@@ -720,4 +815,309 @@ const S19b = s19(
   "fails",
 );
 
-export const SCENARIOS: Scenario[] = [S1, S2, S3, S4, S5, S6, S7, S8, S9, S10, S11, S12, S13, S14, S15, S16, S17, S18, S19a, S19b];
+// ─────────────────────────────────────────────────────────────────────────────
+// S20–S26 — RENEWALS: open-ended plans that extend the rental (Wave 3)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// The renewal fixture, and EVERY expected value below, derived by hand from
+// auto-extend-rentals' pricing formula (renewal-pricing.ts:
+// computeBreakdown(discountedRate(rental), tenant)) — not by running the code:
+//
+//   rental  end_date 2026-10-02 (a Friday); monthly_amount $350.00;
+//           discount_applied $16.16 → discountedRate = max(0, 350.00 − 16.16) = $333.84
+//   tenant  America/New_York; tax 7% on; service fee $5.00, fixed, on
+//   computeBreakdown(333.84):
+//     rental     = round2(333.84)           = 333.84 → 33384 cents
+//     tax        = round2(333.84 × 7 ÷ 100) = round2(23.3688) = 23.37 → 2337 cents
+//     serviceFee = round2(5.00)             = 5.00   → 500 cents
+//     total      = 33384 + 2337 + 500       = 36221 cents ($362.21)
+//   period 1 = addPeriod(2026-10-02, Weekly, 1) = [2026-10-02, 2026-10-09): 7 days,
+//     due 2026-10-02 10:00 New York (EDT = UTC−4) = 2026-10-02T14:00:00.000Z;
+//     posted RENEWAL_POST_LEAD_DAYS = 2 days ahead: first tick dated ≥ 2026-09-30 in New York
+//   period 2 = [2026-10-09, 2026-10-16), due 2026-10-09T14:00:00.000Z; posted from 2026-10-07
+//   CDW (S23a), bought at the 2026-09-30T14:00Z tick = 07:00 PDT on 09-30, so
+//     Bonzah's earliest start is 10-01 (tomorrow, Pacific); the period starts
+//     10-02 ≥ 10-01 → covered 10-02 → 10-09 = 7 nights × $26.95 = $188.65 = 18865
+//     cents, and the period costs 36221 + 18865 = 55086 cents
+//   not insurable (S23b): first tick 2026-10-08T14:00Z = 07:00 PDT on 10-08 →
+//     earliest start 10-09 = the period's end → no night can be insured → 0 premium
+//   credit (S25): 50000 cents of credit; period 1 takes 36221 (leaves 13779);
+//     period 2: 13779 of credit first → the card pays 36221 − 13779 = 22442
+
+const RENEWAL_SEED: RenewalRentalSeed = { endDate: "2026-10-02", monthlyAmount: 350, discountApplied: 16.16, taxPercentage: 7, serviceFeeFixed: 5 };
+const R_PRICE = 36221;
+const R_DUE = ["2026-10-02T14:00:00.000Z", "2026-10-09T14:00:00.000Z"] as const;
+const R_CHARGES_OPEN: [string, number, number][] = [
+  ["Extension Rental", 33384, 33384],
+  ["Extension Tax", 2337, 2337],
+  ["Extension Service Fee", 500, 500],
+];
+const R_CHARGES_PAID: [string, number, number][] = [
+  ["Extension Rental", 33384, 0],
+  ["Extension Tax", 2337, 0],
+  ["Extension Service Fee", 500, 0],
+];
+
+const renewalDeps = (ctx: ScenarioContext) => ({ store: ctx.store as RenewalStore, notifier: ctx.notifier, insurer: ctx.insurer });
+/** [seq, status, from, to, days, rental, tax, fee, insurance] */
+const extRow = (e: ScenarioExtension) => [e.sequenceNumber, e.status, e.previousEndDate, e.newEndDate, e.days, e.rentalCents, e.taxCents, e.serviceFeeCents, e.insuranceCents];
+const extAt = async (ctx: ScenarioContext, rentalId: string, seq: number) => (await ctx.extensions(rentalId)).find((e) => e.sequenceNumber === seq) ?? null;
+const occBySeq = async (ctx: ScenarioContext, planId: string, seq: number) => (await ctx.store.listOccurrences(planId)).find((o) => o.seq === seq) ?? null;
+
+async function setupRenewal(
+  ctx: ScenarioContext,
+  r: Rec,
+  opts: { method?: CollectionMethod; insurance?: RenewalCoverage | null; sendAgreementEachPeriod?: boolean } = {},
+): Promise<{ planId: string; rental: ScenarioRental; occ1: OccurrenceRow }> {
+  await ctx.at(SETUP_AT);
+  const rental = await ctx.seedRenewalRental(RENEWAL_SEED);
+  const pricing = await ctx.store.renewalPricing(rental.rentalId);
+  // The one form, answered "keeps renewing until stopped": the server ignores
+  // the rhythm/amount fields and derives both from the rental (engine.ts).
+  const form: PlanForm = {
+    freq: "weekly",
+    interval: 1,
+    byWeekday: [5],
+    anchor: "2026-10-02",
+    firstOccurrence: "on_anchor",
+    end: { kind: "open", through: "2026-10-02" },
+    amountMode: "fixed",
+    collectionMethod: opts.method ?? "auto_charge",
+    fallbackToLink: true,
+    maxAttempts: 3,
+    retryAfterDays: 2,
+    reminderOffsets: [-2, 0, 2],
+    renewal: { extendsRental: true, periodUnit: "week", periodCount: 1, insurance: opts.insurance ?? null, sendAgreementEachPeriod: opts.sendAgreementEachPeriod ?? false },
+  };
+  const draft = planFormToRowAndSchedule(form, {
+    tenantId: rental.tenantId,
+    rentalId: rental.rentalId,
+    customerId: rental.customerId,
+    rentalEnd: pricing.rentalEnd,
+    timezone: TZ,
+    currency: "usd",
+    paymentProvider: "stripe",
+    owedCents: await ctx.store.rentalOwedCents(rental.rentalId),
+    stripePaymentMethodId: "pm_sim_card",
+    renewalPricing: pricing,
+  });
+  const planId = await ctx.store.createPlan({ plan: draft.plan, occurrences: draft.occurrences });
+  r.planId = planId;
+  r.rentalId = rental.rentalId;
+  const occs = await ctx.store.listOccurrences(planId);
+  r.check(
+    "renewing plan: ONE period to start with — 10-02 → 10-09, due 10-02T14:00Z, 36221, a renewal, not yet posted",
+    [[1, "2026-10-02", R_DUE[0], "2026-10-02", "2026-10-09", R_PRICE, true, null]],
+    occs.map((o) => [o.seq, o.dueDate, o.dueAt, o.periodStart, o.periodEnd, o.amountCents, o.renews ?? null, o.extensionId ?? null]),
+  );
+  return { planId, rental, occ1: occs[0] };
+}
+
+const S20 = define("S20", "Renewal — paid, then the end date moves", "A renewing plan posts next week's extension two days ahead, charges it on the week's first day, and only once the charge succeeds does finalize_rental_extension move the end date (A3). The next week follows.", async (ctx, r) => {
+  const { planId, rental, occ1 } = await setupRenewal(ctx, r);
+  await r.tick("2026-09-29T14:00:00.000Z");
+  r.check("09-29 (three days ahead): nothing posted yet", [], await ctx.extensions(rental.rentalId));
+  await r.tick("2026-09-30T14:00:00.000Z");
+  r.check(
+    "09-30 (two days ahead): extension #1 posted — approved, 10-02 → 10-09, 7 days, 33384 + 2337 + 500, no insurance",
+    [[1, "approved", "2026-10-02", "2026-10-09", 7, 33384, 2337, 500, 0]],
+    (await ctx.extensions(rental.rentalId)).map(extRow),
+  );
+  r.check("its Extension* charges, all unpaid", R_CHARGES_OPEN, (await extAt(ctx, rental.rentalId, 1))?.charges ?? null);
+  r.check("posted is not paid: the end date is still 2026-10-02", "2026-10-02", await ctx.rentalEndDate(rental.rentalId));
+  await r.tick("2026-10-02T13:59:00.000Z");
+  r.check("not a minute early", 0, cardCalls(ctx, occ1.id).length);
+  await r.tick(R_DUE[0]);
+  r.check("10-02T14:00Z: one charge of 36221 with key pp:acct_sim:{occ1}:1", [[`pp:acct_sim:${occ1.id}:1`, R_PRICE]], cardCalls(ctx, occ1.id).map((c) => [c.idempotencyKey, c.amountCents]));
+  const o1 = await occOf(ctx, occ1.id);
+  r.check("occ1 paid, 36221", ["paid", R_PRICE], [o1.status, o1.amountPaidCents]);
+  r.check("paid → extension #1 paid and the end date is 2026-10-09", ["paid", "2026-10-09"], [(await extAt(ctx, rental.rentalId, 1))?.status ?? null, await ctx.rentalEndDate(rental.rentalId)]);
+  r.check("one payment of 36221 on occ1", [R_PRICE], (await paymentsOf(ctx, rental.rentalId, occ1.id)).map((p) => p.amountCents));
+  await r.tick("2026-10-02T14:15:00.000Z");
+  const o2 = await occBySeq(ctx, planId, 2);
+  r.check(
+    "the next tick appends period 2 — 10-09 → 10-16, due 10-09T14:00Z, 36221, scheduled, not posted",
+    ["2026-10-09", R_DUE[1], "2026-10-09", "2026-10-16", R_PRICE, "scheduled", null],
+    o2 ? [o2.dueDate, o2.dueAt, o2.periodStart, o2.periodEnd, o2.amountCents, o2.status, o2.extensionId ?? null] : null,
+  );
+  await r.tick("2026-10-07T14:00:00.000Z");
+  await r.tick(R_DUE[1]);
+  r.check("10-09: extension #2 paid, end date 2026-10-16", ["paid", "2026-10-16"], [(await extAt(ctx, rental.rentalId, 2))?.status ?? null, await ctx.rentalEndDate(rental.rentalId)]);
+  r.check("the rental owes nothing, and the plan is still active (it renews until stopped)", [0, "active"], [await ctx.store.rentalOwedCents(rental.rentalId), await planStatus(ctx, planId)]);
+});
+
+const S21 = define("S21", "Renewal — a declined card leaves the end date", "The week's charge is declined: the extension stays posted and owed, the end date does not move, no further week is added — until the retry succeeds, and only then does the end date move.", async (ctx, r) => {
+  const { planId, rental, occ1 } = await setupRenewal(ctx, r);
+  ctx.provider.queue(occ1.id, [{ decline: "insufficient_funds" }, "succeed"]);
+  await r.tick("2026-09-30T14:00:00.000Z");
+  await r.tick(R_DUE[0]);
+  const o1 = await occOf(ctx, occ1.id);
+  r.check("10-02T14:00Z: declined → occ1 failed, retry at 10-04T14:00Z", ["failed", "2026-10-04T14:00:00.000Z"], [o1.status, o1.nextAttemptAt]);
+  r.check("the end date did NOT move: 2026-10-02", "2026-10-02", await ctx.rentalEndDate(rental.rentalId));
+  r.check("extension #1 still approved, all of it still owed", ["approved", R_CHARGES_OPEN], [(await extAt(ctx, rental.rentalId, 1))?.status ?? null, (await extAt(ctx, rental.rentalId, 1))?.charges ?? null]);
+  await r.tick("2026-10-03T14:00:00.000Z");
+  r.check("10-03: no second week while the first is unpaid; end date still 2026-10-02", [1, "2026-10-02"], [(await ctx.store.listOccurrences(planId)).length, await ctx.rentalEndDate(rental.rentalId)]);
+  await r.tick("2026-10-04T14:00:00.000Z");
+  r.check("10-04T14:00Z: the retry, key …:2, charges 36221", [[`pp:acct_sim:${occ1.id}:1`, R_PRICE], [`pp:acct_sim:${occ1.id}:2`, R_PRICE]], cardCalls(ctx, occ1.id).map((c) => [c.idempotencyKey, c.amountCents]));
+  r.check("paid → extension #1 paid, end date 2026-10-09", ["paid", "2026-10-09"], [(await extAt(ctx, rental.rentalId, 1))?.status ?? null, await ctx.rentalEndDate(rental.rentalId)]);
+});
+
+const S22 = define("S22", "Extend — give the days now", "The operator's Extend with 'give the days now' moves the end date at once, as a manual extension does; the plan then collects the week on its next run, and paying it moves nothing twice.", async (ctx, r) => {
+  const { planId, rental, occ1 } = await setupRenewal(ctx, r);
+  await ctx.at("2026-09-28T15:00:00.000Z");
+  const res = await extendPlan(renewalDeps(ctx), { planId, periods: 1, giveDaysNow: true, sendAgreement: false, asOf: "2026-09-28T15:00:00.000Z" });
+  r.note("extend", res);
+  r.check("Extend posts the plan's own next week (occ1) — one extension", [[occ1.id], 1], [res.occurrenceIds, res.extensionIds.length]);
+  const o1 = await occOf(ctx, occ1.id);
+  r.check("brought forward to today: due 09-28 at 14:00Z (was 10-02)", ["2026-09-28", "2026-09-28T14:00:00.000Z", "2026-10-02"], [o1.dueDate, o1.dueAt, o1.movedFrom ?? null]);
+  r.check("the days are given NOW: end date 2026-10-09 before any payment", ["2026-10-09", "2026-10-09"], [await ctx.rentalEndDate(rental.rentalId), res.endDate]);
+  r.check("extension #1 approved, nothing charged yet", ["approved", 0], [(await extAt(ctx, rental.rentalId, 1))?.status ?? null, ctx.provider.calls.length]);
+  const choice = (await eventsOf(ctx, planId, null, "agreement_choice")).map((e) => {
+    const d = (e.detail ?? {}) as Record<string, unknown>;
+    return [e.occurrenceId, d.sendAgreement, d.automatic, d.giveDaysNow];
+  });
+  r.check("the operator's answers are on the record: no agreement, days given now", [[occ1.id, false, false, true]], choice);
+  await r.tick("2026-09-28T15:00:00.000Z");
+  r.check("the next run collects it: 36221", [R_PRICE], cardCalls(ctx, occ1.id).map((c) => c.amountCents));
+  r.check("paid → extension paid; the end date stays 2026-10-09", ["paid", "2026-10-09"], [(await extAt(ctx, rental.rentalId, 1))?.status ?? null, await ctx.rentalEndDate(rental.rentalId)]);
+});
+
+const S23a = define("S23a", "Insurance — bought before the charge", "A period with cover gets its Bonzah policy BEFORE it is charged (A4): the premium goes on the ledger only once a policy exists, and the week is charged with it.", async (ctx, r) => {
+  const { rental, occ1 } = await setupRenewal(ctx, r, { insurance: { cdw: true } });
+  await r.tick("2026-09-30T14:00:00.000Z");
+  r.check(
+    "09-30: one policy, 10-02 → 10-09 (7 nights × 2695 = 18865), bought while no card had been charged",
+    [[["2026-10-02", "2026-10-09", 18865]], 0],
+    [ctx.insurer.policies.map((p) => [p.coveredFrom, p.coveredTo, p.premiumCents]), ctx.provider.calls.length],
+  );
+  const e1 = await extAt(ctx, rental.rentalId, 1);
+  r.check(
+    "the premium joins the ledger with its policy: Extension Insurance 18865, policy 00000000-0000-4000-8000-000000000001",
+    [18865, "00000000-0000-4000-8000-000000000001", [...R_CHARGES_OPEN, ["Extension Insurance", 18865, 18865]]],
+    [e1?.insuranceCents ?? null, e1?.bonzahPolicyId ?? null, e1?.charges ?? null],
+  );
+  const o1 = await occOf(ctx, occ1.id);
+  r.check("the week now costs 36221 + 18865 = 55086; its insurance is decided", [55086, "insured"], [o1.amountCents, o1.insuranceStatus ?? null]);
+  await r.tick(R_DUE[0]);
+  r.check("10-02: charged 55086", [55086], cardCalls(ctx, occ1.id).map((c) => c.amountCents));
+  r.check("paid → end date 2026-10-09", "2026-10-09", await ctx.rentalEndDate(rental.rentalId));
+});
+
+const S23b = define("S23b", "Insurance — not insurable: no premium, operator told", "The cron was off until 10-08. Bonzah cannot start cover before tomorrow (Pacific) = 10-09 = the period's end, so nothing can be insured: the week is charged WITHOUT a premium and the operator is alerted. Never a premium without a policy.", async (ctx, r) => {
+  const { planId, rental, occ1 } = await setupRenewal(ctx, r, { insurance: { cdw: true } });
+  await r.tick("2026-10-08T14:00:00.000Z");
+  const o1 = await occOf(ctx, occ1.id);
+  const e1 = await extAt(ctx, rental.rentalId, 1);
+  r.check("10-08: posted; insurance not insurable; no policy, no premium", ["not_insurable", 0, null, []], [o1.insuranceStatus ?? null, e1?.insuranceCents ?? null, e1?.bonzahPolicyId ?? null, ctx.insurer.policies]);
+  r.check("no Extension Insurance charge", R_CHARGES_PAID, e1?.charges ?? null);
+  r.check(
+    "an insurance_not_bought event, and an operator alert saying so",
+    [1, 1],
+    [
+      (await eventsOf(ctx, planId, occ1.id, "insurance_not_bought")).length,
+      ctx.notifier.sent.filter((n) => n.kind === "alert" && n.to === "operator" && (n.detail as { problem?: string } | undefined)?.problem === "insurance_not_bought").length,
+    ],
+  );
+  r.check("charged 36221 — the week without a premium", [R_PRICE], cardCalls(ctx, occ1.id).map((c) => c.amountCents));
+  r.check("paid → end date 2026-10-09", "2026-10-09", await ctx.rentalEndDate(rental.rentalId));
+});
+
+const S24 = define("S24", "Extension agreement — the choice is recorded (A5)", "A plan set to send an agreement for each period records that choice when it adds a week and asks the operator to send it; an operator's Extend records their own answer ('don't send' here). The end date waits for payment ('when paid').", async (ctx, r) => {
+  const { planId, rental, occ1 } = await setupRenewal(ctx, r, { sendAgreementEachPeriod: true });
+  await r.tick("2026-09-30T14:00:00.000Z");
+  await r.tick(R_DUE[0]);
+  await r.tick("2026-10-02T14:15:00.000Z");
+  const occ2 = await occBySeq(ctx, planId, 2);
+  await ctx.at("2026-10-03T15:00:00.000Z");
+  const res = await extendPlan(renewalDeps(ctx), { planId, periods: 1, giveDaysNow: false, sendAgreement: false, asOf: "2026-10-03T15:00:00.000Z" });
+  r.check("Extend posts week 2 (the plan's own next week)", [occ2?.id ?? null], res.occurrenceIds);
+  const choices = (await eventsOf(ctx, planId, null, "agreement_choice")).map((e) => {
+    const d = (e.detail ?? {}) as Record<string, unknown>;
+    return [e.occurrenceId, d.sendAgreement, d.automatic];
+  });
+  r.check("week 1 (automatic): the plan's setting — send; week 2 (the operator's Extend): don't send", [[occ1.id, true, true], [occ2?.id ?? null, false, false]], choices);
+  r.check(
+    "the operator was asked, once, to send week 1's agreement",
+    1,
+    ctx.notifier.sent.filter((n) => n.kind === "alert" && (n.detail as { problem?: string } | undefined)?.problem === "extension_agreement_due").length,
+  );
+  r.check("'when paid': week 2 is posted but the end date is still 2026-10-09", ["approved", "2026-10-09"], [(await extAt(ctx, rental.rentalId, 2))?.status ?? null, await ctx.rentalEndDate(rental.rentalId)]);
+});
+
+const S25 = define("S25", "Credit covers a period", "The customer has 50000 of credit. Week 1 (36221) is paid from it in full — no card call — and the end date moves; week 2 takes the last 13779 of credit first and the card pays only the 22442 left (auto-extend's credit-then-the-rest).", async (ctx, r) => {
+  const { planId, rental, occ1 } = await setupRenewal(ctx, r);
+  await ctx.store.recordExternalPayment(rental.rentalId, 50000, "2026-09-25");
+  await r.tick("2026-09-30T14:00:00.000Z");
+  await r.tick(R_DUE[0]);
+  const o1 = await occOf(ctx, occ1.id);
+  r.check("10-02: week 1 covered by credit — no card call", 0, cardCalls(ctx, occ1.id).length);
+  r.check("occ1 paid by the ledger (36221 applied); one covered_by_balance event", ["paid", R_PRICE, 1], [o1.status, o1.amountPaidCents, (await eventsOf(ctx, planId, occ1.id, "covered_by_balance")).length]);
+  r.check(
+    "extension #1 paid, its charges settled; end date 2026-10-09",
+    ["paid", R_CHARGES_PAID, "2026-10-09"],
+    [(await extAt(ctx, rental.rentalId, 1))?.status ?? null, (await extAt(ctx, rental.rentalId, 1))?.charges ?? null, await ctx.rentalEndDate(rental.rentalId)],
+  );
+  await r.tick("2026-10-02T14:15:00.000Z");
+  await r.tick("2026-10-07T14:00:00.000Z");
+  await r.tick(R_DUE[1]);
+  const o2 = await occBySeq(ctx, planId, 2);
+  r.check("10-09: 13779 of credit first, the card pays 36221 − 13779 = 22442", [22442], o2 ? cardCalls(ctx, o2.id).map((c) => c.amountCents) : null);
+  r.check("occ2 paid, 36221 applied", ["paid", R_PRICE], o2 ? [(await occOf(ctx, o2.id)).status, (await occOf(ctx, o2.id)).amountPaidCents] : null);
+  r.check("extension #2 settled in full; end date 2026-10-16; the rental owes nothing", [R_CHARGES_PAID, "2026-10-16", 0], [(await extAt(ctx, rental.rentalId, 2))?.charges ?? null, await ctx.rentalEndDate(rental.rentalId), await ctx.store.rentalOwedCents(rental.rentalId)]);
+});
+
+const S26 = define("S26", "Shadow comparison — a plain weekly rental matches", "For a weekly auto-extend rental with no overrides, no credit and no insurance, the old job and the plan charge the same money for the same weeks; only WHEN differs (00:00 UTC vs 10:00 local), and that is a note, not a mismatch. The real engine then posts exactly the shadow's plan row.", async (ctx, r) => {
+  const shadow = shadowCompare({
+    rental: {
+      rentalId: "shadow-rental",
+      enabled: true,
+      status: "Active",
+      endDate: "2026-10-02",
+      monthlyAmount: 350,
+      discountApplied: 16.16,
+      periodUnit: "Weekly",
+      intervalCount: 1,
+      exceptions: { moves: {}, skips: [] },
+      overrides: {},
+      nextChargeAt: "2026-10-02T00:00:00.000Z",
+      leadHours: 0,
+      chargeCount: 0,
+      maxPeriods: null,
+      pendingExtensionId: null,
+      paused: false,
+      chargeMode: "auto_charge",
+    },
+    tenant: { tax_enabled: true, tax_percentage: 7, service_fee_enabled: true, service_fee_type: "fixed_amount", service_fee_value: 5, service_fee_amount: 0, timezone: TZ },
+    customerCreditCents: 0,
+    rentalCreditCents: 0,
+    openBaseChargesCents: 0,
+    periods: 2,
+  });
+  r.note("shadow", shadow);
+  const money = { rentalCents: 33384, taxCents: 2337, serviceFeeCents: 500, insuranceCents: 0, creditAppliedCents: 0, totalCents: R_PRICE };
+  r.check(
+    "two weeks; each: old job at 00:00Z on the week's first day, plan at 14:00Z (10:00 New York); both 36221 = 33384 + 2337 + 500; matches",
+    [
+      ["2026-10-02 → 2026-10-09", "2026-10-02T00:00:00.000Z", "2026-10-02", R_PRICE, { ...money, extrasCents: 0 }, "2026-10-02T14:00:00.000Z", R_PRICE, { ...money, extrasCents: 0 }, true],
+      ["2026-10-09 → 2026-10-16", "2026-10-09T00:00:00.000Z", "2026-10-09", R_PRICE, { ...money, extrasCents: 0 }, "2026-10-09T14:00:00.000Z", R_PRICE, { ...money, extrasCents: 0 }, true],
+    ],
+    shadow.rows.map((x) => [x.period, x.oldEngine.dueAt, x.oldEngine.chargeDate, x.oldEngine.amountCents, x.oldEngine.breakdown, x.newEngine.dueAt, x.newEngine.amountCents, x.newEngine.breakdown, x.matches]),
+  );
+  r.check(
+    "each row's only note is WHEN (00:00 UTC on 10-02 is 10-01 in New York); no rental-level notes",
+    [[true], [true], []],
+    [...shadow.rows.map((x) => x.notes.map((t) => t.startsWith("When: the old job charges at"))), shadow.notes],
+  );
+  // The real engine, on the same rental, posts exactly the shadow's plan row.
+  const { rental, occ1 } = await setupRenewal(ctx, r);
+  await r.tick("2026-09-30T14:00:00.000Z");
+  const posted = await occOf(ctx, occ1.id);
+  const e1 = await extAt(ctx, rental.rentalId, 1);
+  r.check(
+    "the engine's posted week = the shadow's plan row: 10-02 → 10-09, due 14:00Z, 36221 (33384 + 2337 + 500)",
+    ["2026-10-02 → 2026-10-09", "2026-10-02T14:00:00.000Z", R_PRICE, [33384, 2337, 500]],
+    [`${posted.periodStart} → ${posted.periodEnd}`, posted.dueAt, posted.amountCents, e1 ? [e1.rentalCents, e1.taxCents, e1.serviceFeeCents] : null],
+  );
+});
+
+export const SCENARIOS: Scenario[] = [S1, S2, S3, S4, S5, S6, S7, S8, S9, S10, S11, S12, S13, S14, S15, S16, S17, S18, S19a, S19b, S20, S21, S22, S23a, S23b, S24, S25, S26];

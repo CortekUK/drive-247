@@ -11,4 +11,5 @@ export * from "./attention";
 export * from "./filters";
 export * from "./stats";
 export * from "./series";
+export * from "./fines";
 export * from "./model";

@@ -22,7 +22,18 @@
  *     nothing plan-shaped is read, the occurrence column is not selected, and
  *     the page still loads. Any other error is an error.
  *   - A scope (`rentalId` / `customerId`) narrows every read — the same model
- *     on a rental's or a customer's page (slice 2b).
+ *     on a rental's or a customer's page (slice 2b). Under a scope, invoices
+ *     are read for the scope's OWN rentals only: a rental pulled in because a
+ *     scoped payment settled a charge on it must not bring its invoices along.
+ *   - `payments.is_off_platform` (the balance migration, roadmap A1) is read
+ *     only once it is known to exist, and never by a request that can fail
+ *     while it does not. After the payments read, and only when there are
+ *     payments, ONE row is read with `select=*` (valid on any schema): if it
+ *     carries the column, the ids flagged true are read (a narrow, paged
+ *     `select=id … is_off_platform=eq.true`) and marked on the rows. A 42703
+ *     naming the column there (a database caught mid-migration) means "no
+ *     flags" — the pattern used for the occurrence column. Production, before
+ *     the migration, therefore sends no request that fails.
  */
 
 import { fetchAllByIds, fetchAllPages, FinanceLoadError, type PageFetcher } from "@/lib/finances/paging";
@@ -57,7 +68,9 @@ export const APPLICATION_COLUMNS = "id, payment_id, charge_entry_id, amount_appl
 export const PAYMENT_COLUMNS =
   "id, customer_id, rental_id, vehicle_id, extension_id, amount, remaining_amount, refund_amount, status, capture_status, payment_type, method, payment_date, paid_at, created_at, verification_status, stripe_payment_intent_id, stripe_checkout_session_id, square_payment_id, square_order_id, square_payment_link_id, payment_provider, booking_source";
 export const PLAN_PAYMENT_COLUMN = "payment_plan_occurrence_id";
-export const INVOICE_COLUMNS = "id, rental_id, invoice_number, created_at";
+export const INVOICE_COLUMNS = "id, rental_id, invoice_number, created_at, customer_id, vehicle_id, invoice_date, total_amount, status";
+/** The balance migration's flag on `payments`. Read only when it exists (see the header). */
+export const OFF_PLATFORM_COLUMN = "is_off_platform";
 export const EXTENSION_COLUMNS = "id, rental_id, sequence_number, status, created_at";
 /** The hook's own PAYG read (use-customer-balance.ts), tenant-wide. */
 export const ACCRUAL_COLUMNS = "id, rental_id, daily_rate, tax_amount, service_fee_amount, rentals!inner(customer_id, payg_closed_at)";
@@ -132,6 +145,36 @@ export async function loadFinanceData(
         }),
   );
 
+  /**
+   * Which of the scope's payments were taken outside the platform — or
+   * `available: false` while `payments.is_off_platform` does not exist. Never
+   * sends a request that fails on a schema without the column (see the
+   * header); skipped entirely when there are no payments to flag.
+   */
+  const readOffPlatform = async (anyPayments: boolean): Promise<{ available: boolean; ids: Set<string> }> => {
+    const none = { available: false, ids: new Set<string>() };
+    if (!anyPayments) return none;
+    // The probe only asks whether the column exists. The payments themselves
+    // were read above, so a probe that fails (it never should: `*` names no
+    // column) costs the badges, not the page.
+    const probe = await client.from("payments").select("*").eq("tenant_id", tenantId).limit(1);
+    if (probe?.error) {
+      if (process.env.NODE_ENV === "development") console.warn("[finances] the off-platform probe failed:", probe.error);
+      return none;
+    }
+    const sample = (probe?.data ?? [])[0] as Record<string, unknown> | undefined;
+    if (!sample || !(OFF_PLATFORM_COLUMN in sample)) return none;
+    try {
+      const rows = await all<{ id: string }>("off-platform payments", "payments", "id", (q) =>
+        narrowBy("rental_id", "customer_id")(q.eq(OFF_PLATFORM_COLUMN, true)),
+      );
+      return { available: true, ids: new Set(rows.map((r) => r.id)) };
+    } catch (err) {
+      if (err instanceof FinanceLoadError && err.code === "42703" && err.pgMessage.includes(OFF_PLATFORM_COLUMN)) return none;
+      throw err;
+    }
+  };
+
   // ── round 1: the tenant's (or the scope's) own rows ─────────────────────
   const [rentals, chargesOwn, accruals, planResult, payments] = await Promise.all([
     all<RawRental>("rentals", "rentals", RENTAL_COLUMNS, narrowBy("id", "customer_id")),
@@ -205,23 +248,29 @@ export async function loadFinanceData(
   ];
   const vehicleIds = [...allRentals.map((r) => r.vehicle_id), ...chargesOwn.map((c) => c.vehicle_id), ...payments.map((p) => p.vehicle_id)];
 
-  const [invoices, extensions, customers, vehicles] = await Promise.all([
+  const [invoices, extensions, customers, vehicles, offPlatform] = await Promise.all([
     scoped
-      ? byIds<RawInvoice>("invoices", "invoices", INVOICE_COLUMNS, "rental_id", allRentalIds)
+      ? byIds<RawInvoice>("invoices", "invoices", INVOICE_COLUMNS, "rental_id", rentals.map((r) => r.id))
       : all<RawInvoice>("invoices", "invoices", INVOICE_COLUMNS),
     scoped
       ? byIds<RawExtension>("extensions", "rental_extensions", EXTENSION_COLUMNS, "rental_id", allRentalIds)
       : all<RawExtension>("extensions", "rental_extensions", EXTENSION_COLUMNS),
     byIds<RawCustomer>("customers", "customers", "id, name", "id", customerIds),
     byIds<RawVehicle>("vehicles", "vehicles", "id, reg", "id", vehicleIds),
+    readOffPlatform(payments.length > 0),
   ]);
+
+  // The flag on every row is the loader's verdict alone: the ids read above
+  // when the column exists, and nothing at all while it does not.
+  const flagged = offPlatform.ids;
+  const paymentsOut = payments.map((p) => ({ ...p, is_off_platform: offPlatform.available ? flagged.has(p.id) : undefined }));
 
   return {
     rentals: allRentals,
     charges: chargesOwn,
     linkedCharges: extraCharges,
     applications,
-    payments,
+    payments: paymentsOut,
     invoices,
     extensions,
     accruals,
@@ -231,5 +280,6 @@ export async function loadFinanceData(
     occurrences,
     attempts,
     plansAvailable: plansOn,
+    offPlatformAvailable: offPlatform.available,
   };
 }

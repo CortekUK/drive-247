@@ -11,6 +11,17 @@
  *   by       [card auto-charge · emailed link · I'll record it]
  *   Remind   [2 days before · On the day · 2 days after]
  *
+ * "until" has a fourth answer where the caller offers it (`ctx.renewal`):
+ * **keeps renewing until stopped**, which reveals, in the same style,
+ *
+ *   renew    every [N] [days · weeks · months]
+ *   cover    each renewal with [the rental's coverage · no insurance]   — only when the tenant sells Bonzah
+ *   send     an extension agreement each period [yes · no]              — default no
+ *
+ * and folds the rhythm lines away: a renewal is collected when its period
+ * starts, so "renew every" IS the rhythm, and each period is priced by the
+ * server when it starts, so "Collect" stops being a choice.
+ *
  * Not a menu of plan types. The lead rejected exactly that — "It shouldn't be
  * that I click payment plan and it gives me three options" — so what the
  * business calls "pay as you go" and "installments" are just two ways of
@@ -51,6 +62,14 @@ import {
   ordinal,
   reminderLabel,
 } from "@/lib/payment-plans-ui/format";
+import {
+  BONZAH_START_RULE,
+  MAX_RENEW_EVERY,
+  RENEWAL_UNITS,
+  describeCoverage,
+  describeEvery,
+  hasCoverage,
+} from "@/lib/payment-plans-ui/renewal";
 import { Chip, InlineDate, InlineNumber, SentenceLine, inlineInputCls, swallowEnter } from "./sentence-kit";
 import { cn } from "@/lib/utils";
 
@@ -78,6 +97,7 @@ const LINE_OF: Record<FormField, string> = {
   count: "until",
   until: "until",
   method: "by",
+  renewEvery: "renew",
 };
 
 const UNITS: IntervalUnit[] = ["days", "weeks", "months"];
@@ -88,19 +108,22 @@ export function PaymentPlanForm({ state, onChange, ctx, currency, error, minStar
   const errOn = (line: string) => (error && error.field && LINE_OF[error.field] === line ? error.message : null);
 
   const anchor = anchorOf(state, ctx);
+  const renewing = state.endBy === "renewing";
+  const renewal = ctx.renewal;
   const weekdayMode =
-    state.rhythm === "weekly" ||
+    !renewing &&
+    (state.rhythm === "weekly" ||
     state.rhythm === "every_2_weeks" ||
     state.rhythm === "twice_a_week" ||
-    (state.rhythm === "every_n" && state.everyUnit === "weeks");
-  const monthMode = state.rhythm === "monthly" || (state.rhythm === "every_n" && state.everyUnit === "months");
-  const datesMode = state.rhythm === "pick_dates";
+    (state.rhythm === "every_n" && state.everyUnit === "weeks"));
+  const monthMode = !renewing && (state.rhythm === "monthly" || (state.rhythm === "every_n" && state.everyUnit === "months"));
+  const datesMode = !renewing && state.rhythm === "pick_dates";
 
   // Is the start itself a payment day? If not, ask what happens to the days
   // before the first one — the "rental starts on a Wednesday, payments are
   // Fridays" case the lead drew on the board.
   const startIsRhythmDay = (() => {
-    if (!anchor || datesMode) return true;
+    if (!anchor || datesMode || renewing) return true;
     if (state.rhythm === "every_n" && state.everyUnit === "days") return true;
     if (weekdayMode) return state.weekdays.includes(isoWeekday(anchor));
     if (monthMode) {
@@ -119,9 +142,29 @@ export function PaymentPlanForm({ state, onChange, ctx, currency, error, minStar
 
   const methodHint = (m: CollectionMethod) => METHOD_CHOICES.find((c) => c.id === m)?.hint ?? "";
 
+  // Leaving "keeps renewing": the start the operator had before still stands,
+  // unless it is the rental start and that is in the past for a set-up/edit
+  // (then from the earliest allowed day).
+  const leaveRenewing = (patch: Partial<PlanFormState>) => {
+    if (!renewing) return set(patch);
+    const past = state.startFrom === "rental_start" && !!minStart && ctx.rentalStart < minStart;
+    set({ ...patch, ...(past ? { startFrom: "date" as const, startDate: minStart as string } : {}) });
+  };
+  const rentalCover = renewal?.rentalCoverage ?? null;
   return (
     <div className="space-y-4" data-payment-plan-form="">
       {/* ── Collect ─────────────────────────────────────────────────────── */}
+      {renewing ? (
+        <SentenceLine
+          word="Collect"
+          id="collect"
+          hint="Priced when each period starts — the rental's rate, tax and fees, worked out the same way the rental's own renewals are priced today."
+        >
+          <span className="inline-flex h-8 items-center rounded-full bg-muted/70 px-3 text-[13px] font-medium text-foreground/80" data-renewal-amount="">
+            each period&rsquo;s price
+          </span>
+        </SentenceLine>
+      ) : (
       <SentenceLine
         word="Collect"
         id="collect"
@@ -158,8 +201,10 @@ export function PaymentPlanForm({ state, onChange, ctx, currency, error, minStar
           </span>
         )}
       </SentenceLine>
+      )}
 
       {/* ── every ───────────────────────────────────────────────────────── */}
+      {!renewing && (
       <SentenceLine word="every" id="every" error={errOn("every")}>
         {RHYTHM_CHOICES.map((r) => (
           <Chip key={r.id} active={state.rhythm === r.id} onClick={() => onChange(selectRhythm(state, r.id, ctx))}>
@@ -194,6 +239,7 @@ export function PaymentPlanForm({ state, onChange, ctx, currency, error, minStar
           </span>
         )}
       </SentenceLine>
+      )}
 
       {/* ── on ──────────────────────────────────────────────────────────── */}
       {weekdayMode && (
@@ -289,22 +335,35 @@ export function PaymentPlanForm({ state, onChange, ctx, currency, error, minStar
       )}
 
       {/* ── starting ────────────────────────────────────────────────────── */}
-      <SentenceLine word="starting" id="starting" error={errOn("starting")}>
-        <Chip active={state.startFrom === "rental_start"} onClick={() => set({ startFrom: "rental_start" })} disabled={!!minStart && ctx.rentalStart < minStart} title={minStart && ctx.rentalStart < minStart ? "The rental started in the past. A changed plan starts from today or later." : undefined}>
-          the rental start · {formatDay(ctx.rentalStart)}
-        </Chip>
-        <Chip active={state.startFrom === "date"} onClick={() => set({ startFrom: "date", startDate: state.startDate ?? minStart ?? ctx.rentalStart })}>
-          a date
-        </Chip>
-        {state.startFrom === "date" && (
-          <InlineDate
-            label="Start date"
-            value={state.startDate}
-            min={minStart ?? undefined}
-            max={ctx.rentalEnd ?? undefined}
-            invalid={error?.field === "startDate"}
-            onChange={(d) => set({ startDate: d })}
-          />
+      <SentenceLine
+        word="starting"
+        id="starting"
+        error={errOn("starting")}
+        hint={renewing ? "Renewals always start where the rental ends now. The rental's own dates are priced and collected as they are." : undefined}
+      >
+        {renewing ? (
+          <span className="inline-flex h-8 items-center rounded-full bg-muted/70 px-3 text-[13px] font-medium text-foreground/80" data-renewal-start="">
+            when the rental ends{ctx.rentalEnd ? ` · ${formatDay(ctx.rentalEnd)}` : ""}
+          </span>
+        ) : (
+          <>
+            <Chip active={state.startFrom === "rental_start"} onClick={() => set({ startFrom: "rental_start" })} disabled={!!minStart && ctx.rentalStart < minStart} title={minStart && ctx.rentalStart < minStart ? "The rental started in the past. A changed plan starts from today or later." : undefined}>
+              the rental start · {formatDay(ctx.rentalStart)}
+            </Chip>
+            <Chip active={state.startFrom === "date"} onClick={() => set({ startFrom: "date", startDate: state.startDate ?? minStart ?? ctx.rentalStart })}>
+              a date
+            </Chip>
+            {state.startFrom === "date" && (
+              <InlineDate
+                label="Start date"
+                value={state.startDate}
+                min={minStart ?? undefined}
+                max={ctx.rentalEnd ?? undefined}
+                invalid={error?.field === "startDate"}
+                onChange={(d) => set({ startDate: d })}
+              />
+            )}
+          </>
         )}
       </SentenceLine>
 
@@ -331,16 +390,27 @@ export function PaymentPlanForm({ state, onChange, ctx, currency, error, minStar
             active={state.endBy === "rental_end"}
             disabled={!ctx.rentalEnd}
             title={!ctx.rentalEnd ? "This rental has no return date." : undefined}
-            onClick={() => set({ endBy: "rental_end" })}
+            onClick={() => leaveRenewing({ endBy: "rental_end" })}
           >
             the rental ends{ctx.rentalEnd ? ` · ${formatDay(ctx.rentalEnd)}` : ""}
           </Chip>
-          <Chip active={state.endBy === "count"} onClick={() => set({ endBy: "count" })}>
+          <Chip active={state.endBy === "count"} onClick={() => leaveRenewing({ endBy: "count" })}>
             after a number of payments
           </Chip>
-          <Chip active={state.endBy === "until"} onClick={() => set({ endBy: "until", until: state.until ?? ctx.rentalEnd })}>
+          <Chip active={state.endBy === "until"} onClick={() => leaveRenewing({ endBy: "until", until: state.until ?? ctx.rentalEnd })}>
             a date
           </Chip>
+          {renewal && (
+            <Chip
+              active={renewing}
+              disabled={!ctx.rentalEnd}
+              title={!ctx.rentalEnd ? "Renewing starts from the return date, and this rental has none." : undefined}
+              onClick={() => !renewing && set({ endBy: "renewing" })}
+              data-renewing-choice=""
+            >
+              keeps renewing until stopped
+            </Chip>
+          )}
           {state.endBy === "count" && (
             <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
               after
@@ -365,6 +435,77 @@ export function PaymentPlanForm({ state, onChange, ctx, currency, error, minStar
             />
           )}
         </SentenceLine>
+      )}
+
+      {/* ── keeps renewing: the three lines it reveals ───────────────────── */}
+      {renewing && (
+        <>
+          <SentenceLine
+            word="renew"
+            id="renew"
+            error={errOn("renew")}
+            hint={`The return date moves ${describeEvery(state.renewUnit, Math.max(1, state.renewEvery))} until you stop it. Each period is collected when it starts, and its days are added once it is paid.`}
+          >
+            <span className="text-sm text-muted-foreground">every</span>
+            <InlineNumber
+              label="How long each renewal lasts"
+              value={state.renewEvery}
+              min={1}
+              max={MAX_RENEW_EVERY[state.renewUnit]}
+              invalid={error?.field === "renewEvery"}
+              onChange={(n) => set({ renewEvery: n })}
+            />
+            {RENEWAL_UNITS.map((u) => (
+              <Chip key={u} active={state.renewUnit === u} onClick={() => set({ renewUnit: u })}>
+                {u}s
+              </Chip>
+            ))}
+          </SentenceLine>
+
+          {renewal?.bonzahSellable && (
+            <SentenceLine
+              word="cover"
+              id="cover"
+              hint={
+                <>
+                  {!hasCoverage(rentalCover) && "This rental has no Bonzah cover, so its renewals have none either. "}
+                  {BONZAH_START_RULE}
+                </>
+              }
+            >
+              <span className="text-sm text-muted-foreground">each renewal with</span>
+              <Chip
+                active={state.renewInsurance === "rental"}
+                disabled={!hasCoverage(rentalCover)}
+                title={!hasCoverage(rentalCover) ? "This rental has no Bonzah cover." : undefined}
+                onClick={() => set({ renewInsurance: "rental" })}
+              >
+                the rental&rsquo;s coverage{hasCoverage(rentalCover) ? ` · ${describeCoverage(rentalCover)}` : ""}
+              </Chip>
+              <Chip active={state.renewInsurance === "none"} onClick={() => set({ renewInsurance: "none" })}>
+                no insurance
+              </Chip>
+            </SentenceLine>
+          )}
+
+          <SentenceLine
+            word="send"
+            id="agreement"
+            hint={
+              state.renewAgreement
+                ? "Each new period is sent to the customer to sign, using your extension agreement template."
+                : "No agreement is sent when a period renews."
+            }
+          >
+            <span className="text-sm text-muted-foreground">an extension agreement each period</span>
+            <Chip active={state.renewAgreement} onClick={() => set({ renewAgreement: true })}>
+              yes
+            </Chip>
+            <Chip active={!state.renewAgreement} onClick={() => set({ renewAgreement: false })}>
+              no
+            </Chip>
+          </SentenceLine>
+        </>
       )}
 
       {/* ── by ──────────────────────────────────────────────────────────── */}

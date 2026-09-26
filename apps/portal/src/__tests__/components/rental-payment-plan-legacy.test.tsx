@@ -34,7 +34,11 @@ vi.mock('@/hooks/use-payment-plan', () => ({
     h.installmentCalls.push([rentalId, enabled]);
     return enabled ? h.installment : { data: undefined, isLoading: false };
   },
+  // Wave 3: the rental facts behind Extend and the renewal answer. Unread here.
+  useRentalPlanFacts: () => ({ data: undefined, isLoading: false }),
 }));
+vi.mock('@/hooks/use-rental-extension-totals', () => ({ useRentalExtensionTotals: () => ({ data: [], isLoading: false }) }));
+vi.mock('@/components/payment-plans/extend-plan-dialog', () => ({ RentalExtendPlanDialog: () => null }));
 vi.mock('@/components/payment-plans/payment-plan-dialogs', () => ({
   SetUpPlanDialog: ({ open }: { open: boolean }) => (open ? <div data-testid="setup-dialog" /> : null),
   EditPlanDialog: () => null,

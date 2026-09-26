@@ -8,6 +8,9 @@
  * (`dashboardLinkFor`). The row menu carries every action the Payments tab
  * had — approve, reject, remove an unpaid link, reverse a hand-recorded
  * payment — plus the refund the rental's Payments stage offers.
+ *
+ * A payment taken outside the platform carries an "Off-platform" badge and no
+ * reference: there is nothing at Stripe or Square to match it to.
  */
 
 import Link from "next/link";
@@ -37,8 +40,8 @@ import { stageHref } from "@/components/rentals-v2/rental-detail/stages";
 import { cn } from "@/lib/utils";
 import { formatMoney } from "@/lib/payment-plans-ui/format";
 import type { ReceiptRow } from "@/lib/finances/types";
-import { RECEIPT_STATUS_LABEL, RECEIPT_TONE, formatListDay, receiptMethodWords } from "./finance-words";
-import { canRefund, canRemoveLink, canReverse, canReview, customerHref, vehicleHref } from "./finance-rules";
+import { OFF_PLATFORM_LABEL, RECEIPT_STATUS_LABEL, RECEIPT_TONE, formatListDay, receiptMethodWords } from "./finance-words";
+import { canRefund, canRemoveLink, canReverse, canReview, paymentCustomerHref, vehicleHref } from "./finance-rules";
 import { MobileFact, MobileRows, RowMenuTrigger } from "./finance-list-bits";
 
 export type ReceiptAction = "approve" | "reject" | "refund" | "remove_link" | "reverse";
@@ -129,6 +132,11 @@ export function ReceivedTable({
                   </ListCell>
                   <ListCell>
                     <span className={cn("block truncate", LIST_CLASSES.text)}>{receiptMethodWords(r)}</span>
+                    {r.isOffPlatform && (
+                      <span className="mt-0.5 block truncate" data-off-platform="">
+                        <ListMetaChip>{OFF_PLATFORM_LABEL}</ListMetaChip>
+                      </span>
+                    )}
                     {r.providerMode === "test" && <span className="block text-[11px] text-muted-foreground">Test mode</span>}
                   </ListCell>
                   <ListCell>
@@ -163,7 +171,10 @@ export function ReceivedTable({
       >
         {(r) => (
           <>
-            <MobileFact primary={r.customerName} secondary={[formatListDay(r.date), receiptMethodWords(r)].filter(Boolean).join(" · ")} />
+            <MobileFact
+              primary={r.customerName}
+              secondary={[formatListDay(r.date), receiptMethodWords(r), r.isOffPlatform ? OFF_PLATFORM_LABEL : null].filter(Boolean).join(" · ")}
+            />
             <MobileFact
               align="right"
               primary={$(r.amountCents)}
@@ -197,7 +208,7 @@ function ReceiptMenu({
   const refund = mayAct && canRefund(row);
   const removeLink = mayAct && canRemoveLink(row);
   const reverse = mayAct && canReverse(row);
-  const customer = customerHref(row.customerId);
+  const customer = paymentCustomerHref(row);
   const vehicle = vehicleHref(row.vehicleId);
   return (
     <DropdownMenu>

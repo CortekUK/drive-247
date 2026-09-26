@@ -28,6 +28,13 @@
     "fireJobs": ["refresh-deposit-holds"],
     "note": "refresh-deposit-holds re-anchors expiry to the real Stripe capture_before on each refresh, so a shift self-reverts. Seed a fresh hold per test."
   },
+  "payment_plan": {
+    "table": "payment_plan_occurrences",
+    "driveCols": ["due_at", "due_date", "next_attempt_at"],
+    "idField": "id",
+    "fireJobs": ["run-payment-plans"],
+    "note": "due_at is what pp_collect_due compares with now(); due_date (the local day) drives reminders; next_attempt_at drives a retry. Shift all three by whole days so they stay coherent (due_at = due_date + charge_local_time in the plan's zone). idField is an OCCURRENCE id for sim_shift (staging); supabase/functions/e2e-runner shifts every occurrence of its fixture's plan at once through e2e_shift_fixture('payment_plan'), and ages unresolved attempts' created_at through the 'plan_attempts' domain so recovery's 600 s stale window can be crossed."
+  },
   "installment": {
     "table": "scheduled_installments",
     "driveCols": ["due_date"],

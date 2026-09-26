@@ -311,6 +311,9 @@ export function occurrenceActions(o: OccurrenceView, ctx: ActionContext): Record
   // A link that is out is released by the server before it skips (payment-plan-manage);
   // only a card charge in flight blocks.
   else if (open && !linkOut) skip = off("A card payment is going through right now. Wait for it to finish.");
+  // A renewal period pays for days of the rental; skipping it would give them
+  // for nothing (the store refuses: pp_skip_occurrence).
+  else if (o.renews) skip = off("This payment is for a renewal period — its days can't be skipped. Record a payment, or cancel the plan to stop renewing.");
   else if (!nextOpenAfter(o, ctx.occurrences))
     skip = off("This is the last payment, so there is nothing after it to carry the amount. Record a payment or change the plan instead.");
 
@@ -321,7 +324,8 @@ export function occurrenceActions(o: OccurrenceView, ctx: ActionContext): Record
 export function nextOpenAfter(o: OccurrenceView, occurrences: OccurrenceView[]): OccurrenceView | null {
   return (
     occurrences
-      .filter((x) => x.id !== o.id && x.planId === o.planId && x.seq > o.seq && ADJUSTABLE.includes(x.status))
+      // A skipped amount never rolls into a renewal period (the store's rule).
+      .filter((x) => x.id !== o.id && x.planId === o.planId && x.seq > o.seq && !x.renews && ADJUSTABLE.includes(x.status))
       .sort((a, b) => a.seq - b.seq)[0] ?? null
   );
 }
@@ -329,7 +333,7 @@ export function nextOpenAfter(o: OccurrenceView, occurrences: OccurrenceView[]):
 export type PlanAction = "edit" | "pause" | "resume" | "cancel";
 
 export function planActions(
-  plan: Pick<PlanView, "status">,
+  plan: Pick<PlanView, "status"> & Partial<Pick<PlanView, "renewal">>,
   occurrences: OccurrenceView[],
   attempts?: AttemptView[],
 ): Record<PlanAction, Availability> {
@@ -341,8 +345,14 @@ export function planActions(
     return o.status === "processing" || (open !== null && open.method !== "checkout_link");
   });
   const busy = charging ? `A card payment on #${charging.seq} is going through right now. Try again when it has finished.` : null;
+  // The store refuses to change a plan that keeps renewing (pp_replace_future,
+  // migration 20260926120200): its periods are real extensions. Stop it with
+  // Cancel and set up a new one; add days with Extend.
+  const renewing = plan.renewal
+    ? "A plan that keeps renewing can't be changed — its periods are real extensions. Use Extend to add days, or cancel it and set up a new one."
+    : null;
   return {
-    edit: done ? off(done) : busy ? off(busy) : on,
+    edit: done ? off(done) : renewing ? off(renewing) : busy ? off(busy) : on,
     pause: done ? off(done) : plan.status === "paused" ? off("The plan is already paused.") : on,
     resume: done ? off(done) : plan.status === "active" ? off("The plan is running.") : on,
     cancel: done ? off(done) : busy ? off(busy) : on,

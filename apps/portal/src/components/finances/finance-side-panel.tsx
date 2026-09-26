@@ -7,11 +7,15 @@
  * is what was taken, this is what remains." Every row on Finances opens here:
  *
  *   a bill      every line · the payments that settled it · Total − Paid −
- *               Credited = Balance written out · collect what is left
+ *               Credited = Balance written out · collect what is left ·
+ *               EVERY invoice of the rental, each with Send and Delete
+ *   an invoice  an invoice-only row (no ledger bill behind it): its number,
+ *               date and total, Send and Delete — and no math claimed
  *   a payment   amount · method · date · status · the provider's reference
  *               with a dashboard link (or how to find it) · what it paid off
  *               · what is not applied · the plan it belongs to · who recorded
- *               it · refund
+ *               it · refund. An off-platform payment says so, and is never
+ *               sent to look for itself at Stripe or Square.
  *   upcoming    the plan's whole schedule, with this payment called out, and
  *               the plan's own actions
  *   a fine      its facts, and its record — where a fine is paid or waived
@@ -38,19 +42,30 @@ import { formatInstant, formatMoney, plural, todayInZone } from "@/lib/payment-p
 import { dashboardLinkFor, type DashboardAccounts } from "@/lib/payment-plans-ui/dashboard-link";
 import { billMathText, billStatusText, tieOutText } from "@/lib/finances/bills";
 import { toCents } from "@/lib/finances/balance";
-import type { BillRow, ReceiptRow, UpcomingRow } from "@/lib/finances/types";
+import type { BillInvoice, BillRow, ReceiptRow, UpcomingRow } from "@/lib/finances/types";
 import type { EnhancedFine } from "@/hooks/use-fines-data";
 import {
   BILL_TONE,
+  OFF_PLATFORM_LABEL,
   RECEIPT_STATUS_LABEL,
   RECEIPT_TONE,
   UPCOMING_METHOD_LABEL,
   fineStatusWords,
   formatListDay,
   receiptMethodWords,
+  reviewWords,
   upcomingStatusWords,
 } from "./finance-words";
-import { canCollectOnBill, canRefund, canRemoveLink, canReverse, canReview, customerHref, vehicleHref } from "./finance-rules";
+import {
+  canCollectOnBill,
+  canRefund,
+  canRemoveLink,
+  canReverse,
+  canReview,
+  customerHref,
+  paymentCustomerHref,
+  vehicleHref,
+} from "./finance-rules";
 import { fineCanCharge, fineCanWaive } from "@/components/fines/use-fine-row-actions";
 import { billTitle } from "./billed-table";
 import { fineReference } from "./fines-view";
@@ -76,13 +91,14 @@ export interface SidePanelActions {
   busy: boolean;
   onReceiptAction: (row: ReceiptRow, action: ReceiptAction) => void;
   onCollect: (bill: BillRow) => void;
-  onEmailInvoice: (bill: BillRow) => void;
+  /** Opens the Invoices tab's own email dialog for `invoice` (the bill's newest when omitted). */
+  onEmailInvoice: (bill: BillRow, invoice?: BillInvoice) => void;
   onOpen: (panel: PanelRef) => void;
   onClearFilters: () => void;
   /** `canEdit('invoices')` — the Invoices tab's Delete gate. */
   mayDeleteInvoice?: boolean;
-  /** Opens the Invoices tab's own DeleteInvoiceDialog for the bill's invoice. */
-  onDeleteInvoice?: (bill: BillRow) => void;
+  /** Opens the Invoices tab's own DeleteInvoiceDialog for `invoice` (the bill's newest when omitted). */
+  onDeleteInvoice?: (bill: BillRow, invoice?: BillInvoice) => void;
   /** `canEdit('fines')` — the fines tab's gate on Record Payment and Waive Fine. */
   mayActOnFines?: boolean;
   /** A waive is on its way. */
@@ -123,7 +139,9 @@ export function FinanceSidePanel({
 function PanelBody({ panel, data, currency, actions }: { panel: PanelRef; data: SidePanelData; currency: string; actions: SidePanelActions }) {
   if (panel.kind === "bill") {
     const bill = data.bills.find((b) => b.key === panel.id);
-    return bill ? <BillPanel bill={bill} data={data} currency={currency} actions={actions} /> : <Missing data={data} what="bill" actions={actions} />;
+    if (!bill) return <Missing data={data} what="bill" actions={actions} />;
+    if (bill.invoiceOnly) return <InvoiceOnlyPanel bill={bill} currency={currency} actions={actions} />;
+    return <BillPanel bill={bill} data={data} currency={currency} actions={actions} />;
   }
   if (panel.kind === "payment") {
     const row = data.receipts.find((r) => r.paymentId === panel.id);
@@ -305,6 +323,8 @@ function BillPanel({ bill, data, currency, actions }: { bill: BillRow; data: Sid
         )}
       </Section>
 
+      <InvoicesSection bill={bill} currency={currency} actions={actions} />
+
       <div className="flex flex-wrap gap-2 px-6 pb-6 pt-2">
         {actions.mayActOnPayments && canCollectOnBill(bill) && (
           <>
@@ -316,24 +336,148 @@ function BillPanel({ bill, data, currency, actions }: { bill: BillRow; data: Sid
             </Button>
           </>
         )}
-        {actions.mayEmailInvoice && bill.invoiceNumber && (
-          <Button type="button" variant="outline" onClick={() => actions.onEmailInvoice(bill)}>
-            <Mail data-icon="inline-start" />
-            Email invoice
+        {bill.onRental && bill.rentalId && (
+          <Button asChild variant="ghost">
+            <Link href={stageHref(bill.rentalId, "payments")}>
+              Open the rental
+              <ArrowUpRight data-icon="inline-end" />
+            </Link>
           </Button>
         )}
-        {actions.mayDeleteInvoice && actions.onDeleteInvoice && bill.invoiceNumber && (
-          <Button
-            type="button"
-            variant="outline"
-            data-panel-action="delete_invoice"
-            className="text-destructive hover:text-destructive"
-            onClick={() => actions.onDeleteInvoice!(bill)}
-          >
-            <Trash2 data-icon="inline-start" />
-            Delete invoice…
-          </Button>
-        )}
+        <RecordLinks customerId={bill.customerId} vehicleId={bill.vehicleId} />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The invoices a bill can be sent or deleted from: every `invoices` row of the
+ * rental (`bill.invoices`, newest first), each with the Invoices tab's own Send
+ * and Delete. A row model without the list (older fixtures) falls back to the
+ * one invoice it names.
+ */
+export function billInvoicesOf(bill: Pick<BillRow, "invoices" | "invoiceId" | "invoiceNumber" | "rentalId" | "customerId">): BillInvoice[] {
+  if (bill.invoices && bill.invoices.length > 0) return bill.invoices;
+  if (!bill.invoiceNumber) return [];
+  return [
+    {
+      id: bill.invoiceId ?? "",
+      number: bill.invoiceNumber,
+      date: null,
+      totalCents: 0,
+      status: null,
+      rentalId: bill.rentalId || null,
+      customerId: bill.customerId || null,
+      createdAt: null,
+    },
+  ];
+}
+
+/** "Pending" · "Paid" · "Cancelled" — `invoices.status` as the Invoices tab showed it. */
+function invoiceStatusWords(status: string | null): string | null {
+  if (!status) return null;
+  return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+function InvoiceActions({ bill, invoice, actions }: { bill: BillRow; invoice: BillInvoice; actions: SidePanelActions }) {
+  const send = actions.mayEmailInvoice;
+  const remove = !!actions.mayDeleteInvoice && !!actions.onDeleteInvoice;
+  if (!send && !remove) return null;
+  return (
+    <span className="flex shrink-0 flex-wrap justify-end gap-1.5">
+      {send && (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          data-panel-action="email_invoice"
+          data-invoice-id={invoice.id}
+          onClick={() => actions.onEmailInvoice(bill, invoice)}
+        >
+          <Mail data-icon="inline-start" />
+          Send email
+        </Button>
+      )}
+      {remove && (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          data-panel-action="delete_invoice"
+          data-invoice-id={invoice.id}
+          className="text-destructive hover:text-destructive"
+          onClick={() => actions.onDeleteInvoice!(bill, invoice)}
+        >
+          <Trash2 data-icon="inline-start" />
+          Delete…
+        </Button>
+      )}
+    </span>
+  );
+}
+
+function InvoicesSection({ bill, currency, actions }: { bill: BillRow; currency: string; actions: SidePanelActions }) {
+  const invoices = billInvoicesOf(bill);
+  if (invoices.length === 0) return null;
+  const $ = (c: number) => formatMoney(c, currency);
+  return (
+    <Section title={`Invoices for this rental (${invoices.length})`}>
+      <ul className="divide-y divide-foreground/5" data-bill-invoices="">
+        {invoices.map((inv) => (
+          <li key={inv.id || inv.number} data-invoice-row={inv.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
+            <span className="min-w-0">
+              <span className="block truncate font-medium text-foreground">{inv.number}</span>
+              <span className="block text-xs text-muted-foreground">
+                {[inv.date ? formatListDay(inv.date) : null, inv.totalCents ? $(inv.totalCents) : null, invoiceStatusWords(inv.status)]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </span>
+            </span>
+            <InvoiceActions bill={bill} invoice={inv} actions={actions} />
+          </li>
+        ))}
+      </ul>
+      {invoices.length > 1 && (
+        <p className="text-xs text-muted-foreground">The newest is the one a payment link sends.</p>
+      )}
+    </Section>
+  );
+}
+
+/**
+ * An invoice that belongs to no bill: an `invoices` row with no charges on the
+ * ledger behind it. Its own figures, its Send and Delete — and no Paid or
+ * Balance, which only the ledger can say.
+ */
+function InvoiceOnlyPanel({ bill, currency, actions }: { bill: BillRow; currency: string; actions: SidePanelActions }) {
+  const invoice = billInvoicesOf(bill)[0] ?? null;
+  const $ = (c: number) => formatMoney(c, currency);
+  return (
+    <div data-bill-panel={bill.key} data-invoice-only-panel="">
+      <Header
+        title={`Invoice ${bill.invoiceNumber ?? ""}`.trim()}
+        description={[bill.customerName, bill.vehicleReg, bill.onRental ? bill.rentalRef : null].filter(Boolean).join(" · ")}
+      />
+      <Section title="The invoice">
+        <dl className="grid grid-cols-2 gap-3">
+          <Fact label="Total on the invoice">{$(bill.invoiceTotalCents ?? invoice?.totalCents ?? 0)}</Fact>
+          <Fact label="Date">{formatListDay(invoice?.date ?? bill.issuedOn) ?? "—"}</Fact>
+          <Fact label="Status">
+            <ListStatusText tone={BILL_TONE.draft}>{billStatusText(bill, currency)}</ListStatusText>
+          </Fact>
+          {invoice?.status && <Fact label="Marked on the invoice">{invoiceStatusWords(invoice.status)}</Fact>}
+        </dl>
+        <p className="text-xs leading-relaxed text-muted-foreground" data-invoice-only-note="">
+          Nothing on the ledger is charged against this invoice{bill.onRental ? " — the rental has no charges" : " — it is on no rental"}, so
+          Finances cannot say what was paid on it or what is left. Its total is the invoice&apos;s own figure.
+        </p>
+      </Section>
+      {invoice && (
+        <div className="flex flex-wrap gap-2 px-6 pb-2 pt-2">
+          <InvoiceActions bill={bill} invoice={invoice} actions={actions} />
+        </div>
+      )}
+      <div className="flex flex-wrap gap-2 px-6 pb-6 pt-2">
         {bill.onRental && bill.rentalId && (
           <Button asChild variant="ghost">
             <Link href={stageHref(bill.rentalId, "payments")}>
@@ -351,9 +495,11 @@ function BillPanel({ bill, data, currency, actions }: { bill: BillRow; data: Sid
 /**
  * "Open the customer" · "Open the vehicle" — the records the Payments tab's
  * row linked its Customer and Vehicle cells to. Each only when the row names one.
+ * `customerLink` overrides the customer's destination (a payment on no rental
+ * opens the customer's payments tab, as the old "View Ledger" did).
  */
-function RecordLinks({ customerId, vehicleId }: { customerId?: string | null; vehicleId?: string | null }) {
-  const customer = customerHref(customerId);
+function RecordLinks({ customerId, vehicleId, customerLink }: { customerId?: string | null; vehicleId?: string | null; customerLink?: string | null }) {
+  const customer = customerLink !== undefined ? customerLink : customerHref(customerId);
   const vehicle = vehicleHref(vehicleId);
   return (
     <>
@@ -477,7 +623,7 @@ export function paymentMathText(
 
 function PaymentPanel({ row, currency, actions }: { row: ReceiptRow; currency: string; actions: SidePanelActions }) {
   const $ = (c: number) => formatMoney(c, currency);
-  const accounts = useFinanceStripeAccounts(row.provider === "stripe");
+  const accounts = useFinanceStripeAccounts(row.provider === "stripe" && !row.isOffPlatform);
   const recorder = useRecorderName(row.recordedById ?? null);
   const may = actions.mayActOnPayments;
   const refundLeft = row.amountCents - row.refundedCents;
@@ -499,14 +645,29 @@ function PaymentPanel({ row, currency, actions }: { row: ReceiptRow; currency: s
           <Fact label="Date">{formatListDay(row.date) ?? "—"}</Fact>
           {row.refundedCents > 0 && <Fact label="Refunded">{$(row.refundedCents)}</Fact>}
           {row.planLabel && <Fact label="Payment plan">{row.planLabel}</Fact>}
+          {reviewWords(row.verificationStatus) && <Fact label="Checked">{reviewWords(row.verificationStatus)}</Fact>}
         </dl>
+        {row.isOffPlatform && (
+          <p className="text-xs text-muted-foreground" data-off-platform="">
+            <span className="mr-1.5 inline-flex items-center rounded-full bg-foreground/5 px-2 py-0.5 text-[11px] font-medium text-foreground">
+              {OFF_PLATFORM_LABEL}
+            </span>
+            Taken outside the platform and recorded here. It counts as money received, like cash.
+          </p>
+        )}
         {!row.countsAsReceived && row.status === "pending" && (
           <p className="text-xs text-muted-foreground">No money has arrived on this one yet — it is a link or a charge still waiting to be paid.</p>
         )}
       </Section>
 
-      <Section title={row.provider === "manual" ? "Where it came from" : row.provider === "square" ? "At Square" : "At Stripe"}>
-        <ReferenceBlock row={row} accounts={accounts} />
+      <Section title={row.isOffPlatform || row.provider === "manual" ? "Where it came from" : row.provider === "square" ? "At Square" : "At Stripe"}>
+        {row.isOffPlatform ? (
+          <p className="text-xs leading-relaxed text-muted-foreground" data-reference-kind="off_platform">
+            Paid outside the platform. No card processor ever saw this money, so there is nothing to match at Stripe or Square.
+          </p>
+        ) : (
+          <ReferenceBlock row={row} accounts={accounts} />
+        )}
       </Section>
 
       <Section title="What it paid off">
@@ -583,7 +744,7 @@ function PaymentPanel({ row, currency, actions }: { row: ReceiptRow; currency: s
             </Link>
           </Button>
         )}
-        <RecordLinks customerId={row.customerId} vehicleId={row.vehicleId} />
+        <RecordLinks customerId={row.customerId} vehicleId={row.vehicleId} customerLink={paymentCustomerHref(row)} />
       </div>
     </div>
   );

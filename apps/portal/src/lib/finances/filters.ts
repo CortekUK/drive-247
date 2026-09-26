@@ -47,7 +47,8 @@ import type {
   UpcomingRow,
 } from "./types";
 
-export const BILL_STATUSES: readonly BillStatus[] = ["paid", "open", "overdue", "credit"];
+/** "draft" is carried only by invoice-only rows (`BillRow.invoiceOnly`). */
+export const BILL_STATUSES: readonly BillStatus[] = ["paid", "open", "overdue", "credit", "draft"];
 export const RECEIPT_STATUSES: readonly ReceiptStatus[] = [
   "approved",
   "pending_review",
@@ -65,6 +66,16 @@ export const UPCOMING_STATUSES: readonly string[] = OPEN_OCCURRENCE_STATUSES;
  * status. It narrows receipts only; bills and upcoming rows ignore it.
  */
 export const PAYMENT_REQUEST_STATUS = "payment_request";
+
+/**
+ * Not a receipt status either: HOW a payment was checked. As a status filter
+ * it keeps exactly the rows the old Payments tab's "Auto-Approved" option
+ * selected — `payments.verification_status = 'auto_approved'` (settled by the
+ * processor, never reviewed by hand; hooks/use-payments-data.ts `.eq`) — in any
+ * money status. "Received" (`approved`) is unchanged: it still means money
+ * landed, however it was checked. Receipts only; bills and upcoming ignore it.
+ */
+export const AUTO_APPROVED_STATUS = "auto_approved";
 export const UPCOMING_METHODS: readonly UpcomingMethod[] = ["auto_charge", "checkout_link", "manual"];
 
 /** The view a card's rows live in. */
@@ -85,7 +96,7 @@ export function searchTerm(filters: Pick<FinanceFilters, "search">): string {
 
 export function billMatchesSearch(b: BillRow, q: string): boolean {
   if (!q) return true;
-  return hit(q, b.customerName, b.rentalRef, b.vehicleReg, b.invoiceNumber, b.label);
+  return hit(q, b.customerName, b.rentalRef, b.vehicleReg, b.invoiceNumber, b.label, ...(b.invoices ?? []).map((i) => i.number));
 }
 
 /** Customer, rental, vehicle, method, and every Stripe/Square reference on the row. */
@@ -118,11 +129,13 @@ export function narrowReceipts(receipts: ReceiptRow[], filters: FinanceFilters):
   // Upcoming's collection methods are not payment methods; any other value is.
   const methods = (filters.methods ?? []).filter((m) => !(UPCOMING_METHODS as readonly string[]).includes(m)).map(norm);
   const requestsOnly = (filters.statuses ?? []).includes(PAYMENT_REQUEST_STATUS);
+  const autoOnly = (filters.statuses ?? []).includes(AUTO_APPROVED_STATUS);
   return receipts.filter(
     (r) =>
       receiptMatchesSearch(r, q) &&
       (!statuses || statuses.has(r.status)) &&
       (!requestsOnly || r.isPaymentRequest === true) &&
+      (!autoOnly || r.verificationStatus === AUTO_APPROVED_STATUS) &&
       (methods.length === 0 || methods.includes(norm(r.method)) || methods.includes(r.provider)),
   );
 }

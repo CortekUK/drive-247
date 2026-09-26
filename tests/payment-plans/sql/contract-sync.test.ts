@@ -30,6 +30,10 @@ describe("Deno Supabase store → pp_* signatures", () => {
 
   it("the parse found the store's calls (not vacuous)", () => {
     expect(calls.length).toBeGreaterThanOrEqual(20);
+    // Wave 3: every renewal RPC the Deno store makes is among them.
+    for (const fn of ["pp_list_renewal_plans", "pp_append_renewal_period", "pp_post_renewal_period", "pp_record_renewal_insurance", "pp_reconcile_renewals"]) {
+      expect(calls.map((c) => c.fn)).toContain(fn);
+    }
   });
 
   it("every call names an existing function, passes only real parameter names, and every parameter without a default", async () => {
@@ -78,6 +82,9 @@ describe("types.ts unions ↔ SQL CHECK lists", () => {
     ["CollectionMethod", "payment_plans_collection_method_check"],
     ["CollectionMethod", "payment_plan_occurrences_collection_method_check"],
     ["CollectionMethod", "payment_plan_attempts_method_check"],
+    // Wave 3 (20260926120200_open_ended_plans.sql)
+    ["RenewalInsuranceStatus", "payment_plan_occurrences_insurance_status_check"],
+    ["RenewalPeriodUnit", "payment_plans_renewal_unit_check"],
   ])("%s = %s", async (typeName, conname) => {
     const ts = union(typeName);
     expect(ts.length).toBeGreaterThanOrEqual(3);

@@ -1,7 +1,8 @@
 "use client";
 
 /**
- * "Set up a payment plan" (an existing rental with a balance) and "Edit" (a
+ * "Set up a payment plan" (an existing rental with a balance — or, where the
+ * caller offers renewing, one that should keep renewing) and "Edit" (a
  * running plan). Both are the composer in a dialog; Edit adds the one thing an
  * operator must see before changing a plan: exactly what changes.
  */
@@ -59,17 +60,22 @@ function SetUpBody({
   // day — a start in the past would make every missed date due at once.
   const { state, setState, preview } = usePlanComposer(ctx, today, () => {
     const s = defaultPlanForm(ctx);
+    // Nothing owed and renewing on offer: the only plan there is to set up is
+    // one that keeps the rental renewing.
+    if (!(ctx.balanceCents > 0) && ctx.renewal && ctx.rentalEnd) return { ...s, endBy: "renewing" };
     if (ctx.rentalStart >= today) return s;
     return { ...s, startFrom: "date", startDate: today, weekdays: [isoWeekday(today)], monthDay: Number(today.slice(8, 10)) };
   });
+  const renewing = preview.ok && !!preview.renewal;
   const [busy, setBusy] = useState(false);
   return (
     <>
       <DialogHeader>
         <DialogTitle>Set up a payment plan</DialogTitle>
         <DialogDescription>
-          Collect the {formatMoney(ctx.balanceCents, currency)} this rental owes over time. Nothing is charged until the first date, and you
-          can change or pause the plan at any point.
+          {ctx.balanceCents > 0
+            ? `Collect the ${formatMoney(ctx.balanceCents, currency)} this rental owes over time, or keep it renewing. Nothing is charged until the first date, and you can change or pause the plan at any point.`
+            : "Keep this rental renewing, one period at a time, collected when each period starts. You can change, pause or stop it at any point."}
         </DialogDescription>
       </DialogHeader>
       <PaymentPlanComposer state={state} onChange={setState} preview={preview} ctx={ctx} currency={currency} today={today} minStart={today} />
@@ -95,7 +101,7 @@ function SetUpBody({
           }}
         >
           {busy && <Loader2 className="animate-spin" />}
-          {preview.ok ? `Set up ${plural(preview.drafts.length, "payment")}` : "Set up plan"}
+          {renewing ? "Set up renewals" : preview.ok ? `Set up ${plural(preview.drafts.length, "payment")}` : "Set up plan"}
         </Button>
       </DialogFooter>
     </>
@@ -159,7 +165,13 @@ function EditBody({
   onDone: () => void;
 }) {
   const $ = (c: number) => formatMoney(c, currency);
-  const before = { rule: plan.rule, amount: plan.amount, collectionMethod: plan.collectionMethod, reminderOffsets: plan.reminderOffsets };
+  const before = {
+    rule: plan.rule,
+    amount: plan.amount,
+    collectionMethod: plan.collectionMethod,
+    reminderOffsets: plan.reminderOffsets,
+    renewal: plan.renewal ?? null,
+  };
 
   // A changed plan carries on from the next unpaid date (or today), never from
   // a start that has already passed.
@@ -209,9 +221,11 @@ function EditBody({
               <li key={c}>{c}</li>
             ))}
             <li>
-              {replacing.length > 0
-                ? `${plural(replacing.length, "upcoming payment")} (${$(replacingTotal)}) ${replacing.length === 1 ? "is" : "are"} replaced by ${plural(preview.drafts.length, "payment")} (${$(preview.totalCents)}), the first on ${formatDay(preview.drafts[0].dueDate)}.`
-                : `${plural(preview.drafts.length, "new payment")} (${$(preview.totalCents)}) ${preview.drafts.length === 1 ? "is" : "are"} added, the first on ${formatDay(preview.drafts[0].dueDate)}.`}
+              {preview.renewal
+                ? `${replacing.length > 0 ? `${plural(replacing.length, "upcoming payment")} (${$(replacingTotal)}) ${replacing.length === 1 ? "is" : "are"} replaced by renewals` : "Renewals start"} from ${formatDay(preview.drafts[0].dueDate)}, each period priced when it starts.`
+                : replacing.length > 0
+                  ? `${plural(replacing.length, "upcoming payment")} (${$(replacingTotal)}) ${replacing.length === 1 ? "is" : "are"} replaced by ${plural(preview.drafts.length, "payment")} (${$(preview.totalCents)}), the first on ${formatDay(preview.drafts[0].dueDate)}.`
+                  : `${plural(preview.drafts.length, "new payment")} (${$(preview.totalCents)}) ${preview.drafts.length === 1 ? "is" : "are"} added, the first on ${formatDay(preview.drafts[0].dueDate)}.`}
             </li>
             {keptPaid > 0 && <li className="text-muted-foreground">{plural(keptPaid, "payment")} already paid stay as they are.</li>}
             {partPaid.length > 0 && (

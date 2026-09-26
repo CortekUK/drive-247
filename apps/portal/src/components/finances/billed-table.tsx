@@ -6,6 +6,10 @@
  * Total · Paid · Credited · Balance, read left to right as a sum. When the
  * ledger's balance is not what the other three say it should be, the row says
  * "Doesn't add up by $X" rather than quietly showing a number (design §3).
+ *
+ * An INVOICE-ONLY row (an `invoices` row with no ledger bill behind it) shows
+ * the invoice's own total and a dash for Paid, Credited and Balance: it claims
+ * no math, because there are no charges to do it with.
  */
 
 import {
@@ -83,12 +87,14 @@ export function BilledTable({
             {rows.visible.map((bill, i) => {
               const status = billStatusText(bill, currency);
               const mismatch = tieOutText(bill, currency);
+              const invoiceOnly = bill.invoiceOnly === true;
               return (
                 <ListRow
                   key={bill.key}
                   data-bill-key={bill.key}
                   data-tour={i === 0 ? "finances-row" : undefined}
                   data-tie-out={bill.tiesOut ? "ok" : "mismatch"}
+                  data-invoice-only={invoiceOnly ? "" : undefined}
                   onOpen={() => onOpen(bill)}
                 >
                   <ListCell>
@@ -98,6 +104,11 @@ export function BilledTable({
                     <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
                       {bill.onRental && <span className="truncate">{bill.label}</span>}
                       {bill.invoiceNumber && <ListMetaChip>{bill.invoiceNumber}</ListMetaChip>}
+                      {bill.invoiceNumber && (bill.invoices?.length ?? 0) > 1 && (
+                        <span className="shrink-0" data-more-invoices="" title="This rental has more invoices — open the bill to see them all">
+                          +{(bill.invoices?.length ?? 1) - 1}
+                        </span>
+                      )}
                     </span>
                   </ListCell>
                   <ListCell>
@@ -109,11 +120,21 @@ export function BilledTable({
                   <ListCell className="tabular-nums">
                     <span className={LIST_CLASSES.text}>{formatListDay(bill.issuedOn) ?? "—"}</span>
                   </ListCell>
-                  <ListCell className="text-right tabular-nums">{$(bill.totalCents)}</ListCell>
-                  <ListCell className="text-right tabular-nums">{$(bill.paidCents)}</ListCell>
-                  <ListCell className="text-right tabular-nums">{bill.creditedCents ? $(bill.creditedCents) : "—"}</ListCell>
                   <ListCell className="text-right tabular-nums">
-                    <span className={cn("block", LIST_CLASSES.identifier)}>{$(bill.balanceCents)}</span>
+                    {invoiceOnly ? (
+                      <span title="The invoice's own total — no charges on the ledger stand behind it">
+                        {$(bill.invoiceTotalCents ?? 0)}
+                      </span>
+                    ) : (
+                      $(bill.totalCents)
+                    )}
+                  </ListCell>
+                  <ListCell className="text-right tabular-nums">{invoiceOnly ? <span className="text-muted-foreground">—</span> : $(bill.paidCents)}</ListCell>
+                  <ListCell className="text-right tabular-nums">{!invoiceOnly && bill.creditedCents ? $(bill.creditedCents) : "—"}</ListCell>
+                  <ListCell className="text-right tabular-nums">
+                    <span className={cn("block", invoiceOnly ? "text-muted-foreground" : LIST_CLASSES.identifier)}>
+                      {invoiceOnly ? "—" : $(bill.balanceCents)}
+                    </span>
                     {mismatch && (
                       <span data-tie-out-marker="" className={cn("mt-0.5 block text-[11px] font-medium", LIST_TONES.danger)}>
                         {mismatch}
@@ -133,7 +154,7 @@ export function BilledTable({
                       <DropdownMenuContent align="end" className="w-auto">
                         <DropdownMenuItem onClick={() => onOpen(bill)}>
                           <PanelRightOpen className="h-4 w-4" />
-                          See the whole bill
+                          {invoiceOnly ? "See the invoice" : "See the whole bill"}
                         </DropdownMenuItem>
                         {mayCollect && canCollectOnBill(bill) && (
                           <DropdownMenuItem onClick={() => onCollect(bill)}>
@@ -186,7 +207,7 @@ export function BilledTable({
             <MobileFact primary={billTitle(bill)} secondary={bill.customerName} />
             <MobileFact
               align="right"
-              primary={$(bill.balanceCents)}
+              primary={bill.invoiceOnly ? $(bill.invoiceTotalCents ?? 0) : $(bill.balanceCents)}
               secondary={
                 <span className={LIST_TONES[bill.tiesOut ? BILL_TONE[bill.status] : "danger"]}>
                   {tieOutText(bill, currency) ?? billStatusText(bill, currency)}

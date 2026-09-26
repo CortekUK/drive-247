@@ -14,11 +14,66 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui-v2/button";
 import { CustomerStatementDialog } from "@/components/customers/customer-statement-dialog";
 import { CollectPaymentDialog } from "@/components/customers/collect-payment-dialog";
+import { CustomerBalanceSection } from "@/components/balance/balance-sections";
+import { ScopedFinances } from "@/components/finances/scoped-finances";
+import { useV2 } from "@/lib/v2-context";
 import { ledgerTotals, moneyIn, signedMoney } from "./derive";
 import { EmptyHint, Panel, Pill, ProducedFrom, Section, Stat, cardCls, fmtDate, listCls } from "./kit";
 import type { SectionProps } from "./sections";
+import type { PaymentLink } from "./types";
 
-export function SectionMoney({ c, onJump, canEdit, currency }: SectionProps) {
+/**
+ * On the Finances canary (the `finances` v2 area: northwind, by slug — NOT
+ * widened by `portal_experience`), Money leads with the balance ("how much
+ * does this customer owe me", spec §8), the Adjust balance panel and Request a
+ * payment, then the scoped Finances views. Everyone else — including the real
+ * v2 tenants on the row flag — gets `SectionMoneyClassic`, unchanged.
+ */
+export function SectionMoney(props: SectionProps) {
+  const financesOn = useV2("finances");
+  return financesOn ? <SectionMoneyFinances {...props} /> : <SectionMoneyClassic {...props} />;
+}
+
+function SectionMoneyFinances({ c, onJump, currency }: SectionProps) {
+  const [statementOpen, setStatementOpen] = useState(false);
+  const money = moneyIn(currency);
+  return (
+    <Panel
+      title="Money"
+      description="What this customer owes you, how it got there, and every change made by hand."
+    >
+      <ProducedFrom
+        sources={[
+          { key: "rentals", label: "Rentals" },
+          { key: "fines", label: "Fines" },
+        ]}
+        onJump={onJump}
+      />
+
+      <CustomerBalanceSection customerId={c.id} customerName={c.identity.name} rentals={c.rentals} currency={currency} />
+
+      <ScopedFinances
+        scope={{ customerId: c.id }}
+        views={["billed", "received", "upcoming", "fines"]}
+        defaultView="billed"
+        heading="Bills and payments"
+      />
+
+      <div className="flex flex-wrap gap-2">
+        <Button variant="outline" data-tour="customer-money-statement" onClick={() => setStatementOpen(true)}>
+          <FileDown className="size-4" />
+          Statement of account
+        </Button>
+      </div>
+
+      <PaymentRequestsSection links={c.links} money={money} />
+
+      <CustomerStatementDialog open={statementOpen} onOpenChange={setStatementOpen} customerId={c.id} />
+    </Panel>
+  );
+}
+
+function SectionMoneyClassic({ c, onJump, canEdit, currency }: SectionProps) {
   const [statementOpen, setStatementOpen] = useState(false);
   const [collectOpen, setCollectOpen] = useState(false);
   const money = moneyIn(currency);
@@ -198,48 +253,55 @@ export function SectionMoney({ c, onJump, canEdit, currency }: SectionProps) {
             </div>
           </Section>
 
-          <Section
-            title="Payment requests"
-            description="Sent when there is no card on file, or when the customer would rather pay in their own time."
-          >
-            {c.links.length === 0 ? (
-              <EmptyHint>No payment requests sent to this customer.</EmptyHint>
-            ) : (
-              <div className={listCls}>
-                {c.links.map((l) => (
-                  <div key={l.id} className="flex items-center gap-4 px-5 py-4">
-                    <span className="flex size-9 shrink-0 items-center justify-center rounded-2xl bg-card ring-1 ring-foreground/5">
-                      <Receipt className="size-4 text-muted-foreground" />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{l.label}</p>
-                      <p className="mt-0.5 text-xs text-muted-foreground">Sent {fmtDate(l.sentAt)}</p>
-                    </div>
-                    <p className="shrink-0 text-sm font-semibold tabular-nums">{money(l.amount)}</p>
-                    <Pill tone={l.status === "Paid" ? "success" : l.status === "Void" ? "neutral" : "primary"}>
-                      {l.status}
-                    </Pill>
-                    {l.url && (
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label="Open the payment link"
-                        onClick={() => window.open(l.url!, "_blank")}
-                        className="text-muted-foreground"
-                      >
-                        <ExternalLink className="size-3.5" />
-                      </Button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </Section>
+          <PaymentRequestsSection links={c.links} money={money} />
         </>
       )}
 
       <CustomerStatementDialog open={statementOpen} onOpenChange={setStatementOpen} customerId={c.id} />
       <CollectPaymentDialog open={collectOpen} onOpenChange={setCollectOpen} customerId={c.id} />
     </Panel>
+  );
+}
+
+/** The payment links sent to this customer. Shared by both Money layouts, so they cannot drift. */
+function PaymentRequestsSection({ links, money }: { links: PaymentLink[]; money: (n: number) => string }) {
+  return (
+    <Section
+      title="Payment requests"
+      description="Sent when there is no card on file, or when the customer would rather pay in their own time."
+    >
+      {links.length === 0 ? (
+        <EmptyHint>No payment requests sent to this customer.</EmptyHint>
+      ) : (
+        <div className={listCls}>
+          {links.map((l) => (
+            <div key={l.id} className="flex items-center gap-4 px-5 py-4">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-2xl bg-card ring-1 ring-foreground/5">
+                <Receipt className="size-4 text-muted-foreground" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium">{l.label}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">Sent {fmtDate(l.sentAt)}</p>
+              </div>
+              <p className="shrink-0 text-sm font-semibold tabular-nums">{money(l.amount)}</p>
+              <Pill tone={l.status === "Paid" ? "success" : l.status === "Void" ? "neutral" : "primary"}>
+                {l.status}
+              </Pill>
+              {l.url && (
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Open the payment link"
+                  onClick={() => window.open(l.url!, "_blank")}
+                  className="text-muted-foreground"
+                >
+                  <ExternalLink className="size-3.5" />
+                </Button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </Section>
   );
 }

@@ -60,7 +60,29 @@ export interface BillLine {
   countsTowardOutstanding: boolean;
 }
 
-export type BillStatus = "paid" | "open" | "overdue" | "credit";
+/**
+ * "draft" is added: an INVOICE-ONLY row (`BillRow.invoiceOnly`) — an `invoices`
+ * row with no ledger bill behind it. The `invoices` table itself can never be
+ * draft (its check constraint allows pending / paid / cancelled only), so the
+ * status belongs to the row that has an invoice and nothing charged against it.
+ */
+export type BillStatus = "paid" | "open" | "overdue" | "credit" | "draft";
+
+/** added — one `invoices` row, as a bill lists it. */
+export interface BillInvoice {
+  id: string;
+  /** `invoices.invoice_number` (NOT NULL in the schema; the id's head if a row ever lacks it). */
+  number: string;
+  /** `invoices.invoice_date`, else the day it was written. */
+  date: string | null;
+  /** `invoices.total_amount`, in cents — the invoice's own figure, not the ledger's. */
+  totalCents: number;
+  /** `invoices.status` as stored: pending · paid · cancelled. */
+  status: string | null;
+  rentalId: string | null;
+  customerId: string | null;
+  createdAt: string | null;
+}
 
 export interface BillRow {
   key: string;
@@ -104,8 +126,28 @@ export interface BillRow {
   onRental: boolean;
   /** added — the rental's vehicle (else the first charge's), for the vehicle link the old Payments rows had. */
   vehicleId?: string | null;
-  /** added — the `invoices` row behind `invoiceNumber` (booking bill only), for Email and Delete invoice. */
+  /**
+   * added — the `invoices` row behind `invoiceNumber` (booking bill only), for
+   * Email and Delete invoice. The NEWEST of the rental's invoices, as the
+   * payment window's `latestInvoice` picks it (created_at, newest first).
+   */
   invoiceId?: string | null;
+  /**
+   * added — EVERY `invoices` row of this bill's rental, newest first, so the
+   * rental's second and later invoices can be sent or deleted too. On every
+   * bill of the rental (invoices carry no extension); empty off a rental. An
+   * invoice-only row carries just its own.
+   */
+  invoices?: BillInvoice[];
+  /**
+   * added — an INVOICE-ONLY row: an `invoices` row that belongs to no bill
+   * (no rental, or a rental with no charge rows). It claims no Paid / Credited
+   * / Balance math: every money figure above is 0, `status` is "draft", and
+   * the invoice's own total is `invoiceTotalCents`.
+   */
+  invoiceOnly?: boolean;
+  /** added — an invoice-only row's `invoices.total_amount`, in cents. Null on a ledger bill. */
+  invoiceTotalCents?: number | null;
 }
 
 export type ReceiptStatus = "approved" | "pending_review" | "rejected" | "refunded" | "partially_refunded" | "pending";
@@ -161,6 +203,13 @@ export interface ReceiptRow {
    * square_payment_link_id not null), whatever their status.
    */
   isPaymentRequest?: boolean;
+  /**
+   * added — money that changed hands OUTSIDE the platform, recorded here
+   * (`payments.is_off_platform`, roadmap A1). It counts as revenue like cash,
+   * but no processor ever saw it: provider "manual", no reference, no
+   * dashboard link. False whenever the column does not exist yet.
+   */
+  isOffPlatform?: boolean;
 }
 
 export type UpcomingMethod = "auto_charge" | "checkout_link" | "manual";
@@ -267,6 +316,11 @@ export interface RawPayment {
   booking_source?: string | null;
   /** Present only when the payment-plan migration is applied (selected only then). */
   payment_plan_occurrence_id?: string | null;
+  /**
+   * Present only once the balance migration adds the column (read only then —
+   * see `offPlatformAvailable`). True: money taken outside the platform.
+   */
+  is_off_platform?: boolean | null;
 }
 
 export interface RawInvoice {
@@ -274,6 +328,12 @@ export interface RawInvoice {
   rental_id: string | null;
   invoice_number: string | null;
   created_at?: string | null;
+  /** added — for the invoice list and the invoice-only rows. */
+  customer_id?: string | null;
+  vehicle_id?: string | null;
+  invoice_date?: string | null;
+  total_amount?: Num;
+  status?: string | null;
 }
 
 export interface RawExtension {
@@ -363,6 +423,8 @@ export interface FinanceRawData {
   linkedCharges?: RawCharge[];
   /** The loader's verdict: the payment-plan tables answered a real read. */
   plansAvailable?: boolean;
+  /** The loader's verdict: `payments.is_off_platform` exists, and the flags on `payments` are real. */
+  offPlatformAvailable?: boolean;
 }
 
 /** Everything the pure builders need besides the rows. */

@@ -94,6 +94,11 @@ import {
 } from "./payments-model";
 import { PaymentActions, type ActionRequest } from "./payments-actions";
 import { RentalPaymentPlanSection } from "@/components/payment-plans/rental-payment-plan";
+// Finances canary only (the `finances` v2 area): the rental's balance
+// adjustments, its fines and its billed/received history.
+import { useV2 } from "@/lib/v2-context";
+import { RentalBalanceSection } from "@/components/balance/balance-sections";
+import { ScopedFinances } from "@/components/finances/scoped-finances";
 
 /* Stable identities, so the ledger is not rebuilt on every render. */
 const NO_ROWS: any[] = [];
@@ -233,6 +238,7 @@ export function StagePayments({ detail, refetch }: StageProps) {
   const { data: extensionRows } = useRentalExtensionTotals(SHOW_MULTI_PERIOD ? rentalId : undefined);
   const { data: linkRows } = useRentalPaymentLinks(rentalId);
   const { data: v1Totals } = useRentalTotals(rentalId);
+  const financesOn = useV2("finances");
 
   const linkStateById = useMemo(() => {
     if (!linkRows?.length) return NO_LINKS;
@@ -704,6 +710,17 @@ export function StagePayments({ detail, refetch }: StageProps) {
             )}
           </div>
         </div>
+      )}
+
+      {/* ═══ Finances canary: adjust the balance, fines, billed / received ═══
+          Rendered only for the `finances` v2 area (northwind, by slug), so
+          every other tenant's Payments stage is exactly what it was. */}
+      {financesOn && (
+        <>
+          <RentalBalanceSection rental={detail.rental} customerName={detail.rental.customers?.name ?? null} onChanged={onChanged} />
+          <ScopedFinances scope={{ rentalId }} views={["fines"]} heading="Fines" compact />
+          <ScopedFinances scope={{ rentalId }} views={["billed", "received"]} defaultView="billed" heading="Billed and received" compact />
+        </>
       )}
     </Panel>
   );

@@ -104,7 +104,12 @@
  *  - The bill TIE-OUT ("Doesn't add up by $X"), refunds, approve / reject and
  *    the plan's actions. Second-visit material, and every one of them is
  *    explained where it is drawn — in the row or its panel.
- *  - Payment analytics and fine analytics. Neither is linked from this page.
+ *  - Payment analytics and fine analytics. Neither is linked from this page:
+ *    the header's two chart icons were removed, as Customers, Vehicles and
+ *    Rentals removed theirs, because the overview graph replaces them (on
+ *    the Fines view its picker offers "Fines issued" and "Fines paid"). The
+ *    overview step already covers the graph. `/payments/analytics` and
+ *    `/fines/analytics` still answer by URL; neither has a step here.
  */
 
 import type { TourStep } from '@/lib/first-rental-tour';

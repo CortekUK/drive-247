@@ -9,6 +9,8 @@ import { EmptyStatePreview } from '@/components/dev/empty-state-preview';
 import { MessagesPreview } from '@/components/dev/messages-preview';
 import { BillingPreview } from '@/components/dev/billing-preview';
 import { PaymentPlanSimulator } from '@/components/dev/payment-plan-simulator';
+import { E2eLiveRunner } from '@/components/dev/e2e-live-runner';
+import { AutoExtendShadow } from '@/components/dev/auto-extend-shadow';
 import { useTenant } from '@/contexts/TenantContext';
 import { supabase } from '@/integrations/supabase/client';
 import { NORTHWIND } from '@/lib/v2';
@@ -36,18 +38,60 @@ import {
  * portal, which is what was asked for. Both are gone, deliberately.
  *
  * What that costs, written down rather than left to be rediscovered: this
- * component and everything it imports from `lib/dev-actions` now ship in the
- * production bundle as reachable code. The one database write in here is a
- * `delete` on `tenant_first_run` scoped to the OPEN TENANT'S OWN id — a table
- * that does not exist in production at all, so it answers "absent" — and the
- * rest is localStorage on the operator's own machine. That is the whole blast
- * radius, and it is why this was judged safe to ship. Add a further action to
- * this page and that sentence stops being true.
+ * component and everything it imports now ship in the production bundle as
+ * reachable code. So here is the whole blast radius — every path on this page
+ * that writes anything, and nothing else does:
  *
- * The payment plan simulator (Sep 25 2026) keeps it true: it runs the plan
- * engine against an in-memory store in the tab and a simulated card, imports no
- * Supabase client and calls no edge function. It writes nothing anywhere; its
- * only output is a JSON file the tester chooses to download.
+ *   1. A `delete` on `tenant_first_run` scoped to the OPEN TENANT'S OWN id — a
+ *      table that does not exist in production at all, so it answers "absent".
+ *   2. Browser storage (localStorage / sessionStorage) on the operator's own
+ *      machine: the reset actions and the empty-state, messages and billing
+ *      previews.
+ *   3. LIVE TEST RUNS (`e2e-live-runner.tsx`, Sep 26 2026) — the one path that
+ *      writes REAL ROWS, and the reason this paragraph was rewritten. It used
+ *      to say the first-run delete was the only database write; that stopped
+ *      being true when this section arrived.
+ *
+ *      The browser itself still inserts, updates and deletes nothing. It GETs
+ *      the `e2e-runner` edge function's catalogue, SELECTs `dev_sim_runs` for
+ *      this tenant, asks the runner for a zero-write PREVIEW of what a run
+ *      would write, and only after the operator confirms beside "This writes
+ *      test rows to northwind in Stripe TEST mode" asks it to RUN. The runner
+ *      then writes — on whatever project this portal talks to, which for the
+ *      live portal is the PRODUCTION database: fixture customers and rentals
+ *      on the northwind tenant; the charges, payments, plan rows, extensions
+ *      and reminders the real engines create for those rentals; one
+ *      `dev_sim_runs` row per run; and Stripe TEST-mode customers, cards and
+ *      payment intents on northwind's test account.
+ *
+ *      What bounds it, outermost first:
+ *        - this page's slug gate (below), and the section's own second check,
+ *          so no other tenant renders it or sends a single probe;
+ *        - the section offers NOTHING to click unless the function answers its
+ *          GET with a catalogue, `dev_sim_runs` answers its GET, and the
+ *          runner reports tenant `northwind` and Stripe mode `test` — a runner
+ *          that says anything else, or nothing, is refused here;
+ *        - a preview that does not say northwind + test, or does not account
+ *          for every scenario asked for, cannot be confirmed;
+ *        - AUTHORITATIVE, and the RUNNER's to enforce, not this page's: locked
+ *          to the one sandbox tenant (SANDBOX_TEST_TENANT_ID, northwind);
+ *          refusing unless that tenant's `stripe_mode` is 'test'; requiring
+ *          the confirm sentence and a fresh preview; acting only on rentals it
+ *          created and flagged as fixtures, through the fail-closed `sandbox-*`
+ *          single-rental clones (`only_rental_id`) — never by firing the live
+ *          cron jobs (6, 4, 32, 33, 54, 55), which act on every tenant; and
+ *          never holding a live Stripe key. A page cannot enforce any of that;
+ *          it can only refuse to offer a run when the runner does not claim it.
+ *
+ *      Until the function is deployed and the table applied, this path is
+ *      inert: the section says which piece is missing and has no buttons.
+ *
+ *   Add a further writing action to this page and this list must grow with it.
+ *
+ * The payment plan simulator (Sep 25 2026) adds nothing to the list: it runs
+ * the plan engine against an in-memory store in the tab and a simulated card,
+ * imports no Supabase client and calls no edge function. It writes nothing
+ * anywhere; its only output is a JSON file the tester chooses to download.
  *
  * TENANT  `tenant.slug === NORTHWIND`, and nothing else, decided below.
  *
@@ -354,6 +398,8 @@ export function DevPageBody() {
       <MessagesPreview />
       <BillingPreview />
       <PaymentPlanSimulator />
+      <E2eLiveRunner />
+      <AutoExtendShadow />
     </div>
   );
 }

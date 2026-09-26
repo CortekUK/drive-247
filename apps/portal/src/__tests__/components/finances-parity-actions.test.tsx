@@ -3,16 +3,21 @@
  * had has a home on Finances, and each one calls the SAME existing dialog or
  * function with the same arguments (docs/FINANCES_DESIGN.md: no new money path).
  *
- *   Payments   Payment analytics · the tab's guided tour · the row's customer
- *              and vehicle links
+ *   Payments   the tab's guided tour · the row's customer and vehicle links
  *   Invoices   Delete invoice (its own DeleteInvoiceDialog) · the "Payment
  *              Requests" sub-tab (one status chip)
- *   Fines      Fine analytics · Record Payment · Waive Fine (the fines tab's
- *              own row actions, `useFineRowActions`)
+ *   Fines      Record Payment · Waive Fine (the fines tab's own row actions,
+ *              `useFineRowActions`)
+ *
+ * Payment analytics and Fine analytics are NOT linked (Sep 26 2026: two
+ * identical chart icons made no sense): the overview graph replaces them, as
+ * on Customers, Vehicles and Rentals, and both routes still answer by URL.
  *
  * And the tour anchors the Finances tour steps point at. Shapes, not copy.
  */
 import React from 'react';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -254,34 +259,44 @@ describe('the header', () => {
     expect(tour.parentElement!.firstElementChild).toBe(tour);
   });
 
-  it('links Payment analytics and Fine analytics, the two dashboards the old tabs linked', () => {
+  // UPDATED Sep 26 2026. These two tests used to pin the header's "Payment
+  // analytics" and "Fine analytics" icon links. The lead removed both (two
+  // identical chart icons made no sense), matching Customers, Vehicles and
+  // Rentals v2, whose overview graph replaced their analytics link; so they
+  // now pin that the icons are GONE, for every grant, and the routes below
+  // still resolve.
+  it('carries no Payment analytics or Fine analytics link — the overview graph replaces them', () => {
     renderView();
-    expect(screen.getByRole('link', { name: 'Payment analytics' }).getAttribute('href')).toBe('/payments/analytics');
-    expect(screen.getByRole('link', { name: 'Fine analytics' }).getAttribute('href')).toBe('/fines/analytics');
-  });
-
-  it('shows each only with the view it belongs to', () => {
-    asManager({ payments: 'viewer' });
-    const a = renderView();
-    expect(screen.queryByRole('link', { name: 'Payment analytics' })).not.toBeNull();
-    expect(screen.queryByRole('link', { name: 'Fine analytics' })).toBeNull();
-    a.unmount();
-
-    asManager({ fines: 'viewer' });
-    const b = renderView();
     expect(screen.queryByRole('link', { name: 'Payment analytics' })).toBeNull();
-    expect(screen.queryByRole('link', { name: 'Fine analytics' })).not.toBeNull();
-    b.unmount();
-
-    asManager({ invoices: 'editor' });
-    renderView();
-    expect(screen.queryByRole('link', { name: /analytics/ })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Fine analytics' })).toBeNull();
+    expect(document.querySelector('a[href="/payments/analytics"]')).toBeNull();
+    expect(document.querySelector('a[href="/fines/analytics"]')).toBeNull();
+    expect(document.querySelector('[data-tour="finances-payment-analytics"], [data-tour="finances-fine-analytics"]')).toBeNull();
   });
 
-  it('the proxy leaves both analytics routes alone (exact list paths only)', () => {
+  it('shows neither for any grant, on any view', () => {
+    for (const grants of [{ payments: 'viewer' }, { fines: 'viewer' }, { invoices: 'editor' }] as Record<string, 'viewer' | 'editor'>[]) {
+      for (const search of ['', 'view=received', 'view=fines']) {
+        asManager(grants);
+        const r = renderView(search);
+        expect(screen.queryByRole('link', { name: /analytics/i }), `${JSON.stringify(grants)} ${search}`).toBeNull();
+        r.unmount();
+      }
+    }
+  });
+
+  it('the proxy leaves both analytics routes alone (exact list paths only), so they still resolve by URL', () => {
     expect(financesRedirectFor('/payments/analytics')).toBeNull();
     expect(financesRedirectFor('/fines/analytics')).toBeNull();
+    expect(financesRedirectFor('/payments/analytics/')).toBeNull();
     expect(financesRedirectFor('/payments')).toBe('/finances?view=received');
+  });
+
+  it('both analytics pages still exist as routes', () => {
+    for (const route of ['payments', 'fines']) {
+      const page = path.resolve(__dirname, `../../app/(dashboard)/${route}/analytics/page.tsx`);
+      expect(existsSync(page), page).toBe(true);
+    }
   });
 });
 

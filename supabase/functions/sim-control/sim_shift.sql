@@ -43,7 +43,10 @@ declare
     ),
     'scheduled_installments', jsonb_build_array('due_date'),
     'installment_plans',      jsonb_build_array('last_reminder_sent_at'),
-    'ledger_entries',         jsonb_build_array('due_date')
+    'ledger_entries',         jsonb_build_array('due_date'),
+    -- payment_plan domain (sim-shift-manifest.json). Shift whole days so due_at
+    -- stays equal to due_date + charge_local_time in the plan's zone.
+    'payment_plan_occurrences', jsonb_build_array('due_at','due_date','next_attempt_at')
   );
   v_col     text;
   v_setlist text := '';

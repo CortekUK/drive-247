@@ -1521,7 +1521,7 @@
       "id": "finances",
       "title": "Finances",
       "status": "requiring_confirmation",
-      "scope": "Canary-only (northwind, by slug; not widened by portal_experience) V2 Finances tab: one screen over bills, payments received, plan payments and fines, laid out like the other hero tabs (a Collected graph and an owed card that turn over to a filter panel), with Needs attention and a side panel. On the canary the Payments, Invoices and Fines rows become one Finances row and their list routes redirect into it. Every action reuses an existing money path; nothing is verified end to end.",
+      "scope": "Canary-only (northwind, by slug; not widened by portal_experience) V2 Finances tab: one screen over bills, payments received, plan payments and fines, laid out like the other hero tabs (a graph and an owed card that turn over to a filter panel; the graph opens on Collected, and on the Fines view on Fines issued with Fines paid, replacing the old Payment analytics and Fine analytics links, whose routes still answer by URL), with Needs attention and a side panel. Every invoice of a rental is listed on its bills with Send and Delete, and an invoice with no bill is its own Invoice only row. The same views scoped to one rental or one customer (ScopedFinances) reuse the tables, side panel and actions. On the canary the Payments, Invoices and Fines rows become one Finances row and their list routes redirect into it. Every action reuses an existing money path; nothing is verified end to end.",
       "routePrefixes": [
         "/finances"
       ],
@@ -1553,7 +1553,8 @@
           "symbols": [
             "FinancesOverview",
             "ageingToDraw",
-            "HeroChart"
+            "HeroChart",
+            "fineMetrics"
           ]
         },
         {
@@ -1568,7 +1569,23 @@
           "symbols": [
             "FinanceSidePanel",
             "dashboardLinkFor",
-            "PaymentPlanCard"
+            "PaymentPlanCard",
+            "InvoicesSection"
+          ]
+        },
+        {
+          "path": "apps/portal/src/components/finances/finance-actions.tsx",
+          "symbols": [
+            "useFinanceActions",
+            "AddPaymentDialog",
+            "DeleteInvoiceDialog"
+          ]
+        },
+        {
+          "path": "apps/portal/src/components/finances/scoped-finances.tsx",
+          "symbols": [
+            "ScopedFinances",
+            "useFinances(scopedFiltersOf(filters, compact), financeScope)"
           ]
         },
         {
@@ -1605,6 +1622,13 @@
           "symbols": [
             "financesRedirectFor"
           ]
+        },
+        {
+          "path": "apps/portal/src/lib/finances/bills.ts",
+          "symbols": [
+            "invoiceOnlyBill",
+            "INVOICE_ONLY_LABEL"
+          ]
         }
       ],
       "tests": [
@@ -1614,10 +1638,132 @@
         "apps/portal/src/__tests__/components/finances-sidebar.test.tsx",
         "apps/portal/src/__tests__/components/finances-view.test.tsx",
         "apps/portal/src/__tests__/components/finances-url-and-rules.test.ts",
-        "apps/portal/src/__tests__/components/finances-render-path.test.tsx"
+        "apps/portal/src/__tests__/components/finances-render-path.test.tsx",
+        "apps/portal/src/__tests__/components/finances-polish.test.tsx",
+        "apps/portal/src/__tests__/components/scoped-finances.test.tsx",
+        "apps/portal/src/__tests__/lib/finances-polish-model.test.ts"
       ],
       "guides": [],
       "limits": "Not eligible for Phase 1 retrieval or navigation. Canary-only until reviewed on northwind; the model's figures, the redirects and the reused money actions have not been verified against production data."
+    },
+    {
+      "id": "balance_adjustments",
+      "title": "Balance adjustments",
+      "status": "requiring_confirmation",
+      "scope": "Canary-only (northwind; the finances v2 area, by slug) Adjust balance panel on the v2 customer record's Money section and the v2 rental's Payments stage. One \"What happened?\" question records a charge correction (a signed Adjustment against one charge), money received outside the platform (a real payment flagged is_off_platform, applied like cash) or goodwill (a negative Adjustment); each keeps who, when and why in the append-only balance_adjustments table and is undone only by a reversing entry. Also Request a payment (a charge whose reference says what it is for, then the existing Collect Payment link flow) and a balance header computed by the shared balance reducer. Hidden until its migration is applied; nothing is deployed or verified end to end.",
+      "routePrefixes": [],
+      "permissionKeys": [
+        "payments",
+        "customers",
+        "rentals"
+      ],
+      "document": "docs/trax/unverified-modules.md",
+      "sources": [
+        {
+          "path": "apps/portal/src/components/balance/balance-sections.tsx",
+          "symbols": [
+            "CustomerBalanceSection",
+            "RentalBalanceSection",
+            "CustomerBalanceHeader",
+            "rentalRefusalFor"
+          ]
+        },
+        {
+          "path": "apps/portal/src/components/balance/adjust-balance-dialog.tsx",
+          "symbols": [
+            "AdjustBalanceDialog",
+            "What happened?"
+          ]
+        },
+        {
+          "path": "apps/portal/src/components/balance/adjustment-history.tsx",
+          "symbols": [
+            "AdjustmentHistory",
+            "UndoDialog",
+            "Save the note"
+          ]
+        },
+        {
+          "path": "apps/portal/src/components/balance/request-payment-dialog.tsx",
+          "symbols": [
+            "RequestPaymentDialog",
+            "payment_request"
+          ]
+        },
+        {
+          "path": "apps/portal/src/components/balance/balance-words.ts",
+          "symbols": [
+            "REASON_CODES",
+            "UNDO_REASON_CODES",
+            "WHAT_HAPPENED",
+            "balanceWords"
+          ]
+        },
+        {
+          "path": "apps/portal/src/hooks/use-balance-adjustments.ts",
+          "symbols": [
+            "useBalanceAdjustments",
+            "useBalanceActions",
+            "is_off_platform: true",
+            "adjust-customer-balance",
+            "reverse-payment",
+            "apply-payment"
+          ]
+        },
+        {
+          "path": "apps/portal/src/components/customers/collect-payment-dialog.tsx",
+          "symbols": [
+            "defaultAmount",
+            "description || \"Account payment\""
+          ]
+        },
+        {
+          "path": "apps/portal/src/components/customers-v2/customer-detail/section-money.tsx",
+          "symbols": [
+            "useV2(\"finances\")",
+            "CustomerBalanceSection",
+            "SectionMoneyClassic"
+          ]
+        },
+        {
+          "path": "apps/portal/src/components/rentals-v2/rental-detail/stage-payments.tsx",
+          "symbols": [
+            "useV2(\"finances\")",
+            "RentalBalanceSection",
+            "ScopedFinances"
+          ]
+        },
+        {
+          "path": "supabase/functions/adjust-customer-balance/core.ts",
+          "symbols": [
+            "handleAdjustCustomerBalance",
+            "isV2Request",
+            "resolveCaller",
+            "balance_adjust",
+            "balance_record_off_platform_payment",
+            "balance_adjustment_reverse"
+          ]
+        },
+        {
+          "path": "supabase/migrations/20260926120000_balance_adjustments.sql",
+          "symbols": [
+            "balance_adjustments_append_only",
+            "is_off_platform",
+            "balance_reason_codes",
+            "payments_off_platform_no_processor_check"
+          ]
+        }
+      ],
+      "tests": [
+        "apps/portal/src/__tests__/components/balance-adjust-panel.test.tsx",
+        "apps/portal/src/__tests__/components/balance-canary-placement.test.tsx",
+        "apps/portal/src/__tests__/components/balance-header-reducer.test.tsx",
+        "apps/portal/src/__tests__/lib/balance-adjustments-model.test.ts",
+        "tests/payment-plans/sql/balance-adjustments.test.ts",
+        "tests/integrations/balance/adjust-customer-balance-contract.test.ts"
+      ],
+      "guides": [],
+      "limits": "Not eligible for Phase 1 retrieval or navigation. Canary-only; needs migration 20260926120000_balance_adjustments.sql applied (and 20260925120000 for a positive adjustment to be payable) and adjust-customer-balance redeployed. Not verified against production data."
     },
     {
       "id": "invoices",

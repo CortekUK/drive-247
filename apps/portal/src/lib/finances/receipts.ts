@@ -18,6 +18,12 @@
  * Unapplied is the allocator's own `remaining_amount`, and only on captured
  * credit (Applied/Credit/Partial, not requires_capture) — the same rule as the
  * customer balance's credit (lib/finances/balance.ts `isCapturedCredit`).
+ *
+ * Off-platform (`payments.is_off_platform`, roadmap A1): money that really
+ * changed hands outside the platform. It is revenue like cash — its status and
+ * Collected follow the same rules as any payment — but no processor ever saw
+ * it, so it is never matched to one: provider "manual", no reference, no mode,
+ * no account, and so no dashboard link or "find it at Stripe" wording.
  */
 
 import { isMoneyReceived } from "@/lib/payment-status";
@@ -95,13 +101,20 @@ export function buildReceipts(
   const attemptFor = attemptsByPayment(raw.attempts);
   const rows: ReceiptRow[] = raw.payments.map((p) => {
     const attempt = attemptFor.get(p.id) ?? null;
-    const facts = providerFacts(p, attempt);
+    const isOffPlatform = p.is_off_platform === true;
+    const found = providerFacts(p, attempt);
+    // Off the platform: nothing to reconcile against a processor.
+    const facts: ProviderFacts = isOffPlatform ? { ...found, provider: "manual", providerRef: null, sessionMode: null } : found;
     const rental = p.rental_id ? lk.rentalById.get(p.rental_id) ?? null : null;
     const vehicleId = p.vehicle_id ?? rental?.vehicle_id ?? null;
     const amountCents = toCents(p.amount);
     const refundedCents = toCents(p.refund_amount);
     const countsAsReceived = isMoneyReceived(p);
-    const mode = attempt?.provider_mode === "live" || attempt?.provider_mode === "test" ? attempt.provider_mode : facts.sessionMode;
+    const mode = isOffPlatform
+      ? null
+      : attempt?.provider_mode === "live" || attempt?.provider_mode === "test"
+        ? attempt.provider_mode
+        : facts.sessionMode;
     // `payments.payment_plan_occurrence_id` and the attempt's `payment_id` are
     // written together (pp_record_success); either names the occurrence.
     const occurrenceId = p.payment_plan_occurrence_id ?? attempt?.occurrence_id ?? null;
@@ -142,7 +155,7 @@ export function buildReceipts(
       countsAsReceived,
       netCents: countsAsReceived ? Math.max(0, amountCents - refundedCents) : 0,
       references: facts.references,
-      providerAccount: attempt?.provider_account ?? null,
+      providerAccount: isOffPlatform ? null : attempt?.provider_account ?? null,
       checkoutSessionId: p.stripe_checkout_session_id ?? attempt?.checkout_session_id ?? null,
       verificationStatus: p.verification_status ?? null,
       recordedById: attempt?.created_by ?? null,
@@ -152,6 +165,7 @@ export function buildReceipts(
       // The old "Payment Requests" list's own selection, on the row itself —
       // not `checkoutSessionId`, which also falls back to a plan attempt's session.
       isPaymentRequest: !!p.stripe_checkout_session_id || !!p.square_payment_link_id,
+      isOffPlatform,
     };
   });
 

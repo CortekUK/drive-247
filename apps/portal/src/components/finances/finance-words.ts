@@ -16,7 +16,7 @@ import type {
   UpcomingMethod,
   UpcomingRow,
 } from "@/lib/finances/types";
-import { PAYMENT_REQUEST_STATUS } from "@/lib/finances/filters";
+import { AUTO_APPROVED_STATUS, PAYMENT_REQUEST_STATUS } from "@/lib/finances/filters";
 import type { PeriodKey } from "./finances-url";
 
 export const VIEW_LABEL: Record<FinanceView, string> = {
@@ -56,7 +56,18 @@ export const BILL_TONE: Record<BillStatus, ListTone> = {
   open: "info",
   overdue: "danger",
   credit: "muted",
+  draft: "muted",
 };
+
+/**
+ * The Billed view's "Draft" chip: the invoice-only rows (an `invoices` row
+ * with no ledger bill behind it). The `invoices` table has no draft rows —
+ * its check constraint allows pending / paid / cancelled — and the old
+ * Invoices tab's "Draft" option matched nothing, so the status is carried by
+ * the rows that ARE drafts in the sense an operator means: an invoice with
+ * nothing charged against it. Offered only when such a row exists.
+ */
+export const DRAFT_BILL_OPTION: { value: BillStatus; label: string } = { value: "draft", label: "Draft" };
 
 /* ── Received ────────────────────────────────────────────────────────────── */
 
@@ -93,6 +104,36 @@ export const PAYMENT_REQUESTS_OPTION = {
   label: "Payment requests",
   patch: { period: "all" as const },
 };
+
+/**
+ * The old Payments tab's "Auto-Approved" option, distinguishable again: the
+ * payments the processor settled that nobody reviewed by hand
+ * (`verification_status = 'auto_approved'`). "Received" keeps meaning money
+ * landed, however it was checked.
+ */
+export const AUTO_APPROVED_OPTION = {
+  value: AUTO_APPROVED_STATUS,
+  label: "Auto-approved",
+};
+
+/** How a payment was checked, in words (`payments.verification_status`). Null when it says nothing. */
+export function reviewWords(verificationStatus: string | null | undefined): string | null {
+  switch (verificationStatus) {
+    case "auto_approved":
+      return "Auto-approved";
+    case "approved":
+      return "Approved by hand";
+    case "pending":
+      return "Awaiting review";
+    case "rejected":
+      return "Rejected";
+    default:
+      return null;
+  }
+}
+
+/** The badge an off-platform payment carries on the row and in the side panel. */
+export const OFF_PLATFORM_LABEL = "Off-platform";
 
 /** "Stripe", "Square", or the method as recorded ("Cash", "Bank transfer"). */
 export function receiptMethodWords(row: Pick<ReceiptRow, "provider" | "method">): string {

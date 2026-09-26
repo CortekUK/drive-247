@@ -19,8 +19,16 @@ export interface FinanceLookups {
   chargeById: Map<string, RawCharge>;
   paymentById: Map<string, RawPayment>;
   extensionById: Map<string, RawExtension>;
-  /** Earliest `invoices` row per rental. */
+  /**
+   * The NEWEST `invoices` row per rental — the one the payment window's
+   * `latestInvoice` picks (created_at, newest first) — for wherever ONE
+   * invoice is shown.
+   */
   invoiceByRental: Map<string, RawInvoice>;
+  /** EVERY `invoices` row per rental, newest first. Nothing is dropped. */
+  invoicesByRental: Map<string, RawInvoice[]>;
+  /** `invoices` rows with no rental at all (the column is NOT NULL today; a reader should not depend on it). */
+  invoicesWithoutRental: RawInvoice[];
   /** `payment_applications`, summed per (payment, charge), keyed by charge. */
   allocationsByCharge: Map<string, Allocation[]>;
   /** The same allocations keyed by payment. */
@@ -35,6 +43,23 @@ export function rentalRefOf(rental: Pick<RawRental, "id" | "rental_number"> | nu
   if (rental?.rental_number) return rental.rental_number;
   const id = rental?.id ?? rentalId;
   return id ? id.slice(0, 8).toUpperCase() : null;
+}
+
+/**
+ * Newest first, as `add-payment-dialog`'s `latestInvoice` reads them
+ * (`order created_at desc`); ties by invoice date, then id, so the order is
+ * stable.
+ */
+export function newestInvoiceFirst(a: RawInvoice, b: RawInvoice): number {
+  const ca = String(a.created_at ?? "");
+  const cb = String(b.created_at ?? "");
+  if (ca !== cb) return ca < cb ? 1 : -1;
+  const da = String(a.invoice_date ?? "");
+  const db = String(b.invoice_date ?? "");
+  if (da !== db) return da < db ? 1 : -1;
+  const ia = String(a.id ?? "");
+  const ib = String(b.id ?? "");
+  return ia < ib ? -1 : ia > ib ? 1 : 0;
 }
 
 const push = <K, V>(m: Map<K, V[]>, k: K, v: V) => {
@@ -55,12 +80,16 @@ export function buildLookups(raw: FinanceRawData): FinanceLookups {
   const paymentById = new Map(raw.payments.map((p) => [p.id, p] as const));
   const extensionById = new Map(raw.extensions.map((e) => [e.id, e] as const));
 
-  const invoiceByRental = new Map<string, RawInvoice>();
-  for (const inv of raw.invoices) {
-    if (!inv.rental_id || !inv.invoice_number) continue;
-    const prev = invoiceByRental.get(inv.rental_id);
-    if (!prev || String(inv.created_at ?? "") < String(prev.created_at ?? "")) invoiceByRental.set(inv.rental_id, inv);
+  // Every invoice is kept: a rental's second and later invoices, and an
+  // invoice with no rental, must still be reachable (Send, Delete).
+  const invoicesByRental = new Map<string, RawInvoice[]>();
+  const invoicesWithoutRental: RawInvoice[] = [];
+  for (const inv of [...raw.invoices].sort(newestInvoiceFirst)) {
+    if (inv.rental_id) push(invoicesByRental, inv.rental_id, inv);
+    else invoicesWithoutRental.push(inv);
   }
+  const invoiceByRental = new Map<string, RawInvoice>();
+  invoicesByRental.forEach((list, rentalId) => invoiceByRental.set(rentalId, list[0]));
 
   // One allocation per (payment, charge). The table carries a unique
   // constraint on that pair, but a reader should not depend on it.
@@ -87,6 +116,8 @@ export function buildLookups(raw: FinanceRawData): FinanceLookups {
     paymentById,
     extensionById,
     invoiceByRental,
+    invoicesByRental,
+    invoicesWithoutRental,
     allocationsByCharge,
     allocationsByPayment,
   };

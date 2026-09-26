@@ -29,8 +29,13 @@ import {
   type PlanOperations,
   type PlanRow,
   type PlanStore,
+  type PostRenewalInput,
+  type PostRenewalResult,
   type RecordFailureInput,
   type RecordSuccessInput,
+  type RenewalInsuranceDecision,
+  type RenewalOperations,
+  type RenewalPricingInputs,
 } from "../payment-plans/types.ts";
 import { LEGACY_MECHANISM_ERROR_PREFIX, PlanStoreError, type PlanStoreErrorCode } from "../payment-plans/errors.ts";
 import { decimalToCents } from "../payment-plans/amounts.ts";
@@ -128,8 +133,14 @@ export function mapOccurrence(r: any): OccurrenceRow {
     movedFrom: dateOrNull(r.moved_from),
     paidAt: isoOrNull(r.paid_at),
     note: r.note ?? null,
+    renews: r.renews === true,
+    extensionId: r.extension_id ?? null,
+    insuranceStatus: r.insurance_status ?? null,
   };
 }
+
+/** A numeric column as PostgREST returns it (number or string) → a JS number of dollars, or null. */
+const numOrNull = (v: unknown): number | null => (v === null || v === undefined || v === "" ? null : Number(v));
 
 // deno-lint-ignore no-explicit-any
 export function mapAttempt(r: any): AttemptRow {
@@ -157,7 +168,7 @@ export function mapAttempt(r: any): AttemptRow {
 
 const EVENT_COLUMNS = "id, plan_id, occurrence_id, kind, dedupe_key, channel, amount, detail, actor_id, created_at";
 
-export class SupabasePlanStore implements PlanStore, PlanOperations, PlanLookups {
+export class SupabasePlanStore implements PlanStore, PlanOperations, PlanLookups, RenewalOperations {
   constructor(private readonly db: PlanDbClient) {}
 
   /** Call a pp_* function; throw on error. */
@@ -423,6 +434,92 @@ export class SupabasePlanStore implements PlanStore, PlanOperations, PlanLookups
         p_plan: filter?.planId ?? null,
       })
     ).map(mapOccurrence);
+  }
+
+  // ── RenewalOperations (20260926120200_open_ended_plans.sql) ────────────────
+
+  async listRenewalPlans(filter?: { tenantId?: string; planId?: string }): Promise<PlanRow[]> {
+    return this.rows<PlanRow>("pp_list_renewal_plans", { p_tenant: filter?.tenantId ?? null, p_plan: filter?.planId ?? null });
+  }
+
+  /** Plain SELECTs: the rental's rate and the tenant's tax / fee settings (what auto-extend reads). */
+  async renewalPricing(rentalId: string): Promise<RenewalPricingInputs> {
+    const { data: rental, error } = await this.db
+      .from("rentals")
+      .select("id, tenant_id, customer_id, end_date, monthly_amount, discount_applied")
+      .eq("id", rentalId)
+      .maybeSingle();
+    if (error) throw toStoreError("renewalPricing(rental)", error);
+    if (!rental) throw new PlanStoreError("not_found", `Rental ${rentalId} not found`);
+    const { data: tenant, error: tenantError } = await this.db
+      .from("tenants")
+      .select("tax_enabled, tax_percentage, service_fee_enabled, service_fee_type, service_fee_value, service_fee_amount")
+      .eq("id", rental.tenant_id)
+      .maybeSingle();
+    if (tenantError) throw toStoreError("renewalPricing(tenant)", tenantError);
+    if (!tenant) throw new PlanStoreError("not_found", `Tenant ${rental.tenant_id} not found`);
+    return {
+      rentalId: rental.id,
+      tenantId: rental.tenant_id,
+      customerId: rental.customer_id,
+      rentalEnd: dateOrNull(rental.end_date),
+      monthlyAmount: numOrNull(rental.monthly_amount),
+      discountApplied: numOrNull(rental.discount_applied),
+      tenant: {
+        tax_enabled: tenant.tax_enabled ?? null,
+        tax_percentage: numOrNull(tenant.tax_percentage),
+        service_fee_enabled: tenant.service_fee_enabled ?? null,
+        service_fee_type: tenant.service_fee_type ?? null,
+        service_fee_value: numOrNull(tenant.service_fee_value),
+        service_fee_amount: numOrNull(tenant.service_fee_amount),
+      },
+    };
+  }
+
+  async appendRenewalPeriod(planId: string, draft: OccurrenceDraft, actorId?: string | null): Promise<{ occurrenceId: string; appended: boolean }> {
+    const data = await this.call<{ occurrenceId?: string; appended?: boolean } | null>("pp_append_renewal_period", {
+      p_plan_id: planId,
+      p_draft: draft,
+      p_actor: actorId ?? null,
+    });
+    if (!data || typeof data.occurrenceId !== "string" || typeof data.appended !== "boolean") {
+      throw new PlanStoreError("refused", `pp_append_renewal_period: unexpected result ${JSON.stringify(data)}`);
+    }
+    return { occurrenceId: data.occurrenceId, appended: data.appended };
+  }
+
+  async postRenewalPeriod(input: PostRenewalInput): Promise<PostRenewalResult> {
+    const data = await this.call<PostRenewalResult | null>("pp_post_renewal_period", {
+      p_occurrence_id: input.occurrenceId,
+      p_breakdown: input.breakdown,
+      p_insurance_requested: input.insuranceRequested,
+      p_give_days_now: input.giveDaysNow ?? false,
+      p_actor: input.actorId ?? null,
+    });
+    if (!data || typeof data.extensionId !== "string" || typeof data.posted !== "boolean") {
+      throw new PlanStoreError("refused", `pp_post_renewal_period: unexpected result ${JSON.stringify(data)}`);
+    }
+    return { extensionId: data.extensionId, posted: data.posted, sequenceNumber: Number(data.sequenceNumber), endDateMoved: data.endDateMoved === true };
+  }
+
+  async recordRenewalInsurance(input: RenewalInsuranceDecision): Promise<void> {
+    // Only the keys pp_record_renewal_insurance accepts — it RAISES on any other.
+    const decision: Record<string, unknown> = { outcome: input.outcome };
+    if (input.policyRef) decision.policyRef = input.policyRef;
+    if (input.premiumCents !== undefined && input.premiumCents !== null) decision.premiumCents = input.premiumCents;
+    if (input.coveredFrom) decision.coveredFrom = input.coveredFrom;
+    if (input.coveredTo) decision.coveredTo = input.coveredTo;
+    if (input.reason) decision.reason = input.reason.slice(0, 500);
+    await this.call("pp_record_renewal_insurance", { p_occurrence_id: input.occurrenceId, p_decision: decision });
+  }
+
+  async reconcileRenewals(filter?: { tenantId?: string; planId?: string }): Promise<string[]> {
+    const rows = await this.rows<string | { pp_reconcile_renewals?: string }>("pp_reconcile_renewals", {
+      p_tenant: filter?.tenantId ?? null,
+      p_plan: filter?.planId ?? null,
+    });
+    // PostgREST returns a SETOF scalar as bare values.
+    return rows.map((r) => (typeof r === "string" ? r : String(r?.pp_reconcile_renewals ?? "")));
   }
 
   async rentalOwedCents(rentalId: string): Promise<number> {

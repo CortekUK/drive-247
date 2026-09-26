@@ -29,6 +29,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { getConnectAccountId, getChargePlatformAccount, getStripeClientForAccount, type PlatformAccount } from "../_shared/stripe-client.ts";
+import { addPeriod, applyExceptions, computeBreakdown, round2 } from "../_shared/payment-plans/renewal-pricing.ts";
 // Vendored inline so the function deploys as a single self-contained file.
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -98,52 +99,9 @@ function deriveBookingOrigin(tenantSlug: string): string {
 // ---------------------------------------------------------------------------
 // Period math + money helpers
 // ---------------------------------------------------------------------------
-function addPeriod(endDate: string, unit: string, count = 1): { newEndDate: string; days: number } {
-  // endDate is a YYYY-MM-DD DATE. Advance by `count` units (e.g. 2 weeks, 10 days, 3 months).
-  const n = Math.max(1, Math.floor(count || 1));
-  const d = new Date(`${endDate}T00:00:00Z`);
-  const before = d.getTime();
-  if (unit === "Daily") {
-    d.setUTCDate(d.getUTCDate() + n);
-  } else if (unit === "Monthly") {
-    d.setUTCMonth(d.getUTCMonth() + n);
-  } else {
-    d.setUTCDate(d.getUTCDate() + n * 7); // Weekly
-  }
-  const days = Math.round((d.getTime() - before) / (24 * 60 * 60 * 1000));
-  return { newEndDate: d.toISOString().split("T")[0], days };
-}
-
-// Apply per-occurrence schedule exceptions to the next renewal's grid date:
-// skip past skipped dates (advancing one period each time), then relocate if moved.
-function applyExceptions(gridYmd: string, unit: string, count: number, ex: any): string {
-  let g = gridYmd, guard = 0;
-  const skips: string[] = Array.isArray(ex?.skips) ? ex.skips : [];
-  const moves: Record<string, string> = (ex && typeof ex.moves === "object") ? ex.moves : {};
-  while (skips.includes(g) && guard < 500) { g = addPeriod(g, unit, count).newEndDate; guard++; }
-  return moves[g] || g;
-}
-
-function round2(n: number): number {
-  return Math.round((n + Number.EPSILON) * 100) / 100;
-}
-
-function computeBreakdown(rentalAmount: number, tenant: any): {
-  rental: number; tax: number; serviceFee: number; total: number;
-} {
-  const rental = round2(Number(rentalAmount) || 0);
-  const taxPct = tenant?.tax_enabled ? Number(tenant?.tax_percentage || 0) : 0;
-  const tax = round2(rental * (taxPct / 100));
-  let serviceFee = 0;
-  if (tenant?.service_fee_enabled) {
-    if (tenant?.service_fee_type === "percentage") {
-      serviceFee = round2(rental * (Number(tenant?.service_fee_value || 0) / 100));
-    } else {
-      serviceFee = round2(Number(tenant?.service_fee_value ?? tenant?.service_fee_amount ?? 0));
-    }
-  }
-  return { rental, tax, serviceFee, total: round2(rental + tax + serviceFee) };
-}
+// addPeriod, applyExceptions, round2 and computeBreakdown live in
+// ../_shared/payment-plans/renewal-pricing.ts (moved there verbatim) — the SAME code
+// auto-extend-rentals and the payment-plan engine run.
 
 function fmtCurrency(amount: number, code: string): string {
   try {

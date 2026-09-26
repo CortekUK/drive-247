@@ -170,8 +170,15 @@
       "id": "finances",
       "title": "Finances",
       "status": "requiring_confirmation",
-      "scope": "Canary-only (northwind, by slug; not widened by portal_experience) V2 Finances tab: one screen over bills, payments received, plan payments and fines, laid out like the other hero tabs (a Collected graph and an owed card that turn over to a filter panel), with Needs attention and a side panel. On the canary the Payments, Invoices and Fines rows become one Finances row and their list routes redirect into it. Every action reuses an existing money path; nothing is verified end to end.",
+      "scope": "Canary-only (northwind, by slug; not widened by portal_experience) V2 Finances tab: one screen over bills, payments received, plan payments and fines, laid out like the other hero tabs (a graph and an owed card that turn over to a filter panel; the graph opens on Collected, and on the Fines view on Fines issued with Fines paid, replacing the old Payment analytics and Fine analytics links, whose routes still answer by URL), with Needs attention and a side panel. Every invoice of a rental is listed on its bills with Send and Delete, and an invoice with no bill is its own Invoice only row. The same views scoped to one rental or one customer (ScopedFinances) reuse the tables, side panel and actions. On the canary the Payments, Invoices and Fines rows become one Finances row and their list routes redirect into it. Every action reuses an existing money path; nothing is verified end to end.",
       "limits": "Not eligible for Phase 1 retrieval or navigation. Canary-only until reviewed on northwind; the model's figures, the redirects and the reused money actions have not been verified against production data."
+    },
+    {
+      "id": "balance_adjustments",
+      "title": "Balance adjustments",
+      "status": "requiring_confirmation",
+      "scope": "Canary-only (northwind; the finances v2 area, by slug) Adjust balance panel on the v2 customer record's Money section and the v2 rental's Payments stage. One \"What happened?\" question records a charge correction (a signed Adjustment against one charge), money received outside the platform (a real payment flagged is_off_platform, applied like cash) or goodwill (a negative Adjustment); each keeps who, when and why in the append-only balance_adjustments table and is undone only by a reversing entry. Also Request a payment (a charge whose reference says what it is for, then the existing Collect Payment link flow) and a balance header computed by the shared balance reducer. Hidden until its migration is applied; nothing is deployed or verified end to end.",
+      "limits": "Not eligible for Phase 1 retrieval or navigation. Canary-only; needs migration 20260926120000_balance_adjustments.sql applied (and 20260925120000 for a positive adjustment to be payable) and adjust-customer-balance redeployed. Not verified against production data."
     },
     {
       "id": "invoices",
@@ -339,7 +346,7 @@
     "verified": 6,
     "partially_documented": 21,
     "unsupported": 1,
-    "requiring_confirmation": 19
+    "requiring_confirmation": 20
   },
   "permissionKeys": [
     "vehicles",

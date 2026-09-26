@@ -23,6 +23,12 @@
  *      mark in flight (write-ahead), charge with the key, classify; checkout
  *      link → claim, mint the stable URL, email it; manual → an
  *      occurrence_due event and an operator notification. Nothing charged.
+ *   1b. RENEWALS (Wave 3, renewals.ts) — open-ended plans that extend the
+ *      rental: reconcile periods settled outside the plan, append a renewal
+ *      plan's next period once its last is settled, post periods about to
+ *      fall due (an extension + its Extension* charges) and buy their
+ *      insurance BEFORE anything can charge them. Before the reminders, so a
+ *      reminder quotes the period's final price.
  *   4. REMINDERS AFTER DUE WORK — offsets > 0 only ("still unpaid"), and only
  *      for occurrences the due work left open. A card retry lands on a later
  *      day than the due date (retry_after_days), so "+2 days, still unpaid"
@@ -54,15 +60,21 @@ import type {
   PlanOperations,
   PlanRow,
   PlanStore,
+  RenewalBreakdown,
+  RenewalCoverage,
+  RenewalPeriodUnit,
+  RenewalPricingInputs,
   ScheduleEnd,
   ScheduleOverride,
   ScheduleRule,
   Weekday,
 } from "./types.ts";
 import { DEFAULT_CHARGE_LOCAL_TIME } from "./types.ts";
-import type { ChargeOutcome, ChargeRequest, LinkMinter, Notification, Notifier, PaymentProvider } from "./providers.ts";
+import type { ChargeOutcome, ChargeRequest, LinkMinter, Notification, Notifier, PaymentProvider, RenewalInsurer } from "./providers.ts";
+import { nextRenewalDraft, normalizeCoverage, runRenewalStage, storeHasRenewals, type RenewalStageResult } from "./renewals.ts";
+import { renewalBreakdownCents } from "./renewal-pricing.ts";
 import { classifyCharge, customerSafeReason, type ChargeClass } from "./classify.ts";
-import { addDays, addHoursToInstant, compareInstants, dueAtUtc, isISODate, isValidTimeZone, localDateInZone, secondsBetween, validateChargeTime } from "./dates.ts";
+import { addDays, addHoursToInstant, compareInstants, dueAtUtc, isISODate, isoWeekday, isValidTimeZone, localDateInZone, parseISODate, secondsBetween, validateChargeTime } from "./dates.ts";
 import { buildSchedule } from "./schedule.ts";
 import { PlanRuleError, PlanStoreError } from "./errors.ts";
 
@@ -77,6 +89,12 @@ export interface EngineDeps {
   provider: PaymentProvider;
   notifier: Notifier;
   links: LinkMinter;
+  /**
+   * Buys a renewal period's Bonzah policy before it is charged (A4). Optional:
+   * without one, a period that asks for cover is charged WITHOUT it — no
+   * premium — and the operator is alerted. Additive (Wave 3).
+   */
+  insurer?: RenewalInsurer | null;
 }
 
 /** An attempt older than this with no answer is recovered (design §7.1: 600 s). */
@@ -140,7 +158,9 @@ export interface TickResult {
   recovered: RecoveryResult[];
   reminders: { occurrenceId: string; planId: string; offset: number; sent: boolean }[];
   actions: OccurrenceActionResult[];
-  errors: { occurrenceId?: string; attemptId?: string; stage: "recovery" | "reminders" | "due"; message: string }[];
+  errors: { occurrenceId?: string; attemptId?: string; stage: "recovery" | "renewals" | "reminders" | "due"; message: string }[];
+  /** What the renewal stage did (only when the store carries renewals). Additive (Wave 3). */
+  renewals?: RenewalStageResult;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -812,6 +832,14 @@ export async function runTick(deps: EngineDeps, opts: { asOf: string; tenantId?:
     }
   }
 
+  // 1b. Renewals: reconcile, append, post, insure — before any reminder quotes
+  //     a period's price and before the due work can charge one.
+  if (storeHasRenewals(deps.store)) {
+    const stage = await runRenewalStage({ store: deps.store, notifier: deps.notifier, insurer: deps.insurer ?? null }, asOf, filter);
+    result.renewals = stage;
+    for (const e of stage.errors) result.errors.push({ stage: "renewals", occurrenceId: e.occurrenceId, message: e.planId ? `plan ${e.planId}: ${e.message}` : e.message });
+  }
+
   // One reminder pass. `which` picks the offsets: ≤ 0 before the due work,
   // > 0 after it. Each pass lists what is open AT THAT MOMENT, so the second
   // one never reminds about an occurrence the due work has just settled.
@@ -1126,6 +1154,21 @@ export interface PlanForm {
   reminderOffsets?: number[];
   chargeLocalTime?: string;
   overrides?: ScheduleOverride[];
+  /**
+   * Additive (Wave 3): "keeps renewing until stopped". With renewal set the
+   * plan RENEWS THE RENTAL one period at a time: end.kind must be 'open', the
+   * anchor is the rental's end date (whatever the form says), the rhythm is
+   * the period, and every amount is priced by the server exactly as
+   * auto-extend prices a period (ctx.renewalPricing) — freq, interval,
+   * weekdays, anchor and the amount fields of the form are not used.
+   */
+  renewal?: {
+    extendsRental: true;
+    periodUnit: RenewalPeriodUnit;
+    periodCount: number;
+    insurance?: RenewalCoverage | null;
+    sendAgreementEachPeriod: boolean;
+  };
 }
 
 /** What only the server knows (or the simulator's store). */
@@ -1141,6 +1184,8 @@ export interface PlanContext {
   /** pp_rental_owed_cents — the total a split plan collects. */
   owedCents: number;
   stripePaymentMethodId?: string | null;
+  /** Additive (Wave 3): the rental's rate and the tenant's tax/fee settings — required for a renewal form. */
+  renewalPricing?: Pick<RenewalPricingInputs, "monthlyAmount" | "discountApplied" | "tenant"> | null;
 }
 
 export interface PlanDraft {
@@ -1156,6 +1201,14 @@ export interface PlanDraft {
     lastDueDate: ISODate;
     /** due_at of each occurrence, in order (the preview shows the local time). */
     dueAts: string[];
+    /** Additive (Wave 3): a renewing plan's first period and what one period costs. */
+    renewal?: {
+      periodStart: ISODate;
+      periodEnd: ISODate;
+      days: number;
+      breakdown: RenewalBreakdown;
+      insurance: RenewalCoverage | null;
+    };
   };
 }
 
@@ -1174,6 +1227,7 @@ export function planFormToRowAndSchedule(form: PlanForm, ctx: PlanContext): Plan
   if (!isValidTimeZone(ctx.timezone)) throw new RangeError(`Unknown timezone ${ctx.timezone}`);
   const chargeLocalTime = form.chargeLocalTime ?? DEFAULT_CHARGE_LOCAL_TIME;
   validateChargeTime(chargeLocalTime);
+  if (form.renewal) return renewalFormToRowAndSchedule(form, ctx, chargeLocalTime);
 
   let end: ScheduleEnd;
   switch (form.end?.kind) {
@@ -1223,17 +1277,7 @@ export function planFormToRowAndSchedule(form: PlanForm, ctx: PlanContext): Plan
       throw new RangeError(`Unknown amount mode ${JSON.stringify(form.amountMode)}`);
   }
 
-  const maxAttempts = form.maxAttempts ?? 3;
-  const retryAfterDays = form.retryAfterDays ?? 2;
-  if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 10) throw new RangeError("maxAttempts must be 1–10");
-  if (!Number.isInteger(retryAfterDays) || retryAfterDays < 1 || retryAfterDays > 14) throw new RangeError("retryAfterDays must be 1–14");
-  const offsets = [...new Set(form.reminderOffsets ?? [-2, 0, 2])].sort((a, b) => a - b);
-  if (offsets.some((o) => !Number.isInteger(o) || Math.abs(o) > REMINDER_HORIZON_DAYS)) {
-    throw new RangeError(`Reminder offsets must be whole days within ±${REMINDER_HORIZON_DAYS}`);
-  }
-  if (!["auto_charge", "checkout_link", "manual"].includes(form.collectionMethod)) {
-    throw new RangeError(`Unknown collection method ${JSON.stringify(form.collectionMethod)}`);
-  }
+  const collection = collectionSettings(form);
 
   const occurrences = buildSchedule(rule, amount, form.overrides);
   const totalCents = occurrences.reduce((s, o) => s + o.amountCents, 0);
@@ -1246,11 +1290,7 @@ export function planFormToRowAndSchedule(form: PlanForm, ctx: PlanContext): Plan
     currency: (ctx.currency || "usd").toLowerCase(),
     timezone: ctx.timezone,
     chargeLocalTime,
-    collectionMethod: form.collectionMethod,
-    fallbackToLink: form.fallbackToLink ?? true,
-    maxAttempts,
-    retryAfterDays,
-    reminderOffsets: offsets,
+    ...collection,
     paymentProvider: ctx.paymentProvider,
     stripePaymentMethodId: ctx.stripePaymentMethodId ?? null,
     extendsRental: false,
@@ -1269,3 +1309,86 @@ export function planFormToRowAndSchedule(form: PlanForm, ctx: PlanContext): Plan
     },
   };
 }
+
+/** The collection half of the form (method, retries, reminders), checked. Shared by every plan shape. */
+function collectionSettings(form: PlanForm): Pick<PlanRow, "collectionMethod" | "fallbackToLink" | "maxAttempts" | "retryAfterDays" | "reminderOffsets"> {
+  const maxAttempts = form.maxAttempts ?? 3;
+  const retryAfterDays = form.retryAfterDays ?? 2;
+  if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 10) throw new RangeError("maxAttempts must be 1–10");
+  if (!Number.isInteger(retryAfterDays) || retryAfterDays < 1 || retryAfterDays > 14) throw new RangeError("retryAfterDays must be 1–14");
+  const offsets = [...new Set(form.reminderOffsets ?? [-2, 0, 2])].sort((a, b) => a - b);
+  if (offsets.some((o) => !Number.isInteger(o) || Math.abs(o) > REMINDER_HORIZON_DAYS)) {
+    throw new RangeError(`Reminder offsets must be whole days within ±${REMINDER_HORIZON_DAYS}`);
+  }
+  if (!["auto_charge", "checkout_link", "manual"].includes(form.collectionMethod)) {
+    throw new RangeError(`Unknown collection method ${JSON.stringify(form.collectionMethod)}`);
+  }
+  return { collectionMethod: form.collectionMethod, fallbackToLink: form.fallbackToLink ?? true, maxAttempts, retryAfterDays, reminderOffsets: offsets };
+}
+
+/**
+ * A renewing plan (Wave 3): the rental's end date is the anchor, one period is
+ * the rhythm, and the plan is created with its FIRST period only — the engine
+ * appends each next one when the last is settled (renewals.ts). The price is
+ * auto-extend's (renewalBreakdownCents); insurance is bought per period later.
+ */
+function renewalFormToRowAndSchedule(form: PlanForm, ctx: PlanContext, chargeLocalTime: string): PlanDraft {
+  const ren = form.renewal!;
+  if (ren.extendsRental !== true) throw new RangeError("renewal.extendsRental must be true");
+  if (!["day", "week", "month"].includes(ren.periodUnit)) throw new RangeError(`Unknown renewal period unit ${JSON.stringify(ren.periodUnit)}`);
+  if (!Number.isInteger(ren.periodCount) || ren.periodCount < 1 || ren.periodCount > MAX_RENEWAL_PERIOD_COUNT) {
+    throw new PlanRuleError("interval_invalid", `A renewal period is 1 to ${MAX_RENEWAL_PERIOD_COUNT} ${ren.periodUnit}s`);
+  }
+  if (form.end?.kind !== "open") throw new RangeError("A renewing plan is open-ended: end.kind must be 'open'");
+  if (!ctx.rentalEnd) throw new PlanRuleError("no_occurrences", "This rental has no end date — a renewing plan starts on it");
+  if (!ctx.renewalPricing) throw new RangeError("A renewing plan needs the rental's rate (ctx.renewalPricing)");
+  const anchor = ctx.rentalEnd;
+  parseISODate(anchor);
+
+  const freq: Freq = ren.periodUnit === "day" ? "daily" : ren.periodUnit === "week" ? "weekly" : "monthly";
+  const rule: ScheduleRule = {
+    freq,
+    interval: ren.periodCount,
+    anchor,
+    firstOccurrence: "on_anchor",
+    end: { kind: "open", through: anchor },
+    ...(freq === "weekly" ? { byWeekday: [isoWeekday(anchor)] } : {}),
+    ...(freq === "monthly" ? { byMonthDay: parseISODate(anchor).d } : {}),
+  };
+  const breakdown = renewalBreakdownCents(ctx.renewalPricing);
+  const first = nextRenewalDraft(anchor, ren, ctx.renewalPricing);
+  const insurance = normalizeCoverage(ren.insurance ?? null);
+  const plan: Omit<PlanRow, "id" | "version" | "status"> = {
+    tenantId: ctx.tenantId,
+    rentalId: ctx.rentalId,
+    customerId: ctx.customerId,
+    rule,
+    amount: { mode: "fixed", amountCents: breakdown.totalCents },
+    currency: (ctx.currency || "usd").toLowerCase(),
+    timezone: ctx.timezone,
+    chargeLocalTime,
+    ...collectionSettings(form),
+    paymentProvider: ctx.paymentProvider,
+    stripePaymentMethodId: ctx.stripePaymentMethodId ?? null,
+    extendsRental: true,
+    renewal: { periodUnit: ren.periodUnit, periodCount: ren.periodCount, insurance, sendAgreementEachPeriod: !!ren.sendAgreementEachPeriod },
+  };
+  return {
+    plan,
+    occurrences: [first],
+    summary: {
+      count: 1,
+      totalCents: breakdown.totalCents,
+      owedCents: ctx.owedCents,
+      // A renewing plan does not collect the balance; it prices each new period.
+      differsFromOwed: false,
+      firstDueDate: first.dueDate,
+      lastDueDate: first.dueDate,
+      dueAts: [dueAtUtc(first.dueDate, chargeLocalTime, ctx.timezone)],
+      renewal: { periodStart: first.periodStart, periodEnd: first.periodEnd, days: first.days, breakdown, insurance },
+    },
+  };
+}
+
+/** payment_plans.renewal_period_count is 1..52. */
+export const MAX_RENEWAL_PERIOD_COUNT = 52;

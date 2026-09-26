@@ -10,16 +10,32 @@
  */
 
 import type { AttemptRow, ISODate, OccurrenceRow, PlanEvent, PlanRow } from "@/lib/payment-plans/types";
+import type { RenewalInsuranceStatus, RenewalView } from "./renewal";
 
 export interface PlanView extends PlanRow {
+  /**
+   * Set when the plan keeps renewing the rental (extends_rental). Read
+   * defensively from the row — see rows.ts `renewalFromRow`.
+   */
+  renewal?: RenewalView | null;
   createdAt?: string | null;
   pausedAt?: string | null;
   cancelledAt?: string | null;
   completedAt?: string | null;
 }
 
-/** `movedFrom`, `paidAt` and `note` are on the engine's row type already. */
-export type OccurrenceView = OccurrenceRow;
+/**
+ * `movedFrom`, `paidAt` and `note` are on the engine's row type already.
+ * The Wave 3 additions — `renews` (a renewal period), `extensionId` (the
+ * `rental_extensions` row the period created) and `insuranceStatus` — are
+ * optional here too, so rows from an engine that does not carry them yet
+ * still fit.
+ */
+export type OccurrenceView = OccurrenceRow & {
+  renews?: boolean;
+  extensionId?: string | null;
+  insuranceStatus?: RenewalInsuranceStatus | null;
+};
 
 /** `createdAt`, `finishedAt` and `checkoutSessionId` are on the engine's row type already. */
 export type AttemptView = AttemptRow;

@@ -11,6 +11,18 @@
  *   by      [card auto-charge · emailed link · I'll record it]
  *   reminders −2 / 0 / +2 days
  *
+ * One more answer to "until" (payment-plans Wave 3): **keeps renewing until
+ * stopped**. It reveals three more lines in the same style —
+ *
+ *   renew every [N] [days · weeks · months]
+ *   cover each renewal with [the rental's coverage · no insurance]   (only when the tenant sells Bonzah)
+ *   send an extension agreement each period [yes · no]               (default no)
+ *
+ * — and turns the plan into one that moves the rental's end date one period
+ * at a time, each period priced by the SERVER when it starts (lib/payment-
+ * plans-ui/renewal.ts has the contract). The rhythm lines give way to "renew
+ * every", because a renewal is collected when its period starts.
+ *
  * There is no plan TYPE anywhere in here. What the business once called "pay as
  * you go" and "installments" are just two corners of the same sentence, and the
  * lead's rule is that the operator is never told which corner they are in
@@ -35,6 +47,19 @@ import type {
 } from "@/lib/payment-plans/types";
 import type { PlanForm as EnginePlanForm } from "@/lib/payment-plans/engine";
 import {
+  MAX_RENEW_EVERY,
+  RENEWAL_PREVIEW_PERIODS,
+  describeCoverage,
+  describeEvery,
+  hasCoverage,
+  renewalBoundaries,
+  renewalRule,
+  type RenewalContext,
+  type RenewalShape,
+  type RenewalSpec,
+  type RenewalUnit,
+} from "./renewal";
+import {
   WEEKDAY_LONG,
   centsToInput,
   dayNumber,
@@ -54,7 +79,8 @@ export type AmountChoice = "split_total" | "split_by_days" | "fixed";
 export type RhythmChoice = "weekly" | "every_2_weeks" | "twice_a_week" | "monthly" | "every_n" | "pick_dates";
 export type IntervalUnit = "days" | "weeks" | "months";
 export type StartChoice = "rental_start" | "date";
-export type EndChoice = "rental_end" | "count" | "until";
+/** "renewing" = keeps renewing until stopped: the plan extends the rental one period at a time. */
+export type EndChoice = "rental_end" | "count" | "until" | "renewing";
 
 /** The amount words, in the order the sentence offers them. */
 export const AMOUNT_CHOICES: readonly { id: AmountChoice; label: string; hint: string }[] = [
@@ -118,6 +144,14 @@ export interface PlanFormState {
   reminders: number[];
   /** Dates moved in the preview. Cleared whenever the rhythm changes. */
   overrides: ScheduleOverride[];
+  /* ── keeps renewing until stopped (endBy === "renewing") ── */
+  /** N, for "renew every N units". */
+  renewEvery: number;
+  renewUnit: RenewalUnit;
+  /** Cover each renewal with the rental's own Bonzah coverage, or none. */
+  renewInsurance: "rental" | "none";
+  /** Send an extension agreement for each new period. Off by default for renewals (roadmap A5). */
+  renewAgreement: boolean;
 }
 
 /** What the rental says, which the form's words refer to. */
@@ -129,6 +163,12 @@ export interface PlanContext {
   balanceCents: number;
   /** What to say when the balance is zero (New Rental: the price hasn't been entered yet). */
   zeroBalanceMessage?: string;
+  /**
+   * Present → "keeps renewing until stopped" is offered. Carries what the
+   * insurance question needs (does the tenant sell Bonzah; what cover the
+   * rental has). Absent (the Developer-tab simulator) → never offered.
+   */
+  renewal?: RenewalContext;
 }
 
 export type FormField =
@@ -143,14 +183,21 @@ export type FormField =
   | "endBy"
   | "count"
   | "until"
-  | "method";
+  | "method"
+  | "renewEvery";
 
 export interface PlanDraft {
   rule: ScheduleRule;
+  /**
+   * For a renewing plan this is `{ mode: "per_period", dailyRateCents: 0 }` —
+   * a marker, never sent as a price: the server prices every period itself.
+   */
   amount: AmountSpec;
   collectionMethod: CollectionMethod;
   reminderOffsets: number[];
   overrides: ScheduleOverride[];
+  /** Set only for "keeps renewing until stopped". */
+  renewal?: RenewalSpec;
 }
 
 export type FormResult = { ok: true; plan: PlanDraft } | { ok: false; field: FormField; message: string };
@@ -182,6 +229,10 @@ export function defaultPlanForm(ctx: PlanContext): PlanFormState {
     method: "checkout_link",
     reminders: [-2, 0, 2],
     overrides: [],
+    renewEvery: 1,
+    renewUnit: ctx.renewal?.defaultUnit ?? "week",
+    renewInsurance: ctx.renewal?.bonzahSellable && hasCoverage(ctx.renewal.rentalCoverage) ? "rental" : "none",
+    renewAgreement: false,
   };
 }
 
@@ -199,6 +250,8 @@ const RULE_KEYS: readonly (keyof PlanFormState)[] = [
   "endBy",
   "count",
   "until",
+  "renewEvery",
+  "renewUnit",
 ];
 
 /**
@@ -264,16 +317,28 @@ export function toggleReminder(state: PlanFormState, offset: number): PlanFormSt
   return { ...state, reminders };
 }
 
+/**
+ * Where the schedule starts. A renewing plan ALWAYS starts where the rental
+ * currently ends — the first renewal period begins on the return date, and the
+ * rental's own dates are priced and collected as they are. The server anchors
+ * it there whatever the form says (engine renewalFormToRowAndSchedule), so the
+ * form never offers another start for it.
+ */
 export function anchorOf(state: PlanFormState, ctx: PlanContext): ISODate | null {
+  if (state.endBy === "renewing") return ctx.rentalEnd && isIsoDate(ctx.rentalEnd) ? ctx.rentalEnd : null;
   const a = state.startFrom === "rental_start" ? ctx.rentalStart : state.startDate;
   return a && isIsoDate(a) ? a : null;
 }
+
+/** Is "keeps renewing until stopped" on offer here? */
+export const renewalOffered = (ctx: PlanContext) => !!ctx.renewal;
 
 /* ── the sentence → the contract ─────────────────────────────────────────── */
 
 const fail = (field: FormField, message: string): FormResult => ({ ok: false, field, message });
 
 export function formToPlan(s: PlanFormState, ctx: PlanContext): FormResult {
+  if (s.endBy === "renewing") return renewingToPlan(s, ctx);
   // HOW MUCH
   let amount: AmountSpec;
   if (s.amount === "fixed") {
@@ -382,6 +447,47 @@ export function formToPlan(s: PlanFormState, ctx: PlanContext): FormResult {
   };
 }
 
+/**
+ * "Keeps renewing until stopped" → the contract. The schedule is one payment
+ * at the start of every period from where the rental ends; `end.through` is
+ * only how far the preview materialises (the plan itself is open) and the
+ * amount is the per-period marker — the server prices each period.
+ */
+function renewingToPlan(s: PlanFormState, ctx: PlanContext): FormResult {
+  if (!ctx.renewal) return fail("endBy", "Renewing isn't available here. Choose when the payments end.");
+  const anchor = anchorOf(s, ctx);
+  if (!anchor) return fail("endBy", "This rental has no return date to renew from. Set one first — the first renewal starts on it.");
+  const n = Math.floor(Number(s.renewEvery));
+  const unit: RenewalUnit = s.renewUnit;
+  if (!Number.isFinite(n) || n < 1) return fail("renewEvery", `Enter how many ${unit}s each renewal lasts — 1 or more.`);
+  if (n > MAX_RENEW_EVERY[unit]) return fail("renewEvery", `A renewal can't be longer than ${MAX_RENEW_EVERY[unit]} ${unit}s.`);
+
+  const through = renewalBoundaries(anchor, unit, n, RENEWAL_PREVIEW_PERIODS)[RENEWAL_PREVIEW_PERIODS - 1];
+  const rule = renewalRule(anchor, unit, n, { kind: "open", through });
+  const coverage = ctx.renewal.bonzahSellable && s.renewInsurance === "rental" && hasCoverage(ctx.renewal.rentalCoverage)
+    ? { ...ctx.renewal.rentalCoverage }
+    : null;
+  return {
+    ok: true,
+    plan: {
+      rule,
+      amount: { mode: "per_period", dailyRateCents: 0 },
+      collectionMethod: s.method,
+      reminderOffsets: [...new Set(s.reminders)].sort((a, b) => a - b),
+      // A renewal is collected when its period starts; moving one would take
+      // the money on a day that is not the period's first.
+      overrides: [],
+      renewal: {
+        extendsRental: true,
+        periodUnit: unit,
+        periodCount: n,
+        insurance: coverage,
+        sendAgreementEachPeriod: s.renewAgreement,
+      },
+    },
+  };
+}
+
 function validMonthDay(d: number): boolean {
   return Number.isInteger(d) && (d === -1 || (d >= 1 && d <= 31));
 }
@@ -393,11 +499,26 @@ export interface StoredPlanShape {
   amount: AmountSpec;
   collectionMethod: CollectionMethod;
   reminderOffsets: number[];
+  renewal?: RenewalShape | null;
 }
 
 export function planToForm(p: StoredPlanShape, ctx: PlanContext): PlanFormState {
   const base = defaultPlanForm(ctx);
   const r = p.rule;
+  if (p.renewal) {
+    return {
+      ...base,
+      endBy: "renewing",
+      startFrom: "rental_start",
+      method: p.collectionMethod,
+      reminders: [...p.reminderOffsets].sort((a, b) => a - b),
+      renewEvery: p.renewal.periodCount,
+      renewUnit: p.renewal.periodUnit,
+      renewInsurance: hasCoverage(p.renewal.insurance) ? "rental" : "none",
+      renewAgreement: !!p.renewal.sendAgreementEachPeriod,
+      overrides: [],
+    };
+  }
   const days = sortWeekdays((r.byWeekday ?? []) as Weekday[]);
 
   let rhythm: RhythmChoice = "weekly";
@@ -469,6 +590,10 @@ export function planToForm(p: StoredPlanShape, ctx: PlanContext): PlanFormState 
     method: p.collectionMethod,
     reminders: [...p.reminderOffsets].sort((a, b) => a - b),
     overrides: [],
+    renewEvery: base.renewEvery,
+    renewUnit: base.renewUnit,
+    renewInsurance: base.renewInsurance,
+    renewAgreement: base.renewAgreement,
   };
 }
 
@@ -549,8 +674,19 @@ export function describeReminders(offsets: number[]): string {
   return joinWords([...offsets].sort((a, b) => a - b).map((o) => reminderLabel(o).toLowerCase()));
 }
 
+/** "Renews every week from Fri 9 Oct, each period priced when it starts". */
+export function describeRenewal(p: Pick<StoredPlanShape, "rule" | "renewal">): string {
+  const r = p.renewal!;
+  return `Keeps renewing ${describeEvery(r.periodUnit, r.periodCount)} from ${formatDay(p.rule.anchor)}, each period priced when it starts`;
+}
+
 /** The whole plan as one sentence, for summaries and confirmations. */
 export function describePlan(p: StoredPlanShape, currency: string): string {
+  if (p.renewal) {
+    const cover = hasCoverage(p.renewal.insurance) ? ` Each period is covered by ${describeCoverage(p.renewal.insurance)} insurance.` : "";
+    const agreement = p.renewal.sendAgreementEachPeriod ? " An extension agreement is sent each period." : "";
+    return `${describeRenewal(p)}, by ${describeMethod(p.collectionMethod)}.${cover}${agreement}`;
+  }
   const rule = p.rule;
   const rhythm = rule.freq === "dates" ? describeRhythm(rule) : `${describeRhythm(rule)}, ${describeEnd(rule.end)}`;
   return `Collect ${describeAmount(p.amount, currency)} ${rhythm}, by ${describeMethod(p.collectionMethod)}.`;
@@ -563,6 +699,25 @@ export function describePlan(p: StoredPlanShape, currency: string): string {
  */
 export function describeChanges(before: StoredPlanShape, after: StoredPlanShape, currency: string): string[] {
   const out: string[] = [];
+  if (before.renewal || after.renewal) {
+    const eb = before.renewal ? `keeps renewing ${describeEvery(before.renewal.periodUnit, before.renewal.periodCount)}` : describeEnd(before.rule.end);
+    const ea = after.renewal ? `keeps renewing ${describeEvery(after.renewal.periodUnit, after.renewal.periodCount)}` : describeEnd(after.rule.end);
+    if (eb !== ea) out.push(`Ends: ${eb} → ${ea}`);
+    if (before.rule.anchor !== after.rule.anchor) out.push(`Starts: ${formatDay(before.rule.anchor)} → ${formatDay(after.rule.anchor)}`);
+    const ib = describeCoverage(before.renewal?.insurance);
+    const ia = describeCoverage(after.renewal?.insurance);
+    if (ib !== ia) out.push(`Insurance on renewals: ${ib} → ${ia}`);
+    const gb = before.renewal?.sendAgreementEachPeriod ? "yes" : "no";
+    const ga = after.renewal?.sendAgreementEachPeriod ? "yes" : "no";
+    if (gb !== ga) out.push(`Extension agreement each period: ${gb} → ${ga}`);
+    if (before.collectionMethod !== after.collectionMethod) {
+      out.push(`Collected by: ${describeMethod(before.collectionMethod)} → ${describeMethod(after.collectionMethod)}`);
+    }
+    const mb = describeReminders(before.reminderOffsets);
+    const ma = describeReminders(after.reminderOffsets);
+    if (mb !== ma) out.push(`Reminders: ${mb} → ${ma}`);
+    return out;
+  }
   const rb = describeRhythm(before.rule);
   const ra = describeRhythm(after.rule);
   if (rb !== ra) out.push(`How often: ${rb} → ${ra}`);
@@ -592,8 +747,27 @@ export function describeChanges(before: StoredPlanShape, after: StoredPlanShape,
  * the amount from the ledger (pp_rental_owed_cents), never from the browser
  * (design §8). A fixed amount is the operator's price, so it is sent.
  */
-export function draftToPlanForm(d: PlanDraft): EnginePlanForm {
+export function draftToPlanForm(d: PlanDraft): EnginePlanForm & { renewal?: RenewalSpec } {
   const r = d.rule;
+  if (d.renewal) {
+    // No amount at all: with renewal set the SERVER prices every period,
+    // exactly as a renewal is priced today (pinned API). No overrides either.
+    return {
+      freq: r.freq,
+      interval: r.interval,
+      ...(r.freq === "weekly" ? { byWeekday: r.byWeekday } : {}),
+      ...(r.freq === "monthly" ? { byMonthDay: r.byMonthDay } : {}),
+      anchor: r.anchor,
+      firstOccurrence: r.firstOccurrence,
+      end: r.end.kind === "open" ? r.end : { kind: "open", through: r.anchor },
+      amountMode: "per_period",
+      fixedAmountCents: null,
+      dailyRateCents: null,
+      collectionMethod: d.collectionMethod,
+      reminderOffsets: d.reminderOffsets,
+      renewal: { ...d.renewal, insurance: d.renewal.insurance ?? null },
+    };
+  }
   const end: EnginePlanForm["end"] = r.end.kind === "rental_end" ? { kind: "rental_end" } : r.end;
   return {
     freq: r.freq,

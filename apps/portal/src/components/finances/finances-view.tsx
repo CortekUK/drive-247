@@ -18,8 +18,17 @@
  * that another screen already uses — AddPaymentDialog, RefundDialog, the
  * Payments tab's approve / reject / remove-link / reverse, the payment plan's
  * own actions, the fines tab's bulk bar, row actions (`useFineRowActions`) and
- * AddFineDialog, the Invoices tab's Send and Delete dialogs. Finances is a new
- * way of LOOKING at the money.
+ * AddFineDialog, the Invoices tab's Send and Delete dialogs. They are wired
+ * once, in `finance-actions.tsx`, which `ScopedFinances` (a rental's or a
+ * customer's own Finances) shares. Finances is a new way of LOOKING at the
+ * money.
+ *
+ * No analytics links: the header's "Payment analytics" and "Fine analytics"
+ * icons (two identical charts) are gone, as Customers, Vehicles and Rentals
+ * dropped theirs — the overview graph replaces them, and on the Fines view it
+ * offers "Fines issued" and "Fines paid". `/payments/analytics` and
+ * `/fines/analytics` still answer by URL (the proxy redirects exact list
+ * paths only).
  *
  * Tour anchors (`data-tour`, read by lib/tab-tours/): finances-header ·
  * finances-record-payment · finances-overview · finances-filter (the top
@@ -33,7 +42,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { BarChart3, CalendarClock, Download, Link2, Plus, Receipt, Wallet } from "lucide-react";
+import { CalendarClock, Download, Link2, Plus, Receipt, Wallet } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import { HEADER_ACTIONS_V2, HEADER_PRIMARY_V2, HeaderIconButton } from "@/components/shared/header-icon-button-v2";
 import { usePageSearch } from "@/components/shared/layout/page-search-slot";
@@ -44,24 +53,16 @@ import {
   SettingsNoMatch,
   SettingsSectionSkeleton,
 } from "@/components/settings-v2/section-states";
-import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
-import { RefundDialog } from "@/components/shared/dialogs/refund-dialog";
-import { SendInvoiceEmailDialog } from "@/components/invoices/send-invoice-email-dialog";
-import { DeleteInvoiceDialog } from "@/components/invoices/delete-invoice-dialog";
-import AddFineDialog from "@/components/fines/add-fine-dialog";
-import { FinePaymentDialog, useFineRowActions } from "@/components/fines/use-fine-row-actions";
 import { TabTourButton } from "@/components/onboarding/tab-tour-button";
 import { useTenant } from "@/contexts/TenantContext";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
-import { usePaymentVerificationActions } from "@/hooks/use-payment-verification";
-import { useToast } from "@/hooks/use-toast";
 import { useFinances } from "@/hooks/use-finances";
+import { FinePaymentDialog, useFineRowActions } from "@/components/fines/use-fine-row-actions";
 import type { EnhancedFine } from "@/hooks/use-fines-data";
-import { supabase } from "@/integrations/supabase/client";
 import { csvFilename, downloadCsv } from "@/lib/csv-export";
-import { isCollectedRow, narrowReceipts, receiptMethodOptions } from "@/lib/finances/filters";
+import { isCollectedRow, narrowReceipts } from "@/lib/finances/filters";
 import { financeViewsFor } from "@/lib/finances-nav";
-import type { BillRow, FinanceCard, FinanceView, ReceiptRow } from "@/lib/finances/types";
+import type { FinanceCard, FinanceView, ReceiptRow } from "@/lib/finances/types";
 import {
   DEFAULT_PERIOD,
   financesQuery,
@@ -72,58 +73,31 @@ import {
   type FinancesUrlState,
   type PanelRef,
 } from "./finances-url";
-import {
-  BILL_STATUS_OPTIONS,
-  BILL_TONE,
-  FINE_STATUS_OPTIONS,
-  PAYMENT_REQUESTS_OPTION,
-  RECEIPT_STATUS_OPTIONS,
-  RECEIPT_TONE,
-  UPCOMING_METHOD_OPTIONS,
-  UPCOMING_STATUS_OPTIONS,
-  VIEW_HINT,
-  VIEW_LABEL,
-  fineStatusWords,
-  upcomingStatusWords,
-} from "./finance-words";
-import { FinancesOverview } from "./finances-overview";
+import { VIEW_HINT, VIEW_LABEL } from "./finance-words";
+import { methodOptionsFor, statusOptionsFor } from "./finance-options";
+import { FINANCE_METRIC, FinancesOverview } from "./finances-overview";
 import { FinancesFilterPanel, countActiveFinanceFilters, type PanelOption } from "./finances-filter-panel";
 import { NeedsAttention, type PlanFix } from "./needs-attention";
 import { FinancesViewSwitch } from "./finances-view-switch";
 import { BilledTable } from "./billed-table";
-import { ReceivedTable, type ReceiptAction } from "./received-table";
+import { ReceivedTable } from "./received-table";
 import { UpcomingTable } from "./upcoming-table";
-import { FinesView } from "./fines-view";
+import { FinesView, type FinesListStatus } from "./fines-view";
 import { FinanceSidePanel } from "./finance-side-panel";
-import {
-  FINANCES_QUERY_KEY,
-  RejectPaymentDialog,
-  RemoveLinkDialog,
-  ReversePaymentDialog,
-  type DialogPayment,
-} from "./finance-dialogs";
-import { PlanActionHost, type PlanActionRequest } from "./plan-actions";
-import { listSum, refundCategoryOf } from "./finance-rules";
+import { useFinanceActions, useFinancesRefresh } from "./finance-actions";
+import { FINANCE_EMPTY_EXPLAINER, FinanceEmptyState } from "./finance-empty-state";
+import { listSum } from "./finance-rules";
 import { SumLine } from "./finance-list-bits";
 import { financesCsv } from "./finances-export";
 
 const EMPTY_FINES: EnhancedFine[] = [];
-
-/** Where money is taken from: the portal's own payment window, aimed or not. */
-type CollectTarget = { bill: BillRow | null };
-
-const toDialogPayment = (r: ReceiptRow): DialogPayment => ({
-  paymentId: r.paymentId,
-  customerName: r.customerName,
-  amountCents: r.amountCents,
-});
+const FINES_NOT_READ: FinesListStatus = { loading: true, failed: false, capped: false };
 
 export function FinancesView() {
   const router = useRouter();
   const pathname = usePathname() || "/finances";
   const searchParams = useSearchParams();
   const qc = useQueryClient();
-  const { toast } = useToast();
   const { tenant } = useTenant();
   const { canView, canEdit } = useManagerPermissions();
   const currency = (tenant?.currency_code || "USD").toUpperCase();
@@ -196,13 +170,18 @@ export function FinancesView() {
   const errorReason =
     loadError && isDev ? ((loadError as Error & { devText?: string }).devText ?? loadError.message) : undefined;
 
-  /* ── who may do what ─────────────────────────────────────────────────── */
+  /* ── who may do what, and every action's dialog (finance-actions.tsx) ── */
 
-  const mayPayments = canEdit("payments");
-  // The plan's actions run through payment-plan-manage, which asks for rentals.
-  const mayPlans = mayPayments && canEdit("rentals");
-  const mayInvoices = canEdit("invoices");
-  const mayFines = canEdit("fines");
+  // The fines tab's own Record Payment and Waive Fine — one copy, shared with
+  // fines/page.tsx. `onChanged` only adds a refresh of this page's read.
+  const refresh = useFinancesRefresh();
+  const fineActions = useFineRowActions({ onChanged: refresh });
+  const act = useFinanceActions({ currency, receipts: fin.model?.receipts ?? fin.receipts, fineActions });
+  const mayPayments = act.may.payments;
+  const mayPlans = act.may.plans;
+  const mayInvoices = act.may.invoices;
+  const mayFines = act.may.fines;
+  const verifying = act.verifying;
 
   const cards: FinanceCard[] = [
     ...(views.includes("billed") ? (["outstanding", "overdue"] as FinanceCard[]) : []),
@@ -210,80 +189,11 @@ export function FinancesView() {
     ...(views.includes("upcoming") && fin.plansAvailable ? (["upcoming"] as FinanceCard[]) : []),
   ];
 
-  /* ── dialogs ─────────────────────────────────────────────────────────── */
+  /* ── the fines list's rows (handed up by the Fines view) ──────────────── */
 
-  const [collect, setCollect] = useState<CollectTarget | null>(null);
-  const [refund, setRefund] = useState<ReceiptRow | null>(null);
-  const [reject, setReject] = useState<DialogPayment | null>(null);
-  const [removeLink, setRemoveLink] = useState<DialogPayment | null>(null);
-  const [reverse, setReverse] = useState<DialogPayment | null>(null);
-  const [planRequest, setPlanRequest] = useState<PlanActionRequest | null>(null);
-  const [addFine, setAddFine] = useState(false);
-  const [invoiceToEmail, setInvoiceToEmail] = useState<any | null>(null);
-  const [invoiceToDelete, setInvoiceToDelete] = useState<any | null>(null);
   const [fineRows, setFineRows] = useState<EnhancedFine[]>(EMPTY_FINES);
+  const [finesStatus, setFinesStatus] = useState<FinesListStatus>(FINES_NOT_READ);
   const [selectedFines, setSelectedFines] = useState<string[]>([]);
-
-  const { approvePayment, isLoading: verifying } = usePaymentVerificationActions();
-  const refresh = useCallback(() => void qc.invalidateQueries({ queryKey: FINANCES_QUERY_KEY }), [qc]);
-
-  // The fines tab's own Record Payment and Waive Fine — one copy, shared with
-  // fines/page.tsx. `onChanged` only adds a refresh of this page's read.
-  const fineActions = useFineRowActions({ onChanged: refresh });
-  const recordFinePayment = (fine: EnhancedFine) => void fineActions.openPaymentDialog(fine);
-  const waiveFine = (fine: EnhancedFine) => fineActions.waiveFineAction.mutate(fine.id);
-
-  const approve = (paymentId: string) => approvePayment.mutate(paymentId, { onSuccess: refresh });
-
-  const onReceiptAction = (row: ReceiptRow, action: ReceiptAction) => {
-    switch (action) {
-      case "approve":
-        return approve(row.paymentId);
-      case "reject":
-        return setReject(toDialogPayment(row));
-      case "refund":
-        return setRefund(row);
-      case "remove_link":
-        return setRemoveLink(toDialogPayment(row));
-      case "reverse":
-        return setReverse(toDialogPayment(row));
-    }
-  };
-
-  const findReceipt = (paymentId: string) =>
-    (fin.model?.receipts ?? fin.receipts).find((r) => r.paymentId === paymentId) ?? null;
-
-  /**
-   * The bill's `invoices` row, read exactly as the Invoices tab reads its list
-   * (the same select), so its Send and Delete dialogs get the row they expect.
-   * By id when the model has it; else by rental and number.
-   */
-  const readInvoice = async (bill: BillRow): Promise<any | null> => {
-    if (!tenant?.id || !bill.invoiceNumber) return null;
-    let q = supabase
-      .from("invoices" as any)
-      .select(
-        `*, customers:customer_id (name, email, phone), vehicles:vehicle_id (reg, make, model), rentals:rental_id (start_date, end_date, monthly_amount)`,
-      )
-      .eq("tenant_id", tenant.id);
-    q = bill.invoiceId ? q.eq("id", bill.invoiceId) : q.eq("rental_id", bill.rentalId).eq("invoice_number", bill.invoiceNumber);
-    const { data, error } = await q.maybeSingle();
-    if (error || !data) {
-      toast({ title: "Couldn't open that invoice", description: error?.message ?? "It could not be found.", variant: "destructive" });
-      return null;
-    }
-    return data;
-  };
-
-  const emailInvoice = async (bill: BillRow) => {
-    const invoice = await readInvoice(bill);
-    if (invoice) setInvoiceToEmail(invoice);
-  };
-
-  const deleteInvoice = async (bill: BillRow) => {
-    const invoice = await readInvoice(bill);
-    if (invoice) setInvoiceToDelete(invoice);
-  };
 
   const exportCsv = () => {
     const csv = financesCsv(view, currency, { bills: fin.bills, receipts: fin.receipts, upcoming: fin.upcoming, fines: fineRows });
@@ -292,21 +202,10 @@ export function FinancesView() {
 
   /* ── the filter panel's options, per view ────────────────────────────── */
 
-  const methodOptions: PanelOption[] = useMemo(() => {
-    if (view === "upcoming") return UPCOMING_METHOD_OPTIONS;
-    if (view !== "received") return [];
-    const recorded = receiptMethodOptions(fin.model?.receipts ?? []).map((m) => ({ value: m, label: m }));
-    return [{ value: "stripe", label: "Stripe" }, { value: "square", label: "Square" }, ...recorded];
-  }, [view, fin.model]);
-
-  const statusOptions: PanelOption[] =
-    view === "billed"
-      ? BILL_STATUS_OPTIONS.map((o) => ({ ...o, tone: BILL_TONE[o.value] }))
-      : view === "received"
-        ? [...RECEIPT_STATUS_OPTIONS.map((o) => ({ ...o, tone: RECEIPT_TONE[o.value] })), PAYMENT_REQUESTS_OPTION]
-        : view === "upcoming"
-          ? UPCOMING_STATUS_OPTIONS.map((o) => ({ ...o, tone: upcomingStatusWords({ status: o.value, nextAttemptOn: null, planStatus: "active" }).tone }))
-          : FINE_STATUS_OPTIONS.map((o) => ({ ...o, tone: o.value === "overdue" ? "danger" : fineStatusWords(o.value, false).tone }));
+  const methodOptions: PanelOption[] = useMemo(() => methodOptionsFor(view, fin.model?.receipts ?? []), [view, fin.model]);
+  // "Draft" is carried only by invoice-only rows, so it is offered only when one exists.
+  const hasInvoiceOnly = (fin.model?.bills ?? fin.bills).some((b) => b.invoiceOnly);
+  const statusOptions: PanelOption[] = statusOptionsFor(view, { hasInvoiceOnly });
 
   /* ── the overview's rows: the model's own selections, never re-derived ─ */
 
@@ -319,6 +218,11 @@ export function FinancesView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [fin.model, JSON.stringify(modelFilters)],
   );
+
+  // The graph follows the view: the Fines view opens it on "Fines issued"
+  // (from the Fines list's own rows), every other view on "Collected".
+  const finesInGraph = view === "fines" && views.includes("fines");
+  const graphMetric = finesInGraph ? FINANCE_METRIC.finesIssued : FINANCE_METRIC.collected;
 
   const resetKey = `${tenant?.id ?? ""}|${financesQuery({ ...state, panel: null })}`;
   const filtered = isFiltered(state);
@@ -348,12 +252,13 @@ export function FinancesView() {
           selected={selectedFines}
           onSelect={setSelectedFines}
           onOpen={(fine) => openPanel({ kind: "fine", id: fine.id })}
-          onAddFine={() => setAddFine(true)}
+          onAddFine={act.addFine}
           onRows={setFineRows}
+          onStatus={setFinesStatus}
           onClearFilters={clearFilters}
-          onRecordPayment={recordFinePayment}
-          onWaive={waiveFine}
-          waiving={fineActions.waiveFineAction.isPending}
+          onRecordPayment={act.recordFinePayment}
+          onWaive={act.waiveFine}
+          waiving={act.finesBusy}
         />
       );
     }
@@ -385,20 +290,24 @@ export function FinancesView() {
           </div>
         );
       }
+      // The old canary Payments and Invoices empty states carried an explainer
+      // chip (lean-empty-states.tsx); these carry the same one.
       return view === "billed" ? (
-        <SettingsEmptyState
+        <FinanceEmptyState
           icon={Receipt}
           headline="Every rental's bill, and what is left on it"
           body="Each rental and each extension gets a bill as it is charged: what it cost, what has been paid, and what is still owed."
           // The Invoices tab's empty state sent an operator to their first rental.
           primaryAction={canEdit("rentals") ? { label: "Create a rental", onClick: () => router.push("/rentals/new"), icon: Plus } : undefined}
+          explainerId={FINANCE_EMPTY_EXPLAINER.billed}
         />
       ) : view === "received" ? (
-        <SettingsEmptyState
+        <FinanceEmptyState
           icon={Wallet}
           headline="Every payment that comes in"
           body="Payments by card, by link or recorded by hand appear here, with where each one went."
-          primaryAction={mayPayments ? { label: "Record payment", onClick: () => setCollect({ bill: null }), icon: Plus } : undefined}
+          primaryAction={mayPayments ? { label: "Record payment", onClick: () => act.collect(null), icon: Plus } : undefined}
+          explainerId={FINANCE_EMPTY_EXPLAINER.received}
         />
       ) : (
         <SettingsEmptyState
@@ -419,7 +328,7 @@ export function FinancesView() {
             currency={currency}
             mayCollect={mayPayments}
             onOpen={(bill) => openPanel({ kind: "bill", id: bill.key })}
-            onCollect={(bill) => setCollect({ bill })}
+            onCollect={(bill) => act.collect(bill)}
           />
         )}
         {view === "received" && (
@@ -430,7 +339,7 @@ export function FinancesView() {
             mayAct={mayPayments}
             busy={verifying}
             onOpen={(r) => openPanel({ kind: "payment", id: r.paymentId })}
-            onAction={onReceiptAction}
+            onAction={act.onReceiptAction}
           />
         )}
         {view === "upcoming" && (
@@ -440,7 +349,7 @@ export function FinancesView() {
             currency={currency}
             mayAct={mayPlans}
             onOpen={(u) => openPanel({ kind: "upcoming", id: u.occurrenceId })}
-            onFix={(u, fix) => setPlanRequest({ rentalId: u.rentalId, occurrenceId: u.occurrenceId, fix })}
+            onFix={(u, fix) => act.planFix({ rentalId: u.rentalId, occurrenceId: u.occurrenceId, fix })}
           />
         )}
         <SumLine
@@ -468,23 +377,15 @@ export function FinancesView() {
           {/* Canary-only: self-gates on the slug and v2 chrome, as on the
               Customers, Vehicles and Payments headers. */}
           <TabTourButton tour="finances" size="h-10" />
-          {/* The two dashboards the old tabs linked from their headers. Their
-              routes are untouched (the proxy redirects exact list paths only). */}
-          {views.includes("received") && (
-            <HeaderIconButton label="Payment analytics" href="/payments/analytics" data-tour="finances-payment-analytics">
-              <BarChart3 className="size-4" />
-            </HeaderIconButton>
-          )}
-          {views.includes("fines") && (
-            <HeaderIconButton label="Fine analytics" href="/fines/analytics" data-tour="finances-fine-analytics">
-              <BarChart3 className="size-4" />
-            </HeaderIconButton>
-          )}
+          {/* v2 has no Analytics links here: the overview graph replaces them
+              (on the Fines view it offers "Fines issued" and "Fines paid"), as
+              on Customers, Vehicles and Rentals. /payments/analytics and
+              /fines/analytics still answer by URL. */}
           <HeaderIconButton label="Export CSV" onClick={exportCsv}>
             <Download className="size-4" />
           </HeaderIconButton>
           {mayPayments && (
-            <HeaderIconButton label="Send a payment link" onClick={() => setCollect({ bill: null })}>
+            <HeaderIconButton label="Send a payment link" onClick={() => act.collect(null)}>
               <Link2 className="size-4" />
             </HeaderIconButton>
           )}
@@ -492,7 +393,7 @@ export function FinancesView() {
             <Button
               type="button"
               data-tour="finances-record-payment"
-              onClick={() => setCollect({ bill: null })}
+              onClick={() => act.collect(null)}
               className={`flex-1 bg-gradient-primary text-white transition-all duration-200 hover:opacity-90 sm:flex-none ${HEADER_PRIMARY_V2}`}
             >
               <Plus className="size-4" />
@@ -524,6 +425,13 @@ export function FinancesView() {
               showCard={views.includes("billed")}
               showUpcoming={views.includes("upcoming") && fin.plansAvailable}
               onRetry={() => fin.refetch()}
+              fines={finesInGraph ? fineRows : undefined}
+              finesLoading={finesInGraph && finesStatus.loading}
+              finesFailed={finesInGraph && finesStatus.failed}
+              finesCapped={finesInGraph && finesStatus.capped}
+              onFinesRetry={() => void qc.invalidateQueries({ queryKey: ["fines-enhanced"] })}
+              timeZone={tenant?.timezone ?? null}
+              defaultMetric={graphMetric}
             />
           ) : (
             <div />
@@ -553,12 +461,9 @@ export function FinancesView() {
           busy={verifying}
           handlers={{
             onPlanFix: (item, fix: PlanFix) =>
-              item.rentalId && item.occurrenceId && setPlanRequest({ rentalId: item.rentalId, occurrenceId: item.occurrenceId, fix }),
-            onApprove: approve,
-            onReject: (paymentId) => {
-              const r = findReceipt(paymentId);
-              setReject(r ? toDialogPayment(r) : { paymentId, customerName: "the customer", amountCents: 0 });
-            },
+              item.rentalId && item.occurrenceId && act.planFix({ rentalId: item.rentalId, occurrenceId: item.occurrenceId, fix }),
+            onApprove: act.approve,
+            onReject: act.rejectById,
             onReview: (ids) => openPanel({ kind: "payments", ids }),
             onOpenPayment: (id) => openPanel({ kind: "payment", id }),
           }}
@@ -589,62 +494,22 @@ export function FinancesView() {
           mayActOnPlans: mayPlans,
           mayEmailInvoice: mayInvoices,
           busy: verifying,
-          onReceiptAction,
-          onCollect: (bill) => setCollect({ bill }),
-          onEmailInvoice: (bill) => void emailInvoice(bill),
+          onReceiptAction: act.onReceiptAction,
+          onCollect: (bill) => act.collect(bill),
+          onEmailInvoice: (bill, invoice) => void act.emailInvoice(bill, invoice),
           onOpen: openPanel,
           onClearFilters: clearFilters,
           mayDeleteInvoice: mayInvoices,
-          onDeleteInvoice: (bill) => void deleteInvoice(bill),
+          onDeleteInvoice: (bill, invoice) => void act.deleteInvoice(bill, invoice),
           mayActOnFines: mayFines,
-          finesBusy: fineActions.waiveFineAction.isPending,
-          onFineRecordPayment: recordFinePayment,
-          onFineWaive: waiveFine,
+          finesBusy: act.finesBusy,
+          onFineRecordPayment: act.recordFinePayment,
+          onFineWaive: act.waiveFine,
         }}
       />
 
-      {/* ── the existing money dialogs, reused ───────────────────────────── */}
-      {collect && (
-        <AddPaymentDialog
-          open
-          onOpenChange={(open) => !open && setCollect(null)}
-          customer_id={collect.bill?.customerId || undefined}
-          rental_id={collect.bill?.rentalId || undefined}
-          extensionId={collect.bill?.extensionId ?? undefined}
-          defaultAmount={collect.bill ? collect.bill.balanceCents / 100 : undefined}
-          onPaymentSuccess={refresh}
-        />
-      )}
-      {refund && refund.rentalId && (
-        <RefundDialog
-          open
-          onOpenChange={(open) => !open && setRefund(null)}
-          rentalId={refund.rentalId}
-          paymentId={refund.paymentId}
-          extensionId={refund.extensionId ?? undefined}
-          category={refundCategoryOf(refund)}
-          totalAmount={refund.amountCents / 100}
-          paidAmount={(refund.amountCents - refund.refundedCents) / 100}
-          onSuccess={refresh}
-        />
-      )}
-      <RejectPaymentDialog payment={reject} onOpenChange={(open) => !open && setReject(null)} />
-      <RemoveLinkDialog payment={removeLink} currency={currency} onOpenChange={(open) => !open && setRemoveLink(null)} />
-      <ReversePaymentDialog payment={reverse} currency={currency} onOpenChange={(open) => !open && setReverse(null)} />
-      <PlanActionHost request={planRequest} onClose={() => setPlanRequest(null)} />
-      {mayFines && <AddFineDialog open={addFine} onOpenChange={setAddFine} />}
-      <SendInvoiceEmailDialog
-        open={!!invoiceToEmail}
-        onOpenChange={(open) => !open && setInvoiceToEmail(null)}
-        invoice={invoiceToEmail}
-      />
-      {/* The Invoices tab's own delete, wired as that tab wires it. */}
-      <DeleteInvoiceDialog
-        open={!!invoiceToDelete}
-        onOpenChange={(open) => !open && setInvoiceToDelete(null)}
-        invoice={invoiceToDelete}
-        onDeleted={refresh}
-      />
+      {/* ── the existing money dialogs, reused (finance-actions.tsx) ────── */}
+      {act.dialogs}
       <FinePaymentDialog actions={fineActions} />
     </div>
   );

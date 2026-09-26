@@ -28,6 +28,7 @@ import { SupabasePlanStore, type PlanDbClient } from "./supabase-store.ts";
 import { StripePaymentProvider, UnavailableProvider } from "./stripe-provider.ts";
 import { DenoNotifier } from "./notifier.ts";
 import { DenoLinkMinter } from "./link-minter.ts";
+import { BonzahRenewalInsurer } from "./insurer.ts";
 import { STRIPE, SQUARE } from "../payments/predicates.ts";
 import type { ProviderId } from "../payments/types.ts";
 
@@ -134,5 +135,9 @@ export function buildEngineDeps(db: PlanDbClient, ctx: TenantPlanContext): Engin
     provider,
     notifier: new DenoNotifier(db),
     links: new DenoLinkMinter(ctx.slug),
+    // Renewal periods buy their Bonzah policy before they are charged (A4).
+    // Independent of the card processor: a Square tenant's manual renewal
+    // plan is insured the same way.
+    insurer: new BonzahRenewalInsurer(db),
   };
 }

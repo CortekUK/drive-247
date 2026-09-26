@@ -23,6 +23,7 @@ import type {
   Weekday,
 } from "@/lib/payment-plans/types";
 import { numericToCents } from "./format";
+import { normaliseCoverage, type RenewalInsuranceStatus, type RenewalUnit, type RenewalView } from "./renewal";
 import type { AttemptView, EventView, OccurrenceView, PlanView } from "./view-types";
 
 type Row = Record<string, any>;
@@ -33,6 +34,28 @@ const int = (v: unknown, fallback = 0): number => {
   const n = typeof v === "number" ? v : Number(v);
   return Number.isFinite(n) ? Math.trunc(n) : fallback;
 };
+
+const UNIT_OF_FREQ: Record<string, RenewalUnit> = { daily: "day", weekly: "week", monthly: "month" };
+
+/**
+ * A plan that keeps renewing, from its row. `extends_rental` is the column
+ * slice 1 already has; the renewal's own settings are the Wave 3 migration's
+ * (20260926120200_open_ended_plans.sql: renewal_period_unit,
+ * renewal_period_count, renewal_insurance, send_agreement_each_period). A
+ * `renewal` jsonb is read too, in case a view returns it nested. Anything
+ * missing falls back to what the rule itself says — the renewal period IS the
+ * rule's rhythm — and to the safe defaults: no insurance, no agreement.
+ */
+export function renewalFromRow(row: Row): RenewalView | null {
+  if (row.extends_rental !== true) return null;
+  const j: Row = row.renewal && typeof row.renewal === "object" ? row.renewal : {};
+  const unitRaw = j.periodUnit ?? j.period_unit ?? row.renewal_period_unit ?? row.period_unit ?? UNIT_OF_FREQ[row.freq as string];
+  const periodUnit: RenewalUnit = unitRaw === "day" || unitRaw === "month" ? unitRaw : "week";
+  const periodCount = int(j.periodCount ?? j.period_count ?? row.renewal_period_count ?? row.period_count ?? row.interval_count, 1) || 1;
+  const insurance = normaliseCoverage(j.insurance ?? row.renewal_insurance ?? row.insurance_coverage ?? null);
+  const agreement = j.sendAgreementEachPeriod ?? j.send_agreement_each_period ?? row.send_agreement_each_period ?? row.renewal_send_agreement;
+  return { extendsRental: true, periodUnit, periodCount, insurance, sendAgreementEachPeriod: agreement === true };
+}
 
 export function planFromRow(row: Row, rentalEnd: ISODate | null): PlanView {
   const freq = row.freq as ScheduleRule["freq"];
@@ -101,6 +124,7 @@ export function planFromRow(row: Row, rentalEnd: ISODate | null): PlanView {
     paymentProvider: row.payment_provider === "square" ? "square" : "stripe",
     stripePaymentMethodId: str(row.stripe_payment_method_id),
     extendsRental: row.extends_rental === true,
+    renewal: renewalFromRow(row),
     version: int(row.version, 1),
     createdAt: str(row.created_at),
     pausedAt: str(row.paused_at),
@@ -130,8 +154,13 @@ export function occurrenceFromRow(row: Row): OccurrenceView {
     movedFrom: day(row.moved_from),
     paidAt: str(row.paid_at),
     note: str(row.note),
+    renews: row.renews === true,
+    extensionId: str(row.extension_id),
+    insuranceStatus: (INSURANCE_STATUSES as readonly string[]).includes(row.insurance_status) ? (row.insurance_status as RenewalInsuranceStatus) : null,
   };
 }
+
+const INSURANCE_STATUSES = ["none", "pending", "insured", "not_insurable", "failed"] as const;
 
 export function attemptFromRow(row: Row): AttemptView {
   const provider = ["stripe", "square", "manual", "simulated"].includes(row.provider) ? row.provider : "manual";

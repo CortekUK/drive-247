@@ -13,15 +13,16 @@ import { computePreview, type PreviewState } from "@/lib/payment-plans-ui/previe
 import type { ISODate } from "@/lib/payment-plans-ui/format";
 import { PaymentPlanForm } from "./payment-plan-form";
 import { SchedulePreview } from "./schedule-preview";
+import { RenewalPreview } from "./renewal-preview";
 
 /** Form state + the preview derived from it, recomputed on every change. */
 export function usePlanComposer(ctx: PlanContext, today: ISODate, initial?: () => PlanFormState) {
   const [state, setState] = useState<PlanFormState>(() => (initial ? initial() : defaultPlanForm(ctx)));
   const preview = useMemo(
     () => computePreview(state, ctx, today),
-    // ctx is rebuilt by callers each render; its three fields are what matter.
+    // ctx is rebuilt by callers each render; its fields are what matter.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [state, ctx.rentalStart, ctx.rentalEnd, ctx.balanceCents, today],
+    [state, ctx.rentalStart, ctx.rentalEnd, ctx.balanceCents, today, JSON.stringify(ctx.renewal ?? null)],
   );
   return { state, setState, preview };
 }
@@ -65,15 +66,20 @@ export function PaymentPlanComposer({
         minStart={minStart}
         error={preview.ok === false ? { field: preview.field, message: preview.message } : null}
       />
-      <SchedulePreview
-        preview={preview}
-        ctx={ctx}
-        currency={currency}
-        today={today}
-        overrides={state.overrides}
-        onMove={onMove}
-        balanceLabel={balanceLabel}
-      />
+      {preview.ok && preview.renewal ? (
+        // Keeps renewing: its first periods, each "priced when it starts".
+        <RenewalPreview preview={preview} ctx={ctx} currency={currency} />
+      ) : (
+        <SchedulePreview
+          preview={preview}
+          ctx={ctx}
+          currency={currency}
+          today={today}
+          overrides={state.overrides}
+          onMove={onMove}
+          balanceLabel={balanceLabel}
+        />
+      )}
     </div>
   );
 }

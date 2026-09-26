@@ -347,6 +347,11 @@ export async function seedRental(
     owedCents?: number;
     charges?: SeedCharge[];
     withVehicle?: boolean;
+    /** rentals.monthly_amount / discount_applied (dollars) — a renewal's per-period rate. */
+    monthlyAmount?: number;
+    discountApplied?: number | null;
+    /** The new tenant's tax and service-fee settings (renewal pricing). */
+    tenantPricing?: { taxPercentage?: number; serviceFeeFixed?: number };
   } = {},
 ): Promise<SeededRental> {
   seedCounter += 1;
@@ -354,9 +359,12 @@ export async function seedRental(
   const startDate = opts.startDate ?? "2026-10-02";
   let tenantId = opts.tenantId;
   if (!tenantId) {
+    const tax = opts.tenantPricing?.taxPercentage ?? 0;
+    const fee = opts.tenantPricing?.serviceFeeFixed ?? 0;
     tenantId = (await db.one<{ id: string }>(
-      `INSERT INTO tenants (slug, company_name, timezone) VALUES ($1, $2, $3) RETURNING id`,
-      [`t${n}`, `Tenant ${n}`, opts.timezone ?? "America/New_York"],
+      `INSERT INTO tenants (slug, company_name, timezone, tax_enabled, tax_percentage, service_fee_enabled, service_fee_type, service_fee_value)
+       VALUES ($1, $2, $3, $4, $5, $6, 'fixed_amount', $7) RETURNING id`,
+      [`t${n}`, `Tenant ${n}`, opts.timezone ?? "America/New_York", tax > 0, tax, fee > 0, fee],
     ))!.id;
   }
   const customerId = (await db.one<{ id: string }>(
@@ -368,9 +376,9 @@ export async function seedRental(
       ? null
       : (await db.one<{ id: string }>(`INSERT INTO vehicles (reg, tenant_id) VALUES ($1, $2) RETURNING id`, [`REG${n}`, tenantId]))!.id;
   const rentalId = (await db.one<{ id: string }>(
-    `INSERT INTO rentals (customer_id, vehicle_id, tenant_id, start_date, end_date, monthly_amount, status)
-     VALUES ($1, $2, $3, $4, $5, 0, 'Active') RETURNING id`,
-    [customerId, vehicleId, tenantId, startDate, opts.endDate ?? null],
+    `INSERT INTO rentals (customer_id, vehicle_id, tenant_id, start_date, end_date, monthly_amount, discount_applied, status)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, 'Active') RETURNING id`,
+    [customerId, vehicleId, tenantId, startDate, opts.endDate ?? null, opts.monthlyAmount ?? 0, opts.discountApplied ?? null],
   ))!.id;
 
   const charges: SeedCharge[] = opts.charges ?? (opts.owedCents ? [{ category: "Rental", amountCents: opts.owedCents, dueDate: startDate }] : []);

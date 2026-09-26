@@ -14,6 +14,7 @@ import { buildSchedule } from "@/lib/payment-plans/schedule";
 import { PlanRuleError } from "@/lib/payment-plans/errors";
 import { dayNumber } from "./format";
 import { formToPlan, ruleErrorText, type FormField, type PlanContext, type PlanDraft, type PlanFormState } from "./plan-form-model";
+import type { RenewalSpec } from "./renewal";
 
 export type PreviewState =
   | {
@@ -26,6 +27,13 @@ export type PreviewState =
       differenceCents: number;
       /** Payments dated on or before today — collected as soon as the plan starts. */
       dueNowCount: number;
+      /**
+       * Set for "keeps renewing until stopped". Then `drafts` are the first
+       * few renewal PERIODS (dates and what each covers) and their amounts
+       * mean nothing: the server prices each period when it starts, so the
+       * preview says so instead of showing a number.
+       */
+      renewal: RenewalSpec | null;
     }
   | { ok: false; field: FormField | null; message: string };
 
@@ -38,6 +46,7 @@ const FIELD_FOR_CODE: Record<string, FormField> = {
   count_invalid: "count",
   too_many_occurrences: "count",
   no_occurrences: "endBy",
+  // (a renewal's interval is checked before the generator runs)
   amount_too_small: "amount",
 };
 
@@ -45,6 +54,20 @@ export function computePreview(state: PlanFormState, ctx: PlanContext, today: st
   const form = formToPlan(state, ctx);
   if (form.ok === false) return { ok: false, field: form.field, message: form.message };
   try {
+    if (form.plan.renewal) {
+      // Dates only. A placeholder amount lets the engine's generator produce
+      // the periods; no screen shows it (SchedulePreview reads `renewal`).
+      const drafts = buildSchedule(form.plan.rule, { mode: "fixed", amountCents: 1 });
+      return {
+        ok: true,
+        plan: form.plan,
+        drafts,
+        totalCents: 0,
+        differenceCents: 0,
+        dueNowCount: drafts.filter((d) => dayNumber(d.dueDate) <= dayNumber(today)).length,
+        renewal: form.plan.renewal,
+      };
+    }
     const drafts = buildSchedule(form.plan.rule, form.plan.amount, form.plan.overrides);
     const totalCents = drafts.reduce((s, d) => s + d.amountCents, 0);
     return {
@@ -54,6 +77,7 @@ export function computePreview(state: PlanFormState, ctx: PlanContext, today: st
       totalCents,
       differenceCents: totalCents - Math.round(ctx.balanceCents),
       dueNowCount: drafts.filter((d) => dayNumber(d.dueDate) <= dayNumber(today)).length,
+      renewal: null,
     };
   } catch (err) {
     if (err instanceof PlanRuleError || (err as { name?: string })?.name === "PlanRuleError") {

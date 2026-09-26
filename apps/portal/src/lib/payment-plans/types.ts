@@ -175,6 +175,135 @@ export interface PlanRow {
   stripePaymentMethodId: string | null; // validated at charge time; the customer id is NOT stored
   extendsRental: boolean; // open-ended plans that move the rental's end date (slice 3)
   version: number;
+  // ── Additive (Wave 3, open-ended plans). Present only when extendsRental is
+  // true: the plan RENEWS the rental one period at a time until it is stopped.
+  renewal?: PlanRenewal | null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Renewals — open-ended plans that extend the rental (Wave 3, spec §4 "green
+// line", roadmap A3/A4/A5). One renewal period = one existing-shaped
+// extension: a rental_extensions row (status approved) + Extension* ledger
+// charges carrying its extension_id, priced exactly as auto-extend prices a
+// period (renewal-pricing.ts). The end date moves when the period is PAID
+// (finalize_rental_extension), or at once when the operator's Extend says
+// "give the days now".
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** A renewal period's length unit; `count` of them make one period. */
+export type RenewalPeriodUnit = "day" | "week" | "month";
+
+/** Bonzah coverage to buy for each period (A4). */
+export interface RenewalCoverage {
+  cdw?: boolean;
+  rcli?: boolean;
+  sli?: boolean;
+  pai?: boolean;
+}
+
+export interface PlanRenewal {
+  periodUnit: RenewalPeriodUnit;
+  periodCount: number; // 1..52
+  /** Buy this cover for every period BEFORE charging it; null = no insurance. */
+  insurance: RenewalCoverage | null;
+  /** A5: ask for an extension agreement for each new automatic period. */
+  sendAgreementEachPeriod: boolean;
+}
+
+/**
+ * Where a renewal period's insurance stands (payment_plan_occurrences.insurance_status):
+ *   none          — no cover requested for this period;
+ *   pending       — requested, not yet decided: the period CANNOT be charged (pp_claim refuses);
+ *   insured       — a policy was bought (quote → confirm) and its premium added;
+ *   not_insurable — Bonzah cannot cover it (Pacific-tomorrow, not sellable…): no premium;
+ *   failed        — the insurer kept failing until the period fell due: no premium.
+ */
+export type RenewalInsuranceStatus = "none" | "pending" | "insured" | "not_insurable" | "failed";
+
+/** A renewal period's price in integer cents (renewal-pricing.ts renewalBreakdownCents). */
+export interface RenewalBreakdown {
+  rentalCents: number;
+  taxCents: number;
+  serviceFeeCents: number;
+  /** rentalCents + taxCents + serviceFeeCents — insurance is added only once a policy exists. */
+  totalCents: number;
+}
+
+/**
+ * What pricing a renewal period needs, read from the rental and its tenant at
+ * the moment of posting (auto-extend re-prices every period the same way).
+ * Dollars, exactly as the columns hold them.
+ */
+export interface RenewalPricingInputs {
+  rentalId: string;
+  tenantId: string;
+  customerId: string;
+  /** rentals.end_date — the paid-through date. */
+  rentalEnd: ISODate | null;
+  /** rentals.monthly_amount — the PRE-discount per-period rate. */
+  monthlyAmount: number | null;
+  /** rentals.discount_applied — a flat amount off each period. */
+  discountApplied: number | null;
+  /** tenants.* — the fields computeBreakdown reads. */
+  tenant: {
+    tax_enabled: boolean | null;
+    tax_percentage: number | null;
+    service_fee_enabled: boolean | null;
+    service_fee_type: string | null;
+    service_fee_value: number | null;
+    service_fee_amount: number | null;
+  };
+}
+
+export interface PostRenewalInput {
+  occurrenceId: string;
+  breakdown: RenewalBreakdown;
+  /** true → the occurrence waits (insurance_status 'pending') until the policy is decided. */
+  insuranceRequested: boolean;
+  /** Operator's Extend, A3 "give the days now": the rental's end date moves at once. */
+  giveDaysNow?: boolean;
+  actorId?: string | null;
+}
+
+export interface PostRenewalResult {
+  extensionId: string;
+  /** false = already posted (idempotent; nothing written). */
+  posted: boolean;
+  sequenceNumber: number;
+  /** giveDaysNow moved rentals.end_date. */
+  endDateMoved: boolean;
+}
+
+export interface RenewalInsuranceDecision {
+  occurrenceId: string;
+  outcome: "insured" | "not_insurable" | "failed";
+  /** bonzah_insurance_policies.id — required for 'insured'. */
+  policyRef?: string | null;
+  /** Required (> 0) for 'insured'. */
+  premiumCents?: number | null;
+  coveredFrom?: ISODate | null;
+  coveredTo?: ISODate | null;
+  reason?: string | null;
+}
+
+/**
+ * The renewal half of the store (pp_* functions of
+ * 20260926120200_open_ended_plans.sql). Optional on a store: the engine skips
+ * the renewal stage for a store that does not implement it.
+ */
+export interface RenewalOperations {
+  /** Active plans with renewal work: every renewal plan, and any plan holding an unposted or insurance-pending renewal period. */
+  listRenewalPlans(filter?: { tenantId?: string; planId?: string }): Promise<PlanRow[]>;
+  /** The rental + tenant fields a period is priced from (plain SELECTs). */
+  renewalPricing(rentalId: string): Promise<RenewalPricingInputs>;
+  /** pp_append_renewal_period: one more renewal period at the end of the chain. Idempotent per (plan, period start). */
+  appendRenewalPeriod(planId: string, draft: OccurrenceDraft, actorId?: string | null): Promise<{ occurrenceId: string; appended: boolean }>;
+  /** pp_post_renewal_period: the extension + its Extension* charges, atomically, once per occurrence. */
+  postRenewalPeriod(input: PostRenewalInput): Promise<PostRenewalResult>;
+  /** pp_record_renewal_insurance: the policy's premium goes on the ledger only with a policy behind it. */
+  recordRenewalInsurance(input: RenewalInsuranceDecision): Promise<void>;
+  /** pp_reconcile_renewals: renewal periods whose charges were settled outside the plan → paid, end date moved. Returns their ids. */
+  reconcileRenewals(filter?: { tenantId?: string; planId?: string }): Promise<string[]>;
 }
 
 export interface OccurrenceRow {
@@ -201,6 +330,13 @@ export interface OccurrenceRow {
   /** When the occurrence last became `paid`. */
   paidAt?: string | null;
   note?: string | null;
+  // ── Additive (Wave 3, open-ended plans).
+  /** A renewal period: posting it creates an extension and moves the end date when paid. */
+  renews?: boolean;
+  /** The rental_extensions row this period posted (null until posted). */
+  extensionId?: string | null;
+  /** Where the period's insurance stands; null until posted. */
+  insuranceStatus?: RenewalInsuranceStatus | null;
 }
 
 export interface AttemptRow {
@@ -252,7 +388,13 @@ export type PlanEventKind =
   | "occurrence_skipped"
   | "occurrence_waived"
   | "occurrence_paid"
-  | "covered_by_balance";
+  | "covered_by_balance"
+  // ── Additive (Wave 3, open-ended plans).
+  | "period_posted" // a renewal period's extension + Extension* charges went on the ledger
+  | "insurance_bought" // its Bonzah policy was bought before the charge (A4)
+  | "insurance_not_bought" // Bonzah could not cover it: no premium was charged (A4)
+  | "rental_extended" // the rental's end date moved (paid, covered, or days given now)
+  | "agreement_choice"; // A5: whether an extension agreement goes out for this period
 
 export interface PlanEvent {
   planId: string;

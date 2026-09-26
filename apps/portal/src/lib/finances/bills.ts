@@ -17,6 +17,15 @@
  * Sep 25 2026, both directions). Such a bill carries `tiesOut: false` and the
  * gap in `mismatchCents`, so the page says "Doesn't add up by $X" instead of
  * quietly showing a number.
+ *
+ * Invoices: EVERY `invoices` row is reachable. A bill on a rental lists all of
+ * that rental's invoices (`BillRow.invoices`, newest first), and the booking
+ * bill names the newest (`invoiceNumber` / `invoiceId`, the payment window's
+ * `latestInvoice`). An invoice that belongs to no bill — no rental, or a
+ * rental with no charge rows (and no open accruals) — becomes its own
+ * INVOICE-ONLY row: label "Invoice only", status "draft", its own total in
+ * `invoiceTotalCents`, and every ledger figure 0, so it adds nothing to any
+ * card and claims no Paid / Balance math.
  */
 
 import { formatMoney } from "@/lib/payment-plans-ui/format";
@@ -30,10 +39,31 @@ import {
 } from "./balance";
 import { rentalRefOf, UNKNOWN_CUSTOMER, type FinanceLookups } from "./lookups";
 import { dayOf, daysFrom, instantDay } from "./period";
-import type { BillLine, BillRow, FinanceContext, FinanceRawData, RawCharge } from "./types";
+import type { BillInvoice, BillLine, BillRow, FinanceContext, FinanceRawData, RawCharge, RawInvoice } from "./types";
 
 export const BOOKING_LABEL = "Booking";
 export const NO_RENTAL_LABEL = "Not on a rental";
+export const INVOICE_ONLY_LABEL = "Invoice only";
+
+/** The key of an invoice-only row: one per `invoices` row. */
+export function invoiceOnlyKey(invoiceId: string): string {
+  return `invoice:${invoiceId}`;
+}
+
+/** One `invoices` row as a bill lists it. */
+export function billInvoiceOf(inv: RawInvoice, timeZone: string | null): BillInvoice {
+  const id = inv.id ?? "";
+  return {
+    id,
+    number: inv.invoice_number || (id ? id.slice(0, 8).toUpperCase() : "—"),
+    date: dayOf(inv.invoice_date) ?? instantDay(inv.created_at, timeZone),
+    totalCents: toCents(inv.total_amount),
+    status: inv.status ?? null,
+    rentalId: inv.rental_id ?? null,
+    customerId: inv.customer_id ?? null,
+    createdAt: inv.created_at ?? null,
+  };
+}
 
 interface Group {
   key: string;
@@ -187,6 +217,9 @@ export function buildBills(raw: FinanceRawData, lk: FinanceLookups, ctx: Finance
 
     const vehicleId = rental?.vehicle_id ?? charges.find((c) => c.vehicle_id)?.vehicle_id ?? null;
     const owing = lines.filter((l) => l.remainingCents > 0).map((l) => l.dueDate);
+    // Every invoice of the rental, newest first; the booking bill names the newest.
+    const rentalInvoices = g.rentalId ? lk.invoicesByRental.get(g.rentalId) ?? [] : [];
+    const newest = isBooking ? rentalInvoices[0] ?? null : null;
 
     bills.push({
       key: g.key,
@@ -197,7 +230,7 @@ export function buildBills(raw: FinanceRawData, lk: FinanceLookups, ctx: Finance
       customerId,
       customerName: (customerId && lk.customerNameById.get(customerId)) || UNKNOWN_CUSTOMER,
       vehicleReg: vehicleId ? lk.vehicleRegById.get(vehicleId) ?? null : null,
-      invoiceNumber: isBooking ? lk.invoiceByRental.get(g.rentalId!)?.invoice_number ?? null : null,
+      invoiceNumber: newest ? billInvoiceOf(newest, ctx.timeZone).number : null,
       issuedOn:
         minDay(lines.map((l) => l.entryDate)) ?? dayOf(rental?.start_date) ?? instantDay(rental?.created_at, ctx.timeZone) ?? ctx.today,
       dueOn: minDay(owing) ?? minDay(lines.map((l) => l.dueDate)),
@@ -217,9 +250,27 @@ export function buildBills(raw: FinanceRawData, lk: FinanceLookups, ctx: Finance
       excludedReason: rental ? excludedRentalReason(rental) : null,
       onRental: !!g.rentalId,
       vehicleId,
-      invoiceId: isBooking ? lk.invoiceByRental.get(g.rentalId!)?.id ?? null : null,
+      invoiceId: newest?.id ?? null,
+      invoices: rentalInvoices.map((inv) => billInvoiceOf(inv, ctx.timeZone)),
+      invoiceOnly: false,
+      invoiceTotalCents: null,
     });
   });
+
+  // Invoices that belong to no bill: no rental, or a rental nothing above
+  // billed (no charge rows, no open accruals). Each is its own row.
+  const billedRentals = new Set<string>();
+  groups.forEach((g) => {
+    if (g.rentalId) billedRentals.add(g.rentalId);
+  });
+  const orphans: RawInvoice[] = [...lk.invoicesWithoutRental];
+  lk.invoicesByRental.forEach((list, rentalId) => {
+    if (!billedRentals.has(rentalId)) orphans.push(...list);
+  });
+  for (const inv of orphans) {
+    if (!inv.id) continue;
+    bills.push(invoiceOnlyBill(inv, lk, ctx));
+  }
 
   return bills.sort((a, b) => {
     if (a.issuedOn !== b.issuedOn) return a.issuedOn < b.issuedOn ? 1 : -1;
@@ -229,7 +280,54 @@ export function buildBills(raw: FinanceRawData, lk: FinanceLookups, ctx: Finance
   });
 }
 
-/** "Paid" · "Open" · "12 days overdue" · "In credit $20.00". */
+/**
+ * An invoice that belongs to no bill, as a row of its own. It claims no
+ * ledger math — every figure is 0 and it ties out trivially — so nothing it
+ * carries can reach a card, a sum or a chart; its own total rides in
+ * `invoiceTotalCents`.
+ */
+export function invoiceOnlyBill(inv: RawInvoice, lk: FinanceLookups, ctx: Pick<FinanceContext, "today" | "timeZone">): BillRow {
+  const rentalId = inv.rental_id ?? null;
+  const rental = rentalId ? lk.rentalById.get(rentalId) ?? null : null;
+  const customerId = inv.customer_id ?? rental?.customer_id ?? "";
+  const vehicleId = inv.vehicle_id ?? rental?.vehicle_id ?? null;
+  const invoice = billInvoiceOf(inv, ctx.timeZone);
+  return {
+    key: invoiceOnlyKey(invoice.id),
+    rentalId: rentalId ?? "",
+    rentalRef: rentalId ? rentalRefOf(rental, rentalId) ?? "" : "—",
+    extensionId: null,
+    label: INVOICE_ONLY_LABEL,
+    customerId,
+    customerName: (customerId && lk.customerNameById.get(customerId)) || UNKNOWN_CUSTOMER,
+    vehicleReg: vehicleId ? lk.vehicleRegById.get(vehicleId) ?? null : null,
+    invoiceNumber: invoice.number,
+    issuedOn: invoice.date ?? ctx.today,
+    dueOn: null,
+    totalCents: 0,
+    paidCents: 0,
+    creditedCents: 0,
+    balanceCents: 0,
+    tiesOut: true,
+    mismatchCents: 0,
+    status: "draft",
+    overdueDays: null,
+    lines: [],
+    outstandingCents: 0,
+    overdueCents: 0,
+    paygOpenCents: 0,
+    isPayg: rental?.is_pay_as_you_go === true,
+    excludedReason: rental ? excludedRentalReason(rental) : null,
+    onRental: !!rentalId,
+    vehicleId,
+    invoiceId: invoice.id,
+    invoices: [invoice],
+    invoiceOnly: true,
+    invoiceTotalCents: invoice.totalCents,
+  };
+}
+
+/** "Paid" · "Open" · "12 days overdue" · "In credit $20.00" · "Draft". */
 export function billStatusText(bill: Pick<BillRow, "status" | "overdueDays" | "balanceCents">, currency = "USD"): string {
   switch (bill.status) {
     case "paid":
@@ -243,6 +341,8 @@ export function billStatusText(bill: Pick<BillRow, "status" | "overdueDays" | "b
     }
     case "credit":
       return `In credit ${formatMoney(Math.abs(bill.balanceCents), currency)}`;
+    case "draft":
+      return "Draft";
   }
 }
 

@@ -27,7 +27,7 @@ export default defineConfig({
     environment: "node",
     globals: true,
     root: path.resolve(__dirname),
-    include: ["spine/**/*.test.ts", "integrations/**/*.test.ts", "payment-plans/**/*.test.ts"],
+    include: ["spine/**/*.test.ts", "integrations/**/*.test.ts", "payment-plans/**/*.test.ts", "e2e/**/*.test.ts"],
 
     // One process, one order, one shared chain.
     //

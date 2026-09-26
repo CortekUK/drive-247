@@ -33,7 +33,8 @@ describe('TRAX maintained knowledge',()=>{
   it('matches its sources, portal route inventory and permission coverage',async()=>{
     // requiring_confirmation 18 since Sep 25 2026: payment_plans (canary, not deployed).
     // 19 since Sep 25 2026: finances (canary by slug, not verified end to end).
-    await expect(prepare(true)).resolves.toMatchObject({verified:6,partially_documented:21,unsupported:1,requiring_confirmation:19});
+    // 20 since Sep 26 2026: balance_adjustments (canary, migration not applied).
+    await expect(prepare(true)).resolves.toMatchObject({verified:6,partially_documented:21,unsupported:1,requiring_confirmation:20});
   },60_000); // Hashes every catalogued source; can exceed the 5s default when the machine is busy.
   it('detects changes and deleted sources without normalizing business text away',async()=>{
     const sha=(text:string)=>createHash('sha256').update(text).digest('hex');

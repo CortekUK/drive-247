@@ -5,6 +5,11 @@
  * places) with the currency code in its own column, so a spreadsheet can add
  * the column up and get the figure on screen. Pure builders; the page hands
  * the result to `downloadCsv`.
+ *
+ * An invoice-only row exports as it reads on screen: its invoice's total under
+ * Total, and blank Paid / Credited / Balance (it claims no math). Every
+ * invoice of a rental is named in "All invoices". A payment taken outside the
+ * platform says so in "Off-platform".
  */
 import type { CsvCell } from "@/lib/csv-export";
 import type { EnhancedFine } from "@/hooks/use-fines-data";
@@ -30,28 +35,32 @@ export function financesCsv(
     case "billed":
       return {
         base: "finances-billed",
-        header: ["Rental", "Bill", "Customer", "Vehicle", "Invoice #", "Issued", "Due", "Total", "Paid", "Credited", "Balance", "Status", "Adds up", "Currency"],
-        rows: (rows.bills ?? []).map((b) => [
-          b.onRental ? b.rentalRef : "",
-          b.label,
-          b.customerName,
-          b.vehicleReg ?? "",
-          b.invoiceNumber ?? "",
-          b.issuedOn,
-          b.dueOn ?? "",
-          dollars(b.totalCents),
-          dollars(b.paidCents),
-          dollars(b.creditedCents),
-          dollars(b.balanceCents),
-          billStatusText(b, currency),
-          b.tiesOut ? "Yes" : `No, by ${dollars(Math.abs(b.mismatchCents))}`,
-          currency,
-        ]),
+        header: ["Rental", "Bill", "Customer", "Vehicle", "Invoice #", "Issued", "Due", "Total", "Paid", "Credited", "Balance", "Status", "Adds up", "Currency", "All invoices"],
+        rows: (rows.bills ?? []).map((b) => {
+          const only = b.invoiceOnly === true;
+          return [
+            b.onRental ? b.rentalRef : "",
+            b.label,
+            b.customerName,
+            b.vehicleReg ?? "",
+            b.invoiceNumber ?? "",
+            b.issuedOn,
+            b.dueOn ?? "",
+            only ? dollars(b.invoiceTotalCents ?? 0) : dollars(b.totalCents),
+            only ? "" : dollars(b.paidCents),
+            only ? "" : dollars(b.creditedCents),
+            only ? "" : dollars(b.balanceCents),
+            billStatusText(b, currency),
+            only ? "Invoice only" : b.tiesOut ? "Yes" : `No, by ${dollars(Math.abs(b.mismatchCents))}`,
+            currency,
+            (b.invoices ?? []).map((i) => i.number).join("; "),
+          ];
+        }),
       };
     case "received":
       return {
         base: "finances-received",
-        header: ["Date", "Customer", "Rental", "Vehicle", "Amount", "Refunded", "Not applied", "Method", "Reference", "Status", "Payment plan", "Currency"],
+        header: ["Date", "Customer", "Rental", "Vehicle", "Amount", "Refunded", "Not applied", "Method", "Reference", "Status", "Payment plan", "Currency", "Off-platform"],
         rows: (rows.receipts ?? []).map((r) => [
           r.date,
           r.customerName,
@@ -65,6 +74,7 @@ export function financesCsv(
           RECEIPT_STATUS_LABEL[r.status],
           r.planLabel ?? "",
           currency,
+          r.isOffPlatform ? "Yes" : "",
         ]),
       };
     case "upcoming":

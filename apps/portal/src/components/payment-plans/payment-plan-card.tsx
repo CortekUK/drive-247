@@ -20,6 +20,13 @@
  *
  * Every row action exists for every row. When one can't be used for that
  * payment it is disabled and says why — never a silent no-op.
+ *
+ * A plan that keeps renewing (or has been extended) carries payments that
+ * each pay for one PERIOD of the rental. Those rows read their period the way
+ * the rental does — "covers 2 Oct → 9 Oct" — and name the extension the
+ * period created ("Extension #3 · awaiting payment"), from the real
+ * `rental_extension_totals` row the caller hands in. **Extend** sits beside
+ * Edit when the caller offers it.
  */
 
 import { Fragment, useMemo, useState } from "react";
@@ -57,6 +64,7 @@ import {
   type Tone,
 } from "@/lib/payment-plans-ui/plan-math";
 import type { AttemptView, EventView, OccurrenceView, PlanView, RecordPaymentInput } from "@/lib/payment-plans-ui/view-types";
+import { extensionStatusWords, formatPeriodSpan, insuranceStatusWords, type ExtensionRef } from "@/lib/payment-plans-ui/renewal";
 import { ConfirmDialog } from "./confirm-dialog";
 import { MoveDateDialog } from "./move-date-dialog";
 import { RecordPaymentDialog } from "./record-payment-dialog";
@@ -69,6 +77,8 @@ export interface PaymentPlanCardActions {
   skip: (o: OccurrenceView) => Promise<unknown>;
   /** Opens the editor. Omit to hide Edit. */
   edit?: () => void;
+  /** Opens the Extend dialog. Omit to hide Extend. */
+  extend?: () => void;
   pause: () => Promise<unknown>;
   resume: () => Promise<unknown>;
   cancel: () => Promise<unknown>;
@@ -87,6 +97,10 @@ export interface PaymentPlanCardProps {
   actions?: PaymentPlanCardActions;
   /** Something to show beside the title (the simulator's "Simulated" tag). */
   badge?: React.ReactNode;
+  /** The rental's extensions, so a period's payment can name the extension it pays for. */
+  extensions?: ExtensionRef[];
+  /** The rental's return date now — an extension ending after it has not had its days given yet. */
+  rentalEnd?: ISODate | null;
 }
 
 export const TONE_CLS: Record<Tone, string> = {
@@ -119,6 +133,8 @@ export function PaymentPlanCard({
   accounts,
   actions,
   badge,
+  extensions,
+  rentalEnd,
 }: PaymentPlanCardProps) {
   const currency = (currencyProp || plan.currency || "usd").toUpperCase();
   const $ = (c: number) => formatMoney(c, currency);
@@ -165,6 +181,12 @@ export function PaymentPlanCard({
   const shownHistory = showAllHistory ? historyRows : historyRows.slice(0, 6);
 
   const upcoming = live.filter((o) => isOpen(o));
+  const extensionFor = (o: OccurrenceView): RowExtension | null => {
+    if (!o.extensionId) return null;
+    const ref = extensions?.find((e) => e.id === o.extensionId) ?? null;
+    const notGiven = !!ref?.newEndDate && !!rentalEnd && ref.newEndDate > rentalEnd.slice(0, 10) && ref.status !== "cancelled";
+    return { id: o.extensionId, ref, notGiven };
+  };
   const overdueOnResume = live.filter((o) => (o.status === "scheduled" || o.status === "due") && o.dueDate <= today);
 
   return (
@@ -180,11 +202,27 @@ export function PaymentPlanCard({
             {badge}
           </div>
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-            {describePlan({ rule: plan.rule, amount: plan.amount, collectionMethod: plan.collectionMethod, reminderOffsets: plan.reminderOffsets }, currency)}
+            {describePlan(
+              { rule: plan.rule, amount: plan.amount, collectionMethod: plan.collectionMethod, reminderOffsets: plan.reminderOffsets, renewal: plan.renewal ?? null },
+              currency,
+            )}
           </p>
         </div>
         {actions && plan.status !== "completed" && plan.status !== "cancelled" && (
           <div className="flex shrink-0 flex-wrap gap-2">
+            {actions.extend && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={plan.status !== "active"}
+                title={plan.status !== "active" ? "Resume the plan before extending the rental." : "Add days to the rental and collect them on this plan"}
+                onClick={actions.extend}
+                data-plan-extend=""
+              >
+                Extend
+              </Button>
+            )}
             {actions.edit && (
               <Button
                 type="button"
@@ -297,6 +335,7 @@ export function PaymentPlanCard({
                 onToggle={() => toggle(o.id)}
                 availability={occurrenceActions(o, actx)}
                 onAction={actions ? (a) => runRow(a, o) : undefined}
+                extension={extensionFor(o)}
               />
             ))}
             {replaced.length > 0 && (
@@ -327,6 +366,7 @@ export function PaymentPlanCard({
                   onToggle={() => toggle(o.id)}
                   availability={occurrenceActions(o, actx)}
                   onAction={actions ? (a) => runRow(a, o) : undefined}
+                  extension={extensionFor(o)}
                 />
               ))}
           </tbody>
@@ -460,6 +500,20 @@ function ReferenceCell({ attempt, accounts, compact }: { attempt: AttemptView | 
   );
 }
 
+/**
+ * The extension a period's payment pays for; `ref` is null until its row is
+ * read. `notGiven`: it ends after the rental's return date — its days are
+ * added once it is paid (A3).
+ */
+type RowExtension = { id: string; ref: ExtensionRef | null; notGiven?: boolean };
+
+function extensionLabel(x: RowExtension): string {
+  if (!x.ref) return "Extension";
+  const status = extensionStatusWords(x.ref.status);
+  const given = x.notGiven && x.ref.status !== "pending_approval" ? " · days given when paid" : "";
+  return `Extension #${x.ref.sequenceNumber}${status ? ` · ${status}` : ""}${given}`;
+}
+
 function OccurrenceRowView({
   o,
   plan,
@@ -471,6 +525,7 @@ function OccurrenceRowView({
   onToggle,
   availability,
   onAction,
+  extension,
 }: {
   o: OccurrenceView;
   plan: PlanView;
@@ -482,8 +537,17 @@ function OccurrenceRowView({
   onToggle: () => void;
   availability: ReturnType<typeof occurrenceActions>;
   onAction?: (a: OccurrenceAction) => void;
+  extension?: RowExtension | null;
 }) {
   const st = statusWords(o, today, currency);
+  // A payment for a rental PERIOD (a renewal or an extension) reads its
+  // period from the old return date to the new one.
+  const isPeriod = !!o.renews || !!extension || !!plan.renewal;
+  // A4: a period whose cover could not be bought says so on the row itself —
+  // the operator is told, and no premium was charged for it.
+  const insurance = insuranceStatusWords(o.insuranceStatus);
+  const noCover = o.insuranceStatus === "not_insurable" || o.insuranceStatus === "failed";
+  const covers = isPeriod ? `covers ${formatPeriodSpan(o.periodStart, o.periodEnd)}` : formatCovers(o.periodStart, o.periodEnd);
   const mine = attempts.filter((a) => a.occurrenceId === o.id).sort((a, b) => a.attemptNo - b.attemptNo);
   const refAttempt = [...mine].reverse().find((a) => a.status === "succeeded") ?? lastAttempt(o, attempts);
   const dim = o.status === "superseded" || o.status === "cancelled" || o.status === "skipped" || o.status === "waived";
@@ -504,7 +568,19 @@ function OccurrenceRowView({
           <span className="block whitespace-nowrap font-medium">{formatDay(o.dueDate)}</span>
           {o.movedFrom && <span className="block text-[11px] text-muted-foreground">moved from {formatDay(o.movedFrom)}</span>}
         </td>
-        <td className={cn(cell, "hidden whitespace-nowrap text-muted-foreground md:table-cell")}>{formatCovers(o.periodStart, o.periodEnd)}</td>
+        <td className={cn(cell, "hidden whitespace-nowrap text-muted-foreground md:table-cell")} data-covers="">
+          <span className="block">{covers}</span>
+          {extension && (
+            <span className="block text-[11px] text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" data-extension-link={extension.id}>
+              {extensionLabel(extension)}
+            </span>
+          )}
+          {noCover && (
+            <span className="block text-[11px] text-destructive" data-insurance-status={o.insuranceStatus ?? ""}>
+              {insurance}
+            </span>
+          )}
+        </td>
         <td className={cn(cell, "text-right tabular-nums", o.status === "superseded" && "line-through decoration-muted-foreground/40")}>
           {formatMoney(o.amountCents, currency)}
         </td>
@@ -557,8 +633,23 @@ function OccurrenceRowView({
           <td colSpan={7} className="pb-3 pr-3">
             <div className={cn(insetCls, "space-y-2 px-4 py-3 text-[12px]")} data-occurrence-detail={o.seq}>
               <p className="text-muted-foreground md:hidden">
-                Covers {formatCovers(o.periodStart, o.periodEnd)} · by {describeMethod(o.collectionMethod)}
+                {isPeriod ? covers.replace(/^covers/, "Covers") : `Covers ${formatCovers(o.periodStart, o.periodEnd)}`} · by {describeMethod(o.collectionMethod)}
               </p>
+              {extension && (
+                <p data-extension-detail={extension.id}>
+                  Pays for {extension.ref ? `Extension #${extension.ref.sequenceNumber}` : "an extension"}
+                  {extension.ref?.previousEndDate && extension.ref?.newEndDate
+                    ? ` (${formatPeriodSpan(extension.ref.previousEndDate, extension.ref.newEndDate)})`
+                    : ""}
+                  {extension.ref?.status ? ` — ${extensionStatusWords(extension.ref.status)}` : ""}.
+                  {extension.notGiven || extension.ref?.status === "pending_approval" ? " Its days are added to the rental once this payment is made." : ""}
+                </p>
+              )}
+              {insurance && (
+                <p className={noCover ? "text-destructive" : "text-muted-foreground"} data-insurance-detail={o.insuranceStatus ?? ""}>
+                  Insurance: {insurance}.
+                </p>
+              )}
               {o.amountPaidCents > 0 && (
                 <p>
                   {formatMoney(o.amountPaidCents, currency)} paid of {formatMoney(o.amountCents, currency)}

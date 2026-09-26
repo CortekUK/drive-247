@@ -26,8 +26,13 @@ import type {
   PlanOperations,
   PlanRow,
   PlanStore,
+  PostRenewalInput,
+  PostRenewalResult,
   RecordFailureInput,
   RecordSuccessInput,
+  RenewalInsuranceDecision,
+  RenewalOperations,
+  RenewalPricingInputs,
 } from "@fn/_shared/payment-plans/types.ts";
 import { LEGACY_MECHANISM_ERROR_PREFIX, PlanStoreError } from "@fn/_shared/payment-plans/errors.ts";
 import { toCents, type Db } from "./pglite";
@@ -55,6 +60,9 @@ export function occFromRow(r: Row): OccurrenceRow {
     movedFrom: r.moved_from,
     paidAt: r.paid_at,
     note: r.note,
+    renews: r.renews,
+    extensionId: r.extension_id,
+    insuranceStatus: r.insurance_status,
   };
 }
 
@@ -96,7 +104,7 @@ function mapError(e: any): Error {
   return e instanceof Error ? e : new Error(msg);
 }
 
-export class PglitePlanStore implements PlanStore, PlanOperations, PlanLookups, LedgerFixture, ClockedStore {
+export class PglitePlanStore implements PlanStore, PlanOperations, PlanLookups, RenewalOperations, LedgerFixture, ClockedStore {
   private clock = "2026-01-01T00:00:00.000Z";
   constructor(readonly db: Db) {}
 
@@ -300,6 +308,81 @@ export class PglitePlanStore implements PlanStore, PlanOperations, PlanLookups, 
   async rentalOwedCents(rentalId: string): Promise<number> {
     const [r] = await this.call<{ n: number }>(`SELECT pp_rental_owed_cents($1)::bigint n`, [rentalId]);
     return Number(r.n);
+  }
+
+  // ── RenewalOperations (20260926120200_open_ended_plans.sql) ──────────────
+
+  async listRenewalPlans(filter?: { tenantId?: string; planId?: string }): Promise<PlanRow[]> {
+    const rows = await this.call<{ p: PlanRow }>(`SELECT p FROM pp_list_renewal_plans($1, $2) p`, [filter?.tenantId ?? null, filter?.planId ?? null]);
+    return rows.map((r) => r.p);
+  }
+
+  async renewalPricing(rentalId: string): Promise<RenewalPricingInputs> {
+    const [r] = await this.call(
+      `SELECT r.id, r.tenant_id, r.customer_id, r.end_date, r.monthly_amount, r.discount_applied,
+              t.tax_enabled, t.tax_percentage, t.service_fee_enabled, t.service_fee_type, t.service_fee_value, t.service_fee_amount
+         FROM rentals r JOIN tenants t ON t.id = r.tenant_id WHERE r.id = $1`,
+      [rentalId],
+    );
+    if (!r) throw new PlanStoreError("not_found", `Rental ${rentalId} not found`);
+    const num = (v: unknown) => (v === null || v === undefined ? null : Number(v));
+    return {
+      rentalId: r.id,
+      tenantId: r.tenant_id,
+      customerId: r.customer_id,
+      rentalEnd: r.end_date,
+      monthlyAmount: num(r.monthly_amount),
+      discountApplied: num(r.discount_applied),
+      tenant: {
+        tax_enabled: r.tax_enabled,
+        tax_percentage: num(r.tax_percentage),
+        service_fee_enabled: r.service_fee_enabled,
+        service_fee_type: r.service_fee_type,
+        service_fee_value: num(r.service_fee_value),
+        service_fee_amount: num(r.service_fee_amount),
+      },
+    };
+  }
+
+  async appendRenewalPeriod(planId: string, draft: OccurrenceDraft, actorId?: string | null): Promise<{ occurrenceId: string; appended: boolean }> {
+    const [r] = await this.call<{ r: { occurrenceId: string; appended: boolean } }>(`SELECT pp_append_renewal_period($1, $2::jsonb, $3) r`, [
+      planId,
+      JSON.stringify(draft),
+      actorId ?? null,
+    ]);
+    return r.r;
+  }
+
+  async postRenewalPeriod(input: PostRenewalInput): Promise<PostRenewalResult> {
+    const [r] = await this.call<{ r: PostRenewalResult }>(`SELECT pp_post_renewal_period($1, $2::jsonb, $3, $4, $5) r`, [
+      input.occurrenceId,
+      JSON.stringify(input.breakdown),
+      input.insuranceRequested,
+      input.giveDaysNow ?? false,
+      input.actorId ?? null,
+    ]);
+    return r.r;
+  }
+
+  async recordRenewalInsurance(input: RenewalInsuranceDecision): Promise<void> {
+    const decision: Record<string, unknown> = { outcome: input.outcome };
+    if (input.policyRef) decision.policyRef = input.policyRef;
+    if (input.premiumCents != null) decision.premiumCents = input.premiumCents;
+    if (input.coveredFrom) decision.coveredFrom = input.coveredFrom;
+    if (input.coveredTo) decision.coveredTo = input.coveredTo;
+    if (input.reason) decision.reason = input.reason;
+    await this.call(`SELECT pp_record_renewal_insurance($1, $2::jsonb)`, [input.occurrenceId, JSON.stringify(decision)]);
+  }
+
+  async reconcileRenewals(filter?: { tenantId?: string; planId?: string }): Promise<string[]> {
+    const rows = await this.call<{ id: string }>(`SELECT id FROM pp_reconcile_renewals($1, $2) id`, [filter?.tenantId ?? null, filter?.planId ?? null]);
+    return rows.map((r) => r.id);
+  }
+
+  /** rentals.end_date. */
+  async rentalEndDate(rentalId: string): Promise<string | null> {
+    const [r] = await this.call<{ end_date: string | null }>(`SELECT end_date FROM rentals WHERE id = $1`, [rentalId]);
+    return r ? r.end_date : null;
   }
 
   // ── LedgerFixture: real payments / ledger rows ────────────────────────────

@@ -59,7 +59,9 @@ export function financeViewsFor(canView: (tabKey: string) => boolean): FinanceVi
 const LEGACY_PAYMENT_STATUS: Readonly<Record<string, string>> = {
   pending: 'pending_review',
   approved: 'approved',
-  auto_approved: 'approved',
+  // The old tab's Auto-Approved option has its own Received chip now
+  // (lib/finances/filters.ts AUTO_APPROVED_STATUS), so the link keeps its meaning.
+  auto_approved: 'auto_approved',
   rejected: 'rejected',
 };
 

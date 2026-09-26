@@ -22,6 +22,14 @@ interface CollectPaymentDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   customerId: string;
+  /**
+   * Optional, additive (Wave 1 "Request a payment"): the amount to open with,
+   * in dollars, and what the payment is for. The description fills Reference
+   * and replaces the emailed link's generic "Account payment" line. Callers that
+   * pass neither get exactly the dialog they always had.
+   */
+  defaultAmount?: number;
+  description?: string;
 }
 
 const PAYMENT_METHODS = ["Cash", "Card", "Bank Transfer", "Zelle", "Check", "Other"];
@@ -37,7 +45,7 @@ const PAYMENT_METHODS = ["Cash", "Card", "Bank Transfer", "Zelle", "Check", "Oth
  *   - Charge via Stripe / Email Stripe Link → create-checkout-session with
  *     holdAsCredit; the webhook commits it as held credit when the customer pays.
  */
-export const CollectPaymentDialog = ({ open, onOpenChange, customerId }: CollectPaymentDialogProps) => {
+export const CollectPaymentDialog = ({ open, onOpenChange, customerId, defaultAmount, description }: CollectPaymentDialogProps) => {
   const { toast } = useToast();
   const { tenant } = useTenant();
   // Everything the operator reads about the processor comes from here, so a
@@ -57,6 +65,15 @@ export const CollectPaymentDialog = ({ open, onOpenChange, customerId }: Collect
 
   const currencyCode = tenant?.currency_code || "USD";
   const currencySymbol = getCurrencySymbol(currencyCode);
+
+  // Prefill on open, only when a caller asked for it.
+  useEffect(() => {
+    if (!open) return;
+    if (defaultAmount !== undefined && Number.isFinite(defaultAmount) && defaultAmount > 0) {
+      setAmount(defaultAmount.toFixed(2));
+    }
+    if (description) setReference(description);
+  }, [open, defaultAmount, description]);
 
   useEffect(() => {
     if (!open) {
@@ -257,7 +274,7 @@ export const CollectPaymentDialog = ({ open, onOpenChange, customerId }: Collect
               ? `${bookingOriginFor(tenant?.slug)}/checkout/${(checkout as any).paymentId}`
               : checkout.url,
           overrideAmount: parsedAmount,
-          overrideDescription: "Account payment",
+          overrideDescription: description || "Account payment",
         },
       });
       if (error) throw new Error(error.message || "Failed to send payment email");

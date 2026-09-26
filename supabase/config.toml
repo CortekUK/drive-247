@@ -50,6 +50,14 @@ verify_jwt = false
 [functions.sim-control]
 verify_jwt = true
 
+# e2e-runner: the Developer tab's LIVE end-to-end runner (docs/E2E_TESTING.md).
+# Northwind only, Stripe TEST only, fixture rentals only. verify_jwt = true —
+# only a signed-in northwind head_admin or a super admin; the function also
+# refuses everything until E2E_RUNNER_ENABLED=northwind is set (G0), and it
+# never calls a real cron (sandbox-* clones with only_rental_id instead).
+[functions.e2e-runner]
+verify_jwt = true
+
 [functions.twilio-inbound-sms]
 verify_jwt = false
 

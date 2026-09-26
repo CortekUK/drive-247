@@ -2,6 +2,8 @@
 //
 // One tick of the engine (_shared/payment-plans/engine.ts runTick) per tenant
 // that has a live plan or an attempt left in flight: recovery first, then
+// renewals (Wave 3: reconcile, append the next period of a renewing plan, post
+// periods about to fall due and buy their insurance — renewals.ts), then
 // reminders, then due work. The engine is the same code vitest and the /dev
 // simulator run; this file only supplies the Supabase store, the tenant's
 // Stripe provider, the notifier and the link minter.
@@ -151,6 +153,10 @@ Deno.serve(async (req) => {
       actions: results.reduce((n, r) => n + (r.result?.actions.length ?? 0), 0),
       recovered: results.reduce((n, r) => n + (r.result?.recovered.length ?? 0), 0),
       reminders: results.reduce((n, r) => n + (r.result?.reminders.filter((x) => x.sent).length ?? 0), 0),
+      renewalsPosted: results.reduce((n, r) => n + (r.result?.renewals?.posted.length ?? 0), 0),
+      renewalsAppended: results.reduce((n, r) => n + (r.result?.renewals?.appended.length ?? 0), 0),
+      renewalsReconciled: results.reduce((n, r) => n + (r.result?.renewals?.reconciled.length ?? 0), 0),
+      insurance: results.reduce((n, r) => n + (r.result?.renewals?.insurance.filter((x) => x.outcome !== "retry_later").length ?? 0), 0),
       errors: results.reduce((n, r) => n + (r.result?.errors.length ?? 0) + (r.error ? 1 : 0), 0),
       ms: Date.now() - started,
     };

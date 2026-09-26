@@ -47,6 +47,21 @@
  * A period that has not started yet is never a fault — an unpaid future period
  * is simply not collected yet. That is the design's rule and it survives
  * contact with real rows unchanged.
+ *
+ * ── A rental on a payment plan (canary, Wave 3) ─────────────────────────────
+ *
+ * The plan's Extend and its renewals create REAL `rental_extensions` rows with
+ * their charges on the ledger, so they appear here exactly like any other
+ * extension — this tab does not know or care who created them, and it sums
+ * only `rental_extension_totals`, never the plan's own occurrences, so no
+ * period's money is counted twice. Three things change while a plan is live:
+ *
+ *   - "Extend this rental" opens the PLAN's Extend, so the rental has one way
+ *     to be extended and every new period is collected by the one engine;
+ *   - the auto-extension row says the rental renews on its plan, instead of
+ *     offering the old job's pause switch for a job that is not running;
+ *   - a period whose days are "given when paid" and not yet paid is shown as
+ *     such, and is NOT counted in how far the rental runs.
  */
 
 import { Fragment, useMemo, useState } from "react";
@@ -72,6 +87,11 @@ import { useRentalExtensionTotals } from "@/hooks/use-rental-extension-totals";
 // edge function that has to be kept in step with the first.
 import { AdminExtendRentalDialog } from "@/components/rentals/AdminExtendRentalDialog";
 import { ExtensionRequestDialog } from "@/components/rentals/ExtensionRequestDialog";
+// Canary only: when a payment plan runs this rental, Extend is the plan's.
+import { usePaymentPlan, usePaymentPlansFeature } from "@/hooks/use-payment-plan";
+import { RentalExtendPlanDialog } from "@/components/payment-plans/extend-plan-dialog";
+import { describeEvery } from "@/lib/payment-plans-ui/renewal";
+import type { RenewalShape } from "@/lib/payment-plans-ui/renewal";
 import type { RentalDetailV2 } from "./use-rental-detail-v2";
 import { fmtDate, money } from "./_kit";
 
@@ -178,6 +198,13 @@ type Period = {
   bookedAt: string | null;
   /** The extension's own lifecycle status, when it has one. */
   rawStatus: string | null;
+  /**
+   * An extension whose days are not given yet — it ends after the rental's
+   * return date, because the date moves only once the period is paid (a
+   * renewal, a plan's "give the days when paid", a pending pay-link period).
+   * Not part of how far the rental runs.
+   */
+  notGiven?: boolean;
 };
 
 type Break = { kind: "gap" | "overlap"; days: number; from: string; to: string };
@@ -219,7 +246,8 @@ const needsAttention = (p: Period, today: string): boolean => {
   return false;
 };
 
-const labelOf = (p: Period) => (p.kind === "original" ? "Original rental" : `Extension ${p.ordinal}`);
+const labelOf = (p: Period) =>
+  p.kind === "original" ? "Original rental" : `Extension ${p.ordinal}${p.notGiven ? " · days given when paid" : ""}`;
 
 /* ══════════════════════════════════════════════════════════════════════════
    Reading the rows
@@ -341,9 +369,11 @@ function buildPeriods(
     rawStatus: null,
   };
 
+  const rentalEnd = rental.end_date ? String(rental.end_date).slice(0, 10) : null;
   const rest: Period[] = exts.map((t) => {
     const from = String(t.previous_end_date ?? original.to ?? rental.start_date).slice(0, 10);
     const to = t.new_end_date ? String(t.new_end_date).slice(0, 10) : null;
+    const notGiven = t.status !== "cancelled" && !!to && !!rentalEnd && to > rentalEnd;
     return {
       id: String(t.id),
       kind: "extension" as const,
@@ -365,6 +395,7 @@ function buildPeriods(
       agreement: toAgreement(agreementFor(from, to)),
       bookedAt: t.requested_at ?? t.created_at ?? null,
       rawStatus: t.status ?? null,
+      notGiven,
     };
   });
 
@@ -753,6 +784,15 @@ export function RailExtensions({
 
   const [extendOpen, setExtendOpen] = useState(false);
   const [requestOpen, setRequestOpen] = useState(false);
+  const [planExtendOpen, setPlanExtendOpen] = useState(false);
+
+  // Canary only (usePaymentPlansFeature: the slug AND the tables). For every
+  // other tenant no plan query runs and `livePlan` is null — the tab is as it was.
+  const { enabled: plansOn } = usePaymentPlansFeature();
+  const planQ = usePaymentPlan(plansOn ? rental.id : null, rental.end_date ?? null);
+  const planData = planQ.data ?? null;
+  const livePlan =
+    planData && (planData.plan.status === "active" || planData.plan.status === "paused") ? planData : null;
 
   const periods = useMemo(
     () =>
@@ -783,8 +823,9 @@ export function RailExtensions({
    */
   const overview = useMemo(() => {
     const extensions = periods.filter((p) => p.kind === "extension");
+    // Days not given yet are not days the rental runs to.
     const endsOn = periods.reduce<string | null>(
-      (latest, p) => (p.to && (!latest || at(p.to) > at(latest)) ? p.to : latest),
+      (latest, p) => (p.to && !p.notGiven && (!latest || at(p.to) > at(latest)) ? p.to : latest),
       null
     );
 
@@ -942,7 +983,7 @@ export function RailExtensions({
         ) : (
           <Button
             className="w-full"
-            onClick={() => setExtendOpen(true)}
+            onClick={() => (livePlan ? setPlanExtendOpen(true) : setExtendOpen(true))}
             disabled={isPayg}
             title={
               isPayg
@@ -954,7 +995,7 @@ export function RailExtensions({
           </Button>
         )}
 
-        <AutoExtensionRow rental={rental} refetch={refetch} />
+        <AutoExtensionRow rental={rental} refetch={refetch} planRenewal={livePlan?.plan.renewal ?? null} />
       </div>
 
       {/* ── one period, in full ────────────────────────────────────────── */}
@@ -976,7 +1017,20 @@ export function RailExtensions({
 
       {/* v1's dialogs, mounted as they stand. Both refetch the rental on close
           so the stack redraws with the period that was just added. */}
-      {!isPayg && (
+      {livePlan && (
+        <RentalExtendPlanDialog
+          open={planExtendOpen}
+          onOpenChange={(o) => {
+            setPlanExtendOpen(o);
+            if (!o) refetch();
+          }}
+          rentalId={rental.id}
+          plan={livePlan.plan}
+          occurrences={livePlan.occurrences}
+          currentEnd={rental.end_date ? String(rental.end_date).slice(0, 10) : null}
+        />
+      )}
+      {!isPayg && !livePlan && (
         <AdminExtendRentalDialog
           open={extendOpen}
           onOpenChange={(o) => {
@@ -1032,11 +1086,27 @@ export function RailExtensions({
 function AutoExtensionRow({
   rental,
   refetch,
+  planRenewal,
 }: {
   rental: Record<string, any>;
   refetch: () => void;
+  /** Set when a live payment plan keeps this rental renewing (canary). */
+  planRenewal?: RenewalShape | null;
 }) {
   const [saving, setSaving] = useState(false);
+
+  // The plan renews this rental; the old job's switch would pause a job that
+  // is not running. Pause and stop live on the plan card.
+  if (planRenewal) {
+    return (
+      <div className="mt-2 flex h-8 items-center gap-2 px-1" data-rail-plan-renewal="">
+        <span className="min-w-0 shrink-0 text-[13px]">Renewing</span>
+        <span className="min-w-0 flex-1 truncate text-right text-[11px] text-muted-foreground/60">
+          {describeEvery(planRenewal.periodUnit, planRenewal.periodCount)} · on the payment plan
+        </span>
+      </div>
+    );
+  }
 
   const enabled = !!rental.auto_extend_enabled;
   const paused = !!rental.auto_extend_paused || rental.auto_extend_status === "paused";

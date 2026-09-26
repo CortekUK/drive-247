@@ -8,9 +8,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { SAMPLE_EXPLAINER_URL } from "@/lib/explainers";
 
 /**
- * `payment_plan` is the canary's fusion of pay-as-you-go and installments
- * (docs/PAYMENT_PLANS_DESIGN.md §9). It is only ever offered through
- * `available` — see `bookingModesFor` below — so no other tenant sees it.
+ * `payment_plan` is the canary's fusion of pay-as-you-go, installments and —
+ * since Wave 3 (docs/PAYMENTS_ROADMAP.md) — auto-extension: "keeps renewing
+ * until stopped" is an answer inside the one plan form, not a card of its own.
+ * It is only ever offered through `available` — see `bookingModesFor` below —
+ * so no other tenant sees it.
  */
 export type BookingMode = "fixed" | "auto_extend" | "installments" | "payg" | "payment_plan";
 
@@ -67,13 +69,13 @@ const MODES: ModeOption[] = [
     title: "Payment plan",
     tagline: "Collect over time",
     description:
-      "Set how the customer pays for this rental — weekly, twice a week, monthly or on dates you pick — by card, emailed link or payments you record.",
-    bestFor: "Customers paying in stages",
+      "Set how the customer pays — weekly, twice a week, monthly or on dates you pick, or renewing each period until you stop it — by card, emailed link or payments you record.",
+    bestFor: "Paying in stages, or ongoing hires",
     videoUrl: SAMPLE_VIDEO, // TODO: replace with a real payment plan explainer
     infoPages: [
       {
         heading: "What it is",
-        body: "A rental with set dates whose total is collected over time instead of all at once. You describe the schedule in one sentence — how much, how often, from when, until when, and how — and see every date before anything is saved.",
+        body: "A rental whose price is collected over time instead of all at once. You describe the schedule in one sentence — how much, how often, from when, until when, and how — and see every date before anything is saved. \"Until\" can also be \"keeps renewing until stopped\": the rental then runs one period at a time, each collected when it starts.",
       },
       {
         heading: "How collecting works",
@@ -190,20 +192,19 @@ interface BookingModeGridProps {
  *
  *   fixed, then payg if the tenant has it on, then auto-extend if on.
  *
- * With payment plans on (the canary, once its tables exist) the PAYG card is
- * replaced by "Payment plan" — the fusion of PAYG and installments — and the
- * list becomes fixed, payment plan, then auto-extend if on (kept until slice 3).
- * `installments` is never a card: it has always been a plan inside a regular
- * rental, not a mode.
+ * With payment plans on (the canary, once its tables exist) there are TWO
+ * cards: fixed dates, and "Payment plan" — the fusion of PAYG, installments
+ * and auto-extension. Renewing is an answer inside the plan form ("keeps
+ * renewing until stopped"), so the auto-extend card goes (Wave 3), whatever the
+ * tenant's auto-extend setting says. `installments` is never a card: it has
+ * always been a plan inside a regular rental, not a mode.
  */
 export function bookingModesFor(opts: {
   paygEnabled: boolean;
   autoExtendEnabled: boolean;
   paymentPlans: boolean;
 }): BookingMode[] {
-  if (opts.paymentPlans) {
-    return ["fixed", "payment_plan", ...(opts.autoExtendEnabled ? (["auto_extend"] as const) : [])];
-  }
+  if (opts.paymentPlans) return ["fixed", "payment_plan"];
   return [
     "fixed",
     ...(opts.paygEnabled ? (["payg"] as const) : []),

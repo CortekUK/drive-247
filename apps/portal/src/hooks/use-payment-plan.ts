@@ -31,7 +31,14 @@ import type { DashboardAccounts } from "@/lib/payment-plans-ui/dashboard-link";
 import { LIVE_INSTALLMENT_STATUSES } from "@/lib/payment-plans-ui/legacy-mechanism";
 import { draftToPlanForm, type PlanDraft } from "@/lib/payment-plans-ui/plan-form-model";
 import { attemptFromRow, eventFromRow, occurrenceFromRow, planFromRow } from "@/lib/payment-plans-ui/rows";
-import type { PlanBundle, PlanView, RecordPaymentInput } from "@/lib/payment-plans-ui/view-types";
+import type { OccurrenceView, PlanBundle, PlanView, RecordPaymentInput } from "@/lib/payment-plans-ui/view-types";
+import { normaliseCoverage, unitFromPeriodType, type RenewalInsurance, type RenewalUnit } from "@/lib/payment-plans-ui/renewal";
+import {
+  agreementOutcomeWords,
+  sendExtensionAgreements,
+  type AgreementOutcome,
+  type ExtensionForAgreement,
+} from "@/lib/payment-plans-ui/extension-agreement";
 
 export const PAYMENT_PLAN_FUNCTION = "payment-plan-manage";
 
@@ -227,7 +234,11 @@ export type ManageAction =
   | "occurrence_set_method"
   | "occurrence_retry"
   | "occurrence_send_link"
-  | "occurrence_record_payment";
+  | "occurrence_record_payment"
+  // Wave 3 (pinned): extend the rental on its plan; the read-only comparison
+  // of the old renewal job against the plan engine (Developer tab).
+  | "extend"
+  | "shadow_compare";
 
 /**
  * Call `payment-plan-manage`. Throws an Error carrying the server's own
@@ -273,6 +284,153 @@ export function draftBody(d: PlanDraft) {
   return { form: draftToPlanForm(d) };
 }
 
+/* ── extending on the plan (Wave 3) ──────────────────────────────────────── */
+
+/** What the Extend dialog and the renewal answer need from the rental row. */
+export interface RentalPlanFacts {
+  endDate: ISODate | null;
+  status: string | null;
+  /** rental_period_type → the unit a renewal/extension period is counted in. */
+  periodUnit: RenewalUnit;
+  customerName: string | null;
+  customerEmail: string | null;
+  /** The rental's own Bonzah coverage (its policy's coverage_types), null when it has none. */
+  coverage: RenewalInsurance | null;
+}
+
+export function rentalPlanFactsKey(tenantId: string | undefined, rentalId: string | null | undefined) {
+  return ["payment-plan-rental-facts", tenantId, rentalId] as const;
+}
+
+/**
+ * The rental facts behind Extend: its current return date, who to send the
+ * agreement to (the same `customers` name/email the manual extension uses),
+ * and the cover its Bonzah policy carries (the manual extension prefills from
+ * the same `coverage_types`).
+ */
+export function useRentalPlanFacts(rentalId: string | null | undefined, enabled = true) {
+  const { tenant } = useTenant();
+  const { enabled: featureOn } = usePaymentPlansFeature();
+  return useQuery({
+    queryKey: rentalPlanFactsKey(tenant?.id, rentalId),
+    enabled: !!tenant && featureOn && !!rentalId && enabled,
+    staleTime: 30_000,
+    queryFn: async (): Promise<RentalPlanFacts> => {
+      const { data, error } = await supabaseUntyped
+        .from("rentals")
+        .select("id, end_date, status, rental_period_type, bonzah_policy_id, customers(name, email)")
+        .eq("tenant_id", tenant!.id)
+        .eq("id", rentalId)
+        .maybeSingle();
+      if (error) throw error;
+      const row = (data ?? {}) as Record<string, any>;
+      let coverage: RenewalInsurance | null = null;
+      if (row.bonzah_policy_id) {
+        const pol = await supabaseUntyped
+          .from("bonzah_insurance_policies")
+          .select("coverage_types")
+          .eq("id", row.bonzah_policy_id)
+          .maybeSingle();
+        if (pol.error) throw pol.error;
+        coverage = normaliseCoverage((pol.data as Record<string, any> | null)?.coverage_types);
+      }
+      const customer = Array.isArray(row.customers) ? row.customers[0] : row.customers;
+      return {
+        endDate: typeof row.end_date === "string" ? row.end_date.slice(0, 10) : null,
+        status: row.status ?? null,
+        periodUnit: unitFromPeriodType(row.rental_period_type),
+        customerName: customer?.name ?? null,
+        customerEmail: customer?.email ?? null,
+        coverage,
+      };
+    },
+  });
+}
+
+/** What the operator chose in the Extend dialog (the pinned `extend` body, less rentalId). */
+export interface ExtendInput {
+  periods: number;
+  giveDaysNow: boolean;
+  sendAgreement: boolean;
+  /** Bonzah cover for the new days; null = none. */
+  insurance: RenewalInsurance | null;
+}
+
+export interface ExtendOutcome {
+  extensionIds: string[];
+  occurrenceIds: string[];
+  /** Null when no agreement was asked for (or nothing to send it for). */
+  agreements: AgreementOutcome | null;
+}
+
+/** rental_extension_totals, read for the agreement body. RLS: tenant staff SELECT. */
+export async function readExtensionsForAgreement(ids: string[]): Promise<ExtensionForAgreement[]> {
+  if (ids.length === 0) return [];
+  const { data, error } = await supabaseUntyped
+    .from("rental_extension_totals")
+    .select("id, sequence_number, previous_end_date, new_end_date, total_amount")
+    .in("id", ids);
+  if (error) throw error;
+  return ((data ?? []) as Record<string, any>[]).map((r) => ({
+    id: String(r.id),
+    sequenceNumber: Number(r.sequence_number) || 0,
+    previousEndDate: typeof r.previous_end_date === "string" ? r.previous_end_date.slice(0, 10) : null,
+    newEndDate: typeof r.new_end_date === "string" ? r.new_end_date.slice(0, 10) : null,
+    totalAmount: r.total_amount === null || r.total_amount === undefined ? null : Number(r.total_amount),
+  }));
+}
+
+/**
+ * Extend the rental on its plan: `payment-plan-manage` 'extend' first — the
+ * server creates the extension rows, their charges and the plan's new
+ * occurrences — then, when asked, the extension agreement through the SAME
+ * `/api/esign` request the manual extension makes (one per new extension).
+ * An agreement that fails never undoes the extension; it is reported.
+ */
+export async function extendOnPlan(
+  ctx: {
+    rentalId: string;
+    tenantId: string;
+    customerName?: string | null;
+    customerEmail?: string | null;
+    /** The plan's occurrences after the extend, for a fallback amount per extension. */
+    occurrences?: () => OccurrenceView[];
+    fetchImpl?: typeof fetch;
+  },
+  input: ExtendInput,
+): Promise<ExtendOutcome> {
+  const reply = await invokePaymentPlanManage<{ extensionIds?: unknown; occurrenceIds?: unknown }>("extend", {
+    rentalId: ctx.rentalId,
+    periods: input.periods,
+    giveDaysNow: input.giveDaysNow,
+    sendAgreement: input.sendAgreement,
+    // Explicit null = "no insurance for the new days" — never left for the
+    // server to default.
+    insurance: input.insurance,
+  });
+  const ids = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
+  const extensionIds = ids(reply.extensionIds);
+  const occurrenceIds = ids(reply.occurrenceIds);
+  let agreements: AgreementOutcome | null = null;
+  if (input.sendAgreement && extensionIds.length > 0) {
+    const doFetch = ctx.fetchImpl ?? fetch;
+    agreements = await sendExtensionAgreements({
+      rentalId: ctx.rentalId,
+      tenantId: ctx.tenantId,
+      customerEmail: ctx.customerEmail,
+      customerName: ctx.customerName,
+      extensionIds,
+      readExtensions: readExtensionsForAgreement,
+      fallbackCents: (extId) => {
+        const o = ctx.occurrences?.().find((x) => x.extensionId === extId);
+        return o ? o.amountCents : null;
+      },
+      fetchImpl: (url, init) => doFetch(url, init),
+    });
+  }
+  return { extensionIds, occurrenceIds, agreements };
+}
+
 export function usePaymentPlanActions(rentalId: string | null | undefined) {
   const { tenant } = useTenant();
   const { toast } = useToast();
@@ -281,6 +439,9 @@ export function usePaymentPlanActions(rentalId: string | null | undefined) {
 
   const refresh = useCallback(() => {
     void qc.invalidateQueries({ queryKey: paymentPlanKey(tenant?.id, rentalId) });
+    // An extension moves the return date and adds extension rows.
+    void qc.invalidateQueries({ queryKey: rentalPlanFactsKey(tenant?.id, rentalId) });
+    void qc.invalidateQueries({ queryKey: ["rental-extension-totals", tenant?.id, rentalId] });
     // A recorded or collected payment moves the rental's own ledger too.
     void qc.invalidateQueries({ queryKey: ["rental-payments-ledger-v2", rentalId] });
     void qc.invalidateQueries({ queryKey: ["rental-totals", tenant?.id, rentalId] });
@@ -335,6 +496,37 @@ export function usePaymentPlanActions(rentalId: string | null | undefined) {
       retry: (occurrenceId: string) => run(`retry:${occurrenceId}`, "occurrence_retry", { occurrenceId }, "Card retried — the result appears here in a moment"),
       sendLink: (occurrenceId: string) =>
         run<{ url?: string }>(`link:${occurrenceId}`, "occurrence_send_link", { occurrenceId }, "Payment link sent to the customer"),
+      /**
+       * Extend on the plan, then (if asked) send the extension agreement(s).
+       * One toast says both halves; an agreement that did not go is a
+       * warning, not a failure of the extension.
+       */
+      extend: async (input: ExtendInput, who: { customerName?: string | null; customerEmail?: string | null; occurrences?: () => OccurrenceView[] }) => {
+        if (!rentalId || !tenant?.id) throw new Error("The rental is not loaded yet.");
+        setBusy("extend");
+        try {
+          const outcome = await extendOnPlan({ rentalId, tenantId: tenant.id, ...who }, input);
+          const agreementWords = agreementOutcomeWords(outcome.agreements);
+          const warn = !!outcome.agreements && outcome.agreements.failed.length > 0;
+          toast({
+            title: input.giveDaysNow ? "Rental extended — the new days are on the plan" : "Extension added — the days are given as each period is paid",
+            description: agreementWords ?? undefined,
+            ...(warn ? { variant: "destructive" as const } : {}),
+          });
+          refresh();
+          return outcome;
+        } catch (err) {
+          toast({
+            title: "The rental was not extended",
+            description: err instanceof Error ? err.message : String(err),
+            variant: "destructive",
+          });
+          refresh();
+          throw err;
+        } finally {
+          setBusy(null);
+        }
+      },
       recordPayment: (occurrenceId: string, input: RecordPaymentInput) =>
         run(
           `record:${occurrenceId}`,
@@ -343,6 +535,6 @@ export function usePaymentPlanActions(rentalId: string | null | undefined) {
           "Payment recorded",
         ),
     }),
-    [busy, refresh, rentalId, run],
+    [busy, refresh, rentalId, run, tenant?.id, toast],
   );
 }

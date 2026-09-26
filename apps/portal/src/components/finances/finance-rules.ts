@@ -144,3 +144,15 @@ export function customerHref(customerId: string | null | undefined): string | nu
 export function vehicleHref(vehicleId: string | null | undefined): string | null {
   return vehicleId ? `/vehicles/${vehicleId}` : null;
 }
+
+/**
+ * "Open the customer" for a PAYMENT. A payment on a rental opens the customer
+ * record; one on NO rental opens the customer's payments tab — exactly where
+ * the old Payments tab's "View Ledger" sent it (`/customers/<id>?tab=payments`),
+ * because there is no rental ledger to show it in.
+ */
+export function paymentCustomerHref(row: Pick<ReceiptRow, "customerId" | "rentalId">): string | null {
+  const base = customerHref(row.customerId);
+  if (!base) return null;
+  return row.rentalId ? base : `${base}?tab=payments`;
+}

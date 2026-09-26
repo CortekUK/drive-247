@@ -8,9 +8,13 @@
  * this to the Payments stage changes nothing for any other tenant, and nothing
  * for the canary before the migration is applied.
  *
- *   a live plan           → the plan card, with every action wired
+ *   a live plan           → the plan card, with every action wired — Extend
+ *                           included (Wave 3: the rental's days, collected on
+ *                           the plan)
  *   no plan, money owed   → "Set up a payment plan"
- *   no plan, nothing owed → nothing (there is nothing to plan)
+ *   no plan, nothing owed → "Keep it renewing" while the rental is still out
+ *                           and has a return date to renew from; otherwise
+ *                           nothing (there is nothing to plan)
  *
  * One engine per rental: a rental still on auto-extend, an open pay-as-you-go
  * or a live installment plan keeps "Set up a plan" DISABLED, with the sentence
@@ -36,12 +40,20 @@ import {
   usePaymentPlanActions,
   usePaymentPlansFeature,
   useLiveInstallmentPlan,
+  useRentalPlanFacts,
 } from "@/hooks/use-payment-plan";
+import { useRentalExtensionTotals } from "@/hooks/use-rental-extension-totals";
+import { isBonzahSellable } from "@/lib/bonzah";
+import type { ExtensionRef } from "@/lib/payment-plans-ui/renewal";
 import { legacyMechanismForRental, legacyMechanismReason, type LegacyRentalFlags } from "@/lib/payment-plans-ui/legacy-mechanism";
 import { formatMoney, todayInZone, type ISODate } from "@/lib/payment-plans-ui/format";
 import type { PlanContext } from "@/lib/payment-plans-ui/plan-form-model";
 import { PaymentPlanCard } from "./payment-plan-card";
 import { EditPlanDialog, SetUpPlanDialog } from "./payment-plan-dialogs";
+import { RentalExtendPlanDialog } from "./extend-plan-dialog";
+
+/** Rental statuses a renewal can no longer start from. */
+const FINISHED_RENTAL = new Set(["closed", "cancelled", "completed", "rejected"]);
 
 export function RentalPaymentPlanSection({
   rentalId,
@@ -85,15 +97,43 @@ function Section({
   const act = usePaymentPlanActions(rentalId);
   const [setUpOpen, setSetUpOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [extendOpen, setExtendOpen] = useState(false);
+  const facts = useRentalPlanFacts(rentalId);
 
   const data = q.data;
   const plan = data?.plan;
   const live = plan && (plan.status === "active" || plan.status === "paused");
   const today = todayInZone(plan?.timezone ?? tenant?.timezone);
-  const ctx: PlanContext = { rentalStart: rentalStart.slice(0, 10), rentalEnd: rentalEnd ? rentalEnd.slice(0, 10) : null, balanceCents };
+  const ctx: PlanContext = {
+    rentalStart: rentalStart.slice(0, 10),
+    rentalEnd: rentalEnd ? rentalEnd.slice(0, 10) : null,
+    balanceCents,
+    // "keeps renewing until stopped" — with what the insurance question needs.
+    renewal: {
+      bonzahSellable: isBonzahSellable(tenant),
+      rentalCoverage: facts.data?.coverage ?? null,
+      defaultUnit: facts.data?.periodUnit,
+    },
+  };
+
+  // The extensions the plan's periods created, so each payment can name its own.
+  const periodPlan = !!plan && (!!plan.renewal || (data?.occurrences ?? []).some((o) => !!o.extensionId));
+  const extTotals = useRentalExtensionTotals(periodPlan ? rentalId : undefined);
+  const extensions: ExtensionRef[] = ((extTotals.data ?? []) as Record<string, any>[]).map((r) => ({
+    id: String(r.id),
+    sequenceNumber: Number(r.sequence_number) || 0,
+    previousEndDate: typeof r.previous_end_date === "string" ? r.previous_end_date.slice(0, 10) : null,
+    newEndDate: typeof r.new_end_date === "string" ? r.new_end_date.slice(0, 10) : null,
+    status: r.display_status ?? r.status ?? null,
+    totalCents: r.total_amount === null || r.total_amount === undefined ? null : Math.round(Number(r.total_amount) * 100),
+  }));
+  // Nothing owed, but the rental is still out with a return date: it can be
+  // set to keep renewing.
+  const rentalStatus = String(facts.data?.status ?? "").toLowerCase();
+  const canRenew = !!ctx.rentalEnd && !!facts.data && !FINISHED_RENTAL.has(rentalStatus);
 
   // One engine per rental: is this rental still billed by an old mechanism?
-  const offersSetup = !q.isLoading && !q.error && !live && balanceCents > 0;
+  const offersSetup = !q.isLoading && !q.error && !live && (balanceCents > 0 || canRenew);
   const installment = useLiveInstallmentPlan(rentalId, offersSetup);
   const mechanism = legacyMechanismForRental(rental, installment.data === true);
   const blockedReason = legacyMechanismReason(mechanism);
@@ -125,7 +165,7 @@ function Section({
 
   return (
     <div className="space-y-4" data-rental-payment-plan="">
-      {!live && balanceCents > 0 && (
+      {!live && (balanceCents > 0 || canRenew) && (
         <div className={cn(cardCls, "flex flex-wrap items-center justify-between gap-4 p-6")} data-plan-setup-entry="">
           <div className="flex min-w-0 items-start gap-3">
             <span className="flex size-9 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary dark:bg-[hsl(var(--v2-hover,var(--muted)))] dark:text-[hsl(var(--v2-link,var(--primary)))]">
@@ -134,8 +174,9 @@ function Section({
             <div className="min-w-0">
               <p className="font-heading text-sm font-semibold">Set up a payment plan</p>
               <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-                This rental owes {formatMoney(balanceCents, currency)}. Collect it over time — weekly, monthly or on the dates you pick — by
-                card, emailed link or payments you record.
+                {balanceCents > 0
+                  ? `This rental owes ${formatMoney(balanceCents, currency)}. Collect it over time — weekly, monthly or on the dates you pick — by card, emailed link or payments you record, or keep the rental renewing.`
+                  : "This rental owes nothing now. Keep it renewing — every week, month or number of days — collected when each period starts."}
               </p>
               {blockedReason && (
                 <p id={reasonId} className="mt-1.5 text-xs font-medium leading-relaxed text-foreground" data-plan-setup-blocked={mechanism ?? ""}>
@@ -168,9 +209,12 @@ function Section({
           currency={currency}
           today={today}
           accounts={accounts}
+          extensions={extensions}
+          rentalEnd={ctx.rentalEnd}
           actions={
             mayAct && live
               ? {
+                  extend: () => setExtendOpen(true),
                   retry: (o) => act.retry(o.id),
                   sendLink: (o) => act.sendLink(o.id),
                   recordPayment: (o, input) => act.recordPayment(o.id, input),
@@ -203,6 +247,16 @@ function Section({
             }
             return reply;
           }}
+        />
+      )}
+      {mayAct && plan && live && data && (
+        <RentalExtendPlanDialog
+          open={extendOpen}
+          onOpenChange={setExtendOpen}
+          rentalId={rentalId}
+          plan={plan}
+          occurrences={data.occurrences}
+          currentEnd={ctx.rentalEnd}
         />
       )}
       {mayAct && plan && live && data && (

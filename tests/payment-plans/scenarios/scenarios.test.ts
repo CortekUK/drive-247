@@ -1,5 +1,6 @@
 /**
- * §10.1 scenarios S1–S19 — the identical list the /dev simulator runs — on
+ * §10.1 scenarios S1–S19, and the Wave 3 renewal scenarios S20–S26 — the
+ * identical list the /dev simulator runs — on
  * BOTH stores:
  *   memory — MemoryPlanStore (the engine agent's; what the browser runs)
  *   pglite — PglitePlanStore: the pp_* SQL functions on real Postgres, with the
@@ -21,7 +22,10 @@ const failedOf = (run: ScenarioRun) => run.assertions.filter((a) => !a.pass).map
 export function normalize(run: ScenarioRun) {
   const ev = run.evidence as ScenarioEvidence;
   const labels = new Map<string, string>();
-  for (const o of ev.occurrences) labels.set(o.id, `occ${o.seq}`);
+  for (const o of ev.occurrences) {
+    labels.set(o.id, `occ${o.seq}`);
+    if (o.extensionId) labels.set(o.extensionId, `ext(occ${o.seq})`);
+  }
   for (const a of ev.attempts) labels.set(a.id, `${labels.get(a.occurrenceId)}#${a.attemptNo}`);
   if (ev.plan) {
     labels.set(ev.plan.id, "plan");
@@ -46,7 +50,12 @@ export function normalize(run: ScenarioRun) {
       seq: o.seq, status: o.status, dueDate: o.dueDate, dueAt: o.dueAt, periodStart: o.periodStart, periodEnd: o.periodEnd,
       amountCents: o.amountCents, amountPaidCents: o.amountPaidCents, attemptNo: o.attemptNo, nextAttemptAt: o.nextAttemptAt,
       planVersion: o.planVersion, collectionMethod: o.collectionMethod, movedFrom: o.movedFrom ?? null,
+      renews: o.renews ?? false, posted: !!o.extensionId, insuranceStatus: o.insuranceStatus ?? null,
     })),
+    // Wave 3: the rental's extensions (no ids in them), its end date, every insurer call.
+    extensions: ev.extensions,
+    rentalEndDate: ev.rentalEndDate,
+    insurerCalls: swap(ev.insurerCalls),
     attempts: byJson(ev.attempts.map((a) => swap({
       id: a.id, attemptNo: a.attemptNo, method: a.method, status: a.status, amountCents: a.amountCents, key: a.idempotencyKey,
       provider: a.provider, providerAccount: a.providerAccount, providerMode: a.providerMode, providerRef: a.providerRef,
@@ -95,8 +104,20 @@ for (const s of SCENARIOS) {
 }
 
 describe("the scenario list itself", () => {
-  it("is S1…S18 then S19a, S19b, in order, each with a why", () => {
-    expect(SCENARIOS.map((s) => s.id)).toEqual([...Array.from({ length: 18 }, (_, i) => `S${i + 1}`), "S19a", "S19b"]);
+  it("is S1…S18, S19a, S19b, then the renewal scenarios S20…S26, in order, each with a why", () => {
+    expect(SCENARIOS.map((s) => s.id)).toEqual([
+      ...Array.from({ length: 18 }, (_, i) => `S${i + 1}`),
+      "S19a",
+      "S19b",
+      "S20",
+      "S21",
+      "S22",
+      "S23a",
+      "S23b",
+      "S24",
+      "S25",
+      "S26",
+    ]);
     expect(SCENARIOS.every((s) => s.why.length > 20)).toBe(true);
   });
 });

@@ -96,7 +96,8 @@ import { draftBody, invokePaymentPlanManage, usePaymentPlansFeature } from "@/ho
 import { PaymentPlanComposer } from "@/components/payment-plans/payment-plan-composer";
 import { defaultPlanForm, type PlanContext, type PlanDraft, type PlanFormState } from "@/lib/payment-plans-ui/plan-form-model";
 import { computePreview } from "@/lib/payment-plans-ui/preview";
-import { todayInZone } from "@/lib/payment-plans-ui/format";
+import { formatDay as formatPlanDay, todayInZone } from "@/lib/payment-plans-ui/format";
+import { hasCoverage, unitFromPeriodType } from "@/lib/payment-plans-ui/renewal";
 import { RentalOnboardingShell } from "@/components/rentals-v2/rental-onboarding-shell";
 import { CustomerList } from "@/components/rentals-v2/customer-step";
 import { VehicleList } from "@/components/rentals-v2/vehicle-step";
@@ -2705,7 +2706,7 @@ export const RentalCreateV2 = () => {
 
       // If installment plan was selected, skip payment/invoice dialogs — go straight to rental detail.
       // PAYG also skips: there is no upfront amount to collect — charges accrue daily.
-      if (planDraftForCreate) {
+      if (planDraftForCreate && !planDraftForCreate.renewal) {
         // Canary: the plan collects the balance, so there is no upfront payment
         // dialog. Land on Payments, where the plan now lives.
         toast(paymentPlanError
@@ -2737,6 +2738,21 @@ export const RentalCreateV2 = () => {
         });
         router.push(`/rentals/${rental.id}`);
       } else {
+        // Canary, "keeps renewing until stopped": the rental's own dates are
+        // paid exactly as a fixed rental's are — this dialog — and the plan
+        // renews it from its return date, each period collected when it starts.
+        if (planDraftForCreate?.renewal) {
+          toast(paymentPlanError
+            ? {
+                title: "Rental created — renewals not set up",
+                description: `${paymentPlanError} Set them up from the rental's Payments.`,
+                variant: "destructive",
+              }
+            : {
+                title: "Rental created — it keeps renewing on its payment plan",
+                description: `Take the first period's payment now. Renewals start on ${formatPlanDay(String(rental.end_date).slice(0, 10))}.`,
+              });
+        }
         // Show payment options dialog for full-payment rentals
         setShowPaymentDialog(true);
       }
@@ -2802,6 +2818,14 @@ export const RentalCreateV2 = () => {
     rentalEnd: end ? format(end, 'yyyy-MM-dd') : null,
     balanceCents: planBalanceEstimateCents(),
     zeroBalanceMessage: "Enter the rental's price first — the payments are sized from it.",
+    // "keeps renewing until stopped" (Wave 3): the insurance question is asked
+    // only when this tenant sells Bonzah, and "the rental's coverage" is what
+    // the operator picked for the rental above.
+    renewal: {
+      bonzahSellable: !skipInsurance,
+      rentalCoverage: hasCoverage(bonzahCoverage) ? { ...bonzahCoverage } : null,
+      defaultUnit: unitFromPeriodType(watchedRentalPeriodType),
+    },
   });
   const yearAgo = subYears(new Date(), 1);
 
@@ -4027,6 +4051,7 @@ export const RentalCreateV2 = () => {
               )}
 
               {/* ── Payment Mode: Regular vs Pay As You Go vs Auto-Extend (positioned after Customer & Vehicle) ──────── */}
+              {/* Canary: Regular vs Payment plan only — the plan form's "keeps renewing" answer replaces Auto-Extend. */}
               {((rentalSettings as any)?.pay_as_you_go_enabled || (rentalSettings as any)?.auto_extend_enabled || paymentPlansOn) && selectedVehicleId && (
                 <div className="rounded-xl border bg-card shadow-sm">
                   <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
@@ -4109,7 +4134,9 @@ export const RentalCreateV2 = () => {
                           </div>
                         </label>
                       )}
-                      {(rentalSettings as any)?.auto_extend_enabled && (
+                      {/* Canary (Wave 3): renewing is an answer inside the payment plan form, so
+                          the separate Auto-Extend choice is not offered there. */}
+                      {(rentalSettings as any)?.auto_extend_enabled && !paymentPlansOn && (
                         <label className={cn("flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors", isAutoExtend ? "border-primary bg-primary/5" : "hover:border-primary/40 hover:bg-primary/5 dark:hover:border-[hsl(var(--v2-link,var(--primary))_/_0.4)] dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]")}>
                           <RadioGroupItem value="auto_extend" />
                           <div>
@@ -5081,7 +5108,9 @@ export const RentalCreateV2 = () => {
                 return shell(
                   <>
                     <p className="text-sm text-muted-foreground">
-                      How this rental&rsquo;s total is collected. The plan is set up the moment the rental is created, and nothing is charged before its first date.
+                      {planState.endBy === 'renewing'
+                        ? "The rental's own dates are paid when it is created, as for any rental. The plan then renews it from its return date, each period collected when it starts."
+                        : "How this rental’s total is collected. The plan is set up the moment the rental is created, and nothing is charged before its first date."}
                     </p>
                     <PaymentPlanComposer
                       state={planState}

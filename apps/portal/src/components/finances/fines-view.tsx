@@ -15,6 +15,12 @@
  *     and hands the two calls in, so the side panel offers the same ones.
  * A fine opens in the side panel; its record (`/fines/[id]`, untouched) is one
  * click from there.
+ *
+ * With a `scope` (a rental's or a customer's own Finances, `ScopedFinances`)
+ * the rows are that rental's or customer's fines, read in full by
+ * `useScopedFinanceFines` — the same rows, rules and actions, narrowed.
+ * Without one it is the page's list, read exactly as before (the page does not
+ * read fines at all until this view is opened).
  */
 
 import { useEffect } from "react";
@@ -44,6 +50,8 @@ import {
 } from "@/components/shared/list-table-v2";
 import { BulkActionBar } from "@/components/fines/bulk-action-bar";
 import { useFinesData, type EnhancedFine } from "@/hooks/use-fines-data";
+import { useScopedFinanceFines } from "@/hooks/use-finances-fines";
+import type { FinanceScope } from "@/lib/finances/types";
 import type { FineFilterState } from "@/components/fines/fine-filters";
 import { cn } from "@/lib/utils";
 import { formatMoney } from "@/lib/payment-plans-ui/format";
@@ -90,22 +98,44 @@ export function fineReference(fine: Pick<EnhancedFine, "reference_no" | "id">): 
   return fine.reference_no || fine.id.slice(0, 8);
 }
 
-export function FinesView({
-  q,
-  status,
-  tenantId,
-  currency,
-  mayEdit,
-  selected,
-  onSelect,
-  onOpen,
-  onAddFine,
-  onRows,
-  onClearFilters,
-  onRecordPayment,
-  onWaive,
-  waiving = false,
-}: {
+/** Where the list's rows came from, and whether they can be trusted yet — for the overview's fine metrics. */
+export interface FinesListStatus {
+  loading: boolean;
+  failed: boolean;
+  /** The read hit the fines tab's 1,000-row cap: the rows are the newest 1,000, not all. */
+  capped: boolean;
+}
+
+type FinesQuery = {
+  data?: { fines: EnhancedFine[]; serverCount?: number } | undefined;
+  isLoading: boolean;
+  error: unknown;
+  refetch: () => unknown;
+  isRefetching?: boolean;
+};
+
+export type FinesViewProps = FinesListProps & {
+  /** A rental's or a customer's own fines; omitted on the Finances page. */
+  scope?: FinanceScope;
+};
+
+export function FinesView(props: FinesViewProps) {
+  return props.scope && (props.scope.rentalId || props.scope.customerId) ? (
+    <ScopedFinesSource {...props} scope={props.scope} />
+  ) : (
+    <TenantFinesSource {...props} />
+  );
+}
+
+function TenantFinesSource(props: FinesListProps) {
+  return <FinesList {...props} query={useFinanceFines(props.q, props.status)} />;
+}
+
+function ScopedFinesSource(props: FinesListProps & { scope: FinanceScope }) {
+  return <FinesList {...props} query={useScopedFinanceFines(props.scope, props.q, props.status)} scoped />;
+}
+
+interface FinesListProps {
   q: string;
   status: string | null;
   tenantId: string | undefined;
@@ -125,26 +155,69 @@ export function FinesView({
   onWaive?: (fine: EnhancedFine) => void;
   /** A waive is on its way: the item waits, as on the fines tab. */
   waiving?: boolean;
-}) {
-  const { data, isLoading, error, refetch, isRefetching } = useFinanceFines(q, status);
+  /** Told whenever the list's read changes state (the overview's fine metrics wait on it). */
+  onStatus?: (status: FinesListStatus) => void;
+  /** The quieter empty state, for a rental's or a customer's own Finances. */
+  compact?: boolean;
+}
+
+function FinesList({
+  q,
+  status,
+  tenantId,
+  currency,
+  mayEdit,
+  selected,
+  onSelect,
+  onOpen,
+  onAddFine,
+  onRows,
+  onClearFilters,
+  onRecordPayment,
+  onWaive,
+  waiving = false,
+  onStatus,
+  compact = false,
+  query,
+  scoped = false,
+}: FinesListProps & { query: FinesQuery; scoped?: boolean }) {
+  const { data, isLoading, error, refetch, isRefetching } = query;
   const fines = data?.fines ?? EMPTY;
   const serverCount = data?.serverCount ?? 0;
   useEffect(() => {
     onRows(fines);
   }, [fines, onRows]);
+  const failed = !!error && !data;
+  useEffect(() => {
+    onStatus?.({ loading: isLoading, failed, capped: serverCount > 1000 });
+  }, [onStatus, isLoading, failed, serverCount]);
   const rows = useProgressiveRows(fines, `${tenantId ?? ""}|${q}|${status ?? ""}`);
   const filtered = !!q.trim() || !!status;
 
-  if (isLoading) return <SettingsSectionSkeleton variant="table" rows={6} columns={6} label="Loading fines" />;
+  if (isLoading) return <SettingsSectionSkeleton variant="table" rows={compact ? 3 : 6} columns={6} label="Loading fines" />;
   if (error && !data) {
-    return <SettingsLoadError thing="your fines" error={error} onRetry={() => refetch()} retrying={isRefetching} />;
+    return <SettingsLoadError thing="your fines" error={error as Error} onRetry={() => refetch()} retrying={isRefetching} />;
   }
   if (fines.length === 0) {
-    return filtered ? (
-      <div className="rounded-2xl bg-card ring-1 ring-foreground/5 dark:ring-foreground/10">
-        <SettingsNoMatch query={q} noun="fines" filtersActive={!!status} onClear={onClearFilters} />
-      </div>
-    ) : (
+    if (filtered) {
+      return (
+        <div className="rounded-2xl bg-card ring-1 ring-foreground/5 dark:ring-foreground/10">
+          <SettingsNoMatch query={q} noun="fines" filtersActive={!!status} onClear={onClearFilters} />
+        </div>
+      );
+    }
+    if (scoped) {
+      return (
+        <SettingsEmptyState
+          variant="compact"
+          icon={AlertTriangle}
+          headline="No fines"
+          body="Tolls, tickets and other fines charged here appear in this list, and join what is owed."
+          primaryAction={mayEdit ? { label: "Add fine", onClick: onAddFine, icon: Plus } : undefined}
+        />
+      );
+    }
+    return (
       <SettingsEmptyState
         icon={AlertTriangle}
         headline="Tolls, tickets and other fines"

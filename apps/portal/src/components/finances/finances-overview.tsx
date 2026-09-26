@@ -24,6 +24,17 @@
  * because a bar that does not sum to the figure above it would be a second
  * definition of that figure.
  *
+ * THE GRAPH FOLLOWS THE VIEW. On the Fines view (for someone who may see
+ * fines) the picker also offers "Fines issued" (value, and a count), and
+ * "Fines paid", and the graph opens on "Fines issued"; every other view opens
+ * on "Collected". The fine metrics are built from the Fines list's own rows
+ * (lib/finances/fines.ts), so a figure in the graph is always the rows under
+ * it. They join the picker on the Fines view only because that is where those
+ * rows are read — the page reads no fine until its view is opened. This row
+ * replaces the Payment analytics and Fine analytics links the header used to
+ * carry, as the overview graph replaced them on Customers, Vehicles and
+ * Rentals; both routes still answer by URL.
+ *
  * Neither the graph nor the card is a filter: no hero row filters its list
  * from the graph. The rows behind each figure are one click away in the filter
  * panel on the back of this card ("Show").
@@ -41,6 +52,7 @@ import { cn } from "@/lib/utils";
 import { parseLocalDate } from "@/lib/date-utils";
 import { formatCurrency } from "@/lib/format-utils";
 import { formatMoney, plural } from "@/lib/payment-plans-ui/format";
+import { finesIssued, finesPaid, type FineRowLike } from "@/lib/finances/fines";
 import type { AgeingBucket, AgeingKey, FinanceStats, OutstandingAgeing, ReceiptRow } from "@/lib/finances/types";
 
 /* ── the graph ───────────────────────────────────────────────────────────── */
@@ -66,6 +78,51 @@ export function collectedMetrics(collected: readonly ReceiptRow[], currency: str
       description: "How many payments came in, each counted on the day it was paid.",
       format: (v) => v.toLocaleString(),
       events: collected.map((r) => ({ at: at(r), amount: 1 })),
+    },
+  ];
+}
+
+/** The metric keys, so the page can say which one a view opens on. */
+export const FINANCE_METRIC = {
+  collected: "collected",
+  payments: "payments",
+  finesIssued: "fines_issued",
+  finesIssuedCount: "fines_issued_count",
+  finesPaid: "fines_paid",
+} as const;
+
+/**
+ * The fine metrics, from the Fines list's own rows: every fine on its issue
+ * day (value, and a count), and the paid ones on the day they were paid.
+ */
+export function fineMetrics(fines: readonly FineRowLike[], currency: string, timeZone: string | null | undefined): HeroMetric[] {
+  const issued = finesIssued(fines);
+  const paid = finesPaid(fines, timeZone);
+  const money = (v: number) => formatCurrency(v, currency);
+  return [
+    {
+      key: FINANCE_METRIC.finesIssued,
+      label: "Fines issued",
+      kind: "flow",
+      description: "The value of the fines on the list, each on the day it was issued.",
+      format: money,
+      events: issued.map((e) => ({ at: parseLocalDate(e.day), amount: e.cents / 100 })),
+    },
+    {
+      key: FINANCE_METRIC.finesIssuedCount,
+      label: "Fines issued (count)",
+      kind: "flow",
+      description: "How many fines were issued, each counted on the day it was issued.",
+      format: (v) => v.toLocaleString(),
+      events: issued.map((e) => ({ at: parseLocalDate(e.day), amount: 1 })),
+    },
+    {
+      key: FINANCE_METRIC.finesPaid,
+      label: "Fines paid",
+      kind: "flow",
+      description: "The value of the fines on the list that are paid, each on the day it was paid.",
+      format: money,
+      events: paid.map((e) => ({ at: parseLocalDate(e.day), amount: e.cents / 100 })),
     },
   ];
 }
@@ -170,14 +227,14 @@ function OwedCard({
 
 /* ── loading and failure: the vehicles row's placeholder, for money ─────── */
 
-function ChartPlaceholder({ failed, onRetry }: { failed: boolean; onRetry: () => void }) {
+function ChartPlaceholder({ failed, onRetry, label = "Collected" }: { failed: boolean; onRetry: () => void; label?: string }) {
   const blank = failed ? "inline-block" : "inline-block animate-pulse rounded-md bg-muted";
   const nbsp = " ";
   return (
-    <section className="flex flex-col gap-3" aria-label="Collected" aria-busy={!failed} data-finances-chart-placeholder="">
+    <section className="flex flex-col gap-3" aria-label={label} aria-busy={!failed} data-finances-chart-placeholder="">
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between gap-4">
-          <span className="text-sm font-medium text-foreground">Collected</span>
+          <span className="text-sm font-medium text-foreground">{label}</span>
           <span className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground">
             Last 30 days
             <ChevronDown className="size-3.5" aria-hidden />
@@ -248,10 +305,34 @@ export function FinancesOverview({
   showChart,
   showCard,
   onRetry,
+  fines,
+  finesLoading = false,
+  finesFailed = false,
+  finesCapped = false,
+  onFinesRetry,
+  timeZone = null,
+  defaultMetric,
 }: {
   stats: FinanceStats | undefined;
   /** The collected receipts, narrowed by the filter bar but NOT by its period (the graph has its own). */
   collected: readonly ReceiptRow[];
+  /**
+   * The Fines list's rows, when the Fines view is on screen and the viewer may
+   * see fines: they add "Fines issued" and "Fines paid" to the picker.
+   * Undefined leaves them out.
+   */
+  fines?: readonly FineRowLike[];
+  /** The Fines list is still reading: the graph waits rather than draw no fines. */
+  finesLoading?: boolean;
+  /** The Fines list's read failed: dashes and a retry, never a zero. */
+  finesFailed?: boolean;
+  /** The Fines list hit its 1,000-row cap, so the fine metrics cover the newest 1,000. */
+  finesCapped?: boolean;
+  onFinesRetry?: () => void;
+  /** `tenants.timezone`, for the day a fine was paid. */
+  timeZone?: string | null;
+  /** The metric the graph opens on (the view it follows). */
+  defaultMetric?: string;
   /** The model's Outstanding ageing (`FinanceSeries.ageing`). */
   ageing: OutstandingAgeing | undefined;
   /** The tenant's today, 'YYYY-MM-DD'. */
@@ -269,15 +350,43 @@ export function FinancesOverview({
   showCard: boolean;
   onRetry: () => void;
 }) {
-  const metrics = useMemo(() => collectedMetrics(collected, currency), [collected, currency]);
+  const withFines = !!fines;
+  const metrics = useMemo(
+    () => [
+      ...(showChart ? collectedMetrics(collected, currency) : []),
+      ...(fines ? fineMetrics(fines, currency, timeZone) : []),
+    ],
+    [showChart, collected, currency, fines, timeZone],
+  );
   const buckets = useMemo(() => (stats ? ageingToDraw(ageing, stats) : null), [ageing, stats]);
   const todayDate = useMemo(() => parseLocalDate(today), [today]);
   const ready = !loading && !failed && !!stats;
+  // The graph opens on the view's own metric; waiting on the fines rows only
+  // when that metric is a fine one.
+  const opensOnFines = withFines && !!defaultMetric && defaultMetric.startsWith("fines_");
+  const finesReady = !withFines || (!finesLoading && !finesFailed);
+  const chartReady = ready && (finesReady || !opensOnFines);
+  const chartFailed = failed || (opensOnFines && finesFailed);
+  const chartNote = filtered ? "Filtered" : withFines && finesCapped ? "Newest 1,000 fines" : undefined;
 
-  const chart = ready ? (
-    <HeroChart metrics={metrics} anchor="finances-chart" note={filtered ? "Filtered" : undefined} today={todayDate} />
+  const hasChart = showChart || withFines;
+  const chart = chartReady ? (
+    <HeroChart
+      // Remounted when the metric it opens on changes, so the graph follows
+      // the view (HeroChart keeps its own choice after that).
+      key={defaultMetric ?? "collected"}
+      metrics={metrics}
+      defaultMetric={defaultMetric && metrics.some((m) => m.key === defaultMetric) ? defaultMetric : undefined}
+      anchor="finances-chart"
+      note={chartNote}
+      today={todayDate}
+    />
   ) : (
-    <ChartPlaceholder failed={failed} onRetry={onRetry} />
+    <ChartPlaceholder
+      failed={chartFailed}
+      onRetry={failed ? onRetry : (onFinesRetry ?? onRetry)}
+      label={opensOnFines ? "Fines issued" : "Collected"}
+    />
   );
   const card = ready ? (
     <OwedCard stats={stats!} ageing={buckets} currency={currency} showUpcoming={showUpcoming} />
@@ -289,7 +398,7 @@ export function FinancesOverview({
     <div data-finances-overview="">
       {/* A viewer without the Received grant has no graph to see; the owed
           card then takes the row, rather than leaving a hole. */}
-      <HeroRow chart={showChart ? chart : card} card={showChart && showCard ? card : undefined} />
+      <HeroRow chart={hasChart ? chart : card} card={hasChart && showCard ? card : undefined} />
     </div>
   );
 }
