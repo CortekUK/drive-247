@@ -27,7 +27,7 @@
  * only to prove a test goes red against a deliberately broken copy.
  */
 import { PGlite, types } from "@electric-sql/pglite";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -35,11 +35,34 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 export const REPO_ROOT = path.resolve(here, "../../..");
 const FIXTURE_DIR = path.resolve(here, "../fixtures");
 
-export const MIGRATION_FILES = [
+/**
+ * The first three were listed by hand. Everything after them is DISCOVERED, so
+ * several waves of work can each add a migration in parallel without all
+ * editing this one line: a migration joins the harness when its filename sorts
+ * after the last listed one AND its first line is the marker
+ * `-- @pglite-harness`. The marker keeps an unrelated migration merged in from
+ * main (which this fixture schema cannot run) from being picked up by accident.
+ * Always read from the real migrations directory, so PP_MIGRATIONS_DIR's
+ * scratch copy (mutation proofs) runs the same list.
+ */
+const LISTED_MIGRATIONS = [
   "20260925120000_ledger_allocation_prerequisites.sql",
   "20260925120100_payment_plans.sql",
   "20260925120200_payment_plans_one_engine_per_rental.sql",
 ] as const;
+export const HARNESS_MARKER = "-- @pglite-harness";
+
+function discoverMigrations(): string[] {
+  const dir = path.join(REPO_ROOT, "supabase/migrations");
+  const last = LISTED_MIGRATIONS[LISTED_MIGRATIONS.length - 1];
+  const found = readdirSync(dir)
+    .filter((f) => f.endsWith(".sql") && f > last)
+    .filter((f) => readFileSync(path.join(dir, f), "utf8").split("\n", 1)[0].trim() === HARNESS_MARKER)
+    .sort();
+  return [...LISTED_MIGRATIONS, ...found];
+}
+
+export const MIGRATION_FILES: readonly string[] = discoverMigrations();
 
 export function migrationPath(file: string): string {
   const dir = process.env.PP_MIGRATIONS_DIR || path.join(REPO_ROOT, "supabase/migrations");
