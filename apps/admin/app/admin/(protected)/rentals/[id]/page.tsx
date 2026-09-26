@@ -149,6 +149,57 @@ function IntegrationStatus({ tone, label }: { tone: StatusTone; label: string })
   );
 }
 
+/*
+ * Integration dialog body pieces — the admin twins of the portal's panel kit
+ * (`apps/portal/src/app/(dashboard)/integrations/_panels/_kit.tsx`).
+ *
+ * Label left, value right, one row per fact. The dialog used to reuse the old
+ * cards' `grid-cols-4` rows, where a long value (a Bonzah login email) ran
+ * straight over the column beside it. A row gives every value the full width
+ * that is left after its label, and wraps it rather than overlapping.
+ */
+function PanelCard({ children }: { children: ReactNode }) {
+  return <div className="divide-y divide-border/60 rounded-xl border bg-muted/20 px-4">{children}</div>;
+}
+
+function PanelRow({ label, mono, children }: { label: string; mono?: boolean; children: ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-6 py-3">
+      <span className="shrink-0 text-sm text-muted-foreground">{label}</span>
+      <div className={cn('min-w-0 text-right text-sm text-foreground', mono && 'break-all font-mono text-[13px]')}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function PanelNote({ tone = 'info', children }: { tone?: 'info' | 'warn'; children: ReactNode }) {
+  return (
+    <div
+      className={cn(
+        'rounded-xl border px-4 py-3 text-xs leading-relaxed',
+        tone === 'info' && 'border-border bg-muted/30 text-muted-foreground',
+        tone === 'warn' && 'border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-300',
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** A test/live badge with its Switch button, as every mode row uses. */
+function ModeControl({ mode, disabled, onSwitch }: { mode: string; disabled: boolean; onSwitch: () => void }) {
+  return (
+    <span className="inline-flex items-center gap-2">
+      <IntegrationStatus tone={mode === 'live' ? 'success' : 'warning'} label={mode === 'live' ? 'Live' : 'Test'} />
+      <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs" disabled={disabled} onClick={onSwitch}>
+        <ArrowRightLeft className="h-3 w-3" />
+        Switch
+      </Button>
+    </span>
+  );
+}
+
 function IntegrationTile({
   logo,
   name,
@@ -2025,16 +2076,11 @@ export default function TenantDetailsPage() {
         <TabsContent value="integrations" className="space-y-6">
           {/* Tiles, then a dialog. Matches the operator portal's own
               Integrations board (Sep 26 2026, by request): the same brand
-              logos, the same card shape, one status pill per tile.
-
-              The detail rows inside each integration still lay themselves
-              out with `grid-cols-2 md:grid-cols-4`, and `md:` is a
-              VIEWPORT breakpoint, not a container one. They were once put
-              straight into a 2-up/3-up page grid and rendered four columns
-              inside a 380px cell, labels landing on top of values. So the
-              tiles carry only logo, name and status; the detail rows open
-              in a dialog as wide as the portal's (`sm:max-w-4xl`), where
-              four columns fit. See `narrow-column-safety.test.ts`. */}
+              logos, the same card shape, one status pill per tile. The
+              details open in a dialog as label/value rows (see PanelRow),
+              never a fixed column grid — long values such as a login email
+              ran over their neighbours in one. See
+              `narrow-column-safety.test.ts`. */}
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {tenant.custom_site_eligible && (
               <IntegrationTile
@@ -2155,49 +2201,39 @@ export default function TenantDetailsPage() {
                 <>
                   <DialogHeader>
                     <div className="mb-2 flex h-16 items-center"><IntegrationLogo src={brandLogo('stripe.com')} alt="Stripe" size={48} /></div>
-                    <DialogTitle>Stripe Connect</DialogTitle>
+                    <DialogTitle className="flex items-center gap-2">
+                      Stripe Connect
+                      <IntegrationStatus
+                        tone={tenant.stripe_account_id ? (tenant.stripe_onboarding_complete ? 'success' : 'warning') : 'neutral'}
+                        label={tenant.stripe_account_id ? (tenant.stripe_onboarding_complete ? 'Connected' : 'Onboarding') : 'Not connected'}
+                      />
+                    </DialogTitle>
                     <DialogDescription>Payment processing for customer bookings via Stripe Connect</DialogDescription>
                   </DialogHeader>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
-            <div className="space-y-1.5">
-              <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Account ID</span>
-              {tenant.stripe_account_id ? (
-                <p className="text-sm font-mono text-foreground">{tenant.stripe_account_id}</p>
-              ) : (
-                <p className="text-sm text-muted-foreground">Not set up</p>
-              )}
-            </div>
-            <div className="space-y-1.5">
-              <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Onboarding</span>
-              {tenant.stripe_account_id ? (
-                <p className={cn("text-sm font-medium", tenant.stripe_onboarding_complete ? "text-success" : "text-warning")}>
-                  {tenant.stripe_onboarding_complete ? 'Complete' : 'Incomplete'}
-                </p>
-              ) : (
-                <p className="text-sm text-muted-foreground">—</p>
-              )}
-            </div>
-            <div className="space-y-1.5">
-              <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Account Status</span>
-              <p className="text-sm font-medium capitalize">{tenant.stripe_account_status || <span className="text-muted-foreground">—</span>}</p>
-            </div>
-            <div className="space-y-1.5">
-              <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Mode</span>
-              <div className="flex items-center gap-2">
-                <Badge variant={tenant.stripe_mode === 'live' ? 'success' : 'warning'} className="capitalize">
-                  {tenant.stripe_mode}
-                </Badge>
-                <Button
-                  variant="ghost" size="sm" className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground"
-                  disabled={modeUpdating}
-                  onClick={() => handleModeToggle('stripe', tenant.stripe_mode === 'test' ? 'live' : 'test')}
-                >
-                  <ArrowRightLeft className="h-3 w-3" />
-                  Switch
-                </Button>
-              </div>
-            </div>
-          </div>
+                  <PanelCard>
+                    <PanelRow label="Account ID" mono>
+                      {tenant.stripe_account_id || <span className="font-sans text-muted-foreground">Not set up</span>}
+                    </PanelRow>
+                    <PanelRow label="Onboarding">
+                      {tenant.stripe_account_id ? (
+                        <span className={cn('font-medium', tenant.stripe_onboarding_complete ? 'text-success' : 'text-warning')}>
+                          {tenant.stripe_onboarding_complete ? 'Complete' : 'Incomplete'}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </PanelRow>
+                    <PanelRow label="Account status">
+                      <span className="capitalize">{tenant.stripe_account_status || <span className="text-muted-foreground">—</span>}</span>
+                    </PanelRow>
+                    <PanelRow label="Mode">
+                      <ModeControl
+                        mode={tenant.stripe_mode}
+                        disabled={modeUpdating}
+                        onSwitch={() => handleModeToggle('stripe', tenant.stripe_mode === 'test' ? 'live' : 'test')}
+                      />
+                    </PanelRow>
+                  </PanelCard>
                 </>
               )}
               {openIntegration === 'bonzah' && (
@@ -2207,142 +2243,125 @@ export default function TenantDetailsPage() {
                       <img src="/bonzah-logo.svg" alt="Bonzah" className="h-8 w-auto dark:hidden" />
                       <img src="/bonzah-logo-dark.svg" alt="Bonzah" className="hidden h-8 w-auto dark:block" />
                     </div>
-                    <DialogTitle>Bonzah Insurance</DialogTitle>
+                    <DialogTitle className="flex items-center gap-2">
+                      Bonzah Insurance
+                      <IntegrationStatus tone={tenant.integration_bonzah ? 'success' : 'neutral'} label={tenant.integration_bonzah ? 'Enabled' : 'Not connected'} />
+                    </DialogTitle>
                     <DialogDescription>Customer insurance coverage and premium calculation</DialogDescription>
                   </DialogHeader>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
-            <div className="space-y-1.5">
-              <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Integration</span>
-              <div className="flex items-center gap-2">
-                <span className={cn("inline-block h-2 w-2 rounded-full", tenant.integration_bonzah ? "bg-emerald-400" : "bg-muted-foreground/40")} />
-                <span className="text-sm font-medium">{tenant.integration_bonzah ? 'Active' : 'Inactive'}</span>
-                <Button
-                  variant="ghost" size="sm" className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground"
-                  onClick={() => handleToggleIntegration('bonzah', !tenant.integration_bonzah)}
-                >
-                  {tenant.integration_bonzah ? 'Disable' : 'Enable'}
-                </Button>
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Credentials</span>
-              <p className="text-sm font-medium">{tenant.bonzah_username || <span className="text-muted-foreground">Not configured</span>}</p>
-            </div>
-            <div className="space-y-1.5">
-              <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Mode</span>
-              <div className="flex items-center gap-2">
-                <Badge variant={(tenant.bonzah_mode || 'test') === 'live' ? 'success' : 'warning'} className="capitalize">
-                  {tenant.bonzah_mode || 'test'}
-                </Badge>
-                <Button
-                  variant="ghost" size="sm" className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground"
-                  disabled={modeUpdating}
-                  onClick={() => handleModeToggle('bonzah', (tenant.bonzah_mode || 'test') === 'test' ? 'live' : 'test')}
-                >
-                  <ArrowRightLeft className="h-3 w-3" />
-                  Switch
-                </Button>
-              </div>
-            </div>
-            {/* Selling is blocked in test mode: a sandbox policy is not real
-                cover, yet the customer can still be charged real money for it.
-                The override exists only for internal/demo tenants. */}
-            <div className="space-y-1.5 sm:col-span-2">
-              <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-                Selling new policies
-              </span>
-              <div className="flex flex-wrap items-center gap-2">
-                {tenant.integration_bonzah &&
-                ((tenant.bonzah_mode || 'test') === 'live' || tenant.bonzah_sandbox_override) ? (
-                  <Badge variant="success">Allowed</Badge>
-                ) : (
-                  <Badge variant="warning">Blocked</Badge>
-                )}
-                {(tenant.bonzah_mode || 'test') === 'test' && (
-                  <>
-                    <span className="text-xs text-muted-foreground">
-                      {tenant.bonzah_sandbox_override
-                        ? 'Sandbox override ON — this tenant can sell sandbox policies. Internal/demo use only.'
-                        : 'Test mode issues sandbox policies, so selling is blocked.'}
-                    </span>
-                    <Button
-                      variant="ghost" size="sm" className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground"
-                      disabled={modeUpdating}
-                      onClick={() => handleToggleSandboxOverride(!tenant.bonzah_sandbox_override)}
-                    >
-                      <ArrowRightLeft className="h-3 w-3" />
-                      {tenant.bonzah_sandbox_override ? 'Disable override' : 'Allow sandbox selling'}
-                    </Button>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
+                  <PanelCard>
+                    <PanelRow label="Integration">
+                      <span className="inline-flex items-center gap-2">
+                        <span className={cn('inline-block h-2 w-2 rounded-full', tenant.integration_bonzah ? 'bg-emerald-400' : 'bg-muted-foreground/40')} />
+                        <span className="font-medium">{tenant.integration_bonzah ? 'Active' : 'Inactive'}</span>
+                        <Button
+                          variant="outline" size="sm" className="h-7 px-2.5 text-xs"
+                          onClick={() => handleToggleIntegration('bonzah', !tenant.integration_bonzah)}
+                        >
+                          {tenant.integration_bonzah ? 'Disable' : 'Enable'}
+                        </Button>
+                      </span>
+                    </PanelRow>
+                    <PanelRow label="Credentials">
+                      {tenant.bonzah_username
+                        ? <span className="break-all">{tenant.bonzah_username}</span>
+                        : <span className="text-muted-foreground">Not configured</span>}
+                    </PanelRow>
+                    <PanelRow label="Mode">
+                      <ModeControl
+                        mode={tenant.bonzah_mode || 'test'}
+                        disabled={modeUpdating}
+                        onSwitch={() => handleModeToggle('bonzah', (tenant.bonzah_mode || 'test') === 'test' ? 'live' : 'test')}
+                      />
+                    </PanelRow>
+                    {/* Selling is blocked in test mode: a sandbox policy is not real
+                        cover, yet the customer can still be charged real money for it.
+                        The override exists only for internal/demo tenants. */}
+                    <PanelRow label="Selling new policies">
+                      {tenant.integration_bonzah &&
+                      ((tenant.bonzah_mode || 'test') === 'live' || tenant.bonzah_sandbox_override) ? (
+                        <IntegrationStatus tone="success" label="Allowed" />
+                      ) : (
+                        <IntegrationStatus tone="warning" label="Blocked" />
+                      )}
+                    </PanelRow>
+                  </PanelCard>
+                  {(tenant.bonzah_mode || 'test') === 'test' && (
+                    <PanelNote tone={tenant.bonzah_sandbox_override ? 'warn' : 'info'}>
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <span>
+                          {tenant.bonzah_sandbox_override
+                            ? 'Sandbox override ON — this tenant can sell sandbox policies. Internal/demo use only.'
+                            : 'Test mode issues sandbox policies, so selling is blocked.'}
+                        </span>
+                        <Button
+                          variant="outline" size="sm" className="h-7 shrink-0 px-2.5 text-xs"
+                          disabled={modeUpdating}
+                          onClick={() => handleToggleSandboxOverride(!tenant.bonzah_sandbox_override)}
+                        >
+                          <ArrowRightLeft className="h-3 w-3" />
+                          {tenant.bonzah_sandbox_override ? 'Disable override' : 'Allow sandbox selling'}
+                        </Button>
+                      </div>
+                    </PanelNote>
+                  )}
                 </>
               )}
               {openIntegration === 'tesla' && (
                 <>
                   <DialogHeader>
                     <div className="mb-2 flex h-16 items-center"><IntegrationLogo src={brandLogo('tesla.com')} alt="Tesla" size={48} /></div>
-                    <DialogTitle>Tesla Fleet API</DialogTitle>
+                    <DialogTitle className="flex items-center gap-2">
+                      Tesla Fleet API
+                      <IntegrationStatus tone={tenant.integration_tesla_fleet ? 'success' : 'neutral'} label={tenant.integration_tesla_fleet ? 'Enabled' : 'Disabled'} />
+                    </DialogTitle>
                     <DialogDescription>Supercharger billing tracking for Tesla vehicles</DialogDescription>
                   </DialogHeader>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
-            <div className="space-y-1.5">
-              <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Integration</span>
-              <div className="flex items-center gap-2">
-                <span className={cn("inline-block h-2 w-2 rounded-full", tenant.integration_tesla_fleet ? "bg-emerald-400" : "bg-muted-foreground/40")} />
-                <span className="text-sm font-medium">{tenant.integration_tesla_fleet ? 'Active' : 'Inactive'}</span>
-                <Button
-                  variant="ghost" size="sm" className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground"
-                  onClick={() => handleToggleIntegration('tesla_fleet', !tenant.integration_tesla_fleet)}
-                >
-                  {tenant.integration_tesla_fleet ? 'Disable' : 'Enable'}
-                </Button>
-              </div>
-            </div>
-          </div>
+                  <PanelCard>
+                    <PanelRow label="Integration">
+                      <span className="inline-flex items-center gap-2">
+                        <span className={cn('inline-block h-2 w-2 rounded-full', tenant.integration_tesla_fleet ? 'bg-emerald-400' : 'bg-muted-foreground/40')} />
+                        <span className="font-medium">{tenant.integration_tesla_fleet ? 'Active' : 'Inactive'}</span>
+                        <Button
+                          variant="outline" size="sm" className="h-7 px-2.5 text-xs"
+                          onClick={() => handleToggleIntegration('tesla_fleet', !tenant.integration_tesla_fleet)}
+                        >
+                          {tenant.integration_tesla_fleet ? 'Disable' : 'Enable'}
+                        </Button>
+                      </span>
+                    </PanelRow>
+                  </PanelCard>
                 </>
               )}
               {openIntegration === 'boldsign' && (
                 <>
                   <DialogHeader>
                     <div className="mb-2 flex h-16 items-center"><IntegrationLogo src={brandLogo('boldsign.com')} alt="BoldSign" size={48} /></div>
-                    <DialogTitle>BoldSign</DialogTitle>
+                    <DialogTitle className="flex items-center gap-2">
+                      BoldSign
+                      <IntegrationStatus tone={tenant.boldsign_mode === 'live' ? 'success' : 'info'} label={tenant.boldsign_mode === 'live' ? 'Production' : 'Sandbox'} />
+                    </DialogTitle>
                     <DialogDescription>Electronic signatures for rental agreements and contracts</DialogDescription>
                   </DialogHeader>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
-            <div className="space-y-1.5">
-              <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Environment</span>
-              <p className={cn("text-sm font-medium", tenant.boldsign_mode === 'live' ? "text-success" : "text-sky-600")}>
-                {tenant.boldsign_mode === 'live' ? 'Production' : 'Sandbox'}
-              </p>
-            </div>
-            <div className="space-y-1.5">
-              <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Mode</span>
-              <div className="flex items-center gap-2">
-                <Badge variant={tenant.boldsign_mode === 'live' ? 'success' : 'warning'} className="capitalize">
-                  {tenant.boldsign_mode || 'test'}
-                </Badge>
-                <Button
-                  variant="ghost" size="sm" className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground"
-                  disabled={modeUpdating}
-                  onClick={() => handleModeToggle('boldsign', tenant.boldsign_mode === 'live' ? 'test' : 'live')}
-                >
-                  <ArrowRightLeft className="h-3 w-3" />
-                  Switch
-                </Button>
-              </div>
-            </div>
-            <div className="col-span-2 space-y-1.5">
-              <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Note</span>
-              <p className="text-xs text-muted-foreground">
-                {tenant.boldsign_mode === 'live'
-                  ? 'Production documents are legally binding and stored permanently'
-                  : 'Sandbox documents are watermarked and auto-deleted after 14 days'}
-              </p>
-            </div>
-          </div>
+                  <PanelCard>
+                    <PanelRow label="Environment">
+                      <span className={cn('font-medium', tenant.boldsign_mode === 'live' ? 'text-success' : 'text-sky-600')}>
+                        {tenant.boldsign_mode === 'live' ? 'Production' : 'Sandbox'}
+                      </span>
+                    </PanelRow>
+                    <PanelRow label="Mode">
+                      <ModeControl
+                        mode={tenant.boldsign_mode || 'test'}
+                        disabled={modeUpdating}
+                        onSwitch={() => handleModeToggle('boldsign', tenant.boldsign_mode === 'live' ? 'test' : 'live')}
+                      />
+                    </PanelRow>
+                  </PanelCard>
+                  <PanelNote>
+                    {tenant.boldsign_mode === 'live'
+                      ? 'Production documents are legally binding and stored permanently.'
+                      : 'Sandbox documents are watermarked and auto-deleted after 14 days.'}
+                  </PanelNote>
                 </>
               )}
             </DialogContent>

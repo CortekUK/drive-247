@@ -78,45 +78,42 @@ describe('a rail never holds something that needs the whole window', () => {
   });
 });
 
-describe("the integration cards keep the width their insides assume", () => {
+describe("the integration details never overlap", () => {
   const page = () =>
     readFileSync(resolve(ROOT, 'app/admin/(protected)/rentals/[id]/page.tsx'), 'utf8');
 
+  // Comments explain the history by quoting class names, so read markup only.
   function integrationsTab(src: string): string {
     const start = src.indexOf('<TabsContent value="integrations"');
     expect(start).toBeGreaterThan(-1);
-    return src.slice(start, src.indexOf('</TabsContent>', start));
+    return src.slice(start, src.indexOf('</TabsContent>', start)).replace(/\{\/\*[\s\S]*?\*\/\}/g, '');
   }
 
-  it('still lays its own facts out on a viewport grid', () => {
-    // If this ever stops being true the cards have been made reflowable, and
-    // the rule below can be revisited on purpose rather than by accident.
-    expect(integrationsTab(page())).toContain('md:grid-cols-4');
-  });
-
-  it('is therefore not boxed into a multi-column page grid', () => {
+  /*
+   * Twice now a fixed column grid has let a long value run over its
+   * neighbour. The detail rows were `grid-cols-2 md:grid-cols-4`, and `md:`
+   * is a VIEWPORT breakpoint: first they were boxed into a 380px page-grid
+   * cell and still drew four columns; then, in the Integrations dialog
+   * (Sep 26 2026), a Bonzah login email ran straight over the Mode badge.
+   * The dialog now uses label/value rows like the portal's panel kit.
+   */
+  it('lays the details out as label/value rows, not a column grid', () => {
     const tab = integrationsTab(page());
-    // The specific wrapper that caused the overlap, and anything like it.
-    expect(tab).not.toContain('lg:grid-cols-2 xl:grid-cols-3');
-    const pageGrids = tab.match(/className="grid grid-cols-1 gap-\d+ (lg|xl):grid-cols-\d/g) ?? [];
-    expect(pageGrids).toEqual([]);
+    expect(tab).not.toContain('md:grid-cols-4');
+    expect(tab).toContain('<PanelRow label="Credentials">');
   });
 
-  it('keeps the four-column detail rows out of the tiles and in the wide dialog', () => {
-    // Since Sep 26 2026 the tab is a 4-up tile grid, like the portal's board.
-    // That is only safe because the tiles hold logo, name and status, and the
-    // viewport-gridded detail rows render in a dialog wide enough for them.
-    // Comments explain the rule by quoting the classes, so read markup only.
-    const tab = integrationsTab(page()).replace(/\{\/\*[\s\S]*?\*\/\}/g, '');
+  it('lets the tiles take the 4-up grid, since they hold only logo, name and status', () => {
+    const tab = integrationsTab(page());
     const tiles = tab.slice(0, tab.indexOf('<Dialog'));
-    const dialog = tab.slice(tab.indexOf('<Dialog'));
     expect(tiles).toContain('sm:grid-cols-2 lg:grid-cols-4');
-    expect(tiles).not.toContain('md:grid-cols-4');
-    expect(dialog).toContain('sm:max-w-4xl');
-    expect(dialog).toContain('md:grid-cols-4');
+    expect(tiles).not.toContain('<PanelRow');
   });
 
-  it('records why, so the empty space is not "fixed" again', () => {
-    expect(integrationsTab(page())).toContain('VIEWPORT breakpoint, not a container one');
+  it('wraps a long value instead of letting it run under the next one', () => {
+    const src = page();
+    const row = src.slice(src.indexOf('function PanelRow('), src.indexOf('function PanelNote('));
+    expect(row).toContain('min-w-0');
+    expect(row).toContain('shrink-0');
   });
 });
