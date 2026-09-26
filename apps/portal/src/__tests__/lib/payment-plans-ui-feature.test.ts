@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import { isMissingRelation, isPaymentPlansTenant, probePaymentPlans, type ProbeClient } from '@/lib/payment-plans-ui/feature';
 
-const client = (reply: { error: unknown } | Error): ProbeClient => ({
+const client = (reply: { data?: unknown; error: unknown } | Error): ProbeClient => ({
   from: () => ({
     select: () => ({
       limit: () => (reply instanceof Error ? Promise.reject(reply) : Promise.resolve(reply)),
@@ -29,7 +29,11 @@ describe('payment plans gate', () => {
   });
 
   it('probes to available / missing / error', async () => {
-    expect(await probePaymentPlans(client({ error: null }))).toBe('available');
+    expect(await probePaymentPlans(client({ data: [], error: null }))).toBe('available');
+    expect(await probePaymentPlans(client({ data: [{ id: 'p1' }], error: null }))).toBe('available');
+    // A success with no rows array is what a body-less 404 turns into — never "available".
+    expect(await probePaymentPlans(client({ data: null, error: null }))).toBe('error');
+    expect(await probePaymentPlans(client({ error: null }))).toBe('error');
     expect(await probePaymentPlans(client({ error: { code: '42P01', message: 'x' } }))).toBe('missing');
     expect(await probePaymentPlans(client({ error: { code: 'PGRST205', message: 'x' } }))).toBe('missing');
     expect(await probePaymentPlans(client({ error: { code: '500', message: 'boom' } }))).toBe('error');

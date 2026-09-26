@@ -9,7 +9,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const h = vi.hoisted(() => ({
   tenant: { id: 'tenant-1', slug: 'northwind', timezone: 'America/New_York', currency_code: 'USD' } as any,
-  probe: { error: null } as { error: unknown },
+  probe: { data: [], error: null } as { data?: unknown; error: unknown },
   from: vi.fn(),
   invoke: vi.fn(),
 }));
@@ -37,7 +37,7 @@ const wrapper = ({ children }: { children?: any }) => (
 
 beforeEach(() => {
   h.tenant = { id: 'tenant-1', slug: 'northwind' };
-  h.probe = { error: null };
+  h.probe = { data: [], error: null }; // a real GET of an existing (empty) table
   h.from.mockClear();
   h.invoke.mockReset();
 });

@@ -40,25 +40,32 @@ export function isMissingRelation(error: unknown): boolean {
 /** The minimum a probe needs from a Supabase client — so tests can hand in a stub. */
 export interface ProbeClient {
   from: (table: string) => {
-    select: (
-      columns: string,
-      options?: { head?: boolean; count?: "exact" | "planned" | "estimated" },
-    ) => { limit: (n: number) => PromiseLike<{ error: unknown }> };
+    select: (columns: string) => { limit: (n: number) => PromiseLike<{ data?: unknown; error: unknown }> };
   };
 }
 
 export type ProbeResult = "available" | "missing" | "error";
 
 /**
- * Is the `payment_plans` table reachable for this user? A HEAD-style read of
- * at most one id — RLS lets tenant staff SELECT their own rows, and an empty
- * table still answers "available".
+ * Is the `payment_plans` table reachable for this user? A GET of at most one
+ * id — RLS lets tenant staff SELECT their own rows, and an empty table still
+ * answers `[]`, which is "available".
+ *
+ * NOT a HEAD request. That is what this used to be, and it was wrong in the one
+ * case the probe exists for: on a database without the table PostgREST answers
+ * HEAD with a 404 and — like every HEAD response — no body, and postgrest-js
+ * turns a 404 with an empty body into a SUCCESS (node_modules/@supabase/
+ * postgrest-js/dist/index.mjs:151). So production, where the migration is not
+ * applied, read as "available" for northwind and every plan query after it
+ * failed ("Couldn't load your finances", Sep 26 2026). A GET carries the
+ * PGRST205 body, and "available" now also requires an actual rows array, so a
+ * body-less success can never read as a table that exists.
  */
 export async function probePaymentPlans(client: ProbeClient): Promise<ProbeResult> {
   try {
-    const { error } = await client.from("payment_plans").select("id", { head: true, count: "exact" }).limit(1);
-    if (!error) return "available";
-    return isMissingRelation(error) ? "missing" : "error";
+    const { data, error } = await client.from("payment_plans").select("id").limit(1);
+    if (error) return isMissingRelation(error) ? "missing" : "error";
+    return Array.isArray(data) ? "available" : "error";
   } catch (err) {
     return isMissingRelation(err) ? "missing" : "error";
   }
