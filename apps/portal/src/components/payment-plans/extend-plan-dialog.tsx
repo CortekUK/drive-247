@@ -6,7 +6,17 @@
  * The four questions, each answered in one line (roadmap A3–A5):
  *
  *   how long        a number of periods, or until a date (the server extends
- *                   by whole periods, so a date becomes "N periods, to X")
+ *                   by whole periods, so a date becomes "N periods, to X").
+ *                   Counted exactly as the engine counts them
+ *                   (lib/payment-plans-ui/renewal.ts `extendSteps`): the
+ *                   plan's untouched renewal periods first, then new ones
+ *                   from the end of its last live period — never from the
+ *                   rental's end date alone, which would bill days twice.
+ *                   The period is the plan's own renewal period, else ONE of
+ *                   the rental's own periods (rental_period_type), and the
+ *                   browser always SENDS it (periodUnit + periodCount), so
+ *                   the server can never price a different period than the
+ *                   one on screen.
  *   when the days   "Give the days now and collect on the plan" — the return
  *                   date moves now, as a manual extension does today — or
  *                   "Give the days when paid" — it moves once each period is
@@ -40,12 +50,15 @@ import {
   MAX_EXTEND_PERIODS,
   describeCoverage,
   describeEvery,
-  endAfterPeriods,
+  extendByPeriods,
+  extendUntil,
+  formatPeriodSpan,
   hasCoverage,
   insurableSentence,
   insurableWindow,
-  periodsUntil,
+  plannedEnd,
   unitWord,
+  type ExtendPlan,
   type RenewalInsurance,
   type RenewalUnit,
 } from "@/lib/payment-plans-ui/renewal";
@@ -59,16 +72,31 @@ export interface ExtendPlanDialogProps {
   plan: Pick<PlanView, "renewal" | "status">;
   /** The rental's return date now. */
   currentEnd: ISODate | null;
+  /**
+   * The plan's payments. Its live renewal periods decide where new periods
+   * start and which ones an Extend takes first (`extendSteps`).
+   */
+  occurrences?: OccurrenceView[];
   /** `undefined` while the rental is still being read (the defaults wait for it); `null` when it could not be. */
   facts: Pick<RentalPlanFacts, "periodUnit" | "customerEmail" | "coverage"> | null | undefined;
   bonzahSellable: boolean;
   onExtend: (input: ExtendInput) => Promise<unknown>;
 }
 
-/** The period one Extend counts in: the plan's own renewal period, else the rental's period type. */
-export function extendPeriodOf(plan: Pick<PlanView, "renewal">, facts: Pick<RentalPlanFacts, "periodUnit"> | null | undefined): { unit: RenewalUnit; count: number } {
+/**
+ * The period one Extend counts in: the plan's own renewal period, else ONE of
+ * the rental's own periods (rental_period_type) — one period is one rental-
+ * period rate, which is what the server charges for it. Null when the plan
+ * does not renew and the rental's period type could not be read: guessing a
+ * unit would price a month's rate for a week (or a week's for a month).
+ */
+export function extendPeriodOf(
+  plan: Pick<PlanView, "renewal">,
+  facts: Pick<RentalPlanFacts, "periodUnit"> | null | undefined,
+): { unit: RenewalUnit; count: number } | null {
   if (plan.renewal) return { unit: plan.renewal.periodUnit, count: plan.renewal.periodCount };
-  return { unit: facts?.periodUnit ?? "week", count: 1 };
+  if (!facts?.periodUnit) return null;
+  return { unit: facts.periodUnit, count: 1 };
 }
 
 export function ExtendPlanDialog(props: ExtendPlanDialogProps) {
@@ -94,8 +122,12 @@ export function ExtendPlanDialog(props: ExtendPlanDialogProps) {
 
 type How = "periods" | "date";
 
-function ExtendBody({ onOpenChange, plan, currentEnd, facts, bonzahSellable, onExtend }: ExtendPlanDialogProps) {
-  const period = extendPeriodOf(plan, facts);
+const NO_OCCURRENCES: OccurrenceView[] = [];
+
+function ExtendBody({ onOpenChange, plan, currentEnd, occurrences = NO_OCCURRENCES, facts, bonzahSellable, onExtend }: ExtendPlanDialogProps) {
+  const known = extendPeriodOf(plan, facts);
+  // Only for the words while there is nothing to extend by; never sent.
+  const period = known ?? { unit: "week" as RenewalUnit, count: 1 };
   const every = describeEvery(period.unit, period.count);
   const one = period.count === 1 ? `1 ${period.unit}` : unitWord(period.unit, period.count);
 
@@ -109,34 +141,37 @@ function ExtendBody({ onOpenChange, plan, currentEnd, facts, bonzahSellable, onE
   const [sendAgreement, setSendAgreement] = useState(true);
   const [busy, setBusy] = useState(false);
 
-  const plan_ = useMemo(() => {
-    if (!currentEnd) return { ok: false as const, message: "This rental has no return date to extend from." };
-    if (how === "periods") {
-      const n = Math.floor(periods);
-      if (!Number.isFinite(n) || n < 1) return { ok: false as const, message: "Extend by 1 period or more." };
-      if (n > MAX_EXTEND_PERIODS) return { ok: false as const, message: `That is more than ${MAX_EXTEND_PERIODS} periods.` };
-      return { ok: true as const, periods: n, newEnd: endAfterPeriods(currentEnd, period.unit, period.count, n) };
+  const plan_: ExtendPlan = useMemo(() => {
+    if (!known) {
+      return { ok: false, message: "The rental's period (daily, weekly or monthly) could not be read, so a period can't be priced. Close this and try again." };
     }
-    if (!until) return { ok: false as const, message: "Pick the date the rental should run to." };
-    const found = periodsUntil(currentEnd, until, period.unit, period.count);
-    if (!found) {
-      return {
-        ok: false as const,
-        message: until <= currentEnd ? `Pick a date after ${formatDay(currentEnd)}, when the rental ends now.` : `That is more than ${MAX_EXTEND_PERIODS} periods away.`,
-      };
-    }
-    return { ok: true as const, ...found };
-  }, [currentEnd, how, periods, until, period.unit, period.count]);
+    return how === "periods"
+      ? extendByPeriods(currentEnd, occurrences, known.unit, known.count, periods)
+      : extendUntil(currentEnd, occurrences, until, known.unit, known.count);
+  }, [known?.unit, known?.count, currentEnd, occurrences, how, periods, until]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Where new periods start when the plan already has periods being collected.
+  const planned = currentEnd ? plannedEnd(currentEnd, occurrences) : null;
+  const reused = plan_.ok ? plan_.steps.filter((s) => s.reused) : [];
+  const firstStart = plan_.ok ? plan_.steps[0].periodStart : currentEnd;
 
   const insurance: RenewalInsurance | null = bonzahSellable && insure === "rental" && hasCoverage(coverage) ? { ...coverage } : null;
-  const window_ = plan_.ok && currentEnd ? insurableWindow(currentEnd, plan_.newEnd, clampToBonzahStart(currentEnd)) : null;
+  const window_ = plan_.ok && firstStart ? insurableWindow(firstStart, plan_.newEnd, clampToBonzahStart(firstStart)) : null;
   const willSend = sendAgreement && hasEmail;
 
   const confirm = async () => {
-    if (!plan_.ok) return;
+    if (!plan_.ok || !known) return;
     setBusy(true);
     try {
-      await onExtend({ periods: plan_.periods, giveDaysNow, sendAgreement: willSend, insurance });
+      await onExtend({
+        periods: plan_.periods,
+        giveDaysNow,
+        sendAgreement: willSend,
+        insurance,
+        // Always the period on screen — the server never picks its own.
+        periodUnit: known.unit,
+        periodCount: known.count,
+      });
       onOpenChange(false);
     } catch {
       /* the caller toasted it; stay open so nothing chosen is lost */
@@ -176,8 +211,11 @@ function ExtendBody({ onOpenChange, plan, currentEnd, facts, bonzahSellable, onE
         </SentenceLine>
         {plan_.ok && currentEnd && (
           <p className="text-xs leading-relaxed text-muted-foreground sm:pl-[92px]" data-extend-summary="">
-            {plural(plan_.periods, "new period")} ({every}): the rental runs {formatDay(currentEnd)} → {formatDay(plan_.newEnd)}
+            {plural(plan_.periods, reused.length === plan_.periods ? "period" : "new period")} ({every}): the rental runs {formatDay(currentEnd)} → {formatDay(plan_.newEnd)}
             {how === "date" && until && plan_.newEnd !== until ? ` — the whole period that covers ${formatDay(until)}` : ""}.
+            {reused.length > 0 &&
+              ` ${reused.length === 1 ? "Payment" : "Payments"} ${reused.map((r) => `#${r.seq} (${formatPeriodSpan(r.periodStart, r.periodEnd)})`).join(", ")} already on the plan ${reused.length === 1 ? "is" : "are"} brought forward to today${plan_.periods > reused.length ? ` and ${plural(plan_.periods - reused.length, "new period")} added after ${reused.length === 1 ? "it" : "them"}` : ""}.`}
+            {reused.length === 0 && planned && planned > currentEnd && ` The plan already runs the rental to ${formatDay(planned)} once its open periods are paid, so the new days start there.`}
           </p>
         )}
 
@@ -316,6 +354,7 @@ export function RentalExtendPlanDialog({
       open={open}
       onOpenChange={onOpenChange}
       plan={plan}
+      occurrences={occurrences}
       currentEnd={facts.data?.endDate ?? currentEnd}
       facts={facts.isLoading ? undefined : facts.data ?? null}
       bonzahSellable={isBonzahSellable(tenant)}

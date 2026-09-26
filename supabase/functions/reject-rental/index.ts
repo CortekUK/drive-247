@@ -6,6 +6,10 @@ import {
   type StripeMode,
 } from "../_shared/stripe-client.ts";
 import { tryProviderRefund } from "../_shared/payments/refund.ts";
+// [staff-auth:begin]
+import { corsHeaders } from "../_shared/cors.ts";
+import { anonAuthClient, authorizeStaff, checkStaffTenant, staffRefusal } from "../_shared/staff-auth.ts";
+// [staff-auth:end]
 
 interface RejectRentalRequest {
   rentalId: string;
@@ -31,6 +35,20 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
+    // [staff-auth:begin] — who may reject a booking (2026-09-26)
+    // This refunds or releases every payment on the rental. It used to take
+    // any caller the gateway admitted — the public anon key included — and any
+    // rentalId. Now: active staff whose role may edit rentals (the Reject
+    // button's canEdit('rentals')), of the rental's own tenant.
+    // _shared/staff-auth.ts.
+    const staff = await authorizeStaff(
+      req,
+      { db: supabase, authClient: anonAuthClient(createClient) },
+      { logPrefix: "[reject-rental]", managerTabs: ["rentals"] },
+    );
+    if (!staff.ok) return staffRefusal(staff, corsHeaders);
+    // [staff-auth:end]
+
     const { rentalId, reason, tenantId: requestTenantId }: RejectRentalRequest = await req.json();
 
     if (!rentalId) {
@@ -50,6 +68,16 @@ Deno.serve(async (req) => {
       console.error("Rental not found:", rentalError);
       return errorResponse("Rental not found", 404);
     }
+
+    // [staff-auth:begin]
+    const staffTenant = checkStaffTenant(staff.caller, rental.tenant_id, "[reject-rental]");
+    if (!staffTenant.ok) return staffRefusal(staffTenant, corsHeaders);
+    // The body's tenantId picks the Stripe account below; it must name the
+    // row's own tenant, or a caller could act with another business's account.
+    if (requestTenantId && requestTenantId !== rental.tenant_id) {
+      return staffRefusal({ status: 403, error: "This belongs to a different business." }, corsHeaders);
+    }
+    // [staff-auth:end]
 
     const tenantId = requestTenantId || rental.tenant_id;
 

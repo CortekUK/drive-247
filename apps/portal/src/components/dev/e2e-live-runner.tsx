@@ -17,20 +17,21 @@
  *       and record every step and check in `dev_sim_runs` / `dev_sim_run_steps`.
  *
  * WHAT THIS SECTION DOES FROM THE BROWSER, AND WHAT IT CAUSES
- *   - On mount: two GETs — the runner's read-only catalogue, and one row of
- *     `dev_sim_runs` — to learn whether the backend exists at all. If either is
- *     missing (not deployed / not applied), refuses, or the runner does not say
+ *   - On mount: two GETs — the runner's read-only catalogue (every scenario,
+ *     steps and expected values included), and one row of `dev_sim_runs` — to
+ *     learn whether the backend exists at all. If either is missing (not
+ *     deployed / not applied), refuses, or the runner does not say
  *     "northwind" and "test", the section says so and offers nothing to click.
- *   - Opening a scenario whose steps the list did not include asks the runner
- *     for that scenario's preview (G7: writes nothing) to show its steps and
- *     expected outcome.
- *   - Run / Run group / Run all: first the runner's PREVIEW of each scenario
- *     (zero writes) — its guard verdicts, and exactly what a run writes, read
- *     from the scenario's own fixture and steps; only the confirm — beside the
+ *   - Run / Run group / Run all: first ONE runner PREVIEW of the scenarios
+ *     (zero writes) — its guard verdicts, and the runner's own plan of what
+ *     each run writes, charges and fires; only the confirm — beside the
  *     sentence "This writes test rows to northwind in Stripe TEST mode" —
  *     starts them, one scenario after another (one dev_sim_runs row each).
- *     The runner writes; this page never inserts, updates or deletes anything
- *     itself.
+ *     Just before each start the page takes a fresh preview of that one
+ *     scenario (the preview_id a run must carry lasts 15 minutes, G12) and
+ *     mints the run's id, so the run can be watched before `run` answers; a
+ *     fresh preview that now refuses stops the queue there. The runner
+ *     writes; this page never inserts, updates or deletes anything itself.
  *   - While they go: polls each run's row and step rows for live progress,
  *     calls `advance` while a run is running (waiting first when the runner
  *     asks, G8), and — at a step only a person can do — shows the payment link
@@ -60,9 +61,11 @@ import {
   closeE2eRun,
   continueE2eRun,
   driveE2eRun,
-  findStartingRun,
+  fetchE2eRunRow,
+  freshPreviewId,
+  newRunId,
   requestE2ePreview,
-  requestScenarioPreview,
+  StartError,
   startE2eRun,
   useE2eRunHistory,
   useE2eRunnerProbe,
@@ -76,13 +79,12 @@ import {
   allScenarioIds,
   groupCatalogue,
   isTerminal,
-  plannedWrites,
   previewProblems,
   rowVerdict,
   runVerdict,
-  withFullScenario,
   type CatalogueScenario,
   type E2eRun,
+  type RunOutcome,
   type RunPreview,
   type RunnerInfo,
   type Verdict,
@@ -106,17 +108,17 @@ interface Queue {
   label: string;
   ids: string[];
   runIds: Record<string, string>;
-  /** The scenario whose `start` request is in flight. */
+  /** The scenario whose `run` request is in flight. */
   starting: string | null;
+  /** The confirmed preview. */
   preview: RunPreview;
+  /** The fresh preview each scenario was started under (scenario id → preview_id). */
+  startedUnder: Record<string, string>;
   note: string | null;
   /** The runner asked the page to hold off (G8). */
   defer: string | null;
   done: boolean;
 }
-
-/** A scenario's full definition, fetched when the list sent only its summary. */
-type Detail = { state: "loading" } | { state: "ok"; scenario: CatalogueScenario } | { state: "error"; message: string };
 
 /** A run reopened from the history. */
 interface Opened {
@@ -145,7 +147,6 @@ export function E2eLiveRunner({ pollMs = 1500 }: { pollMs?: number } = {}) {
   const [queue, setQueue] = useState<Queue | null>(null);
   const [opened, setOpened] = useState<Opened | null>(null);
   const [open, setOpen] = useState<Set<string>>(() => new Set());
-  const [details, setDetails] = useState<Record<string, Detail>>({});
   const stopAfterCurrent = useRef(false);
   const alive = useRef(true);
   const flowRef = useRef<HTMLDivElement>(null);
@@ -173,70 +174,52 @@ export function E2eLiveRunner({ pollMs = 1500 }: { pollMs?: number } = {}) {
   // disabled unless `enabled`).
   if (!enabled) return null;
 
-  // The list's summaries, completed by any full scenario a preview has brought back.
-  const catalogue: CatalogueScenario[] =
-    probe.state === "ready"
-      ? probe.catalogue.map((s) => {
-          const d = details[s.id];
-          return d && d.state === "ok" ? withFullScenario(s, d.scenario) : s;
-        })
-      : [];
+  // The runner's catalogue, as it listed it (full scenarios: steps and expected values).
+  const catalogue: CatalogueScenario[] = probe.state === "ready" ? probe.catalogue : [];
   const runner: RunnerInfo | null = probe.state === "ready" ? probe.runner : null;
   const queueGoing = !!queue && !queue.done;
   const locked = queueGoing || !!opened?.driving || flow.stage === "previewing" || flow.stage === "preview";
-
-  /** Remember the full scenarios a preview brought back, so their expected outcomes show. */
-  const learn = (preview: RunPreview) =>
-    setDetails((prev) => {
-      const next = { ...prev };
-      for (const p of preview.items) if (p.scenario) next[p.scenarioId] = { state: "ok", scenario: p.scenario };
-      return next;
-    });
 
   const askPreview = async (ids: string[], label: string) => {
     if (!ids.length || locked) return;
     setFlow({ stage: "previewing", ids, label });
     try {
       const preview = await requestE2ePreview(ids);
-      learn(preview);
       setFlow({ stage: "preview", ids, label, preview, problems: previewProblems(preview, ids) });
     } catch (e) {
       setFlow({ stage: "failed", label, message: `The preview failed, so nothing was run: ${e instanceof Error ? e.message : String(e)}` });
     }
   };
 
-  /** Opening a scenario the list sent only as a summary: its preview (no writes) brings the steps. */
-  const loadDetail = (s: CatalogueScenario) => {
-    if (s.full || s.stepCount === 0 || details[s.id]) return;
-    setDetails((prev) => ({ ...prev, [s.id]: { state: "loading" } }));
-    void requestScenarioPreview(s.id)
-      .then((p) => {
-        if (!alive.current) return;
-        setDetails((prev) => ({
-          ...prev,
-          [s.id]: p.scenario ? { state: "ok", scenario: p.scenario } : { state: "error", message: "the preview did not include the scenario" },
-        }));
-      })
-      .catch((e) => {
-        if (!alive.current) return;
-        setDetails((prev) => ({ ...prev, [s.id]: { state: "error", message: e instanceof Error ? e.message : String(e) } }));
-      });
-  };
-
   /**
-   * The confirmed queue: start each scenario, drive it to its end, then the
-   * next. `start` does real work before it answers (the fixture and the first
-   * steps, up to ~100 s), so while it is in flight the page looks for the row
-   * it is making and shows its steps as they land.
+   * The confirmed queue: for each scenario, a fresh preview (zero writes; its
+   * id is what the runner checks, G12), then `run` under a run id minted
+   * here, then drive it to its end, then the next. `run` does real work before
+   * it answers (the fixture and the first steps, up to ~100 s); because the
+   * page chose the id, the report watches that row from the first moment.
    */
   const runQueue = async (ids: string[], label: string, preview: RunPreview) => {
     stopAfterCurrent.current = false;
     setOpened(null);
-    setQueue({ label, ids, runIds: {}, starting: null, preview, note: null, defer: null, done: false });
+    setQueue({ label, ids, runIds: {}, starting: null, preview, startedUnder: {}, note: null, defer: null, done: false });
     const patch = (p: Partial<Queue>) => alive.current && setQueue((q) => (q ? { ...q, ...p } : q));
-    const setRunId = (id: string, runId: string) =>
-      alive.current && setQueue((q) => (q && q.runIds[id] !== runId ? { ...q, runIds: { ...q.runIds, [id]: runId } } : q));
-    const knownRunIds: string[] = [];
+    const setRunId = (id: string, runId: string | null) =>
+      alive.current &&
+      setQueue((q) => {
+        if (!q) return q;
+        const runIds = { ...q.runIds };
+        if (runId) runIds[id] = runId;
+        else delete runIds[id];
+        return { ...q, runIds };
+      });
+    const stopHere = (i: number, why: string) => {
+      patch({
+        starting: null,
+        done: true,
+        note: `${why} The queue stopped there${i + 1 < ids.length ? ` (${ids.length - i - 1} not run).` : "."}`,
+      });
+      void refreshHistory();
+    };
     for (let i = 0; i < ids.length; i += 1) {
       const id = ids[i];
       if (!alive.current) return;
@@ -246,52 +229,61 @@ export function E2eLiveRunner({ pollMs = 1500 }: { pollMs?: number } = {}) {
         return;
       }
       patch({ starting: id });
-      const sentAt = Date.now();
-      let answered = false;
-      // Find the row while `start` works, so its steps show as they happen.
-      const finding = (async () => {
-        while (!answered && alive.current) {
-          await new Promise((r) => setTimeout(r, pollMs));
-          if (answered || !alive.current) return;
-          const found = await findStartingRun(tenantId!, id, sentAt, knownRunIds).catch(() => null);
-          if (found && !answered) setRunId(id, found);
-        }
-      })();
+
+      // 1. A fresh preview of this one scenario — nothing is written.
+      let previewId: string;
       try {
-        const first = await startE2eRun(id);
-        answered = true;
-        await finding;
+        previewId = (await freshPreviewId(id)).previewId;
+      } catch (e) {
         if (!alive.current) return;
-        knownRunIds.push(first.runId!);
-        setRunId(id, first.runId!);
-        patch({ starting: null });
-        void refreshHistory();
-        const end = await driveE2eRun({
-          tenantId: tenantId!,
-          runId: first.runId!,
-          first,
-          pollMs,
-          maxMs: MAX_RUN_MS,
-          cancelled: () => !alive.current,
-          onDefer: (secs) =>
-            patch({ defer: secs ? `The runner asked to wait ${secs} s so a real cron's run window passes first (G8). It carries on by itself.` : null }),
-        });
-        if (end === "cancelled") return;
-        if (end === "gave_up") {
-          patch({ note: `${id} was still not finished after 30 minutes; the queue stopped there. Reopen it from the history.`, done: true });
-          void refreshHistory();
+        stopHere(i, `${id} was not started: ${e instanceof Error ? e.message : String(e)}. Nothing was written for it.`);
+        return;
+      }
+      if (!alive.current) return;
+      setQueue((q) => (q ? { ...q, startedUnder: { ...q.startedUnder, [id]: previewId } } : q));
+
+      // 2. Start it under a run id minted here, and watch that row at once.
+      const runId = newRunId();
+      setRunId(id, runId);
+      let first: RunOutcome | null = null;
+      try {
+        first = await startE2eRun(id, previewId, runId);
+      } catch (e) {
+        if (!alive.current) return;
+        const text = e instanceof Error ? e.message : String(e);
+        if (e instanceof StartError && e.refusedBeforeWrite) {
+          setRunId(id, null);
+          stopHere(i, `${id} did not start: ${text}. The runner refused before writing its run.`);
           return;
         }
-      } catch (e) {
-        answered = true;
-        patch({
-          starting: null,
-          done: true,
-          note:
-            `${id} did not start: ${e instanceof Error ? e.message : String(e)}. The queue stopped there` +
-            (i + 1 < ids.length ? ` (${ids.length - i - 1} not run).` : ".") +
-            " If the runner recorded anything before refusing, it is in the history below.",
-        });
+        // No clean answer (a timeout, a 5xx, no network): the runner may still have made the run.
+        const row = await fetchE2eRunRow(tenantId!, runId).catch(() => null);
+        if (!alive.current) return;
+        if (!row) {
+          setRunId(id, null);
+          stopHere(i, `${id} did not start: ${text}. No run was recorded under ${runId.slice(0, 8)}; if the runner wrote anything, it is in the history below.`);
+          return;
+        }
+        patch({ note: `${id}: the start request ended without an answer (${text}), but its run exists — carrying on with it.` });
+      }
+      if (!alive.current) return;
+      patch({ starting: null });
+      void refreshHistory();
+
+      // 3. Drive it to its end.
+      const end = await driveE2eRun({
+        tenantId: tenantId!,
+        runId,
+        first,
+        pollMs,
+        maxMs: MAX_RUN_MS,
+        cancelled: () => !alive.current,
+        onDefer: (secs) =>
+          patch({ defer: secs ? `The runner asked to wait ${secs} s so a real cron's run window passes first (G8). It carries on by itself.` : null }),
+      });
+      if (end === "cancelled") return;
+      if (end === "gave_up") {
+        patch({ note: `${id} was still not finished after 30 minutes; the queue stopped there. Reopen it from the history.`, done: true });
         void refreshHistory();
         return;
       }
@@ -345,17 +337,13 @@ export function E2eLiveRunner({ pollMs = 1500 }: { pollMs?: number } = {}) {
     return null;
   };
 
-  const toggle = (s: CatalogueScenario) => {
-    const opening = !open.has(s.id);
+  const toggle = (s: CatalogueScenario) =>
     setOpen((prev) => {
       const n = new Set(prev);
-      if (opening) n.add(s.id);
-      else n.delete(s.id);
+      if (n.has(s.id)) n.delete(s.id);
+      else n.add(s.id);
       return n;
     });
-    // Outside the updater: React may run an updater twice, and this sends a request.
-    if (opening) loadDetail(s);
-  };
 
   const openedData = opened ? watch.byId[opened.runId] : undefined;
   const openedUnfinished = !!openedData?.run && !isTerminal(openedData.run.status);
@@ -513,6 +501,7 @@ export function E2eLiveRunner({ pollMs = 1500 }: { pollMs?: number } = {}) {
                     catalogue={catalogue}
                     runner={runner}
                     confirmedPreview={queue?.preview ?? null}
+                    startedUnder={queue?.startedUnder}
                     tenantId={tenantId}
                     queueNote={queue?.note ?? null}
                     deferNote={queueGoing ? queue.defer : null}
@@ -576,7 +565,6 @@ export function E2eLiveRunner({ pollMs = 1500 }: { pollMs?: number } = {}) {
                             <ScenarioRow
                               key={s.id}
                               s={s}
-                              detail={details[s.id] ?? null}
                               verdict={verdictIn(s.id)}
                               isOpen={open.has(s.id)}
                               onToggle={() => toggle(s)}
@@ -617,7 +605,6 @@ export function E2eLiveRunner({ pollMs = 1500 }: { pollMs?: number } = {}) {
 
 function ScenarioRow({
   s,
-  detail,
   verdict,
   isOpen,
   onToggle,
@@ -626,7 +613,6 @@ function ScenarioRow({
   onRun,
 }: {
   s: CatalogueScenario;
-  detail: Detail | null;
   verdict: Verdict | "queued" | null;
   isOpen: boolean;
   onToggle: () => void;
@@ -700,17 +686,6 @@ function ScenarioRow({
               waits until you pay it and press Continue.
             </p>
           )}
-          {detail?.state === "loading" && (
-            <p role="status" className="flex items-center gap-1.5 text-muted-foreground" data-e2e-detail-loading="">
-              <Loader2 className="size-3 animate-spin" />
-              Reading this scenario&rsquo;s steps and expected values from the runner (its preview, which writes nothing)…
-            </p>
-          )}
-          {detail?.state === "error" && (
-            <p role="alert" className="text-destructive" data-e2e-detail-error="">
-              The runner could not show this scenario&rsquo;s steps: {detail.message}
-            </p>
-          )}
           <div>
             <p className="font-medium text-foreground">Expected outcome</p>
             {s.expected.length ? (
@@ -719,7 +694,7 @@ function ScenarioRow({
                   <li key={i}>{e}</li>
                 ))}
               </ul>
-            ) : detail?.state === "loading" ? null : (
+            ) : (
               <p className="text-warning" data-e2e-no-expected="">
                 {s.full || s.stepCount === 0
                   ? "This scenario states no expected outcome — a run of it would prove nothing."
@@ -790,6 +765,16 @@ function RunnerLine({ runner }: { runner: RunnerInfo }) {
           <li key={`b${i}`}>{b}</li>
         ))}
       </ul>
+      {runner.guards.length > 0 && (
+        <details className="pl-5 text-[11px] text-muted-foreground" data-e2e-runner-guards="">
+          <summary className="cursor-pointer select-none">What the runner enforces ({runner.guards.length} guards, in its own words)</summary>
+          <ul className="mt-1 list-disc pl-5">
+            {runner.guards.map((g, i) => (
+              <li key={i}>{g}</li>
+            ))}
+          </ul>
+        </details>
+      )}
     </div>
   );
 }
@@ -813,26 +798,50 @@ function PreviewPanel({
 }) {
   const byId = new Map(catalogue.map((s) => [s.id, s] as const));
   const bySid = new Map(preview.items.map((p) => [p.scenarioId, p] as const));
-  const humans = ids.reduce((n, id) => n + (bySid.get(id)?.scenario?.humanSteps ?? byId.get(id)?.humanSteps ?? 0), 0);
+  const humans = ids.reduce((n, id) => n + (byId.get(id)?.humanSteps ?? 0), 0);
   const mark = (ok: boolean) => <span className={ok ? "text-success" : "text-destructive"}>{ok ? "✓" : "✗"}</span>;
   return (
     <div role="region" aria-label="Preview of the live run" data-e2e-preview="" className="space-y-3 rounded-3xl bg-card p-4 ring-1 ring-foreground/10">
       <p className="text-[13px] font-medium text-foreground">Preview — {label}. Nothing has been written yet.</p>
       <p className="text-[11px] text-muted-foreground">
-        The runner checked every guard for {ids.length === 1 ? "this scenario" : `these ${ids.length} scenarios`} without writing anything.
-        Below, for each: its answers, and what a run writes — read from the scenario&rsquo;s own fixture and steps, because the runner&rsquo;s
-        preview does not list writes itself.{ids.length > 1 ? " They run one after another." : ""}
+        The runner checked every guard for {ids.length === 1 ? "this scenario" : `these ${ids.length} scenarios`} without writing anything,
+        and says below, for each, what a run writes, charges and fires.{ids.length > 1 ? " They run one after another." : ""} Just before
+        each one starts, the page asks for a fresh preview of it and stops if anything has changed.
         {humans > 0 ? ` ${humans === 1 ? "One step asks" : `${humans} steps ask`} you to pay a Stripe test link and press Continue.` : ""}
       </p>
+
+      <ul className="space-y-0.5 font-mono text-[11px] text-muted-foreground" data-e2e-preview-env="">
+        <li>
+          {mark(preview.tenantSlug === NORTHWIND && preview.stripeMode === "test")} tenant {preview.tenantSlug ?? "?"} · Stripe{" "}
+          {preview.stripeMode ?? "?"} mode
+        </li>
+        {preview.checks.map((c, i) => (
+          <li key={i}>
+            {mark(c.ok)} {c.name}
+            {!c.ok && c.message ? ` — ${c.message}` : ""}
+          </li>
+        ))}
+        <li data-e2e-preview-refused="">
+          {mark(preview.refusedWrites.length === 0)}{" "}
+          {preview.refusedWrites.length === 0
+            ? "the preview wrote nothing (its read-only client refused no writes)"
+            : `the preview tried to write: ${preview.refusedWrites.join(", ")}`}
+        </li>
+        <li data-e2e-preview-id="">
+          {mark(!!preview.previewId)}{" "}
+          {preview.previewId
+            ? `preview id issued${preview.expiresAt ? `, good until ${new Date(preview.expiresAt).toLocaleTimeString()}` : ""}`
+            : "no preview id — the runner would refuse to start this"}
+        </li>
+      </ul>
 
       <ol className="space-y-2">
         {ids.map((id) => {
           const p = bySid.get(id);
-          const scenario = p?.scenario ?? null;
           return (
             <li key={id} data-e2e-preview-scenario={id} className="space-y-1.5 rounded-2xl bg-muted/40 px-3 py-2">
               <p className="font-mono text-[12px] text-foreground">
-                {id} · {scenario?.title ?? byId.get(id)?.title ?? id}
+                {id} · {byId.get(id)?.title ?? id}
               </p>
               {!p ? (
                 <p className="font-mono text-[11px] text-destructive">Not in the preview.</p>
@@ -847,22 +856,10 @@ function PreviewPanel({
                       {mark(p.assumptionsOk === true)} northwind&rsquo;s settings match what the expected values assume
                       {p.assumptionsFailed.length ? ` — ${p.assumptionsFailed.join("; ")}` : ""}
                     </li>
-                    {p.checks.map((c, i) => (
-                      <li key={i}>
-                        {mark(c.ok)} {c.name}
-                        {!c.ok && c.message ? ` — ${c.message}` : ""}
-                      </li>
-                    ))}
-                    <li data-e2e-preview-refused="">
-                      {mark(p.refusedWrites.length === 0)}{" "}
-                      {p.refusedWrites.length === 0
-                        ? "the preview wrote nothing (its read-only client refused no writes)"
-                        : `the preview tried to write: ${p.refusedWrites.join(", ")}`}
-                    </li>
                   </ul>
-                  {scenario && (
+                  {p.writes.length + p.stripe.length + p.crons.length > 0 && (
                     <ul className="space-y-0.5 border-t border-foreground/5 pt-1.5 font-mono text-[11px] text-muted-foreground" data-e2e-preview-writes="">
-                      {plannedWrites(scenario).map((w, i) => (
+                      {[...p.writes, ...p.stripe, ...p.crons].map((w, i) => (
                         <li key={i} data-e2e-preview-write={w.where}>
                           <span className="text-foreground">{w.where}</span> — {w.what}
                         </li>

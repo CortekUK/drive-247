@@ -25,16 +25,31 @@
  *
  * ── Dates ──────────────────────────────────────────────────────────────────
  *
- * Every renewal boundary comes from the ENGINE's own generator (`expandRule`),
- * so the dates the operator previews are the dates the server stores: a
- * monthly renewal that starts on the 31st clamps to the 28th in February and
- * returns to the 31st in March (design D4), because that is what the engine
- * does — not because this file re-implemented it.
+ * Every renewal period is dated by the ENGINE's own `renewalPeriod` (renewal-
+ * pricing.ts — auto-extend's `addPeriod`, verbatim), chained exactly as the
+ * engine chains them: each period starts where the one before ends
+ * (renewals.ts `renewalChainStart` → `nextRenewalDraft`). So the dates the
+ * operator previews are the dates the server stores — including auto-extend's
+ * month overflow: a monthly period from 31 Jan ends on 3 Mar, not 28 Feb, and
+ * the next one runs 3 Mar → 3 Apr. (The plan schedule's `expandRule` clamps
+ * month-ends instead; renewals never use it, so neither does this file.)
+ *
+ * ── Extend ─────────────────────────────────────────────────────────────────
+ *
+ * `extendSteps` says, before anything is saved, which periods an Extend of N
+ * would collect and where the rental would then run to — the engine's
+ * `extendPlan` order: the plan's own untouched renewal periods first (brought
+ * forward), then new ones appended from the end of the last live period. The
+ * limit is the engine's `MAX_EXTEND_PERIODS`, re-exported here, so the dialog
+ * and the server can never disagree about it.
  */
 
-import type { ISODate, ScheduleRule, Weekday } from "@/lib/payment-plans/types";
-import { expandRule } from "@/lib/payment-plans/schedule";
-import { formatDay, formatDayLong, isIsoDate, isoWeekday, plural } from "./format";
+import type { ISODate, OccurrenceRow, ScheduleRule, Weekday } from "@/lib/payment-plans/types";
+import { renewalPeriod } from "@/lib/payment-plans/renewal-pricing";
+import { MAX_EXTEND_PERIODS, renewalChainStart } from "@/lib/payment-plans/renewals";
+import { formatDay, formatDayLong, formatMoney, isIsoDate, isoWeekday, plural } from "./format";
+
+export { MAX_EXTEND_PERIODS };
 
 export type RenewalUnit = "day" | "week" | "month";
 
@@ -97,15 +112,74 @@ export interface RenewalContext {
   bonzahSellable: boolean;
   /** The rental's own Bonzah coverage; null when it has none. */
   rentalCoverage: RenewalInsurance | null;
-  /** The unit "renew every" starts on — the rental's own period type. */
+  /**
+   * The unit "renew every" starts on — the rental's own period type. It is
+   * also what one renewal's price is: ONE rental-period rate per renewal,
+   * however long the renewal is (auto-extend's pricing, renewal-pricing.ts),
+   * so the form warns when the chosen period is not exactly one of these.
+   */
   defaultUnit?: RenewalUnit;
+}
+
+/**
+ * What one renewal period costs, as the SERVER prices it
+ * (payment-plan-manage 'preview' → PlanDraft.summary.renewal.breakdown).
+ * Insurance is never in it: a premium joins a period only once its policy is
+ * bought (A4).
+ */
+export interface RenewalPriceBreakdown {
+  rentalCents: number;
+  taxCents: number;
+  serviceFeeCents: number;
+  totalCents: number;
+}
+
+export type RenewalQuote =
+  | { state: "loading" }
+  | { state: "ready"; breakdown: RenewalPriceBreakdown }
+  | { state: "error"; message: string };
+
+/**
+ * One renewal's price in words. Null when there is no quote to show (the
+ * caller has no rental to ask the server about yet — New Rental — or the
+ * form is not a renewal).
+ */
+export function renewalPriceWords(quote: RenewalQuote | null | undefined, currency: string): string | null {
+  if (!quote) return null;
+  if (quote.state === "loading") return "Working out the price of one period…";
+  if (quote.state === "error") return `The price could not be worked out: ${quote.message}`;
+  const b = quote.breakdown;
+  const $ = (c: number) => formatMoney(c, currency);
+  const parts = [`${$(b.rentalCents)} rate`];
+  if (b.taxCents > 0) parts.push(`${$(b.taxCents)} tax`);
+  if (b.serviceFeeCents > 0) parts.push(`${$(b.serviceFeeCents)} service fee`);
+  return parts.length === 1 ? `${$(b.totalCents)} each period.` : `${$(b.totalCents)} each period (${parts.join(" + ")}).`;
+}
+
+const UNIT_ADJ: Record<RenewalUnit, string> = { day: "day", week: "week", month: "month" };
+
+/**
+ * The warning when a renewal period is not exactly one of the rental's own
+ * periods. The server charges ONE rental-period rate per renewal whatever its
+ * length (renewalBreakdownCents takes no unit or count), so a weekly-priced
+ * rental renewing every month would be charged one week's rate for a month.
+ * Null when they match, or when the rental's period type is not known.
+ */
+export function renewalUnitWarning(
+  unit: RenewalUnit,
+  count: number,
+  rentalUnit: RenewalUnit | null | undefined,
+  perPeriodWords?: string | null,
+): string | null {
+  if (!rentalUnit) return null;
+  const n = Math.max(1, Math.floor(Number(count) || 1));
+  if (unit === rentalUnit && n === 1) return null;
+  const rate = perPeriodWords ? `one ${UNIT_ADJ[rentalUnit]}'s rate (${perPeriodWords})` : `one ${UNIT_ADJ[rentalUnit]}'s rate`;
+  return `This rental is priced by the ${UNIT_ADJ[rentalUnit]}. Each renewal is charged ${rate}, however long it lasts — renewing ${describeEvery(unit, n)} charges that for ${plural(n, unit)}. Renew every 1 ${UNIT_ADJ[rentalUnit]} to charge the rental's own rate for its own period.`;
 }
 
 /** How many renewal periods the preview lists (the plan itself has no end). */
 export const RENEWAL_PREVIEW_PERIODS = 4;
-
-/** The most periods one Extend adds — a guard against a mistyped 500. */
-export const MAX_EXTEND_PERIODS = 52;
 
 /** The plan engine's interval ceilings, per unit (schedule.ts MAX_INTERVAL; 12 months). */
 export const MAX_RENEW_EVERY: Record<RenewalUnit, number> = { day: 52, week: 52, month: 12 };
@@ -168,15 +242,38 @@ export function renewalRule(anchor: ISODate, unit: RenewalUnit, count: number, e
   return { ...base, freq: "monthly", interval: count, byMonthDay: Number(anchor.slice(8, 10)) };
 }
 
+/** One renewal period, dated by the engine: [periodStart, periodEnd), `days` long. */
+export interface RenewalPeriodDates {
+  periodStart: ISODate;
+  periodEnd: ISODate;
+  days: number;
+}
+
+/**
+ * The first `n` renewal periods from `anchor`, chained as the engine chains
+ * them: each is `renewalPeriod(previous end)` — auto-extend's addPeriod, so a
+ * monthly period from the 31st overflows (31 Jan → 3 Mar → 3 Apr) exactly as
+ * the server dates it.
+ */
+export function renewalPeriods(anchor: ISODate, unit: RenewalUnit, count: number, n: number): RenewalPeriodDates[] {
+  if (!isIsoDate(anchor) || n < 1) return [];
+  const out: RenewalPeriodDates[] = [];
+  let start = anchor;
+  for (let i = 0; i < n; i += 1) {
+    const p = renewalPeriod(start, unit, count);
+    out.push({ periodStart: p.periodStart, periodEnd: p.periodEnd, days: p.days });
+    start = p.periodEnd;
+  }
+  return out;
+}
+
 /**
  * `n + 1` period boundaries from `anchor`: [anchor, end of period 1, …, end of
- * period n]. Computed by the engine's generator, so month-ends clamp and
- * return exactly as the stored schedule will.
+ * period n] — `renewalPeriods`' dates, so they are the server's.
  */
 export function renewalBoundaries(anchor: ISODate, unit: RenewalUnit, count: number, n: number): ISODate[] {
   if (!isIsoDate(anchor) || n < 1) return [anchor];
-  const ex = expandRule(renewalRule(anchor, unit, count, { kind: "count", count: n }));
-  return [...ex.dates, ex.lastPeriodEnd];
+  return [anchor, ...renewalPeriods(anchor, unit, count, n).map((p) => p.periodEnd)];
 }
 
 /** Where the rental would end after `periods` more periods. */
@@ -202,6 +299,121 @@ export function periodsUntil(
   const b = renewalBoundaries(currentEnd, unit, count, max);
   for (let i = 1; i < b.length; i += 1) if (b[i] >= target) return { periods: i, newEnd: b[i] };
   return null;
+}
+
+/* ── Extend: which periods, and to where ────────────────────────────────── */
+
+const LIVE_OUT = new Set(["superseded", "cancelled"]);
+const UNTOUCHED = new Set(["scheduled", "due"]);
+
+/** A renewal period still on the plan (renewals.ts `isLive`). */
+export const isLiveRenewal = (o: Pick<OccurrenceRow, "renews" | "status">): boolean => !!o.renews && !LIVE_OUT.has(o.status);
+
+/**
+ * A live renewal period Extend takes as one of its N rather than adding a new
+ * one after it: nothing has been tried on it yet (scheduled or due, no
+ * attempt), posted or not. Extend brings it forward to today. This is the
+ * engine's `extendPlan` selection with the Wave 3 fix D1 ("bring posted-but-
+ * untouched periods forward"); a period already being collected (an attempt
+ * made, failed, part paid) is left where it is and new periods follow it.
+ */
+export const extendReuses = (o: Pick<OccurrenceRow, "renews" | "status" | "attemptNo">): boolean =>
+  isLiveRenewal(o) && UNTOUCHED.has(o.status) && (o.attemptNo ?? 0) === 0;
+
+/** One period an Extend would collect. `seq` is set for a period already on the plan. */
+export interface ExtendStep {
+  periodStart: ISODate;
+  periodEnd: ISODate;
+  /** Already on the plan — brought forward, not added. */
+  reused: boolean;
+  seq?: number;
+}
+
+/**
+ * The periods an Extend of `n` collects, in the engine's order: the plan's
+ * untouched renewal periods first (by number), then new ones, each starting
+ * where the plan's periods end now (renewals.ts `renewalChainStart`: the later
+ * of the rental's end and its last live period) — never from the rental's end
+ * alone, which would bill days a period already covers.
+ */
+export function extendSteps(
+  rentalEnd: ISODate | null,
+  occurrences: readonly OccurrenceRow[],
+  unit: RenewalUnit,
+  count: number,
+  n: number,
+): ExtendStep[] {
+  const steps: ExtendStep[] = [];
+  if (n < 1) return steps;
+  const reusable = occurrences
+    .filter((o) => extendReuses(o) && !!o.periodStart && !!o.periodEnd)
+    .sort((a, b) => a.seq - b.seq);
+  for (const o of reusable.slice(0, n)) steps.push({ periodStart: o.periodStart as ISODate, periodEnd: o.periodEnd as ISODate, reused: true, seq: o.seq });
+  let start = renewalChainStart(rentalEnd, [...occurrences]);
+  while (steps.length < n && start && isIsoDate(start)) {
+    const p = renewalPeriod(start, unit, count);
+    steps.push({ periodStart: p.periodStart, periodEnd: p.periodEnd, reused: false });
+    start = p.periodEnd;
+  }
+  return steps;
+}
+
+/**
+ * How far the plan ALREADY takes the rental without an Extend: the later of
+ * its end date and the end of every live renewal period Extend would not
+ * reuse (paid, being collected). Asking to extend "until" a date on or before
+ * this would add a period the rental does not need.
+ */
+export function plannedEnd(rentalEnd: ISODate | null, occurrences: readonly OccurrenceRow[]): ISODate | null {
+  return renewalChainStart(rentalEnd, occurrences.filter((o) => !extendReuses(o)));
+}
+
+export type ExtendPlan =
+  | { ok: true; periods: number; newEnd: ISODate; steps: ExtendStep[] }
+  | { ok: false; message: string };
+
+/** "Extend by N periods" → what the server does with it. */
+export function extendByPeriods(
+  rentalEnd: ISODate | null,
+  occurrences: readonly OccurrenceRow[],
+  unit: RenewalUnit,
+  count: number,
+  periods: number,
+  max = MAX_EXTEND_PERIODS,
+): ExtendPlan {
+  if (!rentalEnd || !isIsoDate(rentalEnd)) return { ok: false, message: "This rental has no return date to extend from." };
+  const n = Math.floor(Number(periods));
+  if (!Number.isFinite(n) || n < 1) return { ok: false, message: "Extend by 1 period or more." };
+  if (n > max) return { ok: false, message: `One Extend adds at most ${max} periods.` };
+  const steps = extendSteps(rentalEnd, occurrences, unit, count, n);
+  if (steps.length < n) return { ok: false, message: "This rental has no return date to extend from." };
+  return { ok: true, periods: n, newEnd: steps[n - 1].periodEnd, steps };
+}
+
+/**
+ * "Extend until a date" → the fewest whole periods whose last one ends ON OR
+ * AFTER `target`, counted the way the server counts them (`extendSteps`). The
+ * server extends by a count, so this count is what is sent.
+ */
+export function extendUntil(
+  rentalEnd: ISODate | null,
+  occurrences: readonly OccurrenceRow[],
+  target: ISODate | null,
+  unit: RenewalUnit,
+  count: number,
+  max = MAX_EXTEND_PERIODS,
+): ExtendPlan {
+  if (!rentalEnd || !isIsoDate(rentalEnd)) return { ok: false, message: "This rental has no return date to extend from." };
+  if (!target || !isIsoDate(target)) return { ok: false, message: "Pick the date the rental should run to." };
+  if (target <= rentalEnd) return { ok: false, message: `Pick a date after ${formatDay(rentalEnd)}, when the rental ends now.` };
+  const planned = plannedEnd(rentalEnd, occurrences);
+  if (planned && target <= planned) {
+    return { ok: false, message: `The plan already runs the rental to ${formatDay(planned)} once its open periods are paid. Pick a later date.` };
+  }
+  const steps = extendSteps(rentalEnd, occurrences, unit, count, max);
+  const i = steps.findIndex((s) => s.periodEnd >= target);
+  if (i < 0) return { ok: false, message: `That is more than ${max} periods away.` };
+  return { ok: true, periods: i + 1, newEnd: steps[i].periodEnd, steps: steps.slice(0, i + 1) };
 }
 
 /* ── Bonzah's own rule, said once ──────────────────────────────────────── */

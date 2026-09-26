@@ -91,16 +91,23 @@ export interface CustomerRentalLite {
   vehicle?: string | null;
   reg?: string | null;
   status?: string | null;
+  /** `rentals.approval_status` — a rejected rental is refused like a cancelled one. */
+  approvalStatus?: string | null;
+  /** `rentals.is_pay_as_you_go` — its balance is the daily bills, not its ledger. */
+  isPayAsYouGo?: boolean | null;
 }
 
+/**
+ * The customer's rentals as the pickers offer them. A rental the SQL function
+ * refuses (cancelled, rejected, pay-as-you-go — `balance__assert_rental`)
+ * carries the SAME refusal the rental's own page shows (`rentalRefusalFor`),
+ * so the picker never offers what the server will refuse.
+ */
 export function rentalOptionsFor(rentals: CustomerRentalLite[]): BalanceRentalOption[] {
   return rentals.map((r) => ({
     id: r.id,
     label: [r.ref, r.vehicle || r.reg].filter(Boolean).join(" · "),
-    refusal:
-      r.status === "Cancelled"
-        ? "This rental is cancelled, so its charges no longer count toward the balance. Use the customer account."
-        : null,
+    refusal: rentalRefusalFor({ status: r.status, approval_status: r.approvalStatus, is_pay_as_you_go: r.isPayAsYouGo }),
   }));
 }
 

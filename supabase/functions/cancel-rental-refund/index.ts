@@ -4,6 +4,9 @@ import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { getConnectAccountId, getStripeClientForRecord, type StripeMode } from '../_shared/stripe-client.ts';
 import { getTenantBonzahCredentials, bonzahFetchWithCredentials } from '../_shared/bonzah-client.ts';
 import { tryProviderRefund } from '../_shared/payments/refund.ts';
+// [staff-auth:begin]
+import { anonAuthClient, authorizeStaff, checkStaffTenant, staffRefusal } from "../_shared/staff-auth.ts";
+// [staff-auth:end]
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -33,6 +36,20 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
+    // [staff-auth:begin] — who may cancel a rental and refund it (2026-09-26)
+    // This refunds money at the processor, releases the deposit hold and
+    // cancels insurance. It used to take any caller the gateway admitted — the
+    // public anon key included — and any rentalId. Now: active staff whose role
+    // may edit rentals (the Cancel button's canEdit('rentals')), of the
+    // rental's own tenant. _shared/staff-auth.ts.
+    const staff = await authorizeStaff(
+      req,
+      { db: supabase, authClient: anonAuthClient(createClient) },
+      { logPrefix: "[cancel-rental-refund]", managerTabs: ["rentals"] },
+    );
+    if (!staff.ok) return staffRefusal(staff, corsHeaders);
+    // [staff-auth:end]
+
     const { rentalId, paymentId, refundType, refundAmount, reason, cancelledBy, tenantId: requestTenantId }: CancelRefundRequest = await req.json();
 
     if (!rentalId || !reason) {
@@ -58,6 +75,16 @@ serve(async (req) => {
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // [staff-auth:begin]
+    const staffTenant = checkStaffTenant(staff.caller, rental.tenant_id, "[cancel-rental-refund]");
+    if (!staffTenant.ok) return staffRefusal(staffTenant, corsHeaders);
+    // The body's tenantId picks the Stripe account below; it must name the
+    // row's own tenant, or a caller could act with another business's account.
+    if (requestTenantId && requestTenantId !== rental.tenant_id) {
+      return staffRefusal({ status: 403, error: "This belongs to a different business." }, corsHeaders);
+    }
+    // [staff-auth:end]
 
     // Get customer details
     let customer = null;

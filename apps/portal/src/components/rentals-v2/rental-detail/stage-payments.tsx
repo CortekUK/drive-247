@@ -318,6 +318,12 @@ export function StagePayments({ detail, refetch }: StageProps) {
    * column directly without recording an application, which is exactly what
    * `deduct-from-deposit` and the Stripe webhooks do for excess mileage. The
    * deposit is subtracted because it never enters this screen's totals.
+   *
+   * Credits (negative charges — goodwill, a correction) are kept OUT of the
+   * comparison: `owedOn` counts each one by its own `remaining_amount`, the
+   * very column v1 sums, so they cancel exactly and only the positive charges
+   * are compared. (Before, the screen dropped credits and v1 counted them, so
+   * every goodwill raised a false "Two sources disagree".)
    */
   const v1Outstanding =
     v1Totals == null ? null : Math.round(v1Totals.outstanding * 100) - deposit.chargeOutstanding;
@@ -335,9 +341,13 @@ export function StagePayments({ detail, refetch }: StageProps) {
           data-tour="rental-outstanding"
         >
           <div className="min-w-0">
-            <p className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground/60">Outstanding</p>
+            {/* Below zero when credits exceed what is left: said as credit,
+                never as a negative amount owed. */}
+            <p className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground/60">
+              {t.outstanding < 0 ? "In credit" : "Outstanding"}
+            </p>
             <p className="mt-1 font-heading text-[40px] font-medium leading-none tracking-tight tabular-nums">
-              {usd(t.outstanding)}
+              {usd(Math.abs(t.outstanding))}
             </p>
             <p className="mt-3 text-[12px] text-muted-foreground tabular-nums">
               {usd(t.charged)} charged · {usd(t.applied)} paid
@@ -430,8 +440,9 @@ export function StagePayments({ detail, refetch }: StageProps) {
           Renders nothing unless payment plans are on for this tenant AND the
           tables exist (usePaymentPlansFeature), so every other tenant's
           Payments stage is exactly what it was. The balance handed in is what
-          the plan server-side calls "owed": charges outstanding (the deposit
-          never enters these totals) less money received but not applied. The
+          the plan server-side calls "owed": charges outstanding, net of any
+          credit (goodwill, a correction — `owedOn`), the deposit never
+          entering these totals, less money received but not applied. The
           flags keep "Set up a plan" off while an old mechanism (auto-extend,
           open PAYG) still bills this rental — one engine per rental. */}
       <RentalPaymentPlanSection
@@ -458,7 +469,9 @@ export function StagePayments({ detail, refetch }: StageProps) {
             right={
               ledger.charges.length === 0
                 ? undefined
-                : t.outstanding === 0
+                : t.outstanding < 0
+                  ? `${usd(t.charged)} · ${usd(-t.outstanding)} in credit`
+                  : t.outstanding === 0
                   ? `${usd(t.charged)} · paid`
                   : t.outstanding === t.charged
                     ? `${usd(t.charged)} outstanding`

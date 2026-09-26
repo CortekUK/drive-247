@@ -136,6 +136,29 @@ function defaultEnv(name: string): string | undefined {
   }
 }
 
+/**
+ * The anon-key client to verify JWTs with, built with the caller's own
+ * createClient (this module imports nothing remote). Null when the env is
+ * incomplete — authorizeStaff then verifies with the service-role client,
+ * which is the same GoTrue check with a different apikey.
+ */
+export function anonAuthClient(
+  createClient: (url: string, key: string) => any,
+  env: (name: string) => string | undefined = defaultEnv,
+): StaffAuthClient | null {
+  const url = env("SUPABASE_URL") ?? "";
+  const anonKey = env("SUPABASE_ANON_KEY") ?? "";
+  return url && anonKey ? (createClient(url, anonKey) as StaffAuthClient) : null;
+}
+
+/** The HTTP answer for a refusal, in the `{ success: false, error }` shape most money functions use. */
+export function staffRefusal(result: { status: number; error: string | null }, headers: Record<string, string>): Response {
+  return new Response(JSON.stringify({ success: false, error: result.error }), {
+    status: result.status,
+    headers: { ...headers, "Content-Type": "application/json" },
+  });
+}
+
 /** The bearer token from the Authorization header, or "" when there is none. */
 export function readBearer(req: Request): string {
   return (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();

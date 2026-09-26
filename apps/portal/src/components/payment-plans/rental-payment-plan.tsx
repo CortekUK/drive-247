@@ -220,6 +220,7 @@ function Section({
                   recordPayment: (o, input) => act.recordPayment(o.id, input),
                   move: (o, to) => act.move(o.id, to),
                   skip: (o) => act.skip(o.id),
+                  setMethod: (o, method) => act.setMethod(o.id, method),
                   edit: () => setEditOpen(true),
                   pause: () => act.pause(plan.id),
                   resume: () => act.resume(plan.id),
@@ -234,6 +235,7 @@ function Section({
         <SetUpPlanDialog
           open={setUpOpen}
           onOpenChange={setSetUpOpen}
+          rentalId={rentalId}
           ctx={ctx}
           currency={currency}
           today={today}
@@ -260,6 +262,8 @@ function Section({
         />
       )}
       {mayAct && plan && live && data && (
+        // Edit never offers "keeps renewing" (EditPlanDialog drops ctx.renewal):
+        // making a plan renew the rental is not a schedule change.
         <EditPlanDialog
           open={editOpen}
           onOpenChange={setEditOpen}

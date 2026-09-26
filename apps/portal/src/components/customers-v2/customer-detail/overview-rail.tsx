@@ -49,7 +49,7 @@ import {
 import { cn } from "@/lib/utils";
 import { dayCount, fmtDate } from "./kit";
 import type { Drift } from "./kit";
-import { ledgerTotals, moneyIn, readinessOf, reviewAverage } from "./derive";
+import { ledgerTotals, moneyIn, owedAmountText, readinessOf, reviewAverage } from "./derive";
 import type { CustomerRecord } from "./types";
 import type { SectionId } from "./sections";
 import { ContextTabs, type ContextTab } from "@/components/timeline-v2/context-rail";
@@ -345,17 +345,31 @@ function CustomerOverview({
         {/* ── money ───────────────────────────────────────────────────── */}
         <Group label="Money">
           <div className="space-y-0.5">
+            {/* On the Finances canary this is the shared reducer's number —
+                the one the Money section's balance header prints, to the
+                cent (`ledgerTotals`, `owedAmountText`). */}
             <Line
               icon={CreditCard}
               label="Net position"
               value={
-                totals.net > 0 ? `${money(totals.net)} owed` : totals.net < 0 ? `${money(-totals.net)} up` : "Settled"
+                totals.source === "pending"
+                  ? "…"
+                  : totals.net > 0
+                    ? `${owedAmountText(totals, totals.net, money, currency)} owed`
+                    : totals.net < 0
+                      ? `${owedAmountText(totals, -totals.net, money, currency)} up`
+                      : "Settled"
               }
               tone={totals.net > 0 ? "warning" : "success"}
               onClick={() => onJump("money")}
             />
             {totals.credit > 0 && (
-              <Line label="Credit held" value={money(totals.credit)} tone="muted" onClick={() => onJump("money")} />
+              <Line
+                label="Credit held"
+                value={owedAmountText(totals, totals.credit, money, currency)}
+                tone="muted"
+                onClick={() => onJump("money")}
+              />
             )}
             <Line
               icon={Gavel}

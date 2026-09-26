@@ -69,6 +69,9 @@ import {
   describeCoverage,
   describeEvery,
   hasCoverage,
+  renewalPriceWords,
+  renewalUnitWarning,
+  type RenewalQuote,
 } from "@/lib/payment-plans-ui/renewal";
 import { Chip, InlineDate, InlineNumber, SentenceLine, inlineInputCls, swallowEnter } from "./sentence-kit";
 import { cn } from "@/lib/utils";
@@ -82,6 +85,8 @@ export interface PaymentPlanFormProps {
   error?: { field: FormField | null; message: string } | null;
   /** The earliest date a plan may start (an edit starts from today). */
   minStart?: string | null;
+  /** One renewal period's price, from the server (PlanDraft.summary.renewal). */
+  renewalQuote?: RenewalQuote | null;
 }
 
 const LINE_OF: Record<FormField, string> = {
@@ -103,7 +108,7 @@ const LINE_OF: Record<FormField, string> = {
 const UNITS: IntervalUnit[] = ["days", "weeks", "months"];
 const WEEKDAYS: Weekday[] = [1, 2, 3, 4, 5, 6, 7];
 
-export function PaymentPlanForm({ state, onChange, ctx, currency, error, minStart }: PaymentPlanFormProps) {
+export function PaymentPlanForm({ state, onChange, ctx, currency, error, minStart, renewalQuote }: PaymentPlanFormProps) {
   const set = (patch: Partial<PlanFormState>) => onChange(updateForm(state, patch));
   const errOn = (line: string) => (error && error.field && LINE_OF[error.field] === line ? error.message : null);
 
@@ -151,6 +156,15 @@ export function PaymentPlanForm({ state, onChange, ctx, currency, error, minStar
     set({ ...patch, ...(past ? { startFrom: "date" as const, startDate: minStart as string } : {}) });
   };
   const rentalCover = renewal?.rentalCoverage ?? null;
+  // D9: the price one renewal period is charged, as the server prices it, and
+  // a warning when the period is not one of the rental's own (ONE rental-
+  // period rate is charged per renewal, however long it lasts).
+  const quoteReady = renewalQuote?.state === "ready" ? renewalQuote.breakdown : null;
+  const priceWords = renewalPriceWords(renewalQuote, currency);
+  const coverAdded = !!renewal?.bonzahSellable && state.renewInsurance === "rental" && hasCoverage(rentalCover);
+  const unitWarning = renewing
+    ? renewalUnitWarning(state.renewUnit, state.renewEvery, renewal?.defaultUnit, quoteReady ? formatMoney(quoteReady.totalCents, currency) : null)
+    : null;
   return (
     <div className="space-y-4" data-payment-plan-form="">
       {/* ── Collect ─────────────────────────────────────────────────────── */}
@@ -158,10 +172,21 @@ export function PaymentPlanForm({ state, onChange, ctx, currency, error, minStar
         <SentenceLine
           word="Collect"
           id="collect"
-          hint="Priced when each period starts — the rental's rate, tax and fees, worked out the same way the rental's own renewals are priced today."
+          hint={
+            <span data-renewal-price-hint={renewalQuote?.state ?? "none"}>
+              {priceWords
+                ? `${priceWords} `
+                : `One ${renewal?.defaultUnit ?? "rental period"}'s rate for each renewal, less the rental's discount, plus tax and fees. `}
+              The same price the rental&rsquo;s own renewals are charged
+              {coverAdded ? "; each period's Bonzah premium is added once its cover is bought." : "."}
+            </span>
+          }
         >
-          <span className="inline-flex h-8 items-center rounded-full bg-muted/70 px-3 text-[13px] font-medium text-foreground/80" data-renewal-amount="">
-            each period&rsquo;s price
+          <span
+            className="inline-flex h-8 items-center rounded-full bg-muted/70 px-3 text-[13px] font-medium tabular-nums text-foreground/80"
+            data-renewal-amount={quoteReady ? String(quoteReady.totalCents) : ""}
+          >
+            {quoteReady ? `${formatMoney(quoteReady.totalCents, currency)} each period` : "each period\u2019s price"}
           </span>
         </SentenceLine>
       ) : (
@@ -444,7 +469,16 @@ export function PaymentPlanForm({ state, onChange, ctx, currency, error, minStar
             word="renew"
             id="renew"
             error={errOn("renew")}
-            hint={`The return date moves ${describeEvery(state.renewUnit, Math.max(1, state.renewEvery))} until you stop it. Each period is collected when it starts, and its days are added once it is paid.`}
+            hint={
+              <>
+                {`The return date moves ${describeEvery(state.renewUnit, Math.max(1, state.renewEvery))} until you stop it. Each period is collected when it starts, and its days are added once it is paid.`}
+                {unitWarning && (
+                  <span className="mt-1 block font-medium text-amber-700 dark:text-amber-400" role="note" data-renewal-unit-warning="">
+                    {unitWarning}
+                  </span>
+                )}
+              </>
+            }
           >
             <span className="text-sm text-muted-foreground">every</span>
             <InlineNumber

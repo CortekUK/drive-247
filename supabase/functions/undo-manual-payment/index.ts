@@ -1,6 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { hasProcessorHandle } from "../_shared/payments/predicates.ts";
+// [staff-auth:begin]
+import { anonAuthClient, authorizeStaff, checkStaffTenant, staffRefusal } from "../_shared/staff-auth.ts";
+// [staff-auth:end]
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -40,6 +43,20 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
+    // [staff-auth:begin] — who may undo a payment (2026-09-26)
+    // The RLS read below only proved the caller could SEE the rental: a
+    // viewer, or a renter reading their own rental on the booking site, passed
+    // it and could delete payment rows. Undo deletes payments, allocations and
+    // P&L, so it now needs active staff whose role may edit rentals or payments
+    // (the portal's canEdit), of the rental's own tenant. _shared/staff-auth.ts.
+    const staff = await authorizeStaff(
+      req,
+      { db: admin, authClient: anonAuthClient(createClient) },
+      { logPrefix: "[undo-manual-payment]", managerTabs: ["rentals", "payments"] },
+    );
+    if (!staff.ok) return staffRefusal(staff, corsHeaders);
+    // [staff-auth:end]
+
     const { rentalId, category, tenantId, reason } =
       (await req.json()) as UndoManualPaymentRequest;
 
@@ -66,6 +83,10 @@ serve(async (req) => {
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+    // [staff-auth:begin]
+    const staffTenant = checkStaffTenant(staff.caller, rental.tenant_id, "[undo-manual-payment]");
+    if (!staffTenant.ok) return staffRefusal(staffTenant, corsHeaders);
+    // [staff-auth:end]
     if (rental.tenant_id !== tenantId) {
       return new Response(
         JSON.stringify({ success: false, error: "Tenant mismatch" }),

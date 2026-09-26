@@ -14,7 +14,7 @@ import { buildSchedule } from "@/lib/payment-plans/schedule";
 import { PlanRuleError } from "@/lib/payment-plans/errors";
 import { dayNumber } from "./format";
 import { formToPlan, ruleErrorText, type FormField, type PlanContext, type PlanDraft, type PlanFormState } from "./plan-form-model";
-import type { RenewalSpec } from "./renewal";
+import { RENEWAL_PREVIEW_PERIODS, renewalPeriods, type RenewalSpec } from "./renewal";
 
 export type PreviewState =
   | {
@@ -55,9 +55,21 @@ export function computePreview(state: PlanFormState, ctx: PlanContext, today: st
   if (form.ok === false) return { ok: false, field: form.field, message: form.message };
   try {
     if (form.plan.renewal) {
-      // Dates only. A placeholder amount lets the engine's generator produce
-      // the periods; no screen shows it (SchedulePreview reads `renewal`).
-      const drafts = buildSchedule(form.plan.rule, { mode: "fixed", amountCents: 1 });
+      // Dates only, from the engine's RENEWAL dating (renewalPeriod — auto-
+      // extend's addPeriod), chained as the server chains them. Not the plan
+      // schedule's generator: that clamps month-ends, the renewal engine does
+      // not (31 Jan + 1 month = 3 Mar). The amount is a placeholder no screen
+      // shows — the server prices each period (RenewalPreview reads `renewal`).
+      const r = form.plan.renewal;
+      const drafts: OccurrenceDraft[] = renewalPeriods(form.plan.rule.anchor, r.periodUnit, r.periodCount, RENEWAL_PREVIEW_PERIODS).map((p, i) => ({
+        seq: i + 1,
+        dueDate: p.periodStart,
+        periodStart: p.periodStart,
+        periodEnd: p.periodEnd,
+        days: p.days,
+        amountCents: 0,
+        isStub: false,
+      }));
       return {
         ok: true,
         plan: form.plan,

@@ -608,3 +608,96 @@ describe("the portal's reason lists are the SQL's", () => {
     expect(Object.keys(CORRECTION_DIRECTION).sort()).toEqual([...REASON_CODES.charge_correction].sort());
   });
 });
+
+// ─── 11. undo never strands money (Wave 1 fixes D5, D2) ─────────────────────
+
+describe("undo of an entry money has already touched", () => {
+  const remainingOf = async (ledgerId: string) =>
+    (await db.one<{ r: string }>(`SELECT remaining_amount::text r FROM ledger_entries WHERE id = $1`, [ledgerId]))!.r;
+
+  it("D5: a payment request that was partly paid cannot be undone — nothing is written", async () => {
+    // Hand-derived. A rental with no other charges. Request +50.00 on it: one
+    // Adjustment charge, remaining 50.00, balance 5000. A 20.00 cash payment on
+    // the rental reaches the only open charge (Adjustment, 13.4): remaining
+    // 30.00, balance 3000. Undoing would write −50.00 while the 20.00 stays
+    // applied to the original row — the customer would read 20.00 in credit
+    // for money that paid a charge that "never happened". Refused.
+    const r = await seedRental(db, {});
+    const actor = await staff(r.tenantId);
+    const req = await adjust(r, actor, "charge_correction", "50.00", "payment_request", "Parking ticket", { rentalId: r.rentalId });
+    expect(await ledgerBalanceCents(r.customerId)).toBe(5000);
+    await insertCompletedPayment(db, r, 2000);
+    expect(await remainingOf(req.ledger_entry_id)).toBe("30.00");
+    expect(await ledgerBalanceCents(r.customerId)).toBe(3000);
+    const before = await counts(r.customerId);
+
+    expect(await reverseOutcome(r, actor, req.adjustment_id)).toMatchObject({
+      code: "P0001",
+      message: "Part of this has been paid — record a correction instead.",
+    });
+    expect(await counts(r.customerId)).toEqual(before);
+    expect(await ledgerBalanceCents(r.customerId)).toBe(3000);
+  });
+
+  it("D5: a debit correction paid in full cannot be undone either; an unpaid one can", async () => {
+    // Rental 100.00 + debit +50.00 against it. A 150.00 payment: Rental 100.00
+    // (priority 1), then the Adjustment 50.00 (13.4) → both remaining 0.00,
+    // balance 0. Undo refused. A second, unpaid +10.00 debit undoes cleanly:
+    // 1000 → 0.
+    const r = await seedRental(db, { owedCents: 10000 });
+    const actor = await staff(r.tenantId);
+    const [c] = r.chargeIds;
+    const paid = await adjust(r, actor, "charge_correction", "50.00", "undercharged", "Child seat", { chargeId: c });
+    await insertCompletedPayment(db, r, 15000);
+    expect(await remainingOf(paid.ledger_entry_id)).toBe("0.00");
+    expect(await ledgerBalanceCents(r.customerId)).toBe(0);
+    expect(await reverseOutcome(r, actor, paid.adjustment_id)).toMatchObject({
+      code: "P0001",
+      message: "Part of this has been paid — record a correction instead.",
+    });
+
+    const unpaid = await adjust(r, actor, "charge_correction", "10.00", "undercharged", "Fuel", { chargeId: c });
+    expect(await ledgerBalanceCents(r.customerId)).toBe(1000);
+    expect(await reverseOutcome(r, actor, unpaid.adjustment_id)).toBe("ok");
+    expect(await ledgerBalanceCents(r.customerId)).toBe(0);
+  });
+
+  it("D5: a credit (negative) entry is never 'paid' — its undo is unaffected", async () => {
+    const r = await seedRental(db, { owedCents: 10000 });
+    const actor = await staff(r.tenantId);
+    const g = await adjust(r, actor, "goodwill", "-30.00", "goodwill", "Late", { rentalId: r.rentalId });
+    await insertCompletedPayment(db, r, 7000);
+    // 100.00 − 30.00 − 70.00 paid = 0; the credit row is untouched by the allocator
+    expect(await remainingOf(g.ledger_entry_id)).toBe("-30.00");
+    expect(await reverseOutcome(r, actor, g.adjustment_id)).toBe("ok");
+    expect(await ledgerBalanceCents(r.customerId)).toBe(3000);
+  });
+
+  it.each([
+    ["a partial refund, still marked Applied", "Applied", "50.00"],
+    ["a partial refund, then reversed", "Reversed", "50.00"],
+    ["status Refunded", "Refunded", "200.00"],
+    ["status Partial Refund", "Partial Refund", "0"],
+  ])("D2: an off-platform payment with %s cannot be undone", async (_label, status, refund) => {
+    const r = await seedRental(db, { owedCents: 50000 });
+    const actor = await staff(r.tenantId);
+    const off = await recordedPayment(r, 20000, { offPlatform: true, method: "Cash" });
+    const rec = await recordOffPlatform(r, actor, off);
+    await db.q(`UPDATE payments SET status = $2, refund_amount = $3::numeric WHERE id = $1`, [off, status, refund]);
+    const before = await counts(r.customerId);
+    expect(await reverseOutcome(r, actor, rec.adjustment_id)).toMatchObject({
+      code: "P0001",
+      message: "This payment has been refunded, in part or in full, so it cannot be undone. Record a correction for what is still wrong instead.",
+    });
+    expect(await counts(r.customerId)).toEqual(before);
+  });
+
+  it("D2: a reversed payment with nothing refunded still undoes (the refusal is only for refunds)", async () => {
+    const r = await seedRental(db, { owedCents: 50000 });
+    const actor = await staff(r.tenantId);
+    const off = await recordedPayment(r, 20000, { offPlatform: true, method: "Cash" });
+    const rec = await recordOffPlatform(r, actor, off);
+    await db.q(`UPDATE payments SET status = 'Reversed', remaining_amount = 0, refund_amount = 0 WHERE id = $1`, [off]);
+    expect(await reverseOutcome(r, actor, rec.adjustment_id)).toBe("ok");
+  });
+});

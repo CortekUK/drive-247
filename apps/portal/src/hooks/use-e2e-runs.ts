@@ -11,21 +11,23 @@
  * which also makes the polling explicit: a set of runs, one timer, stopped
  * when every run is finished, on unmount, or after `maxWatchMs`.
  *
- * WHAT IT READS AND WRITES. From the browser: reads only — a GET and a
- * `list` to the `e2e-runner` function, SELECTs on `dev_sim_runs` /
+ * WHAT IT READS AND WRITES. From the browser: reads only — a GET to the
+ * `e2e-runner` function (its catalogue), SELECTs on `dev_sim_runs` /
  * `dev_sim_run_steps` for the open tenant, and a rental's number for the
  * Finances link. The calls that lead to writes are `startE2eRun`,
  * `advanceE2eRun`, `continueE2eRun`, `abortE2eRun` and `closeE2eRun` — the
- * RUNNER writes, server side, after its guards (G0–G11) and the database's;
- * `requestE2ePreview` asks for its zero-write preview (G7).
+ * RUNNER writes, server side, after its guards (G0–G12) and the database's;
+ * `requestE2ePreview` asks for its zero-write preview (G7), whose
+ * `preview_id` every start must carry (G12).
  *
  * GET, NEVER HEAD. The presence probes are GETs. A HEAD to a missing
  * PostgREST table answers 404 with no body, and postgrest-js reads a bodiless
  * answer as success — so `select(…, { head: true })` would call an absent
  * table present. `select("id").limit(1)` is a GET that returns the real error
  * (PGRST205). The function's GET answers 404 when it is not deployed, 503 when
- * its kill switch is off (G0), 401/403 when this user may not run it (G1), and
- * otherwise 400 ("unknown action") — present, and then `list` is asked.
+ * its kill switch is off (G0), 401/403 when this user may not run it (G1),
+ * 412 when the tenant is not northwind in Stripe test mode (G2), and otherwise
+ * 200 with its catalogue — the same answer as POST `list`.
  *
  * Every Supabase call is wrapped: supabase-js reports most failures in
  * `{ error }` rather than throwing, and the rest (a missing client in a test,
@@ -36,16 +38,20 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { extractFunctionError, extractFunctionErrorPayload } from "@/lib/edge-error";
 import {
-  CONFIRM_SENTENCE,
   E2E_RUNNER_FUNCTION,
   E2E_RUNS_TABLE,
   E2E_STEPS_TABLE,
   isTerminal,
+  listRequest,
   normalizeRun,
   normalizeStep,
   parseOutcome,
+  parseRunPreview,
   parseRunnerList,
-  parseScenarioPreview,
+  previewProblems,
+  previewRequest,
+  runActionRequest,
+  runRequest,
   runnerSafetyProblem,
   type CatalogueScenario,
   type E2eRun,
@@ -54,7 +60,6 @@ import {
   type RunPreview,
   type RunStatus,
   type RunnerInfo,
-  type ScenarioPreview,
 } from "@/components/dev/e2e-runner-contract";
 
 /* ── one piece of the backend: present, or why not ───────────────────────── */
@@ -107,9 +112,10 @@ function tableError(error: unknown): PieceState {
 /* ── probes ─────────────────────────────────────────────────────────────── */
 
 /**
- * Is the runner there, may this user use it, and what would it run? A GET
- * first (presence: see the header), then `list` (no writes) for the catalogue
- * and the runner's own environment checks.
+ * Is the runner there, may this user use it, and what would it run? One GET
+ * (see the header): the runner answers it with its catalogue and its own
+ * environment checks, and writes nothing. A runner that answers the GET 400
+ * (an older build that did not treat GET as `list`) is asked with POST `list`.
  */
 export async function probeE2eRunner(): Promise<{ piece: PieceState; runner: RunnerInfo | null; catalogue: CatalogueScenario[] }> {
   const fail = (kind: "absent" | "refused" | "error", text: string) => ({
@@ -131,8 +137,9 @@ export async function probeE2eRunner(): Promise<{ piece: PieceState; runner: Run
     return null;
   };
   try {
-    // 1. Presence, with a GET. A deployed, switched-on runner answers 400 "unknown action" here.
+    // Presence AND the catalogue, with one GET.
     const probe = await supabase.functions.invoke(E2E_RUNNER_FUNCTION, { method: "GET" });
+    let data: unknown = probe.data;
     if (probe.error) {
       const r = await refusedOrMissing(probe.error, "GET");
       if (r) return r;
@@ -143,14 +150,14 @@ export async function probeE2eRunner(): Promise<{ piece: PieceState; runner: Run
           `The ${E2E_RUNNER_FUNCTION} function could not be reached${status ? ` (${status})` : ""}: ${await extractFunctionError(probe.error, "no message")}`,
         );
       }
-    }
-    // 2. The catalogue and the runner's checks.
-    const { data, error } = await supabase.functions.invoke(E2E_RUNNER_FUNCTION, { body: { action: "list" } });
-    if (error) {
-      const r = await refusedOrMissing(error, "list");
-      if (r) return r;
-      const status = statusOf(error);
-      return fail("error", `The ${E2E_RUNNER_FUNCTION} function did not list its scenarios${status ? ` (${status})` : ""}: ${await extractFunctionError(error, "no message")}`);
+      const listed = await supabase.functions.invoke(E2E_RUNNER_FUNCTION, { body: listRequest() });
+      if (listed.error) {
+        const r2 = await refusedOrMissing(listed.error, "list");
+        if (r2) return r2;
+        const s2 = statusOf(listed.error);
+        return fail("error", `The ${E2E_RUNNER_FUNCTION} function did not list its scenarios${s2 ? ` (${s2})` : ""}: ${await extractFunctionError(listed.error, "no message")}`);
+      }
+      data = listed.data;
     }
     const parsed = parseRunnerList(data);
     if (parsed.ok === false) return fail("error", parsed.message);
@@ -222,28 +229,6 @@ export async function fetchE2eRunRow(tenantId: string, runId: string): Promise<E
   const { data, error } = await db().from(E2E_RUNS_TABLE).select("*").eq("id", runId).eq("tenant_id", tenantId).maybeSingle();
   if (error) throw new Error(error.message || `${E2E_RUNS_TABLE} could not be read`);
   return normalizeRun(data);
-}
-
-/**
- * The run `start` is creating, found before `start` answers — the first
- * request makes the fixture and runs steps for up to ~100 s, and the lead
- * should watch them happen. The newest unfinished run of this scenario, created
- * since the request went out (with two minutes' allowance for clock skew), that
- * the page does not already know.
- */
-export async function findStartingRun(tenantId: string, scenarioId: string, sentAtMs: number, known: readonly string[]): Promise<string | null> {
-  const since = new Date(sentAtMs - 120_000).toISOString();
-  const { data, error } = await db()
-    .from(E2E_RUNS_TABLE)
-    .select("id, status, created_at")
-    .eq("tenant_id", tenantId)
-    .eq("scenario_id", scenarioId)
-    .gte("created_at", since)
-    .order("created_at", { ascending: false })
-    .limit(5);
-  if (error || !Array.isArray(data)) return null;
-  const hit = (data as { id: string; status: string }[]).find((r) => !known.includes(r.id) && (r.status === "running" || r.status === "waiting"));
-  return hit?.id ?? null;
 }
 
 export interface RunWithSteps {
@@ -323,6 +308,7 @@ export function useE2eRunHistory(enabled: boolean, tenantId: string | null | und
 /* ── the runner's actions ───────────────────────────────────────────────── */
 
 class RunnerHttpError extends Error {
+  /** The HTTP status the runner answered with; null when no answer came back (network, relay). */
   readonly status: number | null;
   readonly code: string | null;
   constructor(text: string, status: number | null, code: string | null = null) {
@@ -339,45 +325,82 @@ async function invokeRunner(body: Record<string, unknown>, fallback: string): Pr
     const code = payload && typeof payload.code === "string" ? payload.code : null;
     throw new RunnerHttpError(await extractFunctionError(error, fallback), statusOf(error), code);
   }
+  // A 2xx came back: the runner answered, so its refusal is its own decision.
   const d = (data ?? null) as Record<string, unknown> | null;
-  if (!d || typeof d !== "object") throw new RunnerHttpError(fallback, null);
+  if (!d || typeof d !== "object") throw new RunnerHttpError(fallback, 200);
   if (d.ok === false || (typeof d.error === "string" && d.error && d.ok !== true)) {
-    throw new RunnerHttpError(String(d.error || d.message || fallback), null, typeof d.code === "string" ? d.code : null);
+    throw new RunnerHttpError(String(d.error || d.message || fallback), 200, typeof d.code === "string" ? d.code : null);
   }
   return d;
 }
 
-/** One scenario's preview: the runner's guards, and the full scenario. Writes nothing (G7). */
-export async function requestScenarioPreview(scenarioId: string): Promise<ScenarioPreview> {
-  const reply = await invokeRunner({ action: "preview", scenarioId }, `The runner could not preview ${scenarioId}. Nothing was written.`);
-  const p = parseScenarioPreview(reply, scenarioId);
-  if (!p) throw new Error(`The runner's preview of ${scenarioId} could not be read, so nothing will be run.`);
+/** The runner's zero-write preview (G7) of these scenarios, in one request. Throws when it is not one. */
+export async function requestE2ePreview(scenarioIds: readonly string[]): Promise<RunPreview> {
+  const reply = await invokeRunner(previewRequest(scenarioIds), `The runner could not preview ${scenarioIds.join(", ")}. Nothing was written.`);
+  const p = parseRunPreview(reply);
+  if (!p) throw new Error("The runner's preview could not be read, so nothing will be run.");
   return p;
 }
 
-/** The preview of a whole request, one scenario after another. Throws naming the one that failed. */
-export async function requestE2ePreview(scenarioIds: readonly string[]): Promise<RunPreview> {
-  const items: ScenarioPreview[] = [];
-  for (const id of scenarioIds) items.push(await requestScenarioPreview(id));
-  return { items };
+/**
+ * A preview of ONE scenario, taken just before it starts: the id a run must
+ * carry lasts 15 minutes (G12), and a queue can take far longer than that.
+ * Anything the preview now refuses stops the start — the tenant's settings or
+ * the runner's environment may have changed since the confirm.
+ */
+export async function freshPreviewId(scenarioId: string): Promise<{ previewId: string; preview: RunPreview }> {
+  const preview = await requestE2ePreview([scenarioId]);
+  const problems = previewProblems(preview, [scenarioId]);
+  if (problems.length) throw new Error(`a fresh preview of ${scenarioId} refuses it — ${problems.join(" ")}`);
+  return { previewId: preview.previewId!, preview };
+}
+
+/** A run id minted here, so the page can watch the run's row before `run` answers. */
+export function newRunId(): string {
+  const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
+  if (c && typeof c.randomUUID === "function") return c.randomUUID();
+  // RFC 4122 v4 from Math.random — only where the platform has no randomUUID (old test runtimes).
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (ch) => {
+    const r = Math.floor(Math.random() * 16);
+    return (ch === "x" ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
+
+/** Why `run` failed, and whether the runner could have created the run row before failing. */
+export class StartError extends Error {
+  /** A 4xx refusal is decided before the row is inserted; anything else may have left a run behind. */
+  readonly refusedBeforeWrite: boolean;
+  constructor(text: string, refusedBeforeWrite: boolean) {
+    super(text);
+    this.refusedBeforeWrite = refusedBeforeWrite;
+  }
 }
 
 /**
- * Start ONE scenario. The runner creates the run and the fixture and works
- * through steps for up to ~100 s before it answers. The confirm sentence goes
- * with it for the record; the runner does not require it (the page does).
+ * Start ONE scenario under a fresh preview, with the confirm sentence and a
+ * run id this page minted. The runner creates the run and the fixture and
+ * works through steps for up to ~100 s before it answers.
  */
-export async function startE2eRun(scenarioId: string): Promise<RunOutcome> {
-  const reply = await invokeRunner({ action: "start", scenarioId, confirm: CONFIRM_SENTENCE }, `The runner did not start ${scenarioId}.`);
+export async function startE2eRun(scenarioId: string, previewId: string, runId: string): Promise<RunOutcome> {
+  let reply: Record<string, unknown>;
+  try {
+    reply = await invokeRunner(runRequest(scenarioId, previewId, runId), `The runner did not start ${scenarioId}.`);
+  } catch (e) {
+    const status = e instanceof RunnerHttpError ? e.status : null;
+    // ok:false in a 2xx body, or a 4xx: the runner refused before writing the row (index.ts checks
+    // G12/G4/G3/assumptions first). A 5xx, a platform timeout or no answer at all may not have.
+    const refused = status !== null && status < 500;
+    throw new StartError(message(e, `The runner did not start ${scenarioId}.`), refused);
+  }
   const o = parseOutcome(reply);
-  if (!o.runId) throw new Error(`The runner started ${scenarioId} but did not say which run it made.`);
-  return o;
+  if (o.runId && o.runId !== runId) throw new StartError(`The runner started ${scenarioId} under another run id (${o.runId}).`, false);
+  return { ...o, runId };
 }
 
 /** More steps of a running run. "busy" = leased by another request, or no longer running (409). */
 export async function advanceE2eRun(runId: string): Promise<RunOutcome | "busy"> {
   try {
-    return parseOutcome(await invokeRunner({ action: "advance", runId }, "The runner did not advance the run."));
+    return parseOutcome(await invokeRunner(runActionRequest("advance", runId), "The runner did not advance the run."));
   } catch (e) {
     if (e instanceof RunnerHttpError && e.status === 409) return "busy";
     throw e;
@@ -386,17 +409,17 @@ export async function advanceE2eRun(runId: string): Promise<RunOutcome | "busy">
 
 /** A `human` step is done: the tester paid the link the step showed. The runner checks for itself. */
 export async function continueE2eRun(runId: string): Promise<RunOutcome> {
-  return parseOutcome(await invokeRunner({ action: "continue", runId }, "The runner did not accept Continue."));
+  return parseOutcome(await invokeRunner(runActionRequest("continue", runId), "The runner did not accept Continue."));
 }
 
 /** Stop the run; the runner parks the fixture. */
 export async function abortE2eRun(runId: string): Promise<void> {
-  await invokeRunner({ action: "abort", runId }, "The runner did not stop the run.");
+  await invokeRunner(runActionRequest("abort", runId), "The runner did not stop the run.");
 }
 
 /** A finished run's fixture rental is Closed (engines off). Money rows stay — they are the evidence. */
 export async function closeE2eRun(runId: string): Promise<void> {
-  await invokeRunner({ action: "close", runId }, "The runner did not close the fixture.");
+  await invokeRunner(runActionRequest("close", runId), "The runner did not close the fixture.");
 }
 
 /**

@@ -66,6 +66,7 @@ import {
   FIFO_CATEGORIES,
   fifoRank,
   heldOn,
+  netOwedFor,
   remainingOn,
   sum,
   totals,
@@ -146,7 +147,9 @@ function AimDialog({
   const [typed, setTyped] = useState<string | null>(null);
 
   const chosen = targets.filter((t) => picked.has(t.key));
-  const owed = sum(chosen.map((t) => t.outstanding));
+  // Net of the rental's credits (goodwill, a correction): a $30 goodwill on a
+  // $100 charge asks for $70 — see `netOwedFor`.
+  const owed = netOwedFor(ledger, sum(chosen.map((t) => t.outstanding)));
   const cents = typed === null ? owed : Math.round(Number(typed) * 100);
   const chargeCount = sum(chosen.map((t) => t.chargeCount));
   const categories = [...new Set(chosen.map((t) => t.category))];
@@ -408,7 +411,7 @@ export function PaymentActions({
   return (
     <>
       <div className="flex flex-wrap items-center gap-2">
-        <ActionButton onClick={() => setOwn({ kind: "take" })} disabled={t.outstanding === 0}>
+        <ActionButton onClick={() => setOwn({ kind: "take" })} disabled={t.outstanding <= 0}>
           <CreditCard className="size-4" />
           {t.outstanding > 0 ? `Take a payment · ${usd(t.outstanding)} owed` : "Nothing owed"}
         </ActionButton>

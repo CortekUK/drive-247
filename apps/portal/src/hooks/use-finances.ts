@@ -25,6 +25,7 @@ import { useV2 } from "@/lib/v2-context";
 import { usePaymentPlansFeature } from "@/hooks/use-payment-plan";
 import { loadFinanceData, type FinanceClient } from "@/hooks/use-finances-data";
 import { buildFinanceModel } from "@/lib/finances/model";
+import { fineSettledDays } from "@/lib/finances/fines";
 import { selectFinances } from "@/lib/finances/filters";
 import { tenantToday } from "@/lib/finances/period";
 import type {
@@ -81,9 +82,16 @@ export interface UseFinancesResult {
    * next-7-days upcoming. Each sums to its stat (lib/finances/series.ts).
    */
   series: FinanceSeries | undefined;
+  /**
+   * added — fine id → the day money paid its charge off (lib/finances/fines.ts
+   * `fineSettledDays`), for "Fines paid" on fines the payment trigger marked
+   * Paid without a `resolved_at`. Empty until the rows are read.
+   */
+  fineSettledDays: ReadonlyMap<string, string>;
 }
 
 const EMPTY: never[] = [];
+const NO_SETTLED_DAYS: ReadonlyMap<string, string> = new Map();
 
 export function useFinances(filters: FinanceFilters, scope?: FinanceScope): UseFinancesResult {
   const { tenant } = useTenant();
@@ -108,6 +116,8 @@ export function useFinances(filters: FinanceFilters, scope?: FinanceScope): UseF
     [model, filterKey, today],
   );
 
+  const settledDays = useMemo(() => (query.data ? fineSettledDays(query.data) : NO_SETTLED_DAYS), [query.data]);
+
   const error = (query.error as Error | null) ?? null;
   const ok = !!selection && !error;
   return {
@@ -127,5 +137,6 @@ export function useFinances(filters: FinanceFilters, scope?: FinanceScope): UseF
     model: ok ? model : undefined,
     today,
     series: ok ? selection!.series : undefined,
+    fineSettledDays: settledDays,
   };
 }

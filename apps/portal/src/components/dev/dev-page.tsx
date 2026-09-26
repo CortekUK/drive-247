@@ -53,13 +53,15 @@ import {
  *      being true when this section arrived.
  *
  *      The browser itself still inserts, updates and deletes nothing. It sends
- *      the `e2e-runner` edge function a GET and a `list` (no writes), SELECTs
- *      `dev_sim_runs` / `dev_sim_run_steps` and a fixture rental's number for
- *      this tenant, and asks for each scenario's `preview` (no writes: the
- *      runner hands that path a client whose writes throw, G7). Only after
- *      the operator confirms beside "This writes test rows to northwind in
- *      Stripe TEST mode" does it send `start`, then `advance` / `continue`,
- *      and on request `abort` or `close`. The RUNNER then writes — on whatever
+ *      the `e2e-runner` edge function a GET (its catalogue; no writes),
+ *      SELECTs `dev_sim_runs` / `dev_sim_run_steps` and a fixture rental's
+ *      number for this tenant, and asks for a `preview` of the scenarios (no
+ *      writes: the runner hands that path a client whose writes throw, G7).
+ *      Only after the operator confirms beside "This writes test rows to
+ *      northwind in Stripe TEST mode" does it send, per scenario, a fresh
+ *      `preview` and then `run` carrying that sentence, the preview's
+ *      preview_id and a run id it minted; then `advance` / `continue`, and on
+ *      request `abort` or `close`. The RUNNER then writes — on whatever
  *      project this portal talks to, which for the live portal is the
  *      PRODUCTION database: per run, one E2E-FIXTURE customer (an
  *      @e2e.drive247.test address, no phone) and one fixture rental on
@@ -81,21 +83,28 @@ import {
  *          fails, or the preview tried to write, cannot be confirmed; and
  *          only scenarios the catalogue marks live-runnable get a Run button;
  *        - AUTHORITATIVE, and the RUNNER's and the database's, not this
- *          page's (supabase/functions/e2e-runner/index.ts G0–G11, and
+ *          page's (supabase/functions/e2e-runner/index.ts G0–G12, and
  *          supabase/migrations/20260926120300_dev_sim_runs.sql): a kill switch
  *          (E2E_RUNNER_ENABLED=northwind); callers limited to a super admin or
  *          northwind's head admin; the tenant re-read by slug on every request
- *          and refused unless northwind, active and stripe_mode 'test', again
- *          in SQL on every write (e2e_fixture_guard); only sk_test_/rk_test_
- *          keys; writes only to the run's registered fixture; time moved only
- *          by e2e_shift_fixture on that fixture; cron work only through the
- *          `sandbox-*` clones with only_rental_id = the fixture, never the live
- *          jobs (6, 4, 32, 33, 54, 55), and the fixture parked between calls
- *          so those jobs never select it; one request per run (a lease). The
- *          page cannot enforce any of that; it can only refuse to offer a run
- *          the runner does not claim is safe. The runner does NOT require the
- *          preview or the confirm sentence before `start` — that order is
- *          this page's.
+ *          and refused unless northwind, active and stripe_mode 'test' — and
+ *          again in SQL, but only where the SQL functions run: at the start of
+ *          each request on an existing run (e2e_fixture_guard) and inside
+ *          e2e_register_fixture / e2e_shift_fixture, NOT on every write (the
+ *          edge functions a step calls write with their own clients); only
+ *          sk_test_/rk_test_ keys; rental writes only to the run's registered
+ *          fixture; time moved only by e2e_shift_fixture on that fixture; cron
+ *          work only through the `sandbox-*` clones with only_rental_id = the
+ *          fixture, never the live jobs (6, 4, 32, 33, 54, 55), and the
+ *          fixture parked between calls so their main selection skips it —
+ *          with known gaps parking does not close (docs/E2E_TESTING.md: job 4
+ *          marks installments overdue whatever the plan's status, job 54's
+ *          credit/reconcile passes run before its auto-extend filter), which
+ *          is why the scenarios they touch stay blocked live; one request per
+ *          run (a lease); and a run refused without the confirm sentence and
+ *          the preview_id of a preview of that scenario under 15 minutes old
+ *          (G12). The page cannot enforce any of that; it can only refuse to
+ *          offer a run the runner does not claim is safe.
  *
  *      Until the function is deployed and switched on and the migration
  *      applied, this path is inert: the section says which piece is missing

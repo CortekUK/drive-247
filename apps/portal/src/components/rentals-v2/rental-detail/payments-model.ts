@@ -101,10 +101,11 @@ export const sum = (ns: number[]) => ns.reduce((a, b) => a + b, 0);
    ══════════════════════════════════════════════════════════════════════════ */
 
 /**
- * The category table inside `payment_apply_fifo_v2`, copied exactly and in its
- * own priority order.
+ * The category table inside the LIVE `payment_apply_fifo_v2`, copied exactly
+ * and in its own priority order — the FALLBACK list, used only while the
+ * database has no `ledger_settleable_categories()` (see below).
  *
- * This is not decoration. The function's loop reads
+ * This is not decoration. The live function's loop reads
  *
  *     JOIN cat_order co ON co.cat = le.category
  *
@@ -116,6 +117,17 @@ export const sum = (ns: number[]) => ns.reduce((a, b) => a + b, 0);
  * The order also matters to an operator: money is applied by CATEGORY rank,
  * not by which charge they meant. An untargeted payment that is short smears
  * the shortfall down this list rather than landing where it was aimed.
+ *
+ * ── Where the list really comes from ────────────────────────────────────
+ *
+ * Migration 20260925120000_ledger_allocation_prerequisites.sql replaces the
+ * allocator with one that settles every category, and adds
+ * `ledger_settleable_categories()`, which returns that allocator's own list
+ * (a test pins the two together). `useSettleableCategories` reads it (a GET
+ * rpc, never HEAD — a HEAD 404 has no body and postgrest-js reads it as a
+ * success), and `buildLedger` uses it whenever it answered. So 'Adjustment',
+ * 'Excess Mileage' and the rest become payable on this screen exactly when the
+ * migration is applied, and not a moment before.
  */
 export const FIFO_CATEGORIES = [
   "Rental",
@@ -160,8 +172,74 @@ export const UNSETTLEABLE = [
   "Initial Fees",
 ] as const;
 
-/** Can any payment ever settle a charge in this category? */
-export const isSettleable = (category: string) => FIFO_SET.has(category);
+/**
+ * Can any payment ever settle a charge in this category? `settleable` is the
+ * database's own list (`ledger_settleable_categories()`); null or undefined —
+ * the function is not there — means the live allocator's list above.
+ */
+export const isSettleable = (category: string, settleable?: readonly string[] | null) =>
+  settleable ? settleable.includes(category) : FIFO_SET.has(category);
+
+export const SETTLEABLE_CATEGORIES_FN = "ledger_settleable_categories";
+
+/** The minimum `probeSettleableCategories` needs from a Supabase client — tests hand in a stub. */
+export interface SettleableProbeClient {
+  rpc: (
+    fn: string,
+    args: Record<string, never>,
+    options: { get: true },
+  ) => PromiseLike<{ data: unknown; error: unknown }>;
+}
+
+/** "The function is not in this database" — PostgREST's PGRST202, or Postgres's 42883. */
+export function isMissingFunction(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const e = error as { code?: unknown; message?: unknown; details?: unknown; hint?: unknown };
+  if (e.code === "PGRST202" || e.code === "42883") return true;
+  const text = [e.message, e.details, e.hint].filter((x) => typeof x === "string").join(" ");
+  return /ledger_settleable_categories/.test(text) && /could not find|does not exist/i.test(text);
+}
+
+/**
+ * The database's list of settleable categories, or null when the function does
+ * not exist yet (the migration is not applied). A GET — `{ get: true }` — so a
+ * missing function comes back as a 404 WITH its PGRST202 body. Any other
+ * failure throws, so the query retries rather than settling on a wrong answer.
+ */
+export async function probeSettleableCategories(client: SettleableProbeClient): Promise<string[] | null> {
+  const { data, error } = await client.rpc(SETTLEABLE_CATEGORIES_FN, {}, { get: true });
+  if (error) {
+    if (isMissingFunction(error)) return null;
+    throw error instanceof Error ? error : new Error(String((error as { message?: unknown }).message ?? "settleable categories could not be read"));
+  }
+  if (!Array.isArray(data) || !data.every((c) => typeof c === "string")) {
+    throw new Error("settleable categories: unexpected answer");
+  }
+  return data as string[];
+}
+
+export function settleableCategoriesKey(tenantId: string | undefined) {
+  return ["ledger-settleable-categories", tenantId] as const;
+}
+
+/**
+ * `ledger_settleable_categories()`, read once per session: the answer only
+ * changes when a migration is applied, and "missing" is a settled answer, so a
+ * database without the function sees ONE failing request, not one per page.
+ * `data` is null (fallback list) until and unless the function answers.
+ */
+export function useSettleableCategories() {
+  const { tenant } = useTenant();
+  const query = useQuery({
+    queryKey: settleableCategoriesKey(tenant?.id),
+    queryFn: () => probeSettleableCategories(supabase as unknown as SettleableProbeClient),
+    enabled: !!tenant?.id,
+    staleTime: Number.POSITIVE_INFINITY,
+    gcTime: Number.POSITIVE_INFINITY,
+    retry: 2,
+  });
+  return query.data ?? null;
+}
 
 /**
  * Categories that describe the BOOKING itself, as opposed to something that
@@ -453,9 +531,8 @@ export function paidFor(l: Ledger, segmentId: string | null): number {
 }
 
 /**
- * What one charge still needs, never below zero. THE primitive: every
- * outstanding figure on the screen is a sum of these, so the headline, a
- * period's cell and the rows under it cannot disagree.
+ * What one charge still needs, never below zero — the figure its ROW shows,
+ * and what a payment can be aimed at. Zero for a credit (see `creditOn`).
  *
  * Derived from the allocations rather than read from `remaining_amount`, and
  * that is deliberate: the two disagree exactly where an edge function wrote
@@ -468,8 +545,35 @@ export function remainingOn(l: Ledger, chargeId: string): number {
   return c ? Math.max(0, c.amountCents - appliedTo(l, c.id)) : 0;
 }
 
+/**
+ * What a CREDIT takes off the balance, as signed cents (≤ 0); zero for every
+ * ordinary charge.
+ *
+ * A charge row with a negative amount is a credit — goodwill or a correction
+ * written as an `Adjustment` (balance_adjust, or v1's "Give credit"). The
+ * shared customer balance rule (lib/finances/balance.ts, the one Finances and
+ * the customer header use) is Σ `remaining_amount` over Charge rows, negative
+ * rows included, so a credit lowers what is owed by its `remaining_amount`.
+ * This is that rule for one row, read from the same column: the allocator
+ * never touches a row whose remaining_amount is not > 0, so a credit is never
+ * "paid" and nothing here is derived from applications.
+ *
+ * Before this existed, `remainingOn` clamped a credit to zero and the stage
+ * simply lost it: after a $30 goodwill on a $100 charge, Outstanding stayed
+ * $100 while the scoped Finances views on the same stage said $70.
+ */
+export const creditOn = (c: Charge): number => (c.amountCents < 0 ? c.remainingOnRow : 0);
+
+/**
+ * One charge's signed share of Outstanding — THE primitive. What an ordinary
+ * charge still needs (`remainingOn`), or what a credit takes off (`creditOn`).
+ * Every outstanding figure on the screen is a sum of these, so the headline, a
+ * period's cell and the plan's balance cannot disagree.
+ */
+export const owedOn = (l: Ledger, c: Charge): number => (c.amountCents < 0 ? creditOn(c) : remainingOn(l, c.id));
+
 export const outstandingFor = (l: Ledger, segmentId: string | null) =>
-  sum(chargesIn(l, segmentId).map((c) => remainingOn(l, c.id)));
+  sum(chargesIn(l, segmentId).map((c) => owedOn(l, c)));
 
 /**
  * Received but not applied to anything — real, and must be visible. Per
@@ -492,10 +596,17 @@ export const heldOn = (d: Deposit) =>
 export function totals(l: Ledger) {
   const landed = l.payments.filter(counts);
   return {
+    /** Σ every charge's amount, credits included — the shared rule's "total charges". */
     charged: sum(l.charges.map((c) => c.amountCents)),
+    /** Of `charged`, what credits took off (a positive figure). */
+    credited: sum(l.charges.filter((c) => c.amountCents < 0).map((c) => -c.amountCents)),
     received: sum(landed.map((p) => p.amountCents)),
     applied: sum(landed.flatMap((p) => p.allocations.map((a) => a.amountCents))),
-    outstanding: sum(l.charges.map((c) => remainingOn(l, c.id))),
+    /**
+     * Σ `owedOn`: what the charges still need, less what credits took off.
+     * Below zero when credits exceed what is left — the rental is in credit.
+     */
+    outstanding: sum(l.charges.map((c) => owedOn(l, c))),
     unapplied: sum(l.payments.map(unallocatedOn)),
     // From the payments, not the refund rows: it is the field `unallocatedOn`
     // nets out, so the two figures can never drift apart.
@@ -508,6 +619,18 @@ export function totals(l: Ledger) {
     stuck: sum(l.charges.filter((c) => !c.settleable).map((c) => remainingOn(l, c.id))),
   };
 }
+
+/**
+ * What a payment aimed at some charges asks for by default: what those charges
+ * still need (`chosenCents`, a sum of `remainingOn`), but never more than the
+ * rental owes once its credits are taken off, and never below zero.
+ *
+ * A $30 goodwill on a $100 charge asks for $70, not $100: the allocator puts
+ * the $70 on the charge, and the credit row covers the rest — Outstanding goes
+ * to exactly zero, the same figure Finances and the customer header show.
+ */
+export const netOwedFor = (l: Ledger, chosenCents: number): number =>
+  Math.max(0, Math.min(chosenCents, totals(l).outstanding));
 
 /**
  * The finest thing money can be aimed at, stated once.
@@ -540,6 +663,11 @@ export type LedgerInput = {
   depositEventRows: Row[];
   /** `useRentalPaymentLinks` output, keyed by payment id. */
   linkStateById: Map<string, string>;
+  /**
+   * `ledger_settleable_categories()`, when the database has it; null or absent
+   * = the live allocator's list (`FIFO_CATEGORIES`). See `isSettleable`.
+   */
+  settleable?: readonly string[] | null;
 };
 
 /** `payments.status` → the five states arithmetic cares about. */
@@ -652,8 +780,17 @@ function originalSegment(rental: Row, extensions: Row[]): Segment {
  * actually reconciles.
  */
 export function buildLedger(input: LedgerInput): Ledger {
-  const { rental, chargeRows, paymentRows, applicationRows, refundRows, extensionRows, depositEventRows, linkStateById } =
-    input;
+  const {
+    rental,
+    chargeRows,
+    paymentRows,
+    applicationRows,
+    refundRows,
+    extensionRows,
+    depositEventRows,
+    linkStateById,
+    settleable = null,
+  } = input;
 
   /* ── segments ───────────────────────────────────────────────────────── */
 
@@ -705,7 +842,7 @@ export function buildLedger(input: LedgerInput): Ledger {
         note: (r.reference ?? null) as string | null,
         dueDate: (r.due_date ?? null) as string | null,
         remainingOnRow: cents(r.remaining_amount),
-        settleable: isSettleable(category),
+        settleable: isSettleable(category, settleable),
       };
     })
     // Oldest first, then by the allocator's own category order — so the list
@@ -853,6 +990,7 @@ function depositStatusOf(rental: Row): DepositStatus {
  */
 export function useRentalLedgerRows(rentalId: string | null | undefined, extensionRows: Row[], linkStateById: Map<string, string>) {
   const { tenant } = useTenant();
+  const settleable = useSettleableCategories();
 
   const query = useQuery({
     queryKey: ["rental-payments-ledger-v2", rentalId, tenant?.id],
@@ -932,8 +1070,8 @@ export function useRentalLedgerRows(rentalId: string | null | undefined, extensi
 
   const ledger = useMemo(() => {
     if (!query.data) return null;
-    return buildLedger({ ...query.data, extensionRows, linkStateById });
-  }, [query.data, extensionRows, linkStateById]);
+    return buildLedger({ ...query.data, extensionRows, linkStateById, settleable });
+  }, [query.data, extensionRows, linkStateById, settleable]);
 
   return { ledger, isLoading: query.isLoading, error: query.error as Error | null, refetch: query.refetch };
 }

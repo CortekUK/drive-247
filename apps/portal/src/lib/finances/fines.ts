@@ -7,13 +7,22 @@
  *  1. The overview's fine metrics (the graph's picker, on the Fines view):
  *       Fines issued   every fine on the list, on its `issue_date`, by value and by count
  *       Fines paid     the fines on the list whose status is 'Paid', on the day
- *                      they were paid — `resolved_at` (written with status
- *                      'Paid' by the fines tab's Record Payment and by
- *                      apply-fine), else `charged_at`, else the issue date for
- *                      a fine marked paid before either was recorded — read in
- *                      the tenant's zone.
+ *                      they were paid (`finePaidDay`), read in the tenant's zone.
  *     Each metric sums exactly the rows the list shows, so the chart can never
  *     disagree with the table under it.
+ *
+ *     WHEN a fine was paid is not one column. A fine becomes 'Paid' two ways:
+ *       - by hand (the fines tab's actions), which writes `resolved_at`; or
+ *       - by MONEY: a payment settles the fine's ledger charge (category
+ *         'Fine', reference 'FINE-<fine id>') and the live trigger
+ *         `sync_fine_status_on_charge_settled` sets status 'Paid' — and
+ *         nothing else. It does NOT write `resolved_at`.
+ *     So for the second kind the day comes from the money itself: the
+ *     `payment_date` of the payment(s) applied to that charge
+ *     (`payment_applications` → `payments`), the latest of them — the one that
+ *     finished paying it (`fineSettledDays`). Falling back to `charged_at` there
+ *     would put the payment on the day the fine was CHARGED to the customer,
+ *     often weeks earlier.
  *
  *  2. The fines of one rental or one customer (`ScopedFinances`): the fines
  *     tab's own row rules, mirrored from hooks/use-fines-data.ts — overdue,
@@ -55,17 +64,72 @@ export function finesIssued(fines: readonly FineRowLike[]): FineEvent[] {
   return out;
 }
 
-/** The day a paid fine was paid: `resolved_at`, else `charged_at` (instants, in the tenant's zone), else its issue date. */
-export function finePaidDay(fine: FineRowLike, timeZone: string | null | undefined): string | null {
-  return instantDay(fine.resolved_at, timeZone) ?? instantDay(fine.charged_at, timeZone) ?? dayOf(fine.issue_date);
+/** The ledger reference a fine's charge carries — the trigger's own pattern: 'FINE-' + the fine's uuid. */
+const FINE_REFERENCE = /^FINE-([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$/;
+
+/** The rows `fineSettledDays` reads — a subset of Finances' raw data (`FinanceRawData`). */
+export interface FineSettlementRows {
+  charges: readonly { id: string; category?: string | null; reference?: string | null; remaining_amount?: unknown }[];
+  applications: readonly { payment_id: string | null; charge_entry_id: string | null; amount_applied?: unknown }[];
+  payments: readonly { id: string; payment_date: string | null; status?: string | null }[];
 }
 
-/** The fines on the list that are paid, on the day each was paid. */
-export function finesPaid(fines: readonly FineRowLike[], timeZone: string | null | undefined): FineEvent[] {
+/**
+ * fine id → the day its charge was paid off by money: the latest
+ * `payment_date` among the payments applied to the fine's ledger charge
+ * (category 'Fine', reference 'FINE-<fine id>' — exactly what
+ * `sync_fine_status_on_charge_settled` matches), for charges with nothing left
+ * to pay. A reversed payment took its money back, so it never counts.
+ */
+export function fineSettledDays(rows: FineSettlementRows): Map<string, string> {
+  const fineByCharge = new Map<string, string>();
+  for (const c of rows.charges) {
+    if (c.category !== "Fine") continue;
+    const m = FINE_REFERENCE.exec(String(c.reference ?? ""));
+    if (!m || toCents(c.remaining_amount) > 0) continue;
+    fineByCharge.set(c.id, m[1].toLowerCase());
+  }
+  const dateByPayment = new Map<string, string>();
+  for (const p of rows.payments) {
+    const day = dayOf(p.payment_date);
+    if (day && p.status !== "Reversed") dateByPayment.set(p.id, day);
+  }
+  const out = new Map<string, string>();
+  for (const a of rows.applications) {
+    const fineId = a.charge_entry_id ? fineByCharge.get(a.charge_entry_id) : undefined;
+    const day = a.payment_id ? dateByPayment.get(a.payment_id) : undefined;
+    if (!fineId || !day || toCents(a.amount_applied) <= 0) continue;
+    const seen = out.get(fineId);
+    if (!seen || day > seen) out.set(fineId, day);
+  }
+  return out;
+}
+
+/**
+ * The day a paid fine was paid: `resolved_at` (marked paid by hand) in the
+ * tenant's zone; else the day money settled its charge (`settledDay`, from
+ * `fineSettledDays` — the trigger that marks a fine paid by payment writes no
+ * `resolved_at`); else `charged_at`; else its issue date.
+ */
+export function finePaidDay(fine: FineRowLike, timeZone: string | null | undefined, settledDay?: string | null): string | null {
+  return (
+    instantDay(fine.resolved_at, timeZone) ??
+    dayOf(settledDay ?? null) ??
+    instantDay(fine.charged_at, timeZone) ??
+    dayOf(fine.issue_date)
+  );
+}
+
+/** The fines on the list that are paid, on the day each was paid. `settledDays` = `fineSettledDays(...)`. */
+export function finesPaid(
+  fines: readonly FineRowLike[],
+  timeZone: string | null | undefined,
+  settledDays?: ReadonlyMap<string, string> | null,
+): FineEvent[] {
   const out: FineEvent[] = [];
   for (const f of fines) {
     if (f.status !== FINE_PAID_STATUS) continue;
-    const day = finePaidDay(f, timeZone);
+    const day = finePaidDay(f, timeZone, settledDays?.get(String(f.id).toLowerCase()) ?? null);
     if (day) out.push({ fineId: f.id, day, cents: toCents(f.amount) });
   }
   return out;

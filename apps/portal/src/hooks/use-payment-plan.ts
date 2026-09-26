@@ -32,7 +32,14 @@ import { LIVE_INSTALLMENT_STATUSES } from "@/lib/payment-plans-ui/legacy-mechani
 import { draftToPlanForm, type PlanDraft } from "@/lib/payment-plans-ui/plan-form-model";
 import { attemptFromRow, eventFromRow, occurrenceFromRow, planFromRow } from "@/lib/payment-plans-ui/rows";
 import type { OccurrenceView, PlanBundle, PlanView, RecordPaymentInput } from "@/lib/payment-plans-ui/view-types";
-import { normaliseCoverage, unitFromPeriodType, type RenewalInsurance, type RenewalUnit } from "@/lib/payment-plans-ui/renewal";
+import {
+  normaliseCoverage,
+  unitFromPeriodType,
+  type RenewalInsurance,
+  type RenewalPriceBreakdown,
+  type RenewalQuote,
+  type RenewalUnit,
+} from "@/lib/payment-plans-ui/renewal";
 import {
   agreementOutcomeWords,
   sendExtensionAgreements,
@@ -275,6 +282,10 @@ export function readPreview(reply: Record<string, unknown>): PreviewResult {
   return { occurrences: Array.isArray(occ) ? (occ as OccurrenceDraft[]) : [], owedCents: typeof owed === "number" ? owed : null };
 }
 
+/** Why Edit cannot make a plan keep renewing (said by the dialog and by `update`). */
+export const EDIT_CANNOT_RENEW =
+  "Edit changes the payments on this plan; it can't make the plan keep renewing the rental. To renew the rental, cancel this plan and set up a new one.";
+
 /**
  * The plan fields `preview` / `create` / `update` send: the engine's
  * `PlanForm`. For a split plan it carries NO total — the server sizes it from
@@ -282,6 +293,64 @@ export function readPreview(reply: Record<string, unknown>): PreviewResult {
  */
 export function draftBody(d: PlanDraft) {
   return { form: draftToPlanForm(d) };
+}
+
+/* ── what one renewal period costs (D9) ──────────────────────────────────── */
+
+/**
+ * One renewal period's price from a `preview` reply —
+ * `summary.renewal.breakdown` (engine PlanDraft.summary.renewal), integer
+ * cents. Null when the reply carries no such breakdown.
+ */
+export function readRenewalQuote(reply: Record<string, unknown>): RenewalPriceBreakdown | null {
+  const summary = (reply.summary ?? null) as Record<string, unknown> | null;
+  const renewal = (summary?.renewal ?? null) as Record<string, unknown> | null;
+  const b = (renewal?.breakdown ?? null) as Record<string, unknown> | null;
+  if (!b) return null;
+  const cents = (k: string) => (typeof b[k] === "number" && Number.isSafeInteger(b[k]) && (b[k] as number) >= 0 ? (b[k] as number) : null);
+  const rentalCents = cents("rentalCents");
+  const taxCents = cents("taxCents");
+  const serviceFeeCents = cents("serviceFeeCents");
+  const totalCents = cents("totalCents");
+  if (rentalCents === null || taxCents === null || serviceFeeCents === null || totalCents === null || totalCents < 1) return null;
+  return { rentalCents, taxCents, serviceFeeCents, totalCents };
+}
+
+/**
+ * The price the SERVER will charge for one period of this renewing draft: its
+ * own `preview` (no writes), read from `summary.renewal`. The price is the
+ * rental's rate (less its discount) plus tax and fees — one rental-period rate
+ * per renewal, whatever the period — so it is asked once per period choice,
+ * not on every keystroke. Null when there is nothing to price.
+ */
+export function useRenewalQuote(rentalId: string | null | undefined, draft: PlanDraft | null | undefined): RenewalQuote | null {
+  const { tenant } = useTenant();
+  const { enabled: featureOn } = usePaymentPlansFeature();
+  const renewal = draft?.renewal ?? null;
+  const q = useQuery({
+    queryKey: [
+      "payment-plan-renewal-quote",
+      tenant?.id,
+      rentalId,
+      renewal?.periodUnit ?? null,
+      renewal?.periodCount ?? null,
+      JSON.stringify(renewal?.insurance ?? null),
+      draft?.collectionMethod ?? null,
+    ],
+    enabled: !!tenant && featureOn && !!rentalId && !!renewal,
+    staleTime: 60_000,
+    retry: false,
+    queryFn: async (): Promise<RenewalPriceBreakdown> => {
+      const reply = await invokePaymentPlanManage("preview", { rentalId, ...draftBody(draft!) });
+      const quote = readRenewalQuote(reply);
+      if (!quote) throw new Error("the server did not say what one period costs.");
+      return quote;
+    },
+  });
+  if (!rentalId || !renewal || !featureOn) return null;
+  if (q.data) return { state: "ready", breakdown: q.data };
+  if (q.error) return { state: "error", message: q.error instanceof Error ? q.error.message : String(q.error) };
+  return { state: "loading" };
 }
 
 /* ── extending on the plan (Wave 3) ──────────────────────────────────────── */
@@ -354,6 +423,14 @@ export interface ExtendInput {
   sendAgreement: boolean;
   /** Bonzah cover for the new days; null = none. */
   insurance: RenewalInsurance | null;
+  /**
+   * The period the dialog counted and showed — ALWAYS sent. A renewing plan's
+   * own period (the server uses the plan's, which is the same), else one of
+   * the rental's own periods. Never left for the server to default: a default
+   * that differs from the screen prices days the operator did not see.
+   */
+  periodUnit: RenewalUnit;
+  periodCount: number;
 }
 
 export interface ExtendOutcome {
@@ -407,6 +484,9 @@ export async function extendOnPlan(
     // Explicit null = "no insurance for the new days" — never left for the
     // server to default.
     insurance: input.insurance,
+    // The period on screen, always (D3): never the server's own default.
+    periodUnit: input.periodUnit,
+    periodCount: input.periodCount,
   });
   const ids = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
   const extensionIds = ids(reply.extensionIds);
@@ -484,8 +564,15 @@ export function usePaymentPlanActions(rentalId: string | null | undefined) {
       /** No writes. The server fills the balance from the ledger. */
       preview: (d: PlanDraft) => invokePaymentPlanManage("preview", { rentalId, ...draftBody(d) }).then(readPreview),
       create: (d: PlanDraft) => run("create", "create", draftBody(d), "Payment plan set up"),
-      update: (planId: string, expectedVersion: number, d: PlanDraft, reason: string) =>
-        run("update", "update", { planId, expectedVersion, reason, ...draftBody(d) }, "Payment plan updated"),
+      update: (planId: string, expectedVersion: number, d: PlanDraft, reason: string) => {
+        // Edit never turns a plan into one that renews the rental (the server
+        // refuses it too). Converting is its own, explicit action.
+        if (d.renewal) {
+          toast({ title: "That didn't work", description: EDIT_CANNOT_RENEW, variant: "destructive" });
+          return Promise.reject(new Error(EDIT_CANNOT_RENEW));
+        }
+        return run("update", "update", { planId, expectedVersion, reason, ...draftBody(d) }, "Payment plan updated");
+      },
       pause: (planId: string, reason?: string) => run("pause", "pause", { planId, reason }, "Plan paused — nothing is collected until you resume it"),
       resume: (planId: string) => run("resume", "resume", { planId }, "Plan resumed"),
       cancel: (planId: string, reason?: string) => run("cancel", "cancel", { planId, reason }, "Plan cancelled"),

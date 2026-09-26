@@ -189,7 +189,22 @@ export type Rental = {
   total: number;
   outstanding: number;
   status: "Active" | "Completed" | "Cancelled" | "Pending" | "Upcoming";
+  /** `rentals.approval_status` — a rejected rental takes no balance adjustment (see `rentalRefusalFor`). */
+  approvalStatus?: string | null;
+  /** `rentals.is_pay_as_you_go` — its balance is the daily bills, so it takes no balance adjustment either. */
+  isPayAsYouGo?: boolean | null;
 };
+
+/**
+ * What the customer owes by the SHARED reducer (lib/finances/balance.ts via
+ * `useCustomerBalanceWithStatus`) — the number the Finances canary's balance
+ * header prints. Present only on that canary; the overview rail then shows
+ * this number instead of its own ledger arithmetic, so the two cannot differ.
+ */
+export type BalancePosition =
+  | { state: "loading" }
+  | { state: "error" }
+  | { state: "ready"; netCents: number; outstandingCents: number; creditCents: number };
 
 export type LedgerRow = {
   id: string;
@@ -268,6 +283,8 @@ export type CustomerRecord = {
    *  the closest honest answer to "can I charge them without asking?", since no
    *  card details are held in this database. */
   billing: { stripeCustomerId: string | null; methodsUsed: string[] };
+  /** The shared reducer's balance — Finances canary only (see `BalancePosition`). */
+  position?: BalancePosition;
 };
 
 /* ── what the panels are handed ─────────────────────────────────────────── */

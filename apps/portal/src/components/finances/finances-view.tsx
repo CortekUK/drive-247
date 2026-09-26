@@ -431,6 +431,7 @@ export function FinancesView() {
               finesCapped={finesInGraph && finesStatus.capped}
               onFinesRetry={() => void qc.invalidateQueries({ queryKey: ["fines-enhanced"] })}
               timeZone={tenant?.timezone ?? null}
+              fineSettledDays={fin.fineSettledDays}
               defaultMetric={graphMetric}
             />
           ) : (

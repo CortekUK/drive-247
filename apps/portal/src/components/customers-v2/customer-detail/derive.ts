@@ -8,6 +8,7 @@
  * ────────────────────────────────────────────────────────────────────────── */
 
 import { formatCurrency } from "@/lib/format-utils";
+import { formatCents } from "@/components/balance/balance-words";
 import { addressOf, expiryOf, fmtDate } from "./kit";
 import type { Drift } from "./kit";
 import type { CustomerRecord } from "./types";
@@ -35,6 +36,17 @@ export const signedMoney = (n: number, money: (v: number) => string) =>
  *
  * So `received` counts payments only, and `writtenOff` is reported separately.
  * `outstanding` is unchanged either way — a write-off still settles a charge.
+ *
+ * ON THE FINANCES CANARY the owed figures — `net`, `outstanding`, `credit` —
+ * are NOT worked out here: they are the shared reducer's
+ * (lib/finances/balance.ts via useCustomerBalanceWithStatus, carried in as
+ * `c.position`), the exact number the Money section's header prints. That rule
+ * nets credits (a goodwill Adjustment is a negative charge), skips cancelled,
+ * rejected and pay-as-you-go rentals' charges and not-yet-due rent, and counts
+ * only captured credit — none of which this ledger arithmetic can see — so two
+ * derivations would disagree on exactly the customers an operator is looking
+ * at. `source` says which one answered; "pending" means the reducer has not
+ * yet (or could not), and the rail says so rather than printing a guess.
  */
 export function ledgerTotals(c: CustomerRecord) {
   const charges = c.ledger.filter((r) => r.amount > 0).reduce((s, r) => s + r.amount, 0);
@@ -50,7 +62,35 @@ export function ledgerTotals(c: CustomerRecord) {
   const applied = received - credit;
   const outstanding = Math.max(0, charges - applied - writtenOff);
 
-  return { charges, received, applied, writtenOff, credit, outstanding, net: outstanding - credit };
+  const p = c.position;
+  if (p?.state === "ready") {
+    return {
+      charges,
+      received,
+      applied,
+      writtenOff,
+      credit: p.creditCents / 100,
+      outstanding: p.outstandingCents / 100,
+      net: p.netCents / 100,
+      source: "reducer" as const,
+    };
+  }
+  if (p) {
+    return { charges, received, applied, writtenOff, credit: 0, outstanding: 0, net: 0, source: "pending" as const };
+  }
+  return { charges, received, applied, writtenOff, credit, outstanding, net: outstanding - credit, source: "ledger" as const };
+}
+
+export type LedgerTotals = ReturnType<typeof ledgerTotals>;
+
+/**
+ * An owed figure in the words of whoever computed it: the shared reducer's
+ * number to the cent, formatted exactly as the balance header formats it; the
+ * ledger arithmetic in the rail's own whole-dollar style.
+ */
+export function owedAmountText(totals: LedgerTotals, amount: number, money: (v: number) => string, currency: string): string {
+  if (totals.source === "reducer") return formatCents(Math.round(amount * 100), currency);
+  return money(amount);
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -248,15 +288,17 @@ export function readinessOf(c: CustomerRecord, verifyDrift: Drift[], currency: s
     {
       id: "money",
       label: "Nothing owed",
-      state: totals.net > 0 || unpaidFines.length ? "open" : "ok",
+      state: totals.source === "pending" || totals.net > 0 || unpaidFines.length ? "open" : "ok",
       detail:
-        totals.net > 0
-          ? `${money(totals.net)} outstanding`
-          : unpaidFines.length
-            ? `${unpaidFines.length} unpaid fine${unpaidFines.length === 1 ? "" : "s"}`
-            : totals.credit > 0
-              ? `${money(totals.credit)} in credit`
-              : "Settled",
+        totals.source === "pending"
+          ? "Reading the balance…"
+          : totals.net > 0
+            ? `${owedAmountText(totals, totals.net, money, currency)} outstanding`
+            : unpaidFines.length
+              ? `${unpaidFines.length} unpaid fine${unpaidFines.length === 1 ? "" : "s"}`
+              : totals.credit > 0
+                ? `${owedAmountText(totals, totals.credit, money, currency)} in credit`
+                : "Settled",
       tab: totals.net > 0 ? "money" : unpaidFines.length ? "fines" : "money",
       required: false,
     },

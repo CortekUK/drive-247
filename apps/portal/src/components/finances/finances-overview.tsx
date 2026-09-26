@@ -95,9 +95,14 @@ export const FINANCE_METRIC = {
  * The fine metrics, from the Fines list's own rows: every fine on its issue
  * day (value, and a count), and the paid ones on the day they were paid.
  */
-export function fineMetrics(fines: readonly FineRowLike[], currency: string, timeZone: string | null | undefined): HeroMetric[] {
+export function fineMetrics(
+  fines: readonly FineRowLike[],
+  currency: string,
+  timeZone: string | null | undefined,
+  settledDays?: ReadonlyMap<string, string> | null,
+): HeroMetric[] {
   const issued = finesIssued(fines);
-  const paid = finesPaid(fines, timeZone);
+  const paid = finesPaid(fines, timeZone, settledDays);
   const money = (v: number) => formatCurrency(v, currency);
   return [
     {
@@ -311,6 +316,7 @@ export function FinancesOverview({
   finesCapped = false,
   onFinesRetry,
   timeZone = null,
+  fineSettledDays,
   defaultMetric,
 }: {
   stats: FinanceStats | undefined;
@@ -331,6 +337,8 @@ export function FinancesOverview({
   onFinesRetry?: () => void;
   /** `tenants.timezone`, for the day a fine was paid. */
   timeZone?: string | null;
+  /** Fine id → the day money paid its charge off (`useFinances().fineSettledDays`). */
+  fineSettledDays?: ReadonlyMap<string, string>;
   /** The metric the graph opens on (the view it follows). */
   defaultMetric?: string;
   /** The model's Outstanding ageing (`FinanceSeries.ageing`). */
@@ -354,9 +362,9 @@ export function FinancesOverview({
   const metrics = useMemo(
     () => [
       ...(showChart ? collectedMetrics(collected, currency) : []),
-      ...(fines ? fineMetrics(fines, currency, timeZone) : []),
+      ...(fines ? fineMetrics(fines, currency, timeZone, fineSettledDays) : []),
     ],
-    [showChart, collected, currency, fines, timeZone],
+    [showChart, collected, currency, fines, timeZone, fineSettledDays],
   );
   const buckets = useMemo(() => (stats ? ageingToDraw(ageing, stats) : null), [ageing, stats]);
   const todayDate = useMemo(() => parseLocalDate(today), [today]);

@@ -674,18 +674,24 @@ export function describeReminders(offsets: number[]): string {
   return joinWords([...offsets].sort((a, b) => a - b).map((o) => reminderLabel(o).toLowerCase()));
 }
 
-/** "Renews every week from Fri 9 Oct, each period priced when it starts". */
-export function describeRenewal(p: Pick<StoredPlanShape, "rule" | "renewal">): string {
+/**
+ * "Keeps renewing every week from Fri 9 Oct, each period priced when it
+ * starts" — or, when the server's price for one period is known (the set-up
+ * form asks it), "…, $362.21 each period".
+ */
+export function describeRenewal(p: Pick<StoredPlanShape, "rule" | "renewal">, perPeriod?: { cents: number; currency: string } | null): string {
   const r = p.renewal!;
-  return `Keeps renewing ${describeEvery(r.periodUnit, r.periodCount)} from ${formatDay(p.rule.anchor)}, each period priced when it starts`;
+  const price = perPeriod && perPeriod.cents > 0 ? `${formatMoney(perPeriod.cents, perPeriod.currency)} each period` : "each period priced when it starts";
+  return `Keeps renewing ${describeEvery(r.periodUnit, r.periodCount)} from ${formatDay(p.rule.anchor)}, ${price}`;
 }
 
 /** The whole plan as one sentence, for summaries and confirmations. */
-export function describePlan(p: StoredPlanShape, currency: string): string {
+export function describePlan(p: StoredPlanShape, currency: string, opts?: { perPeriodCents?: number | null }): string {
   if (p.renewal) {
     const cover = hasCoverage(p.renewal.insurance) ? ` Each period is covered by ${describeCoverage(p.renewal.insurance)} insurance.` : "";
     const agreement = p.renewal.sendAgreementEachPeriod ? " An extension agreement is sent each period." : "";
-    return `${describeRenewal(p)}, by ${describeMethod(p.collectionMethod)}.${cover}${agreement}`;
+    const perPeriod = opts?.perPeriodCents ? { cents: opts.perPeriodCents, currency } : null;
+    return `${describeRenewal(p, perPeriod)}, by ${describeMethod(p.collectionMethod)}.${cover}${agreement}`;
   }
   const rule = p.rule;
   const rhythm = rule.freq === "dates" ? describeRhythm(rule) : `${describeRhythm(rule)}, ${describeEnd(rule.end)}`;

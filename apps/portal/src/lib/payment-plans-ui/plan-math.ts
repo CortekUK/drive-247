@@ -13,7 +13,7 @@
  */
 
 import type { AttemptView, EventView, OccurrenceView, PlanView } from "./view-types";
-import type { OccurrenceStatus } from "@/lib/payment-plans/types";
+import type { CollectionMethod, OccurrenceStatus } from "@/lib/payment-plans/types";
 import { dayNumber, formatDay, formatInstant, formatMoney, plural, todayInZone } from "./format";
 import { describeMethod } from "./plan-form-model";
 
@@ -318,6 +318,56 @@ export function occurrenceActions(o: OccurrenceView, ctx: ActionContext): Record
     skip = off("This is the last payment, so there is nothing after it to carry the amount. Record a payment or change the plan instead.");
 
   return { retry, send_link: sendLink, record_payment: record, move_date: move, skip };
+}
+
+/* ── how ONE payment is collected ────────────────────────────────────────── */
+
+/** The three ways a single payment can be collected, in the plan form's order. */
+export const COLLECT_BY: readonly CollectionMethod[] = ["auto_charge", "checkout_link", "manual"];
+
+export interface MethodChoice extends Availability {
+  /** This payment is collected this way now. */
+  current: boolean;
+  /** What else happens if this is chosen (e.g. a link already sent stops working). Null when nothing. */
+  note: string | null;
+}
+
+/**
+ * "Collect by: card / link / I'll record it" for ONE payment, with the reason
+ * each choice cannot be used where it can't — the store's own rule
+ * (pp_set_method: the payment must still be open) and the few the operator
+ * would otherwise hit on the next run:
+ *   - a closed payment (paid, skipped, replaced …) or one mid-charge;
+ *   - a plan that is over;
+ *   - a card charge in flight on it;
+ *   - Square: only "I'll record it" is collected by the plan today.
+ * Switching away from a link releases the link already sent (payment-plan-
+ * manage does it), which the choice says.
+ */
+export function methodChoices(
+  o: OccurrenceView,
+  ctx: ActionContext & { plan: Pick<PlanView, "status"> & Partial<Pick<PlanView, "paymentProvider">> },
+): Record<CollectionMethod, MethodChoice> {
+  const closed = closedReason(o);
+  const planOver = ctx.plan.status === "cancelled" || ctx.plan.status === "completed";
+  const planWhy = ctx.plan.status === "cancelled" ? "The plan was cancelled." : "The plan is complete.";
+  const open = openAttemptOn(o, ctx.attempts);
+  const charging = open !== null && open.method !== "checkout_link";
+  const linkOut = open !== null && open.method === "checkout_link";
+  const out = {} as Record<CollectionMethod, MethodChoice>;
+  for (const m of COLLECT_BY) {
+    const current = o.collectionMethod === m;
+    let why: string | null = null;
+    if (closed) why = closed;
+    else if (planOver) why = planWhy;
+    else if (!ADJUSTABLE.includes(o.status)) why = "This payment can't be changed.";
+    else if (charging) why = "A card payment is going through right now. Wait for it to finish.";
+    else if (current) why = `This payment is already collected by ${describeMethod(m)}.`;
+    else if (m !== "manual" && ctx.plan.paymentProvider === "square") why = "Card charges and payment links are not available for Square yet.";
+    const note = !why && linkOut && m !== "checkout_link" ? "The payment link already sent for it stops working." : null;
+    out[m] = { enabled: why === null, reason: why, current, note };
+  }
+  return out;
 }
 
 /** The payment a skipped one's amount rolls into: the next by NUMBER that can still take it (the store's rule). */

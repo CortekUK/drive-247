@@ -83,7 +83,10 @@ export function AdjustmentHistory({
           const isUndo = !!e.reversesId;
           const title = isUndo ? `Undo · ${KIND_LABELS[e.kind]}` : KIND_LABELS[e.kind];
           const where = e.rentalId ? rentalLabel?.(e.rentalId) ?? null : rentalLabel ? "On the account" : null;
-          const canUndo = canEdit && !isUndo && !e.undoneBy;
+          // A refunded off-platform payment cannot be undone — the server
+          // refuses it (balance_adjustment_reverse), so no button offers it.
+          const refunded = e.kind === "off_platform_payment" && !!e.paymentRefunded;
+          const canUndo = canEdit && !isUndo && !e.undoneBy && !refunded;
           return (
             <li key={e.id} className="flex items-start gap-3 px-5 py-3.5" data-testid="adjustment-entry" data-entry-id={e.id}>
               <div className="min-w-0 flex-1">
@@ -107,9 +110,14 @@ export function AdjustmentHistory({
                     Undone {when(e.undoneBy.at)} by {e.undoneBy.byName || "a team member"}
                   </p>
                 )}
-                {e.reversedWithoutUndo && (
+                {e.reversedWithoutUndo && !refunded && (
                   <p className="mt-1 text-[11px] text-muted-foreground">
                     The payment was reversed elsewhere; the undo is not on this record yet.
+                  </p>
+                )}
+                {refunded && !isUndo && !e.undoneBy && (
+                  <p className="mt-1 text-[11px] text-muted-foreground" data-testid="refunded-no-undo">
+                    Some of this payment was refunded, so it cannot be undone. Record a correction for what is still wrong.
                   </p>
                 )}
               </div>

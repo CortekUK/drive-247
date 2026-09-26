@@ -1,6 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { getConnectAccountId, getStripeClientForRecord, type StripeMode } from '../_shared/stripe-client.ts';
+// [staff-auth:begin]
+import { anonAuthClient, authorizeStaff, checkStaffTenant, staffRefusal } from "../_shared/staff-auth.ts";
+// [staff-auth:end]
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -24,6 +27,19 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
+
+    // [staff-auth:begin] — who may capture a booking payment (2026-09-26)
+    // This captures money on the customer's card. It used to take any caller
+    // the gateway admitted — the public anon key included — and any paymentId.
+    // Now: active staff whose role may edit rentals (the Approve button's
+    // canEdit('rentals')), of the payment's own tenant. _shared/staff-auth.ts.
+    const staff = await authorizeStaff(
+      req,
+      { db: supabase, authClient: anonAuthClient(createClient) },
+      { logPrefix: "[capture-booking-payment]", managerTabs: ["rentals"] },
+    );
+    if (!staff.ok) return staffRefusal(staff, corsHeaders);
+    // [staff-auth:end]
 
     const body: CaptureRequest = await req.json();
     const { paymentId, approvedBy } = body;
@@ -53,6 +69,11 @@ serve(async (req) => {
         }
       );
     }
+
+    // [staff-auth:begin]
+    const staffTenant = checkStaffTenant(staff.caller, payment.tenant_id || payment.rental?.tenant_id, "[capture-booking-payment]");
+    if (!staffTenant.ok) return staffRefusal(staffTenant, corsHeaders);
+    // [staff-auth:end]
 
     // 2. Check if payment is in correct state
     if (payment.capture_status !== "requires_capture") {

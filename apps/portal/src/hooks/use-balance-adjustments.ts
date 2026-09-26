@@ -17,7 +17,10 @@
  *
  * Reads degrade instead of failing: until the migration is applied the table
  * does not exist, and `available` is false — the panel says so and offers
- * nothing that would fail.
+ * nothing that would fail. Whether the table exists is asked ONCE per session
+ * (`useBalanceAdjustmentsFeature`, a GET probe exactly like the payment-plans
+ * gate): a database without it sees one failing request, not one on every
+ * customer and rental page, and the history is never read there.
  */
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, supabaseUntyped } from "@/integrations/supabase/client";
@@ -56,6 +59,18 @@ export interface OffPlatformPaymentRow {
   payment_date: string | null;
   status: string | null;
   rental_id: string | null;
+  /** `payments.refund_amount` — any refund at all means it can no longer be undone here. */
+  refund_amount?: number | string | null;
+}
+
+/**
+ * Some of this payment has gone back to the customer. `balance_adjustment_reverse`
+ * refuses to undo such a payment (the refunded part would count twice), so the
+ * history offers no Undo for it — the same rule, said before the click.
+ */
+export function isRefundedPayment(p: Pick<OffPlatformPaymentRow, "status" | "refund_amount"> | null | undefined): boolean {
+  if (!p) return false;
+  return centsOf(p.refund_amount ?? 0) > 0 || p.status === "Refunded" || p.status === "Partial Refund";
 }
 
 export interface AdjustmentEntry {
@@ -80,6 +95,8 @@ export interface AdjustmentEntry {
   paymentMethod: string | null;
   /** Off-platform only: the payment was reversed (e.g. from Finances) but no undo was recorded here. */
   reversedWithoutUndo: boolean;
+  /** Off-platform only: some or all of the payment was refunded, so it cannot be undone (`isRefundedPayment`). */
+  paymentRefunded?: boolean;
 }
 
 /** An off-platform payment with no audit row — recorded, but its "why" was never saved. */
@@ -141,6 +158,7 @@ export function buildAdjustmentHistory(
         paymentStatus,
         paymentMethod: pay?.method ?? null,
         reversedWithoutUndo: r.kind === "off_platform_payment" && !r.reverses_id && !undo && paymentStatus === "Reversed",
+        paymentRefunded: r.kind === "off_platform_payment" && isRefundedPayment(pay),
       };
     })
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
@@ -153,10 +171,69 @@ export function buildAdjustmentHistory(
   return { entries, unrecorded };
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   The gate — does this database have the table yet?
+   ══════════════════════════════════════════════════════════════════════════ */
+
+export type BalanceProbeResult = "available" | "missing" | "error";
+
+/** The minimum the probe needs from a Supabase client — so tests can hand in a stub. */
+export interface BalanceProbeClient {
+  from: (table: string) => {
+    select: (columns: string) => { limit: (n: number) => PromiseLike<{ data?: unknown; error: unknown }> };
+  };
+}
+
+/**
+ * Is `balance_adjustments` there? A GET of at most one id — never a HEAD: on a
+ * database without the table PostgREST answers HEAD with a bodiless 404, which
+ * postgrest-js turns into a SUCCESS (see lib/payment-plans-ui/feature.ts).
+ * "available" also requires a real rows array. RLS lets staff read their own
+ * tenant's rows, and an empty table answers `[]`.
+ */
+export async function probeBalanceAdjustments(client: BalanceProbeClient): Promise<BalanceProbeResult> {
+  try {
+    const { data, error } = await client.from("balance_adjustments").select("id").limit(1);
+    if (error) return isMissingSchema(error) ? "missing" : "error";
+    return Array.isArray(data) ? "available" : "error";
+  } catch (err) {
+    return isMissingSchema(err) ? "missing" : "error";
+  }
+}
+
+/** Its own prefix, so the `[BALANCE_ADJUSTMENTS_KEY]` invalidation after every write does not re-probe. */
+export function balanceAdjustmentsAvailableKey(tenantId: string | undefined) {
+  return ["balance-adjustments-available", tenantId] as const;
+}
+
+/**
+ * The probe, once per session: "missing" is a settled answer (the migration
+ * is applied separately, and a reload picks it up), so every customer and
+ * rental page after the first sends no request that fails. A transient error
+ * is retried, and fails closed.
+ */
+export function useBalanceAdjustmentsFeature() {
+  const { tenant } = useTenant();
+  const probe = useQuery({
+    queryKey: balanceAdjustmentsAvailableKey(tenant?.id),
+    queryFn: async () => {
+      const result = await probeBalanceAdjustments(supabaseUntyped as unknown as BalanceProbeClient);
+      if (result === "error") throw new Error("Could not check whether balance adjustments are switched on.");
+      return result;
+    },
+    enabled: !!tenant,
+    staleTime: Number.POSITIVE_INFINITY,
+    gcTime: Number.POSITIVE_INFINITY,
+    retry: 2,
+  });
+  return { state: probe.data, error: probe.error as Error | null };
+}
+
 export function useBalanceAdjustments(scope: BalanceScope | null) {
   const { tenant } = useTenant();
   const customerId = scope?.customerId ?? null;
   const rentalId = scope?.rentalId ?? null;
+  const feature = useBalanceAdjustmentsFeature();
 
   const query = useQuery({
     queryKey: [BALANCE_ADJUSTMENTS_KEY, tenant?.id, customerId, rentalId],
@@ -186,7 +263,7 @@ export function useBalanceAdjustments(scope: BalanceScope | null) {
 
       let pq = supabaseUntyped
         .from("payments")
-        .select("id, amount, method, payment_date, status, rental_id")
+        .select("id, amount, method, payment_date, status, rental_id, refund_amount")
         .eq("tenant_id", tenant!.id)
         .eq("customer_id", customerId)
         .eq("is_off_platform", true);
@@ -196,15 +273,17 @@ export function useBalanceAdjustments(scope: BalanceScope | null) {
 
       return { available: true, ...buildAdjustmentHistory(rows, names, (pays ?? []) as OffPlatformPaymentRow[]) };
     },
-    enabled: !!tenant && !!customerId,
+    // Only once the probe has seen the table: before the migration, no history
+    // read is ever sent.
+    enabled: !!tenant && !!customerId && feature.state === "available",
   });
 
   return {
-    available: query.data?.available,
+    available: feature.state === "missing" ? false : feature.state === "available" ? query.data?.available : undefined,
     entries: query.data?.entries ?? [],
     unrecorded: query.data?.unrecorded ?? [],
-    isLoading: query.isLoading,
-    error: query.error as Error | null,
+    isLoading: feature.state === undefined ? !feature.error : query.isLoading,
+    error: (feature.error ?? (query.error as Error | null)) as Error | null,
     refetch: query.refetch,
   };
 }

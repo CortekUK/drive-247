@@ -5,6 +5,10 @@ import {
   getStripeClientForRecord,
   type StripeMode,
 } from "../_shared/stripe-client.ts";
+// [staff-auth:begin]
+import { corsHeaders } from "../_shared/cors.ts";
+import { anonAuthClient, authorizeStaff, checkStaffTenant, staffRefusal } from "../_shared/staff-auth.ts";
+// [staff-auth:end]
 
 interface RefundInstallmentRequest {
   rentalId: string;
@@ -31,6 +35,20 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
+
+    // [staff-auth:begin] — who may refund a rental's installments (2026-09-26)
+    // This refunds every paid installment at Stripe and cancels the plan. It
+    // used to take any caller the gateway admitted — the public anon key
+    // included — and any rentalId. Now: active staff whose role may edit
+    // rentals (the rejection dialog's canEdit('rentals')), of the plan's own
+    // tenant. _shared/staff-auth.ts.
+    const staff = await authorizeStaff(
+      req,
+      { db: supabase, authClient: anonAuthClient(createClient) },
+      { logPrefix: "[refund-installment-payments]", managerTabs: ["rentals"] },
+    );
+    if (!staff.ok) return staffRefusal(staff, corsHeaders);
+    // [staff-auth:end]
 
     const { rentalId, reason, tenantId: requestTenantId }: RefundInstallmentRequest = await req.json();
 
@@ -69,6 +87,16 @@ Deno.serve(async (req) => {
         results: [],
       });
     }
+
+    // [staff-auth:begin]
+    const staffTenant = checkStaffTenant(staff.caller, plan.tenant_id, "[refund-installment-payments]");
+    if (!staffTenant.ok) return staffRefusal(staffTenant, corsHeaders);
+    // The body's tenantId picks the Stripe account below; it must name the
+    // row's own tenant, or a caller could act with another business's account.
+    if (requestTenantId && requestTenantId !== plan.tenant_id) {
+      return staffRefusal({ status: 403, error: "This belongs to a different business." }, corsHeaders);
+    }
+    // [staff-auth:end]
 
     const tenantId = requestTenantId || plan.tenant_id;
 

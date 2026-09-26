@@ -3,37 +3,51 @@
  * (docs/PAYMENTS_ROADMAP.md Wave 4, assumption A6; spec §9).
  *
  * The runner is the `e2e-runner` edge function (supabase/functions/e2e-runner,
- * guards G0–G11 in its header), with its evidence in `dev_sim_runs` and
+ * guards G0–G12 in its header), with its evidence in `dev_sim_runs` and
  * `dev_sim_run_steps` (supabase/migrations/20260926120300_dev_sim_runs.sql).
  * Neither may exist yet on the project the portal talks to, so every shape
  * below is parsed tolerantly and anything that does not parse is reported,
  * never guessed at.
  *
- * THE RUNNER'S ACTIONS (all POST JSON, camelCase, the caller's own session):
+ * THE RUNNER'S ACTIONS, exactly as supabase/functions/e2e-runner/index.ts
+ * answers them (snake_case both ways; the caller's own session). The page and
+ * the runner are held to each other by
+ * src/__tests__/lib/e2e-runner-cross-contract.test.ts, which feeds the
+ * runner's OWN reply builders through the parsers below.
  *
- *   list                   → { ok, scenarios: catalogueSummary(), environment:
- *                              { stripeTestKey, sandboxTenant }, quiet }
- *                              No writes. A summary carries no steps, so the
- *                              expected outcome of a scenario is fetched with
- *                              `preview` when the tester opens it.
- *   preview  { scenarioId } → { ok, preview: true, writes, scenario, runnable,
- *                              assumptions, environment, quiet, wouldStart }
- *                              No writes (G7: a client whose writes throw;
- *                              `writes` lists any it refused, normally none).
- *                              It checks the guards; it does NOT list what a run
- *                              would write — this page reads that from the
- *                              scenario itself (`plannedWrites`).
- *   start    { scenarioId } → creates the run row and the fixture, runs steps
- *                              for up to ~100 s, answers a RunOutcome:
- *                              { ok, runId, status, nextStep, waitingFor,
- *                                passCount, failCount, deferredSeconds?, error? }
- *   advance  { runId }      → more steps of a `running` run. 409 when the run is
+ *   GET (no body)          → { ok, runner: { version, tenant_slug, stripe_mode,
+ *                              guards }, catalogue: Scenario[] (steps and all),
+ *                              environment: { stripeTestKey, sandboxTenant },
+ *                              quiet }      No writes. (POST list is the same.)
+ *   preview { scenario_ids }
+ *                          → { ok, preview: { preview_id, tenant_slug,
+ *                              stripe_mode, expires_at, scenarios: [{
+ *                              scenario_id, writes, stripe, crons, runnable,
+ *                              assumptions }] }, problems, writes, environment,
+ *                              quiet }
+ *                              ZERO writes (G7: a client whose writes throw;
+ *                              top-level `writes` lists any it refused,
+ *                              normally none). Per scenario, the runner's own
+ *                              plan (preview-plan.ts) of what a run writes,
+ *                              charges and fires. `preview_id` is null unless
+ *                              every scenario could start; it names the
+ *                              scenarios it covers and is good for 15 minutes.
+ *   run { scenario_id, preview_id, run_id, confirm }
+ *                          → the run row (under the page-minted run_id) and the
+ *                              fixture, then steps for up to ~100 s; answers a
+ *                              RunOutcome { ok, run_id, status, next_step,
+ *                              waiting_for, pass_count, fail_count,
+ *                              deferred_seconds?, run_error? }. Refused (412)
+ *                              without the confirm sentence or a fresh preview
+ *                              of THAT scenario (G12) — so the page previews
+ *                              each scenario again just before it starts it.
+ *   advance  { run_id }     → more steps of a `running` run. 409 when the run is
  *                              leased by another request (G11) or not running.
- *                              `deferredSeconds` = wait that long first (G8:
+ *                              `deferred_seconds` = wait that long first (G8:
  *                              a real cron's window must pass).
- *   continue { runId }      → a person paid the link a `human` step showed.
- *   abort    { runId }      → stop the run; the fixture is parked.
- *   close    { runId }      → a finished run's fixture rental is Closed.
+ *   continue { run_id }     → a person paid the link a `human` step showed.
+ *   abort    { run_id }     → stop the run; the fixture is parked.
+ *   close    { run_id }     → a finished run's fixture rental is Closed.
  *
  * A run is ONE scenario (one dev_sim_runs row); "Run group" / "Run all" are a
  * queue on this page, one run after another, under one confirm.
@@ -339,7 +353,7 @@ export interface CatalogueScenario {
   runnableLive: boolean;
   /** True when this is the full scenario (steps and all), not the list's summary. */
   full: boolean;
-  /** The scenario exactly as sent — `plannedWrites` reads its fixture and steps. */
+  /** The scenario exactly as sent. */
   raw: unknown;
 }
 
@@ -380,12 +394,6 @@ export function readScenario(raw: unknown): CatalogueScenario | null {
   };
 }
 
-/** A summary entry, completed by the full scenario once the tester opens it (the summary's verdict stands). */
-export function withFullScenario(summary: CatalogueScenario, full: CatalogueScenario | null): CatalogueScenario {
-  if (!full || full.id !== summary.id) return summary;
-  return { ...full, runnableLive: summary.runnableLive && full.runnableLive };
-}
-
 /* ── list: the runner, its checks, its catalogue ────────────────────────── */
 
 /** One of the runner's own checks, in its words (a guards.ts `Verdict`). */
@@ -405,6 +413,8 @@ export interface RunnerInfo {
   checks: RunnerCheck[];
   /** How the page knows what it shows — said on screen. */
   basis: string[];
+  /** The guards the runner says it enforces, in its own words (index.ts GUARD_SUMMARY). */
+  guards: string[];
 }
 
 export type RunnerList =
@@ -456,7 +466,7 @@ export function parseRunnerList(body: unknown): RunnerList {
   }
   return {
     ok: true,
-    runner: { version: str(r.version), tenantSlug, stripeMode, checks, basis },
+    runner: { version: str(r.version), tenantSlug, stripeMode, checks, basis, guards: strings(r.guards) },
     catalogue,
   };
 }
@@ -511,25 +521,43 @@ export function allScenarioIds(catalogue: readonly CatalogueScenario[]): string[
 
 /* ── preview ─────────────────────────────────────────────────────────────── */
 
-/** One scenario's preview, as the runner answered it. */
+/** One line of what a run would do, in words: where it lands, and what. */
+export interface PlannedWrite {
+  /** A table, a Stripe TEST object, or a job. */
+  where: string;
+  what: string;
+}
+
+/** One scenario of a preview, as the runner answered it (`preview.scenarios[i]`). */
 export interface ScenarioPreview {
   scenarioId: string;
-  /** The FULL scenario (steps and expectations). */
-  scenario: CatalogueScenario | null;
   runnable: RunnerCheck;
   /** Tenant settings the expected values were derived under, and any that differ now. */
   assumptionsOk: boolean | null;
   assumptionsFailed: string[];
-  checks: RunnerCheck[];
-  /** Writes the preview's read-only client REFUSED — proof it wrote nothing; normally empty. */
-  refusedWrites: string[];
-  wouldStart: boolean | null;
+  /** The runner's own plan (preview-plan.ts): rows it would write, Stripe TEST objects, jobs it would fire. */
+  writes: PlannedWrite[];
+  stripe: PlannedWrite[];
+  crons: PlannedWrite[];
   raw: unknown;
 }
 
-/** The preview of a whole run request: one per scenario, in run order. */
+/** A whole preview answer: one per scenario asked for, plus what covers them all. */
 export interface RunPreview {
+  /** What a run must carry (G12). Null unless every scenario could start. */
+  previewId: string | null;
+  expiresAt: string | null;
+  tenantSlug: string | null;
+  stripeMode: string | null;
   items: ScenarioPreview[];
+  /** The runner's own reasons it would refuse, verbatim. */
+  runnerProblems: string[];
+  /** The runner's environment checks (G3), for every scenario alike. */
+  checks: RunnerCheck[];
+  /** Writes the preview's read-only client REFUSED — proof it wrote nothing; normally empty. */
+  refusedWrites: string[];
+  /** The whole answer, for the evidence file. */
+  raw: unknown;
 }
 
 const verdictOf = (name: string, v: unknown): RunnerCheck => ({
@@ -538,31 +566,83 @@ const verdictOf = (name: string, v: unknown): RunnerCheck => ({
   message: isObj(v) ? str(v.message) ?? str(v.error) : "not reported",
 });
 
-export function parseScenarioPreview(body: unknown, requestedId: string): ScenarioPreview | null {
-  if (!isObj(body) || body.ok === false) return null;
-  const scenario = readScenario(body.scenario);
-  const assumptions = isObj(body.assumptions) ? body.assumptions : null;
+const countWords = (n: number | null) => (n === null ? "as many rows as the real code writes" : `${n} row${n === 1 ? "" : "s"}`);
+
+function readPlan(v: unknown, kind: "writes" | "stripe" | "crons"): PlannedWrite[] {
+  return arr(v)
+    .filter(isObj)
+    .map((w) => {
+      const note = str(w.note) ?? "";
+      if (kind === "writes") {
+        const action = str(w.action) ?? "write";
+        return { where: str(w.table) ?? "?", what: `${action} ${countWords(num(w.count))}${note ? ` — ${note}` : ""}` };
+      }
+      if (kind === "stripe") return { where: `Stripe TEST ${str(w.object) ?? "object"}`, what: note };
+      return { where: str(w.job) ?? "a job", what: note };
+    });
+}
+
+function readScenarioPreview(v: unknown): ScenarioPreview | null {
+  if (!isObj(v)) return null;
+  const scenarioId = str(pick(v, "scenario_id", "scenarioId"));
+  if (!scenarioId) return null;
+  const assumptions = isObj(v.assumptions) ? v.assumptions : null;
   return {
-    scenarioId: scenario?.id ?? requestedId,
-    scenario,
-    runnable: verdictOf("the scenario may run live (G4)", body.runnable),
+    scenarioId,
+    runnable: verdictOf("the scenario may run live (G4)", v.runnable),
     assumptionsOk: assumptions ? assumptions.ok === true : null,
     assumptionsFailed: assumptions
-      ? arr(assumptions.failed).map((f) => (typeof f === "string" ? f : isObj(f) ? str(f.message) ?? str(f.assumption) ?? JSON.stringify(f) : String(f)))
+      ? arr(assumptions.failed).map((f) => {
+          if (typeof f === "string") return f;
+          if (!isObj(f)) return String(f);
+          const name = str(f.message) ?? str(f.assumption) ?? JSON.stringify(f);
+          return "actual" in f && f.actual !== undefined ? `${name} (now ${JSON.stringify(f.actual)})` : name;
+        })
       : [],
+    writes: readPlan(v.writes, "writes"),
+    stripe: readPlan(v.stripe, "stripe"),
+    crons: readPlan(v.crons, "crons"),
+    raw: v,
+  };
+}
+
+/** index.ts's preview answer; null when it is not one (the caller says so and runs nothing). */
+export function parseRunPreview(body: unknown): RunPreview | null {
+  if (!isObj(body) || body.ok === false || !isObj(body.preview)) return null;
+  const p = body.preview;
+  const items: ScenarioPreview[] = [];
+  for (const raw of arr(p.scenarios)) {
+    const item = readScenarioPreview(raw);
+    if (item) items.push(item);
+  }
+  return {
+    previewId: str(pick(p, "preview_id", "previewId")),
+    expiresAt: str(pick(p, "expires_at", "expiresAt")),
+    tenantSlug: str(pick(p, "tenant_slug", "tenantSlug")),
+    stripeMode: str(pick(p, "stripe_mode", "stripeMode")),
+    items,
+    runnerProblems: strings(body.problems),
     checks: readChecks(body.environment),
     refusedWrites: strings(body.writes),
-    wouldStart: typeof body.wouldStart === "boolean" ? body.wouldStart : null,
     raw: body,
   };
 }
 
 /**
- * Why this preview may NOT be confirmed, or an empty list. The confirm button
- * is disabled while anything is listed.
+ * Why this preview may NOT be confirmed (or started), or an empty list. The
+ * confirm button is disabled while anything is listed. The runner's own
+ * reasons come first, verbatim; the page then adds what it sees for itself
+ * — a second opinion that never passes what the runner refused, and refuses
+ * what the runner did not claim (another tenant or mode, no preview id).
  */
 export function previewProblems(preview: RunPreview, requested: readonly string[]): string[] {
-  const out: string[] = [];
+  const out: string[] = [...preview.runnerProblems];
+  const said = (text: string) => out.some((p) => p.includes(text));
+  if (preview.tenantSlug !== NORTHWIND) out.push(`The preview is for tenant "${preview.tenantSlug ?? "?"}", not ${NORTHWIND}.`);
+  if (preview.stripeMode !== REQUIRED_STRIPE_MODE) out.push(`The preview reports Stripe mode "${preview.stripeMode ?? "?"}"; live runs are offered only in test mode.`);
+  if (preview.checks.length === 0) out.push("The preview did not report the runner's environment checks (G3).");
+  for (const c of preview.checks) if (!c.ok && !said(c.message ?? c.name)) out.push(`${c.name} — ${c.message ?? "failed"}.`);
+  if (preview.refusedWrites.length) out.push(`The preview tried to write (${preview.refusedWrites.join(", ")}) and was stopped — that is a runner fault.`);
   const byId = new Map(preview.items.map((p) => [p.scenarioId, p] as const));
   for (const id of requested) {
     const p = byId.get(id);
@@ -570,126 +650,33 @@ export function previewProblems(preview: RunPreview, requested: readonly string[
       out.push(`The runner gave no preview for ${id}.`);
       continue;
     }
-    if (!p.scenario) out.push(`${id}: the preview did not include the scenario, so what it would write cannot be shown.`);
-    if (!p.runnable.ok) out.push(`${id}: the runner will not run it — ${p.runnable.message ?? "no reason given"}.`);
-    if (p.assumptionsOk === false) {
+    const aboutIt = out.some((x) => x.startsWith(`${id}:`));
+    if (!p.runnable.ok && !aboutIt) out.push(`${id}: the runner will not run it — ${p.runnable.message ?? "no reason given"}.`);
+    if (p.assumptionsOk === false && !aboutIt) {
       out.push(`${id}: northwind's settings differ from the ones its expected values assume${p.assumptionsFailed.length ? ` (${p.assumptionsFailed.join("; ")})` : ""}.`);
     }
-    if (p.assumptionsOk === null) out.push(`${id}: the preview did not check the tenant's settings.`);
-    for (const c of p.checks) if (!c.ok) out.push(`${id}: ${c.name} — ${c.message ?? "failed"}.`);
-    if (p.refusedWrites.length) out.push(`${id}: the preview tried to write (${p.refusedWrites.join(", ")}) and was stopped — that is a runner fault.`);
-    if (p.wouldStart === false && p.runnable.ok && p.assumptionsOk !== false && p.checks.every((c) => c.ok)) {
-      out.push(`${id}: the runner says it would not start.`);
-    }
+    if (p.runnable.ok && p.assumptionsOk === null) out.push(`${id}: the preview did not check the tenant's settings.`);
+    if (p.runnable.ok && p.writes.length === 0) out.push(`${id}: the runner did not say what a run would write, so it cannot be confirmed.`);
   }
   const extra = preview.items.map((p) => p.scenarioId).filter((id) => !requested.includes(id));
   if (extra.length) out.push(`The preview includes scenarios that were not asked for: ${extra.join(", ")}.`);
+  if (!preview.previewId && out.length === 0) out.push("The runner issued no preview id, so it would refuse to start this (G12).");
   return out;
 }
 
-export interface PlannedWrite {
-  /** Where it lands: a table, "Stripe TEST", or an edge function that writes. */
-  where: string;
-  what: string;
-}
+/* ── the requests, exactly as index.ts reads them ─────────────────────────── */
 
-const CARD_WORDS: Record<string, string> = {
-  visa: "Visa test card (always succeeds)",
-  declined: "test card that attaches, then declines every off-session charge",
-  auth_required: "test card that asks for authentication",
-};
-
-/**
- * What a run of this scenario writes, read from the scenario itself — its
- * fixture and its steps — following what e2e-runner's runner.ts does for each.
- * The runner's own preview checks the guards but does not list writes, so the
- * page says where this list comes from.
- */
-export function plannedWrites(scenario: CatalogueScenario): PlannedWrite[] {
-  const raw = isObj(scenario.raw) ? scenario.raw : {};
-  const fx = isObj(raw.fixture) ? raw.fixture : null;
-  const out: PlannedWrite[] = [
-    { where: "dev_sim_runs", what: "1 row for this run (the evidence)" },
-    { where: "dev_sim_run_steps", what: `${scenario.stepCount + 1} rows — the fixture and each step, with every check` },
-  ];
-  if (!fx) return out;
-  out.push({ where: "customers", what: "1 fixture customer named E2E-FIXTURE…, at an @e2e.drive247.test address, no phone" });
-  const card = str(fx.card);
-  if (card) {
-    out.push({
-      where: "Stripe TEST",
-      what: `a customer with the ${CARD_WORDS[card] ?? `"${card}" test card`} (sandbox-fixture-setup), and a $1.00 hold it places, cancelled at once`,
-    });
-  }
-  out.push({ where: "rentals", what: "1 fixture rental, no vehicle, marked as this run's fixture and registered in dev_sim_fixtures" });
-  const charges = arr(fx.charges).filter(isObj);
-  if (charges.length) {
-    out.push({
-      where: "ledger_entries",
-      what: `${charges.length} booking charge${charges.length === 1 ? "" : "s"}: ${charges
-        .map((c) => `${str(c.category) ?? "Charge"} ${isMoney(c.amount) ? formatCents(c.amount.cents) : "?"}`)
-        .join(", ")}`,
-    });
-  }
-  if (isObj(fx.installments)) {
-    const n = num(fx.installments.count) ?? 0;
-    out.push({
-      where: "installment_plans, scheduled_installments",
-      what: `1 parked plan and ${n} installment${n === 1 ? "" : "s"} of ${isMoney(fx.installments.amount) ? formatCents(fx.installments.amount.cents) : "?"}`,
-    });
-  }
-  if (isObj(fx.plan)) {
-    const n = num(fx.plan.count) ?? 0;
-    out.push({ where: "payment-plan-manage", what: `a payment plan of ${n} occurrence${n === 1 ? "" : "s"}, created the way the operator creates one` });
-  }
-  for (const st of arr(raw.steps)) {
-    if (!isObj(st)) continue;
-    const m = isMoney(st.amount) ? formatCents(st.amount.cents) : "?";
-    switch (st.kind) {
-      case "charge_saved_card":
-        out.push({ where: "charge-saved-card", what: `a Stripe TEST charge of ${m} on the saved card, its payment row and allocation` });
-        break;
-      case "record_payment":
-        out.push({ where: "payments", what: `a ${str(st.method) ?? "manual"} payment of ${m}, applied by apply-payment` });
-        break;
-      case "refund":
-        out.push({ where: "process-refund", what: `a Stripe TEST refund of ${m} of ${str(st.category) ?? "the charge"}, and its Refund ledger row` });
-        break;
-      case "extend_manually":
-        out.push({ where: "create-extension-checkout", what: `an extension of ${String(st.days)} day(s) for ${m}: its charge and a Stripe TEST payment link` });
-        break;
-      case "pause_auto_extend":
-      case "resume_auto_extend":
-        out.push({ where: "rentals", what: `automatic renewal ${st.kind === "pause_auto_extend" ? "paused" : "resumed"} on the fixture` });
-        break;
-      case "swap_card":
-        out.push({ where: "Stripe TEST", what: `the fixture customer's card changed to the ${CARD_WORDS[str(st.card) ?? ""] ?? "other test card"}` });
-        break;
-      case "advance":
-        out.push({ where: "e2e_shift_fixture", what: `the fixture's ${str(st.domain) ?? ""} dates moved ${String(st.days)} day(s) into the past — nothing else's` });
-        break;
-      case "fire":
-        out.push({
-          where: str(st.job) ?? "a sandbox job",
-          what: `run for the fixture only (only_rental_id)${st.copies === 2 ? ", twice at once" : ""} — whatever it writes for that rental`,
-        });
-        break;
-      case "tick_plan":
-      case "crash_after_charge":
-        out.push({ where: "payment-plan engine", what: `a tick for the fixture's plan only${st.kind === "crash_after_charge" ? ", with a crash after the charge" : ""}` });
-        break;
-      case "expire_latest_link":
-        out.push({ where: "Stripe TEST", what: "the latest checkout session expired" });
-        break;
-      case "replay_webhook":
-        out.push({ where: "stripe-webhook-test", what: "the fixture's own checkout.session.completed delivered a second time" });
-        break;
-      default:
-        break; // check, tie_out, human: the runner reads; a person pays a TEST link.
-    }
-  }
-  return out;
-}
+export const listRequest = () => ({ action: "list" }) as const;
+export const previewRequest = (scenarioIds: readonly string[]) => ({ action: "preview", scenario_ids: [...scenarioIds] });
+/** A run: the confirm sentence, the preview it was confirmed on, and the run id this page minted. */
+export const runRequest = (scenarioId: string, previewId: string, runId: string) => ({
+  action: "run",
+  scenario_id: scenarioId,
+  preview_id: previewId,
+  run_id: runId,
+  confirm: CONFIRM_SENTENCE,
+});
+export const runActionRequest = (action: "advance" | "continue" | "abort" | "close", runId: string) => ({ action, run_id: runId });
 
 /* ── an answer from start / advance / continue ───────────────────────────── */
 
@@ -698,6 +685,7 @@ export interface RunOutcome {
   status: RunStatus | null;
   /** Wait this long before the next advance (a real cron's window, G8). */
   deferredSeconds: number | null;
+  /** Why the run ERRORED (`run_error`). The call itself worked — a refusal is ok:false instead. */
   error: string | null;
 }
 
@@ -708,7 +696,7 @@ export function parseOutcome(body: unknown): RunOutcome {
     runId: str(pick(o, "run_id", "runId")),
     status: run && run.status !== "unknown" ? run.status : null,
     deferredSeconds: num(pick(o, "deferred_seconds", "deferredSeconds")),
-    error: str(o.error),
+    error: str(pick(o, "run_error", "runError")),
   };
 }
 
@@ -1036,6 +1024,8 @@ export function buildEvidence(args: {
   runner: RunnerInfo | null;
   catalogue: readonly CatalogueScenario[];
   confirmedPreview: RunPreview | null;
+  /** The fresh preview each run was started under (scenario id → preview_id, G12). */
+  startedUnder?: Readonly<Record<string, string>>;
   now?: Date;
 }) {
   const { runs, runner, catalogue, confirmedPreview } = args;
@@ -1047,7 +1037,8 @@ export function buildEvidence(args: {
     tenant: NORTHWIND,
     stripeMode: runner?.stripeMode ?? null,
     runner,
-    confirmedPreview: confirmedPreview ? confirmedPreview.items.map((p) => p.raw) : null,
+    confirmedPreview: confirmedPreview ? confirmedPreview.raw : null,
+    startedUnder: args.startedUnder ?? {},
     runs: runs.map(({ run, steps }) => {
       const spec = run.scenario ?? byId.get(run.scenarioId) ?? null;
       const counts = runCounts(steps);

@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { defaultPlanForm, updateForm, type PlanContext, type PlanFormState } from "@/lib/payment-plans-ui/plan-form-model";
 import { computePreview, type PreviewState } from "@/lib/payment-plans-ui/preview";
 import type { ISODate } from "@/lib/payment-plans-ui/format";
+import type { RenewalQuote } from "@/lib/payment-plans-ui/renewal";
 import { PaymentPlanForm } from "./payment-plan-form";
 import { SchedulePreview } from "./schedule-preview";
 import { RenewalPreview } from "./renewal-preview";
@@ -37,6 +38,7 @@ export function PaymentPlanComposer({
   layout = "split",
   minStart,
   balanceLabel,
+  renewalQuote,
 }: {
   state: PlanFormState;
   onChange: (next: PlanFormState) => void;
@@ -48,6 +50,12 @@ export function PaymentPlanComposer({
   layout?: "split" | "stacked";
   minStart?: ISODate | null;
   balanceLabel?: string;
+  /**
+   * What one renewal period costs, from the server's own preview
+   * (PlanDraft.summary.renewal). Absent where there is no rental to ask about
+   * yet (New Rental) — the form then says how a period is priced instead.
+   */
+  renewalQuote?: RenewalQuote | null;
 }) {
   const onMove = (seq: number, to: ISODate | null) => {
     const others = state.overrides.filter((o) => o.seq !== seq);
@@ -65,10 +73,11 @@ export function PaymentPlanComposer({
         currency={currency}
         minStart={minStart}
         error={preview.ok === false ? { field: preview.field, message: preview.message } : null}
+        renewalQuote={renewalQuote}
       />
       {preview.ok && preview.renewal ? (
-        // Keeps renewing: its first periods, each "priced when it starts".
-        <RenewalPreview preview={preview} ctx={ctx} currency={currency} />
+        // Keeps renewing: its first periods, each at the server's price.
+        <RenewalPreview preview={preview} ctx={ctx} currency={currency} quote={renewalQuote} />
       ) : (
         <SchedulePreview
           preview={preview}

@@ -5,6 +5,13 @@
  * caller offers renewing, one that should keep renewing) and "Edit" (a
  * running plan). Both are the composer in a dialog; Edit adds the one thing an
  * operator must see before changing a plan: exactly what changes.
+ *
+ * Set up, renewing: the price of one period is the SERVER's (its own preview,
+ * `useRenewalQuote`), shown before anything is saved.
+ *
+ * Edit never offers "keeps renewing": turning a plan that collects a balance
+ * into one that renews the rental is not a change to its schedule (the server
+ * refuses it), so the answer is simply not on the Edit form.
  */
 
 import { useMemo, useState } from "react";
@@ -14,6 +21,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { inputCls } from "@/components/rentals-v2/rental-detail/_kit";
 import { cn } from "@/lib/utils";
 import { defaultPlanForm, describeChanges, describePlan, planToForm, type PlanContext, type PlanDraft } from "@/lib/payment-plans-ui/plan-form-model";
+import { EDIT_CANNOT_RENEW, useRenewalQuote } from "@/hooks/use-payment-plan";
 import { formatDay, formatMoney, isoWeekday, plural, type ISODate } from "@/lib/payment-plans-ui/format";
 import { isOpen, remainingOf } from "@/lib/payment-plans-ui/plan-math";
 import type { OccurrenceView, PlanView } from "@/lib/payment-plans-ui/view-types";
@@ -24,6 +32,7 @@ const WIDE = "w-[calc(100vw-2rem)] sm:!max-w-4xl max-h-[90svh] overflow-y-auto n
 export function SetUpPlanDialog({
   open,
   onOpenChange,
+  rentalId,
   ctx,
   currency,
   today,
@@ -31,6 +40,8 @@ export function SetUpPlanDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** The rental the plan is for — the server prices a renewal period from it. */
+  rentalId?: string | null;
   ctx: PlanContext;
   currency: string;
   today: ISODate;
@@ -38,18 +49,22 @@ export function SetUpPlanDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={WIDE}>{open && <SetUpBody ctx={ctx} currency={currency} today={today} onCreate={onCreate} onDone={() => onOpenChange(false)} />}</DialogContent>
+      <DialogContent className={WIDE}>
+        {open && <SetUpBody rentalId={rentalId ?? null} ctx={ctx} currency={currency} today={today} onCreate={onCreate} onDone={() => onOpenChange(false)} />}
+      </DialogContent>
     </Dialog>
   );
 }
 
 function SetUpBody({
+  rentalId,
   ctx,
   currency,
   today,
   onCreate,
   onDone,
 }: {
+  rentalId: string | null;
   ctx: PlanContext;
   currency: string;
   today: ISODate;
@@ -67,6 +82,7 @@ function SetUpBody({
     return { ...s, startFrom: "date", startDate: today, weekdays: [isoWeekday(today)], monthDay: Number(today.slice(8, 10)) };
   });
   const renewing = preview.ok && !!preview.renewal;
+  const quote = useRenewalQuote(rentalId, renewing && preview.ok ? preview.plan : null);
   const [busy, setBusy] = useState(false);
   return (
     <>
@@ -78,10 +94,21 @@ function SetUpBody({
             : "Keep this rental renewing, one period at a time, collected when each period starts. You can change, pause or stop it at any point."}
         </DialogDescription>
       </DialogHeader>
-      <PaymentPlanComposer state={state} onChange={setState} preview={preview} ctx={ctx} currency={currency} today={today} minStart={today} />
+      <PaymentPlanComposer
+        state={state}
+        onChange={setState}
+        preview={preview}
+        ctx={ctx}
+        currency={currency}
+        today={today}
+        minStart={today}
+        renewalQuote={renewing ? quote : null}
+      />
       <DialogFooter className="items-center gap-3 sm:justify-between">
-        <p className="text-xs leading-relaxed text-muted-foreground">
-          {preview.ok ? describePlan(preview.plan, currency) : "Finish the sentence to see the plan."}
+        <p className="text-xs leading-relaxed text-muted-foreground" data-plan-summary="">
+          {preview.ok
+            ? describePlan(preview.plan, currency, { perPeriodCents: renewing && quote?.state === "ready" ? quote.breakdown.totalCents : null })
+            : "Finish the sentence to see the plan."}
         </p>
         <Button
           type="button"
@@ -147,10 +174,20 @@ export function EditPlanDialog({
   );
 }
 
+/**
+ * The context Edit composes in: the caller's, WITHOUT the renewal answer. Edit
+ * changes a plan's payments; it never makes a plan keep renewing the rental
+ * (the server refuses that too — payment-plan-manage 'update').
+ */
+export function editContext(ctx: PlanContext): PlanContext {
+  const { renewal: _renewal, ...rest } = ctx;
+  return rest;
+}
+
 function EditBody({
   plan,
   occurrences,
-  ctx,
+  ctx: ctxIn,
   currency,
   today,
   onSave,
@@ -164,6 +201,7 @@ function EditBody({
   onSave: (draft: PlanDraft, reason: string) => Promise<unknown>;
   onDone: () => void;
 }) {
+  const ctx = useMemo(() => editContext(ctxIn), [ctxIn]);
   const $ = (c: number) => formatMoney(c, currency);
   const before = {
     rule: plan.rule,
@@ -222,7 +260,7 @@ function EditBody({
             ))}
             <li>
               {preview.renewal
-                ? `${replacing.length > 0 ? `${plural(replacing.length, "upcoming payment")} (${$(replacingTotal)}) ${replacing.length === 1 ? "is" : "are"} replaced by renewals` : "Renewals start"} from ${formatDay(preview.drafts[0].dueDate)}, each period priced when it starts.`
+                ? EDIT_CANNOT_RENEW
                 : replacing.length > 0
                   ? `${plural(replacing.length, "upcoming payment")} (${$(replacingTotal)}) ${replacing.length === 1 ? "is" : "are"} replaced by ${plural(preview.drafts.length, "payment")} (${$(preview.totalCents)}), the first on ${formatDay(preview.drafts[0].dueDate)}.`
                   : `${plural(preview.drafts.length, "new payment")} (${$(preview.totalCents)}) ${preview.drafts.length === 1 ? "is" : "are"} added, the first on ${formatDay(preview.drafts[0].dueDate)}.`}
@@ -247,9 +285,9 @@ function EditBody({
         <Button
           type="button"
           data-confirm=""
-          disabled={!preview.ok || busy}
+          disabled={!preview.ok || !!preview.renewal || busy}
           onClick={async () => {
-            if (!preview.ok) return;
+            if (!preview.ok || preview.renewal) return;
             setBusy(true);
             try {
               await onSave(preview.plan, reason.trim() || "Changed by an operator");

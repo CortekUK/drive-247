@@ -160,7 +160,7 @@ export interface ReportEntry {
   scenarioId: string;
   /** Null while the queue has not reached this scenario, or before its row is found. */
   runId: string | null;
-  /** Its `start` request is in flight (the runner is making the fixture and taking the first steps). */
+  /** Its `run` request is in flight (the runner is making the fixture and taking the first steps). */
   starting?: boolean;
 }
 
@@ -174,6 +174,7 @@ export function E2eRunReport({
   catalogue,
   runner,
   confirmedPreview,
+  startedUnder,
   tenantId,
   onClose,
   onContinue,
@@ -191,6 +192,8 @@ export function E2eRunReport({
   catalogue: readonly CatalogueScenario[];
   runner: RunnerInfo | null;
   confirmedPreview: RunPreview | null;
+  /** The fresh preview each run was started under (scenario id → preview_id, G12), for the evidence. */
+  startedUnder?: Readonly<Record<string, string>>;
   tenantId: string | null;
   onClose?: () => void;
   /** Only while runs are being driven; the button shows beside a waiting step. */
@@ -250,6 +253,7 @@ export function E2eRunReport({
                     runner,
                     catalogue,
                     confirmedPreview,
+                    startedUnder,
                   }),
                 )
               }

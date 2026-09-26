@@ -33,9 +33,13 @@ import { useCustomerReviewSummary } from "@/hooks/use-customer-review-summary";
 import { useGigDriverImages } from "@/hooks/use-gig-driver-images";
 import { useCustomerPaymentLinks } from "@/hooks/use-payment-links";
 import { useCmdVerification, useCmdResults } from "@/hooks/use-cmd-verification";
+import { useCustomerBalanceWithStatus } from "@/hooks/use-customer-balance";
+import { useV2 } from "@/lib/v2-context";
+import { centsOf, netCentsFromStatus } from "@/components/balance/balance-words";
 import { dateOnly } from "./kit";
 import type {
   ActivityEvent,
+  BalancePosition,
   CustomerRecord,
   Doc,
   Fine,
@@ -230,9 +234,12 @@ function useRentalOutstandings(id: string) {
       // `rental_number` rides along on a query this screen already makes.
       // `useCustomerRentals` does not select it and is shared with v1, so it is
       // picked up here rather than by widening a hook two screens depend on.
+      // So does `is_pay_as_you_go`, for the balance pickers' refusals.
       const numbers: Record<string, string> = {};
+      const payg: Record<string, boolean> = {};
       (rentalsRes.data || []).forEach((r: any) => {
         if (r.rental_number) numbers[r.id] = r.rental_number;
+        payg[r.id] = r.is_pay_as_you_go === true;
       });
 
       const paygRentalIds = (rentalsRes.data || []).filter((r: any) => r.is_pay_as_you_go).map((r: any) => r.id);
@@ -283,7 +290,7 @@ function useRentalOutstandings(id: string) {
         const key = e.rental_id || "__none__";
         map[key] = (map[key] || 0) + Number(e.remaining_amount || 0);
       });
-      return { outstanding: map, numbers };
+      return { outstanding: map, numbers, payg };
     },
     enabled: !!tenant?.id && !!id,
     staleTime: 0,
@@ -296,6 +303,45 @@ function useRentalOutstandings(id: string) {
    ══════════════════════════════════════════════════════════════════════════ */
 
 const s = (v: unknown) => (v == null ? "" : String(v));
+
+/**
+ * One `useCustomerRentals` row as the record carries it. `approval_status`
+ * comes with the row; `is_pay_as_you_go` from `useRentalOutstandings` (which
+ * already reads it) — both so the balance pickers can refuse exactly the
+ * rentals `balance__assert_rental` refuses (PAYG, rejected, cancelled).
+ */
+export function rentalOf(
+  r: any,
+  lookups: { numbers: Record<string, string>; outstanding: Record<string, number>; payg: Record<string, boolean> },
+): Rental {
+  return {
+    id: r.id,
+    ref: lookups.numbers[r.id] || (r.id as string).slice(0, 8).toUpperCase(),
+    vehicle: [r.vehicle?.make, r.vehicle?.model].filter(Boolean).join(" ") || "Vehicle",
+    reg: s(r.vehicle?.reg),
+    start: r.start_date,
+    end: r.end_date,
+    total: Number(r.monthly_amount || 0),
+    outstanding: Number(lookups.outstanding[r.id] || 0),
+    status: rentalStatusOf(r),
+    approvalStatus: r.approval_status ?? null,
+    // Unknown until the outstandings read lands; `null`, never a guessed false.
+    isPayAsYouGo: r.id in lookups.payg ? lookups.payg[r.id] : null,
+  };
+}
+
+/** `useCustomerBalanceWithStatus`'s answer as the record carries it. */
+export function positionOf(q: { data?: any; error?: unknown; isLoading?: boolean }): BalancePosition {
+  if (q.error) return { state: "error" };
+  const net = netCentsFromStatus(q.data ?? null);
+  if (net === null) return { state: "loading" };
+  return {
+    state: "ready",
+    netCents: net,
+    outstandingCents: centsOf(q.data.outstandingDebt),
+    creditCents: centsOf(q.data.availableCredit),
+  };
+}
 
 /**
  * `ai_scan_status` says how far the scan got, `review_reasons` says whether it
@@ -346,6 +392,12 @@ export function useCustomerRecord(id: string) {
   const auditQ = useCustomerAudit(id);
   const cmdQ = useCmdVerification(id);
   const cmdResultsQ = useCmdResults(cmdQ.data?.cmd_applicant_verification_id);
+  // Finances canary only: the shared reducer's balance — the same query (same
+  // key, one fetch) the Money section's header reads — so the overview rail
+  // shows the header's number. Off the canary no request is made (an absent
+  // id disables the hook) and the rail keeps its own arithmetic.
+  const financesOn = useV2("finances");
+  const positionQ = useCustomerBalanceWithStatus(financesOn ? id : undefined);
 
   const blocksQ = useGlobalBlocks([s(row?.license_number), s(row?.id_number), s(row?.email)]);
 
@@ -422,17 +474,10 @@ export function useCustomerRecord(id: string) {
     });
 
     /* ── rentals ───────────────────────────────────────────────────────── */
-    const rentals: Rental[] = (rentalsQ.data || []).map((r: any) => ({
-      id: r.id,
-      ref: rentalNumbers[r.id] || (r.id as string).slice(0, 8).toUpperCase(),
-      vehicle: [r.vehicle?.make, r.vehicle?.model].filter(Boolean).join(" ") || "Vehicle",
-      reg: s(r.vehicle?.reg),
-      start: r.start_date,
-      end: r.end_date,
-      total: Number(r.monthly_amount || 0),
-      outstanding: Number(outstandings[r.id] || 0),
-      status: rentalStatusOf(r),
-    }));
+    const rentalPayg = outstandingQ.data?.payg || {};
+    const rentals: Rental[] = (rentalsQ.data || []).map((r: any) =>
+      rentalOf(r, { numbers: rentalNumbers, outstanding: outstandings, payg: rentalPayg }),
+    );
 
     /* ── fines ─────────────────────────────────────────────────────────── */
     const fines: Fine[] = (finesQ.data || []).map((f: any) => ({
@@ -636,8 +681,12 @@ export function useCustomerRecord(id: string) {
           new Set(((paymentsQ.data as any[]) || []).map((p: any) => s(p.method)).filter(Boolean))
         ),
       },
+      position: financesOn ? positionOf(positionQ) : undefined,
     };
   }, [
+    financesOn,
+    positionQ.data,
+    positionQ.error,
     row,
     verificationQ.data,
     cmdQ.data,

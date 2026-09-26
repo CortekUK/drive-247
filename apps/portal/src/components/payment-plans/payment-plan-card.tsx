@@ -19,7 +19,10 @@
  * the operator uses here.
  *
  * Every row action exists for every row. When one can't be used for that
- * payment it is disabled and says why — never a silent no-op.
+ * payment it is disabled and says why — never a silent no-op. That includes
+ * "Collect this payment by: card auto-charge / emailed link / I'll record
+ * it" — one payment's method, changed without touching the rest of the plan
+ * (payment-plan-manage 'occurrence_set_method').
  *
  * A plan that keeps renewing (or has been extended) carries payments that
  * each pay for one PERIOD of the rental. Those rows read their period the way
@@ -30,7 +33,7 @@
  */
 
 import { Fragment, useMemo, useState } from "react";
-import { ArrowUpRight, ChevronDown, MoreHorizontal } from "lucide-react";
+import { ArrowUpRight, Check, ChevronDown, MoreHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui-v2/button";
 import {
@@ -45,13 +48,16 @@ import { cardCls, insetCls } from "@/components/rentals-v2/rental-detail/_kit";
 import { dashboardLinkFor, type DashboardAccounts } from "@/lib/payment-plans-ui/dashboard-link";
 import { formatCovers, formatDay, formatInstant, formatMoney, plural, type ISODate } from "@/lib/payment-plans-ui/format";
 import { describePlan, describeMethod } from "@/lib/payment-plans-ui/plan-form-model";
+import type { CollectionMethod } from "@/lib/payment-plans/types";
 import {
   ACTION_LABELS,
+  COLLECT_BY,
   declineWords,
   eventSentence,
   explainMath,
   isOpen,
   lastAttempt,
+  methodChoices,
   nextOpenAfter,
   occurrenceActions,
   openAttemptOn,
@@ -75,6 +81,8 @@ export interface PaymentPlanCardActions {
   recordPayment: (o: OccurrenceView, input: RecordPaymentInput) => Promise<unknown>;
   move: (o: OccurrenceView, to: ISODate) => Promise<unknown>;
   skip: (o: OccurrenceView) => Promise<unknown>;
+  /** Change how ONE payment is collected. Omit to hide "Collect this payment by". */
+  setMethod?: (o: OccurrenceView, method: CollectionMethod) => Promise<unknown>;
   /** Opens the editor. Omit to hide Edit. */
   edit?: () => void;
   /** Opens the Extend dialog. Omit to hide Extend. */
@@ -335,6 +343,8 @@ export function PaymentPlanCard({
                 onToggle={() => toggle(o.id)}
                 availability={occurrenceActions(o, actx)}
                 onAction={actions ? (a) => runRow(a, o) : undefined}
+                methods={actions?.setMethod ? methodChoices(o, actx) : undefined}
+                onSetMethod={actions?.setMethod ? (m) => void actions.setMethod!(o, m).catch(() => undefined) : undefined}
                 extension={extensionFor(o)}
               />
             ))}
@@ -525,6 +535,8 @@ function OccurrenceRowView({
   onToggle,
   availability,
   onAction,
+  methods,
+  onSetMethod,
   extension,
 }: {
   o: OccurrenceView;
@@ -537,6 +549,9 @@ function OccurrenceRowView({
   onToggle: () => void;
   availability: ReturnType<typeof occurrenceActions>;
   onAction?: (a: OccurrenceAction) => void;
+  /** "Collect this payment by", when the caller can change it. */
+  methods?: ReturnType<typeof methodChoices>;
+  onSetMethod?: (m: CollectionMethod) => void;
   extension?: RowExtension | null;
 }) {
   const st = statusWords(o, today, currency);
@@ -620,6 +635,38 @@ function OccurrenceRowView({
                     </DropdownMenuItem>
                   );
                 })}
+                {methods && onSetMethod && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuLabel className="text-xs text-muted-foreground">Collect this payment by</DropdownMenuLabel>
+                    {COLLECT_BY.map((m) => {
+                      const c = methods[m];
+                      return (
+                        <DropdownMenuItem
+                          key={m}
+                          role="menuitemradio"
+                          aria-checked={c.current}
+                          disabled={!c.enabled}
+                          onSelect={() => c.enabled && onSetMethod(m)}
+                          className="flex-col items-start gap-0.5"
+                          data-row-method={m}
+                          data-current={c.current ? "true" : "false"}
+                          data-enabled={c.enabled ? "true" : "false"}
+                        >
+                          <span className="inline-flex items-center gap-1.5 text-[13px]">
+                            {describeMethod(m)}
+                            {c.current && <Check className="size-3.5" aria-hidden />}
+                          </span>
+                          {(c.reason ?? c.note) && (
+                            <span className="text-[11px] leading-snug text-muted-foreground" data-reason="">
+                              {c.reason ?? c.note}
+                            </span>
+                          )}
+                        </DropdownMenuItem>
+                      );
+                    })}
+                  </>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (

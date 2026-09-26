@@ -9,25 +9,39 @@
 import type { PreviewState } from "@/lib/payment-plans-ui/preview";
 import type { PlanContext } from "@/lib/payment-plans-ui/plan-form-model";
 import { formatDay, formatMoney, plural } from "@/lib/payment-plans-ui/format";
-import { describeEvery, formatPeriodSpan } from "@/lib/payment-plans-ui/renewal";
+import { describeEvery, formatPeriodSpan, type RenewalQuote } from "@/lib/payment-plans-ui/renewal";
 
 /**
  * A plan that KEEPS RENEWING has no total and no last date. The preview then
  * lists its first few periods — when each starts and what it covers — and
- * says "priced when it starts" where an amount would be, because the server
- * prices every period itself (lib/payment-plans-ui/renewal.ts). Renewal dates
- * are not movable: a renewal is collected on the day its period starts.
+ * what each costs: the price the SERVER charges for one period (its preview's
+ * PlanDraft.summary.renewal), handed in as `quote`. Where there is no quote
+ * (New Rental: no rental to price yet) it says "priced when it starts".
+ * Renewal dates are not movable: a renewal is collected on the day its period
+ * starts.
  */
 const PRICED_LATER = "priced when it starts";
 
-export function RenewalPreview({ preview, ctx, currency }: { preview: Extract<PreviewState, { ok: true }>; ctx: PlanContext; currency: string }) {
+export function RenewalPreview({
+  preview,
+  ctx,
+  currency,
+  quote,
+}: {
+  preview: Extract<PreviewState, { ok: true }>;
+  ctx: PlanContext;
+  currency: string;
+  quote?: RenewalQuote | null;
+}) {
   const r = preview.renewal!;
   const { drafts, dueNowCount } = preview;
+  const price = quote?.state === "ready" ? formatMoney(quote.breakdown.totalCents, currency) : null;
   return (
     <div className="space-y-3" data-preview-state="ok" data-preview-renewing="">
       <div className="rounded-3xl bg-muted/40 px-5 py-4 ring-1 ring-foreground/5">
         <p className="text-[13px] font-medium" data-preview-total="">
-          Keeps renewing {describeEvery(r.periodUnit, r.periodCount)} · first renewal {formatDay(drafts[0]?.dueDate)} · each period {PRICED_LATER}
+          Keeps renewing {describeEvery(r.periodUnit, r.periodCount)} · first renewal {formatDay(drafts[0]?.dueDate)} · each period{" "}
+          {price ?? PRICED_LATER}
         </p>
         <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
           Each period is collected on the day it starts, and the return date moves once it is paid. It carries on until you stop it.
@@ -54,9 +68,15 @@ export function RenewalPreview({ preview, ctx, currency }: { preview: Extract<Pr
                 covers {formatPeriodSpan(d.periodStart, d.periodEnd)} · {plural(d.days, "day")}
               </span>
             </span>
-            <span className="shrink-0 text-[12px] text-muted-foreground" data-preview-priced-later="">
-              {PRICED_LATER}
-            </span>
+            {price ? (
+              <span className="shrink-0 text-[13px] font-medium tabular-nums" data-preview-amount="">
+                {price}
+              </span>
+            ) : (
+              <span className="shrink-0 text-[12px] text-muted-foreground" data-preview-priced-later="">
+                {PRICED_LATER}
+              </span>
+            )}
           </li>
         ))}
         <li className="px-4 py-2.5 text-[11px] text-muted-foreground">…and {describeEvery(r.periodUnit, r.periodCount)} after that, until you stop it.</li>
