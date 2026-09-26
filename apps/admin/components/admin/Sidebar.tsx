@@ -8,7 +8,13 @@ import { useAuthStore } from '@/store/authStore';
 import { useSidebar } from './SidebarContext';
 import { useAdminSupport } from '@/lib/use-support-messaging';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
-import { Separator } from '@/components/ui/separator';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { useSidebarSections, type SidebarSection } from '@/components/admin/sidebar-sections';
 import {
@@ -21,6 +27,7 @@ import {
   Users,
   ChevronDown,
   LogOut,
+  ChevronsUpDown,
   ScrollText,
   Scale,
   ListChecks,
@@ -385,31 +392,75 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         )}
       </div>
 
-      {/* Footer */}
-      <div className="border-t border-sidebar-border p-4">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="flex items-center justify-center h-8 w-8 rounded-full bg-primary/15 text-primary text-xs font-bold">
-            {user?.email?.[0]?.toUpperCase() || 'A'}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[15px] md:text-[13px] font-medium text-sidebar-foreground truncate">
-              {user?.name || user?.email}
-            </p>
-            {user?.is_primary_super_admin && (
-              <span className="inline-flex items-center mt-0.5 px-1.5 py-0 text-[10px] font-semibold rounded-full bg-primary/15 text-primary border border-primary/30">
-                Primary Admin
-              </span>
-            )}
-          </div>
-        </div>
-        <Separator className="mb-3 bg-sidebar-border" />
-        <button
-          onClick={() => logout()}
-          className="flex min-h-11 md:min-h-0 items-center gap-2 w-full px-3 py-2 rounded-lg text-[15px] md:text-[13px] font-medium text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-all"
-        >
-          <LogOut className="h-4 w-4" />
-          Sign out
-        </button>
+      {/* Footer — the account row IS the menu.
+
+          Asked for Sep 26 2026: sign out belongs inside the Super Admin label,
+          the way the portal does it. It used to be a permanent row of its own
+          under a divider, so the most destructive control in the rail sat in
+          the open, one stray click from the navigation above it.
+
+          `side="top"` because this is the last thing in the rail — a menu
+          opening downward would leave the viewport. */}
+      <div className="border-t border-sidebar-border p-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              className="flex min-h-11 md:min-h-0 w-full items-center gap-3 rounded-lg p-2 text-left outline-none transition-colors hover:bg-sidebar-accent focus-visible:bg-sidebar-accent"
+              aria-label="Account menu"
+            >
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-bold text-primary">
+                {user?.email?.[0]?.toUpperCase() || 'A'}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[15px] font-medium text-sidebar-foreground md:text-[13px]">
+                  {user?.name || user?.email}
+                </p>
+                {/* The email, as the portal shows it. The Primary Admin badge
+                    moves into the menu, where there is room for it beside the
+                    address rather than under a truncated name. */}
+                <p className="truncate text-[12px] leading-tight text-muted-foreground md:text-[11px]">
+                  {user?.email}
+                </p>
+              </div>
+              <ChevronsUpDown className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            </button>
+          </DropdownMenuTrigger>
+
+          <DropdownMenuContent side="top" align="start" className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-56 p-0">
+            <div className="p-3">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">
+                  {user?.email?.[0]?.toUpperCase() || 'A'}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[15px] font-semibold leading-tight md:text-[13px]">
+                    {user?.name || 'Super Admin'}
+                  </div>
+                  <div className="truncate text-[12px] leading-tight text-muted-foreground md:text-[11px]">
+                    {user?.email}
+                  </div>
+                </div>
+              </div>
+              {user?.is_primary_super_admin && (
+                <span className="mt-2 inline-flex items-center rounded-full border border-primary/30 bg-primary/15 px-1.5 py-0 text-[10px] font-semibold text-primary">
+                  Primary Admin
+                </span>
+              )}
+            </div>
+
+            <DropdownMenuSeparator className="m-0" />
+
+            <div className="p-1.5">
+              <DropdownMenuItem
+                onClick={() => logout()}
+                className="cursor-pointer rounded-lg px-2.5 py-1.5 text-[15px] text-destructive focus:bg-destructive/10 focus:text-destructive md:text-[13px]"
+              >
+                <LogOut className="mr-2.5 h-4 w-4" />
+                <span>Sign out</span>
+              </DropdownMenuItem>
+            </div>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   );

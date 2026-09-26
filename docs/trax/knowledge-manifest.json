@@ -12,7 +12,7 @@
     "TRAX_APPLICATION_CONTEXT.md": "af89a1747288df3889dc52ca2f07ac38d02d2adab571c1aaace2f74cbe3f76e1",
     "apps/admin/app/admin/(protected)/support/page.tsx": "7332c4c6a19f1dbef9527a165906a4b9a4657bb38651c267c3235a543f67551e",
     "apps/admin/app/api/trax-messaging/route.ts": "ff2369347fd2591631b755b5d2963c5730837f969f6937cbf3a42bfeaf5723de",
-    "apps/admin/components/admin/Sidebar.tsx": "8f919b468fa3527327ff0ce5f570f48a190bb2b7dfb8e4a89aaee6eccb8cf1b9",
+    "apps/admin/components/admin/Sidebar.tsx": "1c317dbd50b51eab75c85f6bbfe1c1a22e3ad4fdb1b1d34ea42d57d52bb810fa",
     "apps/admin/components/support/AdminSupportWorkspace.tsx": "36d97e21fee3d629630430e6074b625da12e2e907ef4c66e8b61454936752735",
     "apps/admin/lib/use-support-messaging.ts": "7175669993a7415cbfee5784ba4f424815bd71f5ec48dc7ef811a0e410f04d3a",
     "apps/booking/src/app/(legacy)/booking/vehicles/page.tsx": "39b054fb7b83087f1bd3898ccc535f0073286a6b62348db4e0c65eaefe5cef1d",
