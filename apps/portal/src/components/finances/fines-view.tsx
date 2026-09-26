@@ -9,15 +9,24 @@
  *   - `BulkActionBar` charges, waives and emails a toll statement for the
  *     selected fines — the fines tab's own bulk actions, unchanged;
  *   - `AddFineDialog` adds one.
- * A fine opens in the side panel, and its record (`/fines/[id]`, untouched)
- * is where a single fine is paid or waived — exactly as before.
- *
- * `fines/page.tsx` is not modified: its v1 and v2 tables are pinned verbatim
- * by tests, and nothing here needed to be lifted out of it.
+ *   - the row menu's Record payment and Waive fine are the fines tab's own
+ *     row actions (`components/fines/use-fine-row-actions.tsx`, lifted out of
+ *     `fines/page.tsx` so both screens run one copy). The page hosts the hook
+ *     and hands the two calls in, so the side panel offers the same ones.
+ * A fine opens in the side panel; its record (`/fines/[id]`, untouched) is one
+ * click from there.
  */
 
 import { useEffect } from "react";
-import { AlertTriangle, Plus } from "lucide-react";
+import Link from "next/link";
+import { AlertTriangle, Ban, DollarSign, FileText, PanelRightOpen, Plus } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui-v2/dropdown-menu";
 import { Button } from "@/components/ui-v2/button";
 import { Checkbox } from "@/components/ui-v2/checkbox";
 import {
@@ -45,19 +54,21 @@ import {
   SettingsNoMatch,
   SettingsSectionSkeleton,
 } from "@/components/settings-v2/section-states";
+import { fineCanCharge, fineCanWaive } from "@/components/fines/use-fine-row-actions";
 import { fineStatusWords, formatListDay } from "./finance-words";
-import { MobileFact, MobileRows } from "./finance-list-bits";
+import { MobileFact, MobileRows, RowMenuTrigger } from "./finance-list-bits";
 
 const EMPTY: EnhancedFine[] = [];
 
 /** The fines list's filters for the shared bar's search and status. */
 export function fineFiltersOf(q: string, status: string | null): FineFilterState {
+  const quick = status === "overdue" ? "overdue" : status === "due_next_7" ? "due-next-7" : undefined;
   return {
-    status: status && status !== "overdue" ? [status] : [],
+    status: status && !quick ? [status] : [],
     vehicleSearch: "",
     customerSearch: "",
     search: q.trim(),
-    quickFilter: status === "overdue" ? "overdue" : undefined,
+    quickFilter: quick,
   };
 }
 
@@ -91,6 +102,9 @@ export function FinesView({
   onAddFine,
   onRows,
   onClearFilters,
+  onRecordPayment,
+  onWaive,
+  waiving = false,
 }: {
   q: string;
   status: string | null;
@@ -105,6 +119,12 @@ export function FinesView({
   /** The rows on screen, handed up so the side panel can find a fine by id. */
   onRows: (fines: EnhancedFine[]) => void;
   onClearFilters: () => void;
+  /** The fines tab's Record Payment (`useFineRowActions().openPaymentDialog`). Offered on an Open fine when `mayEdit`. */
+  onRecordPayment?: (fine: EnhancedFine) => void;
+  /** The fines tab's Waive Fine (`useFineRowActions().waiveFineAction.mutate(fine.id)`). Offered on an Open fine when `mayEdit`. */
+  onWaive?: (fine: EnhancedFine) => void;
+  /** A waive is on its way: the item waits, as on the fines tab. */
+  waiving?: boolean;
 }) {
   const { data, isLoading, error, refetch, isRefetching } = useFinanceFines(q, status);
   const fines = data?.fines ?? EMPTY;
@@ -165,15 +185,18 @@ export function FinesView({
             </ListHead>
             <ListHead className="w-[12%]">Reference</ListHead>
             <ListHead className="w-[10%]">Rental</ListHead>
-            <ListHead className="w-[12%]">Vehicle</ListHead>
-            <ListHead className="w-[15%]">Customer</ListHead>
+            <ListHead className="w-[10%]">Vehicle</ListHead>
+            <ListHead className="w-[13%]">Customer</ListHead>
             <ListHead className="w-[11%]">Issued</ListHead>
             <ListHead className="w-[13%]">Due</ListHead>
             <ListHead className="w-[12%]">Status</ListHead>
             <ListHead className="w-[11%] text-right">Amount</ListHead>
+            <ListHead className="w-[4%] text-right">
+              <span className="sr-only">Actions</span>
+            </ListHead>
           </ListTableHeader>
           <ListBody>
-            {rows.visible.map((fine) => {
+            {rows.visible.map((fine, i) => {
               const ref = fineReference(fine);
               const status = fineStatusWords(fine.status, fine.isOverdue);
               const days = Math.abs(fine.daysUntilDue);
@@ -181,6 +204,7 @@ export function FinesView({
                 <ListRow
                   key={fine.id}
                   data-fine-id={fine.id}
+                  data-tour={i === 0 ? "finances-row" : undefined}
                   data-state={selected.includes(fine.id) ? "selected" : undefined}
                   className={cn(fine.isOverdue && "border-l-2 border-l-red-500 bg-red-500/5")}
                   onOpen={() => onOpen(fine)}
@@ -236,6 +260,16 @@ export function FinesView({
                   <ListCell className="text-right tabular-nums">
                     <span className={LIST_CLASSES.text}>{formatMoney(toCents(fine.amount), currency)}</span>
                   </ListCell>
+                  <ListCell className="px-1 text-right" onClick={(e) => e.stopPropagation()}>
+                    <FineMenu
+                      fine={fine}
+                      mayEdit={mayEdit}
+                      waiving={waiving}
+                      onOpen={onOpen}
+                      onRecordPayment={onRecordPayment}
+                      onWaive={onWaive}
+                    />
+                  </ListCell>
                 </ListRow>
               );
             })}
@@ -265,3 +299,58 @@ export function FinesView({
   );
 }
 
+/**
+ * A fine's row menu. The fines tab's two items — Record Payment and Waive
+ * Fine, on an Open fine, for someone who may edit fines — plus the ways in
+ * that every Finances row menu offers.
+ */
+export function FineMenu({
+  fine,
+  mayEdit,
+  waiving,
+  onOpen,
+  onRecordPayment,
+  onWaive,
+}: {
+  fine: EnhancedFine;
+  mayEdit: boolean;
+  waiving: boolean;
+  onOpen: (fine: EnhancedFine) => void;
+  onRecordPayment?: (fine: EnhancedFine) => void;
+  onWaive?: (fine: EnhancedFine) => void;
+}) {
+  const charge = mayEdit && !!onRecordPayment && fineCanCharge(fine);
+  const waive = mayEdit && !!onWaive && fineCanWaive(fine);
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <RowMenuTrigger label={`Actions for fine ${fineReference(fine)}`} />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-auto">
+        <DropdownMenuItem onClick={() => onOpen(fine)}>
+          <PanelRightOpen className="h-4 w-4" />
+          See the fine
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href={`/fines/${fine.id}`}>
+            <FileText className="h-4 w-4" />
+            Open the fine
+          </Link>
+        </DropdownMenuItem>
+        {(charge || waive) && <DropdownMenuSeparator />}
+        {charge && (
+          <DropdownMenuItem data-fine-action="record_payment" onClick={() => onRecordPayment!(fine)}>
+            <DollarSign className="h-4 w-4" />
+            Record payment
+          </DropdownMenuItem>
+        )}
+        {waive && (
+          <DropdownMenuItem data-fine-action="waive" disabled={waiving} onClick={() => onWaive!(fine)}>
+            <Ban className="h-4 w-4" />
+            Waive fine
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}

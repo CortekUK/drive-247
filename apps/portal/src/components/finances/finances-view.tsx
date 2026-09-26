@@ -17,8 +17,14 @@
  * SAFETY: no new money path. Every action here opens a dialog or calls a hook
  * that another screen already uses — AddPaymentDialog, RefundDialog, the
  * Payments tab's approve / reject / remove-link / reverse, the payment plan's
- * own actions, the fines tab's bulk bar and AddFineDialog. Finances is a new
+ * own actions, the fines tab's bulk bar, row actions (`useFineRowActions`) and
+ * AddFineDialog, the Invoices tab's Send and Delete dialogs. Finances is a new
  * way of LOOKING at the money.
+ *
+ * Tour anchors (`data-tour`, read by lib/tab-tours/): finances-header ·
+ * finances-record-payment · finances-overview · finances-filter (the top
+ * bar's filter button, via `usePageSearch`) · finances-attention ·
+ * finances-views · finances-list · finances-row · finances-side-panel.
  *
  * Reached only through `app/(dashboard)/finances/page.tsx`, which answers 404
  * unless the tenant is on the `finances` v2 area (northwind, by slug only).
@@ -27,7 +33,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, Download, Link2, Plus, Receipt, Wallet } from "lucide-react";
+import { BarChart3, CalendarClock, Download, Link2, Plus, Receipt, Wallet } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import { HEADER_ACTIONS_V2, HEADER_PRIMARY_V2, HeaderIconButton } from "@/components/shared/header-icon-button-v2";
 import { usePageSearch } from "@/components/shared/layout/page-search-slot";
@@ -41,7 +47,10 @@ import {
 import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
 import { RefundDialog } from "@/components/shared/dialogs/refund-dialog";
 import { SendInvoiceEmailDialog } from "@/components/invoices/send-invoice-email-dialog";
+import { DeleteInvoiceDialog } from "@/components/invoices/delete-invoice-dialog";
 import AddFineDialog from "@/components/fines/add-fine-dialog";
+import { FinePaymentDialog, useFineRowActions } from "@/components/fines/use-fine-row-actions";
+import { TabTourButton } from "@/components/onboarding/tab-tour-button";
 import { useTenant } from "@/contexts/TenantContext";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { usePaymentVerificationActions } from "@/hooks/use-payment-verification";
@@ -67,6 +76,7 @@ import {
   BILL_STATUS_OPTIONS,
   BILL_TONE,
   FINE_STATUS_OPTIONS,
+  PAYMENT_REQUESTS_OPTION,
   RECEIPT_STATUS_OPTIONS,
   RECEIPT_TONE,
   UPCOMING_METHOD_OPTIONS,
@@ -167,6 +177,8 @@ export function FinancesView() {
       open: filtersOpen,
       onOpenChange: setFiltersOpen,
       activeCount: countActiveFinanceFilters(state),
+      // The tour's step on the filter button that turns the overview over.
+      tourAnchor: "finances-filter",
     },
   });
 
@@ -208,11 +220,18 @@ export function FinancesView() {
   const [planRequest, setPlanRequest] = useState<PlanActionRequest | null>(null);
   const [addFine, setAddFine] = useState(false);
   const [invoiceToEmail, setInvoiceToEmail] = useState<any | null>(null);
+  const [invoiceToDelete, setInvoiceToDelete] = useState<any | null>(null);
   const [fineRows, setFineRows] = useState<EnhancedFine[]>(EMPTY_FINES);
   const [selectedFines, setSelectedFines] = useState<string[]>([]);
 
   const { approvePayment, isLoading: verifying } = usePaymentVerificationActions();
   const refresh = useCallback(() => void qc.invalidateQueries({ queryKey: FINANCES_QUERY_KEY }), [qc]);
+
+  // The fines tab's own Record Payment and Waive Fine — one copy, shared with
+  // fines/page.tsx. `onChanged` only adds a refresh of this page's read.
+  const fineActions = useFineRowActions({ onChanged: refresh });
+  const recordFinePayment = (fine: EnhancedFine) => void fineActions.openPaymentDialog(fine);
+  const waiveFine = (fine: EnhancedFine) => fineActions.waiveFineAction.mutate(fine.id);
 
   const approve = (paymentId: string) => approvePayment.mutate(paymentId, { onSuccess: refresh });
 
@@ -234,23 +253,36 @@ export function FinancesView() {
   const findReceipt = (paymentId: string) =>
     (fin.model?.receipts ?? fin.receipts).find((r) => r.paymentId === paymentId) ?? null;
 
-  const emailInvoice = async (bill: BillRow) => {
-    if (!tenant?.id || !bill.invoiceNumber) return;
-    // The Invoices tab's own read, narrowed to this bill's invoice.
-    const { data, error } = await supabase
+  /**
+   * The bill's `invoices` row, read exactly as the Invoices tab reads its list
+   * (the same select), so its Send and Delete dialogs get the row they expect.
+   * By id when the model has it; else by rental and number.
+   */
+  const readInvoice = async (bill: BillRow): Promise<any | null> => {
+    if (!tenant?.id || !bill.invoiceNumber) return null;
+    let q = supabase
       .from("invoices" as any)
       .select(
         `*, customers:customer_id (name, email, phone), vehicles:vehicle_id (reg, make, model), rentals:rental_id (start_date, end_date, monthly_amount)`,
       )
-      .eq("tenant_id", tenant.id)
-      .eq("rental_id", bill.rentalId)
-      .eq("invoice_number", bill.invoiceNumber)
-      .maybeSingle();
+      .eq("tenant_id", tenant.id);
+    q = bill.invoiceId ? q.eq("id", bill.invoiceId) : q.eq("rental_id", bill.rentalId).eq("invoice_number", bill.invoiceNumber);
+    const { data, error } = await q.maybeSingle();
     if (error || !data) {
       toast({ title: "Couldn't open that invoice", description: error?.message ?? "It could not be found.", variant: "destructive" });
-      return;
+      return null;
     }
-    setInvoiceToEmail(data);
+    return data;
+  };
+
+  const emailInvoice = async (bill: BillRow) => {
+    const invoice = await readInvoice(bill);
+    if (invoice) setInvoiceToEmail(invoice);
+  };
+
+  const deleteInvoice = async (bill: BillRow) => {
+    const invoice = await readInvoice(bill);
+    if (invoice) setInvoiceToDelete(invoice);
   };
 
   const exportCsv = () => {
@@ -271,7 +303,7 @@ export function FinancesView() {
     view === "billed"
       ? BILL_STATUS_OPTIONS.map((o) => ({ ...o, tone: BILL_TONE[o.value] }))
       : view === "received"
-        ? RECEIPT_STATUS_OPTIONS.map((o) => ({ ...o, tone: RECEIPT_TONE[o.value] }))
+        ? [...RECEIPT_STATUS_OPTIONS.map((o) => ({ ...o, tone: RECEIPT_TONE[o.value] })), PAYMENT_REQUESTS_OPTION]
         : view === "upcoming"
           ? UPCOMING_STATUS_OPTIONS.map((o) => ({ ...o, tone: upcomingStatusWords({ status: o.value, nextAttemptOn: null, planStatus: "active" }).tone }))
           : FINE_STATUS_OPTIONS.map((o) => ({ ...o, tone: o.value === "overdue" ? "danger" : fineStatusWords(o.value, false).tone }));
@@ -319,6 +351,9 @@ export function FinancesView() {
           onAddFine={() => setAddFine(true)}
           onRows={setFineRows}
           onClearFilters={clearFilters}
+          onRecordPayment={recordFinePayment}
+          onWaive={waiveFine}
+          waiving={fineActions.waiveFineAction.isPending}
         />
       );
     }
@@ -355,6 +390,8 @@ export function FinancesView() {
           icon={Receipt}
           headline="Every rental's bill, and what is left on it"
           body="Each rental and each extension gets a bill as it is charged: what it cost, what has been paid, and what is still owed."
+          // The Invoices tab's empty state sent an operator to their first rental.
+          primaryAction={canEdit("rentals") ? { label: "Create a rental", onClick: () => router.push("/rentals/new"), icon: Plus } : undefined}
         />
       ) : view === "received" ? (
         <SettingsEmptyState
@@ -421,13 +458,28 @@ export function FinancesView() {
     <div className="container mx-auto space-y-6 p-4 md:p-6" data-finances-view={view}>
       {/* Header: one labelled button, every other control an icon (v2 rule). */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
+        <div className="min-w-0" data-tour="finances-header">
           <h1 className="text-2xl font-bold sm:text-3xl">Finances</h1>
           <p className="text-sm text-muted-foreground sm:text-base">
             What you&apos;re owed, what came in, what&apos;s coming, and what needs you.
           </p>
         </div>
         <div className={`flex items-center gap-2 ${HEADER_ACTIONS_V2}`}>
+          {/* Canary-only: self-gates on the slug and v2 chrome, as on the
+              Customers, Vehicles and Payments headers. */}
+          <TabTourButton tour="finances" size="h-10" />
+          {/* The two dashboards the old tabs linked from their headers. Their
+              routes are untouched (the proxy redirects exact list paths only). */}
+          {views.includes("received") && (
+            <HeaderIconButton label="Payment analytics" href="/payments/analytics" data-tour="finances-payment-analytics">
+              <BarChart3 className="size-4" />
+            </HeaderIconButton>
+          )}
+          {views.includes("fines") && (
+            <HeaderIconButton label="Fine analytics" href="/fines/analytics" data-tour="finances-fine-analytics">
+              <BarChart3 className="size-4" />
+            </HeaderIconButton>
+          )}
           <HeaderIconButton label="Export CSV" onClick={exportCsv}>
             <Download className="size-4" />
           </HeaderIconButton>
@@ -439,6 +491,7 @@ export function FinancesView() {
           {mayPayments && (
             <Button
               type="button"
+              data-tour="finances-record-payment"
               onClick={() => setCollect({ bill: null })}
               className={`flex-1 bg-gradient-primary text-white transition-all duration-200 hover:opacity-90 sm:flex-none ${HEADER_PRIMARY_V2}`}
             >
@@ -452,6 +505,7 @@ export function FinancesView() {
       {/* The overview turns over to show the filter panel: the top bar's
           filter button flips it, the panel's ✕ and Escape flip it back —
           wired as on Customers, Vehicles and Rentals. */}
+      <div data-tour="finances-overview">
       <OverviewFlip
         flipped={filtersOpen}
         onFlipBack={() => setFiltersOpen(false)}
@@ -488,6 +542,7 @@ export function FinancesView() {
           />
         }
       />
+      </div>
 
       {!fin.isLoading && !fin.error && (
         <NeedsAttention
@@ -515,7 +570,7 @@ export function FinancesView() {
         <p id="finances-list-heading" className="px-1 text-sm text-muted-foreground">
           {VIEW_HINT[view]}
         </p>
-        {listBody()}
+        <div data-tour="finances-list">{listBody()}</div>
       </section>
 
       <FinanceSidePanel
@@ -539,6 +594,12 @@ export function FinancesView() {
           onEmailInvoice: (bill) => void emailInvoice(bill),
           onOpen: openPanel,
           onClearFilters: clearFilters,
+          mayDeleteInvoice: mayInvoices,
+          onDeleteInvoice: (bill) => void deleteInvoice(bill),
+          mayActOnFines: mayFines,
+          finesBusy: fineActions.waiveFineAction.isPending,
+          onFineRecordPayment: recordFinePayment,
+          onFineWaive: waiveFine,
         }}
       />
 
@@ -577,6 +638,14 @@ export function FinancesView() {
         onOpenChange={(open) => !open && setInvoiceToEmail(null)}
         invoice={invoiceToEmail}
       />
+      {/* The Invoices tab's own delete, wired as that tab wires it. */}
+      <DeleteInvoiceDialog
+        open={!!invoiceToDelete}
+        onOpenChange={(open) => !open && setInvoiceToDelete(null)}
+        invoice={invoiceToDelete}
+        onDeleted={refresh}
+      />
+      <FinePaymentDialog actions={fineActions} />
     </div>
   );
 }

@@ -34,12 +34,18 @@ interface DeleteInvoiceDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   invoice: Invoice | null;
+  /**
+   * Called once the invoice is gone, after this dialog's own invalidations.
+   * Optional: the Invoices tab passes nothing; Finances refreshes its bills.
+   */
+  onDeleted?: () => void;
 }
 
 export const DeleteInvoiceDialog = ({
   open,
   onOpenChange,
   invoice,
+  onDeleted,
 }: DeleteInvoiceDialogProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -92,6 +98,7 @@ export const DeleteInvoiceDialog = ({
 
       queryClient.invalidateQueries({ queryKey: ["invoices-list"] });
       queryClient.invalidateQueries({ queryKey: ["audit-logs"] });
+      onDeleted?.();
       onOpenChange(false);
     },
     onError: (error: Error) => {

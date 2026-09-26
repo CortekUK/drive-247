@@ -10,16 +10,12 @@ import Link from "next/link";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertTriangle, Plus, Eye, MoreVertical, DollarSign, Ban, ArrowUpDown, BarChart3 } from "lucide-react";
-import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
+import { FinePaymentDialog, useFineRowActions } from "@/components/fines/use-fine-row-actions";
 import { FineStatusBadge } from "@/components/shared/status/fine-status-badge";
 import { FineKPIs } from "@/components/fines/fine-kpis";
 import { FineFilters, FineFilterState } from "@/components/fines/fine-filters";
 import { BulkActionBar } from "@/components/fines/bulk-action-bar";
 import { useFinesData, EnhancedFine } from "@/hooks/use-fines-data";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
-import { useAuditLog } from "@/hooks/use-audit-log";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format-utils";
 import { useTenant } from "@/contexts/TenantContext";
@@ -97,14 +93,10 @@ const formatFineDateV2 = (value: string | null | undefined): string | null => {
 
 const FinesList = () => {
   const router = useRouter();
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
   const searchParams = useSearchParams();
-  const { logAction } = useAuditLog();
   const { tenant } = useTenant();
   const { canEdit } = useManagerPermissions();
   const [showAddFineDialog, setShowAddFineDialog] = useState(false);
-  const [paymentFine, setPaymentFine] = useState<EnhancedFine | null>(null);
 
   // State for filtering, sorting, and selection
   const [filters, setFilters] = useState<FineFilterState>({
@@ -172,117 +164,10 @@ const FinesList = () => {
   // on the selected rows of the page on screen.
   const selectedFineObjectsV2 = fineRows.visible.filter(fine => selectedFines.includes(fine.id));
 
-  const waiveFineAction = useMutation({
-    mutationFn: async (fineId: string) => {
-      // Client-side: delete ledger entry for Open fines before calling edge function
-      // (the deployed edge function only handles Charged fines' ledger cleanup)
-      await supabase
-        .from('ledger_entries')
-        .delete()
-        .eq('reference', `FINE-${fineId}`)
-        .eq('type', 'Charge');
-
-      const { data, error } = await supabase.functions.invoke('apply-fine', {
-        body: { fineId, action: 'waive' }
-      });
-      if (error) throw error;
-      if (!data.success) throw new Error(data.error || 'Failed to waive fine');
-      return { ...data, fineId };
-    },
-    onSuccess: (data) => {
-      toast({ title: "Fine waived successfully" });
-      queryClient.invalidateQueries({ queryKey: ["fines-enhanced"] });
-      queryClient.invalidateQueries({ queryKey: ["fines-kpis"] });
-      queryClient.invalidateQueries({ queryKey: ["customer-balance"] });
-      queryClient.invalidateQueries({ queryKey: ["customer-balance-status"] });
-      queryClient.invalidateQueries({ queryKey: ["customer-fine-stats"] });
-      queryClient.invalidateQueries({ queryKey: ["audit-logs"] });
-
-      // Audit log
-      logAction({
-        action: "fine_waived",
-        entityType: "fine",
-        entityId: data.fineId,
-        details: { amount: data.amount }
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to waive fine",
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Ensure fine's ledger entry has rental_id before opening payment dialog
-  const openPaymentDialog = async (fine: EnhancedFine) => {
-    if (fine.rental_id) {
-      // Ensure the ledger entry has the rental_id (may be missing for older fines)
-      await supabase
-        .from('ledger_entries')
-        .update({ rental_id: fine.rental_id })
-        .eq('reference', `FINE-${fine.id}`)
-        .eq('type', 'Charge')
-        .is('rental_id', null);
-    }
-    setPaymentFine(fine);
-  };
-
-  // After a payment is recorded, sync the fine status based on ledger entry remaining_amount
-  const syncFineStatusAfterPayment = async (fine: EnhancedFine) => {
-    try {
-      // Check the ledger entry for this fine
-      const { data: ledgerEntry } = await supabase
-        .from('ledger_entries')
-        .select('remaining_amount, amount')
-        .eq('reference', `FINE-${fine.id}`)
-        .eq('type', 'Charge')
-        .maybeSingle();
-
-      let newStatus: string | null = null;
-
-      if (ledgerEntry) {
-        if (ledgerEntry.remaining_amount <= 0) {
-          newStatus = 'Paid';
-        } else if (ledgerEntry.remaining_amount < ledgerEntry.amount) {
-          newStatus = 'Charged';
-        }
-      } else {
-        // No ledger entry found — fine was created before ledger integration
-        // Mark as Paid since a payment was just successfully recorded for it
-        newStatus = 'Paid';
-      }
-
-      if (newStatus && newStatus !== fine.status) {
-        const updateData: any = { status: newStatus };
-        const now = new Date().toISOString();
-        if (newStatus === 'Paid') {
-          updateData.charged_at = now;
-          updateData.resolved_at = now;
-        } else if (newStatus === 'Charged') {
-          updateData.charged_at = now;
-        }
-
-        await supabase
-          .from('fines')
-          .update(updateData)
-          .eq('id', fine.id);
-      }
-
-      // Always invalidate queries after payment success
-      queryClient.invalidateQueries({ queryKey: ["fines-enhanced"] });
-      queryClient.invalidateQueries({ queryKey: ["fines-kpis"] });
-      queryClient.invalidateQueries({ queryKey: ["customer-balance"] });
-      queryClient.invalidateQueries({ queryKey: ["customer-balance-status"] });
-      queryClient.invalidateQueries({ queryKey: ["customer-fine-stats"] });
-      queryClient.invalidateQueries({ queryKey: ["rental-fines"] });
-      queryClient.invalidateQueries({ queryKey: ["rental-totals"] });
-      queryClient.invalidateQueries({ queryKey: ["audit-logs"] });
-    } catch (err) {
-      console.error('Error syncing fine status after payment:', err);
-    }
-  };
+  // Record Payment and Waive Fine: the shared row actions (components/fines/
+  // use-fine-row-actions.tsx), the same code the Finances Fines view runs.
+  const fineActions = useFineRowActions();
+  const { waiveFineAction, openPaymentDialog } = fineActions;
 
   // Handle sorting
   const handleSort = (column: string) => {
@@ -858,23 +743,7 @@ const FinesList = () => {
 
     <AddFineDialog open={showAddFineDialog} onOpenChange={setShowAddFineDialog} />
 
-    {paymentFine && (
-      <AddPaymentDialog
-        open={!!paymentFine}
-        onOpenChange={(open) => {
-          if (!open) setPaymentFine(null);
-        }}
-        customer_id={paymentFine.customer_id || undefined}
-        vehicle_id={paymentFine.vehicle_id}
-        rental_id={paymentFine.rental_id || undefined}
-        defaultAmount={Number(paymentFine.amount)}
-        targetCategories={["Fine"]}
-        onPaymentSuccess={() => {
-          const fineToSync = paymentFine;
-          if (fineToSync) syncFineStatusAfterPayment(fineToSync);
-        }}
-      />
-    )}
+    <FinePaymentDialog actions={fineActions} />
 
   </>
   );

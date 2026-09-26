@@ -16,6 +16,7 @@ import type {
   UpcomingMethod,
   UpcomingRow,
 } from "@/lib/finances/types";
+import { PAYMENT_REQUEST_STATUS } from "@/lib/finances/filters";
 import type { PeriodKey } from "./finances-url";
 
 export const VIEW_LABEL: Record<FinanceView, string> = {
@@ -81,6 +82,17 @@ export const RECEIPT_STATUS_OPTIONS = (Object.keys(RECEIPT_STATUS_LABEL) as Rece
   value,
   label: RECEIPT_STATUS_LABEL[value],
 }));
+
+/**
+ * The old Invoices tab's "Payment Requests" list, as one status chip on
+ * Received: every link or charge sent, in any status and over all time
+ * (the list had no date filter), so choosing it also widens the period to All.
+ */
+export const PAYMENT_REQUESTS_OPTION = {
+  value: PAYMENT_REQUEST_STATUS,
+  label: "Payment requests",
+  patch: { period: "all" as const },
+};
 
 /** "Stripe", "Square", or the method as recorded ("Cash", "Bank transfer"). */
 export function receiptMethodWords(row: Pick<ReceiptRow, "provider" | "method">): string {
@@ -160,6 +172,10 @@ export const FINE_STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: "Paid", label: "Paid" },
   { value: "Waived", label: "Waived" },
   { value: "Appealed", label: "Appealed" },
+  { value: "Refunded", label: "Refunded" },
+  { value: "Partially Refunded", label: "Partially refunded" },
+  /** Not a stored status: due in the next 7 days (the fines list's other quick filter, `due-next-7`). */
+  { value: "due_next_7", label: "Due in 7 days" },
 ];
 
 /**

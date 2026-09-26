@@ -148,6 +148,10 @@ export function buildReceipts(
       recordedById: attempt?.created_by ?? null,
       recordedAt: p.created_at ?? null,
       extensionId: p.extension_id ?? null,
+      vehicleId,
+      // The old "Payment Requests" list's own selection, on the row itself —
+      // not `checkoutSessionId`, which also falls back to a plan attempt's session.
+      isPaymentRequest: !!p.stripe_checkout_session_id || !!p.square_payment_link_id,
     };
   });
 

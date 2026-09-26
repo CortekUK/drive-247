@@ -76,10 +76,15 @@ export function UpcomingTable({
             </ListHead>
           </ListTableHeader>
           <ListBody>
-            {rows.visible.map((u) => {
+            {rows.visible.map((u, i) => {
               const status = upcomingStatusWords(u);
               return (
-                <ListRow key={u.occurrenceId} data-occurrence-id={u.occurrenceId} onOpen={() => onOpen(u)}>
+                <ListRow
+                  key={u.occurrenceId}
+                  data-occurrence-id={u.occurrenceId}
+                  data-tour={i === 0 ? "finances-row" : undefined}
+                  onOpen={() => onOpen(u)}
+                >
                   <ListCell className="tabular-nums">
                     <span className={LIST_CLASSES.text}>{formatListDay(u.effectiveOn ?? u.dueDate) ?? "—"}</span>
                     {u.effectiveOn && u.effectiveOn !== u.dueDate && (

@@ -23,7 +23,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowUpRight, CheckCircle, ExternalLink, Link2Off, Mail, RotateCcw, Undo2, XCircle } from "lucide-react";
+import { ArrowUpRight, Ban, CheckCircle, DollarSign, ExternalLink, Link2Off, Mail, RotateCcw, Trash2, Undo2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui-v2/sheet";
 import { Skeleton } from "@/components/ui-v2/skeleton";
@@ -50,7 +50,8 @@ import {
   receiptMethodWords,
   upcomingStatusWords,
 } from "./finance-words";
-import { canCollectOnBill, canRefund, canRemoveLink, canReverse, canReview } from "./finance-rules";
+import { canCollectOnBill, canRefund, canRemoveLink, canReverse, canReview, customerHref, vehicleHref } from "./finance-rules";
+import { fineCanCharge, fineCanWaive } from "@/components/fines/use-fine-row-actions";
 import { billTitle } from "./billed-table";
 import { fineReference } from "./fines-view";
 import type { ReceiptAction } from "./received-table";
@@ -78,6 +79,18 @@ export interface SidePanelActions {
   onEmailInvoice: (bill: BillRow) => void;
   onOpen: (panel: PanelRef) => void;
   onClearFilters: () => void;
+  /** `canEdit('invoices')` — the Invoices tab's Delete gate. */
+  mayDeleteInvoice?: boolean;
+  /** Opens the Invoices tab's own DeleteInvoiceDialog for the bill's invoice. */
+  onDeleteInvoice?: (bill: BillRow) => void;
+  /** `canEdit('fines')` — the fines tab's gate on Record Payment and Waive Fine. */
+  mayActOnFines?: boolean;
+  /** A waive is on its way. */
+  finesBusy?: boolean;
+  /** The fines tab's Record Payment (`useFineRowActions().openPaymentDialog`). */
+  onFineRecordPayment?: (fine: EnhancedFine) => void;
+  /** The fines tab's Waive Fine (`useFineRowActions().waiveFineAction.mutate`). */
+  onFineWaive?: (fine: EnhancedFine) => void;
 }
 
 export function FinanceSidePanel({
@@ -98,6 +111,7 @@ export function FinanceSidePanel({
       <SheetContent
         side="right"
         data-finance-panel={panel?.kind ?? ""}
+        data-tour="finances-side-panel"
         className="gap-0 overflow-y-auto p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-[520px]"
       >
         {panel && <PanelBody panel={panel} data={data} currency={currency} actions={actions} />}
@@ -121,7 +135,7 @@ function PanelBody({ panel, data, currency, actions }: { panel: PanelRef; data: 
   }
   if (panel.kind === "fine") {
     const fine = data.fines.find((f) => f.id === panel.id);
-    return fine ? <FinePanel fine={fine} currency={currency} /> : <Missing data={data} what="fine" actions={actions} />;
+    return fine ? <FinePanel fine={fine} currency={currency} actions={actions} /> : <Missing data={data} what="fine" actions={actions} />;
   }
   const rows = panel.ids.map((id) => data.receipts.find((r) => r.paymentId === id)).filter((r): r is ReceiptRow => !!r);
   return <PaymentsPanel ids={panel.ids} rows={rows} data={data} currency={currency} actions={actions} />;
@@ -308,6 +322,18 @@ function BillPanel({ bill, data, currency, actions }: { bill: BillRow; data: Sid
             Email invoice
           </Button>
         )}
+        {actions.mayDeleteInvoice && actions.onDeleteInvoice && bill.invoiceNumber && (
+          <Button
+            type="button"
+            variant="outline"
+            data-panel-action="delete_invoice"
+            className="text-destructive hover:text-destructive"
+            onClick={() => actions.onDeleteInvoice!(bill)}
+          >
+            <Trash2 data-icon="inline-start" />
+            Delete invoice…
+          </Button>
+        )}
         {bill.onRental && bill.rentalId && (
           <Button asChild variant="ghost">
             <Link href={stageHref(bill.rentalId, "payments")}>
@@ -316,8 +342,38 @@ function BillPanel({ bill, data, currency, actions }: { bill: BillRow; data: Sid
             </Link>
           </Button>
         )}
+        <RecordLinks customerId={bill.customerId} vehicleId={bill.vehicleId} />
       </div>
     </div>
+  );
+}
+
+/**
+ * "Open the customer" · "Open the vehicle" — the records the Payments tab's
+ * row linked its Customer and Vehicle cells to. Each only when the row names one.
+ */
+function RecordLinks({ customerId, vehicleId }: { customerId?: string | null; vehicleId?: string | null }) {
+  const customer = customerHref(customerId);
+  const vehicle = vehicleHref(vehicleId);
+  return (
+    <>
+      {customer && (
+        <Button asChild variant="ghost">
+          <Link href={customer} data-panel-link="customer">
+            Open the customer
+            <ArrowUpRight data-icon="inline-end" />
+          </Link>
+        </Button>
+      )}
+      {vehicle && (
+        <Button asChild variant="ghost">
+          <Link href={vehicle} data-panel-link="vehicle">
+            Open the vehicle
+            <ArrowUpRight data-icon="inline-end" />
+          </Link>
+        </Button>
+      )}
+    </>
   );
 }
 
@@ -527,6 +583,7 @@ function PaymentPanel({ row, currency, actions }: { row: ReceiptRow; currency: s
             </Link>
           </Button>
         )}
+        <RecordLinks customerId={row.customerId} vehicleId={row.vehicleId} />
       </div>
     </div>
   );
@@ -672,8 +729,12 @@ function PlanSchedule({ rentalId, mayAct }: { rentalId: string; mayAct: boolean 
 
 /* ── a fine ──────────────────────────────────────────────────────────────── */
 
-function FinePanel({ fine, currency }: { fine: EnhancedFine; currency: string }) {
+function FinePanel({ fine, currency, actions }: { fine: EnhancedFine; currency: string; actions: SidePanelActions }) {
   const status = fineStatusWords(fine.status, fine.isOverdue);
+  // The fines tab's own row actions, on its own gates: an Open fine, and
+  // someone who may edit fines.
+  const charge = !!actions.mayActOnFines && !!actions.onFineRecordPayment && fineCanCharge(fine);
+  const waive = !!actions.mayActOnFines && !!actions.onFineWaive && fineCanWaive(fine);
   return (
     <div data-fine-panel={fine.id}>
       <Header title={`Fine ${fineReference(fine)}`} description={[fine.type, fine.customers?.name].filter(Boolean).join(" · ")} />
@@ -691,7 +752,25 @@ function FinePanel({ fine, currency }: { fine: EnhancedFine; currency: string })
         {fine.notes && <p className="whitespace-pre-wrap text-sm text-muted-foreground">{fine.notes}</p>}
       </Section>
       <div className="flex flex-wrap gap-2 px-6 pb-6 pt-2">
-        <Button asChild>
+        {charge && (
+          <Button type="button" data-panel-action="fine_record_payment" onClick={() => actions.onFineRecordPayment!(fine)}>
+            <DollarSign data-icon="inline-start" />
+            Record payment
+          </Button>
+        )}
+        {waive && (
+          <Button
+            type="button"
+            variant="outline"
+            data-panel-action="fine_waive"
+            disabled={!!actions.finesBusy}
+            onClick={() => actions.onFineWaive!(fine)}
+          >
+            <Ban data-icon="inline-start" />
+            Waive fine
+          </Button>
+        )}
+        <Button asChild variant={charge ? "outline" : "default"}>
           <Link href={`/fines/${fine.id}`}>
             Open the fine
             <ArrowUpRight data-icon="inline-end" />
@@ -702,8 +781,13 @@ function FinePanel({ fine, currency }: { fine: EnhancedFine; currency: string })
             <Link href={stageHref(fine.rental_id, "payments")}>Open the rental</Link>
           </Button>
         )}
+        <RecordLinks customerId={fine.customer_id} vehicleId={fine.vehicle_id} />
       </div>
-      <p className="px-6 pb-6 text-xs text-muted-foreground">Take a payment for it or waive it from the fine itself.</p>
+      {!charge && !waive && (
+        <p className="px-6 pb-6 text-xs text-muted-foreground">
+          {fineCanCharge(fine) ? "Take a payment for it or waive it from the fine itself." : "Its full history, appeals and documents are on the fine itself."}
+        </p>
+      )}
     </div>
   );
 }

@@ -57,6 +57,14 @@ export const RECEIPT_STATUSES: readonly ReceiptStatus[] = [
   "pending",
 ];
 export const UPCOMING_STATUSES: readonly string[] = OPEN_OCCURRENCE_STATUSES;
+
+/**
+ * Not a receipt status: a KIND of receipt. As a status filter it keeps exactly
+ * the payment links and charges the operator sent (`ReceiptRow.isPaymentRequest`)
+ * — the rows the old Invoices tab's "Payment Requests" list showed — in any
+ * status. It narrows receipts only; bills and upcoming rows ignore it.
+ */
+export const PAYMENT_REQUEST_STATUS = "payment_request";
 export const UPCOMING_METHODS: readonly UpcomingMethod[] = ["auto_charge", "checkout_link", "manual"];
 
 /** The view a card's rows live in. */
@@ -109,10 +117,12 @@ export function narrowReceipts(receipts: ReceiptRow[], filters: FinanceFilters):
   const statuses = applicable(filters.statuses, RECEIPT_STATUSES);
   // Upcoming's collection methods are not payment methods; any other value is.
   const methods = (filters.methods ?? []).filter((m) => !(UPCOMING_METHODS as readonly string[]).includes(m)).map(norm);
+  const requestsOnly = (filters.statuses ?? []).includes(PAYMENT_REQUEST_STATUS);
   return receipts.filter(
     (r) =>
       receiptMatchesSearch(r, q) &&
       (!statuses || statuses.has(r.status)) &&
+      (!requestsOnly || r.isPaymentRequest === true) &&
       (methods.length === 0 || methods.includes(norm(r.method)) || methods.includes(r.provider)),
   );
 }

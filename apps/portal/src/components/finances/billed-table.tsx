@@ -14,7 +14,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui-v2/dropdown-menu";
-import { CreditCard, FileText, PanelRightOpen } from "lucide-react";
+import { Car, CreditCard, FileText, PanelRightOpen, User } from "lucide-react";
 import Link from "next/link";
 import {
   LIST_CLASSES,
@@ -36,7 +36,7 @@ import { formatMoney } from "@/lib/payment-plans-ui/format";
 import { billStatusText, tieOutText } from "@/lib/finances/bills";
 import type { BillRow } from "@/lib/finances/types";
 import { BILL_TONE, formatListDay } from "./finance-words";
-import { canCollectOnBill } from "./finance-rules";
+import { canCollectOnBill, customerHref, vehicleHref } from "./finance-rules";
 import { MobileFact, MobileRows, RowMenuTrigger } from "./finance-list-bits";
 
 export function billTitle(bill: Pick<BillRow, "rentalRef" | "label" | "onRental">): string {
@@ -80,13 +80,14 @@ export function BilledTable({
             </ListHead>
           </ListTableHeader>
           <ListBody>
-            {rows.visible.map((bill) => {
+            {rows.visible.map((bill, i) => {
               const status = billStatusText(bill, currency);
               const mismatch = tieOutText(bill, currency);
               return (
                 <ListRow
                   key={bill.key}
                   data-bill-key={bill.key}
+                  data-tour={i === 0 ? "finances-row" : undefined}
                   data-tie-out={bill.tiesOut ? "ok" : "mismatch"}
                   onOpen={() => onOpen(bill)}
                 >
@@ -145,6 +146,22 @@ export function BilledTable({
                             <Link href={stageHref(bill.rentalId, "payments")}>
                               <FileText className="h-4 w-4" />
                               Open the rental
+                            </Link>
+                          </DropdownMenuItem>
+                        )}
+                        {customerHref(bill.customerId) && (
+                          <DropdownMenuItem asChild>
+                            <Link href={customerHref(bill.customerId)!} data-row-link="customer">
+                              <User className="h-4 w-4" />
+                              Open the customer
+                            </Link>
+                          </DropdownMenuItem>
+                        )}
+                        {vehicleHref(bill.vehicleId) && (
+                          <DropdownMenuItem asChild>
+                            <Link href={vehicleHref(bill.vehicleId)!} data-row-link="vehicle">
+                              <Car className="h-4 w-4" />
+                              Open the vehicle
                             </Link>
                           </DropdownMenuItem>
                         )}

@@ -1702,7 +1702,12 @@
             "canEdit('fines')",
             "setShowAddFineDialog(true)",
             "Fines Management",
-            "Waive Fine",
+            "Waive Fine"
+          ]
+        },
+        {
+          "path": "apps/portal/src/components/fines/use-fine-row-actions.tsx",
+          "symbols": [
             "syncFineStatusAfterPayment"
           ]
         },

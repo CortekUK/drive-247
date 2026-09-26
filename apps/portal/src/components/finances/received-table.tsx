@@ -11,7 +11,7 @@
  */
 
 import Link from "next/link";
-import { CheckCircle, FileText, Link2Off, PanelRightOpen, Undo2, XCircle, RotateCcw } from "lucide-react";
+import { Car, CheckCircle, FileText, Link2Off, PanelRightOpen, Undo2, User, XCircle, RotateCcw } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,7 +38,7 @@ import { cn } from "@/lib/utils";
 import { formatMoney } from "@/lib/payment-plans-ui/format";
 import type { ReceiptRow } from "@/lib/finances/types";
 import { RECEIPT_STATUS_LABEL, RECEIPT_TONE, formatListDay, receiptMethodWords } from "./finance-words";
-import { canRefund, canRemoveLink, canReverse, canReview } from "./finance-rules";
+import { canRefund, canRemoveLink, canReverse, canReview, customerHref, vehicleHref } from "./finance-rules";
 import { MobileFact, MobileRows, RowMenuTrigger } from "./finance-list-bits";
 
 export type ReceiptAction = "approve" | "reject" | "refund" | "remove_link" | "reverse";
@@ -88,11 +88,16 @@ export function ReceivedTable({
             </ListHead>
           </ListTableHeader>
           <ListBody>
-            {rows.visible.map((r) => {
+            {rows.visible.map((r, i) => {
               const status = RECEIPT_STATUS_LABEL[r.status];
               const ref = shortRef(r.providerRef);
               return (
-                <ListRow key={r.paymentId} data-payment-id={r.paymentId} onOpen={() => onOpen(r)}>
+                <ListRow
+                  key={r.paymentId}
+                  data-payment-id={r.paymentId}
+                  data-tour={i === 0 ? "finances-row" : undefined}
+                  onOpen={() => onOpen(r)}
+                >
                   <ListCell className="tabular-nums">
                     <span className={LIST_CLASSES.text}>{formatListDay(r.date) ?? "—"}</span>
                   </ListCell>
@@ -192,6 +197,8 @@ function ReceiptMenu({
   const refund = mayAct && canRefund(row);
   const removeLink = mayAct && canRemoveLink(row);
   const reverse = mayAct && canReverse(row);
+  const customer = customerHref(row.customerId);
+  const vehicle = vehicleHref(row.vehicleId);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -207,6 +214,22 @@ function ReceiptMenu({
             <Link href={stageHref(row.rentalId, "payments")}>
               <FileText className="h-4 w-4" />
               Open the rental
+            </Link>
+          </DropdownMenuItem>
+        )}
+        {customer && (
+          <DropdownMenuItem asChild>
+            <Link href={customer} data-row-link="customer">
+              <User className="h-4 w-4" />
+              Open the customer
+            </Link>
+          </DropdownMenuItem>
+        )}
+        {vehicle && (
+          <DropdownMenuItem asChild>
+            <Link href={vehicle} data-row-link="vehicle">
+              <Car className="h-4 w-4" />
+              Open the vehicle
             </Link>
           </DropdownMenuItem>
         )}

@@ -37,6 +37,8 @@ export interface PanelOption {
   label: string;
   /** Status chips borrow the hue the list paints that status with. */
   tone?: ListTone;
+  /** Anything else choosing this chip changes (the Payment requests chip also widens the period to All). */
+  patch?: Partial<FinancesUrlState>;
 }
 
 /** The list kit's tones as the hex a chip tints itself with (the design-system status colours). */
@@ -133,7 +135,7 @@ export function FinancesFilterPanel({
                 key={o.value}
                 active={state.status === o.value}
                 color={o.tone ? TONE_HEX[o.tone] : null}
-                onClick={() => onPatch({ status: o.value })}
+                onClick={() => onPatch({ ...o.patch, status: o.value })}
               >
                 {o.label}
               </FilterChip>

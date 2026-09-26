@@ -36,8 +36,10 @@ export function MobileRows<T>({
       data-finance-mobile-rows=""
       className="divide-y divide-foreground/5 overflow-hidden rounded-2xl bg-card ring-1 ring-foreground/5 sm:hidden dark:ring-foreground/10"
     >
-      {rows.map((row) => (
-        <li key={keyOf(row)}>
+      {rows.map((row, i) => (
+        // The first row is the tour's `finances-row` anchor on a phone, where the
+        // table (and its own first row) is hidden.
+        <li key={keyOf(row)} data-tour={i === 0 ? "finances-row" : undefined}>
           <button
             type="button"
             aria-label={label(row)}

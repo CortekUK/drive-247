@@ -306,6 +306,7 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
               type="button"
               aria-label={slot.filters.open ? "Hide filters" : "Show filters"}
               aria-pressed={slot.filters.open}
+              data-tour={slot.filters.tourAnchor}
               onClick={() => slot.filters!.onOpenChange(!slot.filters!.open)}
               className={
                 "relative flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors " +

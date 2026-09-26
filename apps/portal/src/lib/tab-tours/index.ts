@@ -81,6 +81,11 @@
 import type { TourBuildContext, TourStep } from '@/lib/first-rental-tour';
 import { AVAILABILITY_TAB_TOUR } from './availability';
 import { CUSTOMERS_TAB_TOUR } from './customers';
+import {
+  FINANCES_ATTENTION_SECTION,
+  FINANCES_EMPTY_STATE,
+  FINANCES_TAB_TOUR,
+} from './finances';
 import { PAYMENTS_TAB_TOUR } from './payments';
 import { RENTALS_TAB_TOUR } from './rentals';
 import { VEHICLES_TAB_TOUR } from './vehicles';
@@ -92,9 +97,15 @@ import { VEHICLES_TAB_TOUR } from './vehicles';
  * resolves by longest match and `readEmptyTabs` returns a set. It is NOT the
  * sidebar's order — that is Rentals, Vehicles, Customers with money under More.
  *
- * FIVE, and five is the whole list Ghulam asked for. Billing, Integrations and
- * Dashboard were ruled out by name; Payments becomes the Finances tour when
- * that tab lands (see the signpost at the head of `payments.ts`).
+ * Five tabs was the whole list Ghulam asked for; Billing, Integrations and
+ * Dashboard were ruled out by name. The sixth, `finances`, is not a new tab
+ * but Payments, Invoices and Fines merged into one, and it SITS BESIDE the
+ * Payments tour rather than replacing it (see the signpost at the head of
+ * `payments.ts`). Finances is canary-only by slug, so `/payments` still
+ * renders for every other tenant — including the real v2 tenants who get the
+ * tour button — and its tour has to keep working there, unchanged. The two
+ * never compete: `tabTourForPath` matches on their different home routes, and
+ * each page's launch button names its own tour.
  */
 export const TAB_TOUR_IDS = [
   'customers',
@@ -102,6 +113,7 @@ export const TAB_TOUR_IDS = [
   'rentals',
   'payments',
   'availability',
+  'finances',
 ] as const;
 
 export type TabTourId = (typeof TAB_TOUR_IDS)[number];
@@ -134,6 +146,7 @@ const TOURS: Record<TabTourId, TabTour> = {
   rentals: RENTALS_TAB_TOUR,
   payments: PAYMENTS_TAB_TOUR,
   availability: AVAILABILITY_TAB_TOUR,
+  finances: FINANCES_TAB_TOUR,
 };
 
 /** Look up a tour by id. Returns null for anything unknown — never throws. */
@@ -317,6 +330,10 @@ const RECORD_FIELD: Record<TabTourId, 'vehicleId' | 'customerId' | 'rentalId' | 
   rentals: 'rentalId',
   payments: null,
   availability: null,
+  // No `/finances/<id>` either: a row opens a side panel on the same page,
+  // and the tab's emptiness is read from its teaching empty state instead —
+  // see `EMPTY_SIGNALS` below.
+  finances: null,
 };
 
 /**
@@ -479,13 +496,21 @@ function firstRecordId(base: string): string | null {
  * lookup for `availability-empty` below is one querySelector that can never
  * match, and that tour is deliberately a single run. See the header of
  * `./availability`, which explains why faking a signal was the wrong fix.
+ *
+ * Two extensions, both below the function. A tab whose empty state is not a
+ * `<tab>-empty` card names its own selector in `EMPTY_SIGNALS` (Finances). And
+ * a SECTION drawn only when it holds something reports its absence through
+ * `OPTIONAL_SECTIONS`, under a dotted key that can never be a tab id.
  */
 export function readEmptyTabs(): string[] {
   if (typeof document === 'undefined') return [];
   const out: string[] = [];
   try {
     for (const id of TAB_TOUR_IDS) {
-      if (document.querySelector(`[data-tour="${id}-empty"]`)) out.push(id);
+      if (document.querySelector(EMPTY_SIGNALS[id] ?? `[data-tour="${id}-empty"]`)) out.push(id);
+    }
+    for (const [key, selector] of Object.entries(OPTIONAL_SECTIONS)) {
+      if (!document.querySelector(selector)) out.push(key);
     }
   } catch {
     // A DOM that refuses to be queried is not an empty tab — say nothing rather
@@ -494,6 +519,41 @@ export function readEmptyTabs(): string[] {
   }
   return out;
 }
+
+/**
+ * How a tab says "I am empty" when it is not the `<tab>-empty` teaching card.
+ *
+ * FINANCES, and the one thing to know about its signal: the Finances lists
+ * open on THIS MONTH (`DEFAULT_PERIOD` in components/finances/finances-url.ts),
+ * and the page puts its teaching empty state up whenever the default window
+ * has nothing in it. So the honest reading is "nothing has been charged or
+ * paid this month", which is every brand-new tenant and, for a day or two, a
+ * quiet one at the turn of a month. The empty run's copy is written to be true
+ * for both (see `finances.empty.what`). `finances-empty` is listed first so a
+ * lifetime-empty marker, if the page ever draws one, wins outright.
+ */
+const EMPTY_SIGNALS: Partial<Record<TabTourId, string>> = {
+  finances: ['[data-tour="finances-empty"]', ...FINANCES_EMPTY_STATE].join(', '),
+};
+
+/**
+ * A section the page draws ONLY when it holds something — Finances' Needs
+ * attention list is the one today. Its key goes into `readEmptyTabs()` when the
+ * section is absent, so a step can carry `requires: { tabHasData: <key> }` and
+ * be dropped at launch, instead of waiting out `ANCHOR_WAIT_MS` on an element
+ * that is not coming (and cascading the short budget onto every later step on
+ * the route).
+ *
+ * Keys are dotted, never a `TabTourId`, so `tabTourVariant` — which asks
+ * `includes(<tab id>)` — cannot mistake one for a whole empty tab. They are
+ * declared in the tour file that guards on them and imported here, never the
+ * other way round: the tour files are evaluated while this module is still
+ * importing them, so a value they read from here at load time would not exist
+ * yet.
+ */
+const OPTIONAL_SECTIONS: Record<string, string> = {
+  [FINANCES_ATTENTION_SECTION]: '[data-tour="finances-attention"]',
+};
 
 /** Sample ids for `TourBuildContext.sampleIds`. Safe to call on any route. */
 export function readSampleIds(): {
@@ -508,4 +568,5 @@ export function readSampleIds(): {
   };
 }
 
+export { FINANCES_ATTENTION_SECTION, FINANCES_EMPTY_STATE };
 export type { TourBuildContext, TourStep };

@@ -128,3 +128,19 @@ export function listSum(
   const upcoming = rows.upcoming ?? [];
   return { label: card === "upcoming" ? "Due in the next 7 days" : "Due on these payments", cents: sum(upcoming.map((u) => u.amountCents)) };
 }
+
+/* ── where a row's links lead ────────────────────────────────────────────── */
+
+/**
+ * The customer and vehicle records a row names — the same destinations the
+ * Payments tab's row linked its customer and vehicle cells to
+ * (`/customers/<id>`, `/vehicles/<id>`). Null when the row has none, so the
+ * link is simply not offered.
+ */
+export function customerHref(customerId: string | null | undefined): string | null {
+  return customerId ? `/customers/${customerId}` : null;
+}
+
+export function vehicleHref(vehicleId: string | null | undefined): string | null {
+  return vehicleId ? `/vehicles/${vehicleId}` : null;
+}

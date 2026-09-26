@@ -52,6 +52,10 @@ export interface PageFilterRegistration {
   /** Drawn as a badge on the filter button while the panel is SHUT — closed, it
    *  is the only thing telling you the list you are reading is not the whole list. */
   activeCount: number;
+  /** `data-tour` to stamp on the filter BUTTON (the search field's own is
+   *  `tourAnchor` below). Optional: only a page whose tour points at the button
+   *  passes one, so every other page's button renders exactly as before. */
+  tourAnchor?: string;
 }
 
 export interface PageSearchRegistration {
@@ -123,6 +127,7 @@ export function usePageSearch(reg: PageSearchRegistration | null) {
   const hasFilters = Boolean(reg?.filters);
   const filtersOpen = reg?.filters?.open ?? false;
   const activeCount = reg?.filters?.activeCount ?? 0;
+  const filterTourAnchor = reg?.filters?.tourAnchor;
   const present = reg !== null;
 
   useEffect(() => {
@@ -136,7 +141,7 @@ export function usePageSearch(reg: PageSearchRegistration | null) {
       value,
       onChange,
       tourAnchor,
-      filters: hasFilters ? { open: filtersOpen, onOpenChange, activeCount } : undefined,
+      filters: hasFilters ? { open: filtersOpen, onOpenChange, activeCount, tourAnchor: filterTourAnchor } : undefined,
     });
     /* Handed back on unmount, so navigating to a page with nothing to filter
        returns the bar to the global ⌘K pill rather than leaving a stale field
@@ -151,6 +156,7 @@ export function usePageSearch(reg: PageSearchRegistration | null) {
     hasFilters,
     filtersOpen,
     activeCount,
+    filterTourAnchor,
     onChange,
     onOpenChange,
   ]);

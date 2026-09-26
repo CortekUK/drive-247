@@ -122,6 +122,7 @@ export function NeedsAttention({
     <section
       aria-labelledby="finances-attention-heading"
       data-finances-attention=""
+      data-tour="finances-attention"
       className="rounded-2xl bg-card p-4 ring-1 ring-foreground/5 dark:ring-foreground/10"
     >
       <div className="flex items-center gap-2 px-1 pb-2">

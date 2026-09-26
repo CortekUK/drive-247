@@ -216,6 +216,8 @@ export function buildBills(raw: FinanceRawData, lk: FinanceLookups, ctx: Finance
       isPayg,
       excludedReason: rental ? excludedRentalReason(rental) : null,
       onRental: !!g.rentalId,
+      vehicleId,
+      invoiceId: isBooking ? lk.invoiceByRental.get(g.rentalId!)?.id ?? null : null,
     });
   });
 

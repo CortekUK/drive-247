@@ -4,19 +4,21 @@
  * ---------------------------------------------------------------------------
  * SIGNPOST: THE FINANCES MERGE. READ THIS BEFORE MOVING ANYTHING.
  *
- * Payments, Invoices and Fines are being merged into ONE tab called "finances",
- * and the team lead is building it himself. When `/finances` lands, this tour
- * needs its `homeRoute` and its `label` revisited — `homeRoute` is what
- * `tabTourForPath` matches on and what the launch button renders under, so a
- * tour still pointing at `/payments` simply stops appearing. The `route` on
- * every step below needs the same one-line change.
+ * Payments, Invoices and Fines were merged into ONE tab, `/finances`, and it
+ * got a tour of its own (`./finances.ts`) rather than this one repointed.
+ * Finances is canary-only BY SLUG (`SLUG_ONLY_AREAS` in lib/v2.ts): the canary
+ * is redirected from `/payments` to `/finances`, but every other tenant —
+ * including the real v2 tenants who get the tour button — still has this tab,
+ * and this tour must keep working for them exactly as it is. So do NOT change
+ * its `homeRoute` or its steps' routes to `/finances`; that would take the
+ * tour off every screen that still draws the Payments tab. The day Finances
+ * reaches everyone and `/payments` is retired, this file can go.
  *
- * Nothing here tries to pre-empt that merge. What it does do is keep the cost
- * of it small: every anchor is a `payments-` prefixed `data-tour` attribute on
+ * Every anchor below is still a `payments-` prefixed `data-tour` attribute on
  * a payments-owned component — the summary cards, the filter bar, the rows —
- * rather than a selector describing where those things sit on today's page. If
- * the Payments screen becomes a section of Finances with its markup intact, the
- * anchors travel with it and only the routes change.
+ * rather than a selector describing where those things sit on the page. The
+ * Finances page does not draw them (it has its own `finances-` names), so the
+ * two tours share no anchors and neither can land on the other's screen.
  *
  * ---------------------------------------------------------------------------
  * WHY THIS TOUR IS FLAT, WHEN THE OTHER THREE GO INSIDE A RECORD

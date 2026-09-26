@@ -31,7 +31,7 @@ export function FinancesViewSwitch({
 }) {
   if (views.length < 2) return null;
   return (
-    <Tabs value={view} onValueChange={(v) => onView(v as FinanceView)} data-finances-toolbar="">
+    <Tabs value={view} onValueChange={(v) => onView(v as FinanceView)} data-finances-toolbar="" data-tour="finances-views">
       <TabsList aria-label="Finances views" className={SETTINGS_TAB_LIST}>
         {views.map((v) => (
           <TabsTrigger key={v} value={v} data-finance-view={v} className={SETTINGS_TAB_TRIGGER}>

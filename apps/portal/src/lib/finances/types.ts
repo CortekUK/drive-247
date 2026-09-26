@@ -102,6 +102,10 @@ export interface BillRow {
   excludedReason: "cancelled" | "rejected" | null;
   /** added — false for the per-customer "Not on a rental" bill (`rentalId` is ""). */
   onRental: boolean;
+  /** added — the rental's vehicle (else the first charge's), for the vehicle link the old Payments rows had. */
+  vehicleId?: string | null;
+  /** added — the `invoices` row behind `invoiceNumber` (booking bill only), for Email and Delete invoice. */
+  invoiceId?: string | null;
 }
 
 export type ReceiptStatus = "approved" | "pending_review" | "rejected" | "refunded" | "partially_refunded" | "pending";
@@ -147,6 +151,16 @@ export interface ReceiptRow {
   recordedAt: string | null;
   /** added — `payments.extension_id`. */
   extensionId: string | null;
+  /** added — `payments.vehicle_id`, else the rental's vehicle, for the vehicle link the old Payments rows had. */
+  vehicleId?: string | null;
+  /**
+   * added — a payment link or charge the operator SENT: the row carries a Stripe
+   * checkout session or a Square payment link. Exactly the rows the old
+   * Invoices tab's "Payment Requests" list selected (hooks/use-payment-links.ts
+   * `fetchTenantPaymentRequests`: stripe_checkout_session_id or
+   * square_payment_link_id not null), whatever their status.
+   */
+  isPaymentRequest?: boolean;
 }
 
 export type UpcomingMethod = "auto_charge" | "checkout_link" | "manual";
