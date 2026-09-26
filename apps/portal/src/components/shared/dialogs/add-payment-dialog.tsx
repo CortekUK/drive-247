@@ -1271,7 +1271,14 @@ export const AddPaymentDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!isAnyLoading) onOpenChange(v); }}>
-      <DialogContent className="max-w-[calc(100vw-16px)] sm:max-w-[460px] p-0 gap-0 overflow-hidden max-h-[calc(100dvh-16px)] sm:max-h-[90vh] overflow-y-auto">
+      {/* 720px wide from sm up so the fields sit in two columns (one below sm),
+          which is what keeps the dialog short enough not to scroll on a
+          laptop screen. sm:w-[calc(100vw-32px)] keeps a margin between 640px
+          and 720px, where the fixed max width alone would run edge to edge.
+          overflow-y-auto stays only as the safety net for very short
+          viewports; the footer below is sticky, so the buttons stay on screen
+          even then. */}
+      <DialogContent className="max-w-[calc(100vw-16px)] sm:w-[calc(100vw-32px)] sm:max-w-[720px] p-0 gap-0 overflow-hidden max-h-[calc(100dvh-16px)] sm:max-h-[calc(100dvh-48px)] overflow-y-auto [@media(min-width:640px)_and_(min-height:600px)]:scroll-pb-56">
         {/* Header */}
         <div className="px-4 sm:px-6 pt-5 sm:pt-6 pb-3 sm:pb-4">
           <DialogHeader>
@@ -1285,11 +1292,15 @@ export const AddPaymentDialog = ({
           </DialogHeader>
         </div>
 
-        {/* Customer/Vehicle selection when not pre-populated */}
+        {/* Customer/Vehicle selection when not pre-populated. Customer | Vehicle
+            from sm up, on the same column edges as the form below.
+            empty:hidden: with a customer and a rental but no vehicle id (the
+            Finances "collect" path) neither picker renders, and the empty
+            wrapper used to leave a padded band and a stray border line. */}
         {(!customer_id || !vehicle_id) && (
-          <div className="px-4 sm:px-6 pb-4 space-y-3 border-b">
+          <div className="px-4 sm:px-6 pb-4 border-b grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-x-4 empty:hidden">
             {!customer_id && (
-              <div>
+              <div className="sm:only:col-span-2">
                 <Label className="text-sm font-medium">Customer <span className="text-red-500">*</span></Label>
                 <Select onValueChange={(val) => form.setValue("customer_id", val)} value={form.watch("customer_id")}>
                   <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select Customer" /></SelectTrigger>
@@ -1303,7 +1314,7 @@ export const AddPaymentDialog = ({
             )}
 
             {!vehicle_id && !propRentalId && (
-              <div>
+              <div className="sm:only:col-span-2">
                 <Label className="text-sm font-medium">
                   Vehicle <span className="text-red-500">*</span>
                 </Label>
@@ -1329,6 +1340,12 @@ export const AddPaymentDialog = ({
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <div className="px-4 sm:px-6 py-4 sm:py-5 space-y-4 sm:space-y-5">
+              {/* Amount | Method. One column below sm, two from sm up. The
+                  breakdown list is the third cell: it spans both columns from
+                  sm up, and on a phone `order` puts it straight under the
+                  amount it explains (it holds no focusable control, so the tab
+                  order still matches what is on screen). */}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-y-3">
               {/* Amount */}
               <FormField
                 control={form.control}
@@ -1339,50 +1356,44 @@ export const AddPaymentDialog = ({
                     {breakdownItems && breakdownItems.length > 0 ? (
                       <>
                         {/* Read-only amount display for breakdown mode */}
-                        <div className="flex items-center h-12 px-3 rounded-md border bg-muted/50 text-lg font-semibold">
-                          <span className="text-muted-foreground text-sm mr-1">{currencySymbol}</span>
-                          {formatCurrency(field.value || 0, tenant?.currency_code || 'USD').replace(/^[^\d]*/, '')}
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium">{currencySymbol}</span>
+                          <Input
+                            readOnly
+                            tabIndex={-1}
+                            aria-label="Amount"
+                            className="pl-7 text-lg font-semibold h-12 bg-muted/50"
+                            value={formatCurrency(field.value || 0, tenant?.currency_code || 'USD').replace(/^[^\d]*/, '')}
+                          />
                         </div>
                         {/* Collapsible breakdown */}
                         <button
                           type="button"
                           className="flex items-center gap-1 text-xs text-primary hover:underline"
                           onClick={() => setShowBreakdown(!showBreakdown)}
+                          aria-expanded={showBreakdown}
+                          aria-controls="payment-breakdown"
                         >
                           <ChevronDown className={cn("h-3 w-3 transition-transform", showBreakdown && "rotate-180")} />
                           {showBreakdown ? 'Hide breakdown' : 'View breakdown'}
                         </button>
-                        {showBreakdown && (
-                          <div className="rounded-lg border px-3 py-2 space-y-1 text-xs">
-                            {breakdownItems.map((item, i) => (
-                              <div key={i} className={cn(
-                                "flex items-center justify-between",
-                                item.type === 'discount' && "text-green-600 dark:text-green-400"
-                              )}>
-                                <span className="text-muted-foreground">{item.label}</span>
-                                <span className="font-medium">
-                                  {item.type === 'discount' ? '−' : ''}{formatCurrency(Math.abs(item.amount), tenant?.currency_code || 'USD')}
-                                </span>
-                              </div>
-                            ))}
-                            <div className="border-t pt-1 flex items-center justify-between font-semibold text-sm">
-                              <span>Total</span>
-                              <span>{formatCurrency(
-                                breakdownItems.reduce((sum, item) => sum + (item.type === 'discount' ? -Math.abs(item.amount) : item.amount), 0),
-                                tenant?.currency_code || 'USD'
-                              )}</span>
-                            </div>
-                          </div>
-                        )}
+                        {/* The expanded list renders after the Method field
+                            below, as a full-width row of this grid. */}
                       </>
                     ) : defaultAmount !== undefined ? (
                       // Read-only amount display when the caller pre-computed the amount
                       // (individual category, collective selection, Bonzah insurance,
                       // extension payments, etc. — amount is derived from outstanding
                       // and must not be edited by hand).
-                      <div className="flex items-center h-12 px-3 rounded-md border bg-muted/50 text-lg font-semibold">
-                        <span className="text-muted-foreground text-sm mr-1">{currencySymbol}</span>
-                        {formatCurrency(field.value || 0, tenant?.currency_code || 'USD').replace(/^[^\d]*/, '')}
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium">{currencySymbol}</span>
+                        <Input
+                          readOnly
+                          tabIndex={-1}
+                          aria-label="Amount"
+                          className="pl-7 text-lg font-semibold h-12 bg-muted/50"
+                          value={formatCurrency(field.value || 0, tenant?.currency_code || 'USD').replace(/^[^\d]*/, '')}
+                        />
                       </div>
                     ) : (
                       <>
@@ -1425,7 +1436,7 @@ export const AddPaymentDialog = ({
                 control={form.control}
                 name="method"
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem className="order-2 sm:order-none">
                     <FormLabel className="text-sm font-medium">Method</FormLabel>
                     <Select
                       value={field.value?.startsWith('Other:') ? 'Other' : (field.value || '')}
@@ -1438,7 +1449,9 @@ export const AddPaymentDialog = ({
                       }}
                     >
                       <FormControl>
-                        <SelectTrigger className="h-9">
+                        {/* sm:h-12 matches the amount box beside it, so the
+                            two-column row reads as one line. */}
+                        <SelectTrigger className="h-9 sm:h-12">
                           <SelectValue placeholder="Select payment method" />
                         </SelectTrigger>
                       </FormControl>
@@ -1466,8 +1479,38 @@ export const AddPaymentDialog = ({
                 )}
               />
 
-              {/* Date + Reference */}
-              <div className="grid grid-cols-2 gap-3">
+              {/* Charge breakdown, opened by "View breakdown" under the amount.
+                  Full width from sm up, with its lines in two columns so a long
+                  bill (rental, tax, fees, insurance, extras) takes half the
+                  height; the total spans both. */}
+              {breakdownItems && breakdownItems.length > 0 && showBreakdown && (
+                <div id="payment-breakdown" className="order-1 sm:order-none sm:col-span-2 rounded-lg border px-3 py-2 grid grid-cols-1 gap-y-1 sm:grid-cols-2 sm:gap-x-6 text-xs">
+                  {breakdownItems.map((item, i) => (
+                    <div key={i} className={cn(
+                      "flex items-center justify-between",
+                      item.type === 'discount' && "text-green-600 dark:text-green-400"
+                    )}>
+                      <span className="text-muted-foreground">{item.label}</span>
+                      <span className="font-medium">
+                        {item.type === 'discount' ? '−' : ''}{formatCurrency(Math.abs(item.amount), tenant?.currency_code || 'USD')}
+                      </span>
+                    </div>
+                  ))}
+                  <div className="border-t pt-1 flex items-center justify-between font-semibold text-sm sm:col-span-2">
+                    <span>Total</span>
+                    <span>{formatCurrency(
+                      breakdownItems.reduce((sum, item) => sum + (item.type === 'discount' ? -Math.abs(item.amount) : item.amount), 0),
+                      tenant?.currency_code || 'USD'
+                    )}</span>
+                  </div>
+                </div>
+              )}
+              </div>
+
+              {/* Date + Reference. Already two columns on a phone (both fields
+                  are short); sm:gap-x-4 lines the columns up with the rows
+                  above. */}
+              <div className="grid grid-cols-2 gap-3 sm:gap-x-4">
                 <FormField
                   control={form.control}
                   name="payment_date"
@@ -1512,7 +1555,12 @@ export const AddPaymentDialog = ({
               </div>
             </div>
 
-            {/* Footer */}
+            {/* Footer. Sticky to the dialog's bottom edge: when a very short
+                screen does make the dialog scroll, Record Payment and Cancel
+                stay on screen instead of being cut off below the fold. The
+                outer layer is opaque so fields scrolling underneath don't show
+                through the translucent muted tint. */}
+            <div className="bg-background [@media(min-width:640px)_and_(min-height:600px)]:sticky [@media(min-width:640px)_and_(min-height:600px)]:bottom-0 [@media(min-width:640px)_and_(min-height:600px)]:z-10">
             <div className="px-4 sm:px-6 py-3 sm:py-4 border-t bg-muted/30 space-y-2">
               {/* Primary: Record manual payment */}
               <Button type="submit" disabled={isAnyLoading} className="w-full h-11">
@@ -1650,6 +1698,7 @@ export const AddPaymentDialog = ({
               <button type="button" className="w-full text-center text-xs text-muted-foreground hover:text-foreground py-1 transition-colors" onClick={() => onOpenChange(false)} disabled={isAnyLoading}>
                 Cancel
               </button>
+            </div>
             </div>
           </form>
         </Form>
