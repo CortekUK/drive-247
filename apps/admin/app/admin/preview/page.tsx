@@ -201,6 +201,7 @@ function SectionsDemo() {
       { id: 'production', label: 'Mark as Production', tone: 'active' },
       { id: 'test', label: 'Mark as Test' },
       { id: 'status', label: 'Suspend company' },
+      { id: 'force-logout', label: 'Force Logout All Users' },
       { id: 'delete', label: 'Delete company', tone: 'destructive' },
     ],
     () => {

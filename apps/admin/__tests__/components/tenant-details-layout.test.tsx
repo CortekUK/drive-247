@@ -37,7 +37,19 @@ function detailsBody(src: string): string {
 }
 
 /** Markup only: comments mention removed things by name and must not count. */
-const markup = (src: string) => src.replace(/\{\/\*[\s\S]*?\*\/\}/g, '');
+/**
+ * Source with every comment stripped.
+ *
+ * Comments count as matches, and this has already produced one test that
+ * passed on a comment explaining the very thing it was asserting was gone.
+ *
+ * BOTH forms, which is the part that caught me a second time: JSX comments
+ * are `{/* … *\/}`, but a comment inside a plain expression — an entry in an
+ * array, say — is a bare `/* … *\/` with no braces, and stripping only the
+ * first form leaves it behind.
+ */
+const markup = (src: string) =>
+  src.replace(/\{\/\*[\s\S]*?\*\/\}/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
 
 describe('the header carries the title and its state, and nothing else', () => {
   /**
@@ -151,11 +163,41 @@ describe('the details tab is one column with no read-only rail', () => {
     }
   });
 
-  it('keeps the remaining cards', () => {
-    const body = markup(detailsBody(page()));
-    for (const card of ['Quick Actions', 'Company Information', 'Staff Users', 'Policy Acceptances']) {
-      expect(body, `${card} missing`).toContain(card);
+  it('keeps Company Information', () => {
+    expect(markup(detailsBody(page()))).toContain('Company Information');
+  });
+});
+
+describe('staff users are gone and consent has its own tab', () => {
+  /*
+   * Sep 26 2026: Staff Users was circled in red and removed; Policy
+   * Acceptances was circled in green and moved to a new "Consent" section.
+   */
+  const consentBody = (src: string) => {
+    const start = src.indexOf('<TabsContent value="consent"');
+    expect(start).toBeGreaterThan(-1);
+    return src.slice(start, src.indexOf('</TabsContent>', start));
+  };
+
+  it('drops the Staff Users card and the list query that fed it', () => {
+    const s = page();
+    expect(markup(s)).not.toContain('Staff Users');
+    for (const sym of ['loadStaffUsers', 'setStaffUsers', 'staffLoading', 'interface StaffUser']) {
+      expect(s, `${sym} still present`).not.toContain(sym);
     }
+  });
+
+  it('registers Consent in the rail', () => {
+    const s = page();
+    const reg = s.slice(s.indexOf('useRegisterSidebarSections('), s.indexOf('if (loading)'));
+    expect(reg).toContain("{ id: 'consent', label: 'Consent' }");
+  });
+
+  it('renders Policy Acceptances in Consent and nowhere in Details', () => {
+    const s = page();
+    expect(markup(consentBody(s))).toContain('Policy Acceptances');
+    expect(markup(consentBody(s))).toContain('policyAcceptances.map');
+    expect(markup(detailsBody(s))).not.toContain('Policy Acceptances');
   });
 });
 
@@ -169,15 +211,49 @@ describe('quick actions', () => {
     }
   });
 
-  it('keeps Open Portal, Open Booking Site and Force Logout', () => {
+  it('is gone entirely, heading and all', () => {
+    // Its last two links moved to the header and Force Logout into Rental
+    // Settings, leaving a card whose only remaining job was to hold a
+    // heading. Sep 26 2026.
+    const s = page();
+    expect(markup(s)).not.toContain('Quick Actions');
+    // And the icon that titled it, so the import does not linger.
+    expect(s).not.toMatch(/\bZap\b/);
+  });
+
+  it('puts the two links in the header, without the word "Open"', () => {
+    const s = page();
+    const header = markup(s.slice(s.indexOf('{/* Page header'), s.indexOf('{/* Tabs */}')));
+    expect(header).toContain('Portal');
+    expect(header).toContain('Booking Site');
+    expect(header).toContain('tenantPortalUrl(tenant.slug)');
+    expect(header).toContain('tenantBookingUrl(tenant.slug)');
+    // The arrow-out-of-box icon already says the link leaves the app.
+    expect(header).toContain('ExternalLink');
+    expect(header).not.toContain('Open Portal');
+    expect(header).not.toContain('Open Booking Site');
+  });
+
+  it('moves Force Logout into the registered actions, dialog intact', () => {
+    const s = page();
+    const reg = s.slice(s.indexOf('useRegisterSidebarSections('), s.indexOf('if (loading)'));
+    expect(reg).toContain("id: 'force-logout'");
+    expect(reg).toContain('Force Logout All Users');
+    expect(reg).toContain('setShowForceLogoutConfirm(true)');
+    // The confirm dialog it opens is unchanged and still reachable.
+    expect(s).toContain('open={showForceLogoutConfirm}');
+  });
+
+  it('leaves the details body with no action buttons at its top', () => {
+    // Company Information is the first card now: the page leads with what it
+    // is about, not with a row of buttons.
     const body = markup(detailsBody(page()));
-    expect(body).toContain('Open Portal');
-    expect(body).toContain('Open Booking Site');
-    expect(body).toContain('Force Logout All Users');
+    expect(body.indexOf('Company Information')).toBeGreaterThan(-1);
+    expect(body).not.toContain('Force Logout All Users');
   });
 });
 
-describe('the rail carries two sections, not six', () => {
+describe('the rail carries three sections, not six', () => {
   /*
    * Payments, Analytics, Finance Sync and Todos were removed from Super Admin
    * on Sep 26 2026. Removing the rail rows alone would not have been enough:
@@ -188,11 +264,12 @@ describe('the rail carries two sections, not six', () => {
    */
   const GONE = ['payments', 'analytics', 'finance', 'todos'];
 
-  it('registers only Details and Management', () => {
+  it('registers only Details, Management and Consent', () => {
     const s = page();
     const reg = s.slice(s.indexOf('useRegisterSidebarSections('), s.indexOf('if (loading)'));
     expect(reg).toContain("id: 'details'");
     expect(reg).toContain("id: 'management'");
+    expect(reg).toContain("id: 'consent'");
     for (const id of GONE) expect(reg).not.toContain(`id: '${id}'`);
   });
 

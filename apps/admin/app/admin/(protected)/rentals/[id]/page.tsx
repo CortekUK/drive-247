@@ -49,14 +49,11 @@ import {
   Link2,
   Settings2,
   Shield,
-  Zap,
   CreditCard,
   FileText,
   X,
   Plus,
-  LogOut,
   Car,
-  Users,
   UserCheck,
   CircleDot,
   ShieldCheck,
@@ -185,15 +182,6 @@ interface TenantStats {
 }
 
 
-interface StaffUser {
-  id: string;
-  name: string | null;
-  email: string;
-  role: string;
-  is_active: boolean;
-  created_at: string;
-}
-
 interface PolicyAcceptance {
   id: string;
   app_user_id: string;
@@ -294,8 +282,6 @@ export default function TenantDetailsPage() {
   // Stats, charts, staff state
   const [stats, setStats] = useState<TenantStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
-  const [staffUsers, setStaffUsers] = useState<StaffUser[]>([]);
-  const [staffLoading, setStaffLoading] = useState(true);
   const [policyAcceptances, setPolicyAcceptances] = useState<PolicyAcceptance[]>([]);
   const [policyLoading, setPolicyLoading] = useState(true);
 
@@ -402,7 +388,6 @@ export default function TenantDetailsPage() {
       loadSubscriptionLink(id);
       loadPlans(id);
       loadStats(id);
-      loadStaffUsers(id);
       loadPolicyAcceptances(id);
     } catch (error) {
       console.error('Error loading tenant:', error);
@@ -799,24 +784,6 @@ export default function TenantDetailsPage() {
 
 
 
-
-  const loadStaffUsers = async (tenantId: string) => {
-    setStaffLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('app_users')
-        .select('id, name, email, role, is_active, created_at')
-        .eq('tenant_id', tenantId)
-        .order('created_at', { ascending: true });
-
-      if (error) throw error;
-      setStaffUsers(data || []);
-    } catch (error) {
-      console.error('Error loading staff:', error);
-    } finally {
-      setStaffLoading(false);
-    }
-  };
 
   const loadPolicyAcceptances = async (tenantId: string) => {
     setPolicyLoading(true);
@@ -1292,7 +1259,7 @@ export default function TenantDetailsPage() {
       : 'details',
   );
   /*
-   * Two sections, not six.
+   * Three sections, not six: Details, Management and Consent.
    *
    * Payments, Analytics, Finance Sync and Todos were removed from Super Admin
    * on Sep 26 2026 by request. This takes them off THIS page only — the rental
@@ -1389,6 +1356,7 @@ export default function TenantDetailsPage() {
     [
       { id: 'details', label: 'Details' },
       { id: 'management', label: 'Management' },
+      { id: 'consent', label: 'Consent' },
     ],
     tab,
     setTab,
@@ -1405,11 +1373,17 @@ export default function TenantDetailsPage() {
       { id: 'production', label: 'Mark as Production', tone: tenant?.tenant_type === 'production' ? 'active' : 'default' },
       { id: 'test', label: 'Mark as Test', tone: tenant?.tenant_type === 'test' ? 'active' : 'default' },
       { id: 'status', label: tenant?.status === 'active' ? 'Suspend company' : 'Activate company' },
+      /* Joined the list Sep 26 2026 when Quick Actions was removed. It signs
+         every one of the company's staff out, so it sits with the other
+         things that act on the whole company rather than on this page. It
+         opens the same confirm dialog it always did. */
+      { id: 'force-logout', label: 'Force Logout All Users' },
       { id: 'delete', label: 'Delete company', tone: 'destructive' },
     ],
     (id) => {
       if (id === 'production' || id === 'test') return void handleUpdateType(id);
       if (id === 'status') return void handleUpdateStatus(tenant?.status === 'active' ? 'suspended' : 'active');
+      if (id === 'force-logout') return setShowForceLogoutConfirm(true);
       if (id === 'delete') setShowDeleteConfirm(true);
     },
   );
@@ -1474,16 +1448,34 @@ export default function TenantDetailsPage() {
           </Badge>
         </div>
 
-        {/* The Production/Test switch, Suspend and Delete were removed from
-            Super Admin on Sep 26 2026 by request. The header now carries the
-            title and its state badges only.
+        {/* The two places this company actually lives.
 
-            The badges stay: they still REPORT the tenant's type and status,
-            which is what the rest of this page is read for. Only the
-            controls that changed them are gone.
+            They were buttons in a "Quick Actions" card below the header,
+            labelled "Open Portal" and "Open Booking Site". The card is gone
+            and the word "Open" with it: the arrow-out-of-box icon already
+            says the link leaves this app, so the word only repeated it.
 
-            Nothing here reached the operator's own portal — that is a
-            separate application (`apps/portal`). */}
+            Up here they also fill the space the Production/Test switch,
+            Suspend and Delete left when those moved into the account menu.
+
+            The Production/Test switch, Suspend and Delete are NOT here — they
+            are in Rental Settings at the foot of the rail. The badges beside
+            the title still REPORT type and status, which is what this page is
+            read for; only the controls that change them moved. */}
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" asChild>
+            <a href={tenantPortalUrl(tenant.slug)} target="_blank" rel="noopener noreferrer">
+              Portal
+              <ExternalLink className="ml-1.5 h-3.5 w-3.5" aria-hidden="true" />
+            </a>
+          </Button>
+          <Button variant="outline" size="sm" asChild>
+            <a href={tenantBookingUrl(tenant.slug)} target="_blank" rel="noopener noreferrer">
+              Booking Site
+              <ExternalLink className="ml-1.5 h-3.5 w-3.5" aria-hidden="true" />
+            </a>
+          </Button>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -1492,53 +1484,18 @@ export default function TenantDetailsPage() {
 
         {/* Details Tab */}
         <TabsContent value="details" className="space-y-6">
-          {/* Single column. The right rail (Access URLs + Recent Activity)
-              and the Email Contact / Maintenance Banner quick actions were
-              removed from Super Admin on Sep 26 2026 by request. */}
-          <div className="min-w-0 space-y-6">
-            {/* Quick Actions */}
-            <Card>
-              <CardHeader className="pb-4">
-                <div className="flex items-center gap-2">
-                  <Zap className="h-4 w-4 text-primary" />
-                  <CardTitle className="text-lg">Quick Actions</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-wrap gap-2">
-                  <Button asChild size="sm">
-                    <a
-                      href={tenantPortalUrl(tenant.slug)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5 mr-1" />
-                      Open Portal
-                    </a>
-                  </Button>
-                  <Button variant="outline" asChild size="sm">
-                    <a
-                      href={tenantBookingUrl(tenant.slug)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5 mr-1" />
-                      Open Booking Site
-                    </a>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowForceLogoutConfirm(true)}
-                    className="text-amber-600 border-amber-500/30 hover:bg-amber-500/10"
-                  >
-                    <LogOut className="w-3.5 h-3.5 mr-1" />
-                    Force Logout All Users
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+          {/* Single column, and Company Information leads it.
 
+              The right rail (Access URLs, Recent Activity) and the Email
+              Contact / Maintenance Banner actions were removed from Super
+              Admin on Sep 26 2026. The whole Quick Actions card went with
+              them: its two links moved to the header without the word
+              'Open', and Force Logout moved into Rental Settings, which
+              left a card whose only remaining job was to hold a heading.
+
+              So the first thing on the page is now what the page is
+              about — the company — rather than a row of buttons. */}
+          <div className="min-w-0 space-y-6">
             {/* Company Information */}
             <Card>
               <CardHeader className="pb-4">
@@ -1636,147 +1593,85 @@ export default function TenantDetailsPage() {
                 )}
               </CardContent>
             </Card>
-
-            {/* Staff Users */}
-            <Card>
-              <CardHeader className="pb-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Users className="h-4 w-4 text-primary" />
-                    <CardTitle className="text-lg">Staff Users</CardTitle>
-                    {!staffLoading && (
-                      <Badge variant="secondary" className="text-[10px]">{staffUsers.length}</Badge>
-                    )}
-                  </div>
-                </div>
-                <CardDescription>Portal staff accounts for this tenant</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {staffLoading ? (
-                  <div className="space-y-3">
-                    <Skeleton className="h-10 w-full" />
-                    <Skeleton className="h-10 w-full" />
-                    <Skeleton className="h-10 w-full" />
-                  </div>
-                ) : staffUsers.length === 0 ? (
-                  <p className="text-muted-foreground text-center py-6 text-sm">No staff users found</p>
-                ) : (
-                  <div className="overflow-hidden rounded-2xl border border-border/40">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-primary/5 hover:bg-primary/5">
-                          <TableHead>Name</TableHead>
-                          <TableHead>Email</TableHead>
-                          <TableHead>Role</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Joined</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {staffUsers.map((user) => (
-                          <TableRow key={user.id}>
-                            <TableCell className="text-sm font-medium">
-                              {user.name || <span className="text-muted-foreground">No name</span>}
-                            </TableCell>
-                            <TableCell className="text-sm text-muted-foreground">{user.email}</TableCell>
-                            <TableCell>
-                              <Badge variant={
-                                user.role === 'head_admin' ? 'default'
-                                : user.role === 'admin' ? 'info'
-                                : user.role === 'manager' ? 'warning'
-                                : 'secondary'
-                              } className="whitespace-nowrap capitalize">
-                                {user.role.replace('_', ' ')}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant={user.is_active ? 'success' : 'destructive'}>
-                                {user.is_active ? 'Active' : 'Inactive'}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-sm text-muted-foreground">
-                              {formatDate(user.created_at)}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Policy Acceptances */}
-            <Card>
-              <CardHeader className="pb-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <ShieldCheck className="h-4 w-4 text-primary" />
-                    <CardTitle className="text-lg">Policy Acceptances</CardTitle>
-                    {!policyLoading && (
-                      <Badge variant="secondary" className="text-[10px]">{policyAcceptances.length}</Badge>
-                    )}
-                  </div>
-                </div>
-                <CardDescription>Privacy policy and terms acceptance log</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {policyLoading ? (
-                  <div className="space-y-3">
-                    <Skeleton className="h-10 w-full" />
-                    <Skeleton className="h-10 w-full" />
-                    <Skeleton className="h-10 w-full" />
-                  </div>
-                ) : policyAcceptances.length === 0 ? (
-                  <p className="text-muted-foreground text-center py-6 text-sm">No policy acceptances recorded</p>
-                ) : (
-                  <div className="overflow-hidden rounded-2xl border border-border/40">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-primary/5 hover:bg-primary/5">
-                          <TableHead>User</TableHead>
-                          <TableHead>Policy</TableHead>
-                          <TableHead>Version</TableHead>
-                          <TableHead>IP Address</TableHead>
-                          <TableHead>Accepted At</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {policyAcceptances.map((entry) => (
-                          <TableRow key={entry.id}>
-                            <TableCell>
-                              <div>
-                                <span className="text-sm font-medium">
-                                  {entry.user_name || <span className="text-muted-foreground">No name</span>}
-                                </span>
-                                {entry.user_email && (
-                                  <p className="text-xs text-muted-foreground">{entry.user_email}</p>
-                                )}
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant={entry.policy_type === 'privacy_policy' ? 'info' : 'default'} className="text-[11px] whitespace-nowrap">
-                                {entry.policy_type === 'privacy_policy' ? 'Privacy Policy' : 'Terms & Conditions'}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-sm text-muted-foreground tabular-nums">
-                              v{entry.version}
-                            </TableCell>
-                            <TableCell className="text-sm text-muted-foreground tabular-nums">
-                              {entry.ip_address || '—'}
-                            </TableCell>
-                            <TableCell className="text-sm text-muted-foreground">
-                              {formatDate(entry.accepted_at)}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
           </div>
+        </TabsContent>
+
+        {/* Consent Tab
+
+            Policy Acceptances moved here from Details on Sep 26 2026 by
+            request, and the Staff Users card beside it was removed. The
+            log is read-only, so it gets a section of its own rather than
+            sitting under the company's editable details. */}
+        <TabsContent value="consent" className="space-y-6">
+          <Card>
+            <CardHeader className="pb-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="h-4 w-4 text-primary" />
+                  <CardTitle className="text-lg">Policy Acceptances</CardTitle>
+                  {!policyLoading && (
+                    <Badge variant="secondary" className="text-[10px]">{policyAcceptances.length}</Badge>
+                  )}
+                </div>
+              </div>
+              <CardDescription>Privacy policy and terms acceptance log</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {policyLoading ? (
+                <div className="space-y-3">
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-10 w-full" />
+                </div>
+              ) : policyAcceptances.length === 0 ? (
+                <p className="text-muted-foreground text-center py-6 text-sm">No policy acceptances recorded</p>
+              ) : (
+                <div className="overflow-hidden rounded-2xl border border-border/40">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-primary/5 hover:bg-primary/5">
+                        <TableHead>User</TableHead>
+                        <TableHead>Policy</TableHead>
+                        <TableHead>Version</TableHead>
+                        <TableHead>IP Address</TableHead>
+                        <TableHead>Accepted At</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {policyAcceptances.map((entry) => (
+                        <TableRow key={entry.id}>
+                          <TableCell>
+                            <div>
+                              <span className="text-sm font-medium">
+                                {entry.user_name || <span className="text-muted-foreground">No name</span>}
+                              </span>
+                              {entry.user_email && (
+                                <p className="text-xs text-muted-foreground">{entry.user_email}</p>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={entry.policy_type === 'privacy_policy' ? 'info' : 'default'} className="text-[11px] whitespace-nowrap">
+                              {entry.policy_type === 'privacy_policy' ? 'Privacy Policy' : 'Terms & Conditions'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground tabular-nums">
+                            v{entry.version}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground tabular-nums">
+                            {entry.ip_address || '—'}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {formatDate(entry.accepted_at)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* Management Tab */}
