@@ -2437,15 +2437,21 @@ export default function TenantDetailsPage() {
             </CardContent>
           </Card>
 
-          {/* The six integrations were one stacked column of short cards,
-              each three or four rows tall and running the full width with
-              its right half empty. They are peers — every one is a status
-              plus the controls for it — so they sit side by side rather
-              than in a queue.
+          {/* These six stay FULL WIDTH, and that is deliberate.
 
-              Booking site design keeps its `custom_site_eligible` guard and
-              simply contributes no cell when the tenant is not eligible. */}
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
+              They were briefly put in a 2-up/3-up grid to use the empty
+              right half of the page. It broke them: each card lays its
+              own facts out with `grid-cols-2 md:grid-cols-4`, and `md:` is
+              a VIEWPORT breakpoint, not a container one. On a wide screen
+              the page is wide, so `md:` is satisfied and every card still
+              rendered FOUR internal columns — inside a 380px cell. Labels
+              and values landed on top of each other: 'Disabled' over an
+              email address, 'Switch' over the note beside it.
+
+              Narrowing a card is only safe when its insides can reflow.
+              These cannot, until those inner grids are container-relative
+              rather than viewport-relative. Until then, width is what they
+              need. See `tenant-details-layout.test.tsx`. */}
           {/* Booking site design. Only offered to tenants the platform has made
               eligible; everyone else stays on the legacy site with no switch to
               find. The database refuses the change regardless. */}
@@ -2751,7 +2757,6 @@ export default function TenantDetailsPage() {
               </div>
             </CardContent>
           </Card>
-          </div>
         </TabsContent>
 
         {/* Payments / Migration Tab */}
