@@ -12,8 +12,6 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Textarea } from '@/components/ui/textarea';
-import { Switch } from '@/components/ui/switch';
 import {
   Table,
   TableBody,
@@ -45,15 +43,12 @@ import { LinkPromoPicker } from '@/components/admin/promo-codes/link-promo-picke
 import {
   ArrowLeft,
   Pencil,
-  Copy,
   ExternalLink,
   Download,
   Building2,
-  Globe,
   Link2,
   Settings2,
   Shield,
-  AlertTriangle,
   Zap,
   CreditCard,
   FileText,
@@ -63,8 +58,6 @@ import {
   Car,
   Users,
   UserCheck,
-  Activity,
-  Clock,
   CircleDot,
   ShieldCheck,
   ArrowRightLeft,
@@ -109,8 +102,8 @@ interface Tenant {
  * localhost. That made a local toggle look broken: you flipped a flag in one
  * database and then looked at a different deployment reading a different one.
  *
- * Only the click-through buttons use this. The "Access URLs" card and anything
- * handed to a tenant deliberately keep the real production hostnames.
+ * Only the click-through buttons use this. Anything
+ * handed to a tenant deliberately keeps the real production hostnames.
  */
 const IS_DEV = process.env.NODE_ENV === 'development';
 const tenantBookingUrl = (slug: string) =>
@@ -201,17 +194,6 @@ interface StaffUser {
   created_at: string;
 }
 
-interface AuditEntry {
-  id: string;
-  action: string;
-  entity_type: string | null;
-  entity_id: string | null;
-  actor_id: string | null;
-  actor_name?: string;
-  details: any;
-  created_at: string;
-}
-
 interface PolicyAcceptance {
   id: string;
   app_user_id: string;
@@ -222,39 +204,6 @@ interface PolicyAcceptance {
   accepted_at: string;
   user_name?: string;
   user_email?: string;
-}
-
-function formatActionLabel(action: string): string {
-  const map: Record<string, string> = {
-    rental_created: 'Rental Add',
-    rental_updated: 'Rental Edit',
-    rental_status_changed: 'Status Change',
-    rental_deleted: 'Rental Delete',
-    customer_created: 'Customer Add',
-    customer_updated: 'Customer Edit',
-    customer_blocked: 'Customer Block',
-    customer_unblocked: 'Customer Unblock',
-    vehicle_created: 'Vehicle Add',
-    vehicle_updated: 'Vehicle Edit',
-    vehicle_deleted: 'Vehicle Delete',
-    payment_created: 'Payment Add',
-    payment_updated: 'Payment Edit',
-    payment_refunded: 'Refund',
-    user_created: 'User Add',
-    user_updated: 'User Edit',
-    user_deactivated: 'User Deactivate',
-    settings_updated: 'Settings Edit',
-    agreement_created: 'Agreement Add',
-    agreement_signed: 'Agreement Sign',
-    login: 'Login',
-    logout: 'Logout',
-  };
-  if (map[action]) return map[action];
-  return action
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase())
-    .replace(/Dialog Shown$/i, 'View')
-    .replace(/Warning Shown$/i, 'Warn');
 }
 
 function formatCurrency(amount: number, currency: string) {
@@ -342,18 +291,11 @@ export default function TenantDetailsPage() {
   });
   const [newFeature, setNewFeature] = useState('');
 
-  // Maintenance banner state
-  const [tenantBannerEnabled, setTenantBannerEnabled] = useState(false);
-  const [tenantBannerMessage, setTenantBannerMessage] = useState('We are currently performing scheduled maintenance. Some features may be temporarily unavailable.');
-  const [bannerSaving, setBannerSaving] = useState(false);
-
-  // Stats, charts, staff, activity state
+  // Stats, charts, staff state
   const [stats, setStats] = useState<TenantStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
   const [staffUsers, setStaffUsers] = useState<StaffUser[]>([]);
   const [staffLoading, setStaffLoading] = useState(true);
-  const [recentActivity, setRecentActivity] = useState<AuditEntry[]>([]);
-  const [activityLoading, setActivityLoading] = useState(true);
   const [policyAcceptances, setPolicyAcceptances] = useState<PolicyAcceptance[]>([]);
   const [policyLoading, setPolicyLoading] = useState(true);
 
@@ -378,7 +320,6 @@ export default function TenantDetailsPage() {
   const [repriceAmount, setRepriceAmount] = useState('');
   const [repricePlanId, setRepricePlanId] = useState<string | null>(null);
   const [repriceBusy, setRepriceBusy] = useState(false);
-  const [showBannerDialog, setShowBannerDialog] = useState(false);
 
   useEffect(() => {
     if (params.id) {
@@ -456,15 +397,12 @@ export default function TenantDetailsPage() {
         slug: data.slug,
         contact_email: data.contact_email,
       });
-      setTenantBannerEnabled(data.maintenance_banner_enabled ?? false);
-      setTenantBannerMessage(data.maintenance_banner_message || 'We are currently performing scheduled maintenance. Some features may be temporarily unavailable.');
 
       loadSubscription(id);
       loadSubscriptionLink(id);
       loadPlans(id);
       loadStats(id);
       loadStaffUsers(id);
-      loadRecentActivity(id);
       loadPolicyAcceptances(id);
     } catch (error) {
       console.error('Error loading tenant:', error);
@@ -880,45 +818,6 @@ export default function TenantDetailsPage() {
     }
   };
 
-  const loadRecentActivity = async (tenantId: string) => {
-    setActivityLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('audit_logs')
-        .select('id, action, entity_type, entity_id, actor_id, details, created_at')
-        .eq('tenant_id', tenantId)
-        .order('created_at', { ascending: false })
-        .limit(15);
-
-      if (error) throw error;
-
-      // Batch-resolve actor names
-      const actorIds = [...new Set((data || []).map((d) => d.actor_id).filter(Boolean))];
-      let actorMap: Record<string, string> = {};
-      if (actorIds.length > 0) {
-        const { data: actors } = await supabase
-          .from('app_users')
-          .select('id, name, email')
-          .in('id', actorIds);
-
-        (actors || []).forEach((a: any) => {
-          actorMap[a.id] = a.name || a.email;
-        });
-      }
-
-      setRecentActivity(
-        (data || []).map((entry) => ({
-          ...entry,
-          actor_name: entry.actor_id ? actorMap[entry.actor_id] || 'Unknown' : 'System',
-        }))
-      );
-    } catch (error) {
-      console.error('Error loading activity:', error);
-    } finally {
-      setActivityLoading(false);
-    }
-  };
-
   const loadPolicyAcceptances = async (tenantId: string) => {
     setPolicyLoading(true);
     try {
@@ -956,26 +855,6 @@ export default function TenantDetailsPage() {
       console.error('Error loading policy acceptances:', error);
     } finally {
       setPolicyLoading(false);
-    }
-  };
-
-  const handleSaveBanner = async () => {
-    if (!tenant) return;
-    setBannerSaving(true);
-    try {
-      const { error } = await supabase
-        .from('tenants')
-        .update({
-          maintenance_banner_enabled: tenantBannerEnabled,
-          maintenance_banner_message: tenantBannerMessage,
-        })
-        .eq('id', tenant.id);
-      if (error) throw error;
-      toast.success(tenantBannerEnabled ? 'Maintenance banner enabled for this tenant' : 'Maintenance banner disabled for this tenant');
-    } catch (error: any) {
-      toast.error(`Failed to update banner: ${error.message}`);
-    } finally {
-      setBannerSaving(false);
     }
   };
 
@@ -1271,11 +1150,6 @@ export default function TenantDetailsPage() {
 
   const removeFeature = (index: number) => {
     setPlanForm({ ...planForm, features: planForm.features.filter((_, i) => i !== index) });
-  };
-
-  const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard.writeText(text);
-    toast.success(`${label} copied to clipboard!`);
   };
 
 
@@ -1618,23 +1492,10 @@ export default function TenantDetailsPage() {
 
         {/* Details Tab */}
         <TabsContent value="details" className="space-y-6">
-          {/* WHAT YOU CAN CHANGE on the left, WHAT YOU CAN ONLY READ on the
-              right.
-
-              Asked for Sep 26 2026. The details tab was a two-up grid of
-              equal cards, so an editable form sat beside a list of links you
-              can only copy, and every wide card below them ran the full width
-              with nothing in the right half.
-
-              The rail is `sticky`, so the URLs and the activity trail stay
-              with you while the editable side scrolls.
-
-              Policy acceptances stay on the LEFT despite being read-only:
-              it is a five-column table (user, policy, version, IP, time) and
-              a 21rem rail would reduce it to unreadable. The rule is
-              read-only AND narrow. */}
-          <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_21rem]">
-            <div className="min-w-0 space-y-6">
+          {/* Single column. The right rail (Access URLs + Recent Activity)
+              and the Email Contact / Maintenance Banner quick actions were
+              removed from Super Admin on Sep 26 2026 by request. */}
+          <div className="min-w-0 space-y-6">
             {/* Quick Actions */}
             <Card>
               <CardHeader className="pb-4">
@@ -1664,22 +1525,6 @@ export default function TenantDetailsPage() {
                       <ExternalLink className="w-3.5 h-3.5 mr-1" />
                       Open Booking Site
                     </a>
-                  </Button>
-                  <Button variant="outline" asChild size="sm">
-                    <a href={`mailto:${tenant.contact_email}`}>
-                      Email Contact
-                    </a>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowBannerDialog(true)}
-                  >
-                    <AlertTriangle className="w-3.5 h-3.5 mr-1" />
-                    Maintenance Banner
-                    {tenantBannerEnabled && (
-                      <Badge variant="warning" className="ml-1 text-[9px] px-1.5 py-0">Active</Badge>
-                    )}
                   </Button>
                   <Button
                     variant="outline"
@@ -1931,117 +1776,6 @@ export default function TenantDetailsPage() {
                 )}
               </CardContent>
             </Card>
-            </div>
-
-            <aside className="space-y-6 xl:sticky xl:top-6 xl:self-start">
-            {/* Access URLs */}
-            <Card>
-              <CardHeader className="pb-4">
-                <div className="flex items-center gap-2">
-                  <Globe className="h-4 w-4 text-primary" />
-                  <CardTitle className="text-lg">Access URLs</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {[
-                  {
-                    label: 'Portal URL (Admin Dashboard)',
-                    url: `https://${tenant.slug}.portal.drive-247.com`,
-                  },
-                  {
-                    label: 'Booking URL (Customer Facing)',
-                    url: `https://${tenant.slug}.drive-247.com`,
-                  },
-                ].map((item) => (
-                  <div key={item.label} className="space-y-1.5">
-                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{item.label}</span>
-                    <div className="flex items-center gap-2">
-                      <code className="flex-1 bg-muted/50 px-3 py-2 rounded-md border border-border/40 text-sm text-primary break-all">
-                        {item.url}
-                      </code>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => copyToClipboard(item.url, item.label.split(' (')[0])}
-                      >
-                        <Copy className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-
-            {/* Recent Activity */}
-            <Card>
-              <CardHeader className="pb-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Activity className="h-4 w-4 text-primary" />
-                    <CardTitle className="text-lg">Recent Activity</CardTitle>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => router.push('/admin/audit-logs')}
-                    className="text-xs text-muted-foreground"
-                  >
-                    View All Logs
-                  </Button>
-                </div>
-                <CardDescription>Latest actions performed within this tenant</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {activityLoading ? (
-                  <div className="space-y-3">
-                    {[...Array(5)].map((_, i) => (
-                      <div key={i} className="flex items-center gap-3">
-                        <Skeleton className="h-8 w-8 rounded-full" />
-                        <div className="flex-1 space-y-1.5">
-                          <Skeleton className="h-3.5 w-48" />
-                          <Skeleton className="h-3 w-24" />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : recentActivity.length === 0 ? (
-                  <p className="text-muted-foreground text-center py-6 text-sm">No activity recorded yet</p>
-                ) : (
-                  <div className="space-y-1">
-                    {recentActivity.map((entry, i) => (
-                      <div
-                        key={entry.id}
-                        className={cn(
-                          "flex items-start gap-3 py-2.5 px-2 rounded-md hover:bg-muted/30 transition-colors",
-                          i < recentActivity.length - 1 && "border-b border-border/20"
-                        )}
-                      >
-                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 mt-0.5">
-                          <Clock className="h-3.5 w-3.5 text-primary" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-sm font-medium">{entry.actor_name}</span>
-                            <Badge variant="default" className="text-[10px] whitespace-nowrap">
-                              {formatActionLabel(entry.action)}
-                            </Badge>
-                            {entry.entity_type && (
-                              <span className="text-xs text-muted-foreground capitalize">{entry.entity_type}</span>
-                            )}
-                          </div>
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            {new Date(entry.created_at).toLocaleDateString('en-US', {
-                              month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-                            })}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-            </aside>
           </div>
         </TabsContent>
 
@@ -3186,60 +2920,6 @@ export default function TenantDetailsPage() {
             <Button variant="outline" onClick={() => setShowPlanModal(false)}>Cancel</Button>
             <Button onClick={handleSavePlan} disabled={planSaving}>
               {planSaving ? 'Saving...' : editingPlan ? 'Update Plan' : 'Create Plan'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Maintenance Banner Dialog */}
-      <Dialog open={showBannerDialog} onOpenChange={setShowBannerDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-warning" />
-              Maintenance Banner
-            </DialogTitle>
-            <DialogDescription>
-              Show a custom maintenance banner on this tenant&apos;s portal and booking site.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <Label>Enable Banner</Label>
-              <div className="flex items-center gap-2">
-                <span className={cn("text-xs font-medium", tenantBannerEnabled ? "text-amber-600" : "text-muted-foreground")}>
-                  {tenantBannerEnabled ? 'Active' : 'Inactive'}
-                </span>
-                <Switch
-                  checked={tenantBannerEnabled}
-                  onCheckedChange={setTenantBannerEnabled}
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Banner Message</Label>
-              <Textarea
-                value={tenantBannerMessage}
-                onChange={(e) => setTenantBannerMessage(e.target.value)}
-                rows={3}
-                placeholder="Enter a custom maintenance message..."
-              />
-            </div>
-            {tenantBannerEnabled && tenantBannerMessage && (
-              <div className="rounded-lg px-4 py-3 text-sm font-medium bg-amber-500/10 border border-amber-500/30 text-amber-600">
-                {tenantBannerMessage}
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowBannerDialog(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={async () => { await handleSaveBanner(); setShowBannerDialog(false); }}
-              disabled={bannerSaving}
-            >
-              {bannerSaving ? 'Saving...' : 'Save Banner Settings'}
             </Button>
           </DialogFooter>
         </DialogContent>

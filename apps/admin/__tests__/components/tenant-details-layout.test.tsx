@@ -14,7 +14,8 @@
  *
  *   2. The body was `lg:grid-cols-2` with almost every card marked
  *      `lg:col-span-2`, so in practice it was one column of full-width cards.
- *      It is now a main column and a sticky rail.
+ *      It briefly became a main column and a sticky rail; the rail's cards
+ *      were later removed, so it is now honestly one column.
  *
  * This reads the source rather than measuring pixels: jsdom has no layout, so
  * a rendered assertion here would prove nothing about where anything sits. The
@@ -28,26 +29,15 @@ import { resolve } from 'node:path';
 const ROOT = resolve(__dirname, '../..');
 const page = () => readFileSync(resolve(ROOT, 'app/admin/(protected)/rentals/[id]/page.tsx'), 'utf8');
 
-/** The details tab's two-column body. */
+/** The details tab body. */
 function detailsBody(src: string): string {
-  const start = src.indexOf('xl:grid-cols-[minmax(0,1fr)_21rem]');
+  const start = src.indexOf('<TabsContent value="details"');
   expect(start).toBeGreaterThan(-1);
   return src.slice(start, src.indexOf('</TabsContent>', start));
 }
 
-/** Everything inside the rail. */
-function rail(src: string): string {
-  const body = detailsBody(src);
-  const start = body.indexOf('<aside');
-  expect(start).toBeGreaterThan(-1);
-  return body.slice(start, body.indexOf('</aside>', start));
-}
-
-/** Everything in the main column, i.e. the body minus the rail. */
-function main(src: string): string {
-  const body = detailsBody(src);
-  return body.slice(0, body.indexOf('<aside'));
-}
+/** Markup only: comments mention removed things by name and must not count. */
+const markup = (src: string) => src.replace(/\{\/\*[\s\S]*?\*\/\}/g, '');
 
 describe('the header carries the title and its state, and nothing else', () => {
   /**
@@ -136,47 +126,54 @@ describe('the tenant controls moved into the account menu', () => {
   });
 });
 
-describe('what you can change sits apart from what you can only read', () => {
-  it('gives the details tab a main column and a rail', () => {
-    const body = detailsBody(page());
-    expect(body).toContain('<aside');
-    // The rail follows you down the page; the editable side scrolls past it.
-    expect(body).toContain('xl:sticky');
-    expect(body).toContain('xl:self-start');
-    // `minmax(0,1fr)` rather than `1fr`: a bare `1fr` refuses to shrink below
-    // its content, so one wide table would push the rail off screen.
-    expect(body).toContain('minmax(0,1fr)');
-  });
-
-  it('puts the read-only cards in the rail', () => {
-    const r = rail(page());
-    expect(r).toContain('Access URLs');      // links you copy, never edit
-    expect(r).toContain('Recent Activity');  // a log, by definition read-only
-  });
-
-  it('keeps the editable and actionable cards in the main column', () => {
-    const m = main(page());
-    expect(m).toContain('Quick Actions');         // buttons that do things
-    expect(m).toContain('Company Information');   // has its own Edit control
-    expect(m).toContain('Staff Users');           // accounts you administer
-  });
-
-  it('leaves the policy table on the left even though it is read-only', () => {
-    // The rule is read-only AND NARROW. Policy acceptances is five columns —
-    // user, policy, version, IP, accepted at — and a 21rem rail would crush
-    // it. Pinned here so a later tidy-up does not "finish the job" and make
-    // the table unreadable.
-    const m = main(page());
-    const r = rail(page());
-    expect(m).toContain('Policy Acceptances');
-    expect(r).not.toContain('Policy Acceptances');
-  });
-
-  it('drops the col-span hack the old grid needed', () => {
-    // Every card used to be `lg:col-span-2` inside a 2-column grid, which is
-    // a single column written the long way round.
-    const body = detailsBody(page());
+describe('the details tab is one column with no read-only rail', () => {
+  /*
+   * Sep 26 2026: the Access URLs and Recent Activity cards were circled in red
+   * and removed. They were the whole right-hand rail, so the rail went with
+   * them and the grid collapsed to one column — otherwise the `21rem` track
+   * would sit empty beside the cards.
+   */
+  it('has no rail and no two-column grid left behind', () => {
+    const body = markup(detailsBody(page()));
+    expect(body).not.toContain('<aside');
+    expect(body).not.toContain('xl:grid-cols-');
     expect(body).not.toContain('lg:col-span-2');
+  });
+
+  it('drops the Access URLs and Recent Activity cards', () => {
+    const s = page();
+    const body = markup(detailsBody(s));
+    expect(body).not.toContain('Access URLs');
+    expect(body).not.toContain('Recent Activity');
+    // And the fetch that fed the activity card, so it no longer runs for nothing.
+    for (const sym of ['loadRecentActivity', 'recentActivity', 'formatActionLabel', 'copyToClipboard']) {
+      expect(s, `${sym} still present`).not.toContain(sym);
+    }
+  });
+
+  it('keeps the remaining cards', () => {
+    const body = markup(detailsBody(page()));
+    for (const card of ['Quick Actions', 'Company Information', 'Staff Users', 'Policy Acceptances']) {
+      expect(body, `${card} missing`).toContain(card);
+    }
+  });
+});
+
+describe('quick actions', () => {
+  it('drops Email Contact and Maintenance Banner, dialog included', () => {
+    const s = page();
+    expect(markup(detailsBody(s))).not.toContain('Email Contact');
+    // With its button gone the dialog was unreachable, so it went too.
+    for (const sym of ['Maintenance Banner', 'showBannerDialog', 'handleSaveBanner', 'tenantBannerEnabled']) {
+      expect(markup(s), `${sym} still present`).not.toContain(sym);
+    }
+  });
+
+  it('keeps Open Portal, Open Booking Site and Force Logout', () => {
+    const body = markup(detailsBody(page()));
+    expect(body).toContain('Open Portal');
+    expect(body).toContain('Open Booking Site');
+    expect(body).toContain('Force Logout All Users');
   });
 });
 
