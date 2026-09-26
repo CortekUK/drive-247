@@ -82,20 +82,20 @@ describe("the integration cards keep the width their insides assume", () => {
   const page = () =>
     readFileSync(resolve(ROOT, 'app/admin/(protected)/rentals/[id]/page.tsx'), 'utf8');
 
-  function managementTab(src: string): string {
-    const start = src.indexOf('<TabsContent value="management"');
+  function integrationsTab(src: string): string {
+    const start = src.indexOf('<TabsContent value="integrations"');
     expect(start).toBeGreaterThan(-1);
-    return src.slice(start, src.indexOf('<TabsContent value="payments"', start));
+    return src.slice(start, src.indexOf('</TabsContent>', start));
   }
 
   it('still lays its own facts out on a viewport grid', () => {
     // If this ever stops being true the cards have been made reflowable, and
     // the rule below can be revisited on purpose rather than by accident.
-    expect(managementTab(page())).toContain('md:grid-cols-4');
+    expect(integrationsTab(page())).toContain('md:grid-cols-4');
   });
 
   it('is therefore not boxed into a multi-column page grid', () => {
-    const tab = managementTab(page());
+    const tab = integrationsTab(page());
     // The specific wrapper that caused the overlap, and anything like it.
     expect(tab).not.toContain('lg:grid-cols-2 xl:grid-cols-3');
     const pageGrids = tab.match(/className="grid grid-cols-1 gap-\d+ (lg|xl):grid-cols-\d/g) ?? [];
@@ -103,6 +103,6 @@ describe("the integration cards keep the width their insides assume", () => {
   });
 
   it('records why, so the empty space is not "fixed" again', () => {
-    expect(managementTab(page())).toContain('VIEWPORT breakpoint, not a container one');
+    expect(integrationsTab(page())).toContain('VIEWPORT breakpoint, not a container one');
   });
 });

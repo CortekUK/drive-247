@@ -1259,7 +1259,7 @@ export default function TenantDetailsPage() {
       : 'details',
   );
   /*
-   * Three sections, not six: Details, Management and Consent.
+   * Four sections, not six: Details, Subscriptions, Integrations and Consent.
    *
    * Payments, Analytics, Finance Sync and Todos were removed from Super Admin
    * on Sep 26 2026 by request. This takes them off THIS page only — the rental
@@ -1355,7 +1355,8 @@ export default function TenantDetailsPage() {
     '/admin/rentals',
     [
       { id: 'details', label: 'Details' },
-      { id: 'management', label: 'Management' },
+      { id: 'subscriptions', label: 'Subscriptions' },
+      { id: 'integrations', label: 'Integrations' },
       { id: 'consent', label: 'Consent' },
     ],
     tab,
@@ -1674,8 +1675,13 @@ export default function TenantDetailsPage() {
           </Card>
         </TabsContent>
 
-        {/* Management Tab */}
-        <TabsContent value="management" className="space-y-6">
+        {/* Subscriptions Tab
+
+            Was "Management" until Sep 26 2026, when it was split by request:
+            the subscription block stays here on its own, and every other card
+            (booking site design, credits, Stripe Connect, Bonzah, Tesla,
+            BoldSign) moved to the Integrations tab below. */}
+        <TabsContent value="subscriptions" className="space-y-6">
           {/* Subscription */}
           {/* Subscription stays full width — it carries a plan table, an
               invoice history and its own dialogs, and none of that reads
@@ -1940,7 +1946,10 @@ export default function TenantDetailsPage() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
 
+        {/* Integrations Tab */}
+        <TabsContent value="integrations" className="space-y-6">
           {/* These six stay FULL WIDTH, and that is deliberate.
 
               They were briefly put in a 2-up/3-up grid to use the empty

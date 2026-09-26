@@ -253,7 +253,7 @@ describe('quick actions', () => {
   });
 });
 
-describe('the rail carries three sections, not six', () => {
+describe('the rail carries four sections, not six', () => {
   /*
    * Payments, Analytics, Finance Sync and Todos were removed from Super Admin
    * on Sep 26 2026. Removing the rail rows alone would not have been enough:
@@ -264,11 +264,13 @@ describe('the rail carries three sections, not six', () => {
    */
   const GONE = ['payments', 'analytics', 'finance', 'todos'];
 
-  it('registers only Details, Management and Consent', () => {
+  it('registers only Details, Subscriptions, Integrations and Consent', () => {
     const s = page();
     const reg = s.slice(s.indexOf('useRegisterSidebarSections('), s.indexOf('if (loading)'));
     expect(reg).toContain("id: 'details'");
-    expect(reg).toContain("id: 'management'");
+    expect(reg).toContain("id: 'subscriptions'");
+    expect(reg).toContain("id: 'integrations'");
+    expect(reg).not.toContain("id: 'management'");
     expect(reg).toContain("id: 'consent'");
     for (const id of GONE) expect(reg).not.toContain(`id: '${id}'`);
   });
@@ -304,5 +306,37 @@ describe('the rail carries three sections, not six', () => {
     const { resolve } = require('node:path') as typeof import('node:path');
     expect(existsSync(resolve(ROOT, '../portal/src/app'))).toBe(true);
     expect(existsSync(resolve(ROOT, 'app/admin'))).toBe(true);
+  });
+});
+
+describe('Management is split into Subscriptions and Integrations', () => {
+  /*
+   * Sep 26 2026: the tab was renamed Subscriptions and keeps only the
+   * subscription block; every other card moved to a new Integrations tab.
+   */
+  const tab = (src: string, id: string) => {
+    const start = src.indexOf(`<TabsContent value="${id}"`);
+    expect(start, `${id} tab missing`).toBeGreaterThan(-1);
+    return src.slice(start, src.indexOf('</TabsContent>', start));
+  };
+
+  it('leaves no Management panel behind', () => {
+    expect(page()).not.toContain('<TabsContent value="management"');
+  });
+
+  it('keeps only the subscription block in Subscriptions', () => {
+    const t = tab(page(), 'subscriptions');
+    expect(t).toContain('Generate subscription link');
+    for (const card of ['Manage Credits', 'Stripe Connect', 'Bonzah', 'Tesla Fleet', 'BoldSign']) {
+      expect(t, `${card} still in Subscriptions`).not.toContain(card);
+    }
+  });
+
+  it('puts every other card in Integrations', () => {
+    const t = tab(page(), 'integrations');
+    for (const card of ['Manage Credits', 'Stripe Connect', 'Bonzah', 'Tesla Fleet', 'BoldSign', 'custom_site_eligible']) {
+      expect(t, `${card} missing from Integrations`).toContain(card);
+    }
+    expect(t).not.toContain('Generate subscription link');
   });
 });
