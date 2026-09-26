@@ -125,7 +125,8 @@ export async function probeE2eRunner(): Promise<{ piece: PieceState; runner: Run
     }
     if (status === 503) return fail("refused", `The ${E2E_RUNNER_FUNCTION} function is deployed but switched off (${text})`);
     if (status === 401 || status === 403 || status === 412) {
-      return fail("refused", `The ${E2E_RUNNER_FUNCTION} function refused this user (${status}): ${text}`);
+      // 401/403: this user (G1); 412: the tenant or the environment (G2, G3) — the runner's words say which.
+      return fail("refused", `The ${E2E_RUNNER_FUNCTION} function refused (${status}): ${text}`);
     }
     return null;
   };

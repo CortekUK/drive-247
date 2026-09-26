@@ -52,39 +52,54 @@ import {
  *      to say the first-run delete was the only database write; that stopped
  *      being true when this section arrived.
  *
- *      The browser itself still inserts, updates and deletes nothing. It GETs
- *      the `e2e-runner` edge function's catalogue, SELECTs `dev_sim_runs` for
- *      this tenant, asks the runner for a zero-write PREVIEW of what a run
- *      would write, and only after the operator confirms beside "This writes
- *      test rows to northwind in Stripe TEST mode" asks it to RUN. The runner
- *      then writes — on whatever project this portal talks to, which for the
- *      live portal is the PRODUCTION database: fixture customers and rentals
- *      on the northwind tenant; the charges, payments, plan rows, extensions
- *      and reminders the real engines create for those rentals; one
- *      `dev_sim_runs` row per run; and Stripe TEST-mode customers, cards and
- *      payment intents on northwind's test account.
+ *      The browser itself still inserts, updates and deletes nothing. It sends
+ *      the `e2e-runner` edge function a GET and a `list` (no writes), SELECTs
+ *      `dev_sim_runs` / `dev_sim_run_steps` and a fixture rental's number for
+ *      this tenant, and asks for each scenario's `preview` (no writes: the
+ *      runner hands that path a client whose writes throw, G7). Only after
+ *      the operator confirms beside "This writes test rows to northwind in
+ *      Stripe TEST mode" does it send `start`, then `advance` / `continue`,
+ *      and on request `abort` or `close`. The RUNNER then writes — on whatever
+ *      project this portal talks to, which for the live portal is the
+ *      PRODUCTION database: per run, one E2E-FIXTURE customer (an
+ *      @e2e.drive247.test address, no phone) and one fixture rental on
+ *      northwind, registered in `dev_sim_fixtures`; that rental's booking
+ *      charges, and the payments, refunds, extensions, plan rows and reminders
+ *      the real edge functions create for it; one `dev_sim_runs` row and one
+ *      `dev_sim_run_steps` row per step; and Stripe TEST-mode customers, cards,
+ *      charges and refunds on northwind's test account.
  *
  *      What bounds it, outermost first:
  *        - this page's slug gate (below), and the section's own second check,
  *          so no other tenant renders it or sends a single probe;
- *        - the section offers NOTHING to click unless the function answers its
- *          GET with a catalogue, `dev_sim_runs` answers its GET, and the
- *          runner reports tenant `northwind` and Stripe mode `test` — a runner
- *          that says anything else, or nothing, is refused here;
- *        - a preview that does not say northwind + test, or does not account
- *          for every scenario asked for, cannot be confirmed;
- *        - AUTHORITATIVE, and the RUNNER's to enforce, not this page's: locked
- *          to the one sandbox tenant (SANDBOX_TEST_TENANT_ID, northwind);
- *          refusing unless that tenant's `stripe_mode` is 'test'; requiring
- *          the confirm sentence and a fresh preview; acting only on rentals it
- *          created and flagged as fixtures, through the fail-closed `sandbox-*`
- *          single-rental clones (`only_rental_id`) — never by firing the live
- *          cron jobs (6, 4, 32, 33, 54, 55), which act on every tenant; and
- *          never holding a live Stripe key. A page cannot enforce any of that;
- *          it can only refuse to offer a run when the runner does not claim it.
+ *        - the section offers NOTHING to click unless the function answers
+ *          (it is deployed, switched on and lets this user in), lists its
+ *          scenarios with every environment check passing, and `dev_sim_runs`
+ *          answers its GET;
+ *        - a preview in which the runner refuses the scenario, the tenant's
+ *          settings differ from what the expected values assume, a check
+ *          fails, or the preview tried to write, cannot be confirmed; and
+ *          only scenarios the catalogue marks live-runnable get a Run button;
+ *        - AUTHORITATIVE, and the RUNNER's and the database's, not this
+ *          page's (supabase/functions/e2e-runner/index.ts G0–G11, and
+ *          supabase/migrations/20260926120300_dev_sim_runs.sql): a kill switch
+ *          (E2E_RUNNER_ENABLED=northwind); callers limited to a super admin or
+ *          northwind's head admin; the tenant re-read by slug on every request
+ *          and refused unless northwind, active and stripe_mode 'test', again
+ *          in SQL on every write (e2e_fixture_guard); only sk_test_/rk_test_
+ *          keys; writes only to the run's registered fixture; time moved only
+ *          by e2e_shift_fixture on that fixture; cron work only through the
+ *          `sandbox-*` clones with only_rental_id = the fixture, never the live
+ *          jobs (6, 4, 32, 33, 54, 55), and the fixture parked between calls
+ *          so those jobs never select it; one request per run (a lease). The
+ *          page cannot enforce any of that; it can only refuse to offer a run
+ *          the runner does not claim is safe. The runner does NOT require the
+ *          preview or the confirm sentence before `start` — that order is
+ *          this page's.
  *
- *      Until the function is deployed and the table applied, this path is
- *      inert: the section says which piece is missing and has no buttons.
+ *      Until the function is deployed and switched on and the migration
+ *      applied, this path is inert: the section says which piece is missing
+ *      and has no buttons.
  *
  *   Add a further writing action to this page and this list must grow with it.
  *

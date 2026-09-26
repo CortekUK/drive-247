@@ -17,12 +17,14 @@ import {
   financesHref,
   formatCents,
   groupCatalogue,
-  newRunId,
   normalizeRun,
   normalizeStep,
-  parsePreview,
-  parseRunnerGet,
+  parseOutcome,
+  parseRunnerList,
+  parseScenarioPreview,
+  plannedWrites,
   previewProblems,
+  readScenario,
   rentalHref,
   rowVerdict,
   runCounts,
@@ -30,7 +32,9 @@ import {
   runVerdict,
   runnerSafetyProblem,
   showActual,
+  withFullScenario,
   type ExecutedStep,
+  type RunnerInfo,
 } from '@/components/dev/e2e-runner-contract';
 
 /** A dev_sim_runs row (supabase/migrations/20260926120300_dev_sim_runs.sql). */
@@ -97,7 +101,9 @@ describe('reading the rows', () => {
     expect(refused.status).toBe('refused');
     expect(refused.detail).toBe('e2e: refused — not northwind');
     // The catalogue's own names are accepted: expect / observed.
-    expect(step(2, 'ok', [{ label: 'c', expect: 2, observed: 2, pass: true }]).assertions[0]).toEqual({ label: 'c', expected: 2, actual: 2, pass: true });
+    expect(step(2, 'ok', [{ label: 'c', expect: 2, observed: 2, pass: true }]).assertions[0]).toEqual({ label: 'c', expected: 2, actual: 2, pass: true, math: null });
+    // The runner's AssertionResult carries the hand derivation.
+    expect(step(3, 'ok', [{ label: 'd', expected: [20000], actual: [20000], pass: true, math: '600.00 / 3 = 200.00' }]).assertions[0].math).toBe('600.00 / 3 = 200.00');
     expect(normalizeStep({ step_index: 'x' })).toBeNull();
   });
 });
@@ -179,7 +185,7 @@ describe('the evidence file', () => {
     const ev = buildEvidence({ runs: [{ run: r, steps: s }], runner: null, catalogue: [], confirmedPreview: null, now: new Date('2026-09-26T12:00:00Z') });
     expect(ev).toMatchObject({ kind: 'e2e-live-run', writesToDatabase: true, tenant: 'northwind', generatedAt: '2026-09-26T12:00:00.000Z' });
     expect(ev.runs[0]).toMatchObject({ id: 'run-1', verdict: 'passed', counts: { passed: 1, failed: 0, badSteps: 0 }, runnerCounts: { pass: 1, fail: 0 } });
-    expect(ev.runs[0].timeline.find((t) => t.index === 1)!.checks).toEqual([ok]);
+    expect(ev.runs[0].timeline.find((t) => t.index === 1)!.checks).toEqual([{ ...ok, math: null }]);
     expect(ev.runs[0].row).toEqual(row());
     expect(ev.runs[0].stepRows).toHaveLength(2);
   });
@@ -203,7 +209,7 @@ describe('engine grouping', () => {
   });
 
   it('keeps all seven groups, an empty one included, and only adds Other when needed', () => {
-    const parsed = parseRunnerGet({
+    const parsed = parseRunnerList({
       ok: true,
       runner: {},
       catalogue: [
@@ -246,47 +252,156 @@ describe('engine grouping', () => {
   });
 
   it('a catalogue with no scenarios is not a runner this page can use', () => {
-    expect(parseRunnerGet({ ok: true, catalogue: [] })).toMatchObject({ ok: false });
-    expect(parseRunnerGet('<html>')).toMatchObject({ ok: false });
-    expect(parseRunnerGet({ ok: false, error: 'nope' })).toEqual({ ok: false, message: 'nope' });
+    expect(parseRunnerList({ ok: true, scenarios: [] })).toMatchObject({ ok: false });
+    expect(parseRunnerList('<html>')).toMatchObject({ ok: false });
+    expect(parseRunnerList({ ok: false, error: 'nope' })).toEqual({ ok: false, message: 'nope' });
   });
 });
 
-describe('the page refuses what the runner does not claim', () => {
-  const info = (stripeMode: string | null, tenantSlug: string | null) => ({ version: null, stripeMode, tenantSlug, guards: [] });
-  it('only northwind + test is offered', () => {
-    expect(runnerSafetyProblem(info('test', 'northwind'))).toBeNull();
-    expect(runnerSafetyProblem(info('live', 'northwind'))).toMatch(/"live"/);
-    expect(runnerSafetyProblem(info(null, 'northwind'))).toMatch(/did not say/);
-    expect(runnerSafetyProblem(info('test', 'revtek'))).toMatch(/"revtek"/);
-    expect(runnerSafetyProblem(info('test', null))).toMatch(/did not say which tenant/);
-    expect(runnerSafetyProblem(info('TEST', 'northwind'))).not.toBeNull();
+describe('list: what the runner claims, and what the page refuses', () => {
+  const LIST = (over: Record<string, unknown> = {}) => ({
+    ok: true,
+    scenarios: [{ id: 'SB1', family: 'simple_booking', title: 't', why: 'w', tiers: ['live'], liveRunnable: true, stepCount: 4, humanSteps: 0 }],
+    environment: { stripeTestKey: { ok: true }, sandboxTenant: { ok: true } },
+    quiet: {},
+    ...over,
   });
 
-  it('previewProblems: mode, tenant, missing, extra and silent scenarios', () => {
-    const p = parsePreview({
-      preview: {
-        preview_id: 'pv',
-        tenant_slug: 'northwind',
-        stripe_mode: 'test',
-        scenarios: [
-          { scenario_id: 'A', writes: [{ table: 'rentals', action: 'insert', count: 1 }] },
-          { scenario_id: 'X', writes: [{ table: 'rentals', action: 'insert', count: 1 }] },
-          { scenario_id: 'B', writes: [] },
-        ],
-      },
-    })!;
-    expect(previewProblems(p, ['A', 'X', 'B'])).toEqual([
-      'The preview lists no database writes for B — a live run always writes its fixture.',
+  it("reads index.ts's list: tenant by slug (G2), test mode only from the key check (G3), the checks by name", () => {
+    const r = parseRunnerList(LIST());
+    expect(r.ok).toBe(true);
+    if (r.ok === false) return;
+    expect(r.runner.tenantSlug).toBe('northwind');
+    expect(r.runner.stripeMode).toBe('test');
+    expect(r.runner.checks).toEqual([
+      { name: 'Stripe key is a TEST key (G3)', ok: true, message: null },
+      { name: 'sandbox clones are locked to northwind (G3)', ok: true, message: null },
     ]);
-    expect(previewProblems(p, ['A', 'C', 'B'])).toEqual([
-      'The preview does not say what C would write.',
-      'The preview includes scenarios that were not asked for: X.',
-      'The preview lists no database writes for B — a live run always writes its fixture.',
+    expect(r.runner.basis).toHaveLength(2);
+    expect(runnerSafetyProblem(r.runner)).toBeNull();
+    // The summary shape: no steps, the catalogue's own verdict, counts.
+    expect(r.catalogue[0]).toMatchObject({ id: 'SB1', full: false, steps: [], stepCount: 4, runnableLive: true, expected: [] });
+  });
+
+  it('a failed check, a missing key check, or an explicit other mode / tenant is refused', () => {
+    const refused = (body: unknown) => {
+      const r = parseRunnerList(body);
+      if (r.ok === false) throw new Error(r.message);
+      return runnerSafetyProblem(r.runner);
+    };
+    expect(refused(LIST({ environment: { stripeTestKey: { ok: false, message: 'sk_live_ key' }, sandboxTenant: { ok: true } } }))).toMatch(
+      /Stripe key is a TEST key \(G3\): sk_live_ key/,
+    );
+    expect(refused(LIST({ environment: { stripeTestKey: { ok: true }, sandboxTenant: { ok: false, message: 'other tenant' } } }))).toMatch(
+      /sandbox clones are locked to northwind \(G3\): other tenant/,
+    );
+    expect(refused(LIST({ environment: undefined }))).toMatch(/did not say which Stripe mode/);
+    expect(refused(LIST({ runner: { stripe_mode: 'live' } }))).toMatch(/Stripe mode "live"/);
+    expect(refused(LIST({ runner: { tenant_slug: 'revtek' } }))).toMatch(/tenant "revtek"/);
+    const info = (stripeMode: string | null, tenantSlug: string | null): RunnerInfo => ({ version: null, stripeMode, tenantSlug, checks: [], basis: [] });
+    expect(runnerSafetyProblem(info('TEST', 'northwind'))).not.toBeNull();
+    expect(runnerSafetyProblem(info('test', 'northwind'))).toBeNull();
+  });
+});
+
+describe('preview: the runner checks the guards; the page reads what a run writes from the scenario', () => {
+  const FULL = {
+    id: 'SB1',
+    family: 'simple_booking',
+    title: 'Pay a booking',
+    why: 'w',
+    tiers: ['live'],
+    assumes: ['usd'],
+    fixture: {
+      shape: 'booking',
+      card: 'visa',
+      charges: [{ category: 'Rental', amount: { cents: 30000, math: '3 × 100.00 = 300.00' }, dueOffsetDays: 0 }],
+    },
+    steps: [
+      { kind: 'charge_saved_card', amount: { cents: 30000, math: 'm' }, note: 'n' },
+      { kind: 'advance', domain: 'payg', days: 2 },
+      { kind: 'fire', job: 'sandbox-accrue-payg-charges', copies: 2 },
+      { kind: 'human', ask: 'pay_latest_link', say: 'Pay it.' },
+      { kind: 'check', label: 'c', checks: [] },
+    ],
+  };
+  const answer = (over: Record<string, unknown> = {}) => ({
+    ok: true,
+    preview: true,
+    writes: [],
+    scenario: FULL,
+    runnable: { ok: true },
+    assumptions: { ok: true, failed: [] },
+    environment: { stripeTestKey: { ok: true }, sandboxTenant: { ok: true } },
+    quiet: {},
+    wouldStart: true,
+    ...over,
+  });
+
+  it('parses index.ts\'s preview answer', () => {
+    const p = parseScenarioPreview(answer(), 'SB1')!;
+    expect(p).toMatchObject({ scenarioId: 'SB1', assumptionsOk: true, refusedWrites: [], wouldStart: true });
+    expect(p.runnable).toEqual({ name: 'the scenario may run live (G4)', ok: true, message: null });
+    expect(p.scenario!.full).toBe(true);
+    expect(p.scenario!.humanSteps).toBe(1);
+    expect(parseScenarioPreview({ ok: false, error: 'x' }, 'SB1')).toBeNull();
+  });
+
+  it('previewProblems: every refusal blocks the confirm, in the runner\'s words', () => {
+    const problems = (over: Record<string, unknown>) => previewProblems({ items: [parseScenarioPreview(answer(over), 'SB1')!] }, ['SB1']);
+    expect(problems({})).toEqual([]);
+    expect(problems({ runnable: { ok: false, message: 'amount above $1,000' } })).toEqual(['SB1: the runner will not run it — amount above $1,000.']);
+    expect(problems({ assumptions: { ok: false, failed: ['tax_off'] } })).toEqual([
+      "SB1: northwind's settings differ from the ones its expected values assume (tax_off).",
     ]);
-    const live = parsePreview({ preview: { tenant_slug: 'northwind', stripe_mode: 'live', scenarios: [] } })!;
-    expect(previewProblems(live, [])).toEqual(['The preview says Stripe mode "live", not test.']);
-    expect(parsePreview({ preview: { scenarios: 'nope' } })).toBeNull();
+    expect(problems({ assumptions: null })).toEqual(["SB1: the preview did not check the tenant's settings."]);
+    expect(problems({ environment: { stripeTestKey: { ok: false, message: 'live key' }, sandboxTenant: { ok: true } } })).toEqual([
+      'SB1: Stripe key is a TEST key (G3) — live key.',
+    ]);
+    expect(problems({ writes: ['insert rentals'] })).toEqual(['SB1: the preview tried to write (insert rentals) and was stopped — that is a runner fault.']);
+    expect(problems({ scenario: null })).toEqual(['SB1: the preview did not include the scenario, so what it would write cannot be shown.']);
+    expect(problems({ wouldStart: false })).toEqual(['SB1: the runner says it would not start.']);
+    // Missing and extra scenarios.
+    expect(previewProblems({ items: [] }, ['SB1'])).toEqual(['The runner gave no preview for SB1.']);
+    expect(previewProblems({ items: [parseScenarioPreview(answer(), 'SB1')!] }, [])).toEqual([
+      'The preview includes scenarios that were not asked for: SB1.',
+    ]);
+  });
+
+  it('plannedWrites: the fixture, each writing step, and nothing for checks or a person\'s step', () => {
+    const w = plannedWrites(readScenario(FULL)!).map((x) => `${x.where}: ${x.what}`);
+    expect(w).toEqual([
+      'dev_sim_runs: 1 row for this run (the evidence)',
+      'dev_sim_run_steps: 6 rows — the fixture and each step, with every check',
+      'customers: 1 fixture customer named E2E-FIXTURE…, at an @e2e.drive247.test address, no phone',
+      'Stripe TEST: a customer with the Visa test card (always succeeds) (sandbox-fixture-setup), and a $1.00 hold it places, cancelled at once',
+      'rentals: 1 fixture rental, no vehicle, marked as this run\'s fixture and registered in dev_sim_fixtures',
+      'ledger_entries: 1 booking charge: Rental $300.00',
+      'charge-saved-card: a Stripe TEST charge of $300.00 on the saved card, its payment row and allocation',
+      "e2e_shift_fixture: the fixture's payg dates moved 2 day(s) into the past — nothing else's",
+      'sandbox-accrue-payg-charges: run for the fixture only (only_rental_id), twice at once — whatever it writes for that rental',
+    ]);
+  });
+
+  it('withFullScenario keeps the summary\'s refusal', () => {
+    const summary = readScenario({ id: 'SB1', family: 'simple_booking', tiers: ['live'], liveRunnable: false, stepCount: 5 })!;
+    const full = readScenario(FULL)!;
+    expect(full.runnableLive).toBe(true);
+    const merged = withFullScenario(summary, full);
+    expect(merged.runnableLive).toBe(false);
+    expect(merged.steps).toHaveLength(5);
+    expect(withFullScenario(summary, null)).toBe(summary);
+  });
+
+  it('parseOutcome reads a RunOutcome', () => {
+    expect(parseOutcome({ ok: true, runId: 'r', status: 'running', nextStep: 2, deferredSeconds: 40 })).toEqual({
+      runId: 'r',
+      status: 'running',
+      deferredSeconds: 40,
+      error: null,
+    });
+    expect(parseOutcome({ ok: true, runId: 'r', status: 'errored', error: 'x' })).toMatchObject({ status: 'error', error: 'x' });
+    expect(parseOutcome(null)).toEqual({ runId: null, status: null, deferredSeconds: null, error: null });
   });
 });
 
@@ -343,14 +458,5 @@ describe('the catalogue in words', () => {
     [{ kind: 'new_kind_nobody_wrote_yet' }, 'new_kind_nobody_wrote_yet'],
   ])('describeStep(%j)', (step, words) => {
     expect(describeStep(step)).toBe(words);
-  });
-});
-
-describe('newRunId', () => {
-  it('is a v4 uuid, fresh each time', () => {
-    const a = newRunId();
-    const b = newRunId();
-    expect(a).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
-    expect(a).not.toBe(b);
   });
 });
