@@ -1670,29 +1670,35 @@ export default function TenantDetailsPage() {
         Back to Rental Companies
       </Button>
 
-      {/* Page header */}
-      <div className="space-y-4">
-        <div className="flex items-start justify-between flex-wrap gap-4">
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-              <Building2 className="h-5 w-5 text-primary" />
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{tenant.company_name}</h1>
-            <Badge variant={
-              tenant.tenant_type === 'production' ? 'success'
-              : tenant.tenant_type === 'test' ? 'warning'
-              : 'secondary'
-            }>
-              {tenant.tenant_type || 'Not Set'}
-            </Badge>
-            <Badge variant={tenant.status === 'active' ? 'success' : 'destructive'}>
-              {tenant.status}
-            </Badge>
+      {/* Page header.
+
+          The title and everything you can DO to this company on ONE line.
+          It used to be a `space-y-4` stack: a `justify-between` row holding
+          only the title — so it had nothing to justify against and left the
+          whole right half of the screen empty — and then the buttons on a
+          second row below it. Reported Sep 26 2026 with that empty space
+          circled in red. */}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+            <Building2 className="h-5 w-5 text-primary" />
           </div>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{tenant.company_name}</h1>
+          <Badge variant={
+            tenant.tenant_type === 'production' ? 'success'
+            : tenant.tenant_type === 'test' ? 'warning'
+            : 'secondary'
+          }>
+            {tenant.tenant_type || 'Not Set'}
+          </Badge>
+          <Badge variant={tenant.status === 'active' ? 'success' : 'destructive'}>
+            {tenant.status}
+          </Badge>
         </div>
 
-        {/* Action buttons */}
-        <div className="flex items-center gap-2 flex-wrap">
+        {/* Type, status and deletion: the three things this page exists to
+            change, now sitting in the space the title was wasting. */}
+        <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-1 rounded-lg border border-border/40 bg-card p-1">
             <Button
               variant={tenant.tenant_type === 'production' ? 'default' : 'ghost'}
@@ -1737,9 +1743,25 @@ export default function TenantDetailsPage() {
 
         {/* Details Tab */}
         <TabsContent value="details" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* WHAT YOU CAN CHANGE on the left, WHAT YOU CAN ONLY READ on the
+              right.
+
+              Asked for Sep 26 2026. The details tab was a two-up grid of
+              equal cards, so an editable form sat beside a list of links you
+              can only copy, and every wide card below them ran the full width
+              with nothing in the right half.
+
+              The rail is `sticky`, so the URLs and the activity trail stay
+              with you while the editable side scrolls.
+
+              Policy acceptances stay on the LEFT despite being read-only:
+              it is a five-column table (user, policy, version, IP, time) and
+              a 21rem rail would reduce it to unreadable. The rule is
+              read-only AND narrow. */}
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_21rem]">
+            <div className="min-w-0 space-y-6">
             {/* Quick Actions */}
-            <Card className="lg:col-span-2">
+            <Card>
               <CardHeader className="pb-4">
                 <div className="flex items-center gap-2">
                   <Zap className="h-4 w-4 text-primary" />
@@ -1895,46 +1917,77 @@ export default function TenantDetailsPage() {
               </CardContent>
             </Card>
 
-            {/* Access URLs */}
+            {/* Staff Users */}
             <Card>
               <CardHeader className="pb-4">
-                <div className="flex items-center gap-2">
-                  <Globe className="h-4 w-4 text-primary" />
-                  <CardTitle className="text-lg">Access URLs</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {[
-                  {
-                    label: 'Portal URL (Admin Dashboard)',
-                    url: `https://${tenant.slug}.portal.drive-247.com`,
-                  },
-                  {
-                    label: 'Booking URL (Customer Facing)',
-                    url: `https://${tenant.slug}.drive-247.com`,
-                  },
-                ].map((item) => (
-                  <div key={item.label} className="space-y-1.5">
-                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{item.label}</span>
-                    <div className="flex items-center gap-2">
-                      <code className="flex-1 bg-muted/50 px-3 py-2 rounded-md border border-border/40 text-sm text-primary break-all">
-                        {item.url}
-                      </code>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => copyToClipboard(item.url, item.label.split(' (')[0])}
-                      >
-                        <Copy className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Users className="h-4 w-4 text-primary" />
+                    <CardTitle className="text-lg">Staff Users</CardTitle>
+                    {!staffLoading && (
+                      <Badge variant="secondary" className="text-[10px]">{staffUsers.length}</Badge>
+                    )}
                   </div>
-                ))}
+                </div>
+                <CardDescription>Portal staff accounts for this tenant</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {staffLoading ? (
+                  <div className="space-y-3">
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                  </div>
+                ) : staffUsers.length === 0 ? (
+                  <p className="text-muted-foreground text-center py-6 text-sm">No staff users found</p>
+                ) : (
+                  <div className="overflow-hidden rounded-2xl border border-border/40">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-primary/5 hover:bg-primary/5">
+                          <TableHead>Name</TableHead>
+                          <TableHead>Email</TableHead>
+                          <TableHead>Role</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Joined</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {staffUsers.map((user) => (
+                          <TableRow key={user.id}>
+                            <TableCell className="text-sm font-medium">
+                              {user.name || <span className="text-muted-foreground">No name</span>}
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">{user.email}</TableCell>
+                            <TableCell>
+                              <Badge variant={
+                                user.role === 'head_admin' ? 'default'
+                                : user.role === 'admin' ? 'info'
+                                : user.role === 'manager' ? 'warning'
+                                : 'secondary'
+                              } className="whitespace-nowrap capitalize">
+                                {user.role.replace('_', ' ')}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={user.is_active ? 'success' : 'destructive'}>
+                                {user.is_active ? 'Active' : 'Inactive'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {formatDate(user.created_at)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
             {/* Policy Acceptances */}
-            <Card className="lg:col-span-2">
+            <Card>
               <CardHeader className="pb-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -2003,78 +2056,49 @@ export default function TenantDetailsPage() {
                 )}
               </CardContent>
             </Card>
+            </div>
 
-            {/* Staff Users */}
-            <Card className="lg:col-span-2">
+            <aside className="space-y-6 xl:sticky xl:top-6 xl:self-start">
+            {/* Access URLs */}
+            <Card>
               <CardHeader className="pb-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Users className="h-4 w-4 text-primary" />
-                    <CardTitle className="text-lg">Staff Users</CardTitle>
-                    {!staffLoading && (
-                      <Badge variant="secondary" className="text-[10px]">{staffUsers.length}</Badge>
-                    )}
-                  </div>
+                <div className="flex items-center gap-2">
+                  <Globe className="h-4 w-4 text-primary" />
+                  <CardTitle className="text-lg">Access URLs</CardTitle>
                 </div>
-                <CardDescription>Portal staff accounts for this tenant</CardDescription>
               </CardHeader>
-              <CardContent>
-                {staffLoading ? (
-                  <div className="space-y-3">
-                    <Skeleton className="h-10 w-full" />
-                    <Skeleton className="h-10 w-full" />
-                    <Skeleton className="h-10 w-full" />
+              <CardContent className="space-y-4">
+                {[
+                  {
+                    label: 'Portal URL (Admin Dashboard)',
+                    url: `https://${tenant.slug}.portal.drive-247.com`,
+                  },
+                  {
+                    label: 'Booking URL (Customer Facing)',
+                    url: `https://${tenant.slug}.drive-247.com`,
+                  },
+                ].map((item) => (
+                  <div key={item.label} className="space-y-1.5">
+                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{item.label}</span>
+                    <div className="flex items-center gap-2">
+                      <code className="flex-1 bg-muted/50 px-3 py-2 rounded-md border border-border/40 text-sm text-primary break-all">
+                        {item.url}
+                      </code>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => copyToClipboard(item.url, item.label.split(' (')[0])}
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
                   </div>
-                ) : staffUsers.length === 0 ? (
-                  <p className="text-muted-foreground text-center py-6 text-sm">No staff users found</p>
-                ) : (
-                  <div className="overflow-hidden rounded-2xl border border-border/40">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-primary/5 hover:bg-primary/5">
-                          <TableHead>Name</TableHead>
-                          <TableHead>Email</TableHead>
-                          <TableHead>Role</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Joined</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {staffUsers.map((user) => (
-                          <TableRow key={user.id}>
-                            <TableCell className="text-sm font-medium">
-                              {user.name || <span className="text-muted-foreground">No name</span>}
-                            </TableCell>
-                            <TableCell className="text-sm text-muted-foreground">{user.email}</TableCell>
-                            <TableCell>
-                              <Badge variant={
-                                user.role === 'head_admin' ? 'default'
-                                : user.role === 'admin' ? 'info'
-                                : user.role === 'manager' ? 'warning'
-                                : 'secondary'
-                              } className="whitespace-nowrap capitalize">
-                                {user.role.replace('_', ' ')}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant={user.is_active ? 'success' : 'destructive'}>
-                                {user.is_active ? 'Active' : 'Inactive'}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-sm text-muted-foreground">
-                              {formatDate(user.created_at)}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
+                ))}
               </CardContent>
             </Card>
 
             {/* Recent Activity */}
-            <Card className="lg:col-span-2">
+            <Card>
               <CardHeader className="pb-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -2142,12 +2166,16 @@ export default function TenantDetailsPage() {
                 )}
               </CardContent>
             </Card>
+            </aside>
           </div>
         </TabsContent>
 
         {/* Management Tab */}
         <TabsContent value="management" className="space-y-6">
           {/* Subscription */}
+          {/* Subscription stays full width — it carries a plan table, an
+              invoice history and its own dialogs, and none of that reads
+              well in half a screen. */}
           <Card>
             <CardContent className="pt-6">
               <div className="flex items-start justify-between mb-5">
@@ -2409,6 +2437,15 @@ export default function TenantDetailsPage() {
             </CardContent>
           </Card>
 
+          {/* The six integrations were one stacked column of short cards,
+              each three or four rows tall and running the full width with
+              its right half empty. They are peers — every one is a status
+              plus the controls for it — so they sit side by side rather
+              than in a queue.
+
+              Booking site design keeps its `custom_site_eligible` guard and
+              simply contributes no cell when the tenant is not eligible. */}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
           {/* Booking site design. Only offered to tenants the platform has made
               eligible; everyone else stays on the legacy site with no switch to
               find. The database refuses the change regardless. */}
@@ -2470,7 +2507,6 @@ export default function TenantDetailsPage() {
             </CardContent>
           </Card>
           )}
-
           {/* Credits */}
           <Card>
             <CardContent className="pt-6">
@@ -2488,7 +2524,6 @@ export default function TenantDetailsPage() {
               </div>
             </CardContent>
           </Card>
-
           {/* Stripe Connect */}
           <Card>
             <CardContent className="pt-6">
@@ -2547,7 +2582,6 @@ export default function TenantDetailsPage() {
               </div>
             </CardContent>
           </Card>
-
           {/* Bonzah Insurance */}
           <Card>
             <CardContent className="pt-6">
@@ -2634,7 +2668,6 @@ export default function TenantDetailsPage() {
               </div>
             </CardContent>
           </Card>
-
           {/* Tesla Fleet API */}
           <Card>
             <CardContent className="pt-6">
@@ -2668,7 +2701,6 @@ export default function TenantDetailsPage() {
               </div>
             </CardContent>
           </Card>
-
           {/* BoldSign */}
           <Card>
             <CardContent className="pt-6">
@@ -2719,6 +2751,7 @@ export default function TenantDetailsPage() {
               </div>
             </CardContent>
           </Card>
+          </div>
         </TabsContent>
 
         {/* Payments / Migration Tab */}
