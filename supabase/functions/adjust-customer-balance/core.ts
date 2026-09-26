@@ -1,4 +1,5 @@
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
+import { authorizeStaff, checkStaffTenant, type StaffAuthClient } from "../_shared/staff-auth.ts";
 
 /**
  * adjust-customer-balance
@@ -22,9 +23,13 @@ import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
  *
  * v1 — the Edit Balance dialog (components/customers/edit-balance-dialog.tsx):
  *   { customerId, tenantId, amount, direction, reason, rentalId?, extensionId? }
- *   Unchanged, byte for byte: the branch below is the original handler body,
- *   pinned by tests/integrations/balance/adjust-customer-balance-contract.test.ts
- *   against a frozen copy of it.
+ *   For an AUTHORISED caller, unchanged byte for byte: the branch below is the
+ *   original handler body, pinned by
+ *   tests/integrations/balance/adjust-customer-balance-contract.test.ts against
+ *   a frozen copy of it. Since 2026-09-26 it first requires active staff of the
+ *   body's tenant whose role may edit (head_admin, admin, ops, a super admin, or
+ *   a manager with an editor grant on payments or customers) — 401 / 403
+ *   otherwise, before any read or write (_shared/staff-auth.ts).
  *
  * v2 — the canary "Adjust balance" panel (components/balance/**), additive:
  *   any body carrying `kind` or `reverses_id`. Three operations behind one
@@ -58,7 +63,23 @@ export interface AdminClientLike {
 export interface AdjustBalanceDeps {
   /** Builds the service-role client — inside the handler's try, where the original built it. */
   createAdminClient: () => AdminClientLike;
+  /**
+   * Builds the anon-key client that verifies a v1 caller's JWT (the
+   * _shared/deposit-hold-auth.ts choice). Omitted or null: the service-role
+   * client does the same GoTrue check.
+   */
+  createAuthClient?: () => StaffAuthClient | null;
+  /** Environment reader for the v1 staff check (defaults to Deno.env.get). */
+  env?: (name: string) => string | undefined;
 }
+
+/**
+ * v1's manager tabs. The Edit Balance dialog lives on the customer page (a
+ * manager reaches it through the `customers` grant), and a balance is money
+ * (the v2 panel and the SQL functions gate managers on `payments`). An EDITOR
+ * grant on either is the portal's canEdit for the place the button sits.
+ */
+export const V1_MANAGER_TABS = ["payments", "customers"] as const;
 
 export const V2_KINDS = ["charge_correction", "off_platform_payment", "goodwill"] as const;
 export type V2Kind = (typeof V2_KINDS)[number];
@@ -83,6 +104,21 @@ export async function handleAdjustCustomerBalance(req: Request, deps: AdjustBala
     const body = await req.json();
 
     if (isV2Request(body)) return await handleV2(req, supabase, body as Record<string, unknown>);
+
+    // ── v1: WHO first (added 2026-09-26) ──────────────────────────────────
+    // v1 used to verify nobody: it trusted `tenantId` and `customerId` from the
+    // body on a service-role client, and with no config.toml block the gateway
+    // accepts the public anon key — so anyone with that key and a customer id
+    // could move a customer's balance. Now the caller must be active staff
+    // whose role may edit here (_shared/staff-auth.ts), and — below, once the
+    // body says which tenant — of that tenant. For an authorised caller
+    // everything after this line is the original handler body, unchanged.
+    const v1Auth = await authorizeStaff(
+      req,
+      { db: supabase as any, authClient: deps.createAuthClient?.() ?? null, env: deps.env },
+      { logPrefix: "[adjust-customer-balance]", managerTabs: V1_MANAGER_TABS },
+    );
+    if (!v1Auth.ok) return errorResponse(v1Auth.error, v1Auth.status);
 
     // ── v1: the original handler body, unchanged ──────────────────────────
     const {
@@ -116,6 +152,14 @@ export async function handleAdjustCustomerBalance(req: Request, deps: AdjustBala
     if (!reason || !reason.trim()) {
       return errorResponse("reason is required");
     }
+
+    // The caller must be staff OF this tenant (super admins excepted). Checked
+    // against the body's tenantId BEFORE the lookup, so staff of one business
+    // cannot probe which business a customer id belongs to; the unchanged
+    // check below then binds the customer ROW to that same tenant — so the
+    // row's tenant is the caller's.
+    const v1Tenant = checkStaffTenant(v1Auth.caller, tenantId, "[adjust-customer-balance]");
+    if (!v1Tenant.ok) return errorResponse(v1Tenant.error, v1Tenant.status);
 
     // Verify the customer belongs to this tenant (defence in depth — the caller
     // is authenticated portal staff, but we never trust client-supplied tenant

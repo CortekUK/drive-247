@@ -47,7 +47,8 @@
 -- A POSITIVE Adjustment (a debit, or a payment request) can only be settled by
 -- a payment once 20260925120000_ledger_allocation_prerequisites.sql is live:
 -- the live payment_apply_fifo_v2 INNER JOINs a hard-coded category list with
--- no 'Adjustment' in it. Apply that migration first (or together).
+-- no 'Adjustment' in it. Apply that migration first (or together, before this
+-- one). Section 0 refuses to run otherwise.
 --
 -- APPEND-ONLY
 -- -----------
@@ -69,6 +70,28 @@
 -- DROP … IF EXISTS before each constraint/trigger/policy, CREATE OR REPLACE for
 -- every function.
 -- ============================================================================
+
+
+-- ─── 0. Order guard: the allocation prerequisites must already be live ──────
+-- Applied on its own, this migration would let an operator raise a positive
+-- Adjustment (a debit, a payment request) that the LIVE allocator can never
+-- settle. ledger_settleable_categories() is created by
+-- 20260925120000_ledger_allocation_prerequisites.sql together with the
+-- allocator that settles 'Adjustment', so it is the proof that file is live.
+-- Two statements, not one condition: PL/pgSQL plans each statement when it
+-- first runs, so the call below is never planned when the function is absent.
+DO $$
+BEGIN
+  IF to_regprocedure('public.ledger_settleable_categories()') IS NULL THEN
+    RAISE EXCEPTION 'Apply 20260925120000_ledger_allocation_prerequisites.sql first: ledger_settleable_categories() does not exist, so the live allocator cannot settle an Adjustment.'
+      USING ERRCODE = 'P0001';
+  END IF;
+  IF NOT ('Adjustment' = ANY (COALESCE(public.ledger_settleable_categories(), ARRAY[]::text[]))) THEN
+    RAISE EXCEPTION 'Apply 20260925120000_ledger_allocation_prerequisites.sql first: ledger_settleable_categories() does not list Adjustment, so the allocator cannot settle one.'
+      USING ERRCODE = 'P0001';
+  END IF;
+END;
+$$;
 
 
 -- ─── 1. payments.is_off_platform ────────────────────────────────────────────
@@ -607,7 +630,7 @@ DECLARE
   v_note text;
   o record;
   t record;
-  v_status text;
+  p record;
   v_vehicle uuid;
   v_entry uuid;
   v_rows integer;
@@ -638,11 +661,32 @@ BEGIN
     -- The money is taken back by reverse-payment (status 'Reversed', its
     -- allocations restored) BEFORE this runs. A payment that has since been
     -- deleted outright is gone from the balance too.
-    SELECT status INTO v_status FROM payments WHERE id = o.payment_id FOR UPDATE;
-    IF FOUND AND v_status IS DISTINCT FROM 'Reversed' THEN
+    SELECT status, COALESCE(refund_amount, 0) AS refunded INTO p FROM payments WHERE id = o.payment_id FOR UPDATE;
+    -- Refunded, in part or in full: some of this money has already gone back
+    -- to the customer. Undoing the whole entry would count that part twice
+    -- (once refunded, once reversed), so it is refused — whatever the status
+    -- says now, since a refunded payment can later be marked Reversed.
+    IF FOUND AND (p.refunded > 0 OR p.status IN ('Refunded', 'Partial Refund')) THEN
+      RAISE EXCEPTION 'This payment has been refunded, in part or in full, so it cannot be undone. Record a correction for what is still wrong instead.';
+    END IF;
+    IF FOUND AND p.status IS DISTINCT FROM 'Reversed' THEN
       RAISE EXCEPTION 'Reverse the payment first: it still counts as money received.';
     END IF;
   ELSE
+    -- Undoing an entry that RAISED what is owed (a debit correction, a payment
+    -- request) once a payment has been applied to it would strand that
+    -- payment: its allocation stays on the original row while the undo writes
+    -- a credit for the full amount. So an undo is only for an entry nobody has
+    -- paid against. Locked, so a payment cannot land between check and write.
+    IF o.amount > 0 THEN
+      SELECT amount, remaining_amount INTO t FROM ledger_entries WHERE id = o.ledger_entry_id FOR UPDATE;
+      IF NOT FOUND THEN
+        RAISE EXCEPTION 'The charge this entry added no longer exists, so there is nothing to undo.';
+      END IF;
+      IF t.remaining_amount < o.amount THEN
+        RAISE EXCEPTION 'Part of this has been paid — record a correction instead.';
+      END IF;
+    END IF;
     -- Undoing a DEBIT correction must not leave the credits against the same
     -- charge larger than the charge.
     IF o.target_charge_id IS NOT NULL AND o.amount > 0 THEN

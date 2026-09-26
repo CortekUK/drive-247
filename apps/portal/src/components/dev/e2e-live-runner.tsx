@@ -345,16 +345,17 @@ export function E2eLiveRunner({ pollMs = 1500 }: { pollMs?: number } = {}) {
     return null;
   };
 
-  const toggle = (s: CatalogueScenario) =>
+  const toggle = (s: CatalogueScenario) => {
+    const opening = !open.has(s.id);
     setOpen((prev) => {
       const n = new Set(prev);
-      if (n.has(s.id)) n.delete(s.id);
-      else {
-        n.add(s.id);
-        loadDetail(s);
-      }
+      if (opening) n.add(s.id);
+      else n.delete(s.id);
       return n;
     });
+    // Outside the updater: React may run an updater twice, and this sends a request.
+    if (opening) loadDetail(s);
+  };
 
   const openedData = opened ? watch.byId[opened.runId] : undefined;
   const openedUnfinished = !!openedData?.run && !isTerminal(openedData.run.status);

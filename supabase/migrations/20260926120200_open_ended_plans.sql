@@ -991,7 +991,9 @@ $$;
 --     categories (auto-extend's auto-charge row), so the live FIFO applies it
 --     to this extension's charges and nothing else;
 --   * a MANUAL record may not exceed what the period still owes (the excess
---     would be credit locked to this extension forever);
+--     would be credit locked to this extension forever); a card or link
+--     payment that does (priced while other charges were open) has its rest
+--     released to the rental's other charges;
 --   * when the period is now paid, the LIVE finalize_rental_extension moves
 --     rentals.end_date, in this same transaction. If finalize fails, nothing
 --     is recorded and the engine refunds the charge (design §7).
@@ -1100,6 +1102,20 @@ BEGIN
   GET DIAGNOSTICS v_rows = ROW_COUNT;
   IF v_rows <> 1 THEN
     RAISE EXCEPTION 'pp_record_success: attempt % was not updated', a.id;
+  END IF;
+
+  -- More than the period still owed (a link priced while other charges were
+  -- open, or the period settled meanwhile): the rest must not stay locked to
+  -- this extension. Drop the targets and let the live FIFO apply what is left
+  -- to the rental's OTHER charges, exactly as a plain payment would (it still
+  -- carries extension_id, so no other extension's charges are touched).
+  IF v_ext IS NOT NULL AND EXISTS (SELECT 1 FROM payments WHERE id = v_payment AND COALESCE(remaining_amount, 0) > 0) THEN
+    UPDATE payments SET target_categories = NULL WHERE id = v_payment;
+    GET DIAGNOSTICS v_rows = ROW_COUNT;
+    IF v_rows <> 1 THEN
+      RAISE EXCEPTION 'pp_record_success: payment % was not released to the rental', v_payment;
+    END IF;
+    PERFORM payment_apply_fifo_v2(v_payment);
   END IF;
 
   PERFORM pp_settle_occurrence(o.id);

@@ -445,6 +445,32 @@ describe("collecting a renewal period — pp_claim, pp_record_success, finalize_
     expect(await endDate(r.rentalId)).toBe("2026-10-09");
   });
 
+  it("a link paid for MORE than the period owes (priced while a 10000 base charge was open): the period is paid first, the rest pays the base charge — nothing stays locked to the extension", async () => {
+    const r = await seedRental(db, {
+      startDate: "2026-09-25",
+      endDate: "2026-10-02",
+      monthlyAmount: 350,
+      discountApplied: 16.16,
+      tenantPricing: { taxPercentage: 7, serviceFeeFixed: 5 },
+      charges: [{ category: "Rental", amountCents: 10000, dueDate: "2026-09-25" }],
+    });
+    const planId = (await db.one<{ id: string }>(`SELECT pp_create_plan($1::jsonb, $2::jsonb) id`, [JSON.stringify(renewalPlanJson(r, { collectionMethod: "checkout_link" })), JSON.stringify(WEEK1)]))!.id;
+    const occ = (await db.one<{ id: string }>(`SELECT id FROM payment_plan_occurrences WHERE plan_id = $1`, [planId]))!.id;
+    const p = await post(occ);
+    await due(planId);
+    const c = await claim(occ, "checkout_link");
+    expect(c.claim.amountCents).toBe(36221);
+    await db.q(`SELECT pp_mark_in_flight($1)`, [c.claim.attemptId]);
+    // 36221 + 10000 = 46221: what payment-plan-pay's cap (the rental's owed) allowed.
+    const payId = (await db.one<{ id: string }>(`SELECT pp_record_success($1, 46221, 'pi_link', 'acct_x', 'test', 'stripe', 'uk', '2026-10-02', 'Card', 'cs_1') id`, [c.claim.attemptId]))!.id;
+    expect((await charges(p.extensionId)).map((x) => x[2])).toEqual([0, 0, 0]);
+    expect(toCents((await db.one<any>(`SELECT remaining_amount FROM ledger_entries WHERE id = $1`, [r.chargeIds[0]]))!.remaining_amount)).toBe(0);
+    const pay = await db.one<any>(`SELECT status, remaining_amount, target_categories, extension_id FROM payments WHERE id = $1`, [payId]);
+    expect([pay.status, toCents(pay.remaining_amount), pay.target_categories, pay.extension_id]).toEqual(["Applied", 0, null, p.extensionId]);
+    expect((await occRow(occ)).status).toBe("paid");
+    expect(await endDate(r.rentalId)).toBe("2026-10-09");
+  });
+
   it("a written-off period (charges zeroed without money) is skipped when due, and its end date does NOT move", async () => {
     const { r, planId, occ } = await setup();
     const p = await post(occ);

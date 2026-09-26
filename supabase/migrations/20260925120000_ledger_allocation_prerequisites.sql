@@ -313,3 +313,75 @@ COMMENT ON VIEW public.v_ledger_allocation_drift IS
 
 REVOKE ALL ON public.v_ledger_allocation_drift FROM PUBLIC, anon, authenticated;
 GRANT SELECT ON public.v_ledger_allocation_drift TO service_role;
+
+
+-- 7. ledger_settleable_categories() — the ONE list of what a payment can settle
+--
+-- Added after slice 1 (Wave 1 fixes, Sep 26 2026). Everything above this
+-- section is unchanged.
+--
+-- The portal marks a charge "no payment can settle this" when its category is
+-- missing from the allocator's cat_order. Until now it did so from a copy of
+-- the LIVE list hard-coded in the portal — so once this migration is applied
+-- the portal would keep calling 'Adjustment', 'Excess Mileage', … unpayable,
+-- and before it is applied a portal copied from the new list would call them
+-- payable when the live function still cannot reach them. This function is the
+-- list, read from the database: it exists exactly when the new
+-- payment_apply_fifo_v2 above does, so the portal (payments-model.ts, a GET
+-- rpc, never HEAD) reads it when it answers and falls back to the old list
+-- when it does not.
+--
+-- The VALUES below are cat_order's VALUES, verbatim and in the same order. A
+-- test (tests/payment-plans/sql/settleable-categories.test.ts) parses
+-- payment_apply_fifo_v2's body from the database and requires this function
+-- to return exactly its categories, in its priority order — so the two lists
+-- cannot drift. Within one priority the order is by name (C collation), which
+-- the allocator does not care about (it then orders by due date).
+--
+-- Read-only and constant: IMMUTABLE (so PostgREST serves it over GET), no
+-- table access, no SECURITY DEFINER. Staff and the service role may call it.
+
+CREATE OR REPLACE FUNCTION public.ledger_settleable_categories()
+ RETURNS text[]
+ LANGUAGE sql
+ IMMUTABLE
+ SET search_path = public
+AS $function$
+  SELECT array_agg(cat ORDER BY pri, cat COLLATE "C")
+    FROM (
+      VALUES
+        -- Existing priorities: unchanged.
+        ('Rental'::text,            1::numeric),
+        ('Tax',                     2),
+        ('Service Fee',             3),
+        ('Delivery Fee',            4),
+        ('Collection Fee',          5),
+        ('Insurance',               6),
+        ('Extras',                  7),
+        ('Extension Rental',        8),
+        ('Extension Tax',           9),
+        ('Extension Service Fee',  10),
+        ('Extension Insurance',    11),
+        ('Fine',                   12),
+        ('Fines',                  12),
+        ('Other',                  13),
+        -- Newly visible: after every existing earned category, before the
+        -- deposit. See the header for why here.
+        ('InitialFee',             13.1),
+        ('Initial Fees',           13.1),
+        ('Extension',              13.2),
+        ('Extension Add-on',       13.2),
+        ('Unlimited Mileage',      13.3),
+        ('Excess Mileage',         13.3),
+        ('Supercharger',           13.3),
+        ('Adjustment',             13.4),
+        -- Deliberately last: refundable money, not earned money. See header.
+        ('Security Deposit',       14)
+    ) AS cat_order(cat, pri)
+$function$;
+
+COMMENT ON FUNCTION public.ledger_settleable_categories() IS
+  'The ledger categories payment_apply_fifo_v2 can settle, in its priority order (its cat_order VALUES). Read by the portal to mark unsettleable charges. A test pins it to the allocator''s body.';
+
+REVOKE ALL ON FUNCTION public.ledger_settleable_categories() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.ledger_settleable_categories() TO authenticated, service_role;

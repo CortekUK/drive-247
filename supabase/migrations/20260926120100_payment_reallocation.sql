@@ -17,8 +17,10 @@
 --                                   for ONE drifted charge
 --   bill_reconcile_options(...)     read-only: why a bill does not tie out and
 --                                   the exact operations that would close it
--- All SECURITY DEFINER, search_path pinned, EXECUTE for service_role only (the
--- payment-reallocate edge function authorises the operator first).
+-- The three entry points and every helper that reads a table are SECURITY
+-- DEFINER; every function has search_path pinned and EXECUTE for service_role
+-- only (the payment-reallocate edge function authorises the operator first).
+-- tests/payment-plans/reallocation/ is the evidence for everything below.
 --
 -- UNITS
 -- -----
@@ -111,8 +113,9 @@
 -- (old ∪ new) FOR UPDATE in id order, then the payment's application rows.
 -- While the payment row is locked, no other transaction can insert an
 -- application for it (the payment_id FK check needs FOR KEY SHARE on it).
--- Every write asserts it touched exactly one row and RAISEs otherwise — the
--- whole call then rolls back.
+-- Every money write asserts it touched exactly one row and RAISEs otherwise —
+-- the whole call then rolls back. (The one unasserted write is the fines
+-- status sync below: 0 rows there just means the fine was not 'Paid'.)
 --
 -- KNOWN LIMITS (reported, not silently handled)
 -- ---------------------------------------------
@@ -195,7 +198,7 @@ COMMENT ON TABLE public.payment_allocation_changes IS
 CREATE OR REPLACE FUNCTION public.payment_allocation_changes_append_only()
  RETURNS trigger
  LANGUAGE plpgsql
- SET search_path = public
+ SET search_path = public, pg_temp
 AS $$
 BEGIN
   IF pg_trigger_depth() > 1 THEN
@@ -245,7 +248,7 @@ CREATE OR REPLACE FUNCTION public.pal__pnl_category(p_ledger_category text)
  RETURNS text
  LANGUAGE sql
  IMMUTABLE
- SET search_path = public
+ SET search_path = public, pg_temp
 AS $$
   SELECT CASE
            WHEN m IS NULL OR NOT (m = ANY (ARRAY[
@@ -271,7 +274,7 @@ CREATE OR REPLACE FUNCTION public.pal__money(p numeric)
  RETURNS text
  LANGUAGE sql
  IMMUTABLE
- SET search_path = public
+ SET search_path = public, pg_temp
 AS $$ SELECT to_char(COALESCE(p, 0), 'FM999999999990.00') $$;
 
 
@@ -284,7 +287,7 @@ CREATE OR REPLACE FUNCTION public.pal__assert_actor(p_actor uuid, p_tenant uuid)
  LANGUAGE plpgsql
  STABLE
  SECURITY DEFINER
- SET search_path = public
+ SET search_path = public, pg_temp
 AS $$
 DECLARE
   u app_users;
@@ -312,7 +315,7 @@ CREATE OR REPLACE FUNCTION public.pal__actor_label(p_actor uuid)
  LANGUAGE sql
  STABLE
  SECURITY DEFINER
- SET search_path = public
+ SET search_path = public, pg_temp
 AS $$
   SELECT COALESCE(NULLIF(btrim(u.name), '') || ' <' || u.email || '>', u.email)
     FROM app_users u WHERE u.id = p_actor
@@ -323,7 +326,7 @@ CREATE OR REPLACE FUNCTION public.pal__require_reason(p_reason text, p_note text
  RETURNS void
  LANGUAGE plpgsql
  IMMUTABLE
- SET search_path = public
+ SET search_path = public, pg_temp
 AS $$
 BEGIN
   IF length(btrim(COALESCE(p_reason, ''))) = 0 THEN
@@ -346,7 +349,7 @@ CREATE OR REPLACE FUNCTION public.pal__reopen_fine(p_reference text)
  RETURNS void
  LANGUAGE plpgsql
  SECURITY DEFINER
- SET search_path = public
+ SET search_path = public, pg_temp
 AS $$
 BEGIN
   IF p_reference LIKE 'FINE-%'
@@ -365,7 +368,7 @@ CREATE OR REPLACE FUNCTION public.pal__payment_snapshot(p_payment_id uuid, p_cha
  LANGUAGE sql
  STABLE
  SECURITY DEFINER
- SET search_path = public
+ SET search_path = public, pg_temp
 AS $$
   SELECT jsonb_build_object(
     'payment', jsonb_build_object(
@@ -417,7 +420,7 @@ CREATE OR REPLACE FUNCTION public.pal__charge_snapshot(p_charge_id uuid)
  LANGUAGE sql
  STABLE
  SECURITY DEFINER
- SET search_path = public
+ SET search_path = public, pg_temp
 AS $$
   SELECT jsonb_build_object(
     'charge_entry_id', le.id,
@@ -452,7 +455,7 @@ CREATE OR REPLACE FUNCTION public.payment_reallocate(
  RETURNS uuid
  LANGUAGE plpgsql
  SECURITY DEFINER
- SET search_path = public
+ SET search_path = public, pg_temp
 AS $$
 DECLARE
   p             payments;
@@ -804,7 +807,7 @@ CREATE OR REPLACE FUNCTION public.charge_recompute_remaining(
  RETURNS uuid
  LANGUAGE plpgsql
  SECURITY DEFINER
- SET search_path = public
+ SET search_path = public, pg_temp
 AS $$
 DECLARE
   c          ledger_entries;
@@ -916,7 +919,7 @@ CREATE OR REPLACE FUNCTION public.bill_reconcile_options(p_rental_id uuid, p_ext
  LANGUAGE plpgsql
  STABLE
  SECURITY DEFINER
- SET search_path = public
+ SET search_path = public, pg_temp
 AS $$
 DECLARE
   r             record;
@@ -1080,7 +1083,10 @@ BEGIN
       v_after_rem := v_amount - (v_applied - v_moved);
       v_fixes := v_fixes || jsonb_build_array(jsonb_build_object(
         'kind', 'move_excess',
-        'label', format('Move the %s recorded twice off this charge; it becomes unused credit on the payment', pal__money(v_moved / 100.0)),
+        'label', CASE WHEN v_moved > 0
+                      THEN format('Move the %s recorded too much off this charge; it becomes unused credit on the payment it came from',
+                                  pal__money(v_moved / 100.0))
+                      ELSE 'The excess is on payments that cannot be moved from here' END,
         'result', CASE WHEN v_left = 0
                        THEN format('The charge ties out with %s owed.', pal__money(v_after_rem / 100.0))
                        ELSE format('%s of the excess is on payments that cannot be moved here (refunded, reversed or not captured) — record an adjustment for it.',

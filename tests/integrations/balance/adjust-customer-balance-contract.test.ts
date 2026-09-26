@@ -4,12 +4,18 @@
  * Driven through the real handler (`handleAdjustCustomerBalance` in core.ts)
  * with a recording fake of the service-role client. Nothing reaches Supabase.
  *
- * 1. v1 is UNCHANGED. The Edit Balance dialog's request shape goes through the
- *    frozen copy of the handler as it stood at 61f877d1
- *    (fixtures/adjust-customer-balance-v1-original.ts) and through core.ts,
- *    and both must answer every request identically — same status, same body,
- *    same writes. The expected payload for the ordinary cases is also written
- *    out by hand, so a change to BOTH could not pass either.
+ * 1. v1 is UNCHANGED FOR EVERY AUTHORISED CALLER. The Edit Balance dialog's
+ *    request shape goes through the frozen copy of the handler as it stood at
+ *    61f877d1 (fixtures/adjust-customer-balance-v1-original.ts) and through
+ *    core.ts, once per kind of caller the portal lets press the button, and
+ *    both must answer every request identically — same status, same body, same
+ *    writes. The expected payload for the ordinary cases is also written out by
+ *    hand, so a change to BOTH could not pass either.
+ * 1b. v1 now REFUSES everyone else (added 2026-09-26, _shared/staff-auth.ts):
+ *    no token, the public anon key, the service-role key, a booking-site renter,
+ *    a viewer, a manager without an editor grant, staff of another business —
+ *    401 / 403 with no customer read, no ledger write and no SQL call. Before,
+ *    all of them got a 200 and a ledger row.
  * 2. v2 — any body with `kind` or `reverses_id` — calls exactly one SQL
  *    function with exactly the arguments below, takes WHO from the caller's
  *    token (never the body), and turns the function's refusals into statuses.
@@ -50,8 +56,11 @@ interface State {
   customerError: any;
   insertError: any;
   authUserId: string | null;
+  getUserThrows: boolean;
   appUser: any;
+  appUserError: any;
   grants: any[];
+  grantError: any;
   rpcResult: { data: any; error: any };
 }
 
@@ -64,15 +73,18 @@ const fresh = (): State => ({
   customerError: null,
   insertError: null,
   authUserId: AUTH_USER,
+  getUserThrows: false,
   appUser: { id: APP_USER, tenant_id: TENANT, role: "admin", is_active: true, is_super_admin: false },
+  appUserError: null,
   grants: [],
+  grantError: null,
   rpcResult: { data: null, error: null },
 });
 
 function respond(op: Op): { data: any; error: any } {
   if (op.table === "customers") return { data: state.customerError ? null : state.customer, error: state.customerError };
-  if (op.table === "app_users") return { data: state.appUser, error: null };
-  if (op.table === "manager_permissions") return { data: state.grants, error: null };
+  if (op.table === "app_users") return { data: state.appUserError ? null : state.appUser, error: state.appUserError };
+  if (op.table === "manager_permissions") return { data: state.grantError ? null : state.grants, error: state.grantError };
   if (op.table === "ledger_entries" && op.action === "insert") {
     if (state.insertError) return { data: null, error: state.insertError };
     return { data: { id: "le-new", ...op.payload }, error: null };
@@ -101,6 +113,10 @@ function builder(table: string) {
       op.filters.push([col, "eq", val]);
       return b;
     },
+    in(col: string, vals: unknown) {
+      op.filters.push([col, "in", vals]);
+      return b;
+    },
     maybeSingle() {
       op.terminal = "maybeSingle";
       return run();
@@ -125,6 +141,7 @@ const fakeClient = () => ({
   auth: {
     getUser: (jwt: string) => {
       state.tokens.push(jwt);
+      if (state.getUserThrows) return Promise.reject(new Error("GoTrue unreachable"));
       return Promise.resolve(
         state.authUserId ? { data: { user: { id: state.authUserId } }, error: null } : { data: { user: null }, error: { message: "bad jwt" } },
       );
@@ -140,7 +157,10 @@ const original = makeOriginalHandler(
   },
   { SUPABASE_URL: "https://x.supabase.co", SUPABASE_SERVICE_ROLE_KEY: "svc" },
 );
-const current = (req: Request) => handleAdjustCustomerBalance(req, { createAdminClient: () => fakeClient() as any });
+// The function's environment: the two project keys the staff check refuses by value.
+const ENV: Record<string, string> = { SUPABASE_ANON_KEY: "anon-key", SUPABASE_SERVICE_ROLE_KEY: "svc" };
+const current = (req: Request) =>
+  handleAdjustCustomerBalance(req, { createAdminClient: () => fakeClient() as any, env: (k) => ENV[k] });
 
 const post = (body: unknown, token: string | null = "user-jwt") =>
   new Request("https://fn.local/adjust-customer-balance", {
@@ -184,7 +204,6 @@ const V1_CASES: { name: string; body: unknown; setup?: (s: State) => void; token
   { name: "decrease on the account", body: { customerId: CUSTOMER, tenantId: TENANT, amount: 30, direction: "decrease", reason: "Goodwill" } },
   { name: "decrease scoped to a rental and extension", body: { customerId: CUSTOMER, tenantId: TENANT, amount: "25.5", direction: "decrease", reason: "x", rentalId: RENTAL, extensionId: EXTENSION } },
   { name: "reason longer than 500 is cut", body: { customerId: CUSTOMER, tenantId: TENANT, amount: 1, direction: "increase", reason: "r".repeat(700) } },
-  { name: "no token at all (v1 never asked for one)", body: { customerId: CUSTOMER, tenantId: TENANT, amount: 1, direction: "increase", reason: "x" }, token: null },
   { name: "missing customerId", body: { tenantId: TENANT, amount: 1, direction: "increase", reason: "x" } },
   { name: "missing tenantId", body: { customerId: CUSTOMER, amount: 1, direction: "increase", reason: "x" } },
   { name: "bad direction", body: { customerId: CUSTOMER, tenantId: TENANT, amount: 1, direction: "up", reason: "x" } },
@@ -200,17 +219,52 @@ const V1_CASES: { name: string; body: unknown; setup?: (s: State) => void; token
   { name: "not JSON", body: "{nope" },
 ];
 
-describe("v1 — the Edit Balance dialog's contract is unchanged", () => {
-  it.each(V1_CASES)("$name: identical to the frozen original", async ({ body, setup, token }) => {
-    applySetup = setup ?? null;
-    const before = await run(original, post(body, token === undefined ? "user-jwt" : token));
-    applySetup = setup ?? null;
-    const after = await run(current, post(body, token === undefined ? "user-jwt" : token));
-    expect(after).toEqual(before);
-    // v1 never reads the token, never looks up staff, never calls a SQL function.
-    expect(after.tokens).toEqual([]);
+/**
+ * Every kind of caller the portal shows the Edit Balance button to AND the
+ * server now lets through. canEdit() is true for head_admin, admin and ops; a
+ * super admin is presented as head_admin; a manager needs an editor grant —
+ * on `customers` (where the button sits) or `payments` (the money grant).
+ */
+const AUTHORISED_CALLERS: { who: string; as: (s: State) => void }[] = [
+  { who: "an admin", as: () => {} },
+  { who: "a head admin", as: (s) => (s.appUser.role = "head_admin") },
+  { who: "an ops user", as: (s) => (s.appUser.role = "ops") },
+  { who: "a super admin with no tenant", as: (s) => { s.appUser.tenant_id = null; s.appUser.is_super_admin = true; s.appUser.role = "head_admin"; } },
+  { who: "a manager with editor on payments", as: (s) => { s.appUser.role = "manager"; s.grants = [{ tab_key: "payments", access_level: "editor" }]; } },
+  { who: "a manager with editor on customers", as: (s) => { s.appUser.role = "manager"; s.grants = [{ tab_key: "customers", access_level: "editor" }]; } },
+];
+
+/** The money half of what a handler did: everything but the staff lookup. */
+const moneyOps = (ops: Op[]) => ops.filter((o) => o.table !== "app_users" && o.table !== "manager_permissions");
+
+describe("v1 — the Edit Balance dialog's contract is unchanged for every authorised caller", () => {
+  const matrix = AUTHORISED_CALLERS.flatMap((c) => V1_CASES.map((v) => ({ ...v, who: c.who, as: c.as })));
+
+  it.each(matrix)("$who · $name: identical to the frozen original", async ({ body, setup, as }) => {
+    const both = (s: State) => {
+      as(s);
+      setup?.(s);
+    };
+    applySetup = both;
+    const before = await run(original, post(body));
+    applySetup = both;
+    const after = await run(current, post(body));
+    // Same answer, same CORS, same reads and writes of money, no SQL function.
+    expect({ ...after, ops: moneyOps(after.ops), tokens: [] }).toEqual({ ...before, tokens: [] });
     expect(after.rpcs).toEqual([]);
-    expect(after.ops.map((o) => o.table).filter((t) => t !== "customers" && t !== "ledger_entries")).toEqual([]);
+    // The one addition: the caller's own token was checked, and the staff row
+    // read, BEFORE anything the body names was touched — or the body was not
+    // JSON, which is answered before anyone is identified, exactly as before.
+    if (body === "{nope") {
+      expect(after.ops).toEqual([]);
+      return;
+    }
+    expect(after.tokens).toEqual(["user-jwt"]);
+    expect(after.ops[0]).toMatchObject({ table: "app_users", filters: [["auth_user_id", "eq", AUTH_USER]] });
+    const firstMoney = after.ops.findIndex((o) => o.table === "customers" || o.table === "ledger_entries");
+    const lastStaff = after.ops.map((o) => o.table).lastIndexOf("app_users");
+    const lastGrant = after.ops.map((o) => o.table).lastIndexOf("manager_permissions");
+    if (firstMoney >= 0) expect(Math.max(lastStaff, lastGrant)).toBeLessThan(firstMoney);
   });
 
   it("OPTIONS preflight is identical", async () => {
@@ -248,6 +302,60 @@ describe("v1 — the Edit Balance dialog's contract is unchanged", () => {
     expect(isV2Request(null)).toBe(false);
     expect(isV2Request({ kind: "goodwill" })).toBe(true);
     expect(isV2Request({ reverses_id: ADJ })).toBe(true);
+  });
+});
+
+/* ── 1b. v1: everyone else is refused ──────────────────────────────────── */
+
+const V1_BODY = { customerId: CUSTOMER, tenantId: TENANT, amount: 25, direction: "decrease", reason: "Goodwill" };
+
+describe("v1 — a caller who is not authorised staff of the customer's business is refused", () => {
+  it("the frozen original let ALL of these through: no token → 200 and a ledger row (the hole being closed)", async () => {
+    const out = await run(original, post(V1_BODY, null));
+    expect(out.status).toBe(200);
+    expect(out.ops.some((o) => o.action === "insert" && o.table === "ledger_entries")).toBe(true);
+  });
+
+  it.each([
+    ["no token at all", null, null, 401],
+    ["the public anon key as the bearer (refused by value; GoTrue is never asked)", "anon-key", null, 401],
+    ["the service-role key as the bearer", "svc", null, 401],
+    ["a token GoTrue does not recognise as a user", "forged", (s: State) => (s.authUserId = null), 401],
+    ["GoTrue unreachable (fails safe)", "user-jwt", (s: State) => (s.getUserThrows = true), 401],
+    ["a booking-site renter (a user with no staff row)", "user-jwt", (s: State) => (s.appUser = null), 403],
+    ["a deactivated staff account", "user-jwt", (s: State) => (s.appUser.is_active = false), 403],
+    ["a viewer", "user-jwt", (s: State) => (s.appUser.role = "viewer"), 403],
+    ["a staff row with no role", "user-jwt", (s: State) => (s.appUser.role = null), 403],
+    ["a role the check has never heard of", "user-jwt", (s: State) => (s.appUser.role = "accountant"), 403],
+    ["a manager with no grant", "user-jwt", (s: State) => (s.appUser.role = "manager"), 403],
+    ["a manager with VIEWER on payments", "user-jwt", (s: State) => { s.appUser.role = "manager"; s.grants = [{ tab_key: "payments", access_level: "viewer" }]; }, 403],
+    ["a manager with editor on an unrelated tab", "user-jwt", (s: State) => { s.appUser.role = "manager"; s.grants = [{ tab_key: "vehicles", access_level: "editor" }]; }, 403],
+    ["staff of ANOTHER business naming this one", "user-jwt", (s: State) => (s.appUser.tenant_id = OTHER_TENANT), 403],
+    ["a staff lookup that fails (fails safe)", "user-jwt", (s: State) => (s.appUserError = { message: "db down" }), 500],
+    ["a grant lookup that fails (fails safe)", "user-jwt", (s: State) => { s.appUser.role = "manager"; s.grantError = { message: "db down" }; }, 500],
+  ] as const)("%s → %i, nothing the body names is read or written", async (_n, token, setup, status) => {
+    applySetup = setup;
+    const out = await run(current, post(V1_BODY, token));
+    expect(out.status).toBe(status);
+    expect(typeof out.body.error).toBe("string");
+    expect(out.ops.filter((o) => o.table === "customers" || o.table === "ledger_entries")).toEqual([]);
+    expect(out.rpcs).toEqual([]);
+    if (token === "anon-key" || token === "svc" || token === null) expect(out.tokens).toEqual([]);
+  });
+
+  it("staff of another business who name THEIR OWN tenant still cannot reach this customer: the row decides (404, no write)", async () => {
+    applySetup = (s) => (s.appUser.tenant_id = OTHER_TENANT);
+    const out = await run(current, post({ ...V1_BODY, tenantId: OTHER_TENANT }));
+    expect(out.status).toBe(404);
+    expect(out.body).toEqual({ error: "Customer not found for this tenant" });
+    expect(out.ops.some((o) => o.action === "insert")).toBe(false);
+  });
+
+  it.each(V1_CASES.filter((c) => c.body !== "{nope"))("no token · $name → 401 (the refusal comes before every validation)", async ({ body, setup }) => {
+    applySetup = setup ?? null;
+    const out = await run(current, post(body, null));
+    expect(out.status).toBe(401);
+    expect(out.ops).toEqual([]);
   });
 });
 

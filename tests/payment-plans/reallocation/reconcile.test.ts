@@ -266,6 +266,41 @@ describe("reconcile this bill — the gaps it explains and the fixes that close 
     expect((await reconcileOptions(db, r.rentalId)).ties_out).toBe(true);
   });
 
+  it("an over-applied charge the drift view no longer lists (already recomputed to −100) still gets its fix: take the later payment off", async () => {
+    const r = await seedRental(db, { charges: [{ category: "Rental", amountCents: 10000, dueDate: "2026-10-02" }] });
+    const charge = r.chargeIds[0];
+    await historicPayment(r, 10000, "2026-10-02", [[charge, 10000]]);
+    const p2 = await historicPayment(r, 10000, "2026-10-04", [[charge, 10000]]);
+    const actor = await seedStaff(db, r.tenantId);
+    await recompute(db, charge, actor); // 100 − 200 = −100: ties out for the view, still over-applied
+    expect(await driftRows(db, r.rentalId)).toEqual({});
+
+    const c = (await reconcileOptions(db, r.rentalId)).charges[0];
+    expect(c).toMatchObject({ problem: "payments_exceed_charge", in_drift_view: false, drift_cents: 0, over_applied_cents: 10000, remaining_cents: -10000 });
+    expect(c.fixes[0].steps).toEqual([
+      { action: "reallocate", payment_id: p2, targets: [], changes: [{ charge_entry_id: charge, from_cents: 10000, to_cents: 0 }], unplaced_cents_added: 10000 },
+    ]);
+    await runSteps(c.fixes[0].steps, actor);
+    expect((await reconcileOptions(db, r.rentalId)).ties_out).toBe(true);
+  });
+
+  it("does not propose moving a partly refunded payment, and says how much it cannot resolve", async () => {
+    const r = await seedRental(db, { charges: [{ category: "Rental", amountCents: 10000, dueDate: "2026-10-02" }] });
+    const charge = r.chargeIds[0];
+    const p = await historicPayment(r, 15000, "2026-10-02", [[charge, 15000]]);
+    await db.q(`UPDATE payments SET refund_amount = 20, status = 'Partial Refund' WHERE id = $1`, [p]);
+    await db.q(`UPDATE ledger_entries SET remaining_amount = 0 WHERE id = $1`, [charge]);
+    const c = (await reconcileOptions(db, r.rentalId)).charges[0];
+    // 150 recorded on a 100 charge: 50 over; the only payment is refunded in part, so nothing is proposed for it.
+    expect(c).toMatchObject({ problem: "payments_exceed_charge", over_applied_cents: 5000 });
+    expect(c.applications).toEqual([expect.objectContaining({ payment_id: p, applied_cents: 15000, movable: false, net_cents: 13000 })]);
+    expect(c.fixes[0]).toMatchObject({
+      kind: "move_excess", unresolved_cents: 5000,
+      result: "50.00 of the excess is on payments that cannot be moved here (refunded, reversed or not captured) — record an adjustment for it.",
+    });
+    expect(c.fixes[0].steps.filter((s: any) => s.action === "reallocate")).toEqual([]);
+  });
+
   it("names exactly the charges v_ledger_allocation_drift names for the rental, plus over-applied ones the view cannot see", async () => {
     const r = await seedRental(db, {
       charges: [

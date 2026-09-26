@@ -892,9 +892,11 @@ export class MemoryPlanStore implements PlanStore, PlanOperations, PlanLookups, 
     });
     if (ext) {
       // extension_id + the Extension* target categories: the FIFO applies it to
-      // this extension's charges only; any excess stays on the payment, locked
-      // to the extension (never reaches the rental's balance).
-      this.applyToExtension(ext, input.amountCents);
+      // this extension's charges first. Any excess (a link priced while other
+      // charges were open) is released to the rental's other, non-extension
+      // charges — pp_record_success drops the targets and runs the FIFO again.
+      const applied = this.applyToExtension(ext, input.amountCents);
+      if (input.amountCents > applied) rental.owedCents -= input.amountCents - applied;
     } else {
       this.applyGeneralPayment(rental, input.amountCents);
     }
