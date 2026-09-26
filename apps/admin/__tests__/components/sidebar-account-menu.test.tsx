@@ -110,7 +110,7 @@ describe('the account row is the way out', () => {
     expect(logout).toHaveBeenCalledTimes(1);
   });
 
-  it('carries the Primary Admin badge into the menu', async () => {
+  it('repeats nothing from the row it opens', async () => {
     mount();
     await act(async () => {
       fireEvent.pointerDown(
@@ -118,11 +118,26 @@ describe('the account row is the way out', () => {
         { ctrlKey: false, button: 0 },
       );
     });
-    // It moved off the row, where it sat under a truncated name, into the
-    // menu header where there is room for it beside the address.
     await waitFor(() => {
-      expect(screen.getByText('Primary Admin')).toBeTruthy();
+      expect(screen.getByRole('menuitem', { name: /sign out/i })).toBeTruthy();
     });
+
+    /*
+     * The menu briefly carried its own user block — same avatar, same name,
+     * same address — directly above the row you had just pressed to open it.
+     * Removed Sep 26 2026.
+     *
+     * The name and email still appear ONCE, on the trigger. So this counts
+     * rather than asserting absence: two of either would mean the block is
+     * back.
+     */
+    const menu = screen.getByRole('menu');
+    expect(menu.textContent).not.toContain('owner@cortek.io');
+    expect(screen.getAllByText('owner@cortek.io')).toHaveLength(1);
+
+    // The Primary Admin badge went with the block. It is a role marker, and
+    // the Admins page is where roles are actually administered.
+    expect(screen.queryByText('Primary Admin')).toBeNull();
   });
 });
 

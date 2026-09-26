@@ -432,26 +432,16 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           </DropdownMenuTrigger>
 
           <DropdownMenuContent side="top" align="start" className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-56 p-0">
-            <div className="p-3">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">
-                  {user?.email?.[0]?.toUpperCase() || 'A'}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-[15px] font-semibold leading-tight md:text-[13px]">
-                    {user?.name || 'Super Admin'}
-                  </div>
-                  <div className="truncate text-[12px] leading-tight text-muted-foreground md:text-[11px]">
-                    {user?.email}
-                  </div>
-                </div>
-              </div>
-              {user?.is_primary_super_admin && (
-                <span className="mt-2 inline-flex items-center rounded-full border border-primary/30 bg-primary/15 px-1.5 py-0 text-[10px] font-semibold text-primary">
-                  Primary Admin
-                </span>
-              )}
-            </div>
+            {/* NO user block in here.
+
+                It repeated the row you just pressed — same avatar, same name,
+                same address, directly above it. Removed Sep 26 2026: the
+                trigger is two pixels below and says all of it already.
+
+                The Primary Admin badge went with it. It had been moved in
+                here when the row got the email, and there is nowhere left in
+                this menu it does not look like clutter. The role is on the
+                Admins page, which is where it is administered. */}
 
             {/* What the open record lets you do.
 
@@ -466,7 +456,6 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                 account items below are always there. */}
             {sections?.actions?.length ? (
               <>
-                <DropdownMenuSeparator className="m-0" />
                 <div className="p-1.5">
                   {/* ONE row that opens the rest.
 
@@ -514,10 +503,9 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                     </DropdownMenuPortal>
                   </DropdownMenuSub>
                 </div>
+                <DropdownMenuSeparator className="m-0" />
               </>
             ) : null}
-
-            <DropdownMenuSeparator className="m-0" />
 
             <div className="p-1.5">
               <DropdownMenuItem
