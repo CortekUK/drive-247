@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
 import { useTenantSubscription } from "@/hooks/use-tenant-subscription";
+import { useSoftSubscriptionBlock } from "@/hooks/use-soft-subscription-block";
 
 /**
  * The dunning warning, for a PHONE.
@@ -73,11 +74,18 @@ export function PaymentDueBar({ allWidths = false }: PaymentDueBarProps) {
     graceSeverity,
     outstandingInvoiceUrl,
   } = useTenantSubscription();
+  const { active: softBlock } = useSoftSubscriptionBlock();
 
   // Same condition as the chip, including the EXPIRED state: the moment the
   // window closes the tenant still owes money, and on an exempt route this bar
   // is the only thing on screen that can take them to pay it.
-  const paymentDue = isInGracePeriod || isGraceExpired;
+  //
+  // SOFT BLOCK is the third way in. That tenant's subscription is canceled
+  // rather than past_due, so neither grace flag is ever true for them and this
+  // bar stayed silent — which would have left the 24h-dismissible dialog as the
+  // ONLY mention of the debt, and therefore nothing at all for most of the day.
+  // This is the surface that does not dismiss.
+  const paymentDue = isInGracePeriod || isGraceExpired || softBlock;
   if (!paymentDue) return null;
 
   // `graceSeverity` is "none" outside the window (it is derived from
@@ -85,6 +93,8 @@ export function PaymentDueBar({ allWidths = false }: PaymentDueBarProps) {
   const critical = graceSeverity === "critical" || isGraceExpired;
 
   const label = "Your payment is due.";
+  // Deliberately NOT "Overdue" for a soft block: the amber/"Action needed"
+  // pairing is the one that matches a tenant who still has their dashboard.
   const detail = isGraceExpired ? "Overdue" : "Action needed";
 
   // Copied verbatim from `app-sidebar-v2.tsx` / `app-sidebar.tsx` (`paymentDueClass`).

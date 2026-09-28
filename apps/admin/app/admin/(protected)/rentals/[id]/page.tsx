@@ -2038,10 +2038,12 @@ export default function TenantDetailsPage() {
               {/* Per-tenant blocker override */}
               <div className="mt-5 pt-4 border-t border-border/40 flex items-center justify-between gap-4">
                 <div>
-                  <p className="text-sm font-medium">Hide subscription blocker</p>
+                  <p className="text-sm font-medium">Soft subscription block</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    When on, this tenant is never shown the &ldquo;Finish Setup&rdquo; / subscription-expired
-                    blocker. Their status, plans and billing stay unchanged.
+                    When on, an unpaid tenant keeps their dashboard and is reminded instead of locked
+                    out: a dismissible popup that returns every 24 hours, plus a &ldquo;payment due&rdquo;
+                    bar that does not dismiss. When off, they meet the full-screen blocker. Their
+                    status, plans and billing stay unchanged either way.
                   </p>
                 </div>
                 <label className="flex items-center cursor-pointer shrink-0">
@@ -2064,7 +2066,7 @@ export default function TenantDetailsPage() {
                     </div>
                   </div>
                   <Badge variant={tenant.subscription_gate_disabled ? 'success' : 'outline'} className="ml-2 whitespace-nowrap">
-                    {tenant.subscription_gate_disabled ? 'Hidden' : 'Active'}
+                    {tenant.subscription_gate_disabled ? 'Soft' : 'Hard'}
                   </Badge>
                 </label>
               </div>

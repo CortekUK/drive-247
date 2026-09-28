@@ -95,6 +95,7 @@ import { useIsAreaHidden } from "@/lib/lean-context";
 import { usePendingBookingsCount } from "@/hooks/use-pending-bookings";
 import { useAuthStore } from "@/stores/auth-store";
 import { useTenantSubscription } from "@/hooks/use-tenant-subscription";
+import { useSoftSubscriptionBlock } from "@/hooks/use-soft-subscription-block";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useCMSPages } from "@/hooks/use-cms-pages";
 import { useCmsOutline } from "@/stores/cms-outline-store";
@@ -353,7 +354,11 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   // moment the window closed the badge fell back to a green "Live" chip sitting
   // behind a modal telling the operator their access had been canceled — the two
   // surfaces flatly contradicting each other at the worst possible moment.
-  const paymentDue = isInGracePeriod || isGraceExpired;
+  // SOFT BLOCK also lights this chip. That tenant sits at `canceled`, not
+  // `past_due`, so neither grace flag is true for them — see the note in
+  // payment-due-bar.tsx. The chip is the desktop half of that pair.
+  const { active: softBlock } = useSoftSubscriptionBlock();
+  const paymentDue = isInGracePeriod || isGraceExpired || softBlock;
   const paymentDueCritical = graceSeverity === "critical" || isGraceExpired;
   // The client's wording, verbatim.
   const paymentDueLabel = "Your payment is due.";

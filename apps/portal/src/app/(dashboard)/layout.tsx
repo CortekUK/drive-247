@@ -12,6 +12,7 @@ import { useSessionGuard } from "@/hooks/use-session-guard";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useSubscriptionGateDisabled } from "@/hooks/use-subscription-gate-disabled";
 import { SubscriptionGateDialog } from "@/components/subscription/subscription-gate-dialog";
+import { SubscriptionSoftReminder } from "@/components/subscription/subscription-soft-reminder";
 import { SubscriptionActivatedDialog } from "@/components/subscription/subscription-activated-dialog";
 import { PaymentDueBar } from "@/components/subscription/payment-due-bar";
 import { SetupReminderDialog } from "@/components/dashboard/setup-reminder-dialog";
@@ -876,6 +877,16 @@ export default function DashboardLayout({
                 : "setup"
           }
         />
+
+        {/* SOFT subscription block — the dismissible half of the paywall.
+            Driven by the per-tenant "Subscription blocker" toggle in the Super
+            Admin record (tenants.subscription_gate_disabled), which suppresses
+            the hard modal above on exactly the same condition. That toggle used
+            to mean "show this tenant nothing"; it now means "remind, do not
+            lock out". Self-gates on owing money and on the 24h dismissal, so a
+            healthy or hard-gated tenant renders nothing here. See
+            use-soft-subscription-block.ts. */}
+        <SubscriptionSoftReminder />
 
         {/* Recurring post-subscription nudge for outstanding setup tasks.
             Self-gates on `isSubscribed`, so it never shows while the hard
