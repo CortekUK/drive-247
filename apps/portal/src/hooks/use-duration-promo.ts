@@ -67,8 +67,22 @@ interface TierRow {
   value: number | string;
   expires_at: string | null;
   min_duration_days: number | null;
+  /**
+   * Upper bound in days. NULL is the original behaviour — "min or more".
+   *
+   * Set equal to the minimum for a fixed-length package: Moore Luxe's LUXE is
+   * 4–4 and WEEK is 7–7, so a five-day rental now falls between the two and
+   * gets nothing, which is what they sell.
+   */
+  max_duration_days: number | null;
   max_users: number | null;
 }
+
+/** Columns the tier query wants, and the set it falls back to. */
+const TIER_COLUMNS =
+  "id, code, type, value, expires_at, min_duration_days, max_duration_days, max_users";
+const TIER_COLUMNS_LEGACY =
+  "id, code, type, value, expires_at, min_duration_days, max_users";
 
 export function useDurationPromo({
   tenantId,
@@ -113,13 +127,28 @@ export function useDurationPromo({
         return;
       }
 
-      const { data, error } = await supabaseUntyped
-        .from("promocodes")
-        .select("id, code, type, value, expires_at, min_duration_days, max_users")
-        .eq("tenant_id", tenantId)
-        .gt("min_duration_days", 0)
-        .lte("min_duration_days", days)
-        .order("min_duration_days", { ascending: false });
+      /*
+       * SELECTED IN TWO SHAPES, deliberately.
+       *
+       * `max_duration_days` is added by a migration that is run by hand, and
+       * this app deploys on push. PostgREST answers a select naming a column
+       * that does not exist with a 400, and the guard below reads any error as
+       * "apply nothing" — so shipping the new column list on its own would have
+       * silently switched every tenant's automatic discounts off for the window
+       * between the deploy and the migration. The fallback keeps the old
+       * behaviour exactly until the column lands, and needs no coordination.
+       */
+      const tiers = async (columns: string) =>
+        await supabaseUntyped
+          .from("promocodes")
+          .select(columns)
+          .eq("tenant_id", tenantId)
+          .gt("min_duration_days", 0)
+          .lte("min_duration_days", days)
+          .order("min_duration_days", { ascending: false });
+
+      let { data, error } = await tiers(TIER_COLUMNS);
+      if (error) ({ data, error } = await tiers(TIER_COLUMNS_LEGACY));
 
       if (cancelled || error) return;
 
@@ -128,8 +157,19 @@ export function useDurationPromo({
 
       // Best tier first, falling through to the next one down when a tier is
       // expired or has been fully claimed.
-      for (const tier of (data ?? []) as TierRow[]) {
+      for (const tier of (data ?? []) as unknown as TierRow[]) {
         if (tier.expires_at && new Date(tier.expires_at) < now) continue;
+
+        /*
+         * The ceiling. NULL keeps the original "min or more" reading, so every
+         * tier that predates the column behaves exactly as it did.
+         *
+         * Note this does NOT fall through to a lower tier by accident: tiers
+         * are walked high min first, so a 5-day rental at Moore Luxe skips LUXE
+         * (4–4) and finds nothing below it, which is the intent. A tenant who
+         * wants the old cascade simply leaves the ceiling unset.
+         */
+        if (tier.max_duration_days != null && days > tier.max_duration_days) continue;
 
         if (tier.max_users && tier.max_users > 0) {
           /*

@@ -1,0 +1,12 @@
+-- Rollback for PENDING_20260929_promo_max_duration_days.sql.txt
+--
+-- Dropping the column returns every tier to "min_duration_days or more". Any
+-- ceilings that were set are lost, so a tenant running exact-length packages
+-- (Moore Luxe: LUXE 4-4, WEEK 7-7) goes back to handing the 4-day discount to
+-- 5- and 6-day rentals until the column is restored and refilled.
+
+ALTER TABLE public.promocodes
+  DROP CONSTRAINT IF EXISTS promocodes_duration_range_check;
+
+ALTER TABLE public.promocodes
+  DROP COLUMN IF EXISTS max_duration_days;

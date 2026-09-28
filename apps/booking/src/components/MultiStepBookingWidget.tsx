@@ -1548,6 +1548,13 @@ const MultiStepBookingWidget = ({
       let best: any = null;
       for (const c of (data || [])) {
         if (c.expires_at && new Date(c.expires_at) < now) continue;
+        // Upper bound, when the tier carries one. NULL/absent keeps the original
+        // "min_duration_days or more" reading, so tiers that predate the column
+        // are untouched — and because the select above is `*`, this needs no
+        // coordination with the migration that adds it. Set min and max to the
+        // same number for a fixed-length package (Moore Luxe: LUXE 4–4,
+        // WEEK 7–7), which stops a 5-day rental collecting the 4-day discount.
+        if (c.max_duration_days != null && rentalDays > c.max_duration_days) continue;
         if (c.max_users && c.max_users > 0) {
           const { count } = await (supabase as any)
             .from("invoices")

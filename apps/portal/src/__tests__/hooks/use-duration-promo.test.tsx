@@ -30,6 +30,7 @@ type Row = {
   value: number;
   expires_at: string | null;
   min_duration_days: number | null;
+  max_duration_days?: number | null;
   max_users: number | null;
 };
 
@@ -38,10 +39,13 @@ const LUXE: Row = {
   id: "luxe", code: "LUXE", type: "percentage", value: 12.5,
   expires_at: "2027-11-30", min_duration_days: 4, max_users: 10000,
 };
+/** The same ladder once Moore Luxe capped each tier at its own length. */
+const LUXE_EXACT: Row = { ...LUXE, max_duration_days: 4 };
 const WEEK: Row = {
   id: "week", code: "WEEK", type: "percentage", value: 14.28,
   expires_at: "2027-09-03", min_duration_days: 7, max_users: 1000,
 };
+const WEEK_EXACT: Row = { ...WEEK, max_duration_days: 7 };
 
 let tiers: Row[] = [];
 /** promo code -> how many rentals already carry it. */
@@ -103,6 +107,10 @@ function harness(initial: AppliedPromo | null = null) {
     );
   return { render, setPromo, get promo() { return promo; } };
 }
+
+/** Let the tier query and its effect resolve, so a "nothing happened"
+    assertion is made AFTER the work rather than before it. */
+const settle = () => new Promise((r) => setTimeout(r, 25));
 
 beforeEach(() => {
   tiers = [LUXE, WEEK];
@@ -219,5 +227,90 @@ describe("both create screens use it", () => {
       expect(s).toContain("min_duration_days");
       expect(s).toContain("source: 'manual'");
     }
+  });
+});
+
+/*
+ * FIXED-LENGTH PACKAGES.
+ *
+ * Reported 29 Sep 2026, once the fix above had made duration codes work in the
+ * portal at all: "Why is it a 12.5% discount on a regular five day — there
+ * should be no promotion for a five day". `min_duration_days` is only a floor,
+ * so LUXE (4) was collecting every 5- and 6-day rental on its way up to WEEK.
+ *
+ * The numbers say these were always meant as packages, not a scale: 12.5% of
+ * four days is half a day free, 14.28% of seven is exactly one day free.
+ * `max_duration_days` is the ceiling that makes that expressible.
+ */
+describe("a tier can be capped to an exact length", () => {
+  beforeEach(() => {
+    tiers = [LUXE_EXACT, WEEK_EXACT];
+  });
+
+  it("still applies on the exact day the package is sold for", async () => {
+    const h = harness();
+    h.render(4);
+    await waitFor(() => expect(h.setPromo).toHaveBeenCalled());
+    expect(h.promo).toMatchObject({ code: "LUXE", value: 12.5 });
+  });
+
+  it("gives the five-day rental NOTHING — the report that prompted this", async () => {
+    const h = harness();
+    h.render(5);
+    /* A bare `not.toHaveBeenCalled` passes before the effect has even run, which
+       would make this test green with the ceiling deleted. Wait for the query to
+       resolve first — the control case above proves that path fires — and only
+       then assert nothing was applied. */
+    await settle();
+    expect(h.setPromo).not.toHaveBeenCalled();
+    expect(h.promo).toBeNull();
+  });
+
+  it("does not quietly fall through to a lower tier at six days", async () => {
+    const h = harness();
+    h.render(6);
+    await settle();
+    expect(h.setPromo).not.toHaveBeenCalled();
+    expect(h.promo).toBeNull();
+  });
+
+  it("applies WEEK on exactly seven", async () => {
+    const h = harness();
+    h.render(7);
+    await waitFor(() => expect(h.setPromo).toHaveBeenCalled());
+    expect(h.promo).toMatchObject({ code: "WEEK", value: 14.28 });
+  });
+
+  it("gives an eight-day rental nothing once the week is capped too", async () => {
+    const h = harness();
+    h.render(8);
+    await settle();
+    expect(h.setPromo).not.toHaveBeenCalled();
+    expect(h.promo).toBeNull();
+  });
+
+  it("withdraws a tier the booking has outgrown", async () => {
+    const h = harness({ id: "luxe", code: "LUXE", type: "percentage", value: 12.5, source: "duration" });
+    h.render(5);
+    await waitFor(() => expect(h.setPromo).toHaveBeenCalledWith(null));
+    expect(h.promo).toBeNull();
+  });
+});
+
+describe("an uncapped tier keeps meaning \"or more\"", () => {
+  it("leaves every existing tenant's ladder exactly as it was", async () => {
+    // tiers is [LUXE, WEEK] from the outer beforeEach — neither has a ceiling.
+    const h = harness();
+    h.render(5);
+    await waitFor(() => expect(h.setPromo).toHaveBeenCalled());
+    expect(h.promo).toMatchObject({ code: "LUXE" });
+  });
+
+  it("caps only the tier that carries a ceiling, not its neighbours", async () => {
+    tiers = [LUXE_EXACT, WEEK]; // 4 exactly, then 7+
+    const h = harness();
+    h.render(9);
+    await waitFor(() => expect(h.setPromo).toHaveBeenCalled());
+    expect(h.promo).toMatchObject({ code: "WEEK" });
   });
 });

@@ -1,0 +1,35 @@
+-- Duration promo tiers gain an UPPER bound.
+--
+-- WHY. `promocodes.min_duration_days` is a minimum and nothing else, so a tier
+-- reads as "N days or more". Moore Luxe set LUXE at 4 days (12.5%, = half a day
+-- free) and WEEK at 7 (14.28%, = exactly one day free) — two fixed packages, not
+-- a sliding scale. With only a minimum, every 5- and 6-day rental collected the
+-- 4-day discount, which is what their agent reported on 29 Sep 2026: "there
+-- should be no promotion for a five day".
+--
+-- NULL means what it has always meant: no ceiling, "N or more". Every existing
+-- tier keeps its current behaviour untouched, so this is additive and safe to
+-- run while the old code is live.
+--
+-- Read by the two places that pick a tier:
+--   apps/portal/src/hooks/use-duration-promo.ts   (both portal create screens)
+--   apps/booking/src/components/MultiStepBookingWidget.tsx  (customer site)
+
+ALTER TABLE public.promocodes
+  ADD COLUMN IF NOT EXISTS max_duration_days integer;
+
+COMMENT ON COLUMN public.promocodes.max_duration_days IS
+  'Upper bound, in days, for an automatic duration tier. NULL = no ceiling ("min_duration_days or more"). Set both min and max to the same value for an exact-length deal, e.g. 4 and 4 for a four-day package.';
+
+-- A ceiling below the floor can never match anything, and would silently
+-- disable the tier rather than fail loudly when someone sets it.
+ALTER TABLE public.promocodes
+  DROP CONSTRAINT IF EXISTS promocodes_duration_range_check;
+
+ALTER TABLE public.promocodes
+  ADD CONSTRAINT promocodes_duration_range_check
+  CHECK (
+    max_duration_days IS NULL
+    OR min_duration_days IS NULL
+    OR max_duration_days >= min_duration_days
+  );

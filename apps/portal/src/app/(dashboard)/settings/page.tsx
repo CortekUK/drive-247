@@ -1987,6 +1987,7 @@ const Settings = () => {
     expires_at: new Date(new Date().setMonth(new Date().getMonth() + 1)),
     max_users: '',
     min_duration_days: '',
+    max_duration_days: '',
   });
   const [promoCodeError, setPromoCodeError] = useState('');
   const [editPromoCodeError, setEditPromoCodeError] = useState('');
@@ -2092,6 +2093,8 @@ const Settings = () => {
           expires_at: format(newPromo.expires_at, 'yyyy-MM-dd'),
           max_users: parseInt(newPromo.max_users) || 1,
           min_duration_days: parseInt(newPromo.min_duration_days) || null,
+          // NULL = no ceiling, i.e. the original "min or more".
+          max_duration_days: parseInt(newPromo.max_duration_days) || null,
           tenant_id: tenant.id
         })
         .select();
@@ -2116,6 +2119,7 @@ const Settings = () => {
         expires_at: new Date(new Date().setMonth(new Date().getMonth() + 1)),
         max_users: '',
         min_duration_days: '',
+        max_duration_days: '',
       });
       // generatePromoCode(); // useEffect will trigger this
       refetchPromos();
@@ -2241,7 +2245,8 @@ const Settings = () => {
           value: parseFloat(updatedPromo.value),
           expires_at: format(new Date(updatedPromo.expires_at), 'yyyy-MM-dd'),
           max_users: parseInt(updatedPromo.max_users) || 1,
-          min_duration_days: parseInt(updatedPromo.min_duration_days) || null
+          min_duration_days: parseInt(updatedPromo.min_duration_days) || null,
+          max_duration_days: parseInt(updatedPromo.max_duration_days) || null
         })
         .eq('id', updatedPromo.id)
         .eq('tenant_id', tenant.id)
@@ -2717,6 +2722,25 @@ const Settings = () => {
                     />
                     <p className="text-xs text-muted-foreground">
                       Auto duration discounts apply to fixed rentals paid in full only — never to installment, pay-as-you-go, or auto-extension bookings.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <PromoUi.Label htmlFor="edit_max_duration">Stop applying after <span className="text-muted-foreground font-normal">(optional)</span></PromoUi.Label>
+                    <PromoUi.Input
+                      id="edit_max_duration"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      placeholder="leave blank for no limit"
+                      value={editingPromo.max_duration_days ?? ''}
+                      onChange={(e) => {
+                        const rawValue = e.target.value.replace(/[^0-9]/g, '');
+                        setEditingPromo({ ...editingPromo, max_duration_days: rawValue });
+                      }}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Leave blank and the discount applies to that many days <em>or more</em>. Set it to the same number to make this a fixed-length deal — e.g. 4 and 4 gives a four-day package, and a five-day rental gets nothing.
                     </p>
                   </div>
 
@@ -3622,7 +3646,18 @@ const Settings = () => {
                             onChange={(e) => setPromoForm(prev => ({ ...prev, min_duration_days: digitsOnly(e.target.value) }))}
                             className="w-24"
                           />
-                          <Unit>days or more</Unit>
+                          <Unit>days</Unit>
+                          <Unit>up to</Unit>
+                          <InputV2
+                            id="v2_promo_max_duration"
+                            type="text"
+                            inputMode="numeric"
+                            placeholder="any"
+                            value={promoForm.max_duration_days}
+                            onChange={(e) => setPromoForm(prev => ({ ...prev, max_duration_days: digitsOnly(e.target.value) }))}
+                            className="w-24"
+                          />
+                          <Unit>days</Unit>
                         </div>
                       </SettingsField>
                     </div>
@@ -6757,6 +6792,20 @@ const Settings = () => {
                   onChange={(e) => {
                     const rawValue = e.target.value.replace(/[^0-9]/g, '');
                     setPromoForm(prev => ({ ...prev, min_duration_days: rawValue }));
+                  }}
+                />
+                <Label htmlFor="promo_max_duration" className="mt-3 block">Stop applying after (optional)</Label>
+                <Input
+                  id="promo_max_duration"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  placeholder="leave blank for no limit"
+                  className="max-w-md"
+                  value={promoForm.max_duration_days}
+                  onChange={(e) => {
+                    const rawValue = e.target.value.replace(/[^0-9]/g, '');
+                    setPromoForm(prev => ({ ...prev, max_duration_days: rawValue }));
                   }}
                 />
               </div>

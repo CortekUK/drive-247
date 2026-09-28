@@ -87,9 +87,29 @@ export interface PromoCodeRowV2 {
   expires_at: string;
   max_users: number;
   min_duration_days: number | null;
+  /** Upper bound; null = no ceiling, i.e. "min or more". */
+  max_duration_days?: number | null;
 }
 
 const Blank = () => <span className="text-muted-foreground">—</span>;
+
+/**
+ * How a duration tier reads, in one phrase.
+ *
+ * A tier with no ceiling is still "N+ days", which is what every tier meant
+ * before `max_duration_days` existed. With a ceiling it becomes a range, and
+ * when the two ends meet it is a fixed-length package — the case Moore Luxe
+ * needed, where "4 days" must NOT catch a five-day rental.
+ */
+function durationRuleLabel(
+  min: number | null | undefined,
+  max: number | null | undefined,
+): string | null {
+  if (!min || min <= 0) return null;
+  if (max == null) return `${formatSettingsNumber(min)}+ days`;
+  if (max === min) return `${formatSettingsNumber(min)} days exactly`;
+  return `${formatSettingsNumber(min)}–${formatSettingsNumber(max)} days`;
+}
 
 /**
  * `created_at` and `expires_at` are written as `yyyy-MM-dd`. `new Date()` reads
@@ -301,8 +321,8 @@ export function PromoCodesTableV2<T extends PromoCodeRowV2>({
               <p className={cn(SETTINGS_PHONE_FACTS.line, "text-xs text-muted-foreground tabular-nums")}>
                 <span>{formatSettingsNumber(promo.max_users)} max uses</span>
                 <span className={SETTINGS_PHONE_FACTS.afterDot}>
-                  {(promo.min_duration_days ?? 0) > 0
-                    ? `Applies by itself on ${formatSettingsNumber(promo.min_duration_days)}+ days`
+                  {durationRuleLabel(promo.min_duration_days, promo.max_duration_days)
+                    ? `Applies by itself on ${durationRuleLabel(promo.min_duration_days, promo.max_duration_days)}`
                     : "Typed at checkout"}
                 </span>
               </p>
@@ -379,8 +399,8 @@ export function PromoCodesTableV2<T extends PromoCodeRowV2>({
                   </ListCell>
                   {/* v1's amber badge for an auto-applied code, as coloured text. */}
                   <ListCell>
-                    {(promo.min_duration_days ?? 0) > 0 ? (
-                      <ListStatusText tone="info">{formatSettingsNumber(promo.min_duration_days)}+ days</ListStatusText>
+                    {durationRuleLabel(promo.min_duration_days, promo.max_duration_days) ? (
+                      <ListStatusText tone="info">{durationRuleLabel(promo.min_duration_days, promo.max_duration_days)}</ListStatusText>
                     ) : (
                       <ListStatusText tone="muted">Manual</ListStatusText>
                     )}
