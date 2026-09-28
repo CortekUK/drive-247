@@ -487,10 +487,55 @@ function AgreementsList() {
     }
   }, [signingDoc]);
 
+  /**
+   * REMIND FIRST, re-issue only if there is nothing left to remind.
+   *
+   * This button used to go straight to POST /api/esign, which builds a NEW
+   * document and revokes the previous one ("Superseded by a newer agreement").
+   * A revoked document cannot be signed — so pressing "resend" for a customer
+   * who said they could not sign destroyed the link they were holding, and the
+   * email already open in front of them went dead. They complain again, the
+   * operator presses it again, and each press costs 7 credits. Moore Luxe ran
+   * up 61 documents across 18 rentals that way and hit a zero balance.
+   *
+   * A reminder re-sends the SAME document on the SAME link and costs nothing,
+   * which is what "resend" was always meant to do. Issuing a fresh agreement is
+   * still available — it just stops being the silent default, and now only
+   * happens when the remind route reports there is no live document to chase.
+   */
   const handleResend = async (doc: AgreementDoc) => {
     if (!doc.rental_id || !tenant?.id) return;
     setResendingId(doc.id);
     try {
+      // Extensions are addressed by their agreement row; originals by rental.
+      const remindBody: Record<string, unknown> =
+        doc.agreementType === "extension"
+          ? { agreementId: doc.id }
+          : { rentalId: doc.rental_id };
+
+      const remindRes = await fetch("/api/esign/remind", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(remindBody),
+      });
+      const remindData = await remindRes.json();
+
+      if (remindRes.ok && remindData?.ok) {
+        toast.success("Reminder sent — same link, no credit used");
+        await Promise.all([refetchSigned(), refetchRentals(), refetchExtensions()]);
+        return;
+      }
+
+      // Anything other than "there is nothing live to remind" is a real
+      // failure: surface it rather than quietly spending a credit on a new
+      // document the operator did not ask for.
+      if (remindData?.code !== "no_live_document") {
+        toast.error(remindData?.detail || remindData?.error || "Failed to send reminder");
+        return;
+      }
+
+      // No live document — the previous one was signed, voided or expired, so a
+      // reminder has nothing to point at. Issue a fresh agreement.
       const body: Record<string, unknown> = {
         rentalId: doc.rental_id,
         customerEmail: (doc.customers as any)?.email,
@@ -507,7 +552,7 @@ function AgreementsList() {
       if (!response.ok || !data?.ok) {
         toast.error(data?.detail || data?.error || "Failed to resend agreement");
       } else {
-        toast.success("Signing notification resent");
+        toast.success("New agreement sent");
         await Promise.all([refetchSigned(), refetchRentals(), refetchExtensions()]);
       }
     } catch (err: any) {
@@ -973,7 +1018,7 @@ function AgreementsList() {
                                     size="sm"
                                     onClick={() => handleResend(doc)}
                                     disabled={resendingId === doc.id}
-                                    title="Resend signing notification"
+                                    title="Send a reminder — same link, no credit used"
                                   >
                                     {resendingId === doc.id ? (
                                       <Loader2 className="h-4 w-4 animate-spin" />

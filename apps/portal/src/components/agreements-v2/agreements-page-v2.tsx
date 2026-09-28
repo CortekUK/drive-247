@@ -183,12 +183,24 @@ export function AgreementsPageV2() {
   }, []);
 
   /**
-   * Resend (D17). A RENTAL row re-posts `/api/esign` with exactly the payload
-   * the rental's Agreement stage sends, which mints a new document and voids
-   * the one before: today's rule, unchanged. An extension agreement is never
-   * re-sent from here, because the list does not hold its period and the route
-   * would issue it as the original. An INDIVIDUAL row gets a new row of its own
-   * and the old one is left alone.
+   * Resend (D17) — a REMINDER first, a new document only as a last resort.
+   *
+   * A rental row used to re-post `/api/esign` unconditionally, which mints a
+   * new document and REVOKES the one before it. A revoked document cannot be
+   * signed, so resending for a customer who said they could not sign killed the
+   * link they were holding: the email already open in front of them went dead,
+   * they complained again, and each press cost 7 credits. Moore Luxe reported
+   * it on 29 Sep 2026 with 61 documents across 18 rentals and a zero balance.
+   *
+   * So a live document is nudged through `/api/esign/remind` — same document,
+   * same link, no credit — and only when that route reports there is nothing
+   * live to chase (`no_live_document`: signed, voided, expired, or never sent)
+   * does this fall through to issuing a real one.
+   *
+   * An extension agreement is still never re-sent from here, because the list
+   * does not hold its period and the route would issue it as the original — but
+   * it CAN be reminded, since a reminder needs nothing but the document.
+   * An INDIVIDUAL row keeps its own path and is left alone.
    */
   const resend = async (row: AgreementRowV2) => {
     if (!tenant?.id || !row.customerEmail || !row.customerName) return;
@@ -208,6 +220,30 @@ export function AgreementsPageV2() {
         } else {
           toast({ title: "Agreement resent", description: `${row.customerName} has been emailed a new copy to sign.` });
         }
+        return;
+      }
+
+      /* Nudge the existing document before considering a new one. Addressed by
+         the agreement row, so this works for an extension too. */
+      const remindRes = await fetch("/api/esign/remind", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agreementId: row.id }),
+      });
+      const remindData = await remindRes.json().catch(() => ({}) as Record<string, any>);
+      if (remindRes.ok && remindData?.ok) {
+        toast({
+          title: "Reminder sent",
+          description: `${row.customerName} has been reminded. Same signing link, no credit used.`,
+        });
+        return;
+      }
+      if (remindData?.code !== "no_live_document") {
+        toast({
+          title: "Not sent",
+          description: String(remindData?.detail || remindData?.error || "The reminder could not be sent."),
+          variant: "destructive",
+        });
         return;
       }
 
