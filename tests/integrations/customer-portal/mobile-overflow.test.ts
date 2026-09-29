@@ -149,4 +149,25 @@ describe('the Northwind portal stays the reference', () => {
   it('keeps 44px tap targets on its nav', () => {
     expect(strip(read(NW))).toMatch(/min-h-11/);
   });
+
+  /*
+   * The rail is `fixed inset-y-0`, so its height is the viewport's. Eight 44px
+   * rows plus the brand header, the Book a car button and the account block
+   * need ~556px, so a short window made the nav overflow and draw its own
+   * scrollbar down the middle of the shell — the one thing in the portal that
+   * had one. The rows still have to be reachable on a short viewport, so the
+   * overflow stays and only the chrome goes.
+   */
+  it('scrolls its nav without drawing a scrollbar', () => {
+    const src = strip(read(NW));
+    const rail = src.slice(src.indexOf('flex-1 overflow-y-auto'));
+    expect(rail).toMatch(/\[scrollbar-width:none\]/);
+    expect(rail).toMatch(/\[&::-webkit-scrollbar\]:hidden/);
+  });
+
+  it('keeps the nav scrollable, rather than clipping rows out of reach', () => {
+    // If this ever becomes `overflow-y-hidden`, a short window silently loses
+    // the bottom nav items with no way to get to them.
+    expect(strip(read(NW))).toMatch(/flex-1 overflow-y-auto/);
+  });
 });

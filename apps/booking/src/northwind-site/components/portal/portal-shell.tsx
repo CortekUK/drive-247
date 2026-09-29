@@ -189,7 +189,17 @@ export function PortalShell({ children }: { children: React.ReactNode }) {
           </span>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-3">
+        {/* SCROLLS, BUT DOES NOT SHOW A BAR.
+            The rail is `fixed inset-y-0`, so its height is the viewport's. The
+            eight nav rows are 44px tap targets and, with the brand header, the
+            Book a car button and the account block, the column needs ~556px —
+            so on a short window the nav overflowed and drew its own scrollbar
+            down the middle of the shell. Nothing else in the portal has one.
+            The chrome is hidden rather than the overflow removed: on a genuinely
+            short viewport the rows still have to be reachable, and wheel, trackpad
+            and touch all still work. Same arbitrary-variant pair the booking bar
+            already uses, so this needs no stylesheet. */}
+        <div className="flex-1 overflow-y-auto px-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <NavList pathname={pathname} />
         </div>
 
@@ -224,7 +234,7 @@ export function PortalShell({ children }: { children: React.ReactNode }) {
               </SheetTrigger>
               <SheetContent
                 side="left"
-                className="flex w-[min(20rem,88vw)] flex-col gap-0 overflow-y-auto bg-brand-card p-0"
+                className="flex w-[min(20rem,88vw)] flex-col gap-0 overflow-y-auto bg-brand-card p-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
               >
                 <SheetHeader className="border-b border-brand-border-soft px-5 py-5 text-left">
                   <SheetTitle className="text-base text-brand-text">
