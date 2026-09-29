@@ -60,6 +60,8 @@ import {
   ArrowRightLeft,
   Coins,
   LayoutTemplate,
+  KeyRound,
+  Copy,
 } from 'lucide-react';
 
 interface Tenant {
@@ -364,6 +366,19 @@ export default function TenantDetailsPage() {
 
   // Force logout state
   const [showForceLogoutConfirm, setShowForceLogoutConfirm] = useState(false);
+
+  /* Locked-out operator recovery. The portal's own reset emails the tenant a
+     link, and admin-reset-password authorises the caller as an admin WITHIN the
+     tenant — so neither reaches a head admin who is locked out, or one whose
+     address cannot receive mail at all (Drive Hustle's domain returns NXDOMAIN;
+     Heirs Rental sat locked out for six weeks). This is the super-admin route
+     back in, for any company. */
+  const [showPasswordReset, setShowPasswordReset] = useState(false);
+  const [pwUsers, setPwUsers] = useState<Array<{ id: string; email: string; name: string | null; role: string; isActive: boolean; canReset: boolean }>>([]);
+  const [pwLoading, setPwLoading] = useState(false);
+  const [pwResettingId, setPwResettingId] = useState<string | null>(null);
+  /* Shown ONCE, in the dialog, and never stored. */
+  const [pwResult, setPwResult] = useState<{ email: string; password: string } | null>(null);
   const [forceLogoutLoading, setForceLogoutLoading] = useState(false);
 
   // Subscription state
@@ -1333,6 +1348,45 @@ export default function TenantDetailsPage() {
     }
   };
 
+  const openPasswordReset = async () => {
+    if (!tenant) return;
+    setPwResult(null);
+    setPwUsers([]);
+    setShowPasswordReset(true);
+    setPwLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-tenant-password-reset', {
+        body: { action: 'list', tenantId: tenant.id },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      setPwUsers(data.users ?? []);
+    } catch (error: any) {
+      toast.error(`Could not load logins: ${error.message}`);
+      setShowPasswordReset(false);
+    } finally {
+      setPwLoading(false);
+    }
+  };
+
+  const handleResetPassword = async (userId: string) => {
+    if (!tenant) return;
+    setPwResettingId(userId);
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-tenant-password-reset', {
+        body: { action: 'reset', tenantId: tenant.id, userId },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      setPwResult({ email: data.email, password: data.password });
+      toast.success('Password reset. Copy it now — it is not shown again.');
+    } catch (error: any) {
+      toast.error(`Reset failed: ${error.message}`);
+    } finally {
+      setPwResettingId(null);
+    }
+  };
+
   const handleForceLogout = async () => {
     if (!tenant) return;
     setForceLogoutLoading(true);
@@ -1503,12 +1557,16 @@ export default function TenantDetailsPage() {
          things that act on the whole company rather than on this page. It
          opens the same confirm dialog it always did. */
       { id: 'force-logout', label: 'Force Logout All Users' },
+      /* Recovers a locked-out operator when the self-service email cannot
+         reach them. See the note on `showPasswordReset`. */
+      { id: 'reset-password', label: 'Reset login password' },
       { id: 'delete', label: 'Delete company', tone: 'destructive' },
     ],
     (id) => {
       if (id === 'production' || id === 'test') return void handleUpdateType(id);
       if (id === 'status') return void handleUpdateStatus(tenant?.status === 'active' ? 'suspended' : 'active');
       if (id === 'force-logout') return setShowForceLogoutConfirm(true);
+      if (id === 'reset-password') return void openPasswordReset();
       if (id === 'delete') setShowDeleteConfirm(true);
     },
   );
@@ -2969,6 +3027,91 @@ export default function TenantDetailsPage() {
               disabled={forceLogoutLoading}
             >
               {forceLogoutLoading ? 'Logging out...' : 'Yes, Force Logout'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Password reset — the super-admin way back in for a locked-out operator. */}
+      <Dialog open={showPasswordReset} onOpenChange={(open) => { if (!open) { setShowPasswordReset(false); setPwResult(null); } }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Reset login password</DialogTitle>
+            <DialogDescription>
+              For <strong className="text-foreground">{tenant.company_name}</strong>. Use this when the
+              operator cannot receive the self-service reset email.
+            </DialogDescription>
+          </DialogHeader>
+
+          {pwResult ? (
+            /* Shown once. There is no second chance to read it, so the dialog
+               says so plainly rather than letting someone close it and hunt. */
+            <div className="space-y-3">
+              <div className="rounded-2xl bg-success/10 px-4 py-3 text-sm ring-1 ring-success/25">
+                <p className="font-medium text-foreground">Password reset for {pwResult.email}</p>
+                <p className="mt-1 text-muted-foreground">
+                  They will be asked to choose their own password when they sign in.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 rounded-xl bg-muted px-3 py-2 font-mono text-base tracking-wide">
+                  {pwResult.password}
+                </code>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    void navigator.clipboard.writeText(pwResult.password);
+                    toast.success('Copied');
+                  }}
+                >
+                  <Copy className="h-4 w-4" />
+                  Copy
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                This password is not stored and cannot be shown again. Send it to them over a channel
+                they already control, and ask them to change it once they are in.
+              </p>
+            </div>
+          ) : pwLoading ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">Loading logins...</p>
+          ) : pwUsers.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              This company has no login accounts.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {pwUsers.map((u) => (
+                <div
+                  key={u.id}
+                  className="flex items-center justify-between gap-3 rounded-2xl px-3 py-2.5 ring-1 ring-border/60"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{u.email}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {u.name || 'No name'} · {u.role}
+                      {u.isActive ? '' : ' · inactive'}
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={!u.canReset || pwResettingId === u.id}
+                    onClick={() => void handleResetPassword(u.id)}
+                    title={u.canReset ? 'Generate a new password' : 'This account has no login to reset'}
+                  >
+                    <KeyRound className="h-4 w-4" />
+                    {pwResettingId === u.id ? 'Resetting...' : 'Reset'}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setShowPasswordReset(false); setPwResult(null); }}>
+              {pwResult ? 'Done' : 'Cancel'}
             </Button>
           </DialogFooter>
         </DialogContent>
