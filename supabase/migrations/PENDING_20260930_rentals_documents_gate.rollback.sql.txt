@@ -1,0 +1,19 @@
+-- Rollback for PENDING_20260930_rentals_documents_gate.sql.txt
+--
+-- Dropping these puts the Northwind customer portal back to failing its
+-- bookings query outright ("column rentals.documents_status does not exist"),
+-- because RENTAL_COLUMNS names them. Roll the portal back first, or expect
+-- every customer on it to see the load error again.
+--
+-- Any document-gate progress recorded in these columns is lost.
+
+DROP INDEX IF EXISTS public.rentals_documents_status_idx;
+
+ALTER TABLE public.rentals
+  DROP CONSTRAINT IF EXISTS rentals_documents_status_check;
+
+ALTER TABLE public.rentals
+  DROP COLUMN IF EXISTS documents_completed_at;
+
+ALTER TABLE public.rentals
+  DROP COLUMN IF EXISTS documents_status;

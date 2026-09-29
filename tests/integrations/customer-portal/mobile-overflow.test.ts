@@ -109,6 +109,22 @@ describe('controls and figures fit the narrow column', () => {
   });
 });
 
+describe('an error message cannot widen the page', () => {
+  /*
+   * `LoadError` prints `error.message`, which for a database failure is prose
+   * with an identifier embedded in it — "column rentals.documents_status does
+   * not exist". `rentals.documents_status` is 24 characters with nowhere to
+   * wrap, so at 390px inside a padded card it pushed the panel wider than the
+   * phone and the whole page scrolled sideways. The failed query was one bug;
+   * the horizontal scroll was the error REPORT being unwrappable.
+   */
+  const src = strip(read('apps/booking/src/northwind-site/components/portal/primitives.tsx'));
+
+  it('wraps the message it did not write', () => {
+    expect(src).toMatch(/break-words[^"]*text-sm leading-relaxed text-brand-text-soft/);
+  });
+});
+
 describe('the shell leaves exactly one scroll container', () => {
   /*
    * Northwind's shell has one: the document. Its sidebar is `fixed`, so it is

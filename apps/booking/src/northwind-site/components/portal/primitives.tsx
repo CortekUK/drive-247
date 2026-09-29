@@ -295,7 +295,14 @@ export function LoadError({
   return (
     <Panel className="px-5 py-6">
       <p className="text-sm font-medium text-brand-text">{title}</p>
-      <p className="mt-1 text-sm leading-relaxed text-brand-text-soft">
+      {/* `break-words`, because this prints a message we do not write.
+          A Postgres error arrives as prose with an identifier embedded in it —
+          "column rentals.documents_status does not exist" — and
+          `rentals.documents_status` is 24 characters with nowhere to wrap. At
+          390px inside a padded card it pushed this panel wider than the phone,
+          and the whole page scrolled sideways. The failure to load was the bug;
+          the horizontal scroll was this line reporting it. */}
+      <p className="mt-1 break-words text-sm leading-relaxed text-brand-text-soft">
         {error?.message ?? 'Please try again in a moment.'}
       </p>
       {onRetry ? (

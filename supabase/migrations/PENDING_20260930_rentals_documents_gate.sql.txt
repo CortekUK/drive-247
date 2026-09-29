@@ -1,0 +1,52 @@
+-- The post-payment identity-document gate: the two columns it was built on.
+--
+-- WHY. The Northwind customer portal reads `documents_status` and
+-- `documents_completed_at` from `rentals` (see RENTAL_COLUMNS in
+-- apps/booking/src/northwind-site/hooks/use-customer-rentals.ts). Neither
+-- column exists in production, so the bookings query 400s and every customer on
+-- that portal is met with "We could not load your bookings — column
+-- rentals.documents_status does not exist". Reported 30 Sep 2026.
+--
+-- It is not only the read. The upload flow WRITES them too —
+-- northwind-site/components/booking/documents-screen.tsx,
+-- insurance-upload.tsx and (booking)/booking/documents/[token]/page.tsx — so
+-- the whole feature has never been able to work against this database.
+--
+-- ── `documents_status` IS NOT `document_status` ─────────────────────────────
+-- One character apart, two unrelated pipelines, both on this table:
+--   document_status  (singular) — the BoldSign e-signature envelope:
+--                     pending | sent | delivered | signed | completed |
+--                     declined | voided.  ALREADY EXISTS. Not touched here.
+--   documents_status (plural)   — the post-payment IDENTITY-DOCUMENT gate,
+--                     added below.
+-- Reading one where the other was meant misreports both, silently.
+--
+-- Additive and safe to run while the current code is live: existing rentals
+-- default to 'not_required', which is what every rental predating the feature
+-- is, and nothing reads the column until the portal deploys.
+
+ALTER TABLE public.rentals
+  ADD COLUMN IF NOT EXISTS documents_status text NOT NULL DEFAULT 'not_required';
+
+ALTER TABLE public.rentals
+  ADD COLUMN IF NOT EXISTS documents_completed_at timestamptz;
+
+COMMENT ON COLUMN public.rentals.documents_status IS
+  'Post-payment identity-document gate: not_required | pending | submitted | verified | rejected. NOT the same as document_status, which is the BoldSign envelope.';
+
+COMMENT ON COLUMN public.rentals.documents_completed_at IS
+  'When the identity-document gate was satisfied. NULL while outstanding or not required.';
+
+-- The set of values the portal branches on. Without this a typo reaches the UI
+-- as a rental stuck in a state no screen knows how to render.
+ALTER TABLE public.rentals
+  DROP CONSTRAINT IF EXISTS rentals_documents_status_check;
+
+ALTER TABLE public.rentals
+  ADD CONSTRAINT rentals_documents_status_check
+  CHECK (documents_status IN ('not_required', 'pending', 'submitted', 'verified', 'rejected'));
+
+-- Read on every portal list query, filtered by customer and tenant.
+CREATE INDEX IF NOT EXISTS rentals_documents_status_idx
+  ON public.rentals (documents_status)
+  WHERE documents_status <> 'not_required';
