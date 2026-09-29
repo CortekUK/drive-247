@@ -109,6 +109,33 @@ describe('controls and figures fit the narrow column', () => {
   });
 });
 
+describe('the shell leaves exactly one scroll container', () => {
+  /*
+   * Northwind's shell has one: the document. Its sidebar is `fixed`, so it is
+   * out of flow, and the content column is a plain block with `lg:pl-[272px]`.
+   *
+   * The legacy shell is a shadcn flex row, and `SidebarInset` is `flex-1` with
+   * no `min-w-0` — a flex item's default `min-width: auto` refuses to shrink
+   * below its content, so one wide row widened the column and the page grew a
+   * horizontal scrollbar. `overflow-x-hidden` was added to bury that, and per
+   * spec a hidden x-axis against a visible y-axis computes y to `auto`: the
+   * element becomes its OWN scroll container, which is the second scrollbar
+   * the portal had and Northwind's did not.
+   */
+  const shell = strip(read(`${LEGACY}/layout.tsx`));
+
+  it('lets the content column shrink instead of forcing the page wide', () => {
+    expect(shell).toMatch(/SidebarInset className="[^"]*min-w-0/);
+  });
+
+  it('clips without creating a nested scroll container', () => {
+    expect(shell).toMatch(/SidebarInset className="[^"]*overflow-x-clip/);
+    // `overflow-x-hidden` here is the regression: it silently turns the y axis
+    // into `auto` and gives the portal a second scrollbar.
+    expect(shell).not.toMatch(/SidebarInset className="[^"]*overflow-x-hidden/);
+  });
+});
+
 describe('the Northwind portal stays the reference', () => {
   // It is the shape being copied, so if it regresses the target moves.
   const NW = 'apps/booking/src/northwind-site/components/portal/portal-shell.tsx';

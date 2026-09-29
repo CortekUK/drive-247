@@ -117,7 +117,21 @@ export default function CustomerPortalLayout({
     <CustomerRealtimeChatProvider>
       <SidebarProvider>
         <CustomerPortalSidebar />
-        <SidebarInset className="overflow-x-hidden">
+        {/* WHY NOT `overflow-x-hidden`, which is what was here.
+            `SidebarInset` is `flex min-h-svh flex-1` with no `min-w-0`, and a
+            flex item defaults to `min-width: auto` — it refuses to shrink below
+            its content, so one wide row widened the whole column and the PAGE
+            grew a horizontal scrollbar. `overflow-x-hidden` was added to bury
+            that, and it made things worse in a way that is easy to miss: per
+            spec, `overflow-x: hidden` against a visible `overflow-y` computes
+            the y axis to `auto`, which turns this element into its own scroll
+            container. That is the second, nested scrollbar the portal has and
+            Northwind's does not.
+            `min-w-0` is the actual fix — it lets the column shrink, so nothing
+            forces the page wide. `overflow-x-clip` keeps the belt-and-braces
+            clipping WITHOUT creating a scroll container, so the page is left
+            with exactly one, like Northwind's shell. */}
+        <SidebarInset className="min-w-0 overflow-x-clip">
           <CustomerPortalHeader />
           <main className="flex flex-1 flex-col gap-4 p-4 pt-4">
             {children}
