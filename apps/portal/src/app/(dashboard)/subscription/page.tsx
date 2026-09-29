@@ -763,6 +763,31 @@ export default function SubscriptionPage() {
                     terminate on cancel_at, and labelling that "Next Payment" is
                     a support ticket (or a chargeback) waiting to happen.
                     Mirrors subscription-settings.tsx. */}
+                {/* FREE TRIAL UNTIL — shown from the subscription row itself,
+                    NOT from `isTrialing`.
+                    `isTrialing` is deliberately false for a tenant that has
+                    already gone live (`setup_completed_at`), because the UK->UAE
+                    migration parks migrated operators at status 'trialing' with a
+                    future trial_end and treating that as a real trial re-triggered
+                    the Setup Mode UI on established businesses. That guard must
+                    stay. But the DATE is a plain billing fact those tenants still
+                    need: when support defers someone's billing by extending the
+                    trial (NealCo, deferred to 1 Jan 2027), the only thing on
+                    screen was a Next Payment date with nothing explaining why it
+                    had moved. This row states it without touching Setup Mode. */}
+                {shownSubscription?.status === "trialing" &&
+                shownSubscription?.trial_end &&
+                new Date(shownSubscription.trial_end).getTime() > Date.now() ? (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Free Trial Until</span>
+                    <div className="flex items-center gap-1.5">
+                      <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-medium">
+                        {formatDate(shownSubscription.trial_end)}
+                      </span>
+                    </div>
+                  </div>
+                ) : null}
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">
                     {shownSubscription?.cancel_at || shownSubscription?.canceled_at
@@ -925,6 +950,31 @@ export default function SubscriptionPage() {
                     terminate on cancel_at, and labelling that "Next Payment" is
                     a support ticket (or a chargeback) waiting to happen.
                     Mirrors subscription-settings.tsx. */}
+                {/* FREE TRIAL UNTIL — shown from the subscription row itself,
+                    NOT from `isTrialing`.
+                    `isTrialing` is deliberately false for a tenant that has
+                    already gone live (`setup_completed_at`), because the UK->UAE
+                    migration parks migrated operators at status 'trialing' with a
+                    future trial_end and treating that as a real trial re-triggered
+                    the Setup Mode UI on established businesses. That guard must
+                    stay. But the DATE is a plain billing fact those tenants still
+                    need: when support defers someone's billing by extending the
+                    trial (NealCo, deferred to 1 Jan 2027), the only thing on
+                    screen was a Next Payment date with nothing explaining why it
+                    had moved. This row states it without touching Setup Mode. */}
+                {shownSubscription?.status === "trialing" &&
+                shownSubscription?.trial_end &&
+                new Date(shownSubscription.trial_end).getTime() > Date.now() ? (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Free Trial Until</span>
+                    <div className="flex items-center gap-1.5">
+                      <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-medium">
+                        {formatDate(shownSubscription.trial_end)}
+                      </span>
+                    </div>
+                  </div>
+                ) : null}
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">
                     {shownSubscription?.cancel_at || shownSubscription?.canceled_at
