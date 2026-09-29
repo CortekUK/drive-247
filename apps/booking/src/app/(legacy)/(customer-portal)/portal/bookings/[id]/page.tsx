@@ -1370,8 +1370,17 @@ export default function BookingDetailPage() {
                   <Separator />
                   <div className="space-y-2">
                     <h4 className="text-sm font-medium text-muted-foreground">Schedule</h4>
+                    {/* A LIST ON A PHONE, a table from `sm` up.
+                        Four columns inside `px-4` leaves ~70px each at 360px,
+                        which a date, a currency amount and a status pill cannot
+                        share — the row pushed the page sideways. The portal
+                        shell hides that with `overflow-x-hidden`, so the right
+                        columns were simply cut off rather than reachable. Each
+                        instalment is its own labelled block below `sm`, which
+                        is the pattern the Northwind portal uses wherever a
+                        table would otherwise have to survive 360px. */}
                     <div className="rounded-md border">
-                      <div className="grid grid-cols-4 gap-2 px-4 py-2 bg-muted/50 text-xs font-medium text-muted-foreground">
+                      <div className="hidden grid-cols-4 gap-2 bg-muted/50 px-4 py-2 text-xs font-medium text-muted-foreground sm:grid">
                         <span>#</span>
                         <span>Due Date</span>
                         <span>Amount</span>
@@ -1382,16 +1391,34 @@ export default function BookingDetailPage() {
                         .map((inst: any) => (
                           <div
                             key={inst.id}
-                            className="grid grid-cols-4 gap-2 px-4 py-2 border-t text-sm"
+                            className="flex flex-col gap-1.5 border-t px-4 py-3 text-sm sm:grid sm:grid-cols-4 sm:items-center sm:gap-2 sm:py-2"
                           >
-                            <span>{inst.installment_number}</span>
-                            <span>{formatDate(inst.due_date)}</span>
-                            <span>{formatCurrency(inst.amount || 0, currencyCode)}</span>
-                            <Badge
-                              className={`${getInstallmentStatusColor(inst.status)} w-fit text-xs`}
-                            >
-                              {inst.status}
-                            </Badge>
+                            <span className="flex items-center justify-between gap-2 sm:block">
+                              <span className="text-xs text-muted-foreground sm:hidden">
+                                Instalment
+                              </span>
+                              <span className="font-medium sm:font-normal">
+                                {inst.installment_number}
+                              </span>
+                            </span>
+                            <span className="flex items-center justify-between gap-2 sm:block">
+                              <span className="text-xs text-muted-foreground sm:hidden">Due</span>
+                              <span>{formatDate(inst.due_date)}</span>
+                            </span>
+                            <span className="flex items-center justify-between gap-2 sm:block">
+                              <span className="text-xs text-muted-foreground sm:hidden">Amount</span>
+                              <span className="tabular-nums">
+                                {formatCurrency(inst.amount || 0, currencyCode)}
+                              </span>
+                            </span>
+                            <span className="flex items-center justify-between gap-2 sm:block">
+                              <span className="text-xs text-muted-foreground sm:hidden">Status</span>
+                              <Badge
+                                className={`${getInstallmentStatusColor(inst.status)} w-fit text-xs`}
+                              >
+                                {inst.status}
+                              </Badge>
+                            </span>
                           </div>
                         ))}
                     </div>

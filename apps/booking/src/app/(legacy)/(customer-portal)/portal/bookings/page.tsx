@@ -212,11 +212,15 @@ export default function BookingsPage() {
             )}
           </div>
 
+          {/* `w-[150px]` plus the search field and the icon overflowed a 360px
+              row even with `flex-wrap`, because the wrapped line still had to
+              fit 150px + icon + gap inside the padded column. Full width on its
+              own line below `sm`, fixed width from there. */}
           {rentals && rentals.length > 1 && (
-            <div className="flex items-center gap-2">
-              <ArrowUpDown className="h-4 w-4 text-muted-foreground" />
+            <div className="flex w-full items-center gap-2 sm:w-auto">
+              <ArrowUpDown className="h-4 w-4 shrink-0 text-muted-foreground" />
               <Select value={sortOrder} onValueChange={(value: SortOrder) => setSortOrder(value)}>
-                <SelectTrigger className="w-[150px]">
+                <SelectTrigger className="h-11 w-full sm:h-9 sm:w-[150px]">
                   <SelectValue placeholder="Sort by" />
                 </SelectTrigger>
                 <SelectContent>

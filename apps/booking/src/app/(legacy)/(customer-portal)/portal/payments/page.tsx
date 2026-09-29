@@ -996,17 +996,22 @@ function DemoInstallmentTimeline({
         <div className="mt-6 space-y-6">
           {/* Progress Summary */}
           <div className="bg-muted/50 rounded-lg p-4">
-            <div className="grid grid-cols-3 gap-4 text-center">
-              <div>
-                <p className="text-xl font-bold text-green-600">{formatCurrency(plan.paidAmount, currencyCode)}</p>
+            {/* Three currency figures share ~110px each at 360px, and
+                `text-xl` made every one of them wider than its column. The
+                three-up shape is worth keeping — it is the comparison — so the
+                TYPE steps down on a phone instead of the layout breaking.
+                `tabular-nums` stops the columns twitching as amounts change. */}
+            <div className="grid grid-cols-3 gap-2 text-center sm:gap-4">
+              <div className="min-w-0">
+                <p className="text-base font-bold tabular-nums text-green-600 sm:text-xl">{formatCurrency(plan.paidAmount, currencyCode)}</p>
                 <p className="text-xs text-muted-foreground">Paid</p>
               </div>
-              <div>
-                <p className="text-xl font-bold">{formatCurrency(plan.remainingAmount, currencyCode)}</p>
+              <div className="min-w-0">
+                <p className="text-base font-bold tabular-nums sm:text-xl">{formatCurrency(plan.remainingAmount, currencyCode)}</p>
                 <p className="text-xs text-muted-foreground">Remaining</p>
               </div>
-              <div>
-                <p className="text-xl font-bold">{formatCurrency(plan.totalAmount, currencyCode)}</p>
+              <div className="min-w-0">
+                <p className="text-base font-bold tabular-nums sm:text-xl">{formatCurrency(plan.totalAmount, currencyCode)}</p>
                 <p className="text-xs text-muted-foreground">Total</p>
               </div>
             </div>
