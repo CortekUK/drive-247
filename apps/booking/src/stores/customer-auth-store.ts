@@ -578,7 +578,30 @@ export const useCustomerAuthStore = create<CustomerAuthState>()((set, get) => ({
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('Customer auth state changed:', event, session?.user?.email);
 
+      // Captured BEFORE the set below overwrites it.
+      const previousUserId = get().user?.id ?? null;
+
       set({ session, user: session?.user ?? null });
+
+      /*
+       * THE SAME PERSON, AGAIN — do nothing.
+       *
+       * Supabase re-emits `SIGNED_IN` whenever a tab regains focus and
+       * revalidates the session, and `TOKEN_REFRESHED` every hour. With no
+       * guard, each one ran `fetchCustomerUser` AND `isGloballyBlacklisted`:
+       * two network round-trips, every time the renter switched back to the
+       * portal tab, for an answer that had not changed. Reported alongside the
+       * portal feeling slow to come back to.
+       *
+       * Keyed on the user id rather than the event name so it holds for any
+       * event Supabase chooses to re-emit. A different user, or a first
+       * resolution where `customerUser` is still null, falls through and does
+       * the full check — including the block and blacklist tests, which must
+       * never be skipped for someone we have not yet resolved.
+       */
+      if (session?.user && get().customerUser && session.user.id === previousUserId) {
+        return;
+      }
 
       if (session?.user) {
         // Use setTimeout to avoid potential Supabase deadlock

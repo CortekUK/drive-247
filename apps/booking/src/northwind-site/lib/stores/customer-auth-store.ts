@@ -539,6 +539,10 @@ export const useCustomerAuthStore = create<CustomerAuthState>()((set, get) => {
       set({ initialized: true });
 
       supabase.auth.onAuthStateChange((event, session) => {
+        // Captured BEFORE the set below, which overwrites it — the whole guard
+        // downstream turns on whether this is the same person as a moment ago.
+        const previousUserId = get().user?.id ?? null;
+
         // Assigning state is safe inside the callback; CALLING the client is
         // not. Everything that does is deferred below.
         set({ session, user: session?.user ?? null, sessionResolved: true });
@@ -548,9 +552,27 @@ export const useCustomerAuthStore = create<CustomerAuthState>()((set, get) => {
           return;
         }
 
-        // A token refresh re-emits the same user. Re-reading the customer row
-        // on every one of those is a wasted round-trip every hour.
-        if (event === "TOKEN_REFRESHED" && get().membership) return;
+        /*
+         * THE SAME PERSON, AGAIN — do nothing.
+         *
+         * This guard used to read `event === "TOKEN_REFRESHED"`, which covered
+         * the hourly refresh and nothing else. Supabase also re-emits
+         * `SIGNED_IN` whenever a tab regains focus and revalidates the session,
+         * and that fell straight through to `membershipResolved: false` below.
+         *
+         * `CustomerAuthContext` derives `isLoading` from exactly that flag, and
+         * `(portal)/layout.tsx` refuses to mount its children while loading —
+         * deliberately, so no page ever runs a query against a stale customer
+         * id. Together those meant every switch away and back to the portal tab
+         * tore the whole tree down, flashed the skeleton, and replayed every
+         * query on the page. Reported as "if I go to another tab and then come
+         * back to the customer portal it refreshes again".
+         *
+         * Keyed on the user id rather than the event name so it holds for any
+         * event Supabase chooses to re-emit. A genuinely different user still
+         * falls through and re-resolves, which is the case that must not break.
+         */
+        if (get().membership && session.user.id === previousUserId) return;
 
         set({ membershipResolved: false });
 
