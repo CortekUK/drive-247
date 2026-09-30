@@ -12,6 +12,7 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useReferralClaim, useReferrals, type ReferralsData } from "@/hooks/use-referrals";
+import { useV2 } from "@/lib/v2-context";
 
 const money = (cents: number) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: cents % 100 === 0 ? 0 : 2 }).format(cents / 100);
@@ -26,7 +27,32 @@ const fmtDate = (iso: string) => new Date(iso).toLocaleDateString(undefined, { d
 export function ReferralsView() {
   const { data, isLoading, error } = useReferrals();
 
-  return (
+  /*
+   * THE v2 SURFACE, ON THIS PAGE, FOR v1 TENANTS.
+   *
+   * Referrals has no v1 counterpart — it was designed on the v2 surface and
+   * opened to everyone on 30 Sep 2026. The markup is already shared, but that
+   * is not the same as looking the same: `.v2-theme` is a block of CSS custom
+   * properties the root layout puts on <body> for gated tenants ONLY, and every
+   * shadcn primitive here reads them. So a v1 tenant got this page's structure
+   * painted in v1's tokens — flat white instead of cards floating on the
+   * lavender wash.
+   *
+   * Custom properties inherit, so hanging `.v2-theme` on a wrapper restyles the
+   * whole subtree without editing a single primitive — the same trick the theme
+   * file itself documents, scoped one level further down.
+   *
+   * Two nested elements, not one: the wash is `.v2-theme .bg-app-gradient`, a
+   * DESCENDANT selector, so the class that defines the tokens cannot sit on the
+   * element that paints.
+   *
+   * And only for v1. A v2 tenant already carries `.v2-theme` on <body> and the
+   * gradient on the sidebar wrapper; adding a second `.bg-app-gradient` here
+   * would paint its fixed ::before overlay twice and darken the page.
+   */
+  const v2Theme = useV2("theme");
+
+  const content = (
     <div className="mx-auto w-full max-w-5xl space-y-6 p-4 md:p-6">
       <div className="flex items-start gap-3">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
@@ -45,6 +71,14 @@ export function ReferralsView() {
         <Card><CardContent className="p-6 text-sm text-muted-foreground">We couldn&apos;t load your referrals right now. Please try again in a moment.</CardContent></Card>
       )}
       {data && <ReferralsBody data={data} />}
+    </div>
+  );
+
+  if (v2Theme) return content;
+
+  return (
+    <div className="v2-theme">
+      <div className="min-h-full bg-background bg-app-gradient">{content}</div>
     </div>
   );
 }
