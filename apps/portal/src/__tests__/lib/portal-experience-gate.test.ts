@@ -66,7 +66,8 @@ const EVERY_AREA: V2Area[] = [
   'availability',
   'turo',
   'agreements',
-  'referrals',
+  // 'referrals' is deliberately absent: it left the canary areas on
+  // 30 Sep 2026 and is now open to every tenant. See lib/v2.ts.
 ];
 
 /** Live operators. None of these may ever be moved by this change. */

@@ -302,7 +302,6 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   const plDashboardHidden = useIsAreaHidden("pl-dashboard");
   const welcomeHidden = useIsAreaHidden("welcome");
   // The Drive247 referral programme page — its own gate area (lib/v2.ts).
-  const referralsOn = useV2("referrals");
   const fleetHealthHidden = useIsAreaHidden("fleet-health");
   // Website rail + its publish switches. React Query dedupes this against the
   // /cms dashboard's own read, so the extra mount costs nothing.
@@ -1622,7 +1621,8 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                       Beside Billing because it is money between the operator and
                       us. The route maps to the Subscription permission, so a
                       manager without it is refused there. */}
-                  {referralsOn && (
+                  {/* Every tenant now — see lib/v2.ts. */}
+                  {true && (
                   <SidebarMenuItem>
                     <SidebarMenuButton
                       asChild
