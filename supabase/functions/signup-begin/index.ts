@@ -416,6 +416,16 @@ Deno.serve(async (req) => {
       email,
       planId: plan.id,
       stage: "account_created",
+      /*
+       * ONE SOURCE OF TRUTH for whether a code was sent.
+       *
+       * The client could read its own NEXT_PUBLIC flag, but then two switches
+       * have to agree: a client that believes OTP is on shows a code screen for
+       * an email nobody sent, and one that believes it is off walks an
+       * unconfirmed user into payment. This server is the only place that knows
+       * — it is the one that minted and sent the code.
+       */
+      requiresVerification: OTP_ENABLED,
     });
   } catch (error) {
     console.error(`${LOG} unexpected error:`, error);

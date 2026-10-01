@@ -76,6 +76,8 @@ export interface SignupBeginResponse {
   email: string;
   planId: SignupPlanId;
   stage: "account_created";
+  /** True when a verification code was emailed and `verify` is the next step. */
+  requiresVerification?: boolean;
 }
 export interface SignupBeginOauthRequest {
   planId: SignupPlanId;
@@ -388,6 +390,35 @@ async function callFunction<T>(name: string, body: unknown, opts: CallOptions): 
  * Step 1. The only call made with the anon key as the bearer, because by
  * definition no user session exists until this returns.
  */
+/**
+ * The emailed code, and the resend.
+ *
+ * `auth: "anon"` deliberately: the whole point is that this account is not
+ * verified yet, and the endpoint identifies the caller by the address they are
+ * proving they own. It answers every failure identically — see `vague()` in the
+ * function — so it cannot be used to ask whether an address has an account.
+ */
+export interface SignupVerifyOtpRequest {
+  email: string;
+  action?: "verify" | "resend";
+  code?: string;
+}
+export interface SignupVerifyOtpResponse {
+  ok: boolean;
+  verified?: boolean;
+  alreadyVerified?: boolean;
+  resent?: boolean;
+  attemptsRemaining?: number;
+  code?: string;
+  error?: string;
+}
+export function signupVerifyOtp(b: SignupVerifyOtpRequest): Promise<SignupVerifyOtpResponse> {
+  return callFunction<SignupVerifyOtpResponse>("signup-verify-otp", b, {
+    auth: "anon",
+    timeoutMs: 20_000,
+  });
+}
+
 export function signupBegin(b: SignupBeginRequest): Promise<SignupBeginResponse> {
   return callFunction<SignupBeginResponse>("signup-begin", b, {
     auth: "anon",

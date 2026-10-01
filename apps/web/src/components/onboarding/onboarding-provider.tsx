@@ -33,6 +33,7 @@ import {
   lookupPromoCode,
   signupBegin,
   signupBeginOauth,
+  signupVerifyOtp,
   signupPaymentIntent,
   signupProvision,
   signupResume,
@@ -122,7 +123,14 @@ const STALL_MESSAGE = "This is taking longer than it should.";
  */
 const ALLOWED_TRANSITIONS: Record<SignupStep, readonly SignupStep[]> = {
   plan: ["plan", "account", "payment", "provisioning", "done"],
-  account: ["account", "payment", "provisioning", "plan"],
+  account: ["account", "verify", "payment", "provisioning", "plan"],
+  /*
+   * `verify -> account` is the ONLY forward move, and it is deliberate: a
+   * confirmed address goes to the business fields, not to the card. Payment is
+   * reachable from there, once there is something to name the tenant after.
+   * `plan` is the way back out for someone who mistyped the address.
+   */
+  verify: ["verify", "account", "plan"],
   // `payment -> done` is the second-tab recovery: signup-payment-intent answers
   // ALREADY_PROVISIONED when another tab has already finished the whole signup,
   // and the only coherent destination from there is the success panel.
@@ -497,6 +505,7 @@ export function OnboardingProvider({
    * handler, long after the first render has run.
    */
   const startPaymentRef = useRef<(() => Promise<void>) | null>(null);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
 
   // Async work reads state through this ref, never through the closure it was
   // created in: a poller created once must see the newest state on every tick.
@@ -1445,7 +1454,7 @@ export function OnboardingProvider({
       dispatch({ type: "business", patch: draftToBusiness(tenant) });
       let handedOff = false;
       try {
-        await signupBegin({
+        const begun = await signupBegin({
           fullName: values.fullName.trim(),
           email: values.email.trim().toLowerCase(),
           password: values.password,
@@ -1493,6 +1502,24 @@ export function OnboardingProvider({
         // a later one — which is what makes the `?signup=resume` return path and
         // the reopen-after-close path work for a first-time visitor.
         setHasResumableSignup(true);
+
+        /*
+         * THE CODE COMES BEFORE THE CARD.
+         *
+         * `requiresVerification` is the server's answer, not a second flag in
+         * the browser — if the two could disagree, one of them would either
+         * show a code screen for an email nobody sent, or walk an unverified
+         * account into payment.
+         *
+         * No `startPayment` here: an intent minted now would sit unconfirmed
+         * while they read their inbox, and the verify step is the one place
+         * that knows when they are through.
+         */
+        if (begun?.requiresVerification) {
+          dispatch({ type: "goto", step: "verify" });
+          return;
+        }
+
         dispatch({ type: "goto", step: "payment" });
         handedOff = true;
         void startPaymentInternal(planId);
@@ -1522,6 +1549,58 @@ export function OnboardingProvider({
    * `continueToProvisioning`: the account exists, the card has been charged, and
    * the only thing missing is the three fields this collects.
    */
+  /**
+   * The emailed code.
+   *
+   * On success the step does NOT go to payment. It goes to the business
+   * fields — `tenant` mode — because the whole point of the order is that the
+   * card is the last thing asked. `submitTenantDetails` then routes to payment
+   * because nothing has been charged, which is the branch the Google path
+   * already uses.
+   */
+  const verifyEmailCode = useCallback(
+    async (code: string): Promise<boolean> => {
+      const email = stateRef.current.account?.email;
+      if (!email) return false;
+      dispatch({ type: "busy", busy: true });
+      dispatch({ type: "error", error: null });
+      try {
+        const res = await signupVerifyOtp({ email, action: "verify", code });
+        if (!res.ok && !res.verified && !res.alreadyVerified) {
+          setVerifyError(res.error ?? "That code is not valid.");
+          return false;
+        }
+        setVerifyError(null);
+        setAccountMode("tenant");
+        dispatch({ type: "resumeTo", step: "account" });
+        return true;
+      } catch (e) {
+        setVerifyError(toOnboardingError(e).message);
+        return false;
+      } finally {
+        dispatch({ type: "busy", busy: false });
+      }
+    },
+    [],
+  );
+
+  const clearVerifyError = useCallback(() => setVerifyError(null), []);
+
+  const resendEmailCode = useCallback(async () => {
+    const email = stateRef.current.account?.email;
+    if (!email) return;
+    try {
+      const res = await signupVerifyOtp({ email, action: "resend" });
+      // A cooldown is not an error the operator caused; the button already
+      // shows the countdown, so saying it twice is noise.
+      if (!res.ok && res.code !== "OTP_COOLDOWN") {
+        setVerifyError(res.error ?? "We could not send another code.");
+      }
+    } catch (e) {
+      setVerifyError(toOnboardingError(e).message);
+    }
+  }, []);
+
   const submitTenantDetails = useCallback(
     async (values: TenantFormValues) => {
       const s = stateRef.current;
@@ -1953,6 +2032,10 @@ export function OnboardingProvider({
       startGoogleSignup,
       signInExisting,
       useDifferentEmail,
+      verifyEmailCode,
+      resendEmailCode,
+      verifyError,
+      clearVerifyError,
       signInInstead,
       startPayment,
       markPaid,
@@ -1977,6 +2060,14 @@ export function OnboardingProvider({
       startGoogleSignup,
       signInExisting,
       useDifferentEmail,
+      verifyEmailCode,
+      resendEmailCode,
+      verifyError,
+      clearVerifyError,
+      verifyEmailCode,
+      resendEmailCode,
+      verifyError,
+      clearVerifyError,
       signInInstead,
       startPayment,
       markPaid,
