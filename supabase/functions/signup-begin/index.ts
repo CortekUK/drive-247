@@ -19,6 +19,7 @@
 
 import { handleCors, errorResponse, jsonResponse } from "../_shared/cors.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getSignupPlan } from "../_shared/signup-plans.ts";
 import { getSignupStripeMode } from "../_shared/signup-stripe.ts";
 import { mintOtp, otpEmailHtml } from "../_shared/signup-otp.ts";
@@ -44,8 +45,46 @@ const LOG = "[signup-begin]";
  * `signup-verify-otp` before it can go further. Only turn it on once the client
  * can render the verification screen — an unconfirmed user with nowhere to go
  * is the dead end the old `email_confirm: true` comment warned about.
+ *
+ * ── WHY A TABLE AND NOT A SECRET ───────────────────────────────────────────
+ *
+ * This read `SIGNUP_OTP_ENABLED` from the function environment. That slot was
+ * not available — the project's secret limit is full — and a database flag
+ * turns out to be the better home anyway: it is the same place
+ * `subscription_gate_disabled` and `subscription_grace_days` already live, it
+ * can be flipped from the Super Admin settings page, and flipping it needs no
+ * redeploy. If a verification email provider goes down at 2am, the switch is a
+ * checkbox rather than a deploy.
+ *
+ * The env var is still honoured, so freeing a slot later changes nothing.
+ *
+ * FAILS OFF, deliberately. A read that errors means the account is created
+ * CONFIRMED — exactly today's behaviour. The other direction would mint
+ * unconfirmed users during a database blip, and nothing could verify them.
  */
-const OTP_ENABLED = Deno.env.get("SIGNUP_OTP_ENABLED") === "true";
+async function otpEnabled(supabase: SupabaseClient): Promise<boolean> {
+  if (Deno.env.get("SIGNUP_OTP_ENABLED") === "true") return true;
+  try {
+    const { data, error } = await supabase.from("admin_settings").select("signup_otp_enabled");
+    if (error) {
+      console.error(`${LOG} admin_settings read failed, OTP treated as OFF: ${error.message}`);
+      return false;
+    }
+    /*
+     * "True if any row is true", the same reading `landing_pricing_enabled`
+     * uses, and the same reading the admin switch shows. admin_settings holds
+     * four rows; the switch writes all of them in one statement. The agreement
+     * between this and the switch is the point — a flag the super admin sees as
+     * on while this reads off is worse than either value.
+     */
+    return (data ?? []).some((row: { signup_otp_enabled?: boolean | null }) =>
+      row.signup_otp_enabled === true
+    );
+  } catch (e) {
+    console.error(`${LOG} admin_settings read threw, OTP treated as OFF:`, e);
+    return false;
+  }
+}
 
 /** A human cannot type a name, an email and a 10-char password this fast. */
 const MIN_DWELL_MS = 1500;
@@ -109,6 +148,8 @@ Deno.serve(async (req) => {
 
   const supabase = createClient(supabaseUrl, serviceKey);
   const ip = clientIp(req);
+  // Resolved once per request; every use below reads this.
+  const OTP_ENABLED = await otpEnabled(supabase);
 
   try {
     let body: BeginRequest;

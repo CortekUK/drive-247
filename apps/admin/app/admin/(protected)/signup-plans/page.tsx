@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { LandingPricingSwitch } from '@/components/admin/landing-pricing-switch';
+import { SignupOtpSwitch } from '@/components/admin/signup-otp-switch';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -565,6 +566,9 @@ export default function SignupPlansPage() {
 
       {/* Whether drive-247.com shows these plans at all (team lead, Sep 2026). */}
       <LandingPricingSwitch />
+
+      {/* Whether a new signup has to prove its email address before paying. */}
+      <SignupOtpSwitch />
 
       {/* Async status for screen readers */}
       <p role="status" aria-live="polite" className="sr-only">

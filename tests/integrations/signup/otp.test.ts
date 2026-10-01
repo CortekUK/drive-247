@@ -14,7 +14,8 @@
 //   - attempts are capped, and a miss is counted BEFORE the answer is sent;
 //   - the code is deleted once spent, so it cannot be replayed;
 //   - every "no" looks the same, so this is not an account-existence oracle;
-//   - the whole thing is off unless SIGNUP_OTP_ENABLED is exactly "true".
+//   - the whole thing is off unless a super admin has switched it on, and a
+//     failed read of that switch means OFF, not on.
 // =============================================================================
 
 import { describe, it, expect } from 'vitest';
@@ -29,6 +30,7 @@ const strip = (s: string) =>
 const helper = strip(read('supabase/functions/_shared/signup-otp.ts'));
 const verify = strip(read('supabase/functions/signup-verify-otp/index.ts'));
 const begin = strip(read('supabase/functions/signup-begin/index.ts'));
+const adminSwitch = strip(read('apps/admin/components/admin/signup-otp-switch.tsx'));
 
 describe('the code itself', () => {
   it('is cryptographically random, never Math.random', () => {
@@ -103,10 +105,59 @@ describe('the verify endpoint', () => {
   });
 });
 
-describe('signup-begin stays safe while the screen does not exist', () => {
-  it('is off unless the flag is exactly "true"', () => {
-    expect(begin).toMatch(/SIGNUP_OTP_ENABLED"\) === "true"/);
+describe('the switch lives in the database, not in a secret', () => {
+  /*
+   * It was `SIGNUP_OTP_ENABLED` in the function environment and there was no
+   * secret slot left for it. A row is the better home: it is a checkbox on the
+   * Signup Plans tab, so if verification email stops being delivered the fix is
+   * a click rather than a deploy.
+   */
+  const fn = begin.slice(begin.indexOf('async function otpEnabled'), begin.indexOf('const MIN_DWELL_MS'));
+
+  it('reads admin_settings, beside the other platform flags', () => {
+    expect(fn).toMatch(/\.from\("admin_settings"\)/);
+    expect(fn).toMatch(/\.select\("signup_otp_enabled"\)/);
   });
+
+  it('still honours the env var, so freeing a slot later changes nothing', () => {
+    expect(fn).toMatch(/SIGNUP_OTP_ENABLED"\) === "true"/);
+  });
+
+  it('FAILS OFF on a read error and on a throw', () => {
+    // Failing ON would create unconfirmed accounts during a database blip, and
+    // nothing in the UI could verify them — locked out of a portal they paid
+    // for. Failing off is just today's behaviour.
+    expect(fn).toMatch(/if \(error\) \{[\s\S]*?return false;/);
+    expect(fn).toMatch(/catch \(e\) \{[\s\S]*?return false;/);
+    // Past the read, nothing returns an unconditional true: the answer can
+    // only come from the row, so no failure path can hand back "on".
+    expect(fn.slice(fn.indexOf('.from("admin_settings")'))).not.toMatch(/return true/);
+  });
+
+  it('is resolved once per request, not once per cold start', () => {
+    // A module-level const would pin the value until the function next cold
+    // starts, which is exactly the redeploy this was meant to avoid.
+    expect(begin).toMatch(/const OTP_ENABLED = await otpEnabled\(supabase\);/);
+    expect(begin).not.toMatch(/^const OTP_ENABLED/m);
+  });
+
+  it('the function and the admin switch read the row the same way', () => {
+    // A flag the super admin sees as ON while signup reads it OFF is worse
+    // than either value: nobody can tell which way signup is behaving.
+    expect(fn).toMatch(/signup_otp_enabled === true/);
+    expect(adminSwitch).toMatch(/rows\.some\(\(row\) => row\.signup_otp_enabled === true\)/);
+    expect(adminSwitch).toMatch(/\.update\(\{ signup_otp_enabled: next/);
+  });
+
+  it('the switch reports an update that changed nothing', () => {
+    // RLS, or no settings row: without the .select() the UI would show a
+    // success toast for a flag that did not move.
+    expect(adminSwitch).toMatch(/\.select\('id'\)/);
+    expect(adminSwitch).toMatch(/!data \|\| data\.length === 0/);
+  });
+});
+
+describe('signup-begin stays safe while the screen does not exist', () => {
 
   it('still auto-confirms when OTP is off, exactly as before', () => {
     expect(begin).toMatch(/email_confirm: !OTP_ENABLED/);
