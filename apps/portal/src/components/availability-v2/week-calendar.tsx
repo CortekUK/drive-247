@@ -32,7 +32,7 @@
 import { useState } from 'react';
 import { format, isSameDay } from 'date-fns';
 import { Ban, Clock } from 'lucide-react';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui-v2/popover';
+import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui-v2/popover';
 import { cn } from '@/lib/utils';
 import { DayEditorPanel } from './day-editor';
 import {
@@ -220,6 +220,11 @@ function DayColumn({
           )}
 
           {/* ── day header ───────────────────────────────────────────── */}
+          {/* The editor is anchored HERE, not on the whole column: the column
+              is as tall as the calendar, so anchoring to it left no room below
+              and the panel flipped up over the page header. From the day
+              header it drops down onto the column it edits (Ghulam, Oct 1). */}
+          <PopoverAnchor asChild>
           <span
             // The tour's anchor for the status chip step. The header, not the
             // chip itself: the chip is ~50px of text, and the step is about the
@@ -246,6 +251,7 @@ function DayColumn({
             </span>
             <StatusChip day={day} />
           </span>
+          </PopoverAnchor>
 
           {/* ── the hours themselves ─────────────────────────────────── */}
           <span
@@ -263,7 +269,7 @@ function DayColumn({
                     'absolute inset-x-1 top-1 flex items-center justify-center rounded-lg px-1.5 py-1 text-[11px] font-medium',
                     isException
                       ? 'border border-dashed border-warning bg-warning/20 text-foreground'
-                      : 'bg-primary/10 text-primary',
+                      : 'bg-primary/10 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]',
                   )}
                 >
                   Open 24 hours
@@ -282,7 +288,7 @@ function DayColumn({
                   <span
                     className={cn(
                       'truncate text-[11px] font-medium leading-tight',
-                      isException ? 'text-foreground' : 'text-primary',
+                      isException ? 'text-foreground' : 'text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]',
                     )}
                   >
                     {height > 34
@@ -371,7 +377,7 @@ function DayColumn({
       {/* `gap-0` because PopoverContent is a flex column with a base `gap-4`,
           which would push 16px between the panel's own bordered sections; and
           `overflow-hidden` so those sections are clipped to its rounded edge. */}
-      <PopoverContent align="center" className="w-[286px] gap-0 overflow-hidden p-0">
+      <PopoverContent side="bottom" align="center" sideOffset={6} className="w-[286px] gap-0 overflow-hidden p-0">
         <DayEditorPanel
           day={day}
           defaults={defaults}

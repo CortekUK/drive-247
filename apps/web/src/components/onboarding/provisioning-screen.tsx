@@ -203,7 +203,7 @@ export function ProvisioningScreen() {
             </button>
           )}
 
-          <div className="my-auto w-full max-w-md animate-in fade-in-0 zoom-in-95 duration-300">
+          <div className="my-auto w-full max-w-md animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none">
             <div className="flex justify-center">
               <Image
                 src="/logo-light.png"
@@ -225,7 +225,7 @@ export function ProvisioningScreen() {
 
             {succeeded && result ? (
               /* ── success ─────────────────────────────────────────────────── */
-              <div className="animate-in fade-in-0 duration-300">
+              <div className="animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none">
                 <CircleCheckBig className="mx-auto mt-8 h-12 w-12 text-indigo-600 dark:text-indigo-400" />
                 {/* asChild so the visible heading IS the accessible name of the
                     dialog — exactly one Title renders in either branch. */}
@@ -334,7 +334,7 @@ export function ProvisioningScreen() {
                         <div
                           className={cn(
                             "flex items-start gap-2.5",
-                            isDone && "animate-in fade-in-0 slide-in-from-bottom-1 duration-200",
+                            isDone && "animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none",
                           )}
                         >
                           {isDone ? (
@@ -375,7 +375,7 @@ export function ProvisioningScreen() {
                 </ul>
 
                 {failed && failure && (
-                  <div className="mt-6 animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
+                  <div className="mt-6 animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none">
                     <Alert variant="destructive">
                       <TriangleAlert />
                       <AlertTitle>We couldn&apos;t finish setting up your portal</AlertTitle>
@@ -407,7 +407,7 @@ export function ProvisioningScreen() {
                     </div>
 
                     {recoverable && fixing && (
-                      <div className="mt-6 space-y-4 rounded-lg border p-4 text-left animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
+                      <div className="mt-6 space-y-4 rounded-lg border p-4 text-left animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none">
                         <TenantIdentityFields
                           value={business}
                           // Always editable here: this panel only renders inside

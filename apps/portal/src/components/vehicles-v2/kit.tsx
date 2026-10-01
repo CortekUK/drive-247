@@ -749,7 +749,7 @@ export type Tone = "neutral" | "primary" | "success" | "warning";
 export function Pill({ tone, children }: { tone: Tone; children: React.ReactNode }) {
   const tones = {
     neutral: "bg-muted text-muted-foreground",
-    primary: "bg-primary-light text-primary",
+    primary: "bg-primary-light text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]",
     success: "bg-success-light text-success",
     warning: "bg-warning-light text-warning",
   } as const;
@@ -777,7 +777,7 @@ export function HeroChip({
     muted: { chip: "border-border bg-muted/60 text-muted-foreground", dot: "bg-muted-foreground/40" },
     success: { chip: "border-success/30 bg-success/10 text-success", dot: "bg-success" },
     warning: { chip: "border-warning/40 bg-warning/10 text-warning", dot: "bg-warning" },
-    primary: { chip: "border-primary/30 bg-primary/10 text-primary", dot: "bg-primary" },
+    primary: { chip: "border-primary/30 bg-primary/10 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]", dot: "bg-primary" },
   } as const;
   const t = tones[tone];
   return (

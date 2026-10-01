@@ -2,7 +2,7 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { parseLocalDate } from "@/lib/date-utils";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,6 +18,9 @@ import { InfoGrid } from "@/components/ui/info-grid";
 import { formatCurrency } from "@/lib/format-utils";
 import { useTenant } from "@/contexts/TenantContext";
 import { useV2 } from "@/lib/v2-context";
+import { AutoSkeleton } from "@/components/skeleton-v2/auto-skeleton";
+import { skeletonFaker } from "@/lib/skeleton-data";
+import { useSkeletonLoading } from "@/hooks/use-skeleton-loading";
 
 interface Fine {
   id: string;
@@ -36,11 +39,41 @@ interface Fine {
   rentals: { rental_number: string | null } | null;
 }
 
+/**
+ * The placeholder fine the v2 skeleton renders through the real layout: only
+ * its shape is ever seen. Not 'Open', so no Record Payment / Waive buttons
+ * appear that would act on it.
+ */
+const SKELETON_FINE: Fine = (() => {
+  const f = skeletonFaker(0);
+  return {
+    id: f.id,
+    type: f.word(5, 8),
+    reference_no: f.word(8, 10),
+    issue_date: f.date(20).slice(0, 10),
+    due_date: f.date(-10).slice(0, 10),
+    amount: f.money(30, 400),
+    status: 'Charged',
+    notes: null,
+    customer_id: null,
+    vehicle_id: f.id,
+    rental_id: null,
+    customers: { name: f.text(2, 3) },
+    vehicles: { reg: f.word(6, 8), make: f.word(4, 8), model: f.word(3, 7) },
+    rentals: { rental_number: f.word(6, 7) },
+  };
+})();
+
 interface FineFile {
   id: string;
   file_name: string;
   file_url: string;
   uploaded_at: string;
+}
+
+/** v1's stand-in for <AutoSkeleton>: renders the region as it always was. */
+function PlainRegion({ children }: { loading: boolean; className?: string; children: ReactNode }) {
+  return <>{children}</>;
 }
 
 const FineDetail = () => {
@@ -155,7 +188,7 @@ const FineDetail = () => {
     },
   });
 
-  const { data: fine, isLoading } = useQuery({
+  const { data: loadedFine, isLoading: fineLoading } = useQuery({
     queryKey: ["fine", id],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -190,7 +223,13 @@ const FineDetail = () => {
     enabled: !!id,
   });
 
-  if (isLoading) {
+  const isLoading = useSkeletonLoading(fineLoading);
+  // v2: while the fine loads, the real layout renders this placeholder fine
+  // and <AutoSkeleton> turns it into the skeleton. v1 keeps its loading block.
+  const fine = v2Chrome && isLoading ? SKELETON_FINE : loadedFine;
+  const SkeletonRegion = v2Chrome ? AutoSkeleton : PlainRegion;
+
+  if (isLoading && !v2Chrome) {
     // v2 (switch row alignment): the loaded page's 24px top padding at md, so the
     // 36px title sits where it will after load, centred at 50 + 24 + 18 = 92 on
     // the sidebar switch's row, not at y=50 under the top bar. v1 unchanged.
@@ -270,9 +309,11 @@ const FineDetail = () => {
             </Tooltip>
             <div>
               <h1 className="text-3xl font-bold">Fine Details</h1>
+              <SkeletonRegion loading={isLoading}>
               <p className="text-muted-foreground">
                 {fine.reference_no || fine.id.slice(0, 8)} • {fine.vehicles.reg}
               </p>
+              </SkeletonRegion>
             </div>
           </div>
 
@@ -300,6 +341,7 @@ const FineDetail = () => {
           </div>
         </div>
 
+        <SkeletonRegion loading={isLoading} className="space-y-6">
         {/* KPI Card Row */}
         <div className="grid gap-4 md:grid-cols-3">
           <KPICard
@@ -411,6 +453,7 @@ const FineDetail = () => {
             </Card>
           </TabsContent>
         </Tabs>
+        </SkeletonRegion>
       </div>
 
       {fine && (

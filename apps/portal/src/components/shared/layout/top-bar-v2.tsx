@@ -2,16 +2,16 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { CircleDollarSign, MessageCircle, Search, SlidersHorizontal, X } from "lucide-react";
+import { ArrowUpRight, CircleDollarSign, MessageCircle, Search, SlidersHorizontal, X } from "lucide-react";
 import { TraxMark } from "@/components/trax/trax-greeting";
 
 import { Button } from "@/components/ui-v2/button";
 import { Separator } from "@/components/ui-v2/separator";
 import { SidebarTrigger } from "@/components/ui-v2/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui-v2/tooltip";
-import { GlobalSearch } from "@/components/shared/layout/global-search";
+import { GlobalSearchV2 } from "@/components/shared/layout/global-search-v2";
 import { MessagesSheet } from "@/components/shared/layout/dock-sheets";
-import { NotificationBell } from "@/components/shared/layout/notification-bell";
+import { NotificationBellV2 } from "@/components/notifications-v2/notification-bell-v2";
 import { useUnreadCount } from "@/hooks/use-unread-count";
 import { useCreditWallet } from "@/hooks/use-credit-wallet";
 // Northwind has no credits (docs/integration-billing/build-spec.md, D3).
@@ -240,12 +240,39 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
   const open = useCallback(() => setSearchOpen(true), []);
 
   /**
+   * One field, two scopes (Sep 27 2026). On a list page the field filters that
+   * list in place — no dialog, that is the point of it. Global search stays one
+   * step away: a "Search everywhere" row under the field while it holds a term
+   * (click, or ⌘↵), and a ⌘K key in the field when it is empty. Either opens the
+   * global dialog, seeded with whatever the field holds.
+   */
+  const [searchSeed, setSearchSeed] = useState("");
+  const [fieldFocused, setFieldFocused] = useState(false);
+  const searchEverywhere = useCallback((q: string) => {
+    setSearchSeed(q.trim());
+    setSearchOpen(true);
+    inputRef.current?.blur();
+  }, []);
+  const onSearchOpenChange = useCallback((next: boolean) => {
+    setSearchOpen(next);
+    if (!next) setSearchSeed("");
+  }, []);
+  const trimmed = term.trim();
+  /* Promote the row only for a count that belongs to what is on screen: the
+     committed term, not one still waiting out the 400ms push. */
+  const noLocalMatch = !!slot && trimmed !== "" && term === (slot.value ?? "") && slot.resultCount === 0;
+  const showEverywhere = !!slot && trimmed !== "" && (fieldFocused || noLocalMatch);
+
+  /**
    * The chord's one owner. `providers.tsx` already preventDefaults ⌘K/Ctrl+K and
    * dispatches this event; before the bar existed nothing was listening, which
    * is why the shortcut did nothing for the canary.
    */
   useEffect(() => {
-    const onOpen = () => setSearchOpen(true);
+    const onOpen = () => {
+      setSearchSeed("");
+      setSearchOpen(true);
+    };
     window.addEventListener("open-global-search", onOpen);
     return () => window.removeEventListener("open-global-search", onOpen);
   }, []);
@@ -281,8 +308,9 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
           Never both — two search fields on one screen, one global and one
           local with nothing saying which, is the confusion this bar removes. */}
       {slot ? (
+        <div className={`${phoneField ? "block" : "hidden sm:block"} relative w-full max-w-[440px]`}>
         <div
-          className={`${phoneField ? "flex" : "hidden sm:flex"} ${FIELD}`}
+          className={`${FIELD} max-w-none`}
           /* Carried from the search box this replaces. `tab-tours/rentals.ts`
              and `payments.ts` anchor a step to it, and a missing anchor does not
              fail loudly — it waits out the full timeout, skips, and starves the
@@ -290,10 +318,40 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
           data-tour={slot.tourAnchor}
         >
           <Search className="size-4 shrink-0 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" aria-hidden />
+          {/* The scope, drawn as an APPLIED filter token rather than a badge:
+              a square-ish chip with a divider after it, the way a search bar
+              shows a filter already in effect. Its × drops the scope, which on
+              this field means searching everything, so it opens the global
+              dialog with the term. No Backspace-to-remove: holding Backspace to
+              clear a term would pop the dialog open mid-keystroke. */}
+          {slot.scopeLabel && (
+            <span className="flex shrink-0 items-center gap-1 rounded-md border border-primary/30 bg-background/70 py-0.5 pl-1.5 pr-0.5 text-[11px] font-medium text-foreground dark:bg-[hsl(var(--v2-hover,var(--muted)))]">
+              <span className="text-muted-foreground">in</span>
+              {slot.scopeLabel}
+              <button
+                type="button"
+                onClick={() => searchEverywhere(term)}
+                aria-label={`Remove ${slot.scopeLabel} filter and search everything`}
+                className="flex size-4 cursor-pointer items-center justify-center rounded text-muted-foreground transition-colors hover:bg-primary/15 hover:text-foreground"
+              >
+                <X className="size-3" aria-hidden />
+              </button>
+            </span>
+          )}
           <input
             ref={inputRef}
             value={term}
             onChange={(e) => setTerm(e.target.value)}
+            onFocus={() => setFieldFocused(true)}
+            onBlur={() => setFieldFocused(false)}
+            onKeyDown={(e) => {
+              if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && trimmed) {
+                e.preventDefault();
+                searchEverywhere(term);
+              } else if (e.key === "Escape") {
+                inputRef.current?.blur();
+              }
+            }}
             placeholder={slot.placeholder}
             aria-label={slot.placeholder}
             /* Muted measures 4.22:1 on the field's light purple ground (4.01
@@ -308,7 +366,7 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
               aria-pressed={slot.filters.open}
               onClick={() => slot.filters!.onOpenChange(!slot.filters!.open)}
               className={
-                "relative flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors " +
+                "relative flex h-6 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md transition-colors " +
                 (slot.filters.open
                   ? "bg-primary text-primary-foreground"
                   : "bg-primary/10 text-primary hover:bg-primary/20 dark:text-[hsl(var(--v2-link,var(--primary)))] dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]")
@@ -322,12 +380,53 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
                   field clips its overflow (for the rounded ends), which cut an
                   outside badge in half. */}
               {!slot.filters.open && slot.filters.activeCount > 0 && (
-                <span className="absolute right-0 top-0 flex size-3.5 items-center justify-center rounded-full bg-primary text-[9px] font-semibold leading-none text-primary-foreground">
+                <span className="absolute -right-0.5 -top-0.5 flex size-3.5 items-center justify-center rounded-full bg-primary text-[9px] font-semibold leading-none text-primary-foreground">
                   {slot.filters.activeCount}
                 </span>
               )}
             </button>
           )}
+          {/* Empty field: the way out to global search, the same key the
+              pill shows on pages that lend the bar nothing. */}
+          {!trimmed && (
+            <button
+              type="button"
+              onClick={() => searchEverywhere("")}
+              aria-label="Search everything"
+              className="hidden shrink-0 cursor-pointer rounded-md bg-primary/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-primary hover:bg-primary/25 dark:text-[hsl(var(--v2-link,var(--primary)))] sm:block"
+            >
+              ⌘K
+            </button>
+          )}
+        </div>
+        {showEverywhere && (
+          <button
+            type="button"
+            /* mousedown, not click: the row shows only while the field has focus,
+               and a click would blur the field (hiding the row) before it lands. */
+            onMouseDown={(e) => {
+              e.preventDefault();
+              searchEverywhere(term);
+            }}
+            className={
+              "absolute left-0 right-0 top-[calc(100%+6px)] z-50 flex cursor-pointer items-center gap-2 rounded-xl border bg-card px-3 py-2 text-left text-[13px] shadow-sm transition-colors hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] " +
+              (noLocalMatch ? "border-primary/40" : "border-border")
+            }
+          >
+            <ArrowUpRight className="size-4 shrink-0 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" aria-hidden />
+            <span className="min-w-0 flex-1 truncate text-foreground">
+              {noLocalMatch && (
+                <span className="text-muted-foreground">
+                  No {slot.scopeLabel ? slot.scopeLabel.toLowerCase() : "results"} match —{" "}
+                </span>
+              )}
+              Search everywhere for <span className="font-semibold">&ldquo;{trimmed}&rdquo;</span>
+            </span>
+            <kbd className="shrink-0 rounded-full bg-primary/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
+              ⌘↵
+            </kbd>
+          </button>
+        )}
         </div>
       ) : (
         <button
@@ -491,7 +590,7 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
                        badge: a 16px red dot needs a ring to seat it against the
                        app gradient this bar sits on. The dock's tucked handle
                        solved the same problem the same way. */
-                    <span className="absolute -right-0.5 -top-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold leading-none text-white ring-2 ring-background">
+                    <span className="absolute -right-0.5 -top-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold leading-none text-destructive-foreground ring-2 ring-background">
                       {chatUnread > 9 ? "9+" : chatUnread}
                     </span>
                   )}
@@ -508,7 +607,7 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
             mark-read / delete / navigate logic is the kind of duplicate that
             drifts silently. It draws its own unread badge. */}
         <div className={BELL_FIX}>
-          <NotificationBell />
+          <NotificationBellV2 />
         </div>
 
 
@@ -519,7 +618,7 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
       {/* The canary's ONLY GlobalSearch mount. It used to live in the sidebar and
           is moved here in the same change, because removing it first would leave
           the tenant with no global search dialog at all — absent, not degraded. */}
-      <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />
+      <GlobalSearchV2 open={searchOpen} onOpenChange={onSearchOpenChange} initialQuery={searchSeed} />
     </header>
   );
 }

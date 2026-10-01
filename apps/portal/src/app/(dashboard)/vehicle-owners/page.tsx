@@ -15,7 +15,11 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { useTenant } from "@/contexts/TenantContext";
-import { useIsAreaHidden } from "@/lib/lean-context";
+import { useIsAreaHidden, useIsLean } from "@/lib/lean-context";
+import { useForcedEmptyState } from "@/hooks/use-forced-empty-state";
+import { VehicleOwnersTeachingEmptyState } from "@/components/empty-states/vehicle-owners-empty-state";
+import { useV2 } from "@/lib/v2-context";
+import { usePageSearch } from "@/components/shared/layout/page-search-slot";
 import { useVehicleOwners } from "@/hooks/use-vehicle-owners";
 import { useOwnerPayouts } from "@/hooks/use-owner-payouts";
 import { OwnerFormDialog } from "@/components/vehicle-owners/owner-form-dialog";
@@ -85,6 +89,30 @@ export default function VehicleOwnersPage() {
     );
   }, [owners, search]);
 
+  // No owners at all: the default (active-only) list is empty and no payout
+  // exists for any owner, active or not — both already loaded here. Lean
+  // canary only; `devForceEmpty` is the /dev preview switch. (The `owners`
+  // area is hidden for lean tenants today, so this waits on that.)
+  const devForceEmpty = useForcedEmptyState("vehicle-owners");
+  const leanTenant = useIsLean();
+  const teachEmptyOwners =
+    leanTenant &&
+    (devForceEmpty || (!includeInactive && !isLoading && owners.length === 0 && payouts.length === 0));
+
+  // v2: the search lives in the top bar (page-search-slot.tsx).
+  const v2Chrome = useV2("chrome");
+  usePageSearch(
+    v2Chrome && !teachEmptyOwners
+      ? {
+          placeholder: "Search by name, email, phone…",
+          value: search,
+          onChange: setSearch,
+          scopeLabel: "Owners",
+          resultCount: isLoading ? undefined : filtered.length,
+        }
+      : null,
+  );
+
   const totalActive = owners.filter((o) => o.is_active).length;
   const totalManagedVehicles = Object.values(vehicleCounts).reduce((a, b) => a + b, 0);
   const totalOutstanding = Object.values(outstandingPerOwner).reduce((a, b) => a + b, 0);
@@ -100,11 +128,17 @@ export default function VehicleOwnersPage() {
             Third-party owners whose vehicles you manage on consignment.
           </p>
         </div>
+        {!teachEmptyOwners && (
         <Button onClick={() => setShowAdd(true)}>
           <Plus className="h-4 w-4 mr-2" /> Add Owner
         </Button>
+        )}
       </div>
 
+      {teachEmptyOwners ? (
+        <VehicleOwnersTeachingEmptyState onAddOwner={() => setShowAdd(true)} />
+      ) : (
+      <>
       {/* Stat cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <StatCard icon={<Users className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />} label="Active Owners" value={String(totalActive)} />
@@ -118,6 +152,7 @@ export default function VehicleOwnersPage() {
 
       {/* Filter bar */}
       <div className="flex items-center gap-3">
+        {!v2Chrome && (
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -127,6 +162,7 @@ export default function VehicleOwnersPage() {
             className="pl-9"
           />
         </div>
+        )}
         <div className="flex items-center gap-2">
           <Switch id="include-inactive" checked={includeInactive} onCheckedChange={setIncludeInactive} />
           <Label htmlFor="include-inactive" className="text-sm">Include inactive</Label>
@@ -202,6 +238,8 @@ export default function VehicleOwnersPage() {
           </Table>
         </CardContent>
       </Card>
+      </>
+      )}
 
       <OwnerFormDialog open={showAdd} onOpenChange={setShowAdd} />
     </div>

@@ -21,7 +21,9 @@ import {
   writeLastShown,
   type DeckCard,
   type FeaturedHandlers,
+  type FeaturedArtKey,
 } from "@/lib/featured-cards";
+import { FeaturedCardArt } from "@/components/illustrations-v2/scenes/featured-cards";
 
 /**
  * The featured deck, presentation only: one card at a time in one fixed slot.
@@ -41,8 +43,10 @@ import {
  * chart sets, with a minimum for when the row stacks on a narrow screen. The
  * card is minimal (team lead, Sep 16 2026): a diagonal "opens" arrow at the top
  * right, and at the bottom the title (truncated) over a two-line description
- * (always reserved). No badge and no art; a paper-like background graphic is
- * planned for the empty middle. The root element is the same node from the first paint
+ * (always reserved). No badge. The empty middle carries the card's picture
+ * (illustrations-v2/scenes/featured-cards.tsx, keyed by the card's `art`),
+ * placed absolutely so it fills the room the card has and never adds height.
+ * The root element is the same node from the first paint
  * (an empty shell while the inputs resolve) to the last card.
  *
  * ---------------------------------------------------------------------------
@@ -95,14 +99,15 @@ export function FeaturedCardShell({
   ...rest
 }: HTMLAttributes<HTMLElement> & { children?: ReactNode; "data-tour"?: string; "data-motion"?: string }) {
   return (
-    <section className={cn(FEATURED_SHELL_CLASS, className)} {...rest}>
+    // A promo, not data: the auto skeleton shows every featured card as it is.
+    <section className={cn(FEATURED_SHELL_CLASS, className)} data-skeleton-keep="" {...rest}>
       {children}
     </section>
   );
 }
 
 /** The inside of the card: the "opens" arrow, then the title and description. */
-export function FeaturedCardFace({ title, subtitle }: { title: string; subtitle: string }) {
+export function FeaturedCardFace({ title, subtitle, art }: { title: string; subtitle: string; art?: FeaturedArtKey }) {
   return (
     <>
       <div className="relative flex shrink-0 justify-end">
@@ -110,6 +115,14 @@ export function FeaturedCardFace({ title, subtitle }: { title: string; subtitle:
             arrow (read as "next") did not. */}
         <ArrowUpRight aria-hidden className="size-5 shrink-0 text-primary dark:text-[hsl(var(--chart-2))]" />
       </div>
+      {/* The picture fills only the room between the arrow and the text:
+          absolutely placed, so it adds no height and every card in the hero
+          row stays the size it was. */}
+      {art && (
+        <div className="relative min-h-0 flex-1">
+          <FeaturedCardArt art={art} className="absolute inset-x-0 -top-2 bottom-1 mx-auto max-w-[240px]" />
+        </div>
+      )}
       <div className="relative shrink-0">
         <div className="truncate text-lg font-bold leading-6 tracking-tight" title={title}>
           {title}
@@ -138,7 +151,7 @@ function CardAction({
   const setRef = (el: HTMLElement | null) => {
     actionRef.current = el;
   };
-  const face = <FeaturedCardFace title={card.title} subtitle={card.subtitle} />;
+  const face = <FeaturedCardFace title={card.title} subtitle={card.subtitle} art={card.art} />;
 
   if (card.action.kind === "handler") {
     const handler = handlers[card.action.handler];

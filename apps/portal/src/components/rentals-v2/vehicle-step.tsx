@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { Search, Check, CarFront, Gauge, Banknote, ShieldCheck } from "lucide-react";
-import { motion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
+import { motionRise } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
 export interface VehicleLite {
@@ -29,6 +30,7 @@ interface VehicleListProps {
 }
 
 export function VehicleList({ selected, onSelect, vehicles, currency = "$" }: VehicleListProps) {
+  const reduceMotion = useReducedMotion();
   // No mock fallback — see the note in customer-step.tsx. A fleet with no
   // vehicles shows an empty state rather than five invented cars.
   const data = vehicles ?? [];
@@ -96,9 +98,7 @@ export function VehicleList({ selected, onSelect, vehicles, currency = "$" }: Ve
                   </div>
                   {isActive && (
                     <motion.span
-                      initial={{ scale: 0.6, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      transition={{ duration: 0.18 }}
+                      {...motionRise(reduceMotion)}
                       className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground"
                     >
                       <Check className="h-3 w-3" strokeWidth={3} />
@@ -141,16 +141,16 @@ function VehicleInfo({ vehicle, currency }: { vehicle: VehicleLite; currency: st
     <div className="p-6">
       {/* Image placeholder */}
       <div className="relative h-40 rounded-xl bg-gradient-to-br from-primary/10 to-muted flex items-center justify-center">
-        <CarFront className="h-16 w-16 text-primary/40" />
+        <CarFront className="h-16 w-16 text-primary/40 dark:text-[hsl(var(--v2-link,var(--primary))/0.4)]" />
         {vehicle.reg && (
-          <span className="absolute left-3 top-3 rounded-md bg-white/90 px-2 py-1 text-xs font-semibold text-foreground shadow-sm">
+          <span className="absolute left-3 top-3 rounded-md bg-card/90 px-2 py-1 text-xs font-semibold text-foreground shadow-sm">
             {vehicle.reg}
           </span>
         )}
         <span
           className={cn(
             "absolute right-3 top-3 rounded-full px-2 py-0.5 text-[11px] font-medium",
-            available ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-600"
+            available ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : "bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400"
           )}
         >
           {vehicle.status ?? "Available"}
@@ -193,7 +193,7 @@ function VehicleInfo({ vehicle, currency }: { vehicle: VehicleLite; currency: st
         </div>
         <div className="rounded-xl border p-3" data-tour="rental-insurance">
           <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Insurance</p>
-          <p className="mt-1 flex items-center gap-2 text-sm font-medium text-emerald-600">
+          <p className="mt-1 flex items-center gap-2 text-sm font-medium text-emerald-600 dark:text-emerald-400">
             <ShieldCheck className="h-4 w-4 shrink-0" />
             Eligible
           </p>

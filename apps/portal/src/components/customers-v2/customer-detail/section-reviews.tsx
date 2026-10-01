@@ -114,7 +114,7 @@ export function SectionReviews({ c, onJump, canEdit, drift }: SectionProps & { d
                     r.rating >= 8
                       ? "bg-success-light text-success"
                       : r.rating >= 5
-                        ? "bg-primary-light text-primary"
+                        ? "bg-primary-light text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]"
                         : "bg-warning-light text-warning"
                   )}
                 >

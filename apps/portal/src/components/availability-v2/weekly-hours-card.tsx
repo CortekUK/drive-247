@@ -83,7 +83,7 @@ const STATE_LABEL: Record<DayState, string> = {
  */
 const STATE_CHIP: Record<DayState, string> = {
   open: 'text-muted-foreground',
-  always: 'bg-primary/10 text-primary',
+  always: 'bg-primary/10 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]',
   closed: 'bg-muted text-muted-foreground',
 };
 

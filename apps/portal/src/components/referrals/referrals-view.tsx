@@ -9,14 +9,50 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
-import { Skeleton } from "@/components/ui/skeleton";
+import { AutoSkeleton } from "@/components/skeleton-v2/auto-skeleton";
+import { skeletonRows } from "@/lib/skeleton-data";
+import { useSkeletonLoading } from "@/hooks/use-skeleton-loading";
 import { Textarea } from "@/components/ui/textarea";
 import { useReferralClaim, useReferrals, type ReferralsData } from "@/hooks/use-referrals";
+import { ReferralCoupon3D } from "@/components/referrals/referral-coupon-3d";
+import { useIsLean } from "@/lib/lean-context";
+import { useForcedEmptyState } from "@/hooks/use-forced-empty-state";
+import { ReferralsTeachingEmptyState } from "@/components/empty-states/referrals-empty-state";
 
 const money = (cents: number) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: cents % 100 === 0 ? 0 : 2 }).format(cents / 100);
 
 const fmtDate = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+
+/** The placeholder programme the skeleton renders: only its shape is ever seen. */
+export const SKELETON_REFERRALS: ReferralsData = {
+  enabled: true,
+  subscribed: true,
+  code: { code: "XXXXXXXX", link: "https://xxxxxxxx.xxx/xxxxxxxxxxxx" },
+  refereeOffer: { discountText: "xx% off", durationText: "xxx xxxx xxxxx xxxxxx" },
+  standing: {
+    activeReferrals: 1,
+    totalReferrals: 2,
+    reward: "xx% off",
+    next: { needed: 2, reward: "xx% off" },
+    tiers: [
+      { min: 1, reward: "xx% off" },
+      { min: 3, reward: "xx% off" },
+      { min: 5, reward: "xx% off" },
+    ],
+    customTiers: false,
+  },
+  referrals: skeletonRows(3, (f) => ({
+    id: f.id,
+    name: f.text(2, 3),
+    counts: true,
+    source: f.word(4, 7),
+    since: f.date(),
+  })),
+  savedCents: 12000,
+  joinedWith: null,
+  claims: [],
+};
 
 /**
  * The operator's Drive247 referral programme: share a code or link; a new
@@ -24,7 +60,8 @@ const fmtDate = (iso: string) => new Date(iso).toLocaleDateString(undefined, { d
  * bill while the operators they referred stay subscribed.
  */
 export function ReferralsView() {
-  const { data, isLoading, error } = useReferrals();
+  const { data, isLoading: referralsLoading, error } = useReferrals();
+  const isLoading = useSkeletonLoading(referralsLoading);
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 p-4 md:p-6">
@@ -40,16 +77,35 @@ export function ReferralsView() {
         </div>
       </div>
 
-      {isLoading && <LoadingState />}
-      {error && (
+      {/* While loading, the real body renders the placeholder programme and
+          <AutoSkeleton> turns it into the skeleton. */}
+      {isLoading && (
+        <AutoSkeleton loading>
+          <ReferralsBody data={SKELETON_REFERRALS} />
+        </AutoSkeleton>
+      )}
+      {!isLoading && error && (
         <Card><CardContent className="p-6 text-sm text-muted-foreground">We couldn&apos;t load your referrals right now. Please try again in a moment.</CardContent></Card>
       )}
-      {data && <ReferralsBody data={data} />}
+      {!isLoading && data && <ReferralsBody data={data} />}
     </div>
   );
 }
 
 function ReferralsBody({ data }: { data: ReferralsData }) {
+  // Nobody referred yet: no referrals, none counted, and no claims sent in.
+  // Only once a code exists — the empty state's whole action is sharing it;
+  // without one the normal page says why there is none. Lean canary only;
+  // `devForceEmpty` is the /dev preview switch (inert outside development).
+  const devForceEmpty = useForcedEmptyState("referrals");
+  const leanTenant = useIsLean();
+  const teachEmptyReferrals =
+    leanTenant &&
+    data.enabled &&
+    !!data.code &&
+    (devForceEmpty ||
+      (data.referrals.length === 0 && data.standing.totalReferrals === 0 && data.claims.length === 0));
+
   if (!data.enabled) {
     return (
       <Card>
@@ -57,6 +113,30 @@ function ReferralsBody({ data }: { data: ReferralsData }) {
           The referral programme isn&apos;t available on your account right now. If someone joined Drive247 because of you, let us know through Support.
         </CardContent>
       </Card>
+    );
+  }
+
+  if (teachEmptyReferrals && data.code) {
+    const link = data.code.link;
+    return (
+      <div className="space-y-6">
+        {/* Kept: it is the operator's own discount, not part of the list. */}
+        {data.joinedWith && <JoinedWithCard joined={data.joinedWith} />}
+        <ReferralsTeachingEmptyState
+          link={link}
+          onCopyLink={async () => {
+            try {
+              await navigator.clipboard.writeText(link);
+              toast.success("Link copied");
+            } catch {
+              toast.error("Couldn't copy — select it and copy by hand");
+            }
+          }}
+          onShareByEmail={() => {
+            window.location.href = `mailto:?subject=${encodeURIComponent("Try Drive247 for your rental business")}&body=${encodeURIComponent(shareText(data))}`;
+          }}
+        />
+      </div>
     );
   }
 
@@ -78,10 +158,14 @@ function ReferralsBody({ data }: { data: ReferralsData }) {
                 : "Share it with other rental operators."}
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-4">
+            <ReferralCoupon3D
+              code={data.code?.code ?? null}
+              discountText={data.refereeOffer?.discountText ?? null}
+              durationText={data.refereeOffer?.durationText ?? null}
+            />
             {data.code ? (
               <>
-                <CopyRow label="Code" value={data.code.code} large />
                 <CopyRow label="Link" value={data.code.link} />
                 <div className="flex flex-wrap gap-2 pt-1">
                   <Button variant="outline" size="sm" className="gap-1.5" asChild>
@@ -306,16 +390,3 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-function LoadingState() {
-  return (
-    <div className="space-y-6">
-      <div className="grid gap-6 lg:grid-cols-5">
-        <Skeleton className="h-56 lg:col-span-3" />
-        <Skeleton className="h-56 lg:col-span-2" />
-      </div>
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Skeleton className="h-20" /><Skeleton className="h-20" /><Skeleton className="h-20" />
-      </div>
-    </div>
-  );
-}

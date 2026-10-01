@@ -123,7 +123,7 @@ export function RentalOnboardingShell({
                       type="button"
                       data-tour={stepTourId(step)}
                       onClick={() => onStepClick?.(i)}
-                      className="leading-none font-medium text-foreground/80 hover:text-primary hover:underline underline-offset-2 cursor-pointer transition-colors"
+                      className="leading-none font-medium text-foreground/80 hover:text-primary dark:hover:text-[hsl(var(--v2-link,var(--primary)))] hover:underline underline-offset-2 cursor-pointer transition-colors"
                     >
                       {step}
                     </button>
@@ -132,7 +132,7 @@ export function RentalOnboardingShell({
                       data-tour={stepTourId(step)}
                       className={cn(
                         "leading-none",
-                        isCurrent ? "font-semibold text-primary" : "text-muted-foreground/60"
+                        isCurrent ? "font-semibold text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" : "text-muted-foreground/60"
                       )}
                     >
                       {step}

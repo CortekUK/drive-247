@@ -459,7 +459,7 @@ export function AccountStep({
 
   if (isStaffEmail) {
     return (
-      <div className="animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
+      <div className="animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none">
         <div className="flex size-10 items-center justify-center rounded-full bg-indigo-50 dark:bg-indigo-950/40">
           <UserRound className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
         </div>
@@ -530,7 +530,7 @@ export function AccountStep({
         id="signup-account-form"
         onSubmit={handleSignIn}
         noValidate
-        className="animate-in fade-in-0 slide-in-from-bottom-2 duration-300"
+        className="animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none"
       >
         <div className="flex size-10 items-center justify-center rounded-full bg-indigo-50 dark:bg-indigo-950/40">
           <UserRound className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
@@ -645,7 +645,7 @@ export function AccountStep({
         id="signup-account-form"
         onSubmit={handleTenantSubmit}
         noValidate
-        className="animate-in fade-in-0 slide-in-from-bottom-2 duration-300"
+        className="animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none"
       >
         <div className="flex size-10 items-center justify-center rounded-full bg-indigo-50 dark:bg-indigo-950/40">
           <Building2 className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
@@ -693,7 +693,7 @@ export function AccountStep({
       id="signup-account-form"
       onSubmit={handleCreateAccount}
       noValidate
-      className="animate-in fade-in-0 slide-in-from-bottom-2 duration-300"
+      className="animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none"
     >
       {/* Plan reminder — the user picked a card several scroll-lengths ago. */}
       <div className="flex items-center gap-2.5 rounded-lg border border-indigo-200/60 bg-indigo-50/30 p-3 dark:border-indigo-800/30 dark:bg-indigo-950/20">

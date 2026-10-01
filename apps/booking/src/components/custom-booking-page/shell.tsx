@@ -128,7 +128,7 @@ export function Nav({ c, mode, onToggleMode }: { c: CbpContent; mode: CbpMode | 
 
       {/* ------------------------------------------------------ mobile drawer */}
       {open && (
-        <div className="cbp-rise cbp-hide-desktop border-t border-[var(--line)] bg-[var(--surface)]">
+        <div className="cbp-appear cbp-hide-desktop border-t border-[var(--line)] bg-[var(--surface)]">
           <nav className="cbp-wrap flex flex-col py-3">
             {c.nav.map(l => (
               <Link

@@ -32,8 +32,7 @@
  */
 
 import { useState } from 'react';
-import { ChevronRight } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui-v2/card';
+import { ChevronRight, SlidersHorizontal } from 'lucide-react';
 import { Skeleton } from '@/components/ui-v2/skeleton';
 import {
   Select,
@@ -54,9 +53,10 @@ import {
   SpentDialog,
   TookInDialog,
 } from './_receipt-dialogs';
+import { CategoriesDialog } from './_categories';
 
 /** Which dialog is open, if any. */
-type Row = 'tookIn' | 'gaveBack' | 'neverYours' | 'spent' | 'owed' | 'carPurchases';
+type Row = 'tookIn' | 'gaveBack' | 'neverYours' | 'spent' | 'owed' | 'carPurchases' | 'categories';
 
 /**
  * U+2212 MINUS SIGN, not a hyphen.
@@ -156,7 +156,7 @@ function ReceiptRow({
    * exactly the sort of thing that makes a money screen feel untrustworthy
    * without anyone being able to say why.
    */
-  const shell = 'grid w-full grid-cols-[minmax(0,1fr)_auto_1rem] items-center gap-x-4 px-3 py-3.5';
+  const shell = 'grid w-full grid-cols-[minmax(0,1fr)_auto_1rem] items-center gap-x-4 px-3 py-3 [@media(max-height:860px)]:py-2';
 
   if (!clickable) {
     return <div className={cn(shell, 'text-left')}>{body}</div>;
@@ -244,28 +244,37 @@ export function MoneyReceipt({
 
   return (
     <>
-      <Card>
-        {/*
-          The card is as wide as the charts below it; the receipt inside is not.
+      {/*
+        Plain on the page, not in a card. The receipt is the page's answer, and
+        a box around it made it read as one widget among several. `-mx-3` lines
+        the labels up with the page title while the rows keep the 12px inset
+        their hover wash needs.
+      */}
+      <div className="-mx-3 space-y-1 xl:flex xl:h-full xl:flex-col">
+        <header className="flex flex-wrap items-center justify-between gap-4 px-3 pb-2">
+          <h2 className="font-heading text-lg font-medium tracking-tight">
+            Where your money went
+          </h2>
 
-          A receipt read across 1,500px is a label stranded on the far left and a
-          number stranded on the far right, with the eye given nothing to follow
-          between them. Capped to a reading measure and centred, the label, the
-          amount and the chevron stay in one glance — which is the entire reason
-          this is a receipt rather than four tiles.
-        */}
-        <CardContent className="mx-auto w-full max-w-3xl space-y-1">
-          <header className="flex flex-wrap items-center justify-between gap-4 px-3 pb-2">
-            <h2 className="font-heading text-lg font-medium tracking-tight">
-              Where your money went
-            </h2>
-
+          {/*
+            The period control lives on the receipt, not in the page header,
+            because the receipt is what an operator is reading when they think
+            "and what about the last three months?". It still governs the whole
+            page — the charts below read the same query.
+          */}
+          <div className="flex items-center gap-1">
             {/*
-              The period control lives on the receipt, not in the page header,
-              because the receipt is what an operator is reading when they think
-              "and what about the last three months?". It still governs the whole
-              page — the charts below read the same query.
+              Which ledger categories land on which line. Beside the period
+              because both change what the receipt adds up.
             */}
+            <button
+              type="button"
+              onClick={() => setOpenRow('categories')}
+              className="flex h-9 cursor-pointer items-center gap-1.5 rounded-full px-3 text-[13px] text-muted-foreground transition-colors duration-200 hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none motion-reduce:transition-none"
+            >
+              <SlidersHorizontal className="size-3.5" aria-hidden />
+              What counts where
+            </button>
             <Select
               value={String(months)}
               onValueChange={(value) => onMonthsChange(Number(value) as PeriodMonths)}
@@ -281,8 +290,12 @@ export function MoneyReceipt({
                 ))}
               </SelectContent>
             </Select>
-          </header>
+          </div>
+        </header>
 
+        {/* xl: these four share whatever height the screen has spare, so the
+            receipt always ends exactly at the bottom of the frame. */}
+        <div className="flex flex-col xl:flex-1 [&>*]:xl:flex-1">
           <ReceiptRow
             label="Money you took in"
             sub="rentals, extras, delivery, insurance"
@@ -321,109 +334,129 @@ export function MoneyReceipt({
             loading={loading}
             onOpen={() => setOpenRow('spent')}
           />
+        </div>
 
-          {/*
-            A double rule, as a paper receipt uses before its total. It is doing
-            real work: it marks where the list of deductions stops and the answer
-            starts, which is the one boundary in this component that must not be
-            missed at a glance.
-          */}
-          <div className="mx-3 mt-3 border-t-4 border-double border-foreground/20" />
+        {/*
+          A double rule, as a paper receipt uses before its total. It is doing
+          real work: it marks where the list of deductions stops and the answer
+          starts, which is the one boundary in this component that must not be
+          missed at a glance.
+        */}
+        <div className="mx-3 mt-3 border-t-4 border-double border-foreground/20" />
 
-          <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2 px-3 pt-5 pb-6">
-            <div>
-              <p className="text-xs font-medium tracking-[0.14em] text-muted-foreground uppercase">
-                Money you kept
-              </p>
-              {/*
-                The share is the second half of this number's meaning: keeping
-                $18,545 on $26,115 taken in and on $2M taken in are different
-                businesses, and only one of them is worth celebrating.
-              */}
-              <p className="mt-1.5 min-h-[1.25rem] text-[13px] text-muted-foreground">
-                {loading
-                  ? ''
-                  : shareKept == null
-                    ? 'Nothing came in this period'
-                    : `${shareKept.toFixed(0)}% of the money you took in`}
-              </p>
-            </div>
-
-            {loading ? (
-              <Skeleton className="h-12 w-52" />
-            ) : (
-              <p
-                className={cn(
-                  'font-heading text-4xl leading-none font-semibold tracking-tight tabular-nums sm:text-5xl',
-                  // Plain ink when there is a profit — a green number would be
-                  // the page congratulating the operator, which is not its job.
-                  // Red only when the answer is genuinely a loss, which IS its
-                  // job to say clearly.
-                  kept < 0 && 'text-destructive',
-                )}
-              >
-                {kept < 0 ? `${MINUS} ${money(Math.abs(kept))}` : money(kept)}
-              </p>
-            )}
-          </div>
-
-          <div className="mx-3 border-t border-foreground/10" />
-
-          <div className="pt-1">
-            <ReceiptRow
-              label="Still owed to you"
-              sub={owedSub}
-              amount={owed}
-              money={money}
-              loading={loading}
-              zeroLabel="nothing outstanding"
-              onOpen={() => setOpenRow('owed')}
-            />
-          </div>
-
-          {/*
-            Fleet investment, stated plainly and OUTSIDE the sum.
-
-            The single most common way to misread this page would be to assume
-            "money you kept" already accounts for the cars bought — so the line
-            says, in the same breath as the number, that it does not. It is
-            never hidden and it is never inside the total. See `_money-model.ts`.
-          */}
-          <CapitalFootnote
-            data={data}
-            loading={loading}
-            money={money}
-            onOpen={() => setOpenRow('carPurchases')}
-          />
-
-          {/*
-            Fleet utilisation, demoted from a KPI tile to a sentence.
-
-            It is not money, so it does not belong in the sum above — but it is
-            the first thing an operator asks after "what did I keep", so it sits
-            here rather than three charts down. `null` renders as an em dash and
-            never as 0%: see `computeUtilisation`.
-          */}
-          {!loading && data ? (
-            <p className="px-3 pt-4 text-[13px] text-muted-foreground">
-              Your cars were earning{' '}
-              <span className="font-medium tabular-nums text-foreground">
-                {data.utilisation == null ? '—' : `${data.utilisation.toFixed(0)}%`}
-              </span>{' '}
-              of the time
-              {data.fleetSize > 0
-                ? ` across ${data.fleetSize.toLocaleString()} ${data.fleetSize === 1 ? 'car' : 'cars'}.`
-                : ', once there are cars on the fleet to measure.'}
+        <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2 px-3 pt-4 pb-5 [@media(max-height:860px)]:pt-3 [@media(max-height:860px)]:pb-3">
+          <div>
+            <p className="text-xs font-medium tracking-[0.14em] text-muted-foreground uppercase">
+              Money you kept
             </p>
-          ) : null}
-        </CardContent>
-      </Card>
+            {/*
+              The share is the second half of this number's meaning: keeping
+              $18,545 on $26,115 taken in and on $2M taken in are different
+              businesses, and only one of them is worth celebrating.
+            */}
+            <p className="mt-1.5 min-h-[1.25rem] text-[13px] text-muted-foreground">
+              {loading
+                ? ''
+                : shareKept == null
+                  ? 'Nothing came in this period'
+                  : `${shareKept.toFixed(0)}% of the money you took in`}
+            </p>
+          </div>
+
+          {loading ? (
+            <Skeleton className="h-12 w-52" />
+          ) : (
+            <p
+              className={cn(
+                'font-heading text-4xl leading-none font-semibold tracking-tight tabular-nums sm:text-5xl',
+                // Plain ink when there is a profit — a green number would be
+                // the page congratulating the operator, which is not its job.
+                // Red only when the answer is genuinely a loss, which IS its
+                // job to say clearly.
+                kept < 0 && 'text-destructive',
+              )}
+            >
+              {kept < 0 ? `${MINUS} ${money(Math.abs(kept))}` : money(kept)}
+            </p>
+          )}
+        </div>
+
+        <div className="mx-3 border-t border-foreground/10" />
+
+        <div className="pt-1">
+          <ReceiptRow
+            label="Still owed to you"
+            sub={owedSub}
+            amount={owed}
+            money={money}
+            loading={loading}
+            zeroLabel="nothing outstanding"
+            onOpen={() => setOpenRow('owed')}
+          />
+        </div>
+
+        {/*
+          Fleet investment, stated plainly and OUTSIDE the sum.
+
+          The single most common way to misread this page would be to assume
+          "money you kept" already accounts for the cars bought — so the line
+          says, in the same breath as the number, that it does not. It is
+          never hidden and it is never inside the total. See `_money-model.ts`.
+        */}
+        <CapitalFootnote
+          data={data}
+          loading={loading}
+          money={money}
+          onOpen={() => setOpenRow('carPurchases')}
+        />
+
+        {/*
+          Fleet utilisation, demoted from a KPI tile to a sentence.
+
+          It is not money, so it does not belong in the sum above — but it is
+          the first thing an operator asks after "what did I keep", so it sits
+          here rather than three charts down. `null` renders as an em dash and
+          never as 0%: see `computeUtilisation`.
+        */}
+        {!loading && data ? (
+          <p className="px-3 pt-3 text-[13px] text-muted-foreground [@media(max-height:860px)]:pt-2">
+            Your cars were earning{' '}
+            <span className="font-medium tabular-nums text-foreground">
+              {data.utilisation == null ? '—' : `${data.utilisation.toFixed(0)}%`}
+            </span>{' '}
+            of the time
+            {data.fleetSize > 0
+              ? ` across ${data.fleetSize.toLocaleString()} ${data.fleetSize === 1 ? 'car' : 'cars'}.`
+              : ', once there are cars on the fleet to measure.'}
+          </p>
+        ) : null}
+
+        {/*
+          Said on the receipt itself: these figures include the operator's own
+          corrections, and nobody should have to remember that they made some.
+        */}
+        {!loading && data && data.adjustedCount > 0 ? (
+          <p className="px-3 pt-2 text-[13px] text-muted-foreground">
+            Includes your changes to{' '}
+            <span className="font-medium tabular-nums text-foreground">
+              {data.adjustedCount.toLocaleString()} {data.adjustedCount === 1 ? 'entry' : 'entries'}
+            </span>
+            . Open a line above to see or undo them.
+          </p>
+        ) : null}
+      </div>
 
       <TookInDialog open={openRow === 'tookIn'} onOpenChange={close} {...dialogProps} />
       <GaveBackDialog open={openRow === 'gaveBack'} onOpenChange={close} {...dialogProps} />
       <NeverYoursDialog open={openRow === 'neverYours'} onOpenChange={close} {...dialogProps} />
       <SpentDialog open={openRow === 'spent'} onOpenChange={close} {...dialogProps} />
       <OwedDialog open={openRow === 'owed'} onOpenChange={close} {...dialogProps} />
+      <CategoriesDialog
+        open={openRow === 'categories'}
+        onOpenChange={close}
+        data={data}
+        currency={currency}
+      />
       <CarPurchasesDialog
         open={openRow === 'carPurchases'}
         onOpenChange={close}
@@ -457,7 +490,9 @@ function CapitalFootnote({
   // "Purchases" only when that is all it was. A period that also sold a car
   // would be mislabelled by it, and mislabelling a number is the exact fault
   // this whole screen exists to correct.
-  const soldSomething = data.ledger.some((row) => row.category === 'Disposal');
+  const soldSomething = data.ledger.some(
+    (row) => row.bucket === 'capital_cost' && row.category === 'Disposal',
+  );
   const label = soldSomething ? 'Buying and selling cars this period' : 'Car purchases this period';
 
   return (

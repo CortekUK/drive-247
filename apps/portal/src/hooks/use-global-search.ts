@@ -150,7 +150,7 @@ export const useGlobalSearch = () => {
   } = useQuery({
     queryKey: ["global-search", debouncedQuery, entityFilter, tenant?.id, tenant?.currency_code, includeKey],
     queryFn: () => searchService.searchAll(debouncedQuery, entityFilter, tenant?.id, tenant?.currency_code || 'USD', include),
-    enabled: debouncedQuery.length > 0 && entityFilter !== "pages" && entityFilter !== "support",
+    enabled: !!tenant?.id && debouncedQuery.length > 0 && entityFilter !== "pages" && entityFilter !== "support",
     staleTime: 30000, // 30 seconds
   });
 

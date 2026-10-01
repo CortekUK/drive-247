@@ -1,572 +1,146 @@
 'use client';
 
 /**
- * The three bands of the dashboard, assembled from whatever is real.
+ * The v2 dashboard body: the revenue line chart, with the feature card at the
+ * far right whenever there is a feature to show.
  *
- * Read top to bottom as a shrinking time horizon: **Important** is anything,
- * any time, that cannot wait; **Today** is only what happens between now and
- * closing; **Stats** is the weeks behind you. Naming the bands is what lets a
- * card title be short — "Money today" does not have to explain itself when it
- * sits under Today.
- *
- * Every band runs on a four-column grid and cards claim one or two of them, so
- * each band has its own rhythm (wide-first, wide-last, wide-middle). Equal
- * thirds cannot say which card matters; width can.
- *
- * ── On the data ──────────────────────────────────────────────────────────────
- * Cards marked LIVE below read real hooks the dashboard already mounts, so
- * React Query dedupes them and they cost no extra request. Cards marked MOCK
- * have no source in the schema yet and render constants from `./mock`; each one
- * is a single swap once its query exists. Nothing here writes anything.
- *
- * TENANT ISOLATION: this component issues no query of its own. Every hook it
- * reads (`useDashboardKPIs`, `usePendingBookingsCount`, `useTodayOperations`)
- * carries its own `.eq('tenant_id', tenant.id)` and is `enabled` only once a
- * tenant is resolved — see V2_PLAN §5, RLS is OFF on these tables.
- * `usePortalAnnouncements` reads through `get_portal_announcements`, which
- * resolves the caller's own app user and tenant server-side and returns only
- * what is targeted at that tenant; the dashboard layout already mounts it, so
- * this is the same cache entry, not a second request.
+ * TENANT ISOLATION: this component issues no query of its own. The revenue
+ * chart's hook filters by tenant; `usePortalAnnouncements` reads through
+ * `get_portal_announcements`, which resolves the caller's own app user and
+ * tenant server-side and returns only what is targeted at that tenant (the
+ * dashboard layout already mounts it, so this is the same cache entry).
  */
 
-import { useMemo, type ReactNode } from 'react';
-import { useRouter } from 'next/navigation';
 import { useTenant } from '@/contexts/TenantContext';
-import { useDashboardKPIs } from '@/hooks/use-dashboard-kpis';
-import { useManagerPermissions } from '@/hooks/use-manager-permissions';
-import { usePendingBookingsCount } from '@/hooks/use-pending-bookings';
 import { usePortalAnnouncements } from '@/hooks/use-portal-announcements';
-import { useTodayOperations, type Movement as OpsMovement } from '@/hooks/use-today-operations';
-import { formatCurrency } from '@/lib/format-utils';
-import { DESK_BAND_HINT, DESK_GRID_CLASSES, FEATURE_CARD_UI } from '@/lib/announcements/contract';
+import { FEATURE_CARD_UI } from '@/lib/announcements/contract';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/stores/auth-store';
-import {
-  BOOKINGS_SERIES,
-  RATIOS,
-  REVENUE_SERIES,
-  SOURCE_MIX,
-  TOP_CUSTOMERS,
-  TOP_VEHICLES,
-  type Movement,
-  type WorkItem,
-} from './mock';
-import {
-  Band,
-  Card,
-  CardFooter,
-  Delta,
-  Eyebrow,
-  Figure,
-  FlowRow,
-  Lead,
-  MagnitudeBar,
-  NowDivider,
-  Row,
-  Spark,
-} from './ui';
+import { useManagerPermissions } from '@/hooks/use-manager-permissions';
+import { RevenueLineCard } from './revenue-line-card';
+import { TraxBriefCard } from './admin-cards';
+import { RequestsCard } from './requests-card';
+import { TodoCard } from './todo-card';
+import { SortableCards } from './sortable-cards';
+import { PHONE_CAROUSEL, PageDots } from './phone-carousel';
+import { BusyDaysCard } from './busy-days-card';
+import { BookingSourcesCard } from './booking-sources-card';
+import { buildDemoBookingSources, buildDemoBusyDays } from './mock';
+import { useBookingSources, useBusyDays } from '@/hooks/use-dashboard-insights';
+import { useSkeletonLoading } from '@/hooks/use-skeleton-loading';
+import { useMemo, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { FeatureAnnouncementDeck } from '@/components/announcements/feature-announcement-deck';
 import { useDeskFeaturePresence } from '@/components/announcements/use-desk-feature-presence';
-import { ChecklistCard } from '@/components/dashboard-v2/checklist-card';
-import { RemindersCard } from '@/components/dashboard-v2/reminders-card';
-
-/** "14:30:00" → 870. Null when the rental never had a time set. */
-function toMinutes(time: string | null): number | null {
-  if (!time) return null;
-  const [h, m] = time.split(':').map(Number);
-  if (Number.isNaN(h)) return null;
-  return h * 60 + (m || 0);
-}
-
-/** 870 → "14:30". The board is 24h so the column stays four characters wide. */
-function toLabel(mins: number): string {
-  return `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`;
-}
-
-/** A rental with no time set still has to happen, so it sorts to the end. */
-const UNTIMED = 24 * 60 + 1;
-
-function toFlow(m: OpsMovement): Movement {
-  const at = toMinutes(m.time);
-  return {
-    id: `${m.kind}-${m.id}`,
-    at: at ?? UNTIMED,
-    time: at === null ? '—' : toLabel(at),
-    direction: m.kind === 'pickup' ? 'out' : 'back',
-    customer: m.customerName,
-    vehicle: m.vehicleLabel,
-    state: 'ready',
-  };
-}
 
 /**
- * `aside` renders at the right of the FIRST band's title row ("On your desk",
- * which always renders). DashboardV2 passes New Rental through it.
+ * EVERYTHING BELOW THE REVENUE ROW REMOVED (Sep 27 2026), at Ghulam's request:
+ * the "Today" band (Attention required now, Money today) and the "This week"
+ * band (fleet week, pickups ready). The dashboard is now the revenue chart and
+ * the feature card only. Their components and hooks are left in place,
+ * unmounted — see git history for how they were wired.
  */
-export function HomeBands({ aside }: { aside?: ReactNode } = {}) {
-  const router = useRouter();
+export function HomeBands() {
   const { tenant } = useTenant();
   const { appUser } = useAuth();
   const { canView } = useManagerPermissions();
-  const { data: kpis } = useDashboardKPIs();
-  const { data: pendingBookings } = usePendingBookingsCount();
-  const { pickups, returns, overdue, staleCount, staleAfterDays } = useTodayOperations();
   const { status: announcementsStatus, features } = usePortalAnnouncements();
+  // PREVIEW (Sep 27 2026): sample busy days and booking sources are ON BY
+  // DEFAULT while the design is reviewed (northwind has 8 cars and 17 rentals
+  // in the window, too few to judge a heatmap by); `?demo-insights=0` shows
+  // the real figures. Flip the default back (`=== '1'`) before this widens.
+  const demoInsights = useSearchParams()?.get('demo-insights') !== '0';
+  const busyQ = useBusyDays();
+  const sourcesQ = useBookingSources();
+  const demoBusy = useMemo(() => buildDemoBusyDays(), []);
+  const demoSources = useMemo(() => buildDemoBookingSources(), []);
+  const busy = demoInsights ? demoBusy : busyQ.data ?? null;
+  const busyLoading = useSkeletonLoading(!demoInsights && busyQ.isLoading);
+  const sources = demoInsights ? demoSources : sourcesQ.data ?? null;
+  const sourcesLoading = useSkeletonLoading(!demoInsights && sourcesQ.isLoading);
+
+  const insightsRef = useRef<HTMLElement>(null);
+  const deskRowRef = useRef<HTMLDivElement>(null);
+
+
   const deskFeature = useDeskFeaturePresence(
     { status: announcementsStatus, features },
     tenant?.id,
     appUser?.id,
   );
-  // Visible desk cards: Checklist and Reminders always render, the feature
-  // card only when there is a feature (or, while loading, when this user's desk
-  // had one last time). Two cards stretch across the row; see DESK_GRID_CLASSES.
-  const deskCount = deskFeature === 'none' ? 2 : 3;
-
-  const currencyCode = tenant?.currency_code || 'USD';
-  const canSeeRentals = canView('rentals');
-  const canSeePayments = canView('payments');
-  const canSeeFleet = canView('vehicles');
-
-  const money = (amount: number) =>
-    formatCurrency(amount, currencyCode, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-
-  // Local clock rather than the tenant's: this only decides where a divider
-  // sits in a list, and a wrong-by-an-hour divider is a cosmetic problem, not a
-  // data one. `useMemo` with no deps freezes it for the render so the marker
-  // cannot move between two rows mid-paint.
-  const nowMinutes = useMemo(() => {
-    const d = new Date();
-    return d.getHours() * 60 + d.getMinutes();
-  }, []);
-
-  // ── LIVE · today's movements, in one queue in time order ──────────────────
-  const flow = useMemo(
-    () => [...pickups, ...returns].map(toFlow).sort((a, b) => a.at - b.at),
-    [pickups, returns]
-  );
-  const doneCount = flow.filter((m) => m.at < nowMinutes).length;
-  const next = flow.find((m) => m.at >= nowMinutes);
-  const nextLabel = next ? `Next: ${next.customer.split(' ')[0]}` : 'Nothing left today';
-
-  // ── LIVE · what cannot wait ───────────────────────────────────────────────
-  const attention: WorkItem[] = [];
-  if (canSeeRentals && overdue.length > 0) {
-    const worst = Math.max(...overdue.map((o) => o.daysLate ?? 0));
-    attention.push({
-      id: 'overdue-vehicles',
-      label:
-        overdue.length === 1 ? '1 vehicle not returned' : `${overdue.length} vehicles not returned`,
-      meta: overdue[0]?.customerName ? `Worst is ${overdue[0].customerName}` : undefined,
-      clock: `${worst}d`,
-      state: 'late',
-    });
-  }
-  if (canSeePayments && kpis && kpis.overdue.count > 0) {
-    attention.push({
-      id: 'overdue-payments',
-      label: `${kpis.overdue.count} overdue payments`,
-      meta: 'Not collected past their due date',
-      clock: 'Late',
-      state: 'late',
-      amount: money(kpis.overdue.amount),
-    });
-  }
-  if (canView('pending_bookings') && (pendingBookings ?? 0) > 0) {
-    attention.push({
-      id: 'pending-bookings',
-      label:
-        pendingBookings === 1 ? '1 booking request' : `${pendingBookings} booking requests`,
-      meta: 'Waiting on your approval',
-      clock: 'New',
-      state: 'waiting',
-    });
-  }
-  if (canView('fines') && kpis && kpis.finesOpen.dueSoonCount > 0) {
-    attention.push({
-      id: 'fines',
-      label: `${kpis.finesOpen.dueSoonCount} fines due soon`,
-      meta: 'They get more expensive on a deadline',
-      clock: 'Soon',
-      state: 'waiting',
-      amount: money(kpis.finesOpen.amount),
-    });
-  }
-  if (canSeeRentals && staleCount > 0) {
-    attention.push({
-      id: 'stale',
-      label: `${staleCount} rentals never closed off`,
-      meta: `Past their end date by ${staleAfterDays} days or more`,
-      clock: `${staleAfterDays}d+`,
-      state: 'idle',
-    });
-  }
-  const lead = attention[0];
-  const urgent = attention.filter((i) => i.state === 'late').length;
-
-  // ── LIVE · money in play today ────────────────────────────────────────────
-  const moneyToday: WorkItem[] = [];
-  if (kpis) {
-    if (kpis.dueToday.count > 0) {
-      moneyToday.push({
-        id: 'due-today',
-        label: 'Due today',
-        meta: `${kpis.dueToday.count} customers`,
-        clock: 'Today',
-        state: 'waiting',
-        amount: money(kpis.dueToday.amount),
-      });
-    }
-    if (kpis.overdue.count > 0) {
-      moneyToday.push({
-        id: 'overdue',
-        label: 'Overdue',
-        meta: `${kpis.overdue.count} invoices`,
-        clock: 'Late',
-        state: 'late',
-        amount: money(kpis.overdue.amount),
-      });
-    }
-    if (kpis.finesOpen.count > 0) {
-      moneyToday.push({
-        id: 'fines-open',
-        label: 'Open fines',
-        meta: `${kpis.finesOpen.count} to recharge`,
-        clock: 'Open',
-        state: 'waiting',
-        amount: money(kpis.finesOpen.amount),
-      });
-    }
-    moneyToday.push({
-      id: 'month',
-      label: 'Collected this month',
-      meta: 'Cleared payments',
-      clock: 'MTD',
-      state: 'clear',
-      amount: money(kpis.monthlyRevenue.amount),
-    });
-  }
-  const inPlay = kpis ? kpis.dueToday.amount + kpis.overdue.amount : 0;
-
-  // ── LIVE · the rest of today ──────────────────────────────────────────────
-  const elseToday: WorkItem[] = [];
-  if (canSeeRentals) {
-    elseToday.push({
-      id: 'handovers',
-      label: `${pickups.length} going out`,
-      meta: pickups.length ? 'Keys, agreements and deposits' : 'Nothing scheduled to leave',
-      clock: pickups.length ? 'Today' : '—',
-      state: pickups.length ? 'waiting' : 'idle',
-    });
-    elseToday.push({
-      id: 'returns',
-      label: `${returns.length} coming back`,
-      meta: returns.length ? 'Check in, damage and fuel' : 'Nothing due back',
-      clock: returns.length ? 'Today' : '—',
-      state: returns.length ? 'waiting' : 'idle',
-    });
-  }
-  if (canSeeFleet && kpis) {
-    const idle = Math.max(0, kpis.fleetUtilization.total - kpis.fleetUtilization.rented);
-    elseToday.push({
-      id: 'idle',
-      label: `${idle} cars idle`,
-      meta: `of ${kpis.fleetUtilization.total} in the fleet`,
-      clock: `${kpis.fleetUtilization.percentage}%`,
-      state: 'idle',
-    });
-  }
-  if (canSeeRentals) {
-    elseToday.push({
-      id: 'active',
-      label: `${kpis?.activeRentals.count ?? 0} rentals running`,
-      meta: 'Out on the road right now',
-      clock: 'Live',
-      state: 'clear',
-    });
-  }
-
-  const maxVehicleDays = Math.max(...TOP_VEHICLES.map((v) => v.days));
-  const fleetPct = kpis ? `${kpis.fleetUtilization.percentage}%` : '—';
 
   return (
-    <div className="space-y-16">
-      {/* ── Important ─────────────────────────────────────────────────────── */}
-      {/* Feature card · checklist · reminders, all 352px tall at md+.
-
-          NO ANNOUNCEMENT, NO CARD (Sep 16 2026). When no feature is active for
-          this tenant the feature card is not rendered at all — no empty slot,
-          no "nothing new" placeholder — and the grid drops to two columns so
-          Checklist and Reminders stretch across the whole row. The grid comes
-          from the number of visible cards (DESK_GRID_CLASSES), and the hint
-          drops "What’s new" with the card. use-desk-feature-presence.ts decides
-          when the card may appear or go without shifting a card being read. */}
-      <Band
-        title="On your desk"
-        hint={deskCount === 3 ? DESK_BAND_HINT.withFeatures : DESK_BAND_HINT.withoutFeatures}
-        aside={aside}
-        gridClassName={DESK_GRID_CLASSES[deskCount]}
-      >
-        {deskFeature === 'deck' && <FeatureAnnouncementDeck features={features} />}
-        {deskFeature === 'skeleton' && (
-          <div
-            aria-hidden="true"
-            data-feature-deck-skeleton=""
-            className={cn(FEATURE_CARD_UI.root, 'animate-pulse motion-reduce:animate-none')}
-          />
-        )}
-
-        {/* The middle slot is the CHECKLIST, per Ghulam's own assignment of these
-            three cards: "ye hamare paas hai what's new wala card... aur ye wala
-            jo hoga na, wo hoga hamare liye checklist wala", then notes third.
-
-            The live "Attention required now" card that used to sit here has NOT
-            been deleted — it moved to the Today band below. It surfaces late
-            cars, overdue money and waiting requests, and the decision about
-            which urgent items belong on this screen is explicitly parked, so
-            dropping it to satisfy a layout would have thrown away working
-            triage on the strength of a decision nobody has made yet. */}
-        <ChecklistCard />
-
-        {/* LIVE — was a hardcoded TODOS array until `tenant_notes` existed.
-            The operator's own notes and timed reminders, per V2_PLAN §5 scoped
-            by tenant_id in application code on every verb, not by RLS alone.
-
-            What it deliberately does NOT show: failed agreements, failed
-            payments or any other urgent system event. Ghulam described those
-            landing here and then parked exactly that decision — "abhi nahi,
-            baad mein faisla karenge ki yahan par humne kaunsi important
-            cheezein show karwani hai... abhi ke liye sirf notes add kare aur
-            apne reminder ke saath time laga ke yahan rakh sake. Bas aur kuch
-            nahi." Deferred, not forgotten; the card above is where urgent
-            items live until that call is made. */}
-        <RemindersCard />
-      </Band>
-
-      {/* ── Today ─────────────────────────────────────────────────────────── */}
-      {/* Rhythm: wide · narrow · narrow. The day queue leads — it is the only
-          card here about the next hour. */}
-      <Band
-        title="Today"
-        hint={flow.length ? `${doneCount} of ${flow.length} movements done` : 'Nothing scheduled'}
-      >
-        {/* LIVE */}
-        <Card title="Attention required now" count={attention.length || undefined} tall>
-          {lead ? (
-            <>
-              <Lead
-                title={lead.label}
-                meta={lead.meta}
-                clock={lead.clock ?? ''}
-                amount={lead.amount}
-                tone={lead.state}
-              />
-              <div className="divide-y divide-[var(--pv-line)]">
-                {attention.slice(1).map((i) => (
-                  <Row key={i.id} item={i} />
-                ))}
-              </div>
-              <CardFooter label={`See all ${attention.length}`} />
-            </>
-          ) : (
-            <div className="flex flex-1 flex-col items-center justify-center gap-1 py-8 text-center">
-              <p className="text-sm font-medium">Nothing needs you</p>
-              <p className="text-[11px] text-[var(--pv-ink-3)]">
-                No late cars, overdue money or waiting requests.
-              </p>
-            </div>
+    /* The first screen, then the scroll (Sep 27 2026).
+       At lg+ this root is exactly the viewport's worth of <main> (flex-1 of a
+       bounded column), and the first block is `h-full` of it: the revenue row
+       keeps its natural height and the three cards take the rest, just as
+       before. Everything after that block sits below the fold and is reached
+       by scrolling <main>. */
+    <div className="relative lg:min-h-0 lg:flex-1">
+    {/* Ends 70px short of the screen (Sep 27 2026) so the top edge of the
+        Busy days card peeks in: the page visibly continues below the cards. */}
+    <div className="flex flex-col gap-[30px] lg:h-[calc(100%-70px)]">
+      {/* Revenue line chart on the left, the feature card at the far right.
+          With no feature the chart takes the whole row. */}
+      <section aria-label="On your desk" data-desk-band="" className={cn('shrink-0 md:-mt-[15px]', PHONE_CAROUSEL)}>
+        {/* The chart takes whatever the feature card leaves. At lg+ the
+            card is a fixed 320 × 240 card; below that it runs full width.
+            On a phone the two are a swipeable pair (PHONE_CAROUSEL, set on the
+            section so this row's own classes stay exactly as they were). */}
+        <div ref={deskRowRef} className="flex flex-col items-stretch gap-5 lg:flex-row">
+          <RevenueLineCard className="flex-1" />
+          {deskFeature === 'deck' && (
+            <FeatureAnnouncementDeck features={features} variant="accent" className="shrink-0 lg:mt-[10px] lg:w-[320px]" />
           )}
-        </Card>
-
-        {/* LIVE */}
-        <Card
-          title="Coming and going"
-          count={`${pickups.length} out · ${returns.length} back`}
-        >
-          {flow.length === 0 ? (
-            <div className="flex flex-1 flex-col items-center justify-center gap-1 py-8 text-center">
-              <p className="text-sm font-medium">Nothing due today</p>
-              <p className="text-[11px] text-[var(--pv-ink-3)]">
-                No pickups or returns on the diary.
-              </p>
-            </div>
-          ) : (
-            /* One queue in time order, with NOW cut in where the day has
-               actually reached. Two columns would make you merge them in your
-               head to answer the only question that matters: what is next. */
-            <div className="divide-y divide-[var(--pv-line)]">
-              {flow.map((m, i) => {
-                const past = m.at < nowMinutes;
-                const crossing = !past && (i === 0 || flow[i - 1].at < nowMinutes);
-                return (
-                  <div key={m.id}>
-                    {crossing && <NowDivider label={toLabel(nowMinutes)} next={nextLabel} />}
-                    <FlowRow m={m} past={past} />
-                  </div>
-                );
-              })}
-            </div>
+          {deskFeature === 'skeleton' && (
+            <div
+              aria-hidden="true"
+              data-feature-deck-skeleton=""
+              className={cn(FEATURE_CARD_UI.root, 'shrink-0 animate-pulse motion-reduce:animate-none lg:mt-[10px] lg:w-[320px]')}
+            />
           )}
-          <CardFooter label="Open the diary" />
-        </Card>
+        </div>
+        {deskFeature === 'deck' && <PageDots scroller={deskRowRef} count={2} />}
+      </section>
 
-        {/* LIVE */}
-        {canSeePayments && (
-          <Card title="Money today">
-            {/* Leads with the figure, because the first question is how much is
-                in play, not which invoice. */}
-            <Figure value={money(inPlay)} label="in play" />
-            <div className="divide-y divide-[var(--pv-line)] border-t border-[var(--pv-line)]">
-              {moneyToday.map((i) => (
-                <Row key={i.id} item={i} />
-              ))}
-            </div>
-            <CardFooter label="Go to payments" />
-          </Card>
-        )}
+      {/* The three questions after "how is the business doing" (Sep 27 2026):
+          what does Trax make of today, who is waiting on me, and my own to-do list. See admin-cards.tsx. */}
+      {/* Rearrangeable (Sep 27 2026): each card has a grip at its top centre,
+          and this user's order is remembered in the browser. */}
+      <section aria-label="Operations" className="lg:-mb-[35px] lg:min-h-0 lg:flex-1">
+        <SortableCards
+          storageKey={`dashboard-v2:ops-order:${appUser?.id ?? 'anon'}`}
+          className="grid h-full grid-cols-1 items-stretch gap-5 md:grid-cols-3"
+          items={[
+            {
+              id: 'trax',
+              label: 'Your business today',
+              node: (
+                <TraxBriefCard
+                  canSeeRentals={canView('rentals')}
+                  canSeePayments={canView('payments')}
+                  canSeeFleet={canView('vehicles')}
+                  canSeeRequests={canView('pending_bookings')}
+                />
+              ),
+            },
+            ...(canView('rentals') ? [{ id: 'requests', label: 'Requests', node: <RequestsCard /> }] : []),
+            { id: 'todo', label: 'To do', node: <TodoCard /> },
+          ]}
+        />
+      </section>
+    </div>
 
-        {/* LIVE */}
-        <Card title="Everything else on today" count={elseToday.length || undefined}>
-          <div className="divide-y divide-[var(--pv-line)]">
-            {elseToday.map((i) => (
-              <Row key={i.id} item={i} />
-            ))}
-          </div>
-          <CardFooter label="See today in full" />
-        </Card>
-      </Band>
-
-      {/* ── Stats ─────────────────────────────────────────────────────────── */}
-      {/* Rhythm: narrow · narrow · wide — the mirror of the band above, so the
-          eye is not walked down the same shape three times. */}
-      <Band title="How it’s going" hint="The last 14 days">
-        {/* MOCK — needs the top-customers / top-vehicles aggregate. */}
-        <Card title="Who and what earns">
-          <div className="flex flex-1 flex-col gap-4 px-6 pb-6 pt-2.5">
-            <div>
-              <Eyebrow>Customers</Eyebrow>
-              <div className="mt-1.5 space-y-1">
-                {TOP_CUSTOMERS.map((c) => (
-                  <div key={c.name} className="flex items-center gap-2">
-                    <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{c.name}</span>
-                    <span className="w-[46px] shrink-0 text-right text-[13px] font-semibold tabular-nums">
-                      {c.value}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="mt-auto border-t border-[var(--pv-line)] pt-2.5">
-              <Eyebrow>Busiest cars</Eyebrow>
-              <div className="mt-1.5 space-y-2">
-                {TOP_VEHICLES.map((v) => (
-                  <div key={v.name}>
-                    <div className="mb-1 flex items-baseline justify-between gap-2">
-                      <span className="truncate text-[13px] font-medium">{v.name}</span>
-                      <span className="shrink-0 text-[11px] tabular-nums text-[var(--pv-ink-3)]">
-                        {v.days}d
-                      </span>
-                    </div>
-                    <MagnitudeBar value={v.days} max={maxVehicleDays} />
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </Card>
-
-        {/* Fleet on rent is LIVE; the three ratios are MOCK until booking
-            attempts are tracked as records that can be counted. */}
-        <Card title="Other stats">
-          <div className="flex flex-1 flex-col px-6 pb-6 pt-2.5">
-            <div className="grid grid-cols-2 gap-x-5 gap-y-6">
-              <div>
-                <span className="block truncate text-[11px] text-[var(--pv-ink-3)]">
-                  Fleet on rent
-                </span>
-                <div className="mt-0.5 flex items-baseline gap-1.5">
-                  <span className="text-[19px] font-semibold leading-none tabular-nums">
-                    {fleetPct}
-                  </span>
-                </div>
-              </div>
-              {RATIOS.slice(0, 3).map((r) => (
-                <div key={r.label}>
-                  <span className="block truncate text-[11px] text-[var(--pv-ink-3)]">
-                    {r.label}
-                  </span>
-                  <div className="mt-0.5 flex items-baseline gap-1.5">
-                    <span className="text-[19px] font-semibold leading-none tabular-nums">
-                      {r.value}
-                    </span>
-                    <Delta value={r.delta} />
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-auto border-t border-[var(--pv-line)] pt-3">
-              <Eyebrow>Where bookings come from</Eyebrow>
-              {/* Stacked, with a 2px surface gap so the parts stay countable
-                  rather than melting into one bar. */}
-              <div className="mt-2 flex h-2 w-full gap-0.5 overflow-hidden rounded-full">
-                {SOURCE_MIX.map((s) => (
-                  <span
-                    key={s.label}
-                    className="block rounded-full"
-                    style={{ width: `${s.share}%`, backgroundColor: s.color }}
-                  />
-                ))}
-              </div>
-              {/* A legend is always present for more than one series — identity
-                  is never carried by colour alone. */}
-              <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
-                {SOURCE_MIX.map((s) => (
-                  <span key={s.label} className="flex items-center gap-1.5">
-                    <span
-                      className="size-1.5 shrink-0 rounded-full"
-                      style={{ backgroundColor: s.color }}
-                    />
-                    <span className="text-[11px] text-[var(--pv-ink-2)]">{s.label}</span>
-                    <span className="text-[11px] font-medium tabular-nums">{s.share}%</span>
-                  </span>
-                ))}
-              </div>
-            </div>
-          </div>
-        </Card>
-
-        {/* MOCK — needs the daily revenue / bookings series. */}
-        <Card title="Revenue and bookings" action="Reports">
-          <div className="flex flex-1 flex-col justify-center gap-6 px-6 pb-6 pt-2.5">
-            <div>
-              <div className="mb-1.5 flex items-baseline gap-2">
-                <span className="text-[26px] font-semibold leading-none tracking-[-0.02em] tabular-nums">
-                  {money(REVENUE_SERIES[REVENUE_SERIES.length - 1])}
-                </span>
-                <span className="text-[11px] text-[var(--pv-ink-3)]">revenue this week</span>
-                <span className="ml-auto">
-                  <Delta value={12} suffix="%" />
-                </span>
-              </div>
-              <Spark data={REVENUE_SERIES} color="#5b5bd6" height={40} />
-            </div>
-
-            <div className="border-t border-[var(--pv-line)] pt-4">
-              <div className="mb-1.5 flex items-baseline gap-2">
-                <span className="text-[26px] font-semibold leading-none tracking-[-0.02em] tabular-nums">
-                  {BOOKINGS_SERIES[BOOKINGS_SERIES.length - 1]}
-                </span>
-                <span className="text-[11px] text-[var(--pv-ink-3)]">bookings this week</span>
-                <span className="ml-auto">
-                  <Delta value={18} suffix="%" />
-                </span>
-              </div>
-              <Spark data={BOOKINGS_SERIES} color="#12a594" height={40} />
-            </div>
-          </div>
-        </Card>
-      </Band>
+      {/* ── Below the fold ─────────────────────────────────────────────────
+          The busy-days heatmap (two thirds) beside where bookings come from. */}
+      <section
+        ref={insightsRef}
+        aria-label="Insights"
+        className="mt-[45px] grid grid-cols-1 items-stretch gap-5 pb-4 lg:mt-[65px] lg:grid-cols-3"
+      >
+        <BusyDaysCard data={busy} isLoading={busyLoading} />
+        <BookingSourcesCard data={sources} isLoading={sourcesLoading} />
+      </section>
     </div>
   );
 }

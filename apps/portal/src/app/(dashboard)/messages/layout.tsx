@@ -27,18 +27,24 @@
  */
 
 import { useState } from "react";
-import { useParams } from "next/navigation";
+import Link from "next/link";
+import { useParams, useSearchParams } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
 import { BulkMessageModal } from "@/components/chat";
 import { ConversationRail } from "@/components/messages-v2/conversation-rail";
 import { CustomerContext } from "@/components/messages-v2/customer-context";
 import { useChatChannels } from "@/hooks/use-chat-channels";
 import { useV2 } from "@/lib/v2-context";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
+import { useIsLean } from "@/lib/lean-context";
+import { useForcedEmptyState } from "@/hooks/use-forced-empty-state";
+import { MessagesTeachingEmptyState } from "@/components/empty-states/messages-empty-state";
 
 export default function MessagesLayout({ children }: { children: React.ReactNode }) {
   const params = useParams();
   const selectedId = typeof params?.channelId === "string" ? params.channelId : null;
-  const { channels } = useChatChannels();
+  const { channels, unknownThreads, isLoading } = useChatChannels();
+  const targetCustomerId = useSearchParams()?.get("customerId") ?? null;
   const { canEdit } = useManagerPermissions();
   const [bulkOpen, setBulkOpen] = useState(false);
 
@@ -50,6 +56,51 @@ export default function MessagesLayout({ children }: { children: React.ReactNode
      the right column can be read at its full width; v1 tenants never mount the
      dock, so they never pay for it. */
   const hasQuickDock = useV2("chrome");
+
+  /* No conversations at all (lean only): the whole workspace steps aside for
+     the teaching empty state, since a rail with nothing in it and an empty
+     centre say nothing. Only on the bare /messages index — a thread URL, or a
+     `?customerId=` deep link that is about to open one, keeps the workspace
+     exactly as it was. Unknown-number threads count as conversations, so an
+     operator whose only contact is an unrecognised texter still gets the rail
+     and its Link control. `devForceEmpty` is the /dev preview switch, inert
+     outside development and inside the lean gate. */
+  const leanTenant = useIsLean();
+  const devForceEmpty = useForcedEmptyState("messages");
+  const teachEmptyMessages =
+    leanTenant &&
+    !selectedId &&
+    !targetCustomerId &&
+    ((!isLoading && channels.length === 0 && unknownThreads.length === 0) || devForceEmpty);
+
+  if (teachEmptyMessages) {
+    return (
+      <div className={`flex h-full min-h-0 flex-col overflow-y-auto ${hasQuickDock ? "pr-12" : ""}`}>
+        {/* The rail's own header, heading and way out, since the workspace
+            takes the whole window and the portal nav is not on screen. */}
+        <div className="flex shrink-0 items-start gap-1.5 px-3 py-3">
+          <Link
+            href="/"
+            title="Back to the portal"
+            aria-label="Back to the portal"
+            className="-ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Link>
+          <div className="min-w-0 pt-1">
+            <h1 className="text-[15px] font-semibold tracking-tight">Messages</h1>
+            <p className="text-[13px] text-muted-foreground">Your conversations with customers, in one inbox.</p>
+          </div>
+        </div>
+        <div className="flex flex-1 items-center justify-center pb-8">
+          <MessagesTeachingEmptyState
+            onMessageCustomers={canEdit("messages") ? () => setBulkOpen(true) : undefined}
+          />
+        </div>
+        <BulkMessageModal open={bulkOpen} onOpenChange={setBulkOpen} />
+      </div>
+    );
+  }
 
   return (
     /* `h-full` + `min-h-0` — the dashboard shell hands this route a bounded

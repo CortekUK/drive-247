@@ -73,6 +73,7 @@ import {
   type SignupPlanId,
 } from "@/lib/plans";
 import { cn } from "@/lib/utils";
+import { MOTION_CONTENT } from "@/components/ui/motion";
 
 const EMPTY_CREDENTIALS: JourneyCredentials = {
   fullName: "",
@@ -529,7 +530,7 @@ function JourneyDialog({
             // this dialog, and at `blur-sm` its cards and prices stayed legible
             // enough to read as a second screen competing with the form.
             "fixed inset-0 z-50 bg-slate-950/50 backdrop-blur-md dark:bg-slate-950/70",
-            "animate-in fade-in-0 duration-200",
+            "animate-in fade-in-0 duration-200 ease-out motion-reduce:animate-none",
           )}
         />
 
@@ -567,9 +568,7 @@ function JourneyDialog({
             // the bottom of the panel — where the submit button is.
             "sm:inset-auto sm:top-1/2 sm:left-1/2 sm:h-auto sm:max-h-[min(96dvh,62rem)] sm:w-[calc(100%-2rem)] sm:max-w-[62rem]",
             "sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:border sm:shadow-2xl",
-            "data-[state=open]:animate-in data-[state=open]:fade-in-0 sm:data-[state=open]:zoom-in-95",
-            "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 sm:data-[state=closed]:zoom-out-95",
-            "duration-200",
+            MOTION_CONTENT,
           )}
         >
           {/* Plan, position, and the way out. */}
@@ -646,7 +645,7 @@ function JourneyDialog({
                 stable, so nothing remounts while someone is typing. */}
             <div
               key={step}
-              className="mt-6 animate-in fade-in-0 slide-in-from-bottom-1 duration-300 sm:mt-7"
+              className="mt-6 animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none sm:mt-7"
             >
               {children}
             </div>

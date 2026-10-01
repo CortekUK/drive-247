@@ -20,6 +20,7 @@ import { useTenantBranding } from '@/hooks/use-tenant-branding';
 import { useAuth } from '@/stores/auth-store';
 import { cn } from '@/lib/utils';
 import type { ChatMessage as ChatMessageType } from '@/types/chat';
+import { MOTION_DIALOG_ENTER, MOTION_FADE_ENTER } from '@/lib/motion';
 
 // ── Suggestion categories ─────────────────────────────────────────
 const SUGGESTION_CATEGORIES = [
@@ -381,7 +382,7 @@ function TraxAIDialogInner({ isOpen, setIsOpen }: { isOpen: boolean; setIsOpen: 
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 z-[9998] bg-black/60 backdrop-blur-sm animate-in fade-in-0 duration-200"
+        className={cn('fixed inset-0 z-[9998] bg-black/60 backdrop-blur-sm', MOTION_FADE_ENTER)}
         onClick={() => setIsOpen(false)}
       />
 
@@ -390,7 +391,7 @@ function TraxAIDialogInner({ isOpen, setIsOpen }: { isOpen: boolean; setIsOpen: 
         className={cn(
           'fixed z-[9999] flex flex-col',
           'bg-background border border-border/50 rounded-xl sm:rounded-2xl shadow-2xl',
-          'animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-4 duration-300',
+          MOTION_DIALOG_ENTER,
           'w-[calc(100vw-16px)] sm:w-[calc(100vw-32px)] max-w-[960px]',
           'h-[calc(100dvh-16px)] sm:h-[calc(100vh-32px)] max-h-[920px]',
           'left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2',

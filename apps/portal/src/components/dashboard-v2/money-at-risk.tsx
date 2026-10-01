@@ -3,12 +3,25 @@
 import { useRouter } from 'next/navigation';
 import { ArrowUpRight, Check, Receipt } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui-v2/card';
-import { Skeleton } from '@/components/ui-v2/skeleton';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/lib/format-utils';
 import { useTenant } from '@/contexts/TenantContext';
-import { useDashboardKPIs } from '@/hooks/use-dashboard-kpis';
+import { useDashboardKPIs, type DashboardKPIs } from '@/hooks/use-dashboard-kpis';
 import { useManagerPermissions } from '@/hooks/use-manager-permissions';
+import { AutoSkeleton } from '@/components/skeleton-v2/auto-skeleton';
+import { useSkeletonLoading } from '@/hooks/use-skeleton-loading';
+
+/** Placeholder figures for the skeleton: only their lengths are ever seen. */
+const SKELETON_KPIS: DashboardKPIs = {
+  overdue: { count: 3, amount: 1240 },
+  dueToday: { count: 2, amount: 860 },
+  activeRentals: { count: 8 },
+  finesOpen: { count: 1, amount: 120, dueSoonCount: 0 },
+  monthlyRevenue: { amount: 12480 },
+  fleetUtilization: { total: 12, rented: 8, available: 4, percentage: 67 },
+  generatedAt: '',
+  timezone: '',
+};
 
 /**
  * What is owed right now.
@@ -83,7 +96,10 @@ export function MoneyAtRisk({ className }: { className?: string }) {
   const router = useRouter();
   const { tenant } = useTenant();
   const { canView } = useManagerPermissions();
-  const { data: kpis } = useDashboardKPIs();
+  const { data: loadedKpis } = useDashboardKPIs();
+  // No figures yet (loading, or a failed poll) reads as loading, as it always has.
+  const isLoading = useSkeletonLoading(!loadedKpis);
+  const kpis = isLoading ? SKELETON_KPIS : loadedKpis!;
   const currencyCode = tenant?.currency_code || 'USD';
 
   if (!canView('payments')) return null;
@@ -95,14 +111,10 @@ export function MoneyAtRisk({ className }: { className?: string }) {
           Money at risk
         </h2>
 
-        {!kpis ? (
-          <div className="space-y-1.5 px-2 py-1">
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
-          </div>
-        ) : (
-          <div className="flex flex-1 flex-col justify-center gap-0.5">
+        {/* One stretched grid cell, so the AutoSkeleton wrapper keeps the rows
+            centred in the card's full height. */}
+        <div className="grid flex-1 grid-rows-[minmax(0,1fr)]">
+          <AutoSkeleton loading={isLoading} className="flex h-full flex-col justify-center gap-0.5">
             <Row
               label="Overdue"
               count={kpis.overdue.count}
@@ -127,8 +139,8 @@ export function MoneyAtRisk({ className }: { className?: string }) {
               tone="neutral"
               onClick={() => router.push('/fines')}
             />
-          </div>
-        )}
+          </AutoSkeleton>
+        </div>
       </CardContent>
     </Card>
   );

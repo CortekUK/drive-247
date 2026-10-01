@@ -9,6 +9,7 @@ import {
   RentalsFilterPanel,
   countActiveRentalFilters,
 } from "@/components/rentals-v2/rentals-filter-panel";
+import { motionRise } from "@/lib/motion";
 
 interface Props {
   filters: RentalFilters;
@@ -59,9 +60,6 @@ export function RentalsFilterBar({
   const activeFilterCount = countActiveRentalFilters(filters);
 
   const reduceMotion = useReducedMotion();
-  const swap = reduceMotion
-    ? { duration: 0 }
-    : { duration: 0.2, ease: [0.22, 1, 0.36, 1] as const };
 
   // Search is debounced into the URL rather than pushed per keystroke: each
   // push is a navigation, so a twenty-character term would be twenty of them.
@@ -83,7 +81,7 @@ export function RentalsFilterBar({
   return (
     <div className="space-y-4">
       <div className="group relative w-full sm:max-w-md" data-tour="rentals-search">
-        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground transition-colors group-focus-within:text-primary" />
+        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground transition-colors group-focus-within:text-primary dark:group-focus-within:text-[hsl(var(--v2-link,var(--primary)))]" />
         <Input
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
@@ -98,7 +96,7 @@ export function RentalsFilterBar({
           className={`absolute right-1.5 top-1/2 flex size-7 -translate-y-1/2 cursor-pointer items-center justify-center rounded-lg transition-colors ${
             showFilters
               ? "bg-primary text-primary-foreground"
-              : "bg-primary/10 text-primary hover:bg-primary/20"
+              : "bg-primary/10 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] hover:bg-primary/20"
           }`}
         >
           <SlidersHorizontal className="size-4" />
@@ -119,10 +117,7 @@ export function RentalsFilterBar({
         {!isControlled && showFilters && (
           <motion.div
             key="filters"
-            initial={{ opacity: 0, scale: 0.985 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.985 }}
-            transition={swap}
+            {...motionRise(reduceMotion)}
           >
             <RentalsFilterPanel
               filters={filters}

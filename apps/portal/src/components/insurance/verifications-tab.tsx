@@ -38,7 +38,15 @@ import { useTenant } from "@/contexts/TenantContext";
 import { useV2 } from "@/lib/v2-context";
 import { InsuranceVerificationsTableV2 } from "@/components/insurance-v2/insurance-verifications-table-v2";
 
-export function VerificationsTab() {
+/**
+ * `search` / `onSearchChange`: the v2 insurances page lifts the search into the
+ * top bar (page-search-slot.tsx) and drives this tab's filter from there. Given
+ * both, the tab uses them and draws no search box of its own; v1 passes neither.
+ */
+export function VerificationsTab({
+  search: liftedSearch,
+  onSearchChange,
+}: { search?: string; onSearchChange?: (next: string) => void } = {}) {
   const { data: verifications = [], isLoading } = useInsuranceVerifications();
   const del = useDeleteInsuranceVerification();
 
@@ -46,7 +54,10 @@ export function VerificationsTab() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [attachOpen, setAttachOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
+  const [ownSearch, setOwnSearch] = useState("");
+  const lifted = liftedSearch !== undefined && !!onSearchChange;
+  const search = lifted ? liftedSearch : ownSearch;
+  const setSearch = lifted ? onSearchChange : setOwnSearch;
   // v2 (northwind) swaps only the populated table for the rentals list's table.
   const { tenant } = useTenant();
   const v2Chrome = useV2("chrome");
@@ -98,6 +109,9 @@ export function VerificationsTab() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
+        {lifted ? (
+          <div className="flex-1" />
+        ) : (
         <div className="relative flex-1 min-w-[220px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
           <Input
@@ -107,6 +121,7 @@ export function VerificationsTab() {
             className="pl-10 h-9 text-sm"
           />
         </div>
+        )}
         <Button onClick={() => setUploadOpen(true)} className="bg-gradient-primary">
           <Plus className="h-4 w-4 mr-2" />
           Verify Insurance

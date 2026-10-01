@@ -210,7 +210,7 @@ export function BookingModeGrid({ selected, onSelect, available }: BookingModeGr
 
                 <div className="min-w-0 pr-8">
                   <h3 className="text-base font-semibold text-foreground leading-tight">{mode.title}</h3>
-                  <p className="text-xs font-medium text-primary mt-0.5">{mode.tagline}</p>
+                  <p className="text-xs font-medium text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] mt-0.5">{mode.tagline}</p>
                 </div>
 
                 <p className="text-sm text-muted-foreground mt-3 leading-relaxed">
@@ -231,7 +231,7 @@ export function BookingModeGrid({ selected, onSelect, available }: BookingModeGr
                       e.stopPropagation();
                       setVideoMode(mode);
                     }}
-                    className="shrink-0 inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary hover:bg-primary/20 transition-colors"
+                    className="shrink-0 inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] hover:bg-primary/20 transition-colors"
                   >
                     <Play className="h-3 w-3 fill-current" />
                     How it works
@@ -247,7 +247,7 @@ export function BookingModeGrid({ selected, onSelect, available }: BookingModeGr
         <DialogContent className="w-[90vw] max-w-[820px] h-[82vh] sm:!max-w-[820px] gap-0 p-0 overflow-hidden flex flex-col">
           <DialogHeader className="shrink-0 px-5 pt-4 pb-3 border-b">
             <DialogTitle className="flex items-center gap-2 text-base">
-              <Play className="h-4 w-4 fill-current text-primary" />
+              <Play className="h-4 w-4 fill-current text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" />
               {videoMode?.title} — How it works
             </DialogTitle>
           </DialogHeader>
@@ -290,14 +290,14 @@ export function BookingModeGrid({ selected, onSelect, available }: BookingModeGr
         <DialogContent className="w-[90vw] max-w-[820px] h-[82vh] sm:!max-w-[820px] gap-0 p-0 overflow-hidden flex flex-col">
           <DialogHeader className="shrink-0 px-6 pt-5 pb-4 border-b">
             <DialogTitle className="flex items-center gap-2 text-base">
-              <Info className="h-4 w-4 text-primary" />
+              <Info className="h-4 w-4 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" />
               {infoMode?.title}
             </DialogTitle>
           </DialogHeader>
 
           {/* Page body */}
           <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar px-8 py-10 flex flex-col items-center justify-center text-center">
-            <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-lg font-semibold text-primary">
+            <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-lg font-semibold text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
               {infoPage + 1}
             </span>
             <h3 className="mt-6 text-2xl font-semibold tracking-tight text-foreground">

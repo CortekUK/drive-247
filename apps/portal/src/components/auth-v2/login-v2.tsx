@@ -607,7 +607,7 @@ function LoginV2Content() {
           panel is a pale tint and white text on it would be unreadable. */}
       <aside
         className={`relative hidden overflow-hidden p-12 lg:flex lg:flex-col lg:justify-between ${
-          heroOnDark ? "text-white" : "text-slate-900"
+          heroOnDark ? "text-white" : "text-foreground"
         }`}
       >
         {/* No text fallback beside this any more: it existed for the tenant
@@ -635,7 +635,7 @@ function LoginV2Content() {
 
         <p
           className={`relative z-10 text-xs ${
-            heroOnDark ? "text-white/60" : "text-slate-900/50"
+            heroOnDark ? "text-white/60" : "text-foreground/50"
           }`}
         >
           © {new Date().getFullYear()} {appName}. All rights reserved.
@@ -854,7 +854,7 @@ function LoginV2Content() {
 
                 {rateLimitStatus.attemptsRemaining < 5 &&
                   rateLimitStatus.attemptsRemaining > 0 && (
-                    <div className="text-center text-sm text-amber-600">
+                    <div className="text-center text-sm text-amber-600 dark:text-amber-400">
                       {rateLimitStatus.attemptsRemaining} attempt
                       {rateLimitStatus.attemptsRemaining > 1 ? "s" : ""} remaining
                     </div>

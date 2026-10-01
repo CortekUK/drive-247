@@ -218,8 +218,9 @@ export default {
           "0%, 100%": { opacity: "1", transform: "scale(1)" },
           "50%": { opacity: "0.9", transform: "scale(0.98)" }
         },
+        /* The Trax motion: fade + 12px rise, 200ms ease-out (see src/lib/motion.ts). */
         "slide-up": {
-          "0%": { opacity: "0", transform: "translateY(10px)" },
+          "0%": { opacity: "0", transform: "translateY(0.75rem)" },
           "100%": { opacity: "1", transform: "translateY(0)" }
         },
         "fade-in": {
@@ -242,7 +243,7 @@ export default {
         "glow": "glow 2s ease-in-out infinite",
         "spin-slow": "spin-slow 3s linear infinite",
         "pulse-subtle": "pulse-subtle 2s ease-in-out infinite",
-        "slide-up": "slide-up 0.3s ease-out",
+        "slide-up": "slide-up 0.2s ease-out",
         "fade-in": "fade-in 0.2s ease-out",
       },
     },

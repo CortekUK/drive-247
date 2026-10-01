@@ -32,7 +32,7 @@ import { FeatureAnnouncementDialog, isFeatureImageRenderable } from './feature-a
  * ---------------------------------------------------------------------------
  * SEVERAL FEATURES
  *
- * One slide at a time in a fixed 352px slot, crossfading. Auto-advance every
+ * One slide at a time in a fixed 240px slot, crossfading. Auto-advance every
  * FEATURE_DECK_ROTATE_MS, paused while the pointer is over the card, while focus
  * is inside it, while the tab is hidden, while its dialog is open, and never
  * started under reduced motion. Dots, a swipe, or ←/→ on the focused card move
@@ -43,6 +43,63 @@ import { FeatureAnnouncementDialog, isFeatureImageRenderable } from './feature-a
  * No severity pill, no badge, no dismiss and no "Show announcements" restore:
  * all four belonged to the old carousel and none of them survived the meeting.
  */
+
+/**
+ * The ACCENT variant (dashboard only): a typographic card, no scrim. A heavy
+ * heading top-left, the description and link at the bottom, ink on a white
+ * card (toned down from an indigo gradient on Sep 27 2026).
+ *
+ * When the feature has a picture it is laid UNDER that text, full bleed, with
+ * no wash over it — so card art for this variant must be drawn for it: light,
+ * with the top-left and bottom-left left clear (the Turo Sync art is; see
+ * docs/brand/illustration-guide.md). With no picture, or one that fails, the
+ * white card alone.
+ */
+const ACCENT_UI = {
+  // Sep 27 2026: toned down to black and white — a light card with ink text and
+  // a touch of accent (the link and the active dot). It stays light in dark mode too, because the card art is
+  // a single light image; ink on it is the only text that reads in both themes.
+  // A light touch of card (Sep 27 2026): a translucent white wash with the
+  // faintest accent tint and a near-invisible hairline, no shadow. The art is a
+  // transparent PNG, so the car sits on this wash rather than in a box.
+  root: 'border-white/80 bg-transparent dark:bg-transparent bg-[linear-gradient(145deg,rgba(255,255,255,0.72)_0%,rgba(238,238,252,0.55)_100%)] dark:border-white/10 dark:bg-[linear-gradient(145deg,rgba(255,255,255,0.06)_0%,rgba(91,91,214,0.10)_100%)]',
+  body: 'flex w-full flex-1 flex-col justify-between p-5',
+  // max-w in `ch` makes a long heading stack, about two words a line
+  // ("Refer / operators"), leaving the right of the card to the art.
+  // leading 1 + a little bottom padding: line-clamp hides overflow, and at
+  // 0.95 it sheared the descenders off the last line (the p in "operator",
+  // the g in "agreements").
+  title: 'line-clamp-2 max-w-[10.5ch] pb-[0.1em] text-[34px] font-black leading-[1] tracking-[-0.04em] text-neutral-950 dark:text-white',
+  summary: 'truncate text-[13px] leading-5 text-neutral-600 dark:text-neutral-300',
+  more: 'mt-2 inline-flex items-center gap-1 text-[12px] font-semibold text-[#5b5bd6]',
+  dot: 'block h-1 w-1 rounded-full bg-neutral-950/20 transition-all',
+  dotActive: 'block h-1 w-2.5 rounded-full bg-[#5b5bd6] transition-all',
+} as const;
+
+export type FeatureDeckVariant = 'image' | 'accent';
+
+/**
+ * The accent card's heading reads as a stack: a title longer than about ten
+ * characters breaks after its first word ("Payment / plans", "Refer /
+ * operators"); a short one ("Zoho Books", "Ask Trax") stays on one line.
+ * Explicit rather than width-driven, so it cannot depend on the font's metrics.
+ */
+const STACK_AFTER_CHARS = 10;
+function stackTitle(title: string) {
+  const trimmed = title.trim();
+  const space = trimmed.indexOf(' ');
+  if (trimmed.length <= STACK_AFTER_CHARS || space === -1) return trimmed;
+  return (
+    <>
+      {trimmed.slice(0, space)}
+      <br />
+      {trimmed.slice(space + 1)}
+    </>
+  );
+}
+
+/** More features than this and the dots give way to a "3 / 15" counter. */
+const MAX_DOTS = 6;
 
 /** Past this horizontal travel a drag counts as a swipe. */
 const SWIPE_THRESHOLD_PX = 60;
@@ -66,6 +123,7 @@ const DRIVE_FROM_JS = () => {};
 
 function DeckSlide({
   feature,
+  variant,
   imageOk,
   draggable,
   reduceMotion,
@@ -75,6 +133,7 @@ function DeckSlide({
   onStep,
 }: {
   feature: PortalAnnouncement;
+  variant: FeatureDeckVariant;
   imageOk: boolean;
   draggable: boolean;
   reduceMotion: boolean;
@@ -102,6 +161,7 @@ function DeckSlide({
     }
   };
 
+  const accent = variant === 'accent';
   const imageUrl = imageOk ? feature.image_url : null;
 
   return (
@@ -110,7 +170,7 @@ function DeckSlide({
         if (isPresent) slideRef.current = el;
       }}
       type="button"
-      className={cn(FEATURE_CARD_UI.slide, !isPresent && 'pointer-events-none')}
+      className={cn(FEATURE_CARD_UI.slide, accent && 'focus-visible:ring-neutral-950', !isPresent && 'pointer-events-none')}
       tabIndex={isPresent ? undefined : -1}
       aria-hidden={isPresent ? undefined : true}
       data-feature-slide={feature.id}
@@ -157,27 +217,55 @@ function DeckSlide({
         />
       ) : (
         // No image, or it failed to load: a paper-toned surface, never the
-        // browser's broken-image icon. The text stays legible on it.
-        <div aria-hidden="true" data-feature-fallback="" className={FEATURE_CARD_UI.fallback} />
+        // browser's broken-image icon. The text stays legible on it. The
+        // accent card's own gradient is its fallback.
+        !accent && <div aria-hidden="true" data-feature-fallback="" className={FEATURE_CARD_UI.fallback} />
       )}
-      <div aria-hidden="true" className={FEATURE_CARD_UI.scrim} />
-      <div className={FEATURE_CARD_UI.content}>
-        <h3 className={FEATURE_CARD_UI.title}>{feature.title}</h3>
-        {/* One line with an ellipsis; the whole line is in the tooltip and the
-            dialog's slides carry the full story. */}
-        <p className={FEATURE_CARD_UI.summary} title={feature.summary ?? undefined}>
-          {feature.summary}
-        </p>
-        <span className={FEATURE_CARD_UI.more}>
-          See how it works
-          <ArrowRight aria-hidden="true" className="size-3.5" />
-        </span>
-      </div>
+      {accent ? (
+        <div className={ACCENT_UI.body}>
+          <h3 className={ACCENT_UI.title}>{stackTitle(feature.title)}</h3>
+          <div className="min-w-0">
+            <p className={ACCENT_UI.summary} title={feature.summary ?? undefined}>
+              {feature.summary}
+            </p>
+            <span className={ACCENT_UI.more}>
+              See how it works
+              <ArrowRight aria-hidden="true" className="size-3.5" />
+            </span>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div aria-hidden="true" className={FEATURE_CARD_UI.scrim} />
+          <div className={FEATURE_CARD_UI.content}>
+            <h3 className={FEATURE_CARD_UI.title}>{feature.title}</h3>
+            {/* One line with an ellipsis; the whole line is in the tooltip and the
+                dialog's slides carry the full story. */}
+            <p className={FEATURE_CARD_UI.summary} title={feature.summary ?? undefined}>
+              {feature.summary}
+            </p>
+            <span className={FEATURE_CARD_UI.more}>
+              See how it works
+              <ArrowRight aria-hidden="true" className="size-3.5" />
+            </span>
+          </div>
+        </>
+      )}
     </motion.button>
   );
 }
 
-export function FeatureAnnouncementDeck({ features }: { features: PortalAnnouncement[] }) {
+export function FeatureAnnouncementDeck({
+  features,
+  className,
+  variant = 'image',
+}: {
+  features: PortalAnnouncement[];
+  /** 'accent' = solid indigo card, no picture. Defaults to the picture card. */
+  variant?: FeatureDeckVariant;
+  /** Merged onto the card's root — the dashboard uses it to set the card's width. */
+  className?: string;
+}) {
   const router = useRouter();
   const { recordEvent } = usePortalAnnouncements();
   const reduceMotion = useReducedMotion() === true;
@@ -271,7 +359,7 @@ export function FeatureAnnouncementDeck({ features }: { features: PortalAnnounce
         aria-roledescription="carousel"
         aria-label="What's new"
         data-feature-deck=""
-        className={FEATURE_CARD_UI.root}
+        className={cn(FEATURE_CARD_UI.root, variant === 'accent' && ACCENT_UI.root, className)}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
         onFocus={() => setFocusInside(true)}
@@ -284,6 +372,7 @@ export function FeatureAnnouncementDeck({ features }: { features: PortalAnnounce
           <DeckSlide
             key={active.id}
             feature={active}
+            variant={variant}
             imageOk={isFeatureImageRenderable(active.image_url) && !brokenImages.has(active.image_url)}
             draggable={count > 1}
             reduceMotion={reduceMotion}
@@ -304,7 +393,33 @@ export function FeatureAnnouncementDeck({ features }: { features: PortalAnnounce
           />
         </AnimatePresence>
 
-        {count > 1 && (
+        {count > MAX_DOTS && (
+          // Past MAX_DOTS the dots would run into the card's link, so a quiet
+          // counter with previous / next takes their place.
+          <div className={cn(FEATURE_CARD_UI.dots, 'gap-1.5')}>
+            <button
+              type="button"
+              aria-label="Previous feature"
+              onClick={() => goTo(activeIndex - 1)}
+              className="flex h-5 w-4 cursor-pointer items-center justify-center rounded-full text-[13px] leading-none text-neutral-400 outline-none hover:text-neutral-700 focus-visible:ring-2 focus-visible:ring-indigo-500"
+            >
+              ‹
+            </button>
+            <span className="text-[11px] font-medium tabular-nums text-neutral-500" aria-live="polite">
+              {activeIndex + 1} / {count}
+            </span>
+            <button
+              type="button"
+              aria-label="Next feature"
+              onClick={() => goTo(activeIndex + 1)}
+              className="flex h-5 w-4 cursor-pointer items-center justify-center rounded-full text-[13px] leading-none text-neutral-400 outline-none hover:text-neutral-700 focus-visible:ring-2 focus-visible:ring-indigo-500"
+            >
+              ›
+            </button>
+          </div>
+        )}
+
+        {count > 1 && count <= MAX_DOTS && (
           // Outside the slide button: a button inside a button is invalid, and
           // a dot press must never open the dialog.
           <div className={FEATURE_CARD_UI.dots}>
@@ -317,7 +432,17 @@ export function FeatureAnnouncementDeck({ features }: { features: PortalAnnounce
                 aria-current={i === activeIndex ? 'true' : undefined}
                 onClick={() => goTo(i)}
               >
-                <span className={i === activeIndex ? FEATURE_CARD_UI.dotActive : FEATURE_CARD_UI.dot} />
+                <span
+                  className={
+                    variant === 'accent'
+                      ? i === activeIndex
+                        ? ACCENT_UI.dotActive
+                        : ACCENT_UI.dot
+                      : i === activeIndex
+                        ? FEATURE_CARD_UI.dotActive
+                        : FEATURE_CARD_UI.dot
+                  }
+                />
               </button>
             ))}
           </div>

@@ -40,8 +40,12 @@ import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { PaymentRequestsTab } from "@/components/invoices/payment-requests-tab";
 import { useV2 } from "@/lib/v2-context";
+import { usePageSearch } from "@/components/shared/layout/page-search-slot";
 import { InvoicesTableV2 } from "@/components/invoices-v2/invoices-table-v2";
 import { HEADER_ACTIONS_V2, HeaderIconButton } from "@/components/shared/header-icon-button-v2";
+import { AutoSkeleton } from "@/components/skeleton-v2/auto-skeleton";
+import { skeletonRows } from "@/lib/skeleton-data";
+import { useSkeletonLoading } from "@/hooks/use-skeleton-loading";
 
 interface Invoice {
   id: string;
@@ -75,6 +79,17 @@ interface Invoice {
   };
 }
 
+/** Placeholder invoices for the v2 skeleton: only their shapes are ever seen. */
+const SKELETON_INVOICES = skeletonRows(8, (f) => ({
+  id: f.id,
+  invoice_number: f.word(8, 11),
+  invoice_date: f.date().slice(0, 10),
+  due_date: f.date(f.int(-20, 30)).slice(0, 10),
+  total_amount: f.money(80, 2400),
+  customers: { name: f.text(2, 3) },
+  vehicles: { reg: f.word(6, 8), make: f.word(4, 8), model: f.word(3, 7) },
+})) as unknown as Invoice[];
+
 interface InvoiceFilters {
   search: string;
   status: string;
@@ -99,6 +114,9 @@ const InvoicesList = () => {
     status: "all",
   });
   const [localSearch, setLocalSearch] = useState("");
+  // v2 only: the Payment Requests tab's search, lifted from PaymentRequestsTab
+  // so the top-bar field can drive it.
+  const [requestsSearch, setRequestsSearch] = useState("");
   const [dateFromOpen, setDateFromOpen] = useState(false);
   const [dateToOpen, setDateToOpen] = useState(false);
 
@@ -118,7 +136,7 @@ const InvoicesList = () => {
     setLocalSearch(filters.search);
   }, [filters.search]);
 
-  const { data: invoices, isLoading } = useQuery({
+  const { data: loadedInvoices, isLoading: invoicesLoading } = useQuery({
     queryKey: ["invoices-list", tenant?.id],
     queryFn: async () => {
       if (!tenant?.id) return [];
@@ -144,6 +162,15 @@ const InvoicesList = () => {
     enabled: !!tenant?.id,
   });
 
+  // v2 (northwind) swaps only the populated table for the rentals list's table,
+  // with no pager. Teaching and "no results" states stay shared.
+  const v2Chrome = useV2("chrome");
+
+  const isLoading = useSkeletonLoading(invoicesLoading);
+  // v2: while the invoices load, the table renders these placeholder rows and
+  // <AutoSkeleton> turns them into the skeleton. v1 keeps its loading line.
+  const invoices = v2Chrome && isLoading ? SKELETON_INVOICES : loadedInvoices;
+
   // `invoices`, the raw query result — not `filteredInvoices`, which a search
   // or a status chip can empty for an operator with a full book. Lean canary
   // only; everyone else keeps the existing EmptyState.
@@ -151,11 +178,8 @@ const InvoicesList = () => {
   // `devForceEmpty` is the /dev preview switch (lib/dev-overrides.ts): inert
   // outside development, and INSIDE the slug gate so it reaches nobody else.
   const devForceEmpty = useForcedEmptyState("invoices");
-  const teachEmptyInvoices = useIsLean() && (!invoices?.length || devForceEmpty);
-
-  // v2 (northwind) swaps only the populated table for the rentals list's table,
-  // with no pager. Loading, teaching and "no results" states stay shared.
-  const v2Chrome = useV2("chrome");
+  // Never on v2's placeholder rows (v1 keeps its old behaviour while loading).
+  const teachEmptyInvoices = useIsLean() && !(v2Chrome && isLoading) && (!invoices?.length || devForceEmpty);
 
   // Filtered invoices
   const filteredInvoices = useMemo(() => {
@@ -223,6 +247,28 @@ const InvoicesList = () => {
     return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 12, 0, 0);
   };
 
+  /* v2: the search lives in the top bar (page-search-slot.tsx) and follows the
+     open tab; the Payment Requests tab's filter is lifted up here for it. */
+  usePageSearch(
+    // The teaching empty state (lean, no invoices yet) has no search to offer.
+    !v2Chrome || (teachEmptyInvoices && activeTab === "invoices")
+      ? null
+      : activeTab === "requests"
+        ? {
+            placeholder: "Search by customer or type…",
+            value: requestsSearch,
+            onChange: setRequestsSearch,
+            scopeLabel: "Payment requests",
+          }
+        : {
+            placeholder: "Search by invoice #, customer, or vehicle…",
+            value: localSearch,
+            onChange: setLocalSearch,
+            scopeLabel: "Invoices",
+            resultCount: isLoading || filters.search !== localSearch ? undefined : filteredInvoices.length,
+          },
+  );
+
   const hasActiveFilters = filters.search || filters.status !== "all" || filters.dateFrom || filters.dateTo;
 
   const handleExportCSV = () => {
@@ -264,9 +310,9 @@ const InvoicesList = () => {
             line (HEADER_ACTIONS_V2, team lead Sep 16 2026). v1 keeps
             "flex items-center gap-2" and its outline icon Button byte for byte. */}
         <div className={`flex items-center gap-2${v2Chrome ? ` ${HEADER_ACTIONS_V2}` : ""}`}>
-          {activeTab === "invoices" && (
+          {activeTab === "invoices" && !teachEmptyInvoices && (
             v2Chrome ? (
-              <HeaderIconButton label="Export CSV" onClick={handleExportCSV} disabled={!filteredInvoices.length}>
+              <HeaderIconButton label="Export CSV" onClick={handleExportCSV} disabled={isLoading || !filteredInvoices.length}>
                 <Download className="h-4 w-4" />
               </HeaderIconButton>
             ) : (
@@ -291,10 +337,12 @@ const InvoicesList = () => {
         </TabsList>
 
         <TabsContent value="invoices" className="space-y-4 mt-0">
-      {/* Filters */}
+      {/* Filters — not on the teaching empty state. */}
+      {!teachEmptyInvoices && (
       <div className="space-y-4">
         {/* Search and main filters */}
         <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 sm:gap-4 sm:items-center">
+          {!v2Chrome && (
           <div className="relative w-full sm:flex-1 sm:min-w-[300px]">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
             <Input
@@ -304,6 +352,7 @@ const InvoicesList = () => {
               className="pl-10"
             />
           </div>
+          )}
 
           <Select
             value={filters.status}
@@ -387,9 +436,10 @@ const InvoicesList = () => {
           )}
         </div>
       </div>
+      )}
 
       {/* Invoices Table */}
-      {isLoading ? (
+      {isLoading && !v2Chrome ? (
         <div className="text-center py-8 text-muted-foreground">Loading invoices...</div>
       ) : !filteredInvoices || filteredInvoices.length === 0 || teachEmptyInvoices ? (
         teachEmptyInvoices ? (
@@ -406,6 +456,7 @@ const InvoicesList = () => {
           // v2: the rentals list's table (components/shared/list-table-v2). No
           // pager, rows arrive as it scrolls. Rows open nothing, as in v1; the
           // actions menu is the same menu with the same handlers.
+          <AutoSkeleton loading={isLoading}>
           <InvoicesTableV2
             invoices={filteredInvoices}
             resetKey={`${tenant?.id ?? ""}|${filters.search}|${filters.status}|${filters.dateFrom?.toISOString() ?? ""}|${filters.dateTo?.toISOString() ?? ""}`}
@@ -420,6 +471,7 @@ const InvoicesList = () => {
               setDeleteDialogOpen(true);
             }}
           />
+          </AutoSkeleton>
         ) : (
         <>
           <Card>
@@ -532,7 +584,9 @@ const InvoicesList = () => {
         </TabsContent>
 
         <TabsContent value="requests" className="mt-0">
-          <PaymentRequestsTab />
+          <PaymentRequestsTab
+            {...(v2Chrome ? { search: requestsSearch, onSearchChange: setRequestsSearch } : {})}
+          />
         </TabsContent>
       </Tabs>
 

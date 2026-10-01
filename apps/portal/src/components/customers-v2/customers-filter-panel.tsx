@@ -74,7 +74,7 @@ export function CustomersFilterPanel({
       activeCount={countActiveCustomerFilters({ status, userType })}
     >
       <FilterSection
-        icon={<Activity className="size-3.5 text-primary" />}
+        icon={<Activity className="size-3.5 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" />}
         tint="bg-primary/10"
         title="Status"
         className="lg:col-span-2"
@@ -94,7 +94,7 @@ export function CustomersFilterPanel({
       </FilterSection>
 
       <FilterSection
-        icon={<UserCheck className="size-3.5 text-blue-600" />}
+        icon={<UserCheck className="size-3.5 text-blue-600 dark:text-blue-400" />}
         tint="bg-blue-500/10"
         title="User type"
         className="lg:col-span-2"

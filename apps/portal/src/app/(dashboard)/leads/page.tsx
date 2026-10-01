@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { Search, Filter, Plus, Flame, ThermometerSun, Snowflake, AlertTriangle, ExternalLink } from "lucide-react";
 
@@ -17,9 +17,17 @@ import {
 
 import { notFound } from "next/navigation";
 import { useTenant } from "@/contexts/TenantContext";
-import { useIsAreaHidden } from "@/lib/lean-context";
-import { useLeads, type LeadFilters } from "@/hooks/use-leads";
-import { useLeadBoard } from "@/hooks/use-lead-board";
+import { useIsAreaHidden, useIsLean } from "@/lib/lean-context";
+import { useForcedEmptyState } from "@/hooks/use-forced-empty-state";
+import { LeadsTeachingEmptyState } from "@/components/empty-states/leads-empty-state";
+import { useV2 } from "@/lib/v2-context";
+import { usePageSearch } from "@/components/shared/layout/page-search-slot";
+import { useLeads, type LeadFilters, type LeadRow } from "@/hooks/use-leads";
+import { useLeadBoard, type BoardColumn } from "@/hooks/use-lead-board";
+import { ACTIVE_COLUMNS } from "@/lib/lead-stage-machine";
+import { AutoSkeleton } from "@/components/skeleton-v2/auto-skeleton";
+import { skeletonRows } from "@/lib/skeleton-data";
+import { useSkeletonLoading } from "@/hooks/use-skeleton-loading";
 import { LeadBoard } from "@/components/leads/lead-board";
 import { LeadList } from "@/components/leads/lead-list";
 import { NewLeadDialog } from "@/components/leads/new-lead-dialog";
@@ -47,6 +55,52 @@ const SOURCE_OPTIONS = [
   { value: "inbound_email", label: "Inbound email" },
   { value: "legacy_enquiry", label: "Legacy inquiry" },
 ];
+
+/**
+ * Placeholder board for the v2 skeleton: every real column, two or three cards
+ * each. Only their shapes are ever seen.
+ */
+const SKELETON_COLUMNS: BoardColumn[] = ACTIVE_COLUMNS.map((c, ci) => ({
+  ...c,
+  leads: skeletonRows(ci % 2 ? 2 : 3, (f): LeadRow => ({
+    id: `${f.id}-${c.id}`,
+    tenant_id: "",
+    customer_id: null,
+    full_name: f.text(2, 3),
+    email: "",
+    phone: "5550000000",
+    phone_normalised: "",
+    email_lower: "",
+    application_data: {},
+    vehicle_id: null,
+    vehicle_class: f.text(1, 2),
+    start_date: f.date(-f.int(1, 20)).slice(0, 10),
+    end_date: f.date(-f.int(21, 40)).slice(0, 10),
+    rental_type: null,
+    stage: c.stages[0],
+    stage_updated_at: f.date(),
+    lead_score: null,
+    score_band: null,
+    source: "application",
+    source_metadata: null,
+    assigned_to: null,
+    last_contacted_at: null,
+    last_message_at: null,
+    last_activity_at: new Date().toISOString(),
+    blacklist_match_id: null,
+    tags: [],
+    converted_at: null,
+    converted_to_rental_id: null,
+    is_read: true,
+    created_at: f.date(),
+    updated_at: f.date(),
+  })),
+}));
+
+/** v1's stand-in for <AutoSkeleton>: renders the region as it always was. */
+function PlainRegion({ children }: { loading: boolean; className?: string; children: ReactNode }) {
+  return <>{children}</>;
+}
 
 export default function LeadsPage() {
   const { tenant, tenantSlug } = useTenant();
@@ -78,6 +132,33 @@ export default function LeadsPage() {
   const lost = useLeads({ ...sharedFilters, stages: ["lost"] });
   const blacklisted = useLeads({ ...sharedFilters, stages: ["blacklisted"] });
 
+  // v2: while the board loads, the page renders a placeholder board through its
+  // real filters, tabs and columns, and <AutoSkeleton> turns that into the
+  // skeleton. v1 keeps its "Loading…" line, on the real loading flag.
+  const v2Chrome = useV2("chrome");
+  const skeletonLoading = useSkeletonLoading(board.isLoading);
+  const isLoading = v2Chrome ? skeletonLoading : board.isLoading;
+  const columns = v2Chrome && isLoading ? SKELETON_COLUMNS : board.columns;
+
+  // Teaching empty state (illustration-guide §4a): lean tenants only, and only
+  // when no filter is set and every tab (active board, waitlist, lost,
+  // blacklisted) has loaded empty — a filtered miss keeps the normal page. The
+  // /dev force switch sits inside the lean gate.
+  const leanTenant = useIsLean();
+  const devForceEmpty = useForcedEmptyState("leads");
+  const noFiltersSet = !search.trim() && scoreBand === "all" && source === "all";
+  const noLeadsAtAll =
+    noFiltersSet &&
+    !board.isLoading &&
+    board.columns.every((c) => c.leads.length === 0) &&
+    [waitlist, lost, blacklisted].every((q) => !q.isLoading && (q.data?.length ?? 0) === 0);
+  const teachEmptyLeads = !(v2Chrome && isLoading) && leanTenant && (noLeadsAtAll || devForceEmpty);
+
+  // v2: the search lives in the top bar (page-search-slot.tsx).
+  usePageSearch(
+    v2Chrome && !teachEmptyLeads ? { placeholder: "Search name, phone, email…", value: search, onChange: setSearch, scopeLabel: "Leads" } : null,
+  );
+
   // Lead-management gate (spec §6.3 Empty state)
   if (tenant && (tenant as { lead_management_enabled?: boolean }).lead_management_enabled === false) {
     return (
@@ -93,9 +174,12 @@ export default function LeadsPage() {
     );
   }
 
-  const totalActive = board.columns.reduce((acc, c) => acc + c.leads.length, 0);
+  const totalActive = columns.reduce((acc, c) => acc + c.leads.length, 0);
   const isEmpty =
-    !board.isLoading && totalActive === 0 && (waitlist.data?.length ?? 0) === 0;
+    !isLoading && totalActive === 0 && (waitlist.data?.length ?? 0) === 0;
+
+  // v2 wraps the data half in the auto skeleton; v1's markup stays exactly as it was.
+  const SkeletonRegion = v2Chrome ? AutoSkeleton : PlainRegion;
 
   return (
     <main className="container mx-auto px-6 py-8">
@@ -106,6 +190,7 @@ export default function LeadsPage() {
             Manage your full lead-to-rental pipeline.
           </p>
         </div>
+        {!teachEmptyLeads && (
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={copyApplyLink} disabled={!applyUrl}>
             <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
@@ -116,9 +201,18 @@ export default function LeadsPage() {
             New Lead
           </Button>
         </div>
+        )}
       </header>
 
+      {teachEmptyLeads ? (
+        <LeadsTeachingEmptyState
+          onNewLead={() => setNewLeadOpen(true)}
+          onCopyApplyLink={applyUrl ? copyApplyLink : undefined}
+        />
+      ) : (
+      <SkeletonRegion loading={isLoading}>
       <div className="mb-4 flex flex-wrap items-center gap-2">
+        {!v2Chrome && (
         <div className="relative min-w-[260px] flex-1">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#737373]" />
           <Input
@@ -128,6 +222,7 @@ export default function LeadsPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
+        )}
         <Select value={scoreBand} onValueChange={setScoreBand}>
           <SelectTrigger className="w-[150px]"><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -155,7 +250,7 @@ export default function LeadsPage() {
         </TabsList>
 
         <TabsContent value="active" className="mt-4">
-          {board.isLoading ? (
+          {isLoading && !v2Chrome ? (
             <div className="text-sm text-[#737373]">Loading…</div>
           ) : isEmpty ? (
             <div className="rounded-lg border border-dashed border-[#f1f5f9] bg-white p-12 text-center">
@@ -169,7 +264,7 @@ export default function LeadsPage() {
             </div>
           ) : (
             <LeadBoard
-              columns={board.columns}
+              columns={columns}
               staleThresholdHours={(tenant as { lead_stale_threshold_hours?: number })?.lead_stale_threshold_hours ?? 48}
             />
           )}
@@ -185,6 +280,8 @@ export default function LeadsPage() {
           <LeadList leads={blacklisted.data ?? []} emptyLabel="No leads have been blacklisted." />
         </TabsContent>
       </Tabs>
+      </SkeletonRegion>
+      )}
 
       <NewLeadDialog open={newLeadOpen} onOpenChange={setNewLeadOpen} />
     </main>

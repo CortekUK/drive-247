@@ -117,6 +117,11 @@ export type PnlEntry = {
   category: string | null;
   amount: number | string | null;
   vehicle_id: string | null;
+  /**
+   * Left out by the operator on the Insights page (`insights_entry_adjustments`).
+   * The row stays listed so it can be restored; it is simply not summed.
+   */
+  excluded?: boolean;
 };
 
 /** The four buckets every ledger row falls into. Exactly one, never two. */
@@ -127,17 +132,30 @@ export type Bucket =
   | 'capital_cost';
 
 /**
- * Which bucket does this row belong to?
- *
- * The single place the classification happens. Every figure on the page is
- * built from this function, so there is exactly one definition of "revenue"
- * and one of "cost" — the failure mode on the old screens was three files
- * each summing the ledger slightly differently.
+ * The operator's own overrides — "count Delivery Fee as never mine", "leave
+ * Disposal off the page". Stored per tenant in `insights_category_rules`
+ * (ops/insights_category_rules.sql), keyed `side:category`. A pair with no
+ * rule takes `defaultBucket`, so an empty map is exactly the page's defaults.
+ */
+export type Rule = Bucket | 'ignored';
+export type Rules = Map<string, Rule>;
+
+export const ruleKey = (side: string | null, category: string | null) =>
+  `${side ?? ''}:${category ?? ''}`;
+
+/** The buckets a row on each side may be moved into. Never across sides. */
+export const RULES_FOR_SIDE: Record<string, Rule[]> = {
+  [REVENUE_SIDE]: ['operating_revenue', 'non_revenue', 'ignored'],
+  [COST_SIDE]: ['operating_cost', 'capital_cost', 'ignored'],
+};
+
+/**
+ * The page's own answer, before any override.
  *
  * Returns null for a row on neither side (defensive: `side` is NOT NULL in the
  * schema, but this page is read-only and must never throw on odd data).
  */
-export function classify(entry: Pick<PnlEntry, 'side' | 'category'>): Bucket | null {
+export function defaultBucket(entry: Pick<PnlEntry, 'side' | 'category'>): Bucket | null {
   const category = entry.category ?? '';
   if (entry.side === REVENUE_SIDE) {
     return NON_REVENUE.has(category) ? 'non_revenue' : 'operating_revenue';
@@ -146,6 +164,27 @@ export function classify(entry: Pick<PnlEntry, 'side' | 'category'>): Bucket | n
     return CAPITAL.has(category) ? 'capital_cost' : 'operating_cost';
   }
   return null;
+}
+
+/**
+ * Which bucket does this row belong to?
+ *
+ * The single place the classification happens. Every figure on the page is
+ * built from this function, so there is exactly one definition of "revenue"
+ * and one of "cost" — the failure mode on the old screens was three files
+ * each summing the ledger slightly differently.
+ *
+ * An override wins when it is valid for the row's side; `ignored` returns
+ * null, which every consumer already treats as "on no line of the receipt".
+ * An override that does not fit the side (the table's CHECK forbids it, but
+ * this page must not trust that) falls back to the default.
+ */
+export function classify(entry: Pick<PnlEntry, 'side' | 'category'>, rules?: Rules): Bucket | null {
+  const rule = rules?.get(ruleKey(entry.side, entry.category));
+  if (rule && RULES_FOR_SIDE[entry.side ?? '']?.includes(rule)) {
+    return rule === 'ignored' ? null : rule;
+  }
+  return defaultBucket(entry);
 }
 
 /**
@@ -181,11 +220,12 @@ const ZERO: Totals = {
 };
 
 /** Sum a set of ledger rows into the five figures the page reports. */
-export function totalsFor(entries: PnlEntry[]): Totals {
+export function totalsFor(entries: PnlEntry[], rules?: Rules): Totals {
   const t = { ...ZERO };
   for (const e of entries) {
+    if (e.excluded) continue;
     const amount = toNumber(e.amount);
-    switch (classify(e)) {
+    switch (classify(e, rules)) {
       case 'operating_revenue':
         t.operatingRevenue += amount;
         break;

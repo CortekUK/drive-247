@@ -215,7 +215,8 @@ export function Panel({
     <div className="flex h-full min-h-0 w-full max-w-3xl flex-col">
       <div className="flex shrink-0 items-start gap-4">
         <div className="min-w-0 flex-1">
-          <h2 className="font-heading text-2xl font-medium tracking-tight">{title}</h2>
+          {/* The section's own name: the same once loaded, so a skeleton keeps it. */}
+          <h2 className="font-heading text-2xl font-medium tracking-tight" data-skeleton-keep>{title}</h2>
           {description && <p className="mt-1.5 text-sm text-muted-foreground">{description}</p>}
         </div>
         {right && <div className="shrink-0 pt-1">{right}</div>}
@@ -442,7 +443,7 @@ export function Stat({
   tone?: "primary" | "success" | "warning" | "destructive";
 }) {
   const tones = {
-    primary: "text-primary",
+    primary: "text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]",
     success: "text-success",
     warning: "text-warning",
     destructive: "text-destructive",
@@ -477,7 +478,7 @@ export function Pill({
 }) {
   const tones = {
     neutral: "bg-muted text-muted-foreground",
-    primary: "bg-primary-light text-primary",
+    primary: "bg-primary-light text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]",
     success: "bg-success-light text-success",
     warning: "bg-warning-light text-warning",
     destructive: "bg-destructive/10 text-destructive",
@@ -571,7 +572,7 @@ export function ProducedFrom({
           <button
             type="button"
             onClick={() => onJump(s.key)}
-            className="cursor-pointer font-medium text-primary underline-offset-2 hover:underline"
+            className="cursor-pointer font-medium text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] underline-offset-2 hover:underline"
           >
             {s.label}
           </button>

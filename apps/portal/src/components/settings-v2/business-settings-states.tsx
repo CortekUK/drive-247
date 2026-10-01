@@ -24,7 +24,9 @@ import { Input } from "@/components/ui-v2/input";
 // uses the page's own popover, border and highlight tokens — see
 // components/ui-v2/select.tsx.
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui-v2/select";
-import { Skeleton } from "@/components/ui-v2/skeleton";
+import { AutoSkeleton } from "@/components/skeleton-v2/auto-skeleton";
+import { skeletonFaker, skeletonRows } from "@/lib/skeleton-data";
+import { useSkeletonLoading } from "@/hooks/use-skeleton-loading";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -47,7 +49,6 @@ import {
   SettingsLoadError,
   SettingsNoMatch,
   SettingsSaveState,
-  SettingsSectionSkeleton,
   TabularValue,
   describeSaveError,
   formatSettingsMoney,
@@ -154,6 +155,9 @@ export function SettingsPanelSkeleton({
   label?: string;
   className?: string;
 }) {
+  // The panel's real frame filled with placeholder words; <AutoSkeleton>
+  // measures them and draws the bones (see SettingsSectionSkeleton).
+  const words = (slot: number, min: number, max: number) => skeletonFaker(slot).text(min, max);
   return (
     <section
       role="status"
@@ -163,32 +167,34 @@ export function SettingsPanelSkeleton({
       className={cn(SETTINGS_PANEL_FLUSH, className)}
     >
       <span className="sr-only">{label}</span>
-      {title && (
-        <div aria-hidden="true" className="space-y-1.5 pb-2">
-          <Skeleton className="h-4 w-32 rounded-full" />
-          <Skeleton className="h-3 w-72 max-w-full rounded-full" />
-        </div>
-      )}
-      <div aria-hidden="true" data-settings-rows="">
-        {Array.from({ length: Math.max(1, rows) }).map((_, i) => (
-          <div
-            key={i}
-            className="flex flex-col gap-3 py-4 md:grid md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:gap-x-10"
-          >
-            <div className="min-w-0 space-y-1.5 md:max-w-2xl">
-              <Skeleton className="h-3.5 w-24 rounded-full" />
-              <Skeleton className="h-3 w-56 max-w-full rounded-full" />
-              {descriptionLines === 2 && <Skeleton className="h-3 w-40 max-w-full rounded-full" />}
-            </div>
-            <Skeleton className="h-9 w-56 max-w-full shrink-0 rounded-3xl" />
+      <AutoSkeleton loading>
+        {title && (
+          <div aria-hidden="true" className="space-y-0.5 pb-2">
+            <p className="text-sm font-medium">{words(40, 2, 3)}</p>
+            <p className="text-[13px]">{words(41, 6, 10)}</p>
           </div>
-        ))}
-      </div>
-      {footer && (
-        <div aria-hidden="true" className="flex items-center justify-end pt-2">
-          <Skeleton className="h-8 w-[88px] rounded-full" />
+        )}
+        <div aria-hidden="true" data-settings-rows="">
+          {Array.from({ length: Math.max(1, rows) }).map((_, i) => (
+            <div
+              key={i}
+              className="flex flex-col gap-3 py-4 md:grid md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:gap-x-10"
+            >
+              <div className="min-w-0 space-y-0.5 md:max-w-2xl">
+                <p className="text-sm font-medium">{words(i * 9, 1, 3)}</p>
+                <p className="text-[13px]">{words(i * 9 + 1, 5, 9)}</p>
+                {descriptionLines === 2 && <p className="text-[13px]">{words(i * 9 + 2, 3, 6)}</p>}
+              </div>
+              <div data-skeleton-block className="h-9 w-56 max-w-full shrink-0 rounded-3xl" />
+            </div>
+          ))}
         </div>
-      )}
+        {footer && (
+          <div aria-hidden="true" className="flex items-center justify-end pt-2">
+            <div data-skeleton-block className="h-8 w-[88px] rounded-full" />
+          </div>
+        )}
+      </AutoSkeleton>
     </section>
   );
 }
@@ -937,9 +943,18 @@ const LOCATION_SCROLL_ROOT = cn(
  * page, so the list has no button of its own. A viewer gets the same table
  * without the Actions column.
  */
+/** Placeholder locations for the list's skeleton: only their shapes are seen. */
+const SKELETON_LOCATIONS = skeletonRows(2, (f) => ({
+  id: f.id,
+  name: f.text(1, 3),
+  address: f.text(4, 7),
+  delivery_fee: f.int(0, 60),
+  is_active: true,
+})) as unknown as PickupLocation[];
+
 export function LocationsListV2({
   side,
-  locations,
+  locations: loadedLocations,
   isLoading,
   error,
   onRetry,
@@ -954,14 +969,12 @@ export function LocationsListV2({
   const [query, setQuery] = useState("");
   const noun = locationNoun(side);
   const listName = side === "pickup" ? "Delivery locations" : "Return locations";
+  // Until the first rows arrive, placeholder locations render through the real
+  // table (an editor's Actions column included) under <AutoSkeleton>.
+  const skeleton = useSkeletonLoading(isLoading && loadedLocations.length === 0);
+  const locations = skeleton ? SKELETON_LOCATIONS : loadedLocations;
 
-  if (isLoading && locations.length === 0) {
-    // The loaded table's columns: Name, Address, Fee, Available, and Actions for an editor.
-    return (
-      <SettingsSectionSkeleton variant="table" rows={2} columns={readOnly ? 4 : 5} label={`Loading ${noun} locations`} />
-    );
-  }
-  if (error && locations.length === 0) {
+  if (!skeleton && error && locations.length === 0) {
     return (
       <SettingsLoadError
         thing={`your ${noun} locations`}
@@ -990,8 +1003,10 @@ export function LocationsListV2({
   const visible = showSearch ? filterLocations(locations, query) : locations;
 
   return (
-    <div className="space-y-3" data-settings-state="content">
-      {!!error && (
+    <AutoSkeleton loading={skeleton}>
+    <div className="space-y-3" data-settings-state={skeleton ? "loading" : "content"}>
+      {skeleton && <span role="status" className="sr-only">{`Loading ${noun} locations`}</span>}
+      {!skeleton && !!error && (
         <SettingsLoadError variant="inline" thing={`${noun} locations`} error={error} onRetry={onRetry} retrying={retrying} />
       )}
 
@@ -1103,5 +1118,6 @@ export function LocationsListV2({
         </div>
       )}
     </div>
+    </AutoSkeleton>
   );
 }

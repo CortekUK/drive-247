@@ -278,7 +278,7 @@ export function createAgreementEditorExtensions({ placeholder = AGREEMENT_EDITOR
       // turns into a link.
       link: { openOnClick: false, autolink: false, linkOnPaste: false },
       // Indigo, the v2 accent: where a dragged variable or field will land.
-      dropcursor: { color: "#6366f1", width: 2 },
+      dropcursor: { color: "hsl(var(--primary))", width: 2 },
       // The PDF draws none of these (route.ts `parseInlineRuns` knows only
       // bold, italic and underline; `parseHtmlToBlocks` only h1-h3, p, lists,
       // tables and rules), so the editor does not offer them either, not even

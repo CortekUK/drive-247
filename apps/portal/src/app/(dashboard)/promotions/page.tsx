@@ -1,11 +1,19 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
+import { useV2 } from "@/lib/v2-context";
+import { AutoSkeleton } from "@/components/skeleton-v2/auto-skeleton";
+import { skeletonRows } from "@/lib/skeleton-data";
+import { useSkeletonLoading } from "@/hooks/use-skeleton-loading";
+import { usePageSearch } from "@/components/shared/layout/page-search-slot";
+import { useIsLean } from "@/lib/lean-context";
+import { useForcedEmptyState } from "@/hooks/use-forced-empty-state";
+import { PromotionsTeachingEmptyState } from "@/components/empty-states/promotions-empty-state";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -60,6 +68,26 @@ const promotionSchema = z.object({
 });
 
 type PromotionFormValues = z.infer<typeof promotionSchema>;
+
+/** Placeholder promotions for the v2 skeleton: only their shapes are ever seen. */
+const SKELETON_PROMOTIONS: Promotion[] = skeletonRows(6, (f) => ({
+  id: f.id,
+  title: f.text(2, 4),
+  description: f.text(8, 14),
+  discount_type: "percentage",
+  discount_value: f.int(5, 30),
+  start_date: f.date(30),
+  end_date: f.date(-400),
+  promo_code: f.word(6, 10).toUpperCase(),
+  image_url: null,
+  is_active: true,
+  created_at: f.date(),
+}));
+
+/** v1's stand-in for <AutoSkeleton>: renders the region as it always was. */
+function PlainRegion({ children }: { loading: boolean; className?: string; children: ReactNode }) {
+  return <>{children}</>;
+}
 
 const defaultFormData: PromotionFormValues = {
   title: "",
@@ -309,7 +337,17 @@ export default function PromotionsManager() {
     form.reset(defaultFormData);
   };
 
+  // v2: while the promotions load, the page renders placeholder promotions
+  // through its real stats and cards, and <AutoSkeleton> turns that into the
+  // skeleton. v1 keeps its own loading block below.
+  const v2Chrome = useV2("chrome");
+  const isLoading = useSkeletonLoading(loading);
+  const shownPromotions = v2Chrome && isLoading ? SKELETON_PROMOTIONS : promotions;
+  const SkeletonRegion = v2Chrome ? AutoSkeleton : PlainRegion;
+
   const filteredPromotions = useMemo(() => {
+    // Never filter the placeholders: an early search must not empty the skeleton.
+    if (v2Chrome && isLoading) return SKELETON_PROMOTIONS;
     let filtered = promotions;
 
     if (searchQuery.trim()) {
@@ -327,7 +365,7 @@ export default function PromotionsManager() {
     }
 
     return filtered;
-  }, [promotions, searchQuery, statusFilter]);
+  }, [promotions, searchQuery, statusFilter, v2Chrome, isLoading]);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -345,11 +383,30 @@ export default function PromotionsManager() {
   };
 
   const stats = useMemo(() => {
-    const active = promotions.filter(p => getPromotionStatus(p) === "active").length;
-    const scheduled = promotions.filter(p => getPromotionStatus(p) === "scheduled").length;
-    const expired = promotions.filter(p => getPromotionStatus(p) === "expired").length;
-    return { total: promotions.length, active, scheduled, expired };
-  }, [promotions]);
+    const active = shownPromotions.filter(p => getPromotionStatus(p) === "active").length;
+    const scheduled = shownPromotions.filter(p => getPromotionStatus(p) === "scheduled").length;
+    const expired = shownPromotions.filter(p => getPromotionStatus(p) === "expired").length;
+    return { total: shownPromotions.length, active, scheduled, expired };
+  }, [shownPromotions]);
+
+  // v2: the search lives in the top bar (page-search-slot.tsx).
+  // No promotions at all — the raw loaded list, never the filtered one — on
+  // the lean canary. `devForceEmpty` is the /dev preview switch (inert outside
+  // development, and inside the lean gate).
+  const devForceEmpty = useForcedEmptyState("promotions");
+  const leanTenant = useIsLean();
+  const teachEmptyPromotions = leanTenant && (devForceEmpty || (!isLoading && promotions.length === 0));
+  usePageSearch(
+    v2Chrome && !teachEmptyPromotions
+      ? {
+          placeholder: "Search promotions…",
+          value: searchQuery,
+          onChange: setSearchQuery,
+          scopeLabel: "Promotions",
+          resultCount: isLoading ? undefined : filteredPromotions.length,
+        }
+      : null,
+  );
 
   const imageUrl = form.watch("image_url");
   const discountType = form.watch("discount_type");
@@ -367,12 +424,15 @@ export default function PromotionsManager() {
           </p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          {/* The empty state carries this action when there is nothing yet. */}
+          {!teachEmptyPromotions && (
           <DialogTrigger asChild>
             <Button onClick={resetForm} className="w-full sm:w-auto">
               <Plus className="w-4 h-4 mr-2" />
               Add Promotion
             </Button>
           </DialogTrigger>
+          )}
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
@@ -624,7 +684,13 @@ export default function PromotionsManager() {
         </Dialog>
       </div>
 
+      {/* No promotions yet (lean only): heading + the empty state, nothing else. */}
+      {teachEmptyPromotions ? (
+        <PromotionsTeachingEmptyState onCreatePromotion={() => { resetForm(); setDialogOpen(true); }} />
+      ) : (
+      <>
       {/* Stats Cards */}
+      <SkeletonRegion loading={isLoading}>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="pt-6">
@@ -651,9 +717,11 @@ export default function PromotionsManager() {
           </CardContent>
         </Card>
       </div>
+      </SkeletonRegion>
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-4">
+        {!v2Chrome && (
         <div className="flex-1 relative">
           <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
           <Input
@@ -663,6 +731,7 @@ export default function PromotionsManager() {
             className="pl-9"
           />
         </div>
+        )}
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-full sm:w-48">
             <SelectValue placeholder="Filter by status" />
@@ -678,7 +747,7 @@ export default function PromotionsManager() {
       </div>
 
       {/* Promotions List */}
-      {loading ? (
+      {loading && !v2Chrome ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {[...Array(6)].map((_, i) => (
             <Skeleton key={i} className="h-64 rounded-lg" />
@@ -703,6 +772,7 @@ export default function PromotionsManager() {
           </CardContent>
         </Card>
       ) : (
+        <SkeletonRegion loading={isLoading}>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {filteredPromotions.map((promo) => {
             const status = getPromotionStatus(promo);
@@ -795,6 +865,9 @@ export default function PromotionsManager() {
             );
           })}
         </div>
+        </SkeletonRegion>
+      )}
+      </>
       )}
 
       {/* Delete Confirmation Dialog */}

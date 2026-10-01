@@ -8,6 +8,9 @@ import "@/global.css";
 // Scoped v2 design tokens. Inert unless <body> carries `v2-theme`, which is
 // decided per-tenant below — so importing it changes nothing for v1 tenants.
 import "@/styles/v2-theme.css";
+// Auto skeleton rules: scoped to [data-auto-skeleton], inert for any page that
+// does not wrap a region in <AutoSkeleton>.
+import "@/styles/auto-skeleton.css";
 import { V2Provider } from "@/lib/v2-context";
 import { readPortalTenant } from "@/lib/portal-tenant";
 import { resolvePortalGates } from "@/lib/v2-server";

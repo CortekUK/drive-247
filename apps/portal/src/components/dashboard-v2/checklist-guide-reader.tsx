@@ -158,7 +158,7 @@ const SHEET =
   'rounded-l-md rounded-r-2xl ring-1 ring-stone-900/[0.07] dark:ring-white/10';
 const PAPER = cn(
   SHEET,
-  'relative flex h-full flex-col overflow-hidden bg-[#fffdf8] px-6 pb-4 pt-6 text-stone-700',
+  'relative flex h-full flex-col overflow-hidden bg-card px-6 pb-4 pt-6 text-foreground/80',
   'shadow-[0_1px_2px_rgba(28,25,23,0.06),0_14px_30px_-16px_rgba(28,25,23,0.4)]',
   'sm:px-9 sm:pt-8',
   'dark:bg-stone-800 dark:text-stone-300',

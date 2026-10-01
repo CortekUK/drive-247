@@ -3,6 +3,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { MOTION_DIALOG, MOTION_OVERLAY } from "./motion";
 
 const Dialog = DialogPrimitive.Root;
 
@@ -22,7 +23,7 @@ const DialogOverlay = React.forwardRef<
       // v2 scrim: a light 30% wash plus a blur, not an 80% blackout. The blur
       // is `supports-` guarded so browsers without backdrop-filter still get a
       // usable scrim rather than a transparent one.
-      "fixed inset-0 isolate z-[100] bg-black/30 supports-[backdrop-filter]:backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+      "fixed inset-0 isolate z-[100] bg-black/30 supports-[backdrop-filter]:backdrop-blur-sm", MOTION_OVERLAY,
       className,
     )}
     {...props}
@@ -39,7 +40,7 @@ const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed left-[50%] top-[50%] z-[100] grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 rounded-4xl bg-popover p-6 text-popover-foreground shadow-xl ring-1 ring-foreground/10 duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]",
+        "fixed left-[50%] top-[50%] z-[100] grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 rounded-4xl bg-popover p-6 text-popover-foreground shadow-xl ring-1 ring-foreground/10", MOTION_DIALOG,
         className,
       )}
       {...props}

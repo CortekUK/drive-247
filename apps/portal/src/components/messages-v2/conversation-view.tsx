@@ -48,7 +48,7 @@ import { Button } from "@/components/ui-v2/button";
 import { Input } from "@/components/ui-v2/input";
 import { Textarea } from "@/components/ui-v2/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { useChatMessages } from "@/hooks/use-chat-messages";
+import { useChatMessages, type ChatMessage } from "@/hooks/use-chat-messages";
 import { useSocket, type MessageChannel } from "@/contexts/RealtimeChatContext";
 import { DateSeparator, VoiceCallBar } from "@/components/chat";
 import { TimelineItem } from "@/components/messages-v2/timeline-item";
@@ -58,6 +58,9 @@ import { useVoiceCall } from "@/hooks/use-voice-call";
 import type { BookingReference } from "@/components/chat/BookingPicker";
 import { AttachMenu } from "@/components/messages-v2/attach-menu";
 import { NO_SCROLLBAR } from "@/components/messages-v2/no-scrollbar";
+import { AutoSkeleton } from "@/components/skeleton-v2/auto-skeleton";
+import { skeletonRows } from "@/lib/skeleton-data";
+import { useSkeletonLoading } from "@/hooks/use-skeleton-loading";
 import { useChatAttachments } from "@/components/messages-v2/use-chat-attachments";
 import type { ChatChannel } from "@/hooks/use-chat-channels";
 
@@ -99,7 +102,7 @@ function ChannelSwitcher({
             onClick={() => setMode(key)}
             className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-all ${
               active
-                ? "bg-card text-primary shadow-sm"
+                ? "bg-card text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] shadow-sm"
                 : why
                   ? "cursor-not-allowed text-muted-foreground/40"
                   : "text-muted-foreground hover:text-foreground"
@@ -132,7 +135,7 @@ function PendingRow({
   return (
     <div className="flex flex-wrap items-center gap-2">
       {booking && (
-        <span className="inline-flex items-center gap-2 rounded-full bg-primary/10 py-1 pl-2.5 pr-1.5 text-[12px] font-medium text-primary">
+        <span className="inline-flex items-center gap-2 rounded-full bg-primary/10 py-1 pl-2.5 pr-1.5 text-[12px] font-medium text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
           <Car className="h-3.5 w-3.5" />
           {booking.rentalNumber || "Rental"} · {booking.vehicle.make} {booking.vehicle.model}
           <button type="button" onClick={onRemoveBooking} aria-label="Remove booking"
@@ -157,6 +160,23 @@ function PendingRow({
   );
 }
 
+/** Placeholder history for the thread's skeleton: one day, turns alternating. */
+const SKELETON_MESSAGES: ChatMessage[] = skeletonRows(6, (f, i) => ({
+  id: -(i + 1),
+  channel_id: "skeleton",
+  sender_type: i % 3 === 1 ? ("customer" as const) : ("tenant" as const),
+  sender_id: "skeleton",
+  content: f.text(4, 16),
+  is_read: true,
+  read_at: null,
+  metadata: {},
+  created_at: f.date(1),
+  channel: "in_app" as const,
+  external_id: null,
+  external_status: null,
+  from_number: null,
+}));
+
 export function ConversationView({ channel }: { channel: ChatChannel }) {
   const customerId = channel.customer_id;
   const name = channel.customer?.name || "Customer";
@@ -179,8 +199,10 @@ export function ConversationView({ channel }: { channel: ChatChannel }) {
     () => "off" as const,
   );
   const previewing = scenario !== "off";
-  const messages = previewing ? mockMessages(scenario) : realMessages;
-  const isLoading = previewing ? false : realLoading;
+  const isLoading = useSkeletonLoading(previewing ? false : realLoading);
+  // While the history loads, placeholder messages render through the real
+  // timeline and <AutoSkeleton> draws the bones over them.
+  const messages = previewing ? mockMessages(scenario) : isLoading ? SKELETON_MESSAGES : realMessages;
   const { sendMessage, markRead, joinRoom, onNewMessage } = useSocket();
   const { toast } = useToast();
 
@@ -366,7 +388,7 @@ export function ConversationView({ channel }: { channel: ChatChannel }) {
         </Button>
         <Avatar className="h-11 w-11">
           <AvatarImage src={channel.customer?.profile_photo_url || undefined} alt={name} />
-          <AvatarFallback className="bg-primary/10 text-[13px] font-semibold text-primary">
+          <AvatarFallback className="bg-primary/10 text-[13px] font-semibold text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
             {initials(name)}
           </AvatarFallback>
         </Avatar>
@@ -414,17 +436,9 @@ export function ConversationView({ channel }: { channel: ChatChannel }) {
         onScroll={onScroll}
         className={`relative min-h-0 flex-1 overflow-y-auto no-scrollbar px-6 py-8 lg:px-10 ${NO_SCROLLBAR}`}
       >
-        {isLoading ? (
-          <div className="space-y-4">
-            {[0, 1, 2, 3].map((i) => (
-              <div key={i} className={`flex ${i % 2 ? "justify-end" : "justify-start"}`}>
-                <div className="h-12 w-2/3 max-w-sm animate-pulse rounded-2xl bg-muted" />
-              </div>
-            ))}
-          </div>
-        ) : messages.length === 0 ? (
+        {!isLoading && messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center text-center">
-            <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+            <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
               <MessageCircle className="h-6 w-6" />
             </div>
             <h3 className="text-base font-semibold tracking-tight">No messages yet</h3>
@@ -434,8 +448,8 @@ export function ConversationView({ channel }: { channel: ChatChannel }) {
             </p>
           </div>
         ) : (
-          <div className="mx-auto w-full max-w-5xl">
-            {hasMore && !previewing && (
+          <AutoSkeleton loading={isLoading} className="mx-auto w-full max-w-5xl">
+            {hasMore && !previewing && !isLoading && (
               <div className="mb-4 flex justify-center">
                 <Button variant="ghost" size="sm" className="rounded-full" onClick={handleLoadMore} disabled={isLoadingMore}>
                   {isLoadingMore ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Load earlier messages"}
@@ -456,7 +470,7 @@ export function ConversationView({ channel }: { channel: ChatChannel }) {
               </div>
             ))}
             <div ref={endRef} />
-          </div>
+          </AutoSkeleton>
         )}
       </div>
 
@@ -470,7 +484,7 @@ export function ConversationView({ channel }: { channel: ChatChannel }) {
           <ChannelSwitcher mode={mode} setMode={setMode} disabled={disabled} />
 
           {disabled[mode] ? (
-            <p className="rounded-2xl bg-amber-500/10 px-4 py-3 text-[13px] text-amber-700">
+            <p className="rounded-2xl bg-amber-500/10 px-4 py-3 text-[13px] text-amber-700 dark:text-amber-300">
               {disabled[mode]}. Add one on the customer record to use this channel.
             </p>
           ) : mode === "call" ? (

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, useRouter } from "next/navigation";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { Plus, Wallet, CircleAlert, CheckCircle2, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTenant } from "@/contexts/TenantContext";
-import { useIsAreaHidden } from "@/lib/lean-context";
+import { useIsAreaHidden, useIsLean } from "@/lib/lean-context";
+import { useForcedEmptyState } from "@/hooks/use-forced-empty-state";
+import { OwnerPayoutsTeachingEmptyState } from "@/components/empty-states/owner-payouts-empty-state";
 import { useOwnerPayouts, useCancelPayout } from "@/hooks/use-owner-payouts";
 import { useVehicleOwners } from "@/hooks/use-vehicle-owners";
 import { CreatePayoutDialog } from "@/components/vehicle-owners/create-payout-dialog";
@@ -52,6 +54,18 @@ export default function OwnerPayoutsPage() {
   });
   const { data: owners = [] } = useVehicleOwners({ includeInactive: true });
   const cancel = useCancelPayout();
+  const router = useRouter();
+
+  // No payouts at all: the list loaded with its status and owner filters at
+  // "all" (both server-side) and came back empty — the date range is a
+  // client-side filter on top, so it cannot hide a payout from this check.
+  // Lean canary only; `devForceEmpty` is the /dev preview switch. (The
+  // `owners` area is hidden for lean tenants today, so this waits on that.)
+  const devForceEmpty = useForcedEmptyState("owner-payouts");
+  const leanTenant = useIsLean();
+  const teachEmptyPayouts =
+    leanTenant &&
+    (devForceEmpty || (statusFilter === "all" && ownerFilter === "all" && !isLoading && payouts.length === 0));
 
   const filtered = useMemo(() => {
     return payouts.filter((p) => p.period_end >= from && p.period_start <= to);
@@ -74,10 +88,21 @@ export default function OwnerPayoutsPage() {
           <h1 className="text-3xl font-medium text-foreground">Owner Payouts</h1>
           <p className="text-sm text-muted-foreground mt-1">Record and track payments to third-party vehicle owners.</p>
         </div>
+        {!teachEmptyPayouts && (
         <Button onClick={() => setShowCreate(true)}>
           <Plus className="h-4 w-4 mr-2" /> Create Payout
         </Button>
+        )}
       </div>
+
+      {teachEmptyPayouts ? (
+        <OwnerPayoutsTeachingEmptyState
+          hasOwners={owners.length > 0}
+          onCreatePayout={() => setShowCreate(true)}
+          onAddOwner={() => router.push("/vehicle-owners")}
+        />
+      ) : (
+      <>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard icon={<Clock className="h-5 w-5 text-blue-600 dark:text-blue-400" />} label="Pending" value={String(stats.pending)} />
@@ -186,6 +211,8 @@ export default function OwnerPayoutsPage() {
           </Table>
         </CardContent>
       </Card>
+      </>
+      )}
 
       <CreatePayoutDialog open={showCreate} onOpenChange={setShowCreate} />
       {recordFor && (

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Key, X, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { MOTION_ENTER } from '@/lib/motion';
 
 interface KeyHandoverActionBannerProps {
   /** Whether the banner should be visible */
@@ -52,7 +53,7 @@ export const KeyHandoverActionBanner = ({
         "sticky top-0 z-40 w-full",
         "bg-gradient-to-r from-amber-500/15 to-amber-600/10 border-b border-amber-500/20",
         "text-foreground shadow-lg backdrop-blur-sm",
-        "animate-in slide-in-from-top duration-300"
+        MOTION_ENTER
       )}
     >
       <div className="px-4 py-3">

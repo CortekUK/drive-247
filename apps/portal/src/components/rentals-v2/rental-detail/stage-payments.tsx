@@ -349,7 +349,7 @@ export function StagePayments({ detail, refetch }: StageProps) {
           <button
             type="button"
             onClick={() => setFlash("deposit")}
-            className="shrink-0 cursor-pointer text-right transition-colors hover:text-primary"
+            className="shrink-0 cursor-pointer text-right transition-colors hover:text-primary dark:hover:text-[hsl(var(--v2-link,var(--primary)))]"
           >
             <p className="flex items-center justify-end gap-1 text-[11px] font-medium uppercase tracking-widest text-muted-foreground/60">
               <Lock className="size-3" />
@@ -728,7 +728,7 @@ function PaymentRow({
     : dead
       ? "text-muted-foreground/50"
       : pr.source === "card"
-        ? "text-primary"
+        ? "text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]"
         : pr.source === "link"
           ? "text-foreground/80"
           : "text-muted-foreground/50";

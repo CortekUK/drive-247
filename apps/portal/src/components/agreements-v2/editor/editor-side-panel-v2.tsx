@@ -166,7 +166,7 @@ function FieldsTab({ content, onInsert }: { content: string; onInsert: (token: s
                 <span
                   className={cn(
                     "flex size-9 shrink-0 items-center justify-center rounded-xl border border-dashed",
-                    placed ? "border-border text-muted-foreground" : "border-primary text-primary",
+                    placed ? "border-border text-muted-foreground" : "border-primary text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]",
                   )}
                   aria-hidden="true"
                 >

@@ -1,3 +1,5 @@
+import { redirect } from 'next/navigation';
+import { serverIsV2 } from '@/lib/v2-server';
 import { ReferralsView } from '@/components/referrals/referrals-view';
 
 /**
@@ -14,6 +16,11 @@ import { ReferralsView } from '@/components/referrals/referrals-view';
  *  - the programme itself only issues codes to subscribed operators, and the
  *    view says so to anyone else.
  */
-export default function ReferralsPage() {
+export default async function ReferralsPage() {
+  // v2 chrome: Referrals lives on Billing now (the coupon opens it all in a
+  // dialog) and has no sidebar row, so an old link or a search hit lands there.
+  if (await serverIsV2('chrome')) {
+    redirect('/subscription');
+  }
   return <ReferralsView />;
 }

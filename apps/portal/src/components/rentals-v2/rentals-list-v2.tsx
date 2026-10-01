@@ -66,6 +66,9 @@ import { TabTourButton } from "@/components/onboarding/tab-tour-button";
 import { HEADER_ACTIONS_V2, HEADER_PRIMARY_V2, HeaderIconButton } from "@/components/shared/header-icon-button-v2";
 import { useViewportFillCap } from "@/components/shared/list-table-v2";
 import { csvDate, csvFilename, downloadCsv } from "@/lib/csv-export";
+import { AutoSkeleton } from "@/components/skeleton-v2/auto-skeleton";
+import { skeletonRows } from "@/lib/skeleton-data";
+import { useSkeletonLoading } from "@/hooks/use-skeleton-loading";
 
 /**
  * `30 Sep`, or `30 Sep 2027` when the year is not the current one.
@@ -192,6 +195,31 @@ const ROWS_PER_FILL = 25;
  */
 const RESULT_KEY_IGNORED = new Set(["page", "pageSize"]);
 
+/** Placeholder rentals for the skeleton: only their shapes are ever seen. */
+const SKELETON_RENTALS: EnhancedRental[] = skeletonRows(8, (f) => ({
+  id: f.id,
+  rental_number: `R-${f.word(5, 6)}`,
+  start_date: f.date(f.int(0, 40)).slice(0, 10),
+  end_date: f.date(f.int(-30, 0)).slice(0, 10),
+  created_at: f.date(),
+  monthly_amount: 0,
+  discount_applied: null,
+  promo_code: null,
+  protection_cost: 0,
+  total_amount: f.money(),
+  status: "active",
+  computed_status: f.pick(["Active", "Upcoming", "Completed", "Pending"]),
+  duration_months: 1,
+  initial_payment: null,
+  customer: { id: f.id, name: f.text(2, 3) },
+  vehicle: { id: f.id, reg: f.word(6, 8), make: f.word(4, 8), model: f.word(3, 7) },
+}));
+const SKELETON_DATA = {
+  allRentals: SKELETON_RENTALS,
+  stats: { total: 8, active: 3, closed: 3, pending: 2, avgDuration: 7 },
+  totalCount: SKELETON_RENTALS.length,
+};
+
 export function RentalsListV2() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -270,12 +298,16 @@ export function RentalsListV2() {
     [searchParams]
   );
 
-  const { data, isLoading } = useEnhancedRentals(filters);
+  const { data, isLoading: rentalsLoading } = useEnhancedRentals(filters);
+  const isLoading = useSkeletonLoading(rentalsLoading);
 
   // `rentals` (the hook's own page slice) and `totalPages` are deliberately not
   // destructured — this list has no pages, and leaving them named would invite
   // someone to render the slice again.
-  const { allRentals, stats, totalCount } = data || {
+  //
+  // While loading, the page renders placeholder rentals through its real
+  // overview and table, and <AutoSkeleton> turns that into the skeleton.
+  const { allRentals, stats, totalCount } = isLoading ? SKELETON_DATA : data || {
     allRentals: [],
     stats: null,
     totalCount: 0,
@@ -380,9 +412,21 @@ export function RentalsListV2() {
    * branch's below, word for word: the measurement runs when the box mounts,
    * and a box that mounted without this turning true would never be measured.
    */
+  // Not gated on loading: the skeleton's table fills the window exactly as the
+  // loaded one will, so the list does not jump when the rows land.
   const tableMounted =
-    !isLoading && currentView !== "calendar" && allRentals.length > 0 && !devForceEmptyRentals;
+    currentView !== "calendar" && allRentals.length > 0 && !devForceEmptyRentals;
   const tableFillCap = useViewportFillCap(scrollRootRef, tableMounted);
+  /**
+   * No rentals yet (list view, nothing asked for): the page keeps its heading
+   * and the teaching empty state below is the only thing on it — no search,
+   * filters, overview, calendar or export. The same condition as the branch
+   * that renders RentalsTeachingEmptyState.
+   */
+  const teachEmptyRentals =
+    !isLoading &&
+    currentView !== "calendar" &&
+    (devForceEmptyRentals || (allRentals.length === 0 && !hasAnyRentalFilter(filters)));
 
   const handleFiltersChange = (newFilters: RentalFilters) => {
     const params = new URLSearchParams();
@@ -419,13 +463,15 @@ export function RentalsListV2() {
    * budget of every later step on this route.
    */
   usePageSearch(
-    currentView === "calendar"
+    currentView === "calendar" || teachEmptyRentals
       ? null
       : {
           placeholder: "Search customer, reg, rental #…",
           value: filters.search || "",
           onChange: (next) => handleFiltersChange({ ...filters, search: next, page: 1 }),
           tourAnchor: "rentals-search",
+          scopeLabel: "Rentals",
+          resultCount: isLoading ? undefined : totalCount,
           filters: {
             open: filtersFlipped,
             onOpenChange: setFiltersOpen,
@@ -474,19 +520,6 @@ export function RentalsListV2() {
     );
   };
 
-
-  if (isLoading) {
-    // md:pt-6 (switch row alignment): the loaded list pads its top 24px at md,
-    // so its title starts at y=74 (centred at 92, on the sidebar switch's row).
-    // Without it this skeleton started at y=50, 14px under the 64px top bar.
-    return (
-      <div className="space-y-6 md:pt-6">
-        <div className="h-8 bg-muted animate-pulse rounded"></div>
-        <div className="h-96 bg-muted animate-pulse rounded"></div>
-      </div>
-    );
-  }
-
   return (
     <div className={currentView === "calendar" ? "p-4 md:p-6 space-y-6" : "container mx-auto p-4 md:p-6 space-y-6"}>
       {/* Header */}
@@ -530,6 +563,10 @@ export function RentalsListV2() {
               /rentals/analytics still resolves if navigated to directly. */}
           {/* Every control here is 32px and the cluster sits on the subtitle line
               (HEADER_ACTIONS_V2 / HEADER_PRIMARY_V2, team lead Sep 16 2026). */}
+          {/* No rentals yet: the empty state carries New rental, so the
+              header keeps nothing but the page title. */}
+          {!teachEmptyRentals && (
+          <>
           <TabTourButton tour="rentals" size="h-9" />
           {currentView === "calendar" ? (
             <HeaderIconButton label="List view" onClick={() => handleViewChange("list")}>
@@ -544,7 +581,7 @@ export function RentalsListV2() {
               >
                 <CalendarDays className="size-4" />
               </HeaderIconButton>
-              <HeaderIconButton label="Export CSV" onClick={handleExportCsv} disabled={allRentals.length === 0}>
+              <HeaderIconButton label="Export CSV" onClick={handleExportCsv} disabled={isLoading || allRentals.length === 0}>
                 <Download className="size-4" />
               </HeaderIconButton>
             </>
@@ -566,12 +603,15 @@ export function RentalsListV2() {
               New Rental
               </Button>
             )}
+          </>
+          )}
           </div>
         </div>
       </div>
 
+      <AutoSkeleton loading={isLoading} className="space-y-6">
       {/* Overview — list view only, and the filter panel is its other face. */}
-      {currentView !== "calendar" && (
+      {currentView !== "calendar" && !teachEmptyRentals && (
         <RentalsOverviewFlip
           flipped={filtersFlipped}
           onFlipBack={() => setFiltersOpen(false)}
@@ -685,7 +725,7 @@ export function RentalsListV2() {
                           flag === "cancelling"
                             ? "bg-red-500/5 border-l-2 border-l-red-500"
                             : flag === "balance" || flag === "quoted"
-                            ? "bg-[#CC004A]/5 border-l-2 border-l-[#CC004A]"
+                            ? "bg-[#CC004A]/5 dark:bg-[#CC004A]/15 border-l-2 border-l-[#CC004A]"
                             : ""
                         }`}
                         onClick={() => router.push(`/rentals/${rental.id}`)}
@@ -706,13 +746,13 @@ export function RentalsListV2() {
                               </span>
                             )}
                             {flag === "balance" && (
-                              <span className="flex items-center gap-1 text-[11px] font-medium text-[#CC004A]">
+                              <span className="flex items-center gap-1 text-[11px] font-medium text-[#CC004A] dark:text-[#ff6b9a]">
                                 <ShieldAlert className="size-3" />
                                 Balance required
                               </span>
                             )}
                             {flag === "quoted" && (
-                              <span className="flex items-center gap-1 text-[11px] font-medium text-[#CC004A]">
+                              <span className="flex items-center gap-1 text-[11px] font-medium text-[#CC004A] dark:text-[#ff6b9a]">
                                 <img src="/bonzah-logo.svg" alt="" className="h-3 w-auto dark:hidden" />
                                 <img src="/bonzah-logo-dark.svg" alt="" className="hidden h-3 w-auto dark:block" />
                                 Insurance quoted
@@ -748,7 +788,7 @@ export function RentalsListV2() {
                               {formatRentalDate(rental.end_date)}
                             </span>
                           ) : rental.is_pay_as_you_go ? (
-                            <span className="text-sm font-medium text-primary">Ongoing</span>
+                            <span className="text-sm font-medium text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">Ongoing</span>
                           ) : (
                             <span className="text-muted-foreground">—</span>
                           )}
@@ -832,7 +872,7 @@ export function RentalsListV2() {
             )}
           </div>
         </>
-      ) : devForceEmptyRentals || !hasAnyRentalFilter(filters) ? (
+      ) : isLoading ? null : devForceEmptyRentals || !hasAnyRentalFilter(filters) ? (
         // Nothing came back and nothing was asked for: this tenant has not
         // taken a booking yet. Teach instead of offering a Clear Filters button
         // that would clear nothing. This component is the northwind-only v2
@@ -854,6 +894,7 @@ export function RentalsListV2() {
           <Button onClick={handleClearFilters}>Clear Filters</Button>
         </div>
       )}
+      </AutoSkeleton>
 
       {/* Extension Request Dialog */}
 

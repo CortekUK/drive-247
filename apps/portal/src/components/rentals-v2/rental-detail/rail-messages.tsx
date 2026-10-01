@@ -200,7 +200,7 @@ function Bubble({
             {/* Read is the customer having OPENED it, not us having sent it.
                 The two are worth separating when you are deciding whether to
                 chase someone. */}
-            {ours && (msg.is_read ? <CheckCheck className="size-3 text-primary" /> : <Check className="size-3" />)}
+            {ours && (msg.is_read ? <CheckCheck className="size-3 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" /> : <Check className="size-3" />)}
           </p>
         )}
       </div>
@@ -292,7 +292,7 @@ export function RailMessages({ detail }: { detail: RentalDetailV2 }) {
         <p className="min-w-0 flex-1 truncate text-[13px] font-medium">{customer?.name}</p>
         <Link
           href={`/messages?customerId=${customerId}`}
-          className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground/70 transition-colors hover:text-primary"
+          className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground/70 transition-colors hover:text-primary dark:hover:text-[hsl(var(--v2-link,var(--primary)))]"
           title="Open the full conversation"
         >
           All messages
@@ -317,7 +317,7 @@ export function RailMessages({ detail }: { detail: RentalDetailV2 }) {
                   type="button"
                   onClick={loadMore}
                   disabled={isLoadingMore}
-                  className="cursor-pointer text-[11px] text-muted-foreground transition-colors hover:text-primary disabled:opacity-50"
+                  className="cursor-pointer text-[11px] text-muted-foreground transition-colors hover:text-primary dark:hover:text-[hsl(var(--v2-link,var(--primary)))] disabled:opacity-50"
                 >
                   {isLoadingMore ? "Loading…" : "Earlier messages"}
                 </button>
@@ -345,8 +345,8 @@ export function RailMessages({ detail }: { detail: RentalDetailV2 }) {
               className={cn(
                 "flex shrink-0 cursor-pointer items-center gap-1.5 rounded-3xl px-2 py-0.5 text-[11px] transition-colors",
                 p.id === pipe
-                  ? "bg-primary/10 font-medium text-primary"
-                  : "text-muted-foreground hover:text-primary",
+                  ? "bg-primary/10 font-medium text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]"
+                  : "text-muted-foreground hover:text-primary dark:hover:text-[hsl(var(--v2-link,var(--primary)))]",
                 !reach[p.id] && "cursor-not-allowed opacity-40 hover:text-muted-foreground"
               )}
             >

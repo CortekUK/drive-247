@@ -20,13 +20,20 @@ export default function CheckoutProgressOverlay({
   return (
     <div
       className={cn(
-        'fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-md transition-all duration-300',
+        // The TRAX motion: the scrim fades, the card rises 12px — 200ms,
+        // ease-out in, ease-in out.
+        'fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-md transition-opacity duration-200 motion-reduce:transition-none',
         isVisible
-          ? 'opacity-100 pointer-events-auto'
-          : 'opacity-0 pointer-events-none'
+          ? 'opacity-100 pointer-events-auto ease-out'
+          : 'opacity-0 pointer-events-none ease-in'
       )}
     >
-      <div className="w-full max-w-md mx-4 p-8 rounded-2xl bg-card border border-border shadow-2xl">
+      <div
+        className={cn(
+          'w-full max-w-md mx-4 p-8 rounded-2xl bg-card border border-border shadow-2xl transition-transform duration-200 motion-reduce:transition-none',
+          isVisible ? 'translate-y-0 ease-out' : 'translate-y-3 ease-in'
+        )}
+      >
         {/* Spinning icon */}
         <div className="flex justify-center mb-6">
           <div className="relative">

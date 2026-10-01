@@ -49,7 +49,7 @@ const RENTAL_SELECT = `
   rentals!rental_agreements_rental_id_fkey(
     id,
     rental_number,
-    customers!rentals_customer_id_fkey(name, email)
+    customers!rentals_customer_id_fkey(id, name, email)
   )
 `;
 
@@ -73,7 +73,7 @@ export interface RentalAgreementListRow {
   rentals?: One<{
     id: string;
     rental_number: string | null;
-    customers?: One<{ name: string | null; email: string | null }>;
+    customers?: One<{ id?: string | null; name: string | null; email: string | null }>;
   }>;
 }
 
@@ -110,6 +110,7 @@ export function toRentalRowV2(row: RentalAgreementListRow): AgreementRowV2 | nul
     rawStatus: row.document_status ?? '',
     rentalId,
     rentalRef: rental?.rental_number || (rentalId ? rentalId.slice(0, 8) : null),
+    customerId: customer?.id ?? null,
     documentId: row.document_id ?? null,
     templateId: null,
     title: row.agreement_type === 'extension' ? 'Extension agreement' : 'Rental agreement',
@@ -135,6 +136,7 @@ export function toIndividualRowV2(row: IndividualAgreementListRow): AgreementRow
     rawStatus: row.document_status ?? '',
     rentalId: null,
     rentalRef: null,
+    customerId: row.customer_id ?? null,
     documentId: row.document_id ?? null,
     templateId: row.template_id ?? null,
     title: row.title ?? null,

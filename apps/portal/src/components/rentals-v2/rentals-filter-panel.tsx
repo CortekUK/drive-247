@@ -113,7 +113,7 @@ export function RentalsFilterPanel({ filters, onChange, onClear, onClose }: Prop
             !value && "text-muted-foreground"
           )}
         >
-          <CalendarIcon className="mr-1.5 size-3.5 shrink-0 text-blue-600" />
+          <CalendarIcon className="mr-1.5 size-3.5 shrink-0 text-blue-600 dark:text-blue-400" />
           {value ? format(value, "MMM d, yyyy") : placeholder}
         </Button>
       </PopoverTrigger>
@@ -130,7 +130,7 @@ export function RentalsFilterPanel({ filters, onChange, onClear, onClose }: Prop
       activeCount={countActiveRentalFilters(filters)}
     >
       <FilterSection
-        icon={<Activity className="size-3.5 text-primary" />}
+        icon={<Activity className="size-3.5 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" />}
         tint="bg-primary/10"
         title="Status"
         className="lg:col-span-2"
@@ -168,7 +168,7 @@ export function RentalsFilterPanel({ filters, onChange, onClear, onClose }: Prop
       </FilterSection>
 
       <FilterSection
-        icon={<ShieldCheck className="size-3.5 text-emerald-600" />}
+        icon={<ShieldCheck className="size-3.5 text-emerald-600 dark:text-emerald-400" />}
         tint="bg-emerald-500/10"
         title="Insurance"
         badge={<BrandBadge src="/bonzah-logo.svg" darkSrc="/bonzah-logo-dark.svg" name="Bonzah" />}
@@ -187,7 +187,7 @@ export function RentalsFilterPanel({ filters, onChange, onClear, onClose }: Prop
       </FilterSection>
 
       <FilterSection
-        icon={<CalendarIcon className="size-3.5 text-blue-600" />}
+        icon={<CalendarIcon className="size-3.5 text-blue-600 dark:text-blue-400" />}
         tint="bg-blue-500/10"
         title="Start date range"
         className="lg:col-span-2"
@@ -214,7 +214,7 @@ export function RentalsFilterPanel({ filters, onChange, onClear, onClose }: Prop
       {/* Amber and red here are the same colours the table paints those rows
           with, so a chip and the rows it selects read as one thing. */}
       <FilterSection
-        icon={<Inbox className="size-3.5 text-amber-600" />}
+        icon={<Inbox className="size-3.5 text-amber-600 dark:text-amber-400" />}
         tint="bg-amber-500/10"
         title="Requests"
         className="lg:col-span-2"

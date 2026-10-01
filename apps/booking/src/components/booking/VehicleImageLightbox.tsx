@@ -4,6 +4,7 @@ import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { MOTION_FADE, MOTION_RISE_CENTERED } from "@/components/ui/motion";
 import { optimizedImageUrl } from "@/lib/optimize-image";
 
 // Full image sized for a large viewport; thumbnails kept tiny.
@@ -104,9 +105,12 @@ export default function VehicleImageLightbox({
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+        <DialogPrimitive.Overlay className={cn("fixed inset-0 z-50 bg-black/90 backdrop-blur-sm", MOTION_FADE)} />
         <DialogPrimitive.Content
-          className="fixed left-1/2 top-1/2 z-50 flex h-[92vh] w-[96vw] max-w-5xl -translate-x-1/2 -translate-y-1/2 flex-col gap-3 p-3 focus:outline-none sm:gap-4 sm:p-5 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
+          className={cn(
+            "fixed left-1/2 top-1/2 z-50 flex h-[92vh] w-[96vw] max-w-5xl -translate-x-1/2 -translate-y-1/2 flex-col gap-3 p-3 focus:outline-none sm:gap-4 sm:p-5",
+            MOTION_RISE_CENTERED,
+          )}
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
           {/* Header */}

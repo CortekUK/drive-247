@@ -201,6 +201,9 @@ export function RecordDock({
         it rather than fighting it.
       */}
       <div
+        /* The phone tab bar (shared/layout/mobile-tab-bar.tsx) hides itself
+           while this is on the page: one bar at the bottom, not two. */
+        data-record-dock=""
         className={cn(
           "pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-4",
           "pb-[calc(env(safe-area-inset-bottom,0px)+1rem)]",

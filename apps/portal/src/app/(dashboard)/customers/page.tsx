@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, type ReactNode } from "react";
 import { parseLocalDate } from "@/lib/date-utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -59,6 +59,9 @@ import { usePageSearch } from "@/components/shared/layout/page-search-slot";
 import { OverviewFlip } from "@/components/shared/layout/overview-flip";
 import { CustomersFilterPanel, countActiveCustomerFilters } from "@/components/customers-v2/customers-filter-panel";
 import { CustomersOverview } from "@/components/customers-v2/customers-overview";
+import { AutoSkeleton } from "@/components/skeleton-v2/auto-skeleton";
+import { useSkeletonLoading } from "@/hooks/use-skeleton-loading";
+import { skeletonRows } from "@/lib/skeleton-data";
 
 interface Customer {
   id: string;
@@ -81,6 +84,28 @@ interface Customer {
   rejected_by?: string;
   created_at?: string;
   user_type?: "Authenticated" | "Guest";
+}
+
+/**
+ * Placeholder customers for the v2 skeleton: only their shapes are ever seen.
+ * The two fields the v2 table and overview read off `any` ride along.
+ */
+const SKELETON_CUSTOMERS: Customer[] = skeletonRows(8, (f) => ({
+  id: f.id,
+  name: f.text(2, 3),
+  email: `${f.word(5, 10)}@${f.word(5, 8)}.com`,
+  phone: '',
+  type: 'Individual',
+  status: 'Active',
+  user_type: f.pick(['Authenticated', 'Guest'] as const),
+  created_at: f.date(f.int(0, 30)),
+  identity_verification_status: f.pick(['verified', 'pending', 'unverified']),
+  is_gig_driver: false,
+})) as unknown as Customer[];
+
+/** v1's stand-in for <AutoSkeleton>: renders the region as it always was. */
+function PlainRegion({ children }: { loading: boolean; className?: string; children: ReactNode }) {
+  return <>{children}</>;
 }
 
 type SortField = 'name' | 'type' | 'balance';
@@ -201,7 +226,7 @@ const CustomersList = () => {
   }, [debouncedSearchTerm, statusFilter, userTypeFilter, sortField, sortOrder, currentPage, pageSize, router, v2Chrome]);
 
   // Fetch customers
-  const { data: customers, isLoading, refetch: refetchCustomers } = useQuery({
+  const { data: loadedCustomers, isLoading: customersLoading, refetch: refetchCustomers } = useQuery({
     queryKey: ["customers-list", tenant?.id],
     queryFn: async () => {
       let query = supabase
@@ -259,10 +284,10 @@ const CustomersList = () => {
   const customerBalanceQueries = useQuery({
     queryKey: ["customer-balances-enhanced", tenant?.id],
     queryFn: async () => {
-      if (!customers?.length) return {};
+      if (!loadedCustomers?.length) return {};
 
       const balanceMap: Record<string, any> = {};
-      const customerIds = customers.map(c => c.id);
+      const customerIds = loadedCustomers.map(c => c.id);
 
       // Batch-fetch cancelled/rejected rental IDs across all customers
       let excludedRentalsQuery = supabase
@@ -336,7 +361,7 @@ const CustomersList = () => {
       });
 
       // Calculate balance for each customer
-      for (const customer of customers) {
+      for (const customer of loadedCustomers) {
         const entries = entriesByCustomer[customer.id] || [];
 
         let totalCharges = 0;
@@ -387,8 +412,14 @@ const CustomersList = () => {
 
       return balanceMap;
     },
-    enabled: !!customers?.length,
+    enabled: !!loadedCustomers?.length,
   });
+
+  // v2: while the list loads the page renders placeholder rows under an
+  // <AutoSkeleton>. The balance query above reads the loaded rows only, so it
+  // never runs against placeholders.
+  const isLoading = useSkeletonLoading(customersLoading);
+  const customers = v2Chrome && isLoading ? SKELETON_CUSTOMERS : loadedCustomers;
 
   const customerBalances = customerBalanceQueries.data || {};
 
@@ -669,10 +700,13 @@ const CustomersList = () => {
    * It sits down here, after every piece of state it reads, and before the
    * `isLoading` early return, so the hook runs on every render.
    */
+  // No search or filters when there are no customers yet (lean only).
   usePageSearch(
-    v2Chrome
+    v2Chrome && !teachEmptyCustomers
       ? {
           placeholder: "Search customers…",
+          scopeLabel: "Customers",
+          resultCount: isLoading ? undefined : filteredAndSortedCustomers.length,
           value: searchTerm,
           onChange: setSearchTerm,
           filters: {
@@ -693,7 +727,7 @@ const CustomersList = () => {
     return !!(customer.nok_full_name || customer.nok_relationship || customer.nok_phone || customer.nok_email);
   };
 
-  if (isLoading) {
+  if (isLoading && !v2Chrome) {
     // v2 (switch row alignment): the loaded page's 24px top padding at md, so this
     // skeleton starts where the title does (y=74, title centred on the sidebar
     // switch's row at 92) instead of at y=50 under the 64px top bar. v1 keeps
@@ -779,6 +813,8 @@ const CustomersList = () => {
     );
   };
 
+  const SkeletonRegion = v2Chrome ? AutoSkeleton : PlainRegion;
+
   return (
     <div className="container mx-auto p-4 sm:p-6 space-y-6">
       {/* Header */}
@@ -810,6 +846,11 @@ const CustomersList = () => {
           */}
           {/* Canary-only: self-gates on the resolved tenant slug, so this
               shared v1 header is unchanged for the other 56 tenants. */}
+          {/* No customers yet (lean only): the page keeps its heading and
+              nothing else up here — the empty state below carries Add and
+              Import, so the header's controls all step aside. */}
+          {!teachEmptyCustomers && (
+          <>
           <TabTourButton tour="customers" size="h-10" />
           {/* v2 headers carry one labelled button, the main action; the rest
               are icons with their names in tooltips (team lead, Sep 15 2026).
@@ -879,7 +920,7 @@ const CustomersList = () => {
               label="Export CSV"
               size="icon-lg"
               onClick={handleExportCustomersCsv}
-              disabled={filteredAndSortedCustomers.length === 0}
+              disabled={isLoading || filteredAndSortedCustomers.length === 0}
             >
               <Download className="h-4 w-4" />
             </HeaderIconButton>
@@ -890,17 +931,20 @@ const CustomersList = () => {
               Add Customer
             </Button>
           )}
+          </>
+          )}
         </div>
       </div>
 
+      <SkeletonRegion loading={isLoading} className="space-y-6">
       {/* Summary Cards */}
-      {!v2Chrome && customers && <CustomerSummaryCards customers={customers} />}
+      {!v2Chrome && customers && !teachEmptyCustomers && <CustomerSummaryCards customers={customers} />}
       {/* v2: the overview turns over to show the filter panel. Its front face is
           the hero row (one graph and a featured card) over the same rows the
           table shows, and it carries the customers-stats tour anchor on its root.
           The card is the featured deck: the invite link, CSV import and the
           blocklist among others, each under its header control's own check. */}
-      {v2Chrome && customers && (
+      {v2Chrome && customers && !teachEmptyCustomers && (
         <OverviewFlip
           flipped={filtersOpen}
           onFlipBack={() => setFiltersOpen(false)}
@@ -926,7 +970,7 @@ const CustomersList = () => {
       )}
 
       {/* Search and Filters */}
-      {!v2Chrome && (
+      {!v2Chrome && !teachEmptyCustomers && (
       <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 sm:items-center">
         <div className="relative w-full sm:flex-1 sm:min-w-[200px]">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
@@ -1345,6 +1389,7 @@ const CustomersList = () => {
       ) : teachEmptyCustomers ? (
         <CustomersTeachingEmptyState
           onAddCustomer={canEdit('customers') ? handleAddCustomer : undefined}
+          onInviteCustomer={canEdit('customers') ? () => setInviteDialogOpen(true) : undefined}
         />
       ) : (
         <div className="text-center py-12">
@@ -1373,6 +1418,7 @@ const CustomersList = () => {
           )}
         </div>
       )}
+      </SkeletonRegion>
 
       <CustomerCsvImportDialog open={csvImportOpen} onOpenChange={setCsvImportOpen} />
 

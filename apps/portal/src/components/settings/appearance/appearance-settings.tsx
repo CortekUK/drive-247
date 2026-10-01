@@ -26,6 +26,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { ArrowLeft, Loader2, RotateCcw, Save } from 'lucide-react';
 
@@ -56,6 +57,7 @@ import { LOGO_PREVIEW_HEIGHT, PortalNamePreview, portalTabTitle } from '@/compon
 
 import { useTenantBranding, type TenantBranding } from '@/hooks/use-tenant-branding';
 import { useTenant } from '@/contexts/TenantContext';
+import { tenantDarkIconKey, useTenantDarkIcon } from '@/hooks/use-tenant-dark-icon';
 import { useV2 } from '@/lib/v2-context';
 import { useManagerPermissions } from '@/hooks/use-manager-permissions';
 import { useThemePreview } from '@/hooks/use-theme-preview';
@@ -95,6 +97,8 @@ interface AppearanceForm extends ThemePalette {
   logo_url: string | null;
   dark_logo_url: string | null;
   favicon_url: string | null;
+  /** v2 only: the dark-mode square icon (`tenants.dark_favicon_url`). v1 never sets it. */
+  dark_favicon_url?: string | null;
 }
 
 /**
@@ -178,6 +182,9 @@ export function AppearanceSettings() {
   } = useTenantBranding();
 
   const readOnly = !permissionsLoading && !canEditSettings('branding');
+  // v2: the dark-mode square icon lives outside the shared branding query (see
+  // the hook); the form waits for it too, or Save could null a saved one.
+  const { darkIconUrl, isLoaded: darkIconLoaded } = useTenantDarkIcon();
 
   const [form, setForm] = useState<AppearanceForm>(EMPTY_FORM);
   const [loaded, setLoaded] = useState(false);
@@ -243,7 +250,7 @@ export function AppearanceSettings() {
     // Wait for the real branding row and a manager's permissions (or a view-only
     // manager sees enabled controls for a moment before they lock), then mount
     // the form once per tenant.
-    if (!tenant?.id || !hasBrandingData || permissionsLoading) {
+    if (!tenant?.id || !hasBrandingData || permissionsLoading || !darkIconLoaded) {
       if (brandingError && !hasBrandingData) {
         return (
           <div className={V2_PAGE_CLASS}>
@@ -264,7 +271,7 @@ export function AppearanceSettings() {
         key={tenant.id}
         tenantId={tenant.id}
         companyName={tenant.company_name}
-        initial={formFromBranding(branding, tenant.company_name, V2_DEFAULT_BRAND_COLOR)}
+        initial={v2InitialForm(formFromBranding(branding, tenant.company_name, V2_DEFAULT_BRAND_COLOR), darkIconUrl)}
         metaTitle={branding.meta_title}
         readOnly={readOnly}
       />
@@ -559,12 +566,26 @@ function V2PageDescription() {
 }
 
 /**
- * A genuine change: the colours a person perceives, the name and the two logos.
- * `dark_logo_url` is not here: v2 has no control for it, and Save leaves it to
- * the logo sync in `useTenantBranding`.
+ * The v2 form's starting values: the branding row plus the dark-mode icon.
+ *
+ * A `dark_logo_url` equal to `logo_url` is not a dark logo anyone chose — it is
+ * the copy onboarding stamps into every companion column — so the dark card
+ * starts empty for it (showing the full logo standing in), and Save leaves the
+ * column to `useTenantBranding`'s logo sync unless the tenant changes it.
  */
+function v2InitialForm(base: AppearanceForm, darkIconUrl: string | null): AppearanceForm {
+  return {
+    ...base,
+    dark_logo_url: base.dark_logo_url && base.dark_logo_url !== base.logo_url ? base.dark_logo_url : null,
+    dark_favicon_url: darkIconUrl,
+  };
+}
+
+/** A genuine change: the colours a person perceives, the name and the four logos. */
 function appearanceFormDiffers(form: AppearanceForm, saved: AppearanceForm): boolean {
   return (
+    (form.dark_favicon_url ?? null) !== (saved.dark_favicon_url ?? null) ||
+    form.dark_logo_url !== saved.dark_logo_url ||
     form.primary_color !== saved.primary_color ||
     form.light_primary_color !== saved.light_primary_color ||
     form.dark_primary_color !== saved.dark_primary_color ||
@@ -597,6 +618,7 @@ function AppearanceFormV2({
   readOnly: boolean;
 }) {
   const { updateBranding, isUpdating } = useTenantBranding();
+  const queryClient = useQueryClient();
   // Try-on: the whole portal repaints with the chosen colour, and the sidebar
   // badge and the browser tab pick up a new logo, before anything is saved.
   // All of it goes back to what is saved on Reset, "Don't save" or leaving.
@@ -639,15 +661,22 @@ function AppearanceFormV2({
   const triedPalette = useRef<ThemePalette | null>(null);
 
   /** Show `palette` (or the saved colours) and these logos on the running portal. */
-  const tryOn = (palette: ThemePalette | null, logos: Pick<AppearanceForm, 'favicon_url' | 'logo_url'>) => {
+  const tryOn = (
+    palette: ThemePalette | null,
+    logos: Pick<AppearanceForm, 'favicon_url' | 'logo_url' | 'dark_logo_url' | 'dark_favicon_url'>
+  ) => {
     const saved = savedRef.current;
     const patch: Partial<TenantBranding> = { ...palette, favicon_url: logos.favicon_url, logo_url: logos.logo_url };
+    // The dark-mode icon has its own cache entry; the sidebar reads it from there.
+    queryClient.setQueryData(tenantDarkIconKey(tenantId), logos.dark_favicon_url ?? null);
     // As the save will do (useTenantBranding): a dark-mode logo that was only
     // following the old logo follows the new one, so the sidebar shows it in
     // dark mode too. A deliberately different dark logo is left alone.
     if (logos.logo_url !== saved.logo_url && (!saved.dark_logo_url || saved.dark_logo_url === saved.logo_url)) {
       patch.dark_logo_url = null;
     }
+    // A dark logo the tenant set here wins over the sync above.
+    if (logos.dark_logo_url !== saved.dark_logo_url) patch.dark_logo_url = logos.dark_logo_url;
     previewTheme(patch);
   };
 
@@ -659,9 +688,17 @@ function AppearanceFormV2({
   };
 
   /** A new (or removed) logo: in the form, and in the sidebar and browser tab straight away. */
-  const applyLogos = (patch: Partial<Pick<AppearanceForm, 'favicon_url' | 'logo_url'>>) => {
+  const applyLogos = (
+    patch: Partial<Pick<AppearanceForm, 'favicon_url' | 'logo_url' | 'dark_logo_url' | 'dark_favicon_url'>>
+  ) => {
     setForm((prev) => ({ ...prev, ...patch }));
-    tryOn(triedPalette.current, { favicon_url: form.favicon_url, logo_url: form.logo_url, ...patch });
+    tryOn(triedPalette.current, {
+      favicon_url: form.favicon_url,
+      logo_url: form.logo_url,
+      dark_logo_url: form.dark_logo_url,
+      dark_favicon_url: form.dark_favicon_url,
+      ...patch,
+    });
   };
 
   const applyBrandColor = (hex: string) => {
@@ -676,6 +713,7 @@ function AppearanceFormV2({
   /** Reset and "Don't save": back to what is saved. Never to the defaults. */
   const discardChanges = () => {
     restoreTheme();
+    queryClient.setQueryData(tenantDarkIconKey(tenantId), savedRef.current.dark_favicon_url ?? null);
     triedPalette.current = null;
     setForm(savedRef.current);
     setSaveError(null);
@@ -717,12 +755,18 @@ function AppearanceFormV2({
         dark_accent_color: values.dark_accent_color,
         dark_background_color: values.dark_background_color,
         app_name: values.app_name.trim() || null,
-        // Deliberately no dark_logo_url or auth_logo_url: left out, the update
-        // keeps any that were following the old logo in step with the new one
-        // (and a deliberately different dark-mode logo untouched).
+        // Deliberately no auth_logo_url, and dark_logo_url only when the tenant
+        // changed it in its own card: left out, the update keeps one that was
+        // following the old logo in step with the new one (and a deliberately
+        // different dark-mode logo untouched).
         logo_url: values.logo_url,
         favicon_url: values.favicon_url,
+        ...(values.dark_logo_url !== savedRef.current.dark_logo_url ? { dark_logo_url: values.dark_logo_url } : {}),
+        // Not in the shared TenantBranding type (v1 shares it); the update
+        // passes it straight to the row.
+        ...({ dark_favicon_url: values.dark_favicon_url ?? null } as Partial<TenantBranding>),
       });
+      queryClient.setQueryData(tenantDarkIconKey(tenantId), values.dark_favicon_url ?? null);
       // The previewed palette is server truth now: advance both baselines, or
       // Save stays enabled and a later Reset brings the old colours back.
       savedRef.current = { ...values };
@@ -857,6 +901,10 @@ function AppearanceFormV2({
               logoUrl={form.logo_url}
               onFaviconChange={(url) => applyLogos({ favicon_url: url })}
               onLogoChange={(url) => applyLogos({ logo_url: url })}
+              darkFaviconUrl={form.dark_favicon_url ?? null}
+              darkLogoUrl={form.dark_logo_url}
+              onDarkFaviconChange={(url) => applyLogos({ dark_favicon_url: url })}
+              onDarkLogoChange={(url) => applyLogos({ dark_logo_url: url })}
               disabled={readOnly}
               onBusyChange={setLogosBusy}
             />

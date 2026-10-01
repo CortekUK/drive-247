@@ -299,7 +299,7 @@ export function SectionAccount({ c, set, onJump, canEdit }: SectionProps) {
                   <button
                     type="button"
                     onClick={() => onJump(globalKind === "email" ? "identity" : "licence")}
-                    className="cursor-pointer font-medium text-primary underline-offset-2 hover:underline"
+                    className="cursor-pointer font-medium text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] underline-offset-2 hover:underline"
                   >
                     {globalKind === "email" ? "Identity" : "Licence & driving"}
                   </button>
@@ -318,7 +318,7 @@ export function SectionAccount({ c, set, onJump, canEdit }: SectionProps) {
           <button
             type="button"
             onClick={() => onJump("rentals")}
-            className="cursor-pointer font-medium text-primary underline-offset-2 hover:underline"
+            className="cursor-pointer font-medium text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] underline-offset-2 hover:underline"
           >
             Rentals
           </button>

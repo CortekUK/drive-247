@@ -11,6 +11,11 @@
  * page would look different every time it is opened.
  */
 
+import type { DayEvent } from '@/hooks/use-day-timeline';
+import type { CustomerRequest } from '@/hooks/use-customer-requests';
+import type { TenantNote } from '@/hooks/use-tenant-notes';
+import { busyWindowStart, type BusyDays, type BookingSources } from '@/hooks/use-dashboard-insights';
+
 export const NOW_MINUTES = 9 * 60 + 14;
 export const NOW_LABEL = '09:14';
 
@@ -236,3 +241,172 @@ export const RATIOS = [
   { label: 'Repeat customers', value: '41%', delta: 3 },
   { label: 'Fleet on rent', value: '64%', delta: 5 },
 ];
+
+// ── Demo day, for previewing the day timeline (`?demo-day=1`) ───────────────
+// Client-side only: nothing is read from or written to the database. Times are
+// laid out around NOW so the past (done / missed) and the future (upcoming)
+// both show, plus clusters that force chips into extra lanes and a few events
+// with no time set.
+
+export function buildDemoDay(now: number): DayEvent[] {
+  const at = (offset: number) => Math.min(23 * 60 + 45, Math.max(0, now + offset));
+  const e = (
+    id: string,
+    kind: DayEvent['kind'],
+    offset: number | null,
+    title: string,
+    subject: string,
+    state: DayEvent['state'],
+    note?: string,
+  ): DayEvent => ({
+    id: `demo-${id}`,
+    kind,
+    at: offset === null ? null : at(offset),
+    title,
+    subject,
+    state,
+    note,
+    rentalId: null,
+  });
+
+  return [
+    // Morning — mostly done, two missed.
+    e('1', 'extension_charge', -305, 'Extension charge', 'Kris Bell · Tesla Model Y', 'done', 'Charged'),
+    e('2', 'payment_reminder', -290, 'Payment reminder', 'Iniko Dubone · VW Golf R', 'done', 'Sent by SMS'),
+    e('3', 'payment_reminder', -284, 'Payment reminder', 'Camille Duval · Volvo S60', 'missed', 'Failed to send'),
+    e('4', 'return_reminder', -265, 'Return reminder', 'Giovante Marsh · Tesla Model 3', 'done', 'Sent'),
+    e('5', 'pickup', -240, 'Car out', 'Sam Lee · Toyota Camry', 'done', 'Handed over'),
+    e('6', 'lockbox', -236, 'Lockbox code', 'Sam Lee · Toyota Camry', 'done', 'Sent'),
+    e('7', 'return', -195, 'Car back', 'Priya Nair · Honda Civic', 'done', 'Returned'),
+    e('8', 'pickup', -150, 'Car out', 'Marco Rossi · BMW 3 Series', 'missed', 'Not handed over'),
+    e('9', 'installment', -120, 'Installment', 'Ava Chen · Kia Sportage', 'done', 'Collected'),
+    e('10', 'extension_charge', -70, 'Extension charge', 'Liam Walsh · Ford Mustang', 'missed', 'Not taken'),
+    e('11', 'return', -35, 'Car back', 'Noah Kim · Tesla Model 3', 'missed', 'Not back yet'),
+    // Around now — a tight cluster, to stack lanes.
+    e('12', 'pickup', 15, 'Car out', 'Emma Stone · Audi Q5', 'upcoming'),
+    e('13', 'return', 20, 'Car back', 'Olivia Brown · Mazda CX-5', 'upcoming'),
+    e('14', 'lockbox', 25, 'Lockbox code', 'Emma Stone · Audi Q5', 'upcoming'),
+    e('15', 'payment_reminder', 30, 'Payment reminder', 'Ethan Park · Nissan Rogue', 'upcoming'),
+    // Afternoon and evening.
+    e('16', 'extension_charge', 120, 'Extension charge', 'Mia Lopez · Jeep Wrangler', 'upcoming'),
+    e('17', 'pickup', 180, 'Car out', 'James Hill · Tesla Model S', 'upcoming'),
+    e('18', 'return', 240, 'Car back', 'Sofia Reyes · Hyundai Tucson', 'upcoming'),
+    e('19', 'return_reminder', 270, 'Return reminder', 'Lucas Grey · Subaru Outback', 'upcoming'),
+    e('20', 'return', 330, 'Car back', 'Lucas Grey · Subaru Outback', 'upcoming'),
+    // No time set.
+    e('21', 'installment', null, 'Installment', 'Chloe Adams · Toyota RAV4', 'upcoming', 'Due today'),
+    e('22', 'pickup', null, 'Car out', 'Daniel Ortiz · Chevy Malibu', 'upcoming'),
+    e('23', 'return', null, 'Car back', 'Grace Liu · Honda CR-V', 'upcoming'),
+  ].sort((a, b) => (a.at ?? -1) - (b.at ?? -1));
+}
+
+// ── Sample requests, for previewing the Requests card (default; `?demo-requests=0` = real) ──
+// Client-side only: nothing is read from or written to the database. Made-up
+// people, so stock portraits are fine here — never on a real tenant's customers.
+
+export function buildDemoRequests(now: Date = new Date()): CustomerRequest[] {
+  const ago = (mins: number) => new Date(now.getTime() - mins * 60_000).toISOString();
+  const inDays = (d: number) => {
+    const x = new Date(now);
+    x.setDate(x.getDate() + d);
+    return x.toISOString().slice(0, 10);
+  };
+  const face = (set: 'men' | 'women', n: number) => `https://randomuser.me/api/portraits/${set}/${n}.jpg`;
+  const r = (
+    id: string,
+    kind: CustomerRequest['kind'],
+    customerName: string,
+    photoUrl: string | null,
+    vehicleName: string,
+    minsAgo: number,
+    extra: Partial<CustomerRequest> = {},
+  ): CustomerRequest => ({
+    id: `demo-${id}`,
+    kind,
+    customerId: `demo-customer-${id}`,
+    customerName,
+    photoUrl,
+    vehicleName,
+    at: ago(minsAgo),
+    href: kind === 'booking' ? '/pending-bookings' : '/rentals',
+    ...extra,
+  });
+
+  return [
+    r('1', 'booking', 'Sophia Martinez', face('women', 44), 'Tesla Model Y', 12, { from: inDays(2), to: inDays(6) }),
+    r('2', 'extension', 'James Carter', face('men', 32), 'BMW 3 Series', 38, { from: inDays(0), to: inDays(4) }),
+    r('3', 'cancellation', 'Aisha Rahman', face('women', 68), 'Audi Q5', 95, { reason: 'Flight got cancelled' }),
+    r('4', 'booking', 'Daniel Okafor', face('men', 75), 'Jeep Wrangler', 140, { from: inDays(5), to: inDays(12) }),
+    r('5', 'extension', 'Priya Nair', null, 'Honda Civic', 210, { from: inDays(1), to: inDays(3) }),
+    r('6', 'booking', 'Lucas Grey', face('men', 12), 'Ford Mustang', 320, { from: inDays(9), to: inDays(11) }),
+    r('7', 'cancellation', 'Emma Stone', face('women', 21), 'Mazda CX-5', 460, { reason: 'Found a closer pickup' }),
+    r('8', 'extension', 'Noah Kim', null, 'Tesla Model 3', 600, { from: inDays(0), to: inDays(7) }),
+    r('9', 'booking', 'Olivia Brown', face('women', 90), 'Hyundai Tucson', 900, { from: inDays(3), to: inDays(5) }),
+    r('10', 'extension', 'Marco Rossi', face('men', 51), 'Kia Sportage', 1440, { from: inDays(1), to: inDays(8) }),
+    r('11', 'cancellation', 'Chloe Adams', null, 'Toyota RAV4', 2100, {}),
+    r('12', 'extension', 'Ethan Park', face('men', 7), 'Nissan Rogue', 3000, { from: inDays(2), to: inDays(5) }),
+  ];
+}
+
+// ── Sample to-dos, for previewing the To do card (default; `?demo-todos=0` = real) ──
+// Client-side only: ticks, deletes and adds change this list in memory and
+// never reach `tenant_notes`.
+
+export function buildDemoTodos(now: Date = new Date()): TenantNote[] {
+  const at = (mins: number) => new Date(now.getTime() + mins * 60_000).toISOString();
+  const dayAt = (days: number, h: number, m = 0) => {
+    const d = new Date(now);
+    d.setDate(d.getDate() + days);
+    d.setHours(h, m, 0, 0);
+    return d.toISOString();
+  };
+  const n = (id: string, body: string, remind_at: string | null, is_done = false): TenantNote => ({
+    id: `demo-todo-${id}`,
+    body,
+    remind_at,
+    is_done,
+    completed_at: is_done ? at(-30) : null,
+    created_at: at(-600 + Number(id)),
+  });
+  return [
+    n('1', 'Call Camille about the Volvo, 18 days late', at(-150)),
+    n('2', 'Chase the $1,240 payment from Marco Rossi', at(-40)),
+    n('3', 'Check the Tesla Model 3 in for Olivia at 2:30', at(75)),
+    n('4', 'Get the Jeep washed before the weekend booking', at(210)),
+    n('5', 'Renew insurance on the Ford Mustang', dayAt(1, 9, 30)),
+    n('6', 'Send new-season prices to repeat customers', dayAt(6, 10)),
+    n('7', 'Order a spare key for the Honda Civic', null),
+    n('8', 'Reply to the Google review from last week', null),
+    n('9', 'Book the Kia Sportage in for a service', null),
+    n('10', 'Approve Sophia Martinez’s Tesla booking', null, true),
+    n('11', 'Top up the lockbox codes for Friday', null, true),
+  ];
+}
+
+// ── Sample busy days and booking sources (default; `?demo-insights=0` = real) ──
+// Client-side only. A believable season: weekends busier than midweek, a
+// build-up through the three months, a couple of standout peaks.
+
+export function buildDemoBusyDays(now: Date = new Date()): BusyDays {
+  const fleet = 18;
+  const today = now.toISOString().slice(0, 10);
+  const from = busyWindowStart(now);
+  const days: BusyDays['days'] = [];
+  let i = 0;
+  for (const d = new Date(Date.UTC(from.getFullYear(), from.getMonth(), from.getDate())); ; d.setUTCDate(d.getUTCDate() + 1), i++) {
+    const key = d.toISOString().slice(0, 10);
+    if (key > today) break;
+    const dow = d.getUTCDay();
+    const weekend = dow === 5 || dow === 6 || dow === 0 ? 0.22 : 0;
+    const season = 0.3 + (i / 92) * 0.25;
+    const wobble = (((i * 7919) % 13) / 13 - 0.5) * 0.28;
+    const peak = i % 31 === 12 || i % 29 === 20 ? 0.25 : 0;
+    const share = Math.min(1, Math.max(0.05, season + weekend + wobble + peak));
+    days.push({ date: key, rented: Math.round(share * fleet) });
+  }
+  return { days, fleet, today };
+}
+
+export function buildDemoBookingSources(): BookingSources {
+  return { counts: { website: 46, team: 31, turo: 18 }, days: 90 };
+}

@@ -48,15 +48,24 @@ type Common = {
   size?: "icon" | "icon-lg";
   className?: string;
   "data-tour"?: string;
+  /** An on/off control (Open 24 hours): sets `aria-pressed` and fills the button while on. */
+  pressed?: boolean;
 };
 
 type AsButton = Common & { href?: undefined; onClick: () => void; disabled?: boolean };
 type AsLink = Common & { href: string; onClick?: undefined; disabled?: undefined };
 
-export function HeaderIconButton(props: AsButton | AsLink) {
-  const { label, children, className } = props;
-  const classes = cn(
-    buttonVariants({ variant: "outline", size: "icon-sm" }),
+/**
+ * The header icon button's look, for a control that must be its own trigger
+ * (a menu or popover opened from the header) and so cannot be wrapped by
+ * `HeaderIconButton`'s tooltip. Same 32px purple pill; `aria-pressed` fills it.
+ */
+export function headerIconButtonClass(className?: string, labelled = false) {
+  return cn(
+    // `labelled`: the same pill with words in it (Availability's "Hours" and
+    // timezone buttons) — 32px tall, sized to its text instead of square.
+    buttonVariants({ variant: "outline", size: labelled ? "sm" : "icon-sm" }),
+    labelled && "px-3 gap-1.5 text-[13px] font-medium",
     // Purple at rest, the tour icon's look (team lead, Sep 16 2026): tinted
     // outline, faint purple ground, purple glyph; a shade deeper on hover/open.
     // Dark: dark --primary is ~1.9:1 as a glyph on the dark header and
@@ -65,8 +74,15 @@ export function HeaderIconButton(props: AsButton | AsLink) {
     "rounded-full border-primary/30 bg-primary/5 text-primary [&_svg]:!size-3.5 dark:bg-primary/10 dark:border-[hsl(var(--v2-link,var(--primary))_/_0.3)] dark:text-[hsl(var(--v2-link,var(--primary)))]",
     "hover:border-primary/50 hover:bg-primary/10 hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:border-[hsl(var(--v2-link,var(--primary))_/_0.5)] dark:hover:text-[hsl(var(--v2-link,var(--primary)))]",
     "aria-expanded:border-primary/50 aria-expanded:bg-primary/10 aria-expanded:text-primary dark:aria-expanded:border-[hsl(var(--v2-link,var(--primary))_/_0.5)] dark:aria-expanded:bg-[hsl(var(--v2-hover,var(--muted)))] dark:aria-expanded:text-[hsl(var(--v2-link,var(--primary)))]",
+    // On (aria-pressed): solid purple, the one state that reads as "switched on".
+    "aria-pressed:border-primary aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:bg-primary/90 aria-pressed:hover:text-primary-foreground dark:aria-pressed:border-primary dark:aria-pressed:bg-primary dark:aria-pressed:text-primary-foreground dark:aria-pressed:hover:text-primary-foreground",
     className,
   );
+}
+
+export function HeaderIconButton(props: AsButton | AsLink) {
+  const { label, children, className, pressed } = props;
+  const classes = headerIconButtonClass(className);
   const trigger =
     props.href !== undefined ? (
       <Link href={props.href} aria-label={label} data-tour={props["data-tour"]} className={classes}>
@@ -81,6 +97,7 @@ export function HeaderIconButton(props: AsButton | AsLink) {
         onClick={props.onClick}
         disabled={props.disabled}
         aria-label={label}
+        aria-pressed={pressed}
         data-tour={props["data-tour"]}
         className={classes}
       >

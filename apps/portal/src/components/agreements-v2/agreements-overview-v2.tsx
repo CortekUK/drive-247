@@ -31,7 +31,7 @@
 import { useMemo } from "react";
 import { Bar, BarChart, XAxis, YAxis } from "recharts";
 import { ChartContainer, ChartTooltip, type ChartConfig } from "@/components/ui/chart";
-import { HERO_CHART_HEIGHT, HeroRow } from "@/components/shared/hero-chart-v2";
+import { HERO_CHART_HEIGHT, HeroChart, HeroRow, type HeroMetric } from "@/components/shared/hero-chart-v2";
 import { CreateTemplateCardV2 } from "@/components/agreements-v2/create-template-card-v2";
 import { formatAgreementSentAtV2 } from "@/components/agreements-v2/agreements-table-v2";
 import { sentAtMs } from "@/lib/agreements-v2/list-filters";
@@ -278,6 +278,51 @@ function AgreementsActivityV2({
   );
 }
 
+/**
+ * The Rentals hero chart, for agreements (Oct 1 2026: "just like Rentals").
+ * The same shared `HeroChart` — metric and period pickers, one line, a lighter
+ * second line, the previous period dotted — fed from the rows the table shows.
+ *
+ *   Agreements sent: each agreement on the day it was sent; the second line is
+ *     the ones signed, on the day they were signed.
+ *   Signed: signatures on the day they came back.
+ *
+ * The weekly stacked bars above (`AgreementsActivityV2`) are no longer mounted;
+ * their helpers stay exported for the tests that pin them.
+ */
+function agreementMetricsV2(rows: readonly AgreementRowV2[]): HeroMetric[] {
+  const at = (iso: string | null) => (iso ? new Date(iso) : null);
+  const sent = rows.flatMap((r) => {
+    const d = at(r.sentAt);
+    return d && !Number.isNaN(d.getTime()) ? [{ at: d, amount: 1 }] : [];
+  });
+  const signed = rows.flatMap((r) => {
+    if (r.status !== "signed") return [];
+    const d = at(r.signedAt ?? r.sentAt);
+    return d && !Number.isNaN(d.getTime()) ? [{ at: d, amount: 1 }] : [];
+  });
+  const count = (v: number) => Math.round(v).toLocaleString();
+  return [
+    {
+      key: "sent",
+      label: "Agreements sent",
+      kind: "flow",
+      description: "Agreements sent for signature, from rentals and from this tab.",
+      format: count,
+      events: sent,
+      secondary: { label: "Signed", events: signed },
+    },
+    {
+      key: "signed",
+      label: "Signed",
+      kind: "flow",
+      description: "Agreements signed, on the day the signature came back.",
+      format: count,
+      events: signed,
+    },
+  ];
+}
+
 export function AgreementsOverviewV2({
   rows,
   filtered,
@@ -289,16 +334,17 @@ export function AgreementsOverviewV2({
   rows: readonly AgreementRowV2[];
   /** True when the search or a filter narrows the list. */
   filtered: boolean;
-  /** Opens the templates section's "create" (the page puts ?view=templates&new=1 in the URL). */
+  /** Opens "Template Studio" (the templates dialog). */
   onCreateTemplate: () => void;
   /** Template editing keeps its grant: canEditSettings('templates') (D19). */
   canCreateTemplate: boolean;
   /** For tests. Defaults to now. */
   today?: Date;
 }) {
+  const metrics = useMemo(() => agreementMetricsV2(rows), [rows]);
   return (
     <HeroRow
-      chart={<AgreementsActivityV2 rows={rows} filtered={filtered} today={today ?? new Date()} />}
+      chart={<HeroChart metrics={metrics} anchor="agreements-chart" note={filtered ? "Filtered" : undefined} today={today} />}
       card={<CreateTemplateCardV2 onCreate={onCreateTemplate} disabled={!canCreateTemplate} />}
     />
   );

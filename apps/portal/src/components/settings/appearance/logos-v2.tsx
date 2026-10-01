@@ -9,6 +9,17 @@
  *   Square icon  `favicon_url`  the browser tab and the sidebar badge
  *   Full logo    `logo_url`     the sign-in page and the booking site
  *
+ * Each has a dark-mode twin (Sep 28 2026), optional, for a mark drawn for a
+ * white page that disappears on dark:
+ *
+ *   Square icon, dark mode        `dark_favicon_url`  the sidebar badge in dark mode
+ *   Full logo, dark backgrounds   `dark_logo_url`     the booking site's header and
+ *                                                     footer, and dark mode
+ *
+ * Left empty, the light version stands in: the square icon gets an automatic
+ * backing in dark mode only if it needs one (lib/appearance/logo-tone.ts), and
+ * every reader of `dark_logo_url` already falls back to `logo_url`.
+ *
  * The code calls them `small` and `large` (`LogoSlot`); people only ever see
  * the names above, never "small", "large" or "favicon".
  *
@@ -47,6 +58,10 @@ import { Button } from '@/components/ui-v2/button';
 import { SettingsSection } from '@/components/settings-v2/settings-kit';
 import { useImageLoadFailed } from '@/components/settings-v2/business-settings-states';
 import { SignInPreview, SquareIconPreview } from '@/components/settings/appearance/branding-previews';
+import { getBrandInitials } from '@/components/shared/layout/brand-logo';
+import { BRAND_MARK_FALLBACK_INITIALS } from '@/lib/appearance/logo';
+import { LOGO_TONE_CLASS_ON_DARK, useLogoTone } from '@/lib/appearance/logo-tone';
+import { cn } from '@/lib/utils';
 import {
   LARGE_LOGO_ACCEPT,
   loadLogoFile,
@@ -84,6 +99,12 @@ export interface LogosV2Props {
   logoUrl: string | null;
   onFaviconChange: (url: string | null) => void;
   onLogoChange: (url: string | null) => void;
+  /** The dark-mode square icon, or null to let the square icon stand in. */
+  darkFaviconUrl: string | null;
+  /** The logo for dark backgrounds, or null to let the full logo stand in. */
+  darkLogoUrl: string | null;
+  onDarkFaviconChange: (url: string | null) => void;
+  onDarkLogoChange: (url: string | null) => void;
   disabled?: boolean;
   /** True while either card is reading, preparing or uploading a file. */
   onBusyChange?: (busy: boolean) => void;
@@ -99,12 +120,18 @@ export function LogosV2({
   logoUrl,
   onFaviconChange,
   onLogoChange,
+  darkFaviconUrl,
+  darkLogoUrl,
+  onDarkFaviconChange,
+  onDarkLogoChange,
   disabled,
   onBusyChange,
 }: LogosV2Props) {
   const [smallBusy, setSmallBusy] = useState(false);
   const [largeBusy, setLargeBusy] = useState(false);
-  const busy = smallBusy || largeBusy;
+  const [darkSmallBusy, setDarkSmallBusy] = useState(false);
+  const [darkLargeBusy, setDarkLargeBusy] = useState(false);
+  const busy = smallBusy || largeBusy || darkSmallBusy || darkLargeBusy;
   const onBusyChangeRef = useRef(onBusyChange);
   onBusyChangeRef.current = onBusyChange;
 
@@ -142,6 +169,24 @@ export function LogosV2({
           disabled={disabled}
           onBusyChange={setLargeBusy}
         />
+        <DarkSquareIconCard
+          tenantId={tenantId}
+          portalName={portalName}
+          lightUrl={faviconUrl}
+          url={darkFaviconUrl}
+          onChange={onDarkFaviconChange}
+          disabled={disabled}
+          onBusyChange={setDarkSmallBusy}
+        />
+        <DarkFullLogoCard
+          tenantId={tenantId}
+          portalName={portalName}
+          lightUrl={logoUrl}
+          url={darkLogoUrl}
+          onChange={onDarkLogoChange}
+          disabled={disabled}
+          onBusyChange={setDarkLargeBusy}
+        />
       </div>
     </SettingsSection>
   );
@@ -153,12 +198,14 @@ export function LogosV2({
 
 interface UploadOptions {
   slot: LogoSlot;
+  /** Storage file-name prefix; defaults to favicon / logo by slot. */
+  storageName?: string;
   tenantId: string;
   onChange: (url: string | null) => void;
   onBusyChange: (busy: boolean) => void;
 }
 
-function useLogoUpload({ slot, tenantId, onChange, onBusyChange }: UploadOptions) {
+function useLogoUpload({ slot, storageName, tenantId, onChange, onBusyChange }: UploadOptions) {
   const [problem, setProblem] = useState<string | null>(null);
   // Square icon only: a file that is fine except for its shape, waiting on "Fit into a square".
   const [notSquare, setNotSquare] = useState<{ loaded: LoadedLogo; message: string } | null>(null);
@@ -195,7 +242,7 @@ function useLogoUpload({ slot, tenantId, onChange, onBusyChange }: UploadOptions
         return;
       }
       // Storage file names are unchanged: favicon-… and logo-… under the tenant.
-      const url = await uploadLogoBlob(blob, tenantId, slot === 'small' ? 'favicon' : 'logo');
+      const url = await uploadLogoBlob(blob, tenantId, storageName ?? (slot === 'small' ? 'favicon' : 'logo'));
       if (mounted.current) latest.current.onChange(url);
     } catch {
       if (mounted.current) setProblem(UPLOAD_FAILED);
@@ -266,6 +313,8 @@ function useLogoUpload({ slot, tenantId, onChange, onBusyChange }: UploadOptions
 
 interface LogoCardProps {
   slot: LogoSlot;
+  /** Overrides the slot's name (the dark-mode cards). */
+  title?: string;
   description: string;
   accept: string;
   url: string | null;
@@ -275,10 +324,10 @@ interface LogoCardProps {
   preview: ReactNode;
 }
 
-function LogoCard({ slot, description, accept, url, disabled, upload, onRemove, preview }: LogoCardProps) {
+function LogoCard({ slot, title, description, accept, url, disabled, upload, onRemove, preview }: LogoCardProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const failed = useImageLoadFailed(url);
-  const noun = logoSlotNoun(slot);
+  const noun = title ? title.toLowerCase() : logoSlotNoun(slot);
   const choose = () => inputRef.current?.click();
 
   const onDrop = (event: DragEvent<HTMLDivElement>) => {
@@ -289,13 +338,13 @@ function LogoCard({ slot, description, accept, url, disabled, upload, onRemove, 
 
   return (
     <div
-      data-logo-card={slot}
+      data-logo-card={title ? `${slot}-dark` : slot}
       className="flex min-w-0 flex-col gap-3 rounded-xl border bg-card p-4"
       onDragOver={(event) => event.preventDefault()}
       onDrop={onDrop}
     >
       <div>
-        <h3 className="text-sm font-semibold text-foreground">{LOGO_SLOT_NAMES[slot]}</h3>
+        <h3 className="text-sm font-semibold text-foreground">{title ?? LOGO_SLOT_NAMES[slot]}</h3>
         <p className="mt-0.5 text-[13px] leading-snug text-muted-foreground">{description}</p>
       </div>
 
@@ -463,6 +512,149 @@ function FullLogoCard({
       upload={upload}
       onRemove={() => onChange(null)}
       preview={<SignInPreview logoUrl={url} appName={portalName} brandColor={brandColor} />}
+    />
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Dark-mode versions                                                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The dark ground both dark cards preview on. Literal colours on purpose: the
+ * card shows what a dark surface will do to the image, so it must stay dark
+ * while the portal itself is in light mode. It matches the dark page (10%).
+ */
+const DARK_GROUND = 'bg-[#1a1a1a] text-[#d6d6d6]';
+
+/** Under a dark card's preview when nothing is uploaded: what stands in. */
+function FallbackNote({ children }: { children: ReactNode }) {
+  return <p className="text-xs leading-snug text-muted-foreground">{children}</p>;
+}
+
+function DarkSquareIconCard({
+  tenantId,
+  portalName,
+  lightUrl,
+  url,
+  onChange,
+  disabled,
+  onBusyChange,
+}: {
+  tenantId: string;
+  portalName: string;
+  lightUrl: string | null;
+  url: string | null;
+  onChange: (url: string | null) => void;
+  disabled?: boolean;
+  onBusyChange: (busy: boolean) => void;
+}) {
+  const upload = useLogoUpload({ slot: 'small', storageName: 'favicon-dark', tenantId, onChange, onBusyChange });
+  // What the sidebar shows today with nothing uploaded: the square icon, with
+  // the same automatic backing the real sidebar gives it in dark mode.
+  const shown = url ?? lightUrl;
+  const tone = useLogoTone(url ? null : lightUrl);
+
+  return (
+    <LogoCard
+      slot="small"
+      title="Square icon, dark mode"
+      description="Optional. Shows at the top of your sidebar in dark mode."
+      accept={SMALL_LOGO_ACCEPT}
+      url={url}
+      disabled={disabled}
+      upload={upload}
+      onRemove={() => onChange(null)}
+      preview={
+        <div className="space-y-2">
+          <div className={cn('flex h-36 items-center rounded-xl px-5', DARK_GROUND)}>
+            <div className="flex items-center gap-2.5 rounded-lg bg-white/[0.06] px-2.5 py-2">
+              {shown ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={shown}
+                  alt=""
+                  className={cn('h-8 w-8 shrink-0 rounded-lg object-contain', !url && LOGO_TONE_CLASS_ON_DARK[tone])}
+                />
+              ) : (
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-[12px] font-semibold text-primary-foreground">
+                  {getBrandInitials(portalName) || BRAND_MARK_FALLBACK_INITIALS}
+                </span>
+              )}
+              <span className="truncate text-[13px] font-semibold">{portalName}</span>
+            </div>
+          </div>
+          {!url && (
+            <FallbackNote>
+              {lightUrl
+                ? tone === 'none'
+                  ? 'Not set. Your square icon already reads well on dark, so it is used as it is.'
+                  : 'Not set. Your square icon is used, with a light backing added so it stays visible on dark.'
+                : 'Not set. Your initials are used, as they are in light mode.'}
+            </FallbackNote>
+          )}
+        </div>
+      }
+    />
+  );
+}
+
+function DarkFullLogoCard({
+  tenantId,
+  portalName,
+  lightUrl,
+  url,
+  onChange,
+  disabled,
+  onBusyChange,
+}: {
+  tenantId: string;
+  portalName: string;
+  lightUrl: string | null;
+  url: string | null;
+  onChange: (url: string | null) => void;
+  disabled?: boolean;
+  onBusyChange: (busy: boolean) => void;
+}) {
+  const upload = useLogoUpload({ slot: 'large', storageName: 'logo-dark', tenantId, onChange, onBusyChange });
+  const shown = url ?? lightUrl;
+
+  return (
+    <LogoCard
+      slot="large"
+      title="Full logo, dark backgrounds"
+      description="Optional. Shows on your booking website's header and footer, and wherever your logo sits on dark."
+      accept={LARGE_LOGO_ACCEPT}
+      url={url}
+      disabled={disabled}
+      upload={upload}
+      onRemove={() => onChange(null)}
+      preview={
+        <div className="space-y-2">
+          <div className={cn('flex h-36 flex-col justify-center gap-3 rounded-xl px-6', DARK_GROUND)}>
+            <div className="flex items-center justify-between gap-4">
+              {shown ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={shown} alt="" className="h-8 w-auto max-w-[160px] object-contain" />
+              ) : (
+                <span className="truncate text-[15px] font-semibold">{portalName}</span>
+              )}
+              <span aria-hidden className="flex gap-3">
+                <span className="h-1.5 w-8 rounded-full bg-white/20" />
+                <span className="h-1.5 w-8 rounded-full bg-white/20" />
+                <span className="h-1.5 w-8 rounded-full bg-white/20" />
+              </span>
+            </div>
+          </div>
+          {!url && (
+            <FallbackNote>
+              {lightUrl
+                ? 'Not set. Your full logo is used on dark backgrounds too. If it is dark, upload a light version here.'
+                : 'Not set. Your name is shown until you upload a logo.'}
+            </FallbackNote>
+          )}
+        </div>
+      }
     />
   );
 }

@@ -90,7 +90,7 @@ export function CmsOverview() {
           href={siteUrl}
           target="_blank"
           rel="noreferrer"
-          className="mt-1.5 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-primary"
+          className="mt-1.5 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-primary dark:hover:text-[hsl(var(--v2-link,var(--primary)))]"
         >
           {siteUrl.replace(/^https?:\/\//, "")}
           <ExternalLink className="size-3.5" />

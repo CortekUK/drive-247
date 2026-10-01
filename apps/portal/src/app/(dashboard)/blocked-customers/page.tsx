@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -27,7 +27,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Ban, Plus, Trash2, User, CreditCard, Search, CheckCircle, AlertTriangle, Eye, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useCustomerBlockingActions, useBlockedIdentities } from "@/hooks/use-customer-blocking";
+import { useCustomerBlockingActions, useBlockedIdentities, type BlockedIdentity } from "@/hooks/use-customer-blocking";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
@@ -35,7 +35,14 @@ import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
 import { useV2 } from "@/lib/v2-context";
 import { HEADER_PRIMARY_V2 } from "@/components/shared/header-icon-button-v2";
+import { usePageSearch } from "@/components/shared/layout/page-search-slot";
 import { BlockedCustomersTableV2, BlockedIdentitiesTableV2 } from "@/components/customers-v2/blocked-customers-tables-v2";
+import { useIsLean } from "@/lib/lean-context";
+import { useForcedEmptyState } from "@/hooks/use-forced-empty-state";
+import { BlockedCustomersTeachingEmptyState } from "@/components/empty-states/blocked-customers-empty-state";
+import { AutoSkeleton } from "@/components/skeleton-v2/auto-skeleton";
+import { skeletonRows } from "@/lib/skeleton-data";
+import { useSkeletonLoading } from "@/hooks/use-skeleton-loading";
 
 interface BlockedCustomer {
   id: string;
@@ -47,6 +54,35 @@ interface BlockedCustomer {
   is_blocked: boolean;
   blocked_at: string | null;
   blocked_reason: string | null;
+}
+
+/** Placeholder blocked customers for the v2 skeleton: only their shapes are seen. */
+const SKELETON_BLOCKED_CUSTOMERS: BlockedCustomer[] = skeletonRows(6, (f) => ({
+  id: f.id,
+  name: f.text(2, 3),
+  email: `${f.word(5, 10)}@${f.word(5, 8)}.com`,
+  phone: null,
+  license_number: f.word(8, 12),
+  id_number: null,
+  is_blocked: true,
+  blocked_at: f.date(),
+  blocked_reason: f.text(2, 6),
+}));
+
+/** Placeholder blocked identities for the v2 skeleton. */
+const SKELETON_BLOCKED_IDENTITIES = skeletonRows(6, (f) => ({
+  id: f.id,
+  identity_type: f.pick(["license", "id_card", "passport"]),
+  identity_number: f.word(8, 12),
+  customer_name: f.text(2, 3),
+  reason: f.text(2, 6),
+  notes: null,
+  created_at: f.date(),
+})) as unknown as BlockedIdentity[];
+
+/** v1's stand-in for <AutoSkeleton>: renders the region as it always was. */
+function PlainRegion({ children }: { loading: boolean; className?: string; children: ReactNode }) {
+  return <>{children}</>;
 }
 
 const BlockedCustomers = () => {
@@ -127,10 +163,10 @@ const BlockedCustomers = () => {
     }
     setCustomerComboboxOpen(false);
   };
-  const { data: blockedIdentities, isLoading: identitiesLoading } = useBlockedIdentities();
+  const { data: loadedBlockedIdentities, isLoading: identitiesLoading } = useBlockedIdentities();
 
   // Fetch blocked customers
-  const { data: blockedCustomers, isLoading: customersLoading, refetch: refetchCustomers } = useQuery({
+  const { data: loadedBlockedCustomers, isLoading: customersLoading, refetch: refetchCustomers } = useQuery({
     queryKey: ["blocked-customers", tenant?.id],
     queryFn: async (): Promise<BlockedCustomer[]> => {
       let query = supabase
@@ -150,6 +186,16 @@ const BlockedCustomers = () => {
     },
     enabled: !!tenant,
   });
+
+  // v2: while either list loads, placeholder rows render through the real
+  // stat cards and tables, and <AutoSkeleton> turns them into the skeleton.
+  // v1 keeps its "Loading..." lines below.
+  const customersSkeleton = useSkeletonLoading(customersLoading) && v2Chrome;
+  const identitiesSkeleton = useSkeletonLoading(identitiesLoading) && v2Chrome;
+  const isSkeleton = customersSkeleton || identitiesSkeleton;
+  const blockedCustomers = customersSkeleton ? SKELETON_BLOCKED_CUSTOMERS : loadedBlockedCustomers;
+  const blockedIdentities = identitiesSkeleton ? SKELETON_BLOCKED_IDENTITIES : loadedBlockedIdentities;
+  const SkeletonRegion = v2Chrome ? AutoSkeleton : PlainRegion;
 
   const handleUnblockCustomer = () => {
     if (unblockCustomerDialog) {
@@ -212,6 +258,35 @@ const BlockedCustomers = () => {
     identity.customer_name?.toLowerCase().includes(searchTerm.toLowerCase())
   ) || [];
 
+  // Nothing blocked at all — no blocked customers AND no blocked identities,
+  // from the raw query results (never the search-filtered lists), and only
+  // once both have loaded. Lean canary only; `devForceEmpty` is the /dev
+  // preview switch, inert outside development and inside the lean gate.
+  const devForceEmpty = useForcedEmptyState("blocked-customers");
+  const leanTenant = useIsLean();
+  const teachEmptyBlocked =
+    leanTenant &&
+    (devForceEmpty ||
+      (!!blockedCustomers && !!blockedIdentities && blockedCustomers.length === 0 && blockedIdentities.length === 0));
+
+  /* v2: the list's search lives in the top bar (page-search-slot.tsx), scoped
+     "Blocked", with global search one step away. One term filters both tabs. */
+  usePageSearch(
+    v2Chrome && !teachEmptyBlocked
+      ? {
+          placeholder: "Search by name, email, license, or ID…",
+          value: searchTerm,
+          // Wrapped: `handleSearchChange` is declared further down this body.
+          onChange: (next) => handleSearchChange(next),
+          scopeLabel: "Blocked",
+          resultCount:
+            !isSkeleton && blockedCustomers && blockedIdentities
+              ? filteredCustomers.length + filteredIdentities.length
+              : undefined,
+        }
+      : null,
+  );
+
   // Pagination for customers
   const totalCustomersCount = filteredCustomers.length;
   const totalCustomersPages = Math.ceil(totalCustomersCount / pageSize);
@@ -258,7 +333,7 @@ const BlockedCustomers = () => {
             Manage blocked customers and identity blacklist
           </p>
         </div>
-        {canEdit('blocked_customers') && (
+        {canEdit('blocked_customers') && !teachEmptyBlocked && (
           v2Chrome ? (
             // v2: the 32px Add to Blocklist pill, centred on the subtitle line
             // (team lead Sep 16 2026). HEADER_ACTIONS_V2 with the box matched to
@@ -278,6 +353,14 @@ const BlockedCustomers = () => {
         )}
       </div>
 
+      {/* Nothing blocked yet (lean only): the heading stays and the empty
+          state carries the one action; stats, search and tabs step aside. */}
+      {teachEmptyBlocked ? (
+        <BlockedCustomersTeachingEmptyState
+          onAddToBlocklist={canEdit('blocked_customers') ? () => setAddIdentityDialogOpen(true) : undefined}
+        />
+      ) : (
+      <SkeletonRegion loading={isSkeleton} className="space-y-4 md:space-y-6">
       {/* Stats Cards */}
       <div className="grid grid-cols-3 gap-3 md:gap-4">
         <Card className="p-4 md:p-6">
@@ -306,7 +389,8 @@ const BlockedCustomers = () => {
         </Card>
       </div>
 
-      {/* Search */}
+      {/* Search — v2 draws it in the top bar instead (usePageSearch above). */}
+      {!v2Chrome && (
       <div className="flex items-center gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -318,6 +402,7 @@ const BlockedCustomers = () => {
           />
         </div>
       </div>
+      )}
 
       {/* Tabs */}
       <Tabs defaultValue="customers" className="space-y-4">
@@ -334,7 +419,7 @@ const BlockedCustomers = () => {
 
         {/* Blocked Customers Tab */}
         <TabsContent value="customers" className="space-y-4">
-          {customersLoading ? (
+          {customersLoading && !v2Chrome ? (
             <div className="text-center py-8 text-muted-foreground">Loading...</div>
           ) : filteredCustomers.length === 0 ? (
             <div className="text-center py-8">
@@ -532,7 +617,7 @@ const BlockedCustomers = () => {
 
         {/* Blocked Identities Tab */}
         <TabsContent value="identities" className="space-y-4">
-          {identitiesLoading ? (
+          {identitiesLoading && !v2Chrome ? (
             <div className="text-center py-8 text-muted-foreground">Loading...</div>
           ) : filteredIdentities.length === 0 ? (
             <div className="text-center py-8">
@@ -702,6 +787,8 @@ const BlockedCustomers = () => {
           )}
         </TabsContent>
       </Tabs>
+      </SkeletonRegion>
+      )}
 
       {/* Add Identity Dialog */}
       <Dialog open={addIdentityDialogOpen} onOpenChange={(open) => {

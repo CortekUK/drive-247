@@ -74,7 +74,8 @@ export function VoiceCallBar({
       setVisible(true);
       setFadeOut(false);
       const fadeTimer = setTimeout(() => setFadeOut(true), 2000);
-      const hideTimer = setTimeout(() => setVisible(false), 3000);
+      // Unmount once the 200ms fade-out has finished.
+      const hideTimer = setTimeout(() => setVisible(false), 2200);
       return () => {
         clearTimeout(fadeTimer);
         clearTimeout(hideTimer);
@@ -101,8 +102,8 @@ export function VoiceCallBar({
   // ─── Incoming call dialog ───
   if (incomingCall && status === 'idle') {
     return (
-      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
-        <div className="w-[340px] rounded-2xl bg-card border shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in-0 duration-200 ease-out motion-reduce:animate-none">
+        <div className="w-[340px] rounded-2xl bg-card border shadow-2xl overflow-hidden animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none">
           {/* Header */}
           <div className="bg-green-600 px-6 py-4 text-center">
             <div className="flex items-center justify-center gap-2 text-green-100 text-sm mb-1">
@@ -163,7 +164,7 @@ export function VoiceCallBar({
   // ─── Connecting / Ringing dialog ───
   if (status === 'connecting' || status === 'ringing') {
     return (
-      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in-0 duration-200 ease-out motion-reduce:animate-none">
         <div className="w-[340px] rounded-2xl bg-card border shadow-2xl overflow-hidden">
           <div className="bg-amber-600 px-6 py-4 text-center">
             <p className="text-amber-100 text-sm">Calling</p>
@@ -205,7 +206,7 @@ export function VoiceCallBar({
   // ─── Connected dialog ───
   if (status === 'connected') {
     return (
-      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in-0 duration-200 ease-out motion-reduce:animate-none">
         <div className="w-[340px] rounded-2xl bg-card border shadow-2xl overflow-hidden">
           <div className="bg-green-600 px-6 py-3 text-center">
             <p className="text-green-100 text-sm">Connected</p>
@@ -265,8 +266,8 @@ export function VoiceCallBar({
   // ─── Ended state (brief display before fade-out) ───
   if (status === 'ended' && visible) {
     return (
-      <div className={`fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm transition-opacity duration-1000 ${
-        fadeOut ? 'opacity-0' : 'opacity-100'
+      <div className={`fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm transition-opacity duration-200 motion-reduce:transition-none ${
+        fadeOut ? 'opacity-0 ease-in' : 'opacity-100 ease-out'
       }`}>
         <div className="w-[340px] rounded-2xl bg-card border shadow-2xl overflow-hidden">
           <div className="px-6 py-8 text-center">

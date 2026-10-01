@@ -35,6 +35,9 @@ import type { MessageChannel } from "@/contexts/RealtimeChatContext";
 import { mockChannelDecoration, type MockChannelDecoration } from "@/components/messages-v2/mock-conversation";
 import { readMessagesScenario, subscribeDevOverrides } from "@/lib/dev-overrides";
 import { NO_SCROLLBAR } from "@/components/messages-v2/no-scrollbar";
+import { AutoSkeleton } from "@/components/skeleton-v2/auto-skeleton";
+import { skeletonRows } from "@/lib/skeleton-data";
+import { useSkeletonLoading } from "@/hooks/use-skeleton-loading";
 
 const initials = (name?: string | null) =>
   (name || "?").split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
@@ -45,6 +48,22 @@ const CHANNEL_MARK: Record<MessageChannel, { icon: typeof Mail; label: string }>
   email: { icon: Mail, label: "Email" },
   voice: { icon: Phone, label: "Call" },
 };
+
+/** Placeholder conversations for the rail's skeleton: only their shapes are seen. */
+const SKELETON_CHANNELS: ChatChannel[] = skeletonRows(8, (f) => ({
+  id: f.id,
+  tenant_id: "",
+  customer_id: f.id,
+  status: "active" as const,
+  last_message_at: f.date(f.int(0, 20)),
+  last_channel: "in_app" as const,
+  created_at: f.date(60),
+  updated_at: f.date(60),
+  customer: { id: f.id, name: f.text(2, 3), email: "", phone: null, profile_photo_url: null },
+  unread_count: 0,
+  last_message_preview: f.text(4, 8),
+  last_message_channel: null,
+}));
 
 function Row({
   channel, mock, selected,
@@ -78,7 +97,7 @@ function Row({
       <div className="relative shrink-0">
         <Avatar className="h-9 w-9">
           <AvatarImage src={channel.customer?.profile_photo_url || undefined} alt={name} />
-          <AvatarFallback className="bg-primary/10 text-[11px] font-semibold text-primary">
+          <AvatarFallback className="bg-primary/10 text-[11px] font-semibold text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
             {initials(name)}
           </AvatarFallback>
         </Avatar>
@@ -121,7 +140,11 @@ export function ConversationRail({
   // the one actually mounted by the Messages layout — never read it. So texts and
   // voicemails from anyone not already on a customer record reached the database and
   // were invisible to the operator.
-  const { channels, unknownThreads, isLoading } = useChatChannels();
+  const { channels: loadedChannels, unknownThreads, isLoading: channelsLoading } = useChatChannels();
+  const isLoading = useSkeletonLoading(channelsLoading);
+  // While the list loads the rail renders placeholder rows through the real
+  // <Row>, and <AutoSkeleton> turns them into the skeleton.
+  const channels = isLoading ? SKELETON_CHANNELS : loadedChannels;
   const [query, setQuery] = useState("");
   const [linkThread, setLinkThread] = useState<UnknownSmsThread | null>(null);
 
@@ -137,7 +160,9 @@ export function ConversationRail({
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return channels;
+    // A query typed before the list arrives must not filter the placeholders
+    // down to "No matches".
+    if (!q || isLoading) return channels;
     return channels.filter((c, i) => {
       const name = c.customer?.name?.toLowerCase() ?? "";
       const email = c.customer?.email?.toLowerCase() ?? "";
@@ -146,7 +171,7 @@ export function ConversationRail({
         : c.last_message_preview ?? "";
       return name.includes(q) || email.includes(q) || shown.toLowerCase().includes(q);
     });
-  }, [channels, query, previewing, scenario]);
+  }, [channels, query, previewing, scenario, isLoading]);
 
   return (
     /* min-h-0 is what stops this column growing past the shell and handing the
@@ -193,19 +218,7 @@ export function ConversationRail({
       {/* The one scroll region in this column. The search header above is a
           sibling, not a wrapper, so it stays put without `sticky`. */}
       <div className={`min-h-0 flex-1 overflow-y-auto no-scrollbar ${NO_SCROLLBAR}`}>
-        {isLoading ? (
-          <div className="space-y-1 p-3">
-            {[0, 1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="flex items-center gap-3 px-1 py-2">
-                <div className="h-9 w-9 shrink-0 animate-pulse rounded-full bg-muted" />
-                <div className="flex-1 space-y-1.5">
-                  <div className="h-3 w-28 animate-pulse rounded-full bg-muted" />
-                  <div className="h-2.5 w-40 animate-pulse rounded-full bg-muted/70" />
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : filtered.length === 0 ? (
+        {!isLoading && filtered.length === 0 ? (
           <div className="px-6 py-16 text-center">
             <p className="text-[13px] font-medium">
               {query ? "No matches" : "No conversations yet"}
@@ -217,16 +230,16 @@ export function ConversationRail({
             </p>
           </div>
         ) : (
-          <div className="divide-y divide-border/30">
+          <AutoSkeleton loading={isLoading} className="divide-y divide-border/30">
             {filtered.map((c) => (
               <Row
                 key={c.id}
                 channel={c}
-                mock={decorationFor(c.id)}
-                selected={c.id === selectedId}
+                mock={isLoading ? null : decorationFor(c.id)}
+                selected={!isLoading && c.id === selectedId}
               />
             ))}
-          </div>
+          </AutoSkeleton>
         )}
 
         {/* Rendered outside the empty/loaded branch above, so an operator whose only

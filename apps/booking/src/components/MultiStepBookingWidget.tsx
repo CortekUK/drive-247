@@ -3589,8 +3589,13 @@ const MultiStepBookingWidget = ({
             <div className="step-transition-bar" />
           </div>
 
-          {/* Fade wrapper for step content */}
-          <div className={cn("transition-opacity duration-300", isStepTransitioning ? "opacity-0" : "opacity-100")}>
+          {/* Fade wrapper for step content. The TRAX motion: the step sinks 12px and fades out (200ms ease-in), then
+              rises back in (200ms ease-out). `translate` rests at none so the wrapper
+              never becomes a containing block for fixed-position children. */}
+          <div className={cn(
+            "[transition-property:opacity,translate] duration-200 motion-reduce:transition-none",
+            isStepTransitioning ? "opacity-0 [translate:0_0.75rem] ease-in" : "opacity-100 [translate:none] ease-out",
+          )}>
 
         {/* Step 1: Rental Details */}
         {currentStep === 1 && <div className="space-y-8">

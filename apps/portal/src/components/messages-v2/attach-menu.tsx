@@ -34,21 +34,37 @@ import { Car, Paperclip, Search, Upload } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import { Input } from "@/components/ui-v2/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui-v2/popover";
-import { useCustomerRentals } from "@/hooks/use-customer-rentals";
+import { useCustomerRentals, type CustomerRental } from "@/hooks/use-customer-rentals";
+import { AutoSkeleton } from "@/components/skeleton-v2/auto-skeleton";
+import { skeletonRows } from "@/lib/skeleton-data";
+import { useSkeletonLoading } from "@/hooks/use-skeleton-loading";
 import type { BookingReference } from "@/components/chat/BookingPicker";
 
 /** Same derivation BookingPicker uses, so a rental reads the same in both. */
 const rentalNumber = (id: string) => `RNT-${id.slice(0, 6).toUpperCase()}`;
 
 const STATUS_TONE: Record<string, string> = {
-  active: "bg-green-500/10 text-green-700",
-  pending: "bg-amber-500/10 text-amber-700",
-  reserved: "bg-amber-500/10 text-amber-700",
+  active: "bg-green-500/10 text-green-700 dark:text-green-300",
+  pending: "bg-amber-500/10 text-amber-700 dark:text-amber-300",
+  reserved: "bg-amber-500/10 text-amber-700 dark:text-amber-300",
   completed: "bg-muted text-muted-foreground",
   ended: "bg-muted text-muted-foreground",
   closed: "bg-muted text-muted-foreground",
   cancelled: "bg-destructive/10 text-destructive",
 };
+
+/** Placeholder bookings for the picker's skeleton: only their shapes are seen. */
+const SKELETON_RENTALS: CustomerRental[] = skeletonRows(3, (f) => ({
+  id: f.id,
+  start_date: f.date(),
+  end_date: f.date(-7),
+  monthly_amount: 0,
+  status: f.pick(["Active", "Completed", "Pending"]),
+  approval_status: null,
+  schedule: "",
+  created_at: f.date(),
+  vehicle: { id: f.id, reg: f.word(6, 8), make: f.word(4, 8), model: f.text(1, 2) },
+}));
 
 export function AttachMenu({
   customerId,
@@ -65,11 +81,14 @@ export function AttachMenu({
   const [view, setView] = useState<"menu" | "booking">("menu");
   const [query, setQuery] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
-  const { data: rentals = [], isLoading } = useCustomerRentals(customerId);
+  const { data: loadedRentals = [], isLoading: rentalsLoading } = useCustomerRentals(customerId);
+  const isLoading = useSkeletonLoading(rentalsLoading);
+  // While loading, placeholder bookings render through the real rows below.
+  const rentals = isLoading ? SKELETON_RENTALS : loadedRentals;
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return rentals;
+    if (!q || isLoading) return rentals;
     return rentals.filter((r) => {
       const vehicle = `${r.vehicle?.make ?? ""} ${r.vehicle?.model ?? ""}`.toLowerCase();
       return (
@@ -79,7 +98,7 @@ export function AttachMenu({
         r.status.toLowerCase().includes(q)
       );
     });
-  }, [rentals, query]);
+  }, [rentals, query, isLoading]);
 
   function close() {
     setOpen(false);
@@ -134,7 +153,7 @@ export function AttachMenu({
                 onClick={() => fileRef.current?.click()}
                 className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-[hsl(var(--v2-hover,var(--accent)_/_0.6))]"
               >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
                   <Upload className="h-4 w-4" />
                 </span>
                 <span className="min-w-0">
@@ -150,7 +169,7 @@ export function AttachMenu({
                 onClick={() => setView("booking")}
                 className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-[hsl(var(--v2-hover,var(--accent)_/_0.6))]"
               >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
                   <Car className="h-4 w-4" />
                 </span>
                 <span className="min-w-0">
@@ -177,20 +196,15 @@ export function AttachMenu({
               </div>
 
               <div className="max-h-[280px] overflow-y-auto no-scrollbar p-1.5">
-                {isLoading ? (
-                  <div className="space-y-2 p-2">
-                    {[0, 1, 2].map((i) => (
-                      <div key={i} className="h-12 animate-pulse rounded-xl bg-muted" />
-                    ))}
-                  </div>
-                ) : filtered.length === 0 ? (
+                {!isLoading && filtered.length === 0 ? (
                   <p className="px-3 py-8 text-center text-[13px] text-muted-foreground">
                     {rentals.length === 0
                       ? "This customer has no rentals yet."
                       : "No bookings match that search."}
                   </p>
                 ) : (
-                  filtered.map((r) => {
+                  <AutoSkeleton loading={isLoading}>
+                  {filtered.map((r) => {
                     const tone = STATUS_TONE[r.status.toLowerCase()] ?? "bg-muted text-muted-foreground";
                     return (
                       <button
@@ -237,7 +251,8 @@ export function AttachMenu({
                         </span>
                       </button>
                     );
-                  })
+                  })}
+                  </AutoSkeleton>
                 )}
               </div>
             </div>

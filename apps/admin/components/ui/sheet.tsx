@@ -4,6 +4,7 @@ import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { MOTION_OVERLAY, MOTION_SHEET } from "./motion";
 
 const Sheet = DialogPrimitive.Root;
 
@@ -20,7 +21,8 @@ const SheetOverlay = React.forwardRef<
   <DialogPrimitive.Overlay
     className={cn(
       // v2 scrim — a light wash plus a blur, matching Dialog.
-      "fixed inset-0 isolate z-50 bg-black/30 supports-[backdrop-filter]:backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+      "fixed inset-0 isolate z-50 bg-black/30 supports-[backdrop-filter]:backdrop-blur-sm",
+      MOTION_OVERLAY,
       className
     )}
     {...props}
@@ -52,7 +54,8 @@ const SheetContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed z-50 gap-4 bg-card border-border p-6 shadow-xl transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500 data-[state=open]:animate-in data-[state=closed]:animate-out",
+        "fixed z-50 gap-4 bg-card border-border p-6 shadow-xl",
+        MOTION_SHEET,
         sheetVariants[side],
         className
       )}

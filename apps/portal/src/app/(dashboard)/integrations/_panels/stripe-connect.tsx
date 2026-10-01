@@ -899,7 +899,7 @@ export default function StripeConnectPanel({ tenant }: IntegrationPanelProps) {
               "Stripe pays out to your bank on its own schedule from then on.",
             ].map((step, i) => (
               <li key={step} className="flex gap-2">
-                <span className="shrink-0 text-primary">{i + 1}.</span>
+                <span className="shrink-0 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">{i + 1}.</span>
                 <span>{step}</span>
               </li>
             ))}

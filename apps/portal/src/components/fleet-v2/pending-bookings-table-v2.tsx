@@ -118,7 +118,7 @@ export function PendingBookingsTableV2({
   if (!bookings) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" />
       </div>
     );
   }

@@ -347,7 +347,7 @@ export function PasswordResetPanel({
         // ---------------------------------------------------------------------
         <div
           key="request"
-          className="animate-in fade-in-0 slide-in-from-bottom-2 duration-300"
+          className="animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none"
         >
           <div className="flex size-10 items-center justify-center rounded-full bg-indigo-50 dark:bg-indigo-950/40">
             <KeyRound className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
@@ -429,7 +429,7 @@ export function PasswordResetPanel({
           key="verify"
           onSubmit={submit}
           noValidate
-          className="animate-in fade-in-0 slide-in-from-bottom-2 duration-300"
+          className="animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none"
         >
           <div className="flex size-10 items-center justify-center rounded-full bg-indigo-50 dark:bg-indigo-950/40">
             <MailCheck className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />

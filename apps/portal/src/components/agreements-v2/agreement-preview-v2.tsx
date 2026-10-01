@@ -335,7 +335,7 @@ export function AgreementPreviewV2({
       <div className="agr-frame">
         {prepared && prepared.unresolved > 0 && (
           <p className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
-            <span aria-hidden="true" className="inline-block h-3 w-5 shrink-0 rounded-sm border border-dashed border-amber-500 bg-amber-100" />
+            <span aria-hidden="true" className="inline-block h-3 w-5 shrink-0 rounded-sm border border-dashed border-amber-500 bg-amber-100 dark:bg-amber-500/15" />
             {unresolvedNote
               ? unresolvedNote(prepared.unresolved)
               : prepared.unresolved === 1

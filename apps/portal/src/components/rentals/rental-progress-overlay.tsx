@@ -20,10 +20,10 @@ export function RentalProgressOverlay({
   return (
     <div
       className={cn(
-        'fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-md transition-all duration-300',
+        'fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-md transition-opacity duration-200 motion-reduce:transition-none',
         isVisible
-          ? 'opacity-100 pointer-events-auto'
-          : 'opacity-0 pointer-events-none'
+          ? 'opacity-100 ease-out pointer-events-auto'
+          : 'opacity-0 ease-in pointer-events-none'
       )}
     >
       <div className="w-full max-w-md mx-4 p-8 rounded-2xl bg-card border border-border shadow-2xl">

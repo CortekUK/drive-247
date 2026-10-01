@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { parseLocalDate } from "@/lib/date-utils";
 import Link from "next/link";
-import { useState, useCallback } from "react";
+import { useState, useCallback, type ReactNode } from "react";
 import { useTenant } from "@/contexts/TenantContext";
 import { useIsAreaHidden, useIsLean } from "@/lib/lean-context";
 import { InsurancesTeachingEmptyState } from "@/components/empty-states/lean-empty-states";
@@ -38,8 +38,12 @@ import {
   InshurStatusBadge,
 } from "@/components/rentals/inshur-coverage-block";
 import { useV2 } from "@/lib/v2-context";
+import { usePageSearch } from "@/components/shared/layout/page-search-slot";
 import { InsurancePoliciesTableV2 } from "@/components/insurance-v2/insurance-policies-table-v2";
 import { HEADER_ACTIONS_V2, HEADER_PRIMARY_V2, HeaderIconButton } from "@/components/shared/header-icon-button-v2";
+import { AutoSkeleton } from "@/components/skeleton-v2/auto-skeleton";
+import { skeletonRows } from "@/lib/skeleton-data";
+import { useSkeletonLoading } from "@/hooks/use-skeleton-loading";
 
 /** Three providers now share this list, so a boolean discriminator no longer
  *  works: `uploaded` documents can name Bonzah as their carrier while not being
@@ -74,8 +78,32 @@ interface InsuranceDoc {
 
 type PaymentState = "paid" | "partial" | "unpaid";
 
+/** Placeholder policies for the v2 skeleton: only their shapes are ever seen. */
+const SKELETON_INSURANCES: InsuranceDoc[] = skeletonRows(8, (f) => ({
+  id: f.id,
+  document_name: `${f.word(6, 8)} ${f.word(8, 10)} ${f.word(4, 7)}`,
+  created_at: f.date(),
+  document_type: "Insurance",
+  customer_id: f.id,
+  customers: { name: f.text(2, 3) },
+  file_url: null,
+  provider: "bonzah" as InsuranceProviderKey,
+  status: f.pick(["active", "confirmed", "pending"]),
+  premium_amount: f.money(20, 400),
+  payment_status: f.pick(["paid", "unpaid"] as const),
+}));
+
+/** v1's stand-in for <AutoSkeleton>: renders the region as it always was. */
+function PlainRegion({ children }: { loading: boolean; className?: string; children: ReactNode }) {
+  return <>{children}</>;
+}
+
 export default function InsurancesList() {
   const [searchQuery, setSearchQuery] = useState("");
+  // v2 only: which tab is open, so the top-bar search follows it, and the AI
+  // verifications tab's search, lifted here from `VerificationsTab`.
+  const [insuranceTab, setInsuranceTab] = useState("policies");
+  const [verificationsSearch, setVerificationsSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(25);
   const [providerFilter, setProviderFilter] = useState<InsuranceProviderKey | null>(null);
@@ -222,10 +250,15 @@ export default function InsurancesList() {
     target.set(policyDbId, { state, remaining: Math.max(remaining, 0), amount });
   }
 
-  const isLoading = isLoadingDocs || isLoadingBonzah || isLoadingLedger || isLoadingInshur;
+  const isLoading = useSkeletonLoading(isLoadingDocs || isLoadingBonzah || isLoadingLedger || isLoadingInshur);
+  // v2 wraps the stat cards and the policies table in the auto skeleton; v1's
+  // markup stays exactly as it was.
+  const SkeletonRegion = v2Chrome ? AutoSkeleton : PlainRegion;
 
-  // Combine all insurance documents
-  const allInsurances: InsuranceDoc[] = [
+  // Combine all insurance documents. v2: while they load, the page renders
+  // placeholder policies through its real cards and table, and <AutoSkeleton>
+  // turns that into the skeleton. v1 keeps its own loading block below.
+  const allInsurances: InsuranceDoc[] = v2Chrome && isLoading ? SKELETON_INSURANCES : [
     ...insuranceDocuments.map((doc: any) => ({
       ...doc,
       provider: (doc.insurance_provider?.toLowerCase().includes('bonzah')
@@ -287,7 +320,7 @@ export default function InsurancesList() {
   // `devForceEmpty` is the /dev preview switch (lib/dev-overrides.ts): inert
   // outside development, and INSIDE the slug gate so it reaches nobody else.
   const devForceEmpty = useForcedEmptyState("insurances");
-  const teachEmptyInsurances = useIsLean() && (allInsurances.length === 0 || devForceEmpty);
+  const teachEmptyInsurances = useIsLean() && !(v2Chrome && isLoading) && (allInsurances.length === 0 || devForceEmpty);
 
   const filteredInsurances = allInsurances.filter((doc) => {
     const needle = searchQuery.toLowerCase();
@@ -626,7 +659,31 @@ export default function InsurancesList() {
     }
   }, [allInsurances, bonzahPolicies, inshurCoverage, tenant]);
 
-  if (isLoading) {
+  /* v2: the search lives in the top bar (page-search-slot.tsx) and follows the
+     open tab — policies, or the AI verifications tab, whose filter is lifted up
+     here so the one field drives it. Above the `isLoading` return. */
+  usePageSearch(
+    // The teaching empty state (lean, no policies yet) has no search to offer
+    // on Policies; AI Verifications keeps its own.
+    !v2Chrome || (teachEmptyInsurances && insuranceTab !== "verifications")
+      ? null
+      : insuranceTab === "verifications"
+        ? {
+            placeholder: "Search verifications…",
+            value: verificationsSearch,
+            onChange: setVerificationsSearch,
+            scopeLabel: "Verifications",
+          }
+        : {
+            placeholder: "Search by document name or customer…",
+            value: searchQuery,
+            onChange: (next) => handleSearchChange(next),
+            scopeLabel: "Policies",
+            resultCount: isLoading ? undefined : filteredInsurances.length,
+          },
+  );
+
+  if (isLoading && !v2Chrome) {
     // v2 (switch row alignment): the loaded page's 24px top padding at md, so this
     // skeleton starts where the title does (y=74, title centred on the sidebar
     // switch's row at 92) instead of at y=50 under the 64px top bar. v1 keeps
@@ -654,7 +711,9 @@ export default function InsurancesList() {
         {/* v2: one labelled button (Generate Insurance), every other control a
             32px round icon, and the cluster sits on the subtitle line
             (HEADER_ACTIONS_V2 / HEADER_PRIMARY_V2, team lead Sep 15-16 2026).
-            v1 keeps its outline Buttons and classes byte for byte. */}
+            v1 keeps its outline Buttons and classes byte for byte. The teaching
+            empty state keeps only the title and description. */}
+        {!teachEmptyInsurances && (
         <div className={`flex items-center gap-2${v2Chrome ? ` ${HEADER_ACTIONS_V2}` : ""}`}>
           {v2Chrome ? (
             <>
@@ -666,7 +725,7 @@ export default function InsurancesList() {
               <HeaderIconButton
                 label="Export PDFs"
                 onClick={handleDownloadAll}
-                disabled={isDownloadingAll || allInsurances.length === 0}
+                disabled={isLoading || isDownloadingAll || allInsurances.length === 0}
               >
                 {isDownloadingAll ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -712,9 +771,10 @@ export default function InsurancesList() {
             </Button>
           </span>
         </div>
+        )}
       </div>
 
-      {bonzahBlocked && (
+      {bonzahBlocked && !teachEmptyInsurances && (
         <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 flex items-start gap-3">
           <ShieldCheck className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
           <div className="text-sm">
@@ -746,7 +806,9 @@ export default function InsurancesList() {
         </div>
       )}
 
-      {/* Stat Cards */}
+      {/* Stat Cards — not on the teaching empty state. */}
+      {!teachEmptyInsurances && (
+      <SkeletonRegion loading={isLoading}>
       <div className={cn("grid grid-cols-2 gap-3 sm:gap-4", inshurEnabled ? "lg:grid-cols-5" : "lg:grid-cols-4")}>
         <Card className="bg-gradient-to-br from-indigo-500/10 to-indigo-500/5 border-indigo-500/20">
           <CardContent className="p-3 sm:p-4">
@@ -793,8 +855,10 @@ export default function InsurancesList() {
           </CardContent>
         </Card>
       </div>
+      </SkeletonRegion>
+      )}
 
-      <Tabs defaultValue="policies" className="space-y-4">
+      <Tabs value={insuranceTab} onValueChange={setInsuranceTab} className="space-y-4">
         <TabsList>
           <TabsTrigger value="policies" className="gap-1.5">
             <ShieldCheck className="h-4 w-4" />
@@ -807,8 +871,11 @@ export default function InsurancesList() {
         </TabsList>
 
         <TabsContent value="policies" className="space-y-4">
-      {/* Search + Bonzah Filter */}
+      {/* Search + Bonzah Filter — v2 draws the search in the top bar. Not on
+          the teaching empty state. */}
+      {!teachEmptyInsurances && (
       <div className="flex flex-wrap gap-3 items-center">
+        {!v2Chrome && (
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
           <Input
@@ -818,6 +885,7 @@ export default function InsurancesList() {
             className="pl-10 h-8 text-sm"
           />
         </div>
+        )}
         <button
           onClick={() => {
             setProviderFilter(providerFilter === 'bonzah' ? null : 'bonzah');
@@ -864,6 +932,7 @@ export default function InsurancesList() {
           </button>
         )}
       </div>
+      )}
 
       {/* Insurance Table */}
       {paginatedDocuments.length === 0 || teachEmptyInsurances ? (
@@ -890,6 +959,7 @@ export default function InsurancesList() {
           // filtered row in v1's order, no page slice and no pager: rows arrive
           // as it scrolls. A row opens its rental where v1 offers View Rental;
           // every action is v1's, with the page's own handlers.
+          <AutoSkeleton loading={isLoading}>
           <InsurancePoliciesTableV2<InsuranceDoc>
             rows={filteredInsurances}
             resetKey={`${tenant?.id ?? ""}|${searchQuery}|${providerFilter ?? ""}|${inshurEnabled}`}
@@ -900,6 +970,7 @@ export default function InsurancesList() {
             onAddPayment={setPaymentDoc}
             onViewRental={(doc) => router.push(`/rentals/${doc.rental_id}`)}
           />
+          </AutoSkeleton>
         ) : (
         <>
           <Card>
@@ -1125,7 +1196,9 @@ export default function InsurancesList() {
         </TabsContent>
 
         <TabsContent value="verifications">
-          <VerificationsTab />
+          <VerificationsTab
+            {...(v2Chrome ? { search: verificationsSearch, onSearchChange: setVerificationsSearch } : {})}
+          />
         </TabsContent>
       </Tabs>
 

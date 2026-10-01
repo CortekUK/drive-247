@@ -24,8 +24,11 @@ import type { ComponentType, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui-v2/badge";
 import { Skeleton } from "@/components/ui-v2/skeleton";
+import { AutoSkeleton } from "@/components/skeleton-v2/auto-skeleton";
+import { skeletonFaker } from "@/lib/skeleton-data";
 import { AlertTriangle, Check, Copy, ExternalLink } from "lucide-react";
-import { useState } from "react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui-v2/tooltip";
+import { createContext, useContext, useState } from "react";
 import { Button } from "@/components/ui-v2/button";
 
 /* ───────────────────────────── contract ─────────────────────────────────── */
@@ -108,6 +111,90 @@ const STATE_LABEL: Record<Exclude<IntegrationState, "loading">, string> = {
   disconnected: "Not connected",
 };
 
+/* ───────────────────────────── card tags ────────────────────────────────── */
+
+/**
+ * The ONE tag a board card carries, top-left. At most one at a time; the board
+ * decides which, in this order: unavailable → soon → addon → live → none.
+ * A free integration that is simply not connected yet carries no tag at all,
+ * so the tags only ever mark something worth noticing.
+ */
+export type CardTagKind = "live" | "soon" | "addon" | "unavailable";
+
+const CARD_TAG: Record<CardTagKind, { text: string; className: string }> = {
+  live: { text: "Live", className: "border-success/30 bg-success/10 text-success" },
+  soon: {
+    text: "Soon",
+    className:
+      "border-primary/30 bg-primary/10 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]",
+  },
+  addon: { text: "Add-on", className: "border-border bg-muted text-foreground/75" },
+  unavailable: { text: "Unavailable", className: "border-border/70 bg-muted/60 text-muted-foreground" },
+};
+
+export function CardTag({ kind, className }: { kind: CardTagKind; className?: string }) {
+  const tag = CARD_TAG[kind];
+  return (
+    <span
+      data-card-tag={kind}
+      className={cn(
+        "inline-flex h-6 shrink-0 items-center rounded-full border px-2.5 text-[11px] font-semibold uppercase tracking-wide",
+        tag.className,
+        className,
+      )}
+    >
+      {tag.text}
+    </span>
+  );
+}
+
+/**
+ * The "!" beside a card's tag: the integration is set up far enough to matter
+ * but cannot do its job yet. The warning itself is on hover, in the panel's own
+ * words, so the card stays quiet until someone asks.
+ */
+export function AttentionMark({ warning }: { warning: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          role="img"
+          tabIndex={0}
+          aria-label={warning}
+          data-attention-mark
+          onClick={(e) => e.stopPropagation()}
+          className="inline-flex size-6 shrink-0 cursor-help items-center justify-center rounded-full border border-warning/30 bg-warning/15 text-[13px] font-bold leading-none text-warning focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        >
+          !
+        </span>
+      </TooltipTrigger>
+      <TooltipContent
+        side="bottom"
+        sideOffset={8}
+        className="rounded-xl border border-border bg-card px-3 py-1.5 text-[12px] text-foreground shadow-sm"
+      >
+        {warning}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+/**
+ * Where a `StatusChip` is being drawn. The dialog header (the default) gets the
+ * full pill; a board card sets "tag", and the same per-integration status
+ * component then renders as the card's top-left tag instead:
+ *   connected    → LIVE
+ *   attention    → "!" alone, the label on hover (not LIVE: most attention
+ *                  states are half-set-up, e.g. Stripe not receiving yet)
+ *   disconnected → nothing
+ *   loading      → nothing (no skeleton flicker in the corner)
+ * Done here, once, so none of the thirteen panel files had to change.
+ */
+const StatusChipModeContext = createContext<"chip" | "tag">("chip");
+export const StatusChipTagMode = ({ children }: { children: ReactNode }) => (
+  <StatusChipModeContext.Provider value="tag">{children}</StatusChipModeContext.Provider>
+);
+
 /**
  * The small status pill shown on a card and in the dialog header.
  *
@@ -124,6 +211,13 @@ export function StatusChip({
   label?: string;
   className?: string;
 }) {
+  const mode = useContext(StatusChipModeContext);
+  if (mode === "tag") {
+    if (state === "connected") return <CardTag kind="live" />;
+    if (state === "attention") return <AttentionMark warning={label ?? STATE_LABEL.attention} />;
+    return null;
+  }
+
   if (state === "loading") {
     return <Skeleton className={cn("h-5 w-24 rounded-full", className)} />;
   }
@@ -328,7 +422,7 @@ export function PanelLink({ href, children }: { href: string; children: ReactNod
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+      className="inline-flex items-center gap-1 text-sm text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] hover:underline"
     >
       {children}
       <ExternalLink className="size-3" />
@@ -336,13 +430,26 @@ export function PanelLink({ href, children }: { href: string; children: ReactNod
   );
 }
 
-/** Placeholder while a panel's first fetch is in flight. */
+/**
+ * Placeholder while a panel's first fetch is in flight: label/value rows of
+ * placeholder words, which <AutoSkeleton> turns into bones at the panel's real
+ * text sizes (the same bones every other v2 screen loads with).
+ */
 export function PanelLoading({ rows = 3 }: { rows?: number }) {
   return (
-    <div className={cn(PANEL_TEXT, "space-y-2.5 py-1")}>
-      {Array.from({ length: rows }).map((_, i) => (
-        <Skeleton key={i} className="h-9 w-full rounded-lg" />
-      ))}
+    <div role="status" className={cn(PANEL_TEXT, "py-1")}>
+      <span className="sr-only">Loading</span>
+      <AutoSkeleton loading className="space-y-2.5">
+        {Array.from({ length: rows }).map((_, i) => {
+          const f = skeletonFaker(i);
+          return (
+            <div key={i} aria-hidden className="flex h-9 items-center justify-between gap-3">
+              <span className="min-w-0 truncate">{f.text(1, 3)}</span>
+              <span className="shrink-0">{f.text(1, 2)}</span>
+            </div>
+          );
+        })}
+      </AutoSkeleton>
     </div>
   );
 }

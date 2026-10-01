@@ -239,7 +239,7 @@ function CustomerOverview({
     // Deliberately the accent, not amber. Amber on this screen means one thing
     // — an output is behind its inputs — and "there is a lapsed document" is
     // not that.
-    caution: "bg-primary-light/70 ring-primary/25 text-primary",
+    caution: "bg-primary-light/70 ring-primary/25 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]",
     success: "bg-success-light/70 ring-success/25 text-success",
   } as const;
 
@@ -253,7 +253,7 @@ function CustomerOverview({
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex h-12 shrink-0 items-center justify-between pl-4 pr-9">
         <p className="text-[13px] font-medium">At a glance</p>
-        <p className={cn("text-[11px]", saving ? "text-primary" : "text-muted-foreground")}>
+        <p className={cn("text-[11px]", saving ? "text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" : "text-muted-foreground")}>
           {saving ? "Saving…" : `${required.filter((k) => k.state === "ok").length}/${required.length} ready`}
         </p>
       </div>
@@ -474,7 +474,7 @@ function Flag({
     <span
       className={cn(
         "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium",
-        tone === "destructive" ? "bg-destructive/10 text-destructive" : "bg-primary-light text-primary"
+        tone === "destructive" ? "bg-destructive/10 text-destructive" : "bg-primary-light text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]"
       )}
     >
       <Icon className="size-3" />

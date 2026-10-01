@@ -80,7 +80,7 @@ export default function AdminLoginPage() {
         className="pointer-events-none absolute left-1/2 top-1/2 h-[34rem] w-[34rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/10 blur-3xl"
       />
 
-      <div className="relative z-10 m-auto w-full max-w-md motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-3 motion-safe:duration-500">
+      <div className="relative z-10 m-auto w-full max-w-md motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-3 motion-safe:duration-200 motion-safe:ease-out">
         {/* The product's own mark, a tinted eyebrow chip, then ink-and-muted
             copy inside the card.
 
@@ -135,7 +135,7 @@ export default function AdminLoginPage() {
               // failure without turning the card into a red slab.
               <div
                 role="alert"
-                className="flex items-start gap-3 rounded-2xl border border-destructive/20 bg-destructive/[0.06] px-4 py-3 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-top-1"
+                className="flex items-start gap-3 rounded-2xl border border-destructive/20 bg-destructive/[0.06] px-4 py-3 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-3 motion-safe:duration-200 motion-safe:ease-out"
               >
                 <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" aria-hidden="true" />
                 <p className="text-sm leading-snug text-destructive">{error}</p>

@@ -57,6 +57,7 @@ import {
 import { formatDistanceToNow, format } from "date-fns";
 import type { BlogPost } from "@/types/blog";
 import { useV2 } from "@/lib/v2-context";
+import { usePageSearch } from "@/components/shared/layout/page-search-slot";
 import { BlogPostsTableV2, BLOG_POST_LIST_COLUMNS_V2 } from "@/components/cms-v2/blog-posts-table-v2";
 
 export default function BlogListingPage() {
@@ -91,6 +92,21 @@ export default function BlogListingPage() {
         ? { page: 1, pageSize: 1000, columns: BLOG_POST_LIST_COLUMNS_V2, keepPreviousResults: true }
         : {}),
     });
+
+  usePageSearch(
+    v2Chrome
+      ? {
+          placeholder: "Search posts…",
+          value: searchQuery,
+          onChange: (next) => {
+            setSearchQuery(next);
+            setCurrentPage(1);
+          },
+          scopeLabel: "Blog",
+          resultCount: isLoading ? undefined : total,
+        }
+      : null,
+  );
 
   const { categories } = useBlogCategories();
 
@@ -189,6 +205,8 @@ export default function BlogListingPage() {
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
+        {/* v2 draws the search in the top bar (usePageSearch above). */}
+        {!v2Chrome && (
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -201,6 +219,7 @@ export default function BlogListingPage() {
             className="pl-9"
           />
         </div>
+        )}
         <Select
           value={statusFilter}
           onValueChange={(v) => {

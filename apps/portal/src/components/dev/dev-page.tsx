@@ -8,6 +8,7 @@ import { Button } from '@/components/ui-v2/button';
 import { EmptyStatePreview } from '@/components/dev/empty-state-preview';
 import { MessagesPreview } from '@/components/dev/messages-preview';
 import { BillingPreview } from '@/components/dev/billing-preview';
+import { SkeletonPreview } from '@/components/dev/skeleton-preview';
 import { useTenant } from '@/contexts/TenantContext';
 import { supabase } from '@/integrations/supabase/client';
 import { NORTHWIND } from '@/lib/v2';
@@ -344,6 +345,7 @@ export function DevPageBody() {
       ))}
 
       <EmptyStatePreview />
+      <SkeletonPreview />
 
       <MessagesPreview />
       <BillingPreview />

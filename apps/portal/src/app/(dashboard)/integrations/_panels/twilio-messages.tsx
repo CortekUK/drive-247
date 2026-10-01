@@ -610,7 +610,7 @@ function ConnectedPanel({
           <button
             type="button"
             onClick={onOpenMessages}
-            className="text-sm text-primary hover:underline"
+            className="text-sm text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] hover:underline"
           >
             Open Messages &rarr;
           </button>
@@ -974,7 +974,7 @@ function Field({
 function SetupStep({ n, children }: { n: number; children: ReactNode }) {
   return (
     <div className="flex gap-2.5 text-xs leading-relaxed text-muted-foreground">
-      <span className="mt-px flex size-4 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-medium text-primary">
+      <span className="mt-px flex size-4 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-medium text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
         {n}
       </span>
       <span>{children}</span>

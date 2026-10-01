@@ -85,7 +85,7 @@ export function GlobalBlacklistPageV2<T extends GlobalBlacklistEntryRowV2>({
   // Nothing to search until there is at least one row.
   usePageSearch(
     rows && rows.length > 0
-      ? { placeholder: "Search by email, company or reason", value: searchTerm, onChange: onSearchChange }
+      ? { placeholder: "Search by email, company or reason", value: searchTerm, onChange: onSearchChange, scopeLabel: "Blacklist" }
       : null,
   );
 

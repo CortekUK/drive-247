@@ -283,7 +283,7 @@ export function JourneyHandoffStep({
   }
 
   return (
-    <div className="animate-in fade-in-0 duration-300">
+    <div className="animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none">
       {/*
         The two addresses the operator now owns, given equal weight in one
         panel. This screen used to name only the portal, in body text, with the

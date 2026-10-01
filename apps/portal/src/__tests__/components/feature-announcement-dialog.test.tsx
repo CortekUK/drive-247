@@ -294,7 +294,8 @@ describe('FeatureAnnouncementDialog — the last slide', () => {
     toLast();
     const gotIt = button('Got it');
     expect(gotIt.className).toContain('bg-indigo-600');
-    expect(within(dialog()).getAllByRole('button').map((b) => b.textContent)).toEqual(['', 'Back', 'Got it']);
+    // No Back on the last slide (Sep 27 2026).
+    expect(within(dialog()).getAllByRole('button').map((b) => b.textContent)).toEqual(['', 'Got it']);
     fireEvent.click(gotIt);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
@@ -455,7 +456,6 @@ describe('FeatureAnnouncementDialog — footer and focus styles', () => {
     expect(controls.map((b) => b.getAttribute('aria-label') ?? b.textContent)).toEqual([
       'Close',
       "Don't show again",
-      'Back',
       'Got it',
       'Open expenses',
     ]);

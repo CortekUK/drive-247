@@ -3761,7 +3761,7 @@ const CreateRental = () => {
                               );
 
                               return (
-                                <div className="mt-2 space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                                <div className="mt-2 space-y-2 animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none">
                                   <div className="flex items-center gap-2">
                                     <span className="text-xs text-muted-foreground">Vehicle health</span>
                                     <HealthStatusChip status={status} />
@@ -3831,7 +3831,7 @@ const CreateRental = () => {
                               if (rates.length === 0) return null;
                               const cur = tenant?.currency_code || 'USD';
                               return (
-                                <div className="flex gap-2 mt-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                                <div className="flex gap-2 mt-2 animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none">
                                   {rates.map(r => (
                                     <div key={r.label} className="flex-1 rounded-lg border bg-muted/40 px-3 py-2 text-center">
                                       <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">{r.label}</p>

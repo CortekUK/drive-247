@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
-import { useReminders, useReminderStats, useReminderActions, type ReminderFilters } from '@/hooks/use-reminders';
+import React, { useState, type ReactNode } from 'react';
+import { useReminders, useReminderStats, useReminderActions, type Reminder, type ReminderFilters } from '@/hooks/use-reminders';
 import { AddReminderDialog } from '@/components/reminders/add-reminder-dialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -35,6 +35,12 @@ import Link from 'next/link';
 import { useManagerPermissions } from '@/hooks/use-manager-permissions';
 import { useV2 } from '@/lib/v2-context';
 import { HEADER_ACTIONS_V2, HEADER_PRIMARY_V2, HeaderIconButton } from '@/components/shared/header-icon-button-v2';
+import { useIsLean } from '@/lib/lean-context';
+import { useForcedEmptyState } from '@/hooks/use-forced-empty-state';
+import { RemindersTeachingEmptyState } from '@/components/empty-states/reminders-empty-state';
+import { AutoSkeleton } from '@/components/skeleton-v2/auto-skeleton';
+import { skeletonRows } from '@/lib/skeleton-data';
+import { useSkeletonLoading } from '@/hooks/use-skeleton-loading';
 
 const capitalize = (str: string) => str.charAt(0).toUpperCase() + str.slice(1);
 
@@ -43,6 +49,31 @@ const SEVERITY_ICONS = {
   warning: Clock,
   info: Bell
 };
+
+/** Placeholder reminders for the v2 skeleton: only their shapes are ever seen. */
+const SKELETON_REMINDERS: Reminder[] = skeletonRows(8, (f) => ({
+  id: f.id,
+  rule_code: '',
+  object_type: 'Vehicle' as const,
+  object_id: f.id,
+  title: f.text(2, 5),
+  message: f.text(4, 9),
+  due_on: f.date(-f.int(1, 30)),
+  remind_on: f.date(-f.int(0, 7)),
+  severity: f.pick(['info', 'warning', 'critical'] as const),
+  status: 'pending' as const,
+  context: { reg: f.word(6, 8) },
+  created_at: f.date(),
+  updated_at: f.date(),
+}));
+
+/** Placeholder counts for the stat cards while they load (v2). */
+const SKELETON_STATS = { total: 24, due: 6, critical: 3, pending: 6, snoozed: 2 };
+
+/** v1's stand-in for <AutoSkeleton>: renders the region as it always was. */
+function PlainRegion({ children }: { loading: boolean; className?: string; children: ReactNode }) {
+  return <>{children}</>;
+}
 
 export default function RemindersPageEnhanced() {
   const [filters, setFilters] = useState<ReminderFilters>({});
@@ -55,9 +86,28 @@ export default function RemindersPageEnhanced() {
   // early returns, as every hook must be.
   const v2Chrome = useV2('chrome');
 
-  const { data: reminders = [], isLoading, error } = useReminders(filters);
-  const { data: stats } = useReminderStats();
+  const { data: loadedReminders = [], isLoading: remindersLoading, error } = useReminders(filters);
+  const { data: loadedStats, isLoading: statsRealLoading } = useReminderStats();
+  const isLoading = useSkeletonLoading(remindersLoading);
+  const statsLoading = useSkeletonLoading(statsRealLoading);
+
+  // v2: while loading, placeholder reminders and counts render through the
+  // real cards and table, and <AutoSkeleton> turns them into the skeleton. v1
+  // keeps its spinner below.
+  const reminders = v2Chrome && isLoading ? SKELETON_REMINDERS : loadedReminders;
+  const stats = v2Chrome && statsLoading ? SKELETON_STATS : loadedStats;
+  const SkeletonRegion = v2Chrome ? AutoSkeleton : PlainRegion;
   const { markDone, dismiss, snooze, bulkUpdate, isLoading: isUpdating } = useReminderActions();
+
+  // No active reminders at all, rather than "the filters matched none": the
+  // unfiltered list came back empty. Lean only; every other tenant keeps the
+  // page as it was. `devForceEmpty` is the /dev preview switch
+  // (lib/dev-overrides.ts), inert outside development and inside the lean gate.
+  const devForceEmpty = useForcedEmptyState('reminders');
+  const leanTenant = useIsLean();
+  const hasFilters = Object.values(filters).some((v) => (Array.isArray(v) ? v.length > 0 : !!v));
+  const teachEmptyReminders =
+    leanTenant && ((!isLoading && !hasFilters && reminders.length === 0) || devForceEmpty);
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
@@ -182,10 +232,13 @@ export default function RemindersPageEnhanced() {
             line (HEADER_ACTIONS_V2 / HEADER_PRIMARY_V2, team lead Sep 16 2026).
             v1 keeps "flex items-center gap-2" and its outline icon Buttons
             byte for byte. */}
+        {/* No reminders yet (lean only): the heading stays and its controls step
+            aside; the empty state below carries New reminder. */}
+        {!teachEmptyReminders && (
         <div className={`flex items-center gap-2${v2Chrome ? ` ${HEADER_ACTIONS_V2}` : ""}`}>
           {v2Chrome ? (
             <>
-              <HeaderIconButton label="Export CSV" onClick={exportReminders} disabled={reminders.length === 0}>
+              <HeaderIconButton label="Export CSV" onClick={exportReminders} disabled={isLoading || reminders.length === 0}>
                 <Download className="h-4 w-4" />
               </HeaderIconButton>
               <HeaderIconButton label="Reminder analytics" href="/reminders/analytics">
@@ -219,9 +272,18 @@ export default function RemindersPageEnhanced() {
             </Button>
           )}
         </div>
+        )}
       </div>
 
+      {teachEmptyReminders ? (
+        <RemindersTeachingEmptyState
+          onNewReminder={canEdit('reminders') ? () => setShowAddDialog(true) : undefined}
+        />
+      ) : (
+      <>
+
       {/* Stats Cards */}
+      <SkeletonRegion loading={statsLoading}>
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
         <Card className="bg-gradient-to-br from-indigo-500/10 to-indigo-500/5 border-indigo-500/20 hover:border-indigo-500/40 transition-all duration-200 cursor-pointer hover:shadow-md">
           <CardHeader className="pb-2 p-3 sm:p-6">
@@ -253,6 +315,7 @@ export default function RemindersPageEnhanced() {
           </CardContent>
         </Card>
       </div>
+      </SkeletonRegion>
 
       {/* Filters */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
@@ -336,6 +399,7 @@ export default function RemindersPageEnhanced() {
       )}
 
       {/* Reminders Table */}
+      <SkeletonRegion loading={isLoading}>
       <Card>
         <CardHeader>
           <CardTitle className="text-sm">
@@ -343,7 +407,7 @@ export default function RemindersPageEnhanced() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
+          {isLoading && !v2Chrome ? (
             <div className="text-center py-12">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
               <p className="mt-4 text-muted-foreground">Loading reminders...</p>
@@ -476,6 +540,9 @@ export default function RemindersPageEnhanced() {
           )}
         </CardContent>
       </Card>
+      </SkeletonRegion>
+      </>
+      )}
       <AddReminderDialog open={showAddDialog} onOpenChange={setShowAddDialog} />
     </div>
   );

@@ -11,8 +11,8 @@
  *   - the header, with the one labelled button: Send agreement (an individual
  *     agreement, D12);
  *   - the hero row, which turns over to the filter panel;
- *   - the templates, on this tab rather than in Settings (`?view=templates`
- *     scrolls to them, and the "Create your template" card opens their create);
+ *   - the templates, in the "Manage agreement templates" dialog the hero
+ *     card opens (`?view=templates` opens it, `new=1` starts a create);
  *   - every agreement sent, rental and individual, newest first.
  *
  * WHO MAY DO WHAT (D19). Sending and resending are writes: `canEdit("agreements")`,
@@ -28,7 +28,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { FileSignature, Send } from "lucide-react";
+import { Send } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import {
   AlertDialog,
@@ -50,7 +50,7 @@ import { useIntegrationBilling } from "@/lib/integration-billing/hooks";
 import { usePageSearch } from "@/components/shared/layout/page-search-slot";
 import { OverviewFlip } from "@/components/shared/layout/overview-flip";
 import { HEADER_ACTIONS_V2, HEADER_PRIMARY_V2 } from "@/components/shared/header-icon-button-v2";
-import { TeachingEmptyState } from "@/components/empty-states/teaching-empty-state";
+import { AgreementsTeachingEmptyState } from "@/components/empty-states/lean-empty-states";
 import { SettingsLoadError, SettingsNoMatch } from "@/components/settings-v2/section-states";
 import { useAgreementsListV2 } from "@/hooks/use-agreements-list-v2";
 import { resendAgreementV2, syncAgreementsV2 } from "@/lib/agreements-v2/api-client";
@@ -72,13 +72,43 @@ import {
   downloadSignedAgreementV2,
 } from "@/components/agreements-v2/agreement-view-dialog-v2";
 import { SendAgreementDialogV2 } from "@/components/agreements-v2/send-agreement-dialog-v2";
-import { AgreementTemplatesSectionV2 } from "@/components/agreements-v2/templates-section-v2";
+import { AgreementTemplatesDialogV2 } from "@/components/agreements-v2/templates-dialog-v2";
+import { AutoSkeleton } from "@/components/skeleton-v2/auto-skeleton";
+import { skeletonRows } from "@/lib/skeleton-data";
+import { useSkeletonLoading } from "@/hooks/use-skeleton-loading";
 
 /** The page's white surfaces carry the ui-v2 Card's hairline ring (not `border-border/*`, invalid in v2 dark). */
 const SURFACE = "rounded-2xl bg-card ring-1 ring-foreground/5 dark:ring-foreground/10";
 
 /** The rental Agreement stage's own message for BoldSign's hourly cap, which arrives as prose. */
 const RATE_LIMITED = /quota exceeded|rate limit/i;
+
+/** Placeholder agreements for the skeleton: only their shapes are ever seen. */
+const SKELETON_AGREEMENTS: AgreementRowV2[] = skeletonRows(8, (f) => {
+  const status = f.pick(["signed", "pending", "signed", "failed"] as const);
+  const sentAt = f.date(f.int(1, 40));
+  return {
+    id: f.id,
+    kind: f.pick(["rental", "individual"] as const),
+    customerName: f.text(2, 3),
+    customerEmail: `${f.word(5, 9)}@${f.word(5, 8)}.com`,
+    sentAt,
+    status,
+    rawStatus: status,
+    rentalId: null,
+    rentalRef: f.word(6, 8),
+    customerId: null,
+    documentId: null,
+    templateId: null,
+    title: null,
+    message: null,
+    cc: [],
+    signedAt: status === "signed" ? sentAt : null,
+    signedDocumentId: null,
+    resentFromId: null,
+    hasContentSnapshot: false,
+  };
+});
 
 export function AgreementsPageV2() {
   const router = useRouter();
@@ -95,12 +125,13 @@ export function AgreementsPageV2() {
   // The list's query waits for the tenant, and a waiting query is not
   // "loading" to React Query. Without the tenant there is no answer yet, so
   // the page must not say "no agreements" in the meantime.
-  const isLoading = list.isLoading || !tenant?.id;
+  const isLoading = useSkeletonLoading(list.isLoading || !tenant?.id);
 
   // The /dev preview switch for the teaching state (lib/dev-overrides.ts),
   // inert outside development and kept inside the lean gate like every page.
   const devForceEmpty = useForcedEmptyState("agreements");
-  const devForceEmptyAgreements = useIsLean() && devForceEmpty;
+  const isLean = useIsLean();
+  const devForceEmptyAgreements = isLean && devForceEmpty;
 
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<AgreementListFiltersV2>(EMPTY_AGREEMENT_FILTERS_V2);
@@ -134,38 +165,67 @@ export function AgreementsPageV2() {
 
   const activeCount = countActiveAgreementFilters(filters);
   const filtered = activeCount > 0 || search.trim() !== "";
+  // While loading, the hero row and table render placeholder rows (never
+  // filtered, so a search typed early cannot empty the skeleton) and
+  // <AutoSkeleton> turns them into the skeleton.
   const visibleRows = useMemo(
-    () => agreementsNewestFirstV2(filterAgreementsV2(allRows ?? [], filters, search)),
-    [allRows, filters, search],
+    () =>
+      isLoading
+        ? SKELETON_AGREEMENTS
+        : agreementsNewestFirstV2(filterAgreementsV2(allRows ?? [], filters, search)),
+    [isLoading, allRows, filters, search],
   );
   const resetKey = agreementsResultKeyV2(tenant?.id, filters, search);
 
-  usePageSearch({
-    placeholder: "Search agreements",
-    value: search,
-    onChange: setSearch,
-    filters: { open: filtersOpen, onOpenChange: setFiltersOpen, activeCount },
-  });
+  const noAgreements = !isLoading && !error && ((allRows?.length ?? 0) === 0 || devForceEmptyAgreements);
+  // The teaching empty state (illustration guide §4a): lean, and nothing sent
+  // yet. Only the title and description stay; the empty state carries the
+  // action. The templates stay reachable through `?view=templates`.
+  const teachEmpty = isLean && noAgreements;
+  // The templates live in "Manage agreement templates", a dialog; `?view=templates`
+  // (the redirect from Settings, and "Create your template") opens it.
+  const templatesOpen = searchParams.get("view") === "templates";
+
+  usePageSearch(
+    teachEmpty
+      ? null
+      : {
+          placeholder: "Search agreements",
+          scopeLabel: "Agreements",
+          value: search,
+          onChange: setSearch,
+          filters: { open: filtersOpen, onOpenChange: setFiltersOpen, activeCount },
+        },
+  );
 
   const clearFilters = () => {
     setFilters(EMPTY_AGREEMENT_FILTERS_V2);
     setSearch("");
   };
 
-  /* ── the templates section ─────────────────────────────────────────── */
+  /* ── the templates dialog ──────────────────────────────────────────── */
 
-  // `?view=templates` (the v2 redirect from Settings, and the card below) is
-  // handled by AgreementTemplatesSectionV2 itself: it scrolls once its cards
-  // are in, and not again when `new` comes off the URL. The page used to
-  // scroll too, and re-scrolled on that change, so the two fought.
+  // `?view=templates` opens "Manage agreement templates"; with `new=1` the
+  // section inside it starts a create as soon as it has loaded.
   const paramsKey = searchParams.toString();
 
-  /** "Create your template": the templates section opens its create on `new=1`. */
+  /** "Create your template" (the teaching empty state): open the dialog on a new template. */
   const openTemplateCreate = () => {
     const params = new URLSearchParams(paramsKey);
     params.set("view", "templates");
     params.set("new", "1");
     router.replace(`/agreements?${params.toString()}`, { scroll: false });
+  };
+
+  const setTemplatesOpen = (open: boolean) => {
+    const params = new URLSearchParams(paramsKey);
+    if (open) params.set("view", "templates");
+    else {
+      params.delete("view");
+      params.delete("new");
+    }
+    const rest = params.toString();
+    router.replace(rest ? `/agreements?${rest}` : "/agreements", { scroll: false });
   };
 
   /* ── row actions ───────────────────────────────────────────────────── */
@@ -302,8 +362,6 @@ export function AgreementsPageV2() {
 
   /* ── the page ──────────────────────────────────────────────────────── */
 
-  const noAgreements = !isLoading && !error && ((allRows?.length ?? 0) === 0 || devForceEmptyAgreements);
-
   return (
     <div className="container mx-auto space-y-6 p-4 md:p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -314,10 +372,10 @@ export function AgreementsPageV2() {
           </p>
         </div>
         <div className={`flex items-center gap-2 ${HEADER_ACTIONS_V2}`}>
-          {canSend && (
+          {canSend && !teachEmpty && (
             <Button
               onClick={() => setSendOpen(true)}
-              className={`flex-1 bg-gradient-primary text-white transition-all duration-200 hover:opacity-90 sm:flex-none ${HEADER_PRIMARY_V2}`}
+              className={`flex-1 bg-gradient-primary text-primary-foreground transition-all duration-200 hover:opacity-90 sm:flex-none ${HEADER_PRIMARY_V2}`}
             >
               <Send className="size-4" />
               Send agreement
@@ -326,9 +384,10 @@ export function AgreementsPageV2() {
         </div>
       </div>
 
-      {isLoading ? (
-        <div className="h-[220px] animate-pulse rounded-2xl bg-muted" aria-hidden />
-      ) : (
+      <AgreementTemplatesDialogV2 open={templatesOpen} onOpenChange={setTemplatesOpen} />
+
+      <AutoSkeleton loading={isLoading} className="space-y-6">
+      {teachEmpty ? null : (
         <OverviewFlip
           flipped={filtersOpen}
           onFlipBack={() => setFiltersOpen(false)}
@@ -336,8 +395,8 @@ export function AgreementsPageV2() {
             <AgreementsOverviewV2
               rows={visibleRows}
               filtered={filtered}
-              onCreateTemplate={openTemplateCreate}
-              canCreateTemplate={canCreateTemplate}
+              onCreateTemplate={() => setTemplatesOpen(true)}
+              canCreateTemplate
             />
           }
           back={
@@ -351,12 +410,9 @@ export function AgreementsPageV2() {
         />
       )}
 
-      <section id="agreement-templates" className="scroll-mt-24">
-        <AgreementTemplatesSectionV2 />
-      </section>
-
       <section className="space-y-3" aria-labelledby="agreements-sent-heading">
-        <div>
+        {/* Named for screen readers only; on screen the table speaks for itself. */}
+        <div className="sr-only">
           <h2 id="agreements-sent-heading" className="font-heading text-lg font-semibold tracking-tight text-foreground">
             Sent agreements
           </h2>
@@ -365,26 +421,13 @@ export function AgreementsPageV2() {
           </p>
         </div>
 
-        {isLoading ? (
-          <div className="space-y-3" role="status" aria-label="Loading agreements">
-            {[0, 1, 2, 3].map((i) => (
-              <div key={i} className="h-10 animate-pulse rounded-xl bg-muted" />
-            ))}
-          </div>
-        ) : error && !(allRows?.length) ? (
+        {/* While loading, the placeholder rows fall through to the table. */}
+        {!isLoading && error && !(allRows?.length) ? (
           <SettingsLoadError thing="your agreements" error={error} onRetry={refetch} />
         ) : noAgreements ? (
-          <TeachingEmptyState
-            icon={FileSignature}
-            headline="Every agreement you send, in one place"
-            body="Send an agreement to anyone for e-signature, with or without a rental. Agreements sent from a rental arrive here too, so you can see at a glance who has signed and who has not."
-            points={[
-              "One recipient, with CC and a message of your own",
-              "Start from your default template, or edit a copy just for this one",
-              "Download the signed PDF the moment it is signed",
-            ]}
-            primaryAction={canSend ? { label: "Send agreement", onClick: () => setSendOpen(true), icon: Send } : undefined}
-            explainerId="agreements.first-agreement"
+          <AgreementsTeachingEmptyState
+            onSendAgreement={canSend ? () => setSendOpen(true) : undefined}
+            onCreateTemplate={canCreateTemplate ? openTemplateCreate : undefined}
           />
         ) : visibleRows.length === 0 ? (
           <div className={SURFACE}>
@@ -408,6 +451,7 @@ export function AgreementsPageV2() {
           </>
         )}
       </section>
+      </AutoSkeleton>
 
       <AgreementViewDialogV2
         row={viewRow}

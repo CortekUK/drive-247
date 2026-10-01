@@ -237,8 +237,8 @@ export default function ManageAdminsPage() {
 
       {/* Create Admin Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black/30 supports-[backdrop-filter]:backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="w-full max-w-md rounded-4xl bg-card p-8 shadow-sm ring-1 ring-foreground/10">
+        <div className="fixed inset-0 bg-black/30 supports-[backdrop-filter]:backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in-0 duration-200 ease-out motion-reduce:animate-none">
+          <div className="w-full max-w-md rounded-4xl bg-card p-8 shadow-sm ring-1 ring-foreground/10 animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none">
             <h2 className="text-2xl font-bold text-foreground mb-4">Add Super Admin</h2>
 
             <form onSubmit={handleCreateAdmin} className="space-y-4">
@@ -314,8 +314,8 @@ export default function ManageAdminsPage() {
 
       {/* Create Sales Agent Modal */}
       {showSalesModal && (
-        <div className="fixed inset-0 bg-black/30 supports-[backdrop-filter]:backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="w-full max-w-md rounded-4xl bg-card p-8 shadow-sm ring-1 ring-foreground/10">
+        <div className="fixed inset-0 bg-black/30 supports-[backdrop-filter]:backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in-0 duration-200 ease-out motion-reduce:animate-none">
+          <div className="w-full max-w-md rounded-4xl bg-card p-8 shadow-sm ring-1 ring-foreground/10 animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none">
             <h2 className="text-2xl font-bold text-foreground mb-4">Add Sales Agent</h2>
 
             <form onSubmit={handleCreateSalesAgent} className="space-y-4">

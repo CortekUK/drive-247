@@ -76,6 +76,10 @@ import {
   type ListTone,
 } from "@/components/shared/list-table-v2";
 import { useV2 } from "@/lib/v2-context";
+import { AutoSkeleton } from "@/components/skeleton-v2/auto-skeleton";
+import { skeletonRows } from "@/lib/skeleton-data";
+import { useSkeletonLoading } from "@/hooks/use-skeleton-loading";
+import type { PaymentRow } from "@/hooks/use-payments-data";
 
 // Helper function to display user-friendly payment type names
 const getPaymentTypeDisplay = (paymentType: string): string => {
@@ -98,6 +102,30 @@ const PAYMENT_VERIFICATION_TONE_V2: Record<string, ListTone> = {
   rejected: 'danger',
 };
 
+/** Placeholder payments for the v2 skeleton: only their shapes are ever seen. */
+const SKELETON_PAYMENTS: PaymentRow[] = skeletonRows(8, (f) => ({
+  id: f.id,
+  amount: f.money(40, 2400),
+  payment_date: f.date().slice(0, 10),
+  method: f.pick(['card', 'cash', 'bank_transfer']),
+  payment_type: f.pick(['Payment', 'InitialFee']),
+  status: 'Applied',
+  remaining_amount: 0,
+  verification_status: f.pick(['approved', 'auto_approved'] as const),
+  verified_by: null,
+  verified_at: null,
+  rejection_reason: null,
+  is_manual_mode: false,
+  stripe_payment_intent_id: null,
+  refund_status: null,
+  refund_reason: null,
+  stripe_checkout_session_id: null,
+  capture_status: null,
+  paid_at: null,
+  customers: { id: f.id, name: f.text(2, 3) },
+  vehicles: { id: f.id, reg: f.word(6, 8), make: null, model: null, daily_rent: null, weekly_rent: null, monthly_rent: null },
+  rentals: { id: f.id, rental_number: f.word(6, 7), rental_period_type: null, monthly_amount: null, start_date: null, end_date: null },
+}));
 
 const PaymentsList = () => {
   const router = useRouter();
@@ -158,7 +186,7 @@ const PaymentsList = () => {
   const listSortBy = v2Chrome ? 'created_at' : sortBy;
   const listSortOrder: 'asc' | 'desc' = v2Chrome ? 'desc' : sortOrder;
 
-  const { data: paymentsData, isLoading } = usePaymentsData({
+  const { data: paymentsData, isLoading: paymentsLoading } = usePaymentsData({
     filters,
     sortBy: listSortBy,
     sortOrder: listSortOrder,
@@ -371,7 +399,10 @@ const PaymentsList = () => {
     return true;
   };
 
-  const payments = paymentsData?.payments || [];
+  const isLoading = useSkeletonLoading(paymentsLoading);
+  // v2: while the payments load, the table renders these placeholder rows and
+  // <AutoSkeleton> turns them into the skeleton. v1 keeps its pulse block.
+  const payments = v2Chrome && isLoading ? SKELETON_PAYMENTS : (paymentsData?.payments || []);
   const totalCount = paymentsData?.totalCount || 0;
   const totalPages = paymentsData?.totalPages || 1;
 
@@ -487,13 +518,17 @@ const PaymentsList = () => {
         <div className={`flex items-center gap-2${v2Chrome ? ` ${HEADER_ACTIONS_V2}` : ""}`}>
           {/* Canary-only: self-gates on the resolved tenant slug, so this
               shared v1 header is unchanged for the other 56 tenants. */}
+          {/* The teaching empty state keeps only the title and description:
+              no tour, analytics, export or header button (it carries the action). */}
+          {!teachEmptyPayments && (
+          <>
           <TabTourButton tour="payments" size="h-10" />
           {v2Chrome ? (
             <>
               <HeaderIconButton label="Payment analytics" href="/payments/analytics" data-tour="payments-analytics">
                 <BarChart3 className="h-4 w-4" />
               </HeaderIconButton>
-              <HeaderIconButton label="Export CSV" onClick={handleExportCSV} data-tour="payments-export">
+              <HeaderIconButton label="Export CSV" onClick={handleExportCSV} disabled={isLoading} data-tour="payments-export">
                 <Download className="h-4 w-4" />
               </HeaderIconButton>
             </>
@@ -509,11 +544,13 @@ const PaymentsList = () => {
               </Button>
             </>
           )}
+          </>
+          )}
           <AddPaymentDialog
             open={showAddDialog}
             onOpenChange={setShowAddDialog}
           />
-          {canEdit('payments') && (
+          {canEdit('payments') && !teachEmptyPayments && (
             <Button onClick={() => setShowAddDialog(true)} data-tour="payments-record" className={`bg-gradient-primary flex-1 sm:flex-none${v2Chrome ? ` ${HEADER_PRIMARY_V2}` : ""}`}>
               <Plus className="h-4 w-4 mr-2" />
               Record Payment
@@ -522,17 +559,20 @@ const PaymentsList = () => {
         </div>
       </div>
 
-      {/* Summary Cards */}
+      {/* Summary Cards and Filters: not on the teaching empty state. */}
+      {!teachEmptyPayments && (
+      <>
       <PaymentSummaryCards />
 
-      {/* Filters */}
       <PaymentFilters onFiltersChange={(newFilters) => {
         setFilters(newFilters);
         setPage(1);
       }} />
+      </>
+      )}
 
       {/* Payments Table */}
-      {isLoading ? (
+      {isLoading && !v2Chrome ? (
         <div className="space-y-4">
           {[...Array(5)].map((_, i) => (
             <div key={i} className="animate-pulse flex space-x-4">
@@ -546,7 +586,7 @@ const PaymentsList = () => {
       ) : payments && payments.length > 0 && !teachEmptyPayments ? (
         <>
         {v2Chrome ? (
-          <>
+          <AutoSkeleton loading={isLoading}>
             {/* v2: the rentals list's table (components/shared/list-table-v2).
                 No pager: rows arrive 25 at a time as the table scrolls. The row
                 opens the ledger this payment posted to, the same destination as
@@ -796,7 +836,7 @@ const PaymentsList = () => {
                   : (totalCount > 1000 ? totalCount : undefined)
               }
             />
-          </>
+          </AutoSkeleton>
         ) : (
         <>
           <Card>

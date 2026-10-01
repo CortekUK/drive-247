@@ -10,6 +10,8 @@ import { useState } from "react";
 import { EMAIL_TEMPLATE_TYPES } from "@/lib/email-template-variables";
 import { useEmailTemplatesStrict } from "@/hooks/use-template-reads-v2";
 import { useTemplateSelection } from "@/hooks/use-agreement-templates";
+import { AutoSkeleton } from "@/components/skeleton-v2/auto-skeleton";
+import { useSkeletonLoading } from "@/hooks/use-skeleton-loading";
 
 /**
  * A failed status read, with a retry. A plain <button>: this line sits in a row
@@ -36,20 +38,28 @@ function StatusError({ text, onRetry }: { text: string; onRetry: () => Promise<u
   );
 }
 
-function Pending() {
+/**
+ * The status line while it is being checked: a line of the same kind, under
+ * <AutoSkeleton>, so the bone is as long as the answer will be.
+ */
+function Pending({ placeholder }: { placeholder: string }) {
   return (
-    <span role="status" className="mt-1 block h-3 w-40 max-w-full animate-pulse rounded-full bg-muted">
-      <span className="sr-only">Checking</span>
-    </span>
+    <AutoSkeleton loading>
+      <span role="status" className="mt-0.5 block">
+        <span className="sr-only">Checking</span>
+        <span aria-hidden>{placeholder}</span>
+      </span>
+    </AutoSkeleton>
   );
 }
 
 export function EmailTemplatesStatusV2() {
   const { data, isError, refetch } = useEmailTemplatesStrict();
+  const pending = useSkeletonLoading(!data && !isError);
   if (!data && isError) {
     return <StatusError text="Couldn't check which emails are customized." onRetry={() => refetch()} />;
   }
-  if (!data) return <Pending />;
+  if (pending || !data) return <Pending placeholder="All emails use the default wording." />;
   const keys = new Set(data.map((t) => t.template_key));
   const count = EMAIL_TEMPLATE_TYPES.filter((t) => keys.has(t.key)).length;
   return (
@@ -61,10 +71,11 @@ export function EmailTemplatesStatusV2() {
 
 export function AgreementTemplateStatusV2() {
   const { activeType, customTemplate, isLoading, error, refetch } = useTemplateSelection("standard");
+  const pending = useSkeletonLoading(isLoading);
   if (error) {
     return <StatusError text="Couldn't check which agreement is active." onRetry={() => refetch()} />;
   }
-  if (isLoading) return <Pending />;
+  if (pending) return <Pending placeholder="Customers sign the default agreement." />;
   const custom = activeType === "custom" && !!customTemplate?.template_content?.trim();
   return (
     <span className="mt-0.5 block" data-status="agreement">

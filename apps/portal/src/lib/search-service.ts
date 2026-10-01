@@ -188,7 +188,9 @@ export const searchService = {
   ): Promise<SearchResults> {
     const results = emptySearchResults();
     const text = toFilterText(query);
-    if (!text) return results;
+    // No tenant, no search. RLS is off on these tables, so a query without its
+    // tenant_id filter would return every operator's records (V2_PLAN §5).
+    if (!text || !tenantId) return results;
 
     const searchTerm = `%${text}%`;
     // Every word typed, so "smith john" and "john smith" find the same person.
@@ -199,7 +201,7 @@ export const searchService = {
       (OPT_IN_CATEGORIES.includes(category) ? include[category] === true : include[category] !== false) &&
       (entityFilter === 'all' || filters.includes(entityFilter));
     // Every query is limited to this tenant, as the original searches were.
-    const scoped = <T,>(q: T): T => (tenantId ? (q as any).eq("tenant_id", tenantId) : q);
+    const scoped = <T,>(q: T): T => (q as any).eq("tenant_id", tenantId);
 
     // Customers and vehicles that match the text, so a rental, payment or fine
     // can be found by the customer's name or the car's registration too.

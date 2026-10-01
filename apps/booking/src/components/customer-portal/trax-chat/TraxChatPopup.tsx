@@ -30,7 +30,8 @@ export function TraxChatPopup({ onClose }: TraxChatPopupProps) {
         'sm:w-[380px] max-h-[calc(100dvh-24px)] sm:max-h-none sm:h-[550px]',
         'bg-background border rounded-xl shadow-2xl',
         'flex flex-col overflow-hidden',
-        'animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2 duration-200'
+        // The TRAX motion: fade + rise 12px, 200ms ease-out.
+        'animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none'
       )}
     >
       {/* Header */}

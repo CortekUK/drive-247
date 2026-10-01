@@ -297,7 +297,7 @@ export function PaymentStep({
     !error;
 
   return (
-    <div className="animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
+    <div className="animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none">
       {/* Order summary — the last place the price is shown before it is taken. */}
       <div className="flex items-center justify-between gap-4 rounded-lg border p-4">
         <div className="min-w-0">

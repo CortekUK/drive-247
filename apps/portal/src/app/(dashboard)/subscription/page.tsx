@@ -74,6 +74,7 @@ import {
 // invoice, and receipts line by line. docs/integration-billing/build-spec.md.
 import { useIntegrationBilling, useInvoiceLines } from "@/lib/integration-billing/hooks";
 import { NextInvoiceCard } from "@/components/integration-billing/next-invoice-card";
+import { BillingPageV2 } from "@/components/billing-v2/billing-page-v2";
 
 function formatCurrency(amount: number, currency: string) {
   return new Intl.NumberFormat("en-US", {
@@ -108,7 +109,17 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+/**
+ * The route's only v2 branch (V2_PLAN §3): v2-chrome tenants get the forked
+ * v2 Billing page (no Credits, no tabs); everyone else gets the
+ * v1 page below, unchanged.
+ */
 export default function SubscriptionPage() {
+  const v2Billing = useV2("chrome");
+  return v2Billing ? <BillingPageV2 /> : <SubscriptionPageV1 />;
+}
+
+function SubscriptionPageV1() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const {

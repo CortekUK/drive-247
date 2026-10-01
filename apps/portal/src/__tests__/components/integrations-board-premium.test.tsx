@@ -4,10 +4,11 @@
  *
  * For northwind, with a catalog that makes Inshur premium ($20, first month
  * free), Turo Sync beta, Tesla not available and Zoho hidden:
- *   - Inshur's card carries a crown, Turo Sync's a Beta pill;
- *   - Tesla is dimmed and says "Not available";
+ *   - Inshur's card is tagged SOON (a coming-soon preview outranks ADD-ON),
+ *     Turo Sync's name carries BETA;
+ *   - Tesla is dimmed and tagged UNAVAILABLE;
  *   - Zoho is not on the board at all;
- *   - one line says what the crown means (and there is no filter);
+ *   - there is no legend line under the title, and no filter;
  *   - Inshur's dialog opens on the price and a Subscribe button, with the
  *     panel read-only under it; Subscribe swaps in the confirm step with
  *     "$20.00 will be added to your next bill" wording and the card on file.
@@ -171,13 +172,14 @@ describe("IntegrationsBoard — premium integrations (northwind)", () => {
   it("marks premium with a crown, beta with a pill, dims not-available and hides hidden", async () => {
     const text = await render();
     expect(text).toContain(INSHUR);
-    expect(cardOf(INSHUR)?.querySelector('[title="Premium integration"]')).not.toBeNull();
+    expect(cardOf(INSHUR)?.querySelector('[data-card-tag="soon"]')).not.toBeNull();
     expect(cardOf(TURO)?.textContent).toContain("Beta");
-    expect(cardOf(TURO)?.querySelector('[title="Premium integration"]')).toBeNull();
+    expect(cardOf(TURO)?.querySelector('[data-card-tag="addon"]')).toBeNull();
     expect(cardOf(TESLA)?.className).toContain("opacity-60");
-    expect(cardOf(TESLA)?.textContent).toContain("Not available");
+    expect(cardOf(TESLA)?.textContent).toContain("Unavailable");
     expect(text).not.toContain(ZOHO);
-    expect(text).toContain(LEGEND);
+    // The crown carries "premium" on its own; the header has no legend line.
+    expect(text).not.toContain(LEGEND);
     // No free/premium filter: nothing to toggle between the two.
     expect(container.querySelector('[role="tablist"]')).toBeNull();
   });
@@ -202,7 +204,7 @@ describe("IntegrationsBoard — premium integrations (northwind)", () => {
 
   it("shows a coming-soon preview's price, but never a live Subscribe", async () => {
     await render();
-    expect(cardOf(INSHUR)?.querySelector('[title="Premium integration"]')).not.toBeNull();
+    expect(cardOf(INSHUR)?.querySelector('[data-card-tag="soon"]')).not.toBeNull();
     await click(cardOf(INSHUR));
     const dialog = document.body.querySelector('[role="dialog"]') as HTMLElement;
     expect(dialog.textContent).toContain("Premium · $20.00/month");
@@ -242,10 +244,10 @@ describe("IntegrationsBoard — the defaults, before a super admin saves anythin
     catalogRows = [];
     await render();
     for (const description of [INSHUR, TURO, "Verify driver's licenses & identity."]) {
-      expect(cardOf(description)?.querySelector('[title="Premium integration"]')).not.toBeNull();
+      expect(cardOf(description)?.querySelector('[data-card-tag="soon"]')).not.toBeNull();
     }
-    expect(cardOf(SQUARE)?.querySelector('[title="Premium integration"]')).toBeNull();
-    expect(container.textContent).toContain(LEGEND);
+    expect(cardOf(SQUARE)?.querySelector('[data-card-tag="addon"]')).toBeNull();
+    expect(container.textContent).not.toContain(LEGEND);
     await click(cardOf(TURO));
     const dialog = document.body.querySelector('[role="dialog"]') as HTMLElement;
     expect(dialog.textContent).toContain("Premium · Price to be announced");
@@ -261,7 +263,7 @@ describe("IntegrationsBoard — every other tenant", () => {
     const text = await render();
     expect(text).toContain(ZOHO);
     expect(text).not.toContain(LEGEND);
-    expect(container.querySelector('[title="Premium integration"]')).toBeNull();
+    expect(container.querySelector('[data-card-tag="addon"]')).toBeNull();
     expect(cardOf(TURO)?.textContent).not.toContain("Beta");
   });
 });
@@ -281,12 +283,13 @@ describe("IntegrationsBoard — someone already paying", () => {
     ...over,
   });
 
-  it("keeps the crown and the Subscribed block even after the admin made it free and hidden", async () => {
+  it("keeps the Subscribed block even after the admin made it free and hidden", async () => {
     catalogRows = [{ integration_key: "square", is_premium: false, monthly_price_cents: null, is_hidden: true }];
     subRows = [inshurRow()];
     await render();
     expect(container.textContent).toContain(SQUARE);
-    expect(cardOf(SQUARE)?.querySelector('[title="Premium integration"]')).not.toBeNull();
+    // Paying for it: no ADD-ON tag on the card — the integration's own status decides.
+    expect(cardOf(SQUARE)?.querySelector('[data-card-tag="addon"]')).toBeNull();
     await click(cardOf(SQUARE));
     const dialog = document.body.querySelector('[role="dialog"]') as HTMLElement;
     expect(dialog.textContent).toContain("Subscribed · $20.00/month on your Drive247 bill");

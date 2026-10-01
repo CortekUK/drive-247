@@ -5,6 +5,7 @@ import { XIcon } from "lucide-react-nw"
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 
 import { cn } from "@nw/lib/utils"
+import { MOTION_FADE, MOTION_RISE } from "@nw/components/ui/motion"
 
 function Dialog({
   ...props
@@ -38,7 +39,8 @@ function DialogOverlay({
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
       className={cn(
-        "fixed inset-0 z-50 bg-brand-forest-deep/55 backdrop-blur-[2px] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0",
+        "fixed inset-0 z-50 bg-brand-forest-deep/55 backdrop-blur-[2px]",
+        MOTION_FADE,
         className
       )}
       {...props}
@@ -60,7 +62,8 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 grid w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-[18px] border border-brand-border-soft bg-brand-card p-6 text-brand-text shadow-[0_18px_50px_-16px_rgba(0,0,0,0.28)] duration-200 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95",
+          "fixed top-1/2 left-1/2 z-50 grid w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-[18px] border border-brand-border-soft bg-brand-card p-6 text-brand-text shadow-[0_18px_50px_-16px_rgba(0,0,0,0.28)]",
+          MOTION_RISE,
           className
         )}
         {...props}

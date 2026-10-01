@@ -772,7 +772,9 @@ function AgreementsList() {
             line (HEADER_ACTIONS_V2 / HEADER_PRIMARY_V2, team lead Sep 16 2026).
             Generate Agreement is the one labelled button, so Export PDFs becomes
             an icon with its name in the tooltip. v1 keeps all three controls
-            byte for byte. */}
+            byte for byte. The teaching empty state (lean, nothing yet) keeps
+            only the title and description: it carries the action itself. */}
+        {!teachEmptyAgreements && (
         <div className={`flex items-center gap-2${v2Chrome ? ` ${HEADER_ACTIONS_V2}` : ""}`}>
           {v2Chrome ? (
             <>
@@ -822,9 +824,12 @@ function AgreementsList() {
             Generate Agreement
           </Button>
         </div>
+        )}
       </div>
 
-      {/* Stat Cards */}
+      {/* Stat Cards and search: not on the teaching empty state. */}
+      {!teachEmptyAgreements && (
+      <>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <Card className="bg-gradient-to-br from-indigo-500/10 to-indigo-500/5 border-indigo-500/20">
           <CardContent className="p-3 sm:p-4">
@@ -868,6 +873,8 @@ function AgreementsList() {
           />
         </div>
       </div>
+      </>
+      )}
 
       {/* Agreements Table */}
       {paginatedDocuments.length === 0 || teachEmptyAgreements ? (

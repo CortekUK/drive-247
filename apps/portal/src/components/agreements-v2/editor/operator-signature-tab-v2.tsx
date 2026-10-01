@@ -79,7 +79,7 @@ type Note = { tone: "ok" | "quiet" | "warn"; text: string } | null;
 
 function SignatureImage({ src }: { src: string }) {
   return (
-    <div className="flex h-24 items-center justify-center rounded-2xl border border-border bg-white p-3">
+    <div className="flex h-24 items-center justify-center rounded-2xl border border-border bg-card p-3">
       {/* eslint-disable-next-line @next/next/no-img-element -- a data URL, not a remote image */}
       <img src={src} alt="Your signature" className="max-h-full max-w-full object-contain" />
     </div>

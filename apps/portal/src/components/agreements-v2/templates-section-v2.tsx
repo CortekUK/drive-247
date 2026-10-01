@@ -54,7 +54,21 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { Check, FileText, Loader2, Pencil, Search, Star, Trash2, X } from "lucide-react";
+import { AlertTriangle, Archive, Check, CircleCheck, CircleDashed, Eye, FileText, Loader2, MoreVertical, Pencil, Plus, Search, Star, Trash2, X } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui-v2/dropdown-menu";
+import { Switch } from "@/components/ui-v2/switch";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui-v2/dialog";
+import { AgreementPreviewV2 } from "@/components/agreements-v2/agreement-preview-v2";
+import { AGREEMENT_PAGE_BACKDROP_V2 } from "@/components/agreements-v2/agreement-pdf-pages-v2";
 import { Button } from "@/components/ui-v2/button";
 import { Input } from "@/components/ui-v2/input";
 import {
@@ -88,8 +102,8 @@ import {
 } from "@/hooks/use-agreement-templates-v2";
 import { getDefaultTemplateForCategory } from "@/lib/default-agreement-template";
 import { getSampleData } from "@/lib/template-variables";
-import { buildIndividualData } from "@/lib/agreements-v2/render";
-import type { AgreementTemplateCategoryV2, AgreementTemplateV2 } from "@/lib/agreements-v2/types";
+import { buildIndividualData, renderAgreementHtml } from "@/lib/agreements-v2/render";
+import type { AgreementTemplateCategoryV2, AgreementTemplateStatusV2, AgreementTemplateV2 } from "@/lib/agreements-v2/types";
 import { cn } from "@/lib/utils";
 import { AgreementEditorV2 } from "@/components/agreements-v2/editor/agreement-editor-v2";
 import { withSignaturesSectionV2 } from "@/components/agreements-v2/editor/starter-content";
@@ -348,10 +362,297 @@ function TemplateCardV2({
 }
 
 /* -------------------------------------------------------------------------- */
+/* The table (Oct 1 2026: templates as a table, not cards)                     */
+/* -------------------------------------------------------------------------- */
+
+const HEAD = "px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground";
+
+/** Text-only status (the design system's table rule): Active green, Draft amber, Archived muted. */
+export const TEMPLATE_STATUS_V2: Record<AgreementTemplateStatusV2, { label: string; tone: string; icon: typeof Check; hint: string }> = {
+  active: { label: "Active", tone: "text-green-600 dark:text-green-400", icon: CircleCheck, hint: "Can be sent and picked for rentals" },
+  draft: { label: "Draft", tone: "text-amber-700 dark:text-amber-400", icon: CircleDashed, hint: "Still being written; never sent" },
+  archived: { label: "Archived", tone: "text-muted-foreground", icon: Archive, hint: "Put away; never sent" },
+};
+const STATUS_ORDER: AgreementTemplateStatusV2[] = ["active", "draft", "archived"];
+
+/**
+ * One row per template: Name (its type under it when it is not Standard, and
+ * a warning when it has no wording), Status, Last updated, Default (the tick,
+ * or "Make default"), then the ⋮ menu: Preview, Edit, the status, Delete.
+ *
+ * The rules: only an ACTIVE template with wording can become the default; the
+ * default stays active (its menu says why the other statuses are shut) and
+ * cannot be deleted.
+ */
+function TemplatesTableV2({
+  templates,
+  canEdit,
+  settingDefaultId,
+  deletingId,
+  statusId,
+  onPreview,
+  onEdit,
+  onSetDefault,
+  onDelete,
+  onSetStatus,
+}: {
+  templates: AgreementTemplateV2[];
+  canEdit: boolean;
+  settingDefaultId: string | null;
+  deletingId: string | null;
+  statusId: string | null;
+  onPreview: (t: AgreementTemplateV2) => void;
+  onEdit: (t: AgreementTemplateV2) => void;
+  onSetDefault: (t: AgreementTemplateV2) => void;
+  onDelete: (t: AgreementTemplateV2) => void;
+  onSetStatus: (t: AgreementTemplateV2, status: AgreementTemplateStatusV2) => void;
+}) {
+  return (
+    <div className={cn(SURFACE, "overflow-x-auto")}>
+      <table className="w-full min-w-[680px] table-fixed text-sm" aria-label="Agreement templates">
+        <thead>
+          <tr className="border-b border-border">
+            <th className={cn(HEAD, "w-[33%]")}>Name</th>
+            <th className={cn(HEAD, "w-[13%]")}>Status</th>
+            <th className={cn(HEAD, "w-[17%]")}>Last updated</th>
+            <th className={cn(HEAD, "w-[18%]")}>Default</th>
+            <th className={cn(HEAD, "w-[19%] text-right")}>
+              <span className="sr-only">Actions</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {templates.map((template) => {
+            const name = displayName(template);
+            const blank = isBlankHtml(template.content);
+            const updated = formatUpdated(template.updatedAt);
+            const status = template.status ?? "active";
+            const look = TEMPLATE_STATUS_V2[status];
+            const busy = statusId === template.id || deletingId === template.id;
+            return (
+              <tr
+                key={template.id}
+                data-template-id={template.id}
+                data-template-status={status}
+                className="border-b border-border last:border-0"
+              >
+                <td className="px-4 py-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span
+                      className={cn(
+                        "flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]",
+                        status === "archived" && "opacity-50",
+                      )}
+                      aria-hidden="true"
+                    >
+                      <FileText className="size-4" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className={cn("truncate font-medium", status === "archived" ? "text-muted-foreground" : "text-foreground")} title={name}>
+                        {name}
+                      </p>
+                      {blank ? (
+                        <p className="flex items-center gap-1 text-xs text-amber-700 dark:text-amber-400">
+                          <AlertTriangle className="size-3" aria-hidden="true" />
+                          No wording yet
+                        </p>
+                      ) : template.category !== "standard" ? (
+                        <p className="text-xs text-muted-foreground">{AGREEMENT_CATEGORY_LABEL[template.category]}</p>
+                      ) : null}
+                    </div>
+                  </div>
+                </td>
+                <td className="px-4 py-3">
+                  <span className={cn("font-medium", look.tone)} title={look.hint}>
+                    {look.label}
+                  </span>
+                </td>
+                <td className="px-4 py-3 tabular-nums text-foreground">{updated ?? "—"}</td>
+                <td className="px-4 py-3">
+                  {template.isDefault ? (
+                    <span className="inline-flex items-center gap-1.5 font-medium text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
+                      <Check className="size-4" aria-hidden="true" />
+                      Default
+                    </span>
+                  ) : canEdit && !blank && status === "active" ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="-ml-2"
+                      onClick={() => onSetDefault(template)}
+                      disabled={settingDefaultId !== null}
+                      aria-label={`Make ${name} the default`}
+                    >
+                      {settingDefaultId === template.id ? (
+                        <Loader2 className="animate-spin" data-icon="inline-start" />
+                      ) : (
+                        <Star data-icon="inline-start" />
+                      )}
+                      Make default
+                    </Button>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </td>
+                <td className="px-2 py-3">
+                  <div className="flex items-center justify-end gap-0.5">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      className="text-muted-foreground hover:text-foreground"
+                      onClick={() => onPreview(template)}
+                      aria-label={`Preview ${name}`}
+                      title="Preview"
+                    >
+                      <Eye />
+                    </Button>
+                    {canEdit && (
+                      <>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          className="text-muted-foreground hover:text-foreground"
+                          onClick={() => onEdit(template)}
+                          aria-label={`Edit ${name}`}
+                          title="Edit"
+                        >
+                          <Pencil />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                          onClick={() => onDelete(template)}
+                          disabled={template.isDefault || deletingId !== null}
+                          aria-label={`Delete ${name}`}
+                          title={
+                            template.isDefault
+                              ? "Your default template can’t be deleted. Make another one the default first."
+                              : "Delete"
+                          }
+                        >
+                          {deletingId === template.id ? <Loader2 className="animate-spin" /> : <Trash2 />}
+                        </Button>
+                        {/* Status only: a short menu that opens below the dots, lined up with their right edge. */}
+                        <DropdownMenu modal={false}>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-sm"
+                              className="text-muted-foreground hover:text-foreground"
+                              aria-label={`Change the status of ${name}`}
+                              aria-busy={statusId === template.id || undefined}
+                              title="Status"
+                            >
+                              {statusId === template.id ? <Loader2 className="animate-spin" /> : <MoreVertical />}
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent side="bottom" align="end" sideOffset={6} collisionPadding={12} className="w-48">
+                            <DropdownMenuLabel className="text-xs font-medium text-muted-foreground">Status</DropdownMenuLabel>
+                            <DropdownMenuRadioGroup
+                              value={status}
+                              onValueChange={(next) => {
+                                if (next !== status) onSetStatus(template, next as AgreementTemplateStatusV2);
+                              }}
+                            >
+                              {STATUS_ORDER.map((key) => {
+                                const option = TEMPLATE_STATUS_V2[key];
+                                return (
+                                  <DropdownMenuRadioItem
+                                    key={key}
+                                    value={key}
+                                    disabled={(template.isDefault && key !== "active") || statusId !== null}
+                                    title={option.hint}
+                                  >
+                                    <span className={option.tone}>{option.label}</span>
+                                  </DropdownMenuRadioItem>
+                                );
+                              })}
+                            </DropdownMenuRadioGroup>
+                            {template.isDefault && (
+                              <p className="px-2 pt-1 pb-1.5 text-xs text-muted-foreground">Your default stays active.</p>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** Preview: the template as a signer would get it, filled with your company and a sample customer. */
+function TemplatePreviewDialogV2({
+  template,
+  previewData,
+  onOpenChange,
+  onEdit,
+}: {
+  template: AgreementTemplateV2 | null;
+  previewData: Record<string, string>;
+  onOpenChange: (open: boolean) => void;
+  onEdit?: (t: AgreementTemplateV2) => void;
+}) {
+  const html = useMemo(
+    () => (template ? renderAgreementHtml(template.content, previewData, { mode: "preview" }) : ""),
+    [template, previewData],
+  );
+  return (
+    <Dialog open={!!template} onOpenChange={onOpenChange}>
+      <DialogContent className="flex h-[90dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl">
+        <DialogHeader className={cn("shrink-0 border-b px-6 py-4 text-left", onEdit ? "pr-28" : "pr-16")}>
+          <DialogTitle className="truncate text-lg">{template ? displayName(template) : ""}</DialogTitle>
+          <DialogDescription>Your company details, sample customer.</DialogDescription>
+        </DialogHeader>
+        {/* Edit, as the ✕'s twin: same size, same round grey ground, just left of it. */}
+        {template && onEdit && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="absolute top-4 right-14 bg-secondary"
+            onClick={() => onEdit(template)}
+            aria-label={`Edit ${displayName(template)}`}
+            title="Edit"
+          >
+            <Pencil />
+          </Button>
+        )}
+        <div className={cn("min-h-0 flex-1 overflow-y-auto p-6", AGREEMENT_PAGE_BACKDROP_V2)}>
+          <AgreementPreviewV2 html={html} className="mx-auto max-w-3xl bg-transparent" />
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
 /* The section                                                                 */
 /* -------------------------------------------------------------------------- */
 
-export function AgreementTemplatesSectionV2({ id }: { id?: string }) {
+export function AgreementTemplatesSectionV2({
+  id,
+  inDialog = false,
+}: {
+  id?: string;
+  /**
+   * Rendered inside "Manage agreement templates" (./templates-dialog-v2): the
+   * dialog carries the title, and the header offers "New template", since
+   * there is no longer a create card beside it.
+   */
+  inDialog?: boolean;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -360,7 +661,7 @@ export function AgreementTemplatesSectionV2({ id }: { id?: string }) {
   const canEdit = canEditSettings("templates");
 
   const { templates, isLoading: templatesLoading, error, refetch } = useAgreementTemplatesV2();
-  const { create, update, setDefault, remove } = useAgreementTemplateMutationsV2();
+  const { create, update, setDefault, remove, setStatus } = useAgreementTemplateMutationsV2();
   const previewData = useTemplatePreviewDataV2();
 
   // The query waits for the tenant, and a waiting query is not "loading" to
@@ -373,12 +674,20 @@ export function AgreementTemplatesSectionV2({ id }: { id?: string }) {
   const [creating, setCreating] = useState(false);
   const creatingRef = useRef(false);
   const [editing, setEditing] = useState<EditingTemplate | null>(null);
+  const [previewing, setPreviewing] = useState<AgreementTemplateV2 | null>(null);
   const [confirmDefault, setConfirmDefault] = useState<AgreementTemplateV2 | null>(null);
   const [settingDefaultId, setSettingDefaultId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<AgreementTemplateV2 | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const visible = useMemo(() => matchTemplatesByNameV2(templates, query), [templates, query]);
+  const [showArchived, setShowArchived] = useState(false);
+  const [statusId, setStatusId] = useState<string | null>(null);
+  const archivedCount = useMemo(() => templates.filter((t) => t.status === "archived").length, [templates]);
+  // Archived templates are put away: listed only when asked for.
+  const visible = useMemo(
+    () => matchTemplatesByNameV2(showArchived ? templates : templates.filter((t) => t.status !== "archived"), query),
+    [templates, query, showArchived],
+  );
 
   // A template "Create your template" made that has not been saved yet. Held
   // in a ref so the editor's close (which runs after its save resolves, from
@@ -468,6 +777,23 @@ export function AgreementTemplatesSectionV2({ id }: { id?: string }) {
     }
   };
 
+  const changeStatus = async (template: AgreementTemplateV2, status: AgreementTemplateStatusV2) => {
+    setStatusId(template.id);
+    try {
+      await setStatus(template.id, status);
+      const said: Record<AgreementTemplateStatusV2, string> = {
+        active: "can now be sent and picked for rentals.",
+        draft: "is a draft again. It won't be sent until it's active.",
+        archived: "is archived. Turn on Show archived to see it.",
+      };
+      toast({ title: `Marked ${TEMPLATE_STATUS_V2[status].label.toLowerCase()}`, description: `“${displayName(template)}” ${said[status]}` });
+    } catch (e) {
+      toast({ title: "Could not change the status", description: friendlyError(e), variant: "destructive" });
+    } finally {
+      setStatusId(null);
+    }
+  };
+
   const deleteTemplate = async (template: AgreementTemplateV2) => {
     setDeletingId(template.id);
     try {
@@ -494,7 +820,8 @@ export function AgreementTemplatesSectionV2({ id }: { id?: string }) {
 
   const scrolledFor = useRef<string | null>(null);
   useEffect(() => {
-    if (view !== "templates") {
+    // In the dialog the section is already what is on screen; nothing to scroll to.
+    if (view !== "templates" || inDialog) {
       scrolledFor.current = null;
       return;
     }
@@ -502,7 +829,7 @@ export function AgreementTemplatesSectionV2({ id }: { id?: string }) {
     if (loading || scrolledFor.current === scrollKey) return;
     scrolledFor.current = scrollKey;
     rootRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
-  }, [view, loading, scrollKey]);
+  }, [view, loading, scrollKey, inDialog]);
 
   const newHandled = useRef(false);
   useEffect(() => {
@@ -570,22 +897,18 @@ export function AgreementTemplatesSectionV2({ id }: { id?: string }) {
          15:18), and showing it twice read as a mistake. That card starts a
          create here through `?new=1`; with no templates yet, the empty state
          offers the same action. */
-      <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-label="Agreement templates">
-        {visible.map((template) => (
-          <TemplateCardV2
-            key={template.id}
-            template={template}
-            canEdit={canEdit}
-            settingDefault={settingDefaultId === template.id}
-            defaultBusy={settingDefaultId !== null}
-            onEdit={() => openEditor(template)}
-            onSetDefault={() => setConfirmDefault(template)}
-            deleting={deletingId === template.id}
-            deleteBusy={deletingId !== null}
-            onDelete={() => setConfirmDelete(template)}
-          />
-        ))}
-      </ul>
+      <TemplatesTableV2
+        templates={visible}
+        canEdit={canEdit}
+        settingDefaultId={settingDefaultId}
+        deletingId={deletingId}
+        onPreview={setPreviewing}
+        onEdit={openEditor}
+        onSetDefault={setConfirmDefault}
+        onDelete={setConfirmDelete}
+        statusId={statusId}
+        onSetStatus={(t, next) => void changeStatus(t, next)}
+      />
     );
   }
 
@@ -598,14 +921,26 @@ export function AgreementTemplatesSectionV2({ id }: { id?: string }) {
       className="scroll-mt-24 space-y-4"
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div className="min-w-0">
+        <div className={cn("min-w-0", inDialog && "sr-only")}>
           <h2 id={headingId} className="font-heading text-lg font-semibold tracking-tight text-foreground">
             Templates
           </h2>
           <p className="text-sm text-muted-foreground">{TEMPLATES_SECTION_DESCRIPTION}</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+        <div className={cn("flex flex-wrap items-center gap-2 sm:justify-end", inDialog && "w-full sm:justify-between")}>
           {!canEdit && !permissionsLoading && <SettingsReadOnlyNotice />}
+          {archivedCount > 0 && (
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Switch checked={showArchived} onCheckedChange={setShowArchived} aria-label="Show archived templates" />
+              Show archived ({archivedCount})
+            </label>
+          )}
+          {inDialog && canEdit && !loading && templates.length > 0 && (
+            <Button type="button" onClick={() => void startCreate()} disabled={creating} className="sm:order-last">
+              {creating ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <Plus data-icon="inline-start" />}
+              {creating ? "Creating…" : "New template"}
+            </Button>
+          )}
           {!loading && templates.length > 0 && (
             <div className="relative w-full sm:w-64">
               <Search
@@ -690,6 +1025,20 @@ export function AgreementTemplatesSectionV2({ id }: { id?: string }) {
         </AlertDialogContent>
       </AlertDialog>
 
+      <TemplatePreviewDialogV2
+        template={previewing}
+        previewData={previewData}
+        onOpenChange={(open) => !open && setPreviewing(null)}
+        onEdit={
+          canEdit
+            ? (t) => {
+                setPreviewing(null);
+                openEditor(t);
+              }
+            : undefined
+        }
+      />
+
       {editing && (
         <AgreementEditorV2
           key={editing.id}
@@ -699,6 +1048,7 @@ export function AgreementTemplatesSectionV2({ id }: { id?: string }) {
             setEditing(null);
           }}
           mode="template"
+          trax
           isDefaultTemplate={editing.isDefault}
           nameEditable
           initialName={editing.name}

@@ -63,6 +63,14 @@ export interface PageSearchRegistration {
   /** `data-tour` to stamp on the field. See the note above — load-bearing. */
   tourAnchor?: string;
   filters?: PageFilterRegistration;
+  /** Short name of what this field searches ("Rentals"), drawn as a chip at the
+   *  front of the field. It is what tells the field apart from global search,
+   *  which is still one keystroke away (⌘K, or ⌘↵ with a term). */
+  scopeLabel?: string;
+  /** Rows the list shows for its COMMITTED term. Optional; undefined while it
+   *  loads. At 0 the bar promotes "Search everywhere", because a list that finds
+   *  nothing is exactly when the operator meant the whole portal. */
+  resultCount?: number;
 }
 
 interface SlotContextValue {
@@ -120,6 +128,8 @@ export function usePageSearch(reg: PageSearchRegistration | null) {
   const placeholder = reg?.placeholder ?? "";
   const value = reg?.value ?? "";
   const tourAnchor = reg?.tourAnchor;
+  const scopeLabel = reg?.scopeLabel;
+  const resultCount = reg?.resultCount;
   const hasFilters = Boolean(reg?.filters);
   const filtersOpen = reg?.filters?.open ?? false;
   const activeCount = reg?.filters?.activeCount ?? 0;
@@ -136,6 +146,8 @@ export function usePageSearch(reg: PageSearchRegistration | null) {
       value,
       onChange,
       tourAnchor,
+      scopeLabel,
+      resultCount,
       filters: hasFilters ? { open: filtersOpen, onOpenChange, activeCount } : undefined,
     });
     /* Handed back on unmount, so navigating to a page with nothing to filter
@@ -148,6 +160,8 @@ export function usePageSearch(reg: PageSearchRegistration | null) {
     placeholder,
     value,
     tourAnchor,
+    scopeLabel,
+    resultCount,
     hasFilters,
     filtersOpen,
     activeCount,

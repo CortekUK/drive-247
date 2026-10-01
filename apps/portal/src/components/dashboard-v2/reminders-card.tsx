@@ -260,7 +260,7 @@ function Composer({
         }}
         className="group mt-auto flex w-full items-center gap-2.5 border-t border-[var(--pv-line)] px-6 py-4 text-left transition-colors hover:bg-[var(--pv-accent-bg)]"
       >
-        <span className="flex size-[15px] shrink-0 items-center justify-center rounded-[5px] border border-dashed border-[var(--pv-line-2)] text-[var(--pv-ink-3)] group-hover:border-[var(--pv-accent)] group-hover:text-[var(--pv-accent)]">
+        <span className="flex size-[15px] shrink-0 items-center justify-center rounded-[5px] border border-dashed border-[var(--pv-line-2)] text-[var(--pv-ink-3)] group-hover:border-[var(--pv-accent)] group-hover:text-[var(--pv-accent-ink)]">
           <Plus className="size-2.5" strokeWidth={3} />
         </span>
         <span className="text-[12px] text-[var(--pv-ink-3)] group-hover:text-[var(--pv-ink-2)]">
@@ -299,7 +299,7 @@ function Composer({
           className={cn(
             'shrink-0 transition-colors',
             wantsTime
-              ? 'text-[var(--pv-accent)]'
+              ? 'text-[var(--pv-accent-ink)]'
               : 'text-[var(--pv-ink-3)] hover:text-[var(--pv-ink-2)]',
           )}
         >
@@ -324,7 +324,7 @@ function Composer({
           onTriggerKeyDown={(e) => {
             if (e.key === 'Escape') close();
           }}
-          triggerClassName="mt-2.5 flex w-full items-center gap-2 rounded-md border border-[var(--pv-line)] bg-[var(--pv-wash)] px-2.5 py-1.5 text-left text-[11.5px] tabular-nums text-[var(--pv-ink-2)] outline-none transition-colors hover:border-[var(--pv-line-2)] focus-visible:border-[var(--pv-accent)] data-[state=open]:border-[var(--pv-accent)] data-[empty=true]:text-[var(--pv-ink-3)] [&_svg]:text-[var(--pv-accent)]"
+          triggerClassName="mt-2.5 flex w-full items-center gap-2 rounded-md border border-[var(--pv-line)] bg-[var(--pv-wash)] px-2.5 py-1.5 text-left text-[11.5px] tabular-nums text-[var(--pv-ink-2)] outline-none transition-colors hover:border-[var(--pv-line-2)] focus-visible:border-[var(--pv-accent)] data-[state=open]:border-[var(--pv-accent)] data-[empty=true]:text-[var(--pv-ink-3)] [&_svg]:text-[var(--pv-accent-ink)]"
         />
       )}
 
@@ -335,7 +335,7 @@ function Composer({
           type="button"
           onClick={() => void submit()}
           disabled={!body.trim() || saving || disabled}
-          className="rounded-md bg-[var(--pv-accent)] px-2.5 py-1 text-[11px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+          className="rounded-md bg-[var(--pv-accent)] px-2.5 py-1 text-[11px] font-medium text-[var(--pv-on-accent)] transition-opacity hover:opacity-90 disabled:opacity-40"
         >
           {saving ? 'Saving…' : 'Add'}
         </button>

@@ -71,7 +71,8 @@ export type V2Area =
   | 'insights'
   | 'availability'
   | 'turo'
-  | 'agreements';
+  | 'agreements'
+  | 'finances';
 
 /**
  * One entry per v2 area. Today every list is just the canary.
@@ -160,6 +161,13 @@ const V2_AREAS: Record<V2Area, readonly string[]> = {
    * programme still only issues codes to subscribed operators — the page says
    * so to anyone else. Neither of those is a canary gate.
    */
+  /**
+   * `/finances` — Payments, Invoices and Fines as three tabs of one screen, in
+   * place of three rail rows. A new route: each tab mounts the existing list
+   * screen unchanged, so `/payments`, `/invoices` and `/fines` keep serving
+   * every tenant (and every deep link) exactly as before.
+   */
+  finances: [NORTHWIND],
 };
 
 /**

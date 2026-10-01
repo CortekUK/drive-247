@@ -214,7 +214,7 @@ function ModeRow({
       <span
         className={cn(
           'mt-0.5 shrink-0',
-          active ? 'text-primary' : tone === 'destructive' ? 'text-destructive' : 'text-muted-foreground',
+          active ? 'text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]' : tone === 'destructive' ? 'text-destructive' : 'text-muted-foreground',
         )}
       >
         {icon}
@@ -225,7 +225,7 @@ function ModeRow({
         </span>
         <span className="block truncate text-xs text-muted-foreground">{hint}</span>
       </span>
-      {active && <Check className="mt-0.5 size-4 shrink-0 text-primary" />}
+      {active && <Check className="mt-0.5 size-4 shrink-0 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" />}
     </button>
   );
 }

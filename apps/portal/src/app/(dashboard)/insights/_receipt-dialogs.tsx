@@ -27,7 +27,8 @@
  * the answer while looking like the whole of it.
  */
 
-import { useMemo, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Search, X } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -39,9 +40,10 @@ import { Skeleton } from '@/components/ui-v2/skeleton';
 import { formatCurrency } from '@/lib/format-utils';
 import { cn } from '@/lib/utils';
 import { EmptyState } from './_kit';
-import { classify, toNumber, type Bucket } from './_money-model';
+import { toNumber, type Bucket } from './_money-model';
 import { vehicleName, type InsightsData, type LedgerRow } from './_data';
 import { useCostDescriptions } from './_receipt-data';
+import { EntryLine, useCanEditInsights } from './_adjustments';
 
 /** How many itemised rows any one list renders before it says it stopped. */
 const LIST_CAP = 100;
@@ -105,6 +107,7 @@ function ReceiptDialog({
   loading,
   isEmpty,
   emptyMessage,
+  search,
   children,
 }: {
   open: boolean;
@@ -114,8 +117,11 @@ function ReceiptDialog({
   loading: boolean;
   isEmpty: boolean;
   emptyMessage: string;
+  /** The dialog's search field. `matches` is how many rows survived it. */
+  search?: DialogSearch & { placeholder: string; matches: number };
   children: ReactNode;
 }) {
+  const noMatches = !!search && search.query.trim() !== '' && search.matches === 0;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
@@ -133,10 +139,94 @@ function ReceiptDialog({
         ) : isEmpty ? (
           <EmptyState message={emptyMessage} className="h-40" />
         ) : (
-          <div className="max-h-[58vh] space-y-6 overflow-y-auto pr-1">{children}</div>
+          <>
+            {search ? <SearchField {...search} /> : null}
+            {noMatches ? (
+              <EmptyState message={`Nothing here matches “${search!.query.trim()}”.`} className="h-40" />
+            ) : (
+              <div className="max-h-[52vh] space-y-6 overflow-y-auto pr-1">{children}</div>
+            )}
+          </>
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Search
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+type DialogSearch = { query: string; setQuery: (query: string) => void };
+
+/** A dialog's search text, cleared every time the dialog closes. */
+function useDialogSearch(open: boolean): DialogSearch {
+  const [query, setQuery] = useState('');
+  useEffect(() => {
+    if (!open) setQuery('');
+  }, [open]);
+  return { query, setQuery };
+}
+
+/**
+ * Every word must appear somewhere in the row's text, in any order — so
+ * "corolla tax" finds the Corolla's tax lines. Amounts are searchable both as
+ * printed ("$23.04") and bare ("23.04").
+ */
+function searchRows<T>(rows: T[], query: string, text: (row: T) => (string | null | undefined)[]): T[] {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return rows;
+  return rows.filter((row) => {
+    const haystack = text(row).filter(Boolean).join(' ').toLowerCase();
+    return words.every((w) => haystack.includes(w));
+  });
+}
+
+/**
+ * The search pill — the top bar's own (`top-bar-v2.tsx` FIELD): light brand
+ * tint, brand-coloured icon, rounded-full. Not a new style.
+ */
+function SearchField({
+  query,
+  setQuery,
+  placeholder,
+  matches,
+}: DialogSearch & { placeholder: string; matches: number }) {
+  return (
+    <div className="flex items-center gap-3">
+      <label
+        className={cn(
+          'group relative flex h-9 w-full items-center gap-2 overflow-hidden rounded-full border border-primary/25 bg-primary/[0.07] px-3 transition-colors duration-200 motion-reduce:transition-none',
+          'hover:border-primary/40 hover:bg-primary/10 focus-within:border-primary/50 focus-within:bg-primary/10 focus-within:ring-3 focus-within:ring-ring/30',
+          'dark:hover:border-[hsl(var(--v2-link,var(--primary))_/_0.4)] dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]',
+        )}
+      >
+        <Search className="size-4 shrink-0 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" aria-hidden />
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={placeholder}
+          aria-label={placeholder}
+          className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-[hsl(var(--v2-muted-on-tint,var(--muted-foreground)))] [&::-webkit-search-cancel-button]:hidden"
+        />
+        {query ? (
+          <button
+            type="button"
+            onClick={() => setQuery('')}
+            aria-label="Clear search"
+            className="flex size-5 cursor-pointer items-center justify-center rounded-full text-muted-foreground hover:text-foreground"
+          >
+            <X className="size-3.5" aria-hidden />
+          </button>
+        ) : null}
+      </label>
+      {query.trim() ? (
+        <span className="shrink-0 text-[13px] tabular-nums text-muted-foreground">
+          {matches.toLocaleString()} {matches === 1 ? 'match' : 'matches'}
+        </span>
+      ) : null}
+    </div>
   );
 }
 
@@ -227,7 +317,7 @@ function CapNote({
 /** The ledger rows in one bucket, newest first. */
 function rowsIn(ledger: LedgerRow[], bucket: Bucket): LedgerRow[] {
   return ledger
-    .filter((row) => classify(row) === bucket)
+    .filter((row) => row.bucket === bucket)
     .sort((a, b) => (b.entry_date ?? '').localeCompare(a.entry_date ?? ''));
 }
 
@@ -235,6 +325,7 @@ function rowsIn(ledger: LedgerRow[], bucket: Bucket): LedgerRow[] {
 function byCategory(rows: LedgerRow[]): { category: string; amount: number; count: number }[] {
   const totals = new Map<string, { amount: number; count: number }>();
   for (const row of rows) {
+    if (row.excluded) continue;
     const key = row.category ?? 'Uncategorised';
     const entry = totals.get(key) ?? { amount: 0, count: 0 };
     entry.amount += toNumber(row.amount);
@@ -246,13 +337,36 @@ function byCategory(rows: LedgerRow[]): { category: string; amount: number; coun
     .sort((a, b) => b.amount - a.amount);
 }
 
-const sumOf = (rows: LedgerRow[]) => rows.reduce((total, row) => total + toNumber(row.amount), 0);
+/** Left-out rows stay in the lists (so they can be restored) but never in a sum. */
+const sumOf = (rows: LedgerRow[]) =>
+  rows.reduce((total, row) => (row.excluded ? total : total + toNumber(row.amount)), 0);
+
+/** The correction props every editable ledger line passes through. */
+const adjustable = (row: LedgerRow) => ({
+  target: { kind: 'entry' as const, id: row.id },
+  amount: toNumber(row.amount),
+  originalAmount: row.originalAmount,
+  excluded: row.excluded,
+  adjusted: row.adjusted,
+});
 
 /** A share of a total, or nothing when the total is zero and a share is a lie. */
 function share(amount: number, total: number): string | undefined {
   if (total <= 0) return undefined;
   return `${((amount / total) * 100).toFixed(1)}%`;
 }
+
+/** What a ledger row can be found by. */
+const ledgerText = (labels: Map<string, string>) => (row: LedgerRow) => [
+  row.category,
+  row.vehicle_id ? labels.get(row.vehicle_id) : null,
+  formatDay(row.entry_date),
+  toNumber(row.amount).toFixed(2),
+  row.excluded ? 'left out' : null,
+];
+
+/** Said once above an editable list, so the click target is discoverable. */
+const editHint = 'amount · counted';
 
 /** Stable identity, so a dialog rendered before the data lands is not a crash. */
 const NO_LABELS: Map<string, string> = new Map();
@@ -270,18 +384,24 @@ type DialogProps = {
  * ──────────────────────────────────────────────────────────────────────────── */
 
 export function TookInDialog({ open, onOpenChange, data, loading, currency }: DialogProps) {
+  const canEdit = useCanEditInsights();
+  const search = useDialogSearch(open);
   // Both revenue buckets: this row is the GROSS top line, tax and deposits
   // included. They come back out on their own line further down the receipt,
   // and taking them out here as well would remove them twice.
-  const rows = useMemo(
+  const allRows = useMemo(
     () =>
       (data?.ledger ?? [])
         .filter((row) => {
-          const bucket = classify(row);
+          const bucket = row.bucket;
           return bucket === 'operating_revenue' || bucket === 'non_revenue';
         })
         .sort((a, b) => (b.entry_date ?? '').localeCompare(a.entry_date ?? '')),
     [data?.ledger],
+  );
+  const rows = useMemo(
+    () => searchRows(allRows, search.query, ledgerText(data?.vehicleLabels ?? NO_LABELS)),
+    [allRows, search.query, data?.vehicleLabels],
   );
 
   const total = sumOf(rows);
@@ -295,8 +415,9 @@ export function TookInDialog({ open, onOpenChange, data, loading, currency }: Di
       title="Money you took in"
       description="Everything charged to customers in this period, before anything comes back out."
       loading={loading}
-      isEmpty={rows.length === 0}
+      isEmpty={allRows.length === 0}
       emptyMessage="Nothing was charged to a customer in this period."
+      search={{ ...search, placeholder: 'Search by charge, car, date or amount…', matches: rows.length }}
     >
       <Block title="What it was for" meta={money(total, currency)}>
         {categories.map((c) => (
@@ -310,17 +431,18 @@ export function TookInDialog({ open, onOpenChange, data, loading, currency }: Di
         ))}
       </Block>
 
-      <Block title="Every entry, newest first">
+      <Block title="Every entry, newest first" meta={canEdit ? editHint : undefined}>
         {shown.map((row) => (
-          <Line
+          <EntryLine
             key={row.id}
+            {...adjustable(row)}
+            currency={currency}
             label={row.category ?? 'Uncategorised'}
             sub={
               row.vehicle_id
                 ? `${formatDay(row.entry_date)} · ${vehicleName(data?.vehicleLabels ?? NO_LABELS, row.vehicle_id)}`
                 : formatDay(row.entry_date)
             }
-            amount={money(toNumber(row.amount), currency)}
           />
         ))}
         <CapNote shown={shown.length} total={rows.length} />
@@ -334,8 +456,17 @@ export function TookInDialog({ open, onOpenChange, data, loading, currency }: Di
  * ──────────────────────────────────────────────────────────────────────────── */
 
 export function GaveBackDialog({ open, onOpenChange, data, loading, currency }: DialogProps) {
-  const refunds = data?.refunds ?? [];
-  const total = refunds.reduce((sum, r) => sum + r.amount, 0);
+  const search = useDialogSearch(open);
+  const allRefunds = data?.refunds ?? [];
+  const refunds = searchRows(allRefunds, search.query, (r) => [
+    r.customerName,
+    r.reason,
+    vehicleName(data?.vehicleLabels ?? NO_LABELS, r.vehicleId),
+    formatInstant(r.date),
+    r.amount.toFixed(2),
+    r.excluded ? 'left out' : null,
+  ]);
+  const total = refunds.reduce((sum, r) => (r.excluded ? sum : sum + r.amount), 0);
   const shown = refunds.slice(0, LIST_CAP);
 
   return (
@@ -345,13 +476,20 @@ export function GaveBackDialog({ open, onOpenChange, data, loading, currency }: 
       title="Money you gave back"
       description="Refunds paid to customers in this period. The ledger does not record these, so they are subtracted here."
       loading={loading}
-      isEmpty={refunds.length === 0}
+      isEmpty={allRefunds.length === 0}
       emptyMessage="You did not refund anybody in this period."
+      search={{ ...search, placeholder: 'Search by customer, reason, car or amount…', matches: refunds.length }}
     >
       <Block title="Refunds" meta={money(total, currency)}>
         {shown.map((refund) => (
-          <Line
+          <EntryLine
             key={refund.id}
+            target={{ kind: 'payment', id: refund.id }}
+            amount={refund.amount}
+            originalAmount={refund.originalAmount}
+            excluded={refund.excluded}
+            adjusted={refund.adjusted}
+            currency={currency}
             label={refund.customerName ?? 'Customer no longer on record'}
             sub={[
               formatInstant(refund.date),
@@ -365,7 +503,6 @@ export function GaveBackDialog({ open, onOpenChange, data, loading, currency }: 
               refund.reason?.replace(/\s+/g, ' ').trim().replace(/\s*;\s*/g, ' · ') ||
                 'No reason recorded',
             ].join(' · ')}
-            amount={money(refund.amount, currency)}
           />
         ))}
         <CapNote shown={shown.length} total={refunds.length} />
@@ -379,7 +516,12 @@ export function GaveBackDialog({ open, onOpenChange, data, loading, currency }: 
  * ──────────────────────────────────────────────────────────────────────────── */
 
 export function NeverYoursDialog({ open, onOpenChange, data, loading, currency }: DialogProps) {
-  const rows = useMemo(() => rowsIn(data?.ledger ?? [], 'non_revenue'), [data?.ledger]);
+  const search = useDialogSearch(open);
+  const allRows = useMemo(() => rowsIn(data?.ledger ?? [], 'non_revenue'), [data?.ledger]);
+  const rows = useMemo(
+    () => searchRows(allRows, search.query, ledgerText(data?.vehicleLabels ?? NO_LABELS)),
+    [allRows, search.query, data?.vehicleLabels],
+  );
 
   // Split by what it actually is, not by category name: everything that is not
   // a deposit is tax. A new tax category added next month lands in the tax
@@ -400,8 +542,9 @@ export function NeverYoursDialog({ open, onOpenChange, data, loading, currency }
       title="Money that was never yours"
       description="Collected from customers, owed straight back out. Sales tax belongs to the state; a deposit belongs to the customer."
       loading={loading}
-      isEmpty={rows.length === 0}
+      isEmpty={allRows.length === 0}
       emptyMessage="You collected no sales tax and held no deposits in this period."
+      search={{ ...search, placeholder: 'Search by kind, car, date or amount…', matches: rows.length }}
     >
       <Block title="Sales tax collected" meta={money(taxTotal, currency)}>
         {shownTax.length === 0 ? (
@@ -411,11 +554,12 @@ export function NeverYoursDialog({ open, onOpenChange, data, loading, currency }
         ) : (
           <>
             {shownTax.map((row) => (
-              <Line
+              <EntryLine
                 key={row.id}
+                {...adjustable(row)}
+                currency={currency}
                 label={row.category ?? 'Tax'}
                 sub={formatDay(row.entry_date)}
-                amount={money(toNumber(row.amount), currency)}
               />
             ))}
             <CapNote shown={shownTax.length} total={tax.length} />
@@ -431,11 +575,12 @@ export function NeverYoursDialog({ open, onOpenChange, data, loading, currency }
         ) : (
           <>
             {shownDeposits.map((row) => (
-              <Line
+              <EntryLine
                 key={row.id}
+                {...adjustable(row)}
+                currency={currency}
                 label={row.category ?? 'Security Deposit'}
                 sub={formatDay(row.entry_date)}
-                amount={money(toNumber(row.amount), currency)}
               />
             ))}
             <CapNote shown={shownDeposits.length} total={deposits.length} />
@@ -460,12 +605,25 @@ function costLabel(row: LedgerRow, descriptions: Map<string, string> | undefined
 }
 
 export function SpentDialog({ open, onOpenChange, data, loading, currency }: DialogProps) {
-  const rows = useMemo(() => rowsIn(data?.ledger ?? [], 'operating_cost'), [data?.ledger]);
+  const search = useDialogSearch(open);
+  const allRows = useMemo(() => rowsIn(data?.ledger ?? [], 'operating_cost'), [data?.ledger]);
 
-  // Resolved only while the dialog is open — see `_receipt-data.ts`.
+  // Resolved only while the dialog is open — see `_receipt-data.ts`. Over
+  // every row, not just the matches, so searching never re-fetches.
   const { data: descriptions, isLoading: descriptionsLoading } = useCostDescriptions(
-    rows.map((row) => row.reference),
+    allRows.map((row) => row.reference),
     open,
+  );
+
+  // Searchable by what the cost was FOR as well as by car, date and amount.
+  const rows = useMemo(
+    () =>
+      searchRows(allRows, search.query, (row) => [
+        ...ledgerText(data?.vehicleLabels ?? NO_LABELS)(row),
+        costLabel(row, descriptions),
+        row.vehicle_id ? null : 'not tied to a car',
+      ]),
+    [allRows, search.query, data?.vehicleLabels, descriptions],
   );
 
   /*
@@ -516,8 +674,9 @@ export function SpentDialog({ open, onOpenChange, data, loading, currency }: Dia
       title="Money you spent"
       description="What it cost to run the cars in this period. Buying and selling them is not in here — it has its own line."
       loading={loading}
-      isEmpty={rows.length === 0}
+      isEmpty={allRows.length === 0}
       emptyMessage="No running costs were recorded in this period."
+      search={{ ...search, placeholder: 'Search by what it was for, car, date or amount…', matches: rows.length }}
     >
       <Block title="Which car it went on" meta={money(total, currency)}>
         {groups.slice(0, LIST_CAP).map((group) => (
@@ -541,15 +700,16 @@ export function SpentDialog({ open, onOpenChange, data, loading, currency }: Dia
           meta={money(group.amount, currency)}
         >
           {group.shownRows.map((row) => (
-            <Line
+            <EntryLine
               key={row.id}
+              {...adjustable(row)}
+              currency={currency}
               label={
                 descriptionsLoading && row.reference
                   ? (row.category ?? 'Cost')
                   : costLabel(row, descriptions)
               }
               sub={formatDay(row.entry_date)}
-              amount={money(toNumber(row.amount), currency)}
             />
           ))}
         </Block>
@@ -580,7 +740,13 @@ function overdueLabel(row: { bucket_90_plus: number; bucket_61_90: number; bucke
 }
 
 export function OwedDialog({ open, onOpenChange, data, loading, currency }: DialogProps) {
-  const receivables = data?.receivables ?? [];
+  const search = useDialogSearch(open);
+  const allReceivables = data?.receivables ?? [];
+  const receivables = searchRows(allReceivables, search.query, (r) => [
+    r.customerName,
+    overdueLabel(r),
+    r.total.toFixed(2),
+  ]);
   const aging = data?.aging;
   const shown = receivables.slice(0, LIST_CAP);
 
@@ -591,7 +757,8 @@ export function OwedDialog({ open, onOpenChange, data, loading, currency }: Dial
       title="Still owed to you"
       description="Everything outstanding as of today, across every invoice. Not limited to the period above — a debt does not disappear because you asked about three months."
       loading={loading}
-      isEmpty={receivables.length === 0}
+      isEmpty={allReceivables.length === 0}
+      search={{ ...search, placeholder: 'Search by customer or amount…', matches: receivables.length }}
       emptyMessage="Nobody owes you anything. Every invoice is settled."
     >
       {aging ? (
@@ -624,7 +791,12 @@ export function OwedDialog({ open, onOpenChange, data, loading, currency }: Dial
  * ──────────────────────────────────────────────────────────────────────────── */
 
 export function CarPurchasesDialog({ open, onOpenChange, data, loading, currency }: DialogProps) {
-  const rows = useMemo(() => rowsIn(data?.ledger ?? [], 'capital_cost'), [data?.ledger]);
+  const search = useDialogSearch(open);
+  const allRows = useMemo(() => rowsIn(data?.ledger ?? [], 'capital_cost'), [data?.ledger]);
+  const rows = useMemo(
+    () => searchRows(allRows, search.query, ledgerText(data?.vehicleLabels ?? NO_LABELS)),
+    [allRows, search.query, data?.vehicleLabels],
+  );
 
   const bought = rows.filter((row) => row.category === 'Acquisition');
   const sold = rows.filter((row) => row.category !== 'Acquisition');
@@ -637,8 +809,9 @@ export function CarPurchasesDialog({ open, onOpenChange, data, loading, currency
       title="Buying and selling cars"
       description="Capital, not running cost. You swapped cash for a car you still own, so it sits outside what you kept rather than eating into it."
       loading={loading}
-      isEmpty={rows.length === 0}
+      isEmpty={allRows.length === 0}
       emptyMessage="You did not buy or sell a car in this period."
+      search={{ ...search, placeholder: 'Search by car, date or amount…', matches: rows.length }}
     >
       <Block title="Summary">
         <Line
@@ -655,11 +828,12 @@ export function CarPurchasesDialog({ open, onOpenChange, data, loading, currency
 
       <Block title="Every car, newest first">
         {shown.map((row) => (
-          <Line
+          <EntryLine
             key={row.id}
+            {...adjustable(row)}
+            currency={currency}
             label={vehicleName(data?.vehicleLabels ?? NO_LABELS, row.vehicle_id)}
             sub={`${row.category === 'Acquisition' ? 'Bought' : 'Taken off the fleet'} · ${formatDay(row.entry_date)}`}
-            amount={money(toNumber(row.amount), currency)}
           />
         ))}
         <CapNote shown={shown.length} total={rows.length} />

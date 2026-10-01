@@ -12,6 +12,7 @@
  *               400 { ok: false, error, field? } · 401/403 { ok: false, error } · 503 { ok: false, error }
  *   sync      → 200 { ok, updated }
  *   document  → 200 { ok, kind: 'pdf', base64, signed } | 200 { ok, kind: 'html', html }
+ *   history   → 200 { ok, events: [{ at, type, label, detail? }] }  (body: { id, kind: 'rental'|'individual' })
  *
  * Ported from the Next routes it replaces (apps/portal/src/app/api/agreements-v2/
  * {send,sync,document,ready}/route.ts and lib/agreements-v2/server/send.ts),
@@ -89,7 +90,7 @@ export async function handleAgreementsV2(req: Request, deps: AgreementsDepsV2): 
   if (!body || typeof body !== 'object' || Array.isArray(body)) return bad('The request could not be read.');
 
   const action = body.action;
-  if (action !== 'ready' && action !== 'send' && action !== 'sync' && action !== 'document') {
+  if (action !== 'ready' && action !== 'send' && action !== 'sync' && action !== 'document' && action !== 'history') {
     return bad('Unknown action.');
   }
 
@@ -108,6 +109,8 @@ export async function handleAgreementsV2(req: Request, deps: AgreementsDepsV2): 
         return await sync(ctx, deps);
       case 'document':
         return await documentOf(ctx, body.id, deps);
+      case 'history':
+        return await historyOf(ctx, body.id, body.kind, deps);
     }
   } catch (e) {
     console.error(`[agreements-v2/${action}] unexpected error:`, e);
@@ -495,4 +498,142 @@ async function documentOf(ctx: AgreementsContextV2, rawId: unknown, deps: Agreem
 
   const base64 = bytesToBase64(new Uint8Array(await response.arrayBuffer()));
   return reply(200, { ok: true, kind: 'pdf', base64, signed });
+}
+
+/* ── history ───────────────────────────────────────────────────────────── */
+
+/**
+ * Everything that happened to one agreement, oldest first, for the View
+ * dialog's activity log: what our own rows recorded (created, the signing
+ * email's delivery, a send that failed) and the signing service's own audit
+ * trail for the document (sent, viewed, signed, completed, reminders…).
+ * Read only; works for both kinds. A provider that cannot answer leaves the
+ * local events standing, with `partial: true`.
+ */
+export interface AgreementEventV2 {
+  at: string;
+  type: string;
+  label: string;
+  detail?: string;
+}
+
+const PROVIDER_ACTION_LABEL: Record<string, (who: string) => string> = {
+  sent: () => 'Sent for signature',
+  viewed: (who) => (who ? `Opened by ${who}` : 'Opened'),
+  signed: (who) => (who ? `Signed by ${who}` : 'Signed'),
+  completed: () => 'Completed, signed copy ready',
+  declined: (who) => (who ? `Declined by ${who}` : 'Declined'),
+  revoked: () => 'Voided',
+  expired: () => 'Expired',
+  reminder: () => 'Reminder sent',
+  remindersent: () => 'Reminder sent',
+  downloaded: (who) => (who ? `Downloaded by ${who}` : 'Downloaded'),
+  deliveryfailed: () => "The signing email couldn't be delivered",
+  delivered: () => 'Signing email delivered',
+  reassigned: () => 'Reassigned',
+  edited: () => 'Edited',
+  authenticationfailed: () => 'Identity check failed',
+};
+
+const humanise = (action: string) =>
+  action.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
+
+// deno-lint-ignore no-explicit-any
+function providerEvents(props: any): AgreementEventV2[] {
+  const history = Array.isArray(props?.documentHistory) ? props.documentHistory : [];
+  const events: AgreementEventV2[] = [];
+  for (const item of history) {
+    const action = String(item?.action ?? item?.activityAction ?? '').trim();
+    const at = toIsoTimestamp(item?.timestamp ?? item?.activityDate ?? item?.date);
+    if (!action || !at) continue;
+    const key = action.toLowerCase().replace(/[^a-z]/g, '');
+    const who = String(item?.name ?? item?.activityBy ?? '').trim();
+    const label = PROVIDER_ACTION_LABEL[key]?.(key === 'sent' ? '' : who) ?? humanise(action);
+    const to = String(item?.toName || item?.toEmail || '').trim();
+    const email = String(item?.email ?? '').trim();
+    const detail = key === 'sent' && to ? `To ${to}` : key !== 'sent' && email && email !== who ? email : undefined;
+    events.push(detail ? { at, type: key, label, detail } : { at, type: key, label });
+  }
+  return events;
+}
+
+const KINDS = new Set(['rental', 'individual']);
+
+async function historyOf(ctx: AgreementsContextV2, rawId: unknown, rawKind: unknown, deps: AgreementsDepsV2): Promise<Outcome> {
+  const { client } = deps;
+  const { tenant, boldsignMode } = ctx;
+  if (!isUuidV2(rawId) || typeof rawKind !== 'string' || !KINDS.has(rawKind)) return reply(404, { ok: false, error: NOT_FOUND });
+
+  const local: AgreementEventV2[] = [];
+  const push = (at: unknown, type: string, label: string, detail?: string) => {
+    const iso = toIsoTimestamp(at);
+    if (iso) local.push(detail ? { at: iso, type, label, detail } : { at: iso, type, label });
+  };
+
+  let documentId: string | null = null;
+  let mode: 'test' | 'live' = boldsignMode;
+  let sentAt: unknown = null;
+  let completedAt: unknown = null;
+
+  if (rawKind === 'rental') {
+    const { data: row, error } = await client
+      .from('rental_agreements')
+      .select('id, document_id, document_status, boldsign_mode, envelope_created_at, envelope_sent_at, envelope_completed_at, created_at, email_delivery_status, email_delivery_error, email_delivered_at')
+      .eq('id', rawId)
+      .eq('tenant_id', tenant.id)
+      .maybeSingle();
+    if (error) return reply(500, { ok: false, error: 'The agreement could not be loaded. Try again.' });
+    if (!row) return reply(404, { ok: false, error: NOT_FOUND });
+    push(row.envelope_created_at ?? row.created_at, 'created', 'Agreement created from the rental');
+    if (row.email_delivered_at) push(row.email_delivered_at, 'email_delivered', 'Signing email delivered');
+    else if (String(row.email_delivery_status ?? '').toLowerCase() === 'failed') {
+      push(row.envelope_sent_at ?? row.created_at, 'email_failed', "The signing email couldn't be delivered", row.email_delivery_error ?? undefined);
+    }
+    documentId = row.document_id ?? null;
+    mode = rowMode(row.boldsign_mode, boldsignMode);
+    sentAt = row.envelope_sent_at;
+    completedAt = row.envelope_completed_at;
+  } else {
+    const { data: row, error } = await client
+      .from(INDIVIDUAL_TABLE)
+      .select('id, document_id, document_status, boldsign_mode, error, sent_at, completed_at, created_at')
+      .eq('id', rawId)
+      .eq('tenant_id', tenant.id)
+      .maybeSingle();
+    if (error && !isMissingTableError(error)) return reply(500, { ok: false, error: 'The agreement could not be loaded. Try again.' });
+    if (!row) return reply(404, { ok: false, error: NOT_FOUND });
+    push(row.created_at, 'created', 'Agreement created');
+    const status = String(row.document_status ?? '').toLowerCase();
+    if (status === 'send_failed' || status === 'credit_failed') {
+      push(row.created_at, 'send_failed', status === 'credit_failed' ? 'Not sent: no e-sign credits left' : 'Not sent: the signing service turned it down', row.error ?? undefined);
+    }
+    documentId = row.document_id ?? null;
+    mode = rowMode(row.boldsign_mode, boldsignMode);
+    sentAt = row.sent_at;
+    completedAt = row.completed_at;
+  }
+
+  let remote: AgreementEventV2[] = [];
+  let partial = false;
+  const apiKey = documentId ? getBoldSignApiKey(deps.env, mode) : '';
+  if (documentId && apiKey) {
+    try {
+      const response = await getDocumentProperties(documentId, apiKey, { fetch: deps.fetch, env: deps.env });
+      if (response.ok) remote = providerEvents(await response.json());
+      else partial = true;
+    } catch {
+      partial = true;
+    }
+  } else if (documentId) {
+    partial = true;
+  }
+
+  // Without the provider's trail, our own timestamps still say when it went out and was signed.
+  if (remote.length === 0) {
+    push(sentAt, 'sent', 'Sent for signature');
+    push(completedAt, 'completed', 'Signed');
+  }
+
+  const events = [...local, ...remote].sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+  return reply(200, { ok: true, events, partial });
 }

@@ -1,5 +1,6 @@
 /**
- * v2 dialogs grow from the centre.
+ * Dialogs rise into the centre (the Trax motion, `MOTION_DIALOG` in
+ * src/lib/motion.ts).
  *
  * A dialog is centred with `top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2`.
  * `animate-in` then runs tailwindcss-animate's `enter` keyframe, whose `from`
@@ -10,14 +11,14 @@
  * centre of the screen — and snaps back when the animation ends. On screen that
  * reads as the dialog flying in from the bottom right.
  *
- * `slide-in-from-left-1/2` and `slide-in-from-top-1/2` (and their exit pair) set
- * those variables to -50%, so the keyframe carries the centring and the only
- * visible change is opacity and scale. They are compensation, not a slide.
+ * `slide-in-from-left-1/2` keeps x at -50%, and
+ * `slide-in-from-bottom-[calc(-50%_+_0.75rem)]` starts y 12px below the centred
+ * position (the exit pair mirrors both). So the keyframe carries the centring
+ * and the only visible change is opacity and a 12px rise — no zoom.
  *
  * jsdom does not run animations, so the classes are compiled with the real
- * Tailwind and the variables it emits are checked. The v1 kit
- * (components/ui/dialog.tsx) has always carried the same compensation, so v1
- * tenants were never affected and are not touched here.
+ * Tailwind and the variables it emits are checked. v1 and v2 dialogs share the
+ * one constant.
  */
 import { describe, expect, it } from "vitest";
 import postcss from "postcss";
@@ -53,57 +54,63 @@ function declarations(css: string, needle: string): string {
   return found;
 }
 
-const V2_DIALOGS = [
-  ["components/ui-v2/dialog.tsx", "dialog-content"],
-  ["components/ui-v2/alert-dialog.tsx", "alert-dialog-content"],
+const DIALOGS = [
+  "components/ui-v2/dialog.tsx",
+  "components/ui-v2/alert-dialog.tsx",
+  "components/ui/dialog.tsx",
+  "components/ui/alert-dialog.tsx",
 ] as const;
 
-describe("v2 dialogs: the centring survives the open animation", () => {
-  it("the enter and exit translate variables are -50%, which is the centring itself", async () => {
+/** The MOTION_DIALOG class string, read from source. */
+const motionDialog = (): string => {
+  const m = read("lib/motion.ts").match(/export const MOTION_DIALOG =\s*"([^"]+)"/);
+  expect(m, "MOTION_DIALOG not found in lib/motion.ts").not.toBeNull();
+  return m![1];
+};
+
+describe("dialogs: the centring survives the open animation", () => {
+  it("x stays at -50%, and y starts 12px below the centre", async () => {
     const css = await compile(
-      "slide-in-from-left-1/2 slide-in-from-top-1/2 slide-out-to-left-1/2 slide-out-to-top-1/2"
+      "slide-in-from-left-1/2 slide-in-from-bottom-[calc(-50%_+_0.75rem)] slide-out-to-left-1/2 slide-out-to-bottom-[calc(-50%_+_0.75rem)]"
     );
     expect(declarations(css, "slide-in-from-left-1\\/2")).toContain("--tw-enter-translate-x: -50%");
-    expect(declarations(css, "slide-in-from-top-1\\/2")).toContain("--tw-enter-translate-y: -50%");
+    expect(declarations(css, "slide-in-from-bottom-")).toMatch(/--tw-enter-translate-y: calc\(-50% \+ 0\.75rem\)/);
     expect(declarations(css, "slide-out-to-left-1\\/2")).toContain("--tw-exit-translate-x: -50%");
-    expect(declarations(css, "slide-out-to-top-1\\/2")).toContain("--tw-exit-translate-y: -50%");
+    expect(declarations(css, "slide-out-to-bottom-")).toMatch(/--tw-exit-translate-y: calc\(-50% \+ 0\.75rem\)/);
   });
 
   it("the enter keyframe really does replace the element's transform", async () => {
     // Why the compensation is needed at all: the keyframe declares a transform
     // of its own, built from those variables.
-    const css = await compile("animate-in zoom-in-95");
+    const css = await compile("animate-in fade-in-0");
     const keyframes = postcss.parse(css).toString();
     expect(keyframes).toContain("--tw-enter-translate-x");
     expect(keyframes).toMatch(/@keyframes enter[\s\S]*transform:\s*translate3d\(/);
   });
 
-  it.each(V2_DIALOGS)("%s centres while it animates, both opening and closing", (file) => {
-    const src = read(file);
-    for (const cls of [
+  it("MOTION_DIALOG centres while it animates, both opening and closing, at 200ms", () => {
+    const cls = motionDialog().split(/\s+/);
+    for (const token of [
       "data-[state=open]:slide-in-from-left-1/2",
-      "data-[state=open]:slide-in-from-top-1/2",
+      "data-[state=open]:slide-in-from-bottom-[calc(-50%_+_0.75rem)]",
+      "data-[state=open]:duration-200",
+      "data-[state=open]:ease-out",
       "data-[state=closed]:slide-out-to-left-1/2",
-      "data-[state=closed]:slide-out-to-top-1/2",
+      "data-[state=closed]:slide-out-to-bottom-[calc(-50%_+_0.75rem)]",
+      "data-[state=closed]:duration-200",
+      "data-[state=closed]:ease-in",
+      "motion-reduce:!animate-none",
     ]) {
-      expect(src).toContain(cls);
+      expect(cls, token).toContain(token);
     }
-    // The centring itself, and the zoom that should be the only visible motion.
-    expect(src).toContain("-translate-x-1/2 -translate-y-1/2");
-    expect(src).toContain("data-[state=open]:zoom-in-95");
+    expect(cls.filter((c) => c.includes("zoom-"))).toEqual([]);
   });
 
-  it.each(V2_DIALOGS)("%s does not slide from an edge", (file) => {
+  it.each(DIALOGS)("%s is centred and takes its motion from MOTION_DIALOG", (file) => {
     const src = read(file);
-    // Any other slide distance would be a real slide, which is what the team
-    // lead asked us to stop doing.
-    const slides = src.match(/slide-(in-from|out-to)-(left|right|top|bottom)-[^\s"]+/g) ?? [];
-    for (const slide of slides) expect(slide).toMatch(/-(left|top)-1\/2$/);
-  });
-
-  it("the v1 kit keeps its own compensation, so v1 tenants are unchanged", () => {
-    const v1 = read("components/ui/dialog.tsx");
-    expect(v1).toContain("data-[state=open]:slide-in-from-left-1/2");
-    expect(v1).toContain("data-[state=open]:slide-in-from-top-[48%]");
+    expect(src).toMatch(/-translate-x-1\/2 -translate-y-1\/2|translate-x-\[-50%\] translate-y-\[-50%\]/);
+    expect(src).toContain("MOTION_DIALOG");
+    // No bespoke slide or zoom left in the file itself.
+    expect(src).not.toMatch(/(slide-(in-from|out-to)|zoom-(in|out))-/);
   });
 });

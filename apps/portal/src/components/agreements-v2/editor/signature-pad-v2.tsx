@@ -198,7 +198,10 @@ export function SignaturePadV2({
   return (
     <div className={cn("flex flex-col gap-2", className)}>
       {/* White with dark ink in both themes: this is a sheet of paper. */}
-      <div className="relative w-full overflow-hidden rounded-2xl border border-border bg-white">
+      {/* data-keep-light: the pad is the white page the signature is placed on, and
+          its ink is read from `text-slate-900` below — the dark-mode safety net in
+          styles/v2-theme.css must never lighten either. */}
+      <div data-keep-light className="relative w-full overflow-hidden rounded-2xl border border-border bg-white">
         <canvas
           ref={canvasRef}
           width={SIGNATURE_PAD_WIDTH * BITMAP_SCALE}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { format, differenceInDays, parseISO } from "date-fns";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -53,15 +53,72 @@ import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useV2 } from "@/lib/v2-context";
 import { PendingBookingsTableV2 } from "@/components/fleet-v2/pending-bookings-table-v2";
 import { HEADER_ACTIONS_V2, HeaderIconButton } from "@/components/shared/header-icon-button-v2";
+import { useTenant } from "@/contexts/TenantContext";
+import { useIsLean } from "@/lib/lean-context";
+import { useForcedEmptyState } from "@/hooks/use-forced-empty-state";
+import { bookingOriginFor } from "@/lib/booking-origin";
+import { PendingBookingsTeachingEmptyState } from "@/components/empty-states/pending-bookings-empty-state";
+import { AutoSkeleton } from "@/components/skeleton-v2/auto-skeleton";
+import { skeletonRows } from "@/lib/skeleton-data";
+import { useSkeletonLoading } from "@/hooks/use-skeleton-loading";
+
+/** Placeholder bookings for the v2 skeleton: only their shapes are ever seen. */
+const SKELETON_BOOKINGS: PendingBooking[] = skeletonRows(6, (f) => ({
+  id: f.id,
+  rental_id: f.id,
+  customer_id: f.id,
+  vehicle_id: f.id,
+  amount: f.money(100, 3000),
+  payment_date: f.date(),
+  stripe_payment_intent_id: null,
+  stripe_checkout_session_id: null,
+  capture_status: "requires_capture",
+  preauth_expires_at: f.date(-f.int(1, 6)),
+  created_at: f.date(),
+  customer: {
+    id: f.id,
+    name: f.text(2, 3),
+    email: `${f.word(6, 10)}@${f.word(5, 8)}.com`,
+    phone: null,
+    identity_verification_status: f.pick(["verified", "pending", null]),
+  },
+  rental: {
+    id: f.id,
+    start_date: f.date(-f.int(1, 20)).slice(0, 10),
+    end_date: f.date(-f.int(21, 40)).slice(0, 10),
+    rental_period_type: "Daily",
+    status: "Pending",
+  },
+  vehicle: { id: f.id, reg: f.word(6, 8), make: f.word(4, 8), model: f.word(3, 7), colour: null },
+}));
+
+/** v1's stand-in for <AutoSkeleton>: renders the region as it always was. */
+function PlainRegion({ children }: { loading: boolean; className?: string; children: ReactNode }) {
+  return <>{children}</>;
+}
 
 const PendingBookings = () => {
-  const { data: bookings, isLoading, error, refetch } = usePendingBookings();
+  const { data: loadedBookings, isLoading: bookingsLoading, error, refetch } = usePendingBookings();
   const approveBooking = useApproveBooking();
   const rejectBooking = useRejectBooking();
   const { canEdit } = useManagerPermissions();
   // v2 chrome (canary tenants only; fails closed to v1). Above the early returns
   // below, as every hook must be.
   const v2Chrome = useV2("chrome");
+  // v2: while the list loads, the page renders placeholder bookings through its
+  // real table and <AutoSkeleton> turns that into the skeleton. v1 keeps its
+  // spinner below, on the real loading flag.
+  const skeletonLoading = useSkeletonLoading(bookingsLoading);
+  const isLoading = v2Chrome ? skeletonLoading : bookingsLoading;
+  const bookings = v2Chrome && isLoading ? SKELETON_BOOKINGS : loadedBookings;
+  // Teaching empty state (illustration-guide §4a): lean tenants only, and only
+  // when there are no pending bookings at all (this page has no filters, so the
+  // loaded list IS the unfiltered count) — or the /dev force switch, which sits
+  // inside the lean gate. Everyone else keeps "All caught up!".
+  const { tenantSlug } = useTenant();
+  const leanTenant = useIsLean();
+  const devForceEmpty = useForcedEmptyState("pending-bookings");
+  const teachEmptyPending = !isLoading && leanTenant && ((bookings !== undefined && bookings.length === 0) || devForceEmpty);
 
   const [selectedBooking, setSelectedBooking] = useState<PendingBooking | null>(
     null
@@ -170,7 +227,7 @@ const PendingBookings = () => {
     }
   };
 
-  if (isLoading) {
+  if (isLoading && !v2Chrome) {
     // v2 (switch row alignment): the loaded page's 24px top padding at md, so this
     // state starts where the title does (y=74) instead of at y=50 under the 64px
     // top bar. v1 renders the same classes as before.
@@ -180,6 +237,9 @@ const PendingBookings = () => {
       </div>
     );
   }
+
+  // v2 wraps the list in the auto skeleton; v1's markup stays exactly as it was.
+  const SkeletonRegion = v2Chrome ? AutoSkeleton : PlainRegion;
 
   if (error) {
     // v2 (switch row alignment): the loaded page's 24px top padding at md, so this
@@ -210,7 +270,7 @@ const PendingBookings = () => {
             Review and approve customer booking requests
           </p>
         </div>
-        {v2Chrome ? (
+        {teachEmptyPending ? null : v2Chrome ? (
           // v2: Refresh is not a main action, so it is a 32px round icon, centred
           // on the subtitle line (team lead Sep 15-16 2026). The subtitle inherits
           // the body size, which v2 sets to 16px/24px below 769px and 14px/20px
@@ -228,7 +288,16 @@ const PendingBookings = () => {
         )}
       </div>
 
-      {bookings && bookings.length === 0 ? (
+      <SkeletonRegion loading={isLoading}>
+      {teachEmptyPending ? (
+        <PendingBookingsTeachingEmptyState
+          onOpenBookingSite={
+            tenantSlug
+              ? () => window.open(bookingOriginFor(tenantSlug), "_blank", "noopener,noreferrer")
+              : undefined
+          }
+        />
+      ) : bookings && bookings.length === 0 ? (
         <div className="text-center py-12">
           <CheckCircle className="h-12 w-12 mx-auto mb-4 text-green-500" />
           <h3 className="text-lg font-semibold mb-2">All caught up!</h3>
@@ -383,6 +452,7 @@ const PendingBookings = () => {
         </Card>
         )
       )}
+      </SkeletonRegion>
 
       {/* Approve Confirmation Dialog */}
       <AlertDialog open={showApproveDialog} onOpenChange={setShowApproveDialog}>

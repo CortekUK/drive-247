@@ -33,7 +33,9 @@
  */
 
 import {
+  createContext,
   useCallback,
+  useContext,
   useEffect,
   useId,
   useLayoutEffect,
@@ -257,12 +259,15 @@ export function PreviewSwitch<T extends string>({
   options,
   onChange,
   className,
+  iconOnly = false,
 }: {
   label: string;
   value: T;
   options: readonly PreviewSwitchOption<T>[];
   onChange: (value: T) => void;
   className?: string;
+  /** Icons only; each option's label becomes its accessible name and hover title. */
+  iconOnly?: boolean;
 }) {
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const step =
@@ -296,15 +301,19 @@ export function PreviewSwitch<T extends string>({
             aria-checked={selected}
             tabIndex={selected ? 0 : -1}
             onClick={() => onChange(option.value)}
+            aria-label={iconOnly && Icon ? option.label : undefined}
+            title={iconOnly && Icon ? option.label : undefined}
             className={cn(
               "inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50",
               selected
                 ? "bg-primary/10 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]"
                 : "text-muted-foreground hover:bg-primary/10 hover:text-foreground dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]",
+              // Icon-only: a 24px circle, so the whole control is 32px tall.
+              iconOnly && Icon && "size-6 justify-center px-0",
             )}
           >
             {Icon && <Icon className="size-3.5" aria-hidden="true" />}
-            {option.label}
+            {!(iconOnly && Icon) && option.label}
           </button>
         );
       })}
@@ -604,7 +613,67 @@ export interface EmailPreviewGmailProps {
   className?: string;
 }
 
-const VIEW_OPTIONS: readonly PreviewSwitchOption<GmailPreviewView>[] = [
+/**
+ * Lets a page own the Desktop / Phone switch and draw it elsewhere (the full
+ * Notifications view puts it in its top row, Oct 1 2026). Inside a provider the
+ * preview follows `view` and hides its own switch row; without one it keeps its
+ * own state exactly as before.
+ */
+export const GmailViewContext = createContext<{
+  view: GmailPreviewView;
+  theme?: "light" | "dark";
+  /**
+   * Desktop only: lay the Gmail window out this many times wider (0.65+), as on
+   * a wide monitor. The email itself keeps its real width in the middle, so a
+   * page that fits the preview to its height fills its width too, instead of
+   * leaving blank space on both sides.
+   */
+  widen?: number;
+  /** Edit in place: the subject line becomes editable, committed on blur. */
+  onEditSubject?: (text: string) => void;
+  /** Edit in place: the email's message becomes editable; gets the edited cell's HTML on blur. */
+  onEditBody?: (cellHtml: string) => void;
+} | null>(null);
+
+/** Props that make an element plain-text editable in place, committing on blur or Enter. */
+function editableText(commit: ((text: string) => void) | undefined) {
+  if (!commit) return {};
+  return {
+    contentEditable: "plaintext-only" as unknown as boolean,
+    suppressContentEditableWarning: true,
+    spellCheck: false,
+    title: "Click to edit",
+    // A soft wash, not a box; padding paid back so the subject does not move.
+    className:
+      "-mx-1.5 cursor-text rounded-lg px-1.5 outline-none transition-[background-color,box-shadow] duration-200 ease-out motion-reduce:transition-none hover:bg-black/[0.04] focus:bg-black/[0.05] focus:shadow-[0_0_0_1px_hsl(var(--primary)/0.3)]",
+    onKeyDown: (e: KeyboardEvent<HTMLElement>) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        e.currentTarget.blur();
+      }
+    },
+    onBlur: (e: React.FocusEvent<HTMLElement>) =>
+      commit((e.currentTarget.innerText ?? "").replace(/\u00a0/g, " ").replace(/\s*\n\s*/g, " ").trim()),
+  };
+}
+
+/**
+ * Gmail's apps show an email in dark mode by inverting its colours. The preview
+ * does the same with a filter on the mockup, and puts photos and logos back the
+ * right way round inside the email (an outer filter can't reach into the frame).
+ */
+const DARK_FILTER = "invert(1) hue-rotate(180deg)";
+function withDarkImages(html: string): string {
+  // The logo's white plate keeps its colour too (flipped back once, with the
+  // logo inside it then left alone), or a dark logo vanishes on a black plate.
+  const style =
+    `<style>img{filter:${DARK_FILTER}}` +
+    `[data-email-logo-plate]{filter:${DARK_FILTER}}` +
+    `[data-email-logo-plate] img{filter:none}</style>`;
+  return /<\/head>/i.test(html) ? html.replace(/<\/head>/i, `${style}</head>`) : style + html;
+}
+
+export const VIEW_OPTIONS: readonly PreviewSwitchOption<GmailPreviewView>[] = [
   { value: "desktop", label: GMAIL_PREVIEW_VIEWS.desktop.label, icon: Monitor },
   { value: "phone", label: GMAIL_PREVIEW_VIEWS.phone.label, icon: Smartphone },
 ];
@@ -619,7 +688,16 @@ export function EmailPreviewGmail({
   defaultView = "desktop",
   className,
 }: EmailPreviewGmailProps) {
-  const [view, setView] = useState<GmailPreviewView>(defaultView);
+  const [ownView, setView] = useState<GmailPreviewView>(defaultView);
+  const controlled = useContext(GmailViewContext);
+  const view = controlled?.view ?? ownView;
+  const dark = controlled?.theme === "dark";
+  // Below 1 = a narrower desktop window (a page fitting the preview to a tall box).
+  const widen = view === "desktop" ? Math.max(0.65, controlled?.widen ?? 1) : 1;
+  const extra = Math.round(GMAIL_PREVIEW_VIEWS.desktop.mockupWidth * (widen - 1));
+  // GMAIL_PREVIEW_VIEWS[view], not `spec`: `spec` is declared further down.
+  const bodyWidth = GMAIL_PREVIEW_VIEWS[view].bodyWidth + (view === "desktop" ? extra : 0);
+  const mockupWidth = GMAIL_PREVIEW_VIEWS[view].mockupWidth + (view === "desktop" ? extra : 0);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [frameHeight, setFrameHeight] = useState(GMAIL_FRAME_MIN_HEIGHT);
   const [sentAt] = useState(() => new Date());
@@ -647,10 +725,41 @@ export function EmailPreviewGmail({
     }
   }, []);
 
+  // Edit in place: the message cell becomes editable inside the frame (the
+  // sandbox allows same-origin, so the page can reach it; no scripts run in it).
+  const editBodyRef = useRef(controlled?.onEditBody);
+  editBodyRef.current = controlled?.onEditBody;
   const handleLoad = useCallback(() => {
     unwatchRef.current?.();
     unwatchRef.current = watchEmailDocument(iframeRef.current, measure);
     measure();
+    const doc = iframeRef.current?.contentDocument;
+    const cell = doc?.querySelector<HTMLElement>("[data-email-body]");
+    if (doc && cell && editBodyRef.current) {
+      cell.contentEditable = "true";
+      cell.spellcheck = false;
+      cell.title = "Click to edit";
+      cell.style.cursor = "text";
+      cell.style.outline = "none";
+      // The same soft wash as the subject and the phones, faded in.
+      cell.style.transition = "background-color 200ms ease-out, box-shadow 200ms ease-out";
+      cell.addEventListener("mouseenter", () => {
+        if (doc.activeElement !== cell) cell.style.backgroundColor = "rgba(99,102,241,.03)";
+      });
+      cell.addEventListener("mouseleave", () => {
+        if (doc.activeElement !== cell) cell.style.backgroundColor = "";
+      });
+      cell.addEventListener("focus", () => {
+        cell.style.backgroundColor = "rgba(99,102,241,.04)";
+        cell.style.boxShadow = "inset 0 0 0 1px rgba(99,102,241,.25)";
+      });
+      cell.addEventListener("input", measure);
+      cell.addEventListener("blur", () => {
+        cell.style.boxShadow = "";
+        cell.style.backgroundColor = "";
+        editBodyRef.current?.(cell.innerHTML);
+      });
+    }
   }, [measure]);
 
   useEffect(
@@ -671,13 +780,13 @@ export function EmailPreviewGmail({
       if (raf && typeof cancelAnimationFrame === "function") cancelAnimationFrame(raf);
       clearTimeout(timer);
     };
-  }, [view, source, measure]);
+  }, [view, source, measure, bodyWidth]);
 
   const bodyFrame = hasBody ? (
     <iframe
       ref={iframeRef}
       title={`Email: ${shownSubject}`}
-      srcDoc={source}
+      srcDoc={dark ? withDarkImages(source) : source}
       sandbox="allow-same-origin"
       referrerPolicy="no-referrer"
       scrolling="no"
@@ -685,7 +794,7 @@ export function EmailPreviewGmail({
       data-gmail-body=""
       style={{
         display: "block",
-        width: spec.bodyWidth,
+        width: bodyWidth,
         height: frameHeight,
         border: 0,
         overflow: "hidden",
@@ -696,7 +805,7 @@ export function EmailPreviewGmail({
     <div
       data-gmail-body-empty=""
       style={{
-        width: spec.bodyWidth,
+        width: bodyWidth,
         padding: "32px 0",
         textAlign: "center",
         color: G.muted,
@@ -722,8 +831,9 @@ export function EmailPreviewGmail({
   const desktop = (
     <div
       style={{
-        width: GMAIL_PREVIEW_VIEWS.desktop.mockupWidth,
-        padding: 12,
+        width: GMAIL_PREVIEW_VIEWS.desktop.mockupWidth + extra,
+        // Tighter frame where a page sets the pair edge to edge.
+        padding: controlled ? 4 : 12,
         borderRadius: 16,
         background: G.frame,
         fontFamily: GMAIL_UI_FONT,
@@ -742,6 +852,7 @@ export function EmailPreviewGmail({
         <div style={{ display: "flex", alignItems: "flex-start", gap: 16, padding: "12px 0 20px 56px" }}>
           <p
             data-gmail-subject=""
+            {...editableText(controlled?.onEditSubject)}
             style={{
               margin: 0,
               minWidth: 0,
@@ -808,7 +919,8 @@ export function EmailPreviewGmail({
     <div
       style={{
         width: GMAIL_PREVIEW_VIEWS.phone.mockupWidth,
-        padding: 12,
+        // Tighter frame where a page sets the pair edge to edge.
+        padding: controlled ? 4 : 12,
         borderRadius: 16,
         background: G.frame,
         fontFamily: GMAIL_UI_FONT,
@@ -831,6 +943,7 @@ export function EmailPreviewGmail({
         <div style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "4px 16px 16px" }}>
           <p
             data-gmail-subject=""
+            {...editableText(controlled?.onEditSubject)}
             style={{
               margin: 0,
               minWidth: 0,
@@ -876,17 +989,24 @@ export function EmailPreviewGmail({
 
   return (
     <div className={cn("min-w-0 space-y-3", className)}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs font-medium text-muted-foreground">Gmail</p>
-        <PreviewSwitch label="Preview width" value={view} options={VIEW_OPTIONS} onChange={(next) => setView(next)} />
-      </div>
+      {!controlled && (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs font-medium text-muted-foreground">Gmail</p>
+          <PreviewSwitch label="Preview width" value={view} options={VIEW_OPTIONS} onChange={(next) => setView(next)} />
+        </div>
+      )}
       <figure
         className="m-0 space-y-2"
         data-view={view}
         aria-label={`Email preview in Gmail, ${spec.label.toLowerCase()} width. From ${name}, to ${to || "the customer"}, subject ${shownSubject}.`}
       >
-        <FitToWidth naturalWidth={spec.mockupWidth}>{view === "desktop" ? desktop : phone}</FitToWidth>
-        <figcaption className="text-xs text-muted-foreground">{GMAIL_PREVIEW_CAPTION}</figcaption>
+        <FitToWidth naturalWidth={mockupWidth}>
+          <div style={dark ? { filter: DARK_FILTER } : undefined} data-gmail-theme={dark ? "dark" : "light"}>
+            {view === "desktop" ? desktop : phone}
+          </div>
+        </FitToWidth>
+        {/* A page that owns the controls shows the caption beside them. */}
+        {!controlled && <figcaption className="text-xs text-muted-foreground">{GMAIL_PREVIEW_CAPTION}</figcaption>}
       </figure>
       {clipped && (
         <p className="text-xs text-amber-700 dark:text-amber-400" role="note">

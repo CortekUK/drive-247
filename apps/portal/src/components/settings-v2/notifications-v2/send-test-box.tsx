@@ -29,6 +29,7 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { Loader2, Send } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import { Input } from "@/components/ui-v2/input";
+import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui-v2/popover";
 import { useNotificationTestV2 } from "@/hooks/use-notification-test-v2";
 import type { NotificationTestRequest, NotificationTestResponse } from "@/lib/notifications-v2/types";
 import { isValidEmail } from "@/lib/notifications-v2/settings-model";
@@ -256,23 +257,32 @@ export function SendTestBox({
     }
   };
 
+  /* Oct 1 2026 (Ghulam): a smaller button, and the box is a popover that opens
+     ABOVE it, so it is never cut off at the bottom of the full-screen view. */
   return (
+    <Popover open={open} onOpenChange={(next) => (next ? openBox() : close())}>
     <div data-send-test={channel} className={cn("space-y-2", className)}>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <PopoverAnchor asChild>
         <Button
           ref={triggerRef}
           type="button"
           variant="outline"
-          size="sm"
+          // Icon only, a 32px circle beside the Light / Dark switch (Ghulam,
+          // Oct 1 2026); its name is the label and the hover title.
+          size="icon-sm"
+          className="rounded-full"
+          aria-label={SEND_TEST_COPY.button}
+          title={SEND_TEST_COPY.button}
           onClick={() => (open ? close() : openBox())}
           disabled={(blocked && !open) || busy}
           aria-expanded={open}
           aria-controls={open ? boxId : undefined}
           aria-describedby={reason ? reasonId : undefined}
         >
-          <Send data-icon="inline-start" />
-          {SEND_TEST_COPY.button}
+          <Send aria-hidden="true" />
         </Button>
+        </PopoverAnchor>
         {reason && (
           <p id={reasonId} className="text-xs text-muted-foreground [overflow-wrap:anywhere]">
             {reason}
@@ -280,13 +290,23 @@ export function SendTestBox({
         )}
       </div>
 
-      {open && (
+      <PopoverContent
+        side="top"
+        align="start"
+        sideOffset={8}
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        // The button toggles the box itself; a click on it is not "outside".
+        onInteractOutside={(e) => {
+          if (triggerRef.current?.contains(e.target as Node)) e.preventDefault();
+        }}
+        className="w-80 gap-0 p-0"
+      >
         <div
           id={boxId}
           role="group"
           aria-label={channel === "email" ? "Send a test email" : "Send a test push"}
           onKeyDown={onBoxKeyDown}
-          className="space-y-3 rounded-xl border bg-card p-4"
+          className="space-y-3 p-4"
         >
           {channel === "email" ? (
             <div className="space-y-1.5">
@@ -310,7 +330,7 @@ export function SendTestBox({
                 disabled={busy}
                 aria-invalid={toError ? true : undefined}
                 aria-describedby={toError ? errorId : hintId}
-                className="max-w-sm"
+                className="w-full"
               />
               {toError ? (
                 <p id={errorId} role="alert" className="text-xs text-destructive">
@@ -359,7 +379,8 @@ export function SendTestBox({
             )}
           </div>
         </div>
-      )}
+      </PopoverContent>
     </div>
+    </Popover>
   );
 }

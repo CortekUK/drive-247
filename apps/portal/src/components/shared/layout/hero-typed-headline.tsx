@@ -299,8 +299,10 @@ export function HeroTypedHeadline({
             from ever showing two different features at once. */}
         <p
           aria-hidden="true"
-          className={`${subSize} leading-relaxed transition-all duration-500 ease-out ${
-            subVisible ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0"
+          className={`${subSize} leading-relaxed motion-reduce:transition-none ${
+            subVisible
+              ? "translate-y-0 opacity-100 [transition:transform_200ms_ease-out,opacity_200ms_ease-out]"
+              : "translate-y-3 opacity-0 [transition:transform_200ms_ease-in,opacity_200ms_ease-in]"
           } ${onDark ? "text-white/75" : "text-slate-900/65"}`}
         >
           {feature.sub}

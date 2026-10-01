@@ -123,7 +123,8 @@ export function pickableTemplatesV2<T extends { content: string | null }>(templa
  */
 export function useRentalTemplateChoiceV2(rental: RentalRow, enabled: boolean) {
   const { tenant } = useTenant();
-  const { templates, isLoading: templatesLoading, error } = useAgreementTemplatesV2();
+  // Active templates only: a draft or archived one is never picked for a rental.
+  const { usableTemplates: templates, isLoading: templatesLoading, error } = useAgreementTemplatesV2();
 
   // The route reads the plan only when the rental is flagged for one, and only
   // an active or pending plan counts.
@@ -399,7 +400,7 @@ export function AgreementTemplateRowV2({ rental, choice, mileage, canEdit, busy 
     >
       <div className={listCls}>
         <div className="flex flex-wrap items-center gap-4 px-5 py-4">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-2xl bg-primary-light text-primary">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-2xl bg-primary-light text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
             <FileText className="size-4" />
           </span>
           <div className="min-w-0 flex-1">
@@ -429,7 +430,7 @@ export function AgreementTemplateRowV2({ rental, choice, mileage, canEdit, busy 
                         type="button"
                         onClick={choice.reset}
                         disabled={busy}
-                        className="cursor-pointer font-medium text-primary underline-offset-2 hover:underline disabled:cursor-default disabled:opacity-50"
+                        className="cursor-pointer font-medium text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] underline-offset-2 hover:underline disabled:cursor-default disabled:opacity-50"
                       >
                         Use the default
                       </button>
@@ -495,7 +496,7 @@ export function AgreementTemplateRowV2({ rental, choice, mileage, canEdit, busy 
           <div className="min-h-0 flex-1 overflow-y-auto bg-muted p-6">
             {sources.isLoading ? (
               <div className="flex h-full items-center justify-center" role="status">
-                <Loader2 className="size-7 animate-spin text-primary" />
+                <Loader2 className="size-7 animate-spin text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" />
               </div>
             ) : (
               <AgreementPreviewV2 html={previewHtml} banner={choice.banner} className="mx-auto" />

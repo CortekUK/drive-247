@@ -3282,7 +3282,7 @@ export const RentalCreateV2 = () => {
               {/* ── Section 1: Customer & Vehicle ──────────────────────────── */}
               <div className="rounded-xl border bg-card shadow-sm">
                 <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
-                  <span className="text-2xl font-extrabold text-primary">1.</span>
+                  <span className="text-2xl font-extrabold text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">1.</span>
                   <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Customer & Vehicle</h2>
                 </div>
                 <div className="p-5">
@@ -3299,7 +3299,7 @@ export const RentalCreateV2 = () => {
                                 type="button"
                                 variant="ghost"
                                 size="sm"
-                                className="h-auto py-0.5 px-2 text-xs text-primary hover:text-primary/80"
+                                className="h-auto py-0.5 px-2 text-xs text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] hover:text-primary/80 dark:hover:text-[hsl(var(--v2-link,var(--primary))/0.8)]"
                                 onClick={() => setInviteDialogOpen(true)}
                               >
                                 <Link2 className="h-3 w-3 mr-1" />
@@ -3376,7 +3376,7 @@ export const RentalCreateV2 = () => {
                     <div className="space-y-4 p-4 border rounded-lg bg-muted/30 mt-5">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <Shield className="h-5 w-5 text-primary" />
+                          <Shield className="h-5 w-5 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" />
                           <h3 className="font-medium">Identity Verification</h3>
                           <span className="text-sm text-muted-foreground">
                             (AI Verification)
@@ -3385,13 +3385,13 @@ export const RentalCreateV2 = () => {
                         {isManuallyVerified ? (
                           /* Deliberately distinct from the green verified pass — a staff
                              decision must never be mistaken for a completed ID check. */
-                          <Badge variant="default" className="bg-indigo-500 hover:bg-indigo-600"><ShieldCheck className="h-3 w-3 mr-1" />Manually Verified</Badge>
+                          <Badge variant="default" className="bg-primary text-primary-foreground hover:bg-primary/90"><ShieldCheck className="h-3 w-3 mr-1" />Manually Verified</Badge>
                         ) : isCustomerVerified ? (
                           <Badge variant="default" className="bg-green-500 hover:bg-green-600"><CheckCircle2 className="h-3 w-3 mr-1" />Verified</Badge>
                         ) : verificationPending ? (
                           <Badge variant="secondary"><Clock className="h-3 w-3 mr-1" />Pending</Badge>
                         ) : (
-                          <Badge variant="outline" className="border-amber-500 text-amber-600"><AlertTriangle className="h-3 w-3 mr-1" />Not Verified</Badge>
+                          <Badge variant="outline" className="border-amber-500 text-amber-600 dark:text-amber-400"><AlertTriangle className="h-3 w-3 mr-1" />Not Verified</Badge>
                         )}
                       </div>
 
@@ -3417,12 +3417,12 @@ export const RentalCreateV2 = () => {
                       )}
 
                       {isManuallyVerified ? (
-                        <div className="rounded-md border border-indigo-200 bg-indigo-50/60 px-3 py-2.5 dark:border-indigo-900 dark:bg-indigo-950/30">
-                          <p className="text-sm font-medium text-indigo-900 dark:text-indigo-200">
+                        <div className="rounded-md border border-primary/25 bg-primary/5 px-3 py-2.5 dark:border-primary/30 dark:bg-primary/10">
+                          <p className="text-sm font-medium text-foreground">
                             Verified manually by a member of staff — not by AI verification.
                           </p>
                           {manualVerifyRecord ? (
-                            <div className="mt-1.5 space-y-0.5 text-xs text-indigo-800/90 dark:text-indigo-300/90">
+                            <div className="mt-1.5 space-y-0.5 text-xs text-foreground/80">
                               <p>
                                 Approved by{" "}
                                 <span className="font-medium">
@@ -3437,7 +3437,7 @@ export const RentalCreateV2 = () => {
                               )}
                             </div>
                           ) : (
-                            <p className="mt-1.5 text-xs text-indigo-800/80 dark:text-indigo-300/80">
+                            <p className="mt-1.5 text-xs text-muted-foreground">
                               Recorded in the audit log. See Audit Logs for who approved it and why.
                             </p>
                           )}
@@ -3449,9 +3449,9 @@ export const RentalCreateV2 = () => {
                         </div>
                       ) : verificationPending ? (
                         <div className="space-y-3">
-                          <Alert variant="default" className="border-blue-500 bg-blue-50">
-                            <Clock className="h-4 w-4 text-blue-600" />
-                            <AlertDescription className="text-blue-700">
+                          <Alert variant="default" className="border-blue-500 bg-blue-50 dark:bg-blue-500/10">
+                            <Clock className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                            <AlertDescription className="text-blue-700 dark:text-blue-300">
                               Verification session in progress. If the customer can&apos;t complete it, you can cancel or restart the session.
                             </AlertDescription>
                           </Alert>
@@ -3460,7 +3460,7 @@ export const RentalCreateV2 = () => {
                               type="button"
                               variant="outline"
                               size="sm"
-                              className="flex-1 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                              className="flex-1 border-red-200 dark:border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-700 dark:hover:text-red-300"
                               disabled={cancelingVerification || creatingVerification}
                               onClick={() => {
                                 setPendingVerificationAction("cancel");
@@ -3526,12 +3526,12 @@ export const RentalCreateV2 = () => {
                           stuck pending or was never started. Not a bypass: it sets the
                           customer's real status so the existing check passes honestly. */}
                       {!isCustomerVerified && canManuallyVerify && (
-                        <div className="border-t border-[#f1f5f9] pt-3">
+                        <div className="border-t border-border pt-3">
                           <Button
                             type="button"
                             variant="outline"
                             size="sm"
-                            className="w-full border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700"
+                            className="w-full border-primary/30 text-primary hover:bg-primary/10 hover:text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-[hsl(var(--v2-link,var(--primary)))]"
                             disabled={creatingVerification || cancelingVerification || manualVerifying}
                             onClick={() => {
                               setManualVerifyReason("");
@@ -3553,7 +3553,7 @@ export const RentalCreateV2 = () => {
                           lesser option, because marking the customer verified is
                           the more honest action when the ID really was checked. */}
                       {!isCustomerVerified && canWaiveIdVerification && (
-                        <div className="border-t border-[#f1f5f9] pt-3">
+                        <div className="border-t border-border pt-3">
                           {idWaiverAccepted ? (
                             <div className="rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 p-2.5">
                               <p className="text-[12px] font-medium text-amber-700 dark:text-amber-400">
@@ -3578,7 +3578,7 @@ export const RentalCreateV2 = () => {
                                 type="button"
                                 variant="outline"
                                 size="sm"
-                                className="w-full border-amber-200 text-amber-700 hover:bg-amber-50 hover:text-amber-800"
+                                className="w-full border-amber-200 dark:border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-500/10 hover:text-amber-800 dark:hover:text-amber-300"
                                 disabled={creatingVerification || cancelingVerification || manualVerifying}
                                 onClick={() => {
                                   setIdWaiverReason("");
@@ -3909,7 +3909,7 @@ export const RentalCreateV2 = () => {
                               if (rates.length === 0) return null;
                               const cur = tenant?.currency_code || 'USD';
                               return (
-                                <div className="flex gap-2 mt-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                                <div className="flex gap-2 mt-2 animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none">
                                   {rates.map(r => (
                                     <div key={r.label} className="flex-1 rounded-lg border bg-muted/40 px-3 py-2 text-center">
                                       <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">{r.label}</p>
@@ -3945,7 +3945,7 @@ export const RentalCreateV2 = () => {
               {((rentalSettings as any)?.pay_as_you_go_enabled || (rentalSettings as any)?.auto_extend_enabled) && selectedVehicleId && (
                 <div className="rounded-xl border bg-card shadow-sm">
                   <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
-                    <div className="flex items-center justify-center h-7 w-7 rounded-md bg-primary/20 text-primary">
+                    <div className="flex items-center justify-center h-7 w-7 rounded-md bg-primary/20 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
                       <CreditCard className="h-4 w-4" />
                     </div>
                     <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Payment Mode</h2>
@@ -4110,11 +4110,11 @@ export const RentalCreateV2 = () => {
                       }
 
                       return (
-                        <div className="mt-3 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/20 p-4 space-y-3">
+                        <div className="mt-3 rounded-lg border border-primary/25 dark:border-primary/30 bg-primary/5 dark:bg-primary/10 p-4 space-y-3">
                           <div className="flex items-start gap-2">
-                            <Info className="h-4 w-4 text-indigo-600 dark:text-indigo-400 mt-0.5 flex-shrink-0" />
+                            <Info className="h-4 w-4 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] mt-0.5 flex-shrink-0" />
                             <div className="space-y-1">
-                              <p className="text-sm font-medium text-indigo-700 dark:text-indigo-300">How Pay As You Go works</p>
+                              <p className="text-sm font-medium text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">How Pay As You Go works</p>
                               <p className="text-xs text-muted-foreground">
                                 The customer pays the rental charges incrementally over time instead of upfront. You record each payment as it comes in from the rental detail page.
                               </p>
@@ -4122,17 +4122,17 @@ export const RentalCreateV2 = () => {
                           </div>
 
                           {discounted > 0 && (
-                            <div className="space-y-2 pt-2 border-t border-indigo-200/60 dark:border-indigo-800/60">
-                              <p className="text-xs font-semibold text-indigo-700 dark:text-indigo-300 uppercase tracking-wider">Paid Incrementally (PAYG)</p>
+                            <div className="space-y-2 pt-2 border-t border-primary/20">
+                              <p className="text-xs font-semibold text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] uppercase tracking-wider">Paid Incrementally (PAYG)</p>
                               {paygItems.map(item => (
                                 <div key={item.label} className="flex justify-between text-sm">
                                   <span className="text-muted-foreground">{item.label}</span>
                                   <span className="font-medium">{formatCurrency(item.amount, currency)}</span>
                                 </div>
                               ))}
-                              <div className="flex justify-between text-sm font-semibold border-t border-indigo-200/60 dark:border-indigo-800/60 pt-1.5">
-                                <span className="text-indigo-700 dark:text-indigo-300">PAYG Total</span>
-                                <span className="text-indigo-700 dark:text-indigo-300">{formatCurrency(paygTotal, currency)}</span>
+                              <div className="flex justify-between text-sm font-semibold border-t border-primary/20 pt-1.5">
+                                <span className="text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">PAYG Total</span>
+                                <span className="text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">{formatCurrency(paygTotal, currency)}</span>
                               </div>
 
                               {normalItems.length > 0 && (
@@ -4186,7 +4186,7 @@ export const RentalCreateV2 = () => {
               {/* ── Section 2: Rental Period & Pricing ────────────── */}
               <div className="rounded-xl border bg-card shadow-sm">
                 <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
-                  <span className="text-2xl font-extrabold text-primary">2.</span>
+                  <span className="text-2xl font-extrabold text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">2.</span>
                   <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Rental Period & Pricing</h2>
                 </div>
                 <div className="p-5 space-y-5">
@@ -4395,7 +4395,7 @@ export const RentalCreateV2 = () => {
                 return (
                   <div className="rounded-xl border bg-card shadow-sm">
                     <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
-                      <div className="flex items-center justify-center h-7 w-7 rounded-md bg-primary/20 text-primary">
+                      <div className="flex items-center justify-center h-7 w-7 rounded-md bg-primary/20 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
                         <Banknote className="h-4 w-4" />
                       </div>
                       <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Pricing & Fees</h2>
@@ -4605,7 +4605,7 @@ export const RentalCreateV2 = () => {
                                     );
                                   })}
                                   {manualItems.length > 0 && (
-                                    <div className="flex justify-between text-indigo-600 dark:text-indigo-400">
+                                    <div className="flex justify-between text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
                                       <span>Custom prices</span>
                                       <span>{manualItems.length} day{manualItems.length !== 1 ? 's' : ''} = {formatCurrency(manualItems.reduce((s, d) => s + d.effectiveRate, 0), currency)}</span>
                                     </div>
@@ -4726,7 +4726,7 @@ export const RentalCreateV2 = () => {
                             )}
                             {promoError && <p className="text-sm text-destructive">{promoError}</p>}
                             {promoDetails && (
-                              <p className="text-sm text-green-600 font-medium flex items-center gap-1">
+                              <p className="text-sm text-green-600 dark:text-green-400 font-medium flex items-center gap-1">
                                 <Check className="w-4 h-4" />
                                 Code applied: {promoDetails.type === 'percentage' ? `${promoDetails.value}% off` : `${formatCurrency(promoDetails.value, tenant?.currency_code || 'USD')} off`}
                               </p>
@@ -4754,7 +4754,7 @@ export const RentalCreateV2 = () => {
                                   <span className="text-muted-foreground">Rental Amount</span>
                                   <span className="font-medium">{formatCurrency(rentalAmount, currency)}</span>
                                 </div>
-                                <div className="flex items-center justify-between text-sm text-green-600">
+                                <div className="flex items-center justify-between text-sm text-green-600 dark:text-green-400">
                                   <span>Promo Discount ({promoDetails?.type === 'percentage' ? `${promoDetails.value}%` : 'fixed'})</span>
                                   <span className="font-medium">-{formatCurrency(discountAmt, currency)}</span>
                                 </div>
@@ -5148,7 +5148,7 @@ export const RentalCreateV2 = () => {
                     return (
                       <div className="rounded-xl border bg-card shadow-sm">
                         <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
-                          <div className="flex items-center justify-center h-7 w-7 rounded-md bg-primary/20 text-primary">
+                          <div className="flex items-center justify-center h-7 w-7 rounded-md bg-primary/20 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
                             <CreditCard className="h-4 w-4" />
                           </div>
                           <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Payment Plan</h2>
@@ -5171,7 +5171,7 @@ export const RentalCreateV2 = () => {
                 return (
                   <div className="rounded-xl border bg-card shadow-sm">
                     <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
-                      <div className="flex items-center justify-center h-7 w-7 rounded-md bg-primary/20 text-primary">
+                      <div className="flex items-center justify-center h-7 w-7 rounded-md bg-primary/20 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
                         <CreditCard className="h-4 w-4" />
                       </div>
                       <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Payment Plan</h2>
@@ -5387,7 +5387,7 @@ export const RentalCreateV2 = () => {
                 return (
                   <div className="rounded-xl border bg-card shadow-sm">
                     <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
-                      <div className="flex items-center justify-center h-7 w-7 rounded-md bg-primary/20 text-primary"><Clock className="h-4 w-4" /></div>
+                      <div className="flex items-center justify-center h-7 w-7 rounded-md bg-primary/20 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]"><Clock className="h-4 w-4" /></div>
                       <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Mileage</h2>
                     </div>
                     <div className="p-5 space-y-4">
@@ -5495,7 +5495,7 @@ export const RentalCreateV2 = () => {
                                 className={cn("w-24 h-9 text-center font-semibold", isOverridden && "border-amber-400 dark:border-amber-600")}
                               />
                               <span className="text-xs text-muted-foreground whitespace-nowrap">{unitShort}</span>
-                              {isOverridden && <button type="button" className="text-xs text-amber-500 hover:text-amber-600 underline whitespace-nowrap" onClick={() => setOverride(null)}>Reset</button>}
+                              {isOverridden && <button type="button" className="text-xs text-amber-500 hover:text-amber-600 dark:hover:text-amber-400 underline whitespace-nowrap" onClick={() => setOverride(null)}>Reset</button>}
                             </div>
                           </div>
                         );
@@ -5505,7 +5505,7 @@ export const RentalCreateV2 = () => {
                           <Label className="text-sm text-muted-foreground whitespace-nowrap">Excess Rate</Label>
                           <CurrencyInput value={effExcessRate ?? 0} onChange={(val) => { const num = typeof val === 'string' ? parseFloat(val) : val; if (num === (vehicle.excess_mileage_rate ?? 0)) setExcessRateOverride(null); else setExcessRateOverride(isNaN(num) ? 0 : num); }} currencySymbol={currencySymbol} className="w-28" />
                           <span className="text-xs text-muted-foreground">/{unitShort}</span>
-                          {excessRateOverride !== null && <button type="button" className="text-xs text-amber-500 hover:text-amber-600 underline" onClick={() => setExcessRateOverride(null)}>Reset</button>}
+                          {excessRateOverride !== null && <button type="button" className="text-xs text-amber-500 hover:text-amber-600 dark:hover:text-amber-400 underline" onClick={() => setExcessRateOverride(null)}>Reset</button>}
                         </div>
                       )}
                       {!unlimitedMileageEnabled && !unlimited && (
@@ -5537,7 +5537,7 @@ export const RentalCreateV2 = () => {
               {/* ── Section 3: Pickup & Return ────────────────────── */}
               <div className="rounded-xl border bg-card shadow-sm">
                 <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
-                  <span className="text-2xl font-extrabold text-primary">3.</span>
+                  <span className="text-2xl font-extrabold text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">3.</span>
                   <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">{isPayAsYouGo ? 'Pickup' : 'Pickup & Return'}</h2>
                 </div>
                 <div className="p-5 space-y-5">
@@ -5561,7 +5561,7 @@ export const RentalCreateV2 = () => {
                     <div className="flex items-center gap-3">
                       <Label className="text-sm text-muted-foreground whitespace-nowrap">Delivery Fee</Label>
                       <CurrencyInput value={deliveryFeeOverride !== null ? deliveryFeeOverride : deliveryFee} onChange={(val) => setDeliveryFeeOverride(val)} currencySymbol={currencySymbol} className="w-32" />
-                      {deliveryFeeOverride !== null && <button type="button" className="text-xs text-amber-500 hover:text-amber-600 underline" onClick={() => setDeliveryFeeOverride(null)}>Reset to {formatCurrency(deliveryFee, tenant?.currency_code || 'USD')}</button>}
+                      {deliveryFeeOverride !== null && <button type="button" className="text-xs text-amber-500 hover:text-amber-600 dark:hover:text-amber-400 underline" onClick={() => setDeliveryFeeOverride(null)}>Reset to {formatCurrency(deliveryFee, tenant?.currency_code || 'USD')}</button>}
                     </div>
                   )}
 
@@ -5606,7 +5606,7 @@ export const RentalCreateV2 = () => {
                     <div className="flex items-center gap-3">
                       <Label className="text-sm text-muted-foreground whitespace-nowrap">Collection Fee</Label>
                       <CurrencyInput value={collectionFeeOverride !== null ? collectionFeeOverride : collectionFee} onChange={(val) => setCollectionFeeOverride(val)} currencySymbol={currencySymbol} className="w-32" />
-                      {collectionFeeOverride !== null && <button type="button" className="text-xs text-amber-500 hover:text-amber-600 underline" onClick={() => setCollectionFeeOverride(null)}>Reset to {formatCurrency(collectionFee, tenant?.currency_code || 'USD')}</button>}
+                      {collectionFeeOverride !== null && <button type="button" className="text-xs text-amber-500 hover:text-amber-600 dark:hover:text-amber-400 underline" onClick={() => setCollectionFeeOverride(null)}>Reset to {formatCurrency(collectionFee, tenant?.currency_code || 'USD')}</button>}
                     </div>
                   )}
 
@@ -5676,7 +5676,7 @@ export const RentalCreateV2 = () => {
               {!isPayAsYouGo && (
                 <div className="rounded-xl border bg-card shadow-sm">
                   <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
-                    <span className="text-2xl font-extrabold text-primary">4.</span>
+                    <span className="text-2xl font-extrabold text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">4.</span>
                     <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Insurance</h2>
                   </div>
                   <div className="p-5 space-y-5">
@@ -5717,8 +5717,8 @@ export const RentalCreateV2 = () => {
                                         variant="outline"
                                         className={cn(
                                           "text-[10px] px-1.5 py-0",
-                                          policy.status === "Active" && "border-emerald-500/30 text-emerald-600",
-                                          policy.status === "Suspended" && "border-amber-500/30 text-amber-600"
+                                          policy.status === "Active" && "border-emerald-500/30 text-emerald-600 dark:text-emerald-400",
+                                          policy.status === "Suspended" && "border-amber-500/30 text-amber-600 dark:text-amber-400"
                                         )}
                                       >
                                         {policy.status}
@@ -5838,7 +5838,7 @@ export const RentalCreateV2 = () => {
                           <span className="sm:hidden">{insuranceDocId ? "Uploaded" : "Upload"}</span>
                         </Button>
                         {insuranceDocId && (
-                          <span className="text-sm text-green-600 whitespace-nowrap">Uploaded</span>
+                          <span className="text-sm text-green-600 dark:text-green-400 whitespace-nowrap">Uploaded</span>
                         )}
                       </div>
                     </div>
@@ -5851,12 +5851,12 @@ export const RentalCreateV2 = () => {
                     {/* Bonzah Insurance — eligibility message shows as soon as vehicle is selected */}
                     {!skipInsurance && selectedVehicleId && isBonzahEligibilityLoading && (
                       <div className="flex items-center gap-2 py-3">
-                        <Loader2 className="h-4 w-4 animate-spin text-[#CC004A]" />
+                        <Loader2 className="h-4 w-4 animate-spin text-[#CC004A] dark:text-[#ff6b9a]" />
                         <span className="text-sm text-muted-foreground">Checking Bonzah insurance eligibility...</span>
                       </div>
                     )}
                     {!skipInsurance && selectedVehicleId && !isBonzahEligibilityLoading && !isBonzahEligible && (
-                      <div className="rounded-lg border border-[#CC004A]/30 bg-[#CC004A]/5 p-3 space-y-2">
+                      <div className="rounded-lg border border-[#CC004A]/30 bg-[#CC004A]/5 dark:bg-[#CC004A]/15 p-3 space-y-2">
                         <div className="flex items-start gap-2">
                           <img src="/bonzah-logo.svg" alt="Bonzah" className="h-4 w-auto mt-0.5 flex-shrink-0 dark:hidden" />
                           <img src="/bonzah-logo-dark.svg" alt="Bonzah" className="h-4 w-auto mt-0.5 flex-shrink-0 hidden dark:block" />
@@ -5868,7 +5868,7 @@ export const RentalCreateV2 = () => {
                           href="https://bonzah.com/included-and-restricted-vehicle-types"
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-xs text-[#CC004A]/70 hover:text-[#CC004A] underline ml-6"
+                          className="text-xs text-[#CC004A]/70 dark:text-[#ff6b9a]/80 hover:text-[#CC004A] dark:hover:text-[#ff6b9a] underline ml-6"
                         >
                           View Bonzah vehicle restrictions
                         </a>
@@ -5970,7 +5970,7 @@ export const RentalCreateV2 = () => {
               {activeExtras.length > 0 && (
                 <div className="rounded-xl border bg-card shadow-sm">
                   <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
-                    <span className="text-2xl font-extrabold text-primary">5.</span>
+                    <span className="text-2xl font-extrabold text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">5.</span>
                     <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Optional Extras</h2>
                   </div>
                   <div className="p-5 space-y-4">
@@ -6015,7 +6015,7 @@ export const RentalCreateV2 = () => {
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center justify-between gap-1">
                                     <span className="font-medium text-sm truncate">{extra.name}</span>
-                                    <span className="text-sm font-semibold text-primary whitespace-nowrap">
+                                    <span className="text-sm font-semibold text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] whitespace-nowrap">
                                       {formatCurrency(Number(extra.price), tenant?.currency_code || 'USD')}{(extra as any).billing_type === 'per_day' ? '/day' : ''}
                                     </span>
                                   </div>
@@ -6150,7 +6150,7 @@ export const RentalCreateV2 = () => {
               <div className="space-y-5">
                 <div className="rounded-xl border bg-card shadow-sm sticky top-0">
                   <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
-                    <div className="flex items-center justify-center h-7 w-7 rounded-md bg-primary/20 text-primary"><FileText className="h-4 w-4" /></div>
+                    <div className="flex items-center justify-center h-7 w-7 rounded-md bg-primary/20 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]"><FileText className="h-4 w-4" /></div>
                     <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Rental Preview</h2>
                   </div>
                   <div className="p-5 space-y-4">
@@ -6195,13 +6195,13 @@ export const RentalCreateV2 = () => {
                             <Clock className="h-3 w-3 mr-1" /> Pending
                           </Badge>
                         ) : (
-                          <Badge variant="outline" className="border-amber-500 text-amber-600 text-[10px]">
+                          <Badge variant="outline" className="border-amber-500 text-amber-600 dark:text-amber-400 text-[10px]">
                             <AlertTriangle className="h-3 w-3 mr-1" /> Not Verified
                           </Badge>
                         )
                       )}
                       {deliveryMethod === 'lockbox' && rentalSettings?.lockbox_enabled && (
-                        <Badge variant="outline" className="text-[10px] border-purple-500/30 text-purple-600">
+                        <Badge variant="outline" className="text-[10px] border-purple-500/30 text-purple-600 dark:text-purple-400">
                           <Lock className="h-3 w-3 mr-1" /> Lockbox
                         </Badge>
                       )}
@@ -6369,7 +6369,7 @@ export const RentalCreateV2 = () => {
                               handover — released after return, never charged. */}
                           <div className="border-t pt-2 mt-1 flex items-center justify-between">
                             <p className="text-sm font-semibold">Total</p>
-                            <p className="text-base font-bold text-primary">
+                            <p className="text-base font-bold text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
                               {subtotal > 0 ? formatCurrency(Math.max(0, depositIsCharged ? subtotal + effectiveDeposit : subtotal), currency) : "—"}
                             </p>
                           </div>
@@ -6527,7 +6527,7 @@ export const RentalCreateV2 = () => {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Smartphone className="h-5 w-5 text-primary" />
+              <Smartphone className="h-5 w-5 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" />
               Identity Verification
             </DialogTitle>
             <DialogDescription>
@@ -6539,7 +6539,7 @@ export const RentalCreateV2 = () => {
             {/* QR Code Display */}
             {aiSessionData && (
               <div
-                className="rounded-xl shadow-lg border-2 border-gray-200"
+                className="rounded-xl shadow-lg border-2 border-border"
                 style={{
                   backgroundColor: "#FFFFFF",
                   padding: "16px",
@@ -6575,7 +6575,7 @@ export const RentalCreateV2 = () => {
             </div>
 
             {/* Status indicator */}
-            <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-full text-sm">
+            <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 rounded-full text-sm">
               <Loader2 className="h-4 w-4 animate-spin" />
               <span>Waiting for customer to complete verification...</span>
             </div>
@@ -6819,7 +6819,7 @@ export const RentalCreateV2 = () => {
                 e.preventDefault(); // keep the dialog open until the write resolves
                 handleManualVerify();
               }}
-              className="bg-indigo-600 hover:bg-indigo-700"
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
             >
               {manualVerifying ? (
                 <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Recording...</>

@@ -40,8 +40,19 @@ import {
   Settings as SettingsIcon,
   Users,
   CalendarPlus,
+  FilePlus2,
+  Link2,
 } from "lucide-react";
 import { TeachingEmptyState } from "@/components/empty-states/teaching-empty-state";
+import {
+  CustomersEmptyArt,
+  RentalsEmptyArt,
+  VehiclesEmptyArt,
+} from "@/components/illustrations-v2/empty-scenes";
+import { AgreementsEmptyArt } from "@/components/illustrations-v2/scenes/agreements";
+import { PaymentsEmptyArt } from "@/components/illustrations-v2/scenes/payments";
+import { InvoicesEmptyArt } from "@/components/illustrations-v2/scenes/invoices";
+import { InsurancesEmptyArt } from "@/components/illustrations-v2/scenes/insurances";
 
 export function VehiclesTeachingEmptyState({
   onAddVehicle,
@@ -55,29 +66,28 @@ export function VehiclesTeachingEmptyState({
       // the card itself — see the prop's note.
       data-tour="vehicles-empty"
       icon={Car}
+      illustration={<VehiclesEmptyArt />}
       headline="Your fleet lives here"
-      body="Every car you rent out is a vehicle record. It carries the registration, the photos and the rates your booking site shows customers — and a rental is always booked against one, so nothing can be hired until a vehicle exists."
-      points={[
-        "Photos and rates decide what customers see and pay",
-        "Availability, blocked dates and pricing all hang off the vehicle",
-        "Everything is editable later — nothing here is one-way",
-      ]}
+      body="Add your cars with their photos and rates. Every booking is made against one."
       primaryAction={{
         label: "Add your first vehicle",
+        hint: "Add a car with its photos, rates and availability.",
         onClick: onAddVehicle,
         icon: Plus,
       }}
       explainerId="fleet.vehicle-add"
-      footnote="Most operators add one car, take a booking against it end to end, then add the rest."
     />
   );
 }
 
 export function CustomersTeachingEmptyState({
   onAddCustomer,
+  onInviteCustomer,
 }: {
   /** Omitted when the signed-in user has view-only access to customers. */
   onAddCustomer?: () => void;
+  /** Opens the customer invite link dialog. Omitted with view-only access. */
+  onInviteCustomer?: () => void;
 }) {
   return (
     <TeachingEmptyState
@@ -85,20 +95,25 @@ export function CustomersTeachingEmptyState({
       // `customers-empty-points`, not the card — see the prop's note.
       data-tour="customers-empty"
       icon={Users}
+      illustration={<CustomersEmptyArt />}
       headline="Everyone who rents from you, in one place"
-      body="A customer record holds their contact details, driving licence and verification status, and it links to every rental, payment, agreement and message they have ever had with you. Anyone who books through your site is added here automatically."
-      points={[
-        "Licence and ID checks attach to the customer, not to one rental",
-        "Their whole rental and payment history sits on one page",
-        "Block a risky renter once and they are blocked everywhere",
-      ]}
+      body="Everyone who books with you, with their licence checks and rental history."
       primaryAction={
         onAddCustomer
-          ? { label: "Add a customer", onClick: onAddCustomer, icon: Plus }
+          ? { label: "Add a customer", onClick: onAddCustomer, icon: Plus, hint: "Add someone’s details and driving licence by hand." }
+          : undefined
+      }
+      secondaryAction={
+        onInviteCustomer
+          ? {
+              label: "Invite by link",
+              onClick: onInviteCustomer,
+              icon: Link2,
+              hint: "Send a sign-up link. They fill in their own details and licence.",
+            }
           : undefined
       }
       explainerId="customers.add"
-      footnote="You can also add someone mid-booking — creating a rental offers it inline."
     />
   );
 }
@@ -115,46 +130,73 @@ export function RentalsTeachingEmptyState({
       // never at the card itself — see the prop's note.
       data-tour="rentals-empty"
       icon={CalendarPlus}
+      illustration={<RentalsEmptyArt />}
       headline="This is where the business actually runs"
-      body="A rental ties one customer to one vehicle for a set of dates, and carries the money with it — the charge, the deposit hold, the signed agreement and the insurance. Every other screen in the portal is reporting on what happens here."
-      points={[
-        "Charge fixed dates, auto-renewing, installments or pay-as-you-go",
-        "Deposit holds, agreements and cover are handled inside the rental",
-        "Bookings from your public site arrive here for approval",
-      ]}
+      body="Each rental ties a customer to a car, with its payment, agreement and handover."
       primaryAction={{
         label: "Create your first rental",
+        hint: "Book a car for a customer and choose the dates.",
         onClick: onCreateRental,
         icon: Plus,
       }}
       explainerId="rentals.first-rental"
-      footnote="You will need a vehicle and a customer first — both can be created from inside the rental."
     />
   );
 }
 
 export function AgreementsTeachingEmptyState({
+  onSendAgreement,
   onGoToRentals,
+  onCreateTemplate,
 }: {
-  onGoToRentals: () => void;
+  /**
+   * Agreements v2 (`AgreementsPageV2`): send one straight from this page.
+   * Omitted when the signed-in user may not send.
+   */
+  onSendAgreement?: () => void;
+  /** The v1 list, where every row is a rental's agreement: go send one from a rental. */
+  onGoToRentals?: () => void;
+  /** Agreements v2: open "create a template". Omitted without the templates grant. */
+  onCreateTemplate?: () => void;
 }) {
   return (
     <TeachingEmptyState
       icon={FileSignature}
-      headline="Signed paperwork, tracked for you"
-      body="Every rental can produce a rental agreement and send it for e-signature before the keys change hands. Sent, opened and signed documents all land on this page, and the signed PDF is filed against both the rental and the customer."
-      points={[
-        "Send for signature straight from a rental — no separate tool",
-        "See at a glance who has signed and who is holding you up",
-        "Extension agreements are tracked here too",
-      ]}
-      primaryAction={{
-        label: "Open a rental to send one",
-        onClick: onGoToRentals,
-        icon: FileSignature,
-      }}
+      illustration={<AgreementsEmptyArt />}
+      headline="Every agreement you send, in one place"
+      body={
+        onSendAgreement
+          ? "Send one for e-signature, and follow it here until it comes back signed."
+          : "Each rental's agreement shows here, from sent for e-signature to signed."
+      }
+      primaryAction={
+        onSendAgreement
+          ? {
+              label: "Send agreement",
+              hint: "Choose who signs and a template, then send it for e-signature.",
+              onClick: onSendAgreement,
+              icon: Plus,
+            }
+          : onGoToRentals
+            ? {
+                label: "Open a rental to send one",
+                hint: "Send the agreement for e-signature from the rental itself.",
+                onClick: onGoToRentals,
+                icon: FileSignature,
+              }
+            : undefined
+      }
+      secondaryAction={
+        onCreateTemplate
+          ? {
+              label: "Create a template",
+              hint: "Write the agreement once. Every rental fills in its own details.",
+              onClick: onCreateTemplate,
+              icon: FilePlus2,
+            }
+          : undefined
+      }
       explainerId="agreements.first-agreement"
-      footnote="Put your logo on the signing emails in Settings → e-Sign."
     />
   );
 }
@@ -167,25 +209,24 @@ export function PaymentsTeachingEmptyState({
 }) {
   return (
     <TeachingEmptyState
-      // Anchor for the Payments tab tour, which has no record steps and so
-      // leans on this card whenever the table is not drawn. It points at
-      // `payments-empty-points`, never the card itself — see the prop's note.
+      // Anchor for the Payments tab tour, which leans on this card whenever the
+      // table is not drawn (its headline and its button).
       data-tour="payments-empty"
       icon={CreditCard}
+      illustration={<PaymentsEmptyArt />}
       headline="Every payment, in one ledger"
-      body="Money lands here the moment a customer pays — card charges from your booking site, installments, pay-as-you-go accruals and released deposit holds all post themselves. You can also record a cash or bank transfer by hand so the ledger matches what is really in your account."
-      points={[
-        "Card payments from your booking site arrive on their own",
-        "Record cash and bank transfers so the books balance",
-        "Refunds, deposits and failed charges are tracked here too",
-      ]}
+      body="Booking-site card payments land here on their own. Record cash and transfers too."
       primaryAction={
         onRecordPayment
-          ? { label: "Record a payment", onClick: onRecordPayment, icon: Plus }
+          ? {
+              label: "Record a payment",
+              hint: "Log a cash, bank transfer or card payment against a customer.",
+              onClick: onRecordPayment,
+              icon: Plus,
+            }
           : undefined
       }
       explainerId="payments.overview"
-      footnote="Connect Stripe once and everything after that posts automatically."
     />
   );
 }
@@ -198,20 +239,16 @@ export function InvoicesTeachingEmptyState({
   return (
     <TeachingEmptyState
       icon={FileText}
+      illustration={<InvoicesEmptyArt />}
       headline="Invoices raise themselves from your rentals"
-      body="Every rental produces its own invoice, so what a customer owes and what they have already paid are never two different numbers. Send one, mark it settled, or download the PDF for your accountant."
-      points={[
-        "Created automatically the moment a rental is booked",
-        "Shows owed, paid and overdue for each customer",
-        "Download as a PDF or send it straight to the customer",
-      ]}
+      body="Each rental makes its own invoice: what the customer owes, and what is paid."
       primaryAction={{
         label: "Create your first rental",
+        hint: "Book a car for a customer. Its invoice is made for you.",
         onClick: onCreateRental,
         icon: Plus,
       }}
       explainerId="invoices.overview"
-      footnote="Nothing to do here yet — take a booking and the first invoice appears."
     />
   );
 }
@@ -224,20 +261,16 @@ export function InsurancesTeachingEmptyState({
   return (
     <TeachingEmptyState
       icon={ShieldCheck}
+      illustration={<InsurancesEmptyArt />}
       headline="Cover for every rental, sold at checkout"
-      body="Switch on Bonzah and customers can buy per-rental cover while they book. You earn on every policy, the documents are issued automatically, and both the policies you sell and any policy a customer brings themselves are listed on this page."
-      points={[
-        "Customers buy cover in the booking flow, not over the phone",
-        "Policy documents are issued and stored against the rental",
-        "Upload a customer's own policy when they arrive with one",
-      ]}
+      body="With Bonzah on, customers add cover as they book, and each policy lands here."
       primaryAction={{
         label: "Set up Bonzah insurance",
+        hint: "Apply for Bonzah in Settings so customers can buy cover as they book.",
         onClick: onSetUpInsurance,
         icon: SettingsIcon,
       }}
       explainerId="insurance.bonzah"
-      footnote="Already connected? Policies appear here the moment a rental sells the first one."
     />
   );
 }

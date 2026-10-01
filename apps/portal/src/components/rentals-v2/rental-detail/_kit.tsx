@@ -286,7 +286,7 @@ export function StageItem({
       <span
         className={cn(
           "shrink-0 text-[10px] font-semibold uppercase tracking-widest",
-          filled ? "text-primary/60" : "text-muted-foreground/60"
+          filled ? "text-primary/60 dark:text-[hsl(var(--v2-link,var(--primary))/0.6)]" : "text-muted-foreground/60"
         )}
       >
         {label}
@@ -294,7 +294,7 @@ export function StageItem({
       <span
         className={cn(
           "min-w-0 flex-1 truncate text-right text-[13px]",
-          filled ? "font-medium text-primary" : "text-muted-foreground"
+          filled ? "font-medium text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" : "text-muted-foreground"
         )}
       >
         {value ?? prompt}
@@ -514,7 +514,7 @@ export function HeroChip({
     muted: { chip: "border-border bg-muted/60 text-muted-foreground", dot: "bg-muted-foreground/40" },
     success: { chip: "border-success/30 bg-success/10 text-success", dot: "bg-success" },
     warning: { chip: "border-warning/40 bg-warning/10 text-warning", dot: "bg-warning" },
-    primary: { chip: "border-primary/30 bg-primary/10 text-primary", dot: "bg-primary" },
+    primary: { chip: "border-primary/30 bg-primary/10 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]", dot: "bg-primary" },
     destructive: { chip: "border-destructive/30 bg-destructive/10 text-destructive", dot: "bg-destructive" },
   } as const;
   const t = tones[tone];
@@ -543,7 +543,7 @@ export function Pill({
 }) {
   const tones = {
     neutral: "bg-muted text-muted-foreground",
-    primary: "bg-primary-light text-primary",
+    primary: "bg-primary-light text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]",
     success: "bg-success-light text-success",
     warning: "bg-warning-light text-warning",
   } as const;

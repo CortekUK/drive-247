@@ -191,7 +191,7 @@ export function BlockedCustomersTableV2<T extends BlockedCustomerRowV2>({
                         <DropdownMenuItem
                           onClick={() => onUnblock(customer)}
                           disabled={isLoading}
-                          className="text-green-600 focus:text-green-600"
+                          className="text-green-600 dark:text-green-400 focus:text-green-600 dark:focus:text-green-400"
                         >
                           <CheckCircle className="h-4 w-4" />
                           Unblock

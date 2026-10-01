@@ -453,12 +453,12 @@ export function AppSidebar() {
               </span>
             </div>
             {!collapsed && item.badge !== undefined && item.badge > 0 && (
-              <span className={`inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-semibold leading-none rounded-full shrink-0 animate-in fade-in ${BADGE_TONE_CLASS[item.badgeTone ?? "destructive"]}`}>
+              <span className={`inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-semibold leading-none rounded-full shrink-0 animate-in fade-in-0 duration-200 ease-out motion-reduce:animate-none ${BADGE_TONE_CLASS[item.badgeTone ?? "destructive"]}`}>
                 {item.badge}
               </span>
             )}
             {collapsed && item.badge !== undefined && item.badge > 0 && (
-              <span className={`absolute -top-1 -right-1 inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold leading-none rounded-full animate-in fade-in ${BADGE_TONE_CLASS[item.badgeTone ?? "destructive"]}`}>
+              <span className={`absolute -top-1 -right-1 inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold leading-none rounded-full animate-in fade-in-0 duration-200 ease-out motion-reduce:animate-none ${BADGE_TONE_CLASS[item.badgeTone ?? "destructive"]}`}>
                 {item.badge > 9 ? '9+' : item.badge}
               </span>
             )}

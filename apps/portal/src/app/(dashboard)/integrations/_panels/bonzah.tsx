@@ -1379,7 +1379,7 @@ function HowItWorks() {
         <ol className="space-y-2">
           {STEPS.map((text, i) => (
             <li key={i} className="flex gap-2.5">
-              <span className="mt-px text-xs font-medium tabular-nums text-primary">{i + 1}.</span>
+              <span className="mt-px text-xs font-medium tabular-nums text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">{i + 1}.</span>
               <span className="min-w-0 text-xs leading-relaxed text-muted-foreground">{text}</span>
             </li>
           ))}
@@ -1465,7 +1465,7 @@ function StageRail({ stage }: { stage: Stage }) {
               className={cn(
                 "relative z-10 flex size-7 shrink-0 items-center justify-center rounded-full text-[11px] font-medium tabular-nums transition-colors",
                 done && "bg-primary text-primary-foreground",
-                active && !needsOperator && "bg-primary/10 text-primary ring-2 ring-primary/25",
+                active && !needsOperator && "bg-primary/10 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] ring-2 ring-primary/25",
                 active && needsOperator && "panel-ink-warn bg-warning/10 ring-2 ring-warning/30",
                 !done && !active && "bg-background text-muted-foreground ring-1 ring-border",
               )}

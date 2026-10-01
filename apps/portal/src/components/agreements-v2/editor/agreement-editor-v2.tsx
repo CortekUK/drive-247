@@ -32,7 +32,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { EditorContent, useEditor } from "@tiptap/react";
-import { AlertTriangle, Eye, Loader2, PanelRightClose, PanelRightOpen, PenLine } from "lucide-react";
+import { AlertTriangle, Eye, FileText, Loader2, PanelRightClose, PanelRightOpen, PenLine, Save, X } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import { Dialog, DialogDescription, DialogPortal, DialogTitle } from "@/components/ui-v2/dialog";
 import { Input } from "@/components/ui-v2/input";
@@ -44,8 +44,14 @@ import { renderAgreementHtml } from "@/lib/agreements-v2/render";
 import { cn } from "@/lib/utils";
 import { createAgreementEditorExtensions, isInsideTableOrList, SIGNATURE_PLACEMENT_REASON } from "./editor-extensions";
 import { EditorToolbarV2 } from "./editor-toolbar-v2";
+import { SelectionBarV2, SlashMenuV2 } from "./slash-menu-v2";
 import { EditorSidePanelV2, type SidePanelTabV2 } from "./editor-side-panel-v2";
 import { AGREEMENT_STARTER_V2, duplicateSignerFieldsReasonV2 } from "./starter-content";
+import { TraxIcon } from "@/components/chat/TraxIcon";
+import { TraxAgreementPane } from "@/components/agreements-v2/trax-studio/trax-agreement-pane";
+import { AgreementOutlinePane, type OutlineSection } from "@/components/agreements-v2/trax-studio/agreement-outline-pane";
+import { DockTip, SigningDockV2 } from "@/components/agreements-v2/trax-studio/signing-dock-v2";
+import { createTraxWritingPlugin, traxWritingKey } from "@/components/agreements-v2/trax-studio/live-writer";
 
 export type AgreementEditorModeV2 = "template" | "one-off" | "rental-template";
 
@@ -79,6 +85,12 @@ export interface AgreementEditorV2Props {
    * Preview dialog uses, so Edit and Preview show the same document.
    */
   previewTransform?: (html: string) => string;
+  /**
+   * The Trax studio layout: Trax on the left (it writes into the document
+   * live), the document in the middle (Preview or Edit), the pages on the
+   * right. Off, the editor is the half-and-half layout it has always been.
+   */
+  trax?: boolean;
 }
 
 /** What the header says under the name, per mode. */
@@ -134,6 +146,9 @@ const errorMessage = (e: unknown) =>
  * highlighter puts on variables and signer fields.
  */
 const EDITOR_CSS = `
+.agr-editor-v2.agr-studio .tiptap{padding-top:19px}
+.agr-editor-v2.agr-studio .agr-preview-v2 .agr-sheet{padding-top:calc(var(--pt) * 20)}
+.agr-editor-v2.agr-studio .agr-preview-v2 .agr-doc:first-child > :first-child{padding-top:0;margin-top:0}
 .agr-editor-v2 .tiptap{min-height:100%;box-sizing:border-box;max-width:794px;margin:0 auto;padding:24px 28px 120px;outline:none;font-size:14px;line-height:1.6;color:hsl(var(--foreground));overflow-wrap:break-word}
 .agr-editor-v2 .tiptap>*:first-child{margin-top:0}
 .agr-editor-v2 .tiptap p{margin:0 0 .5rem}
@@ -155,14 +170,27 @@ const EDITOR_CSS = `
 .agr-editor-v2 .tiptap a{color:inherit;text-decoration:underline dotted}
 .agr-editor-v2 .tiptap p.is-editor-empty:first-child::before{content:attr(data-placeholder);float:left;height:0;pointer-events:none;color:hsl(var(--muted-foreground))}
 .agr-editor-v2 .tiptap .agr-token{border-radius:4px;padding:0 1px;-webkit-box-decoration-break:clone;box-decoration-break:clone}
-.agr-editor-v2 .tiptap .agr-token[data-token=variable]{background:hsl(var(--primary) / .1);color:hsl(var(--primary))}
+.agr-editor-v2 .tiptap .agr-token[data-token=variable]{background:hsl(var(--primary) / .1);color:hsl(var(--v2-link, var(--primary)))}
 .agr-editor-v2 .tiptap .agr-token[data-token=logic]{background:hsl(var(--muted));color:hsl(var(--muted-foreground))}
 .agr-editor-v2 .tiptap .agr-token[data-token=field]{border:1.5px dashed currentColor;padding:0 3px;font-weight:600}
-.agr-editor-v2 .tiptap .agr-token[data-field=signature]{color:#4f46e5;background:#eef2ff}
+.agr-editor-v2 .tiptap .agr-token[data-field=signature]{color:hsl(var(--v2-link, var(--primary)));background:hsl(var(--primary) / .1)}
 .agr-editor-v2 .tiptap .agr-token[data-field=initials]{color:#b45309;background:#fffbeb}
 .agr-editor-v2 .tiptap .agr-token[data-field=date]{color:#1d4ed8;background:#eff6ff}
 .agr-editor-v2 .tiptap .agr-token[data-token=field-unknown]{color:#b91c1c;background:#fef2f2}
+.dark .agr-editor-v2 .tiptap .agr-token[data-field=initials]{color:#fbbf24;background:rgb(245 158 11 / .12)}
+.dark .agr-editor-v2 .tiptap .agr-token[data-field=date]{color:#93c5fd;background:rgb(59 130 246 / .12)}
+.dark .agr-editor-v2 .tiptap .agr-token[data-token=field-unknown]{color:#fca5a5;background:rgb(239 68 68 / .12)}
+.agr-editor-v2 .tiptap .trax-writing{background:hsl(var(--primary) / .08);border-radius:2px}
+.agr-editor-v2 .trax-caret,.agr-editor-v2 .trax-chat-caret{display:inline-block;width:2px;height:1.1em;margin-left:1px;vertical-align:text-bottom;background:hsl(var(--primary));border-radius:1px;animation:trax-caret-blink 1s steps(2,start) infinite}
+.agr-editor-v2 .trax-chat-caret{height:1em}
+@keyframes trax-caret-blink{to{visibility:hidden}}
+@media (prefers-reduced-motion:reduce){.agr-editor-v2 .trax-caret,.agr-editor-v2 .trax-chat-caret{animation:none}}
 `;
+
+/** The studio's two stacked document views: the one shown, and the one fading out behind it. */
+const VIEW_SHOWN = "visible opacity-100 [transition:opacity_200ms_ease-out] motion-reduce:transition-none";
+const VIEW_HIDDEN =
+  "invisible pointer-events-none opacity-0 [transition:opacity_200ms_ease-in,visibility_0s_linear_200ms] motion-reduce:transition-none";
 
 export function AgreementEditorV2(props: AgreementEditorV2Props) {
   // Closing is always asked for from inside (Cancel, Escape), where the
@@ -182,6 +210,7 @@ function EditorWorkspace({
   previewBanner,
   isDefaultTemplate = false,
   previewTransform,
+  trax = false,
 }: AgreementEditorV2Props) {
   // An empty agreement ("Create new", or a template with no wording yet)
   // starts from the starter: a title, an opening line and the signatures
@@ -201,6 +230,12 @@ function EditorWorkspace({
   const [panelOpen, setPanelOpen] = useState(false);
   const [panelTab, setPanelTab] = useState<SidePanelTabV2>("variables");
   const [phoneView, setPhoneView] = useState<"edit" | "preview">("edit");
+  // Studio (`trax`) only.
+  const [docView, setDocView] = useState<"preview" | "edit">("preview");
+  const [studioPhone, setStudioPhone] = useState<"trax" | "doc" | "pages">("trax");
+  const [traxWriting, setTraxWriting] = useState(false);
+  const [previewRoot, setPreviewRoot] = useState<HTMLElement | null>(null);
+  const editScrollRef = useRef<HTMLDivElement | null>(null);
   const focusedOnce = useRef(false);
   const mounted = useRef(true);
   const panelId = useId();
@@ -212,7 +247,12 @@ function EditorWorkspace({
     };
   }, []);
 
-  const extensions = useMemo(() => createAgreementEditorExtensions(), []);
+  // The studio says how to reach everything without a toolbar.
+  const extensions = useMemo(
+    () => createAgreementEditorExtensions(trax ? { placeholder: "Type / for blocks, signer fields and variables…" } : {}),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
   const editor = useEditor({
     extensions,
     content: startingContent,
@@ -247,12 +287,15 @@ function EditorWorkspace({
     setContent(html);
   }, [editor]);
 
-  const trimmedName = name.trim();
+  // A blank name is never an error (Oct 1 2026): the template keeps the name
+  // it had, or gets a default, and the field shows it again on leaving.
+  const fallbackName = (initialName ?? "").trim() || "Untitled agreement";
+  const trimmedName = name.trim() || fallbackName;
   const nameChanged = nameEditable && trimmedName !== (initialName ?? "").trim();
   const contentChanged = baseline !== null && comparable(content) !== comparable(baseline);
   const dirty = contentChanged || nameChanged;
   const blank = baseline !== null && isBlankAgreementHtml(content);
-  const nameMissing = nameEditable && trimmedName === "";
+  const nameMissing = false;
   // Each signer field once: the send path defines each tag once, for signer 1,
   // and a repeated one can confuse the signing service. Blocks Save, with why.
   const duplicateReason = useMemo(() => duplicateSignerFieldsReasonV2(content), [content]);
@@ -260,7 +303,7 @@ function EditorWorkspace({
   // saving a template with nothing changed would only rewrite it, and the
   // starter is not an agreement until someone has written in it.
   const canSave =
-    baseline !== null && !saving && !blank && !nameMissing && !duplicateReason && ((mode === "one-off" && !seeded) || dirty);
+    baseline !== null && !saving && !traxWriting && !blank && !nameMissing && !duplicateReason && ((mode === "one-off" && !seeded) || dirty);
 
   const save = useCallback(async (): Promise<boolean> => {
     if (!canSave) return false;
@@ -289,7 +332,7 @@ function EditorWorkspace({
   const guard = useUnsavedChangesWarning({ hasChanges: dirty && !saving, onSave: save });
 
   const requestClose = () => {
-    if (saving) return;
+    if (saving || traxWriting) return;
     if (dirty) setAskClose(true);
     else onClose();
   };
@@ -321,6 +364,65 @@ function EditorWorkspace({
     return null;
   };
 
+  // The "Trax is writing here" highlight and caret, for the studio only.
+  useEffect(() => {
+    if (!trax || !editor) return;
+    editor.registerPlugin(createTraxWritingPlugin());
+    return () => {
+      if (!editor.isDestroyed) editor.unregisterPlugin(traxWritingKey);
+    };
+  }, [trax, editor]);
+
+  /** Trax started or stopped typing: show the page being written, and where. */
+  const onTraxWriting = useCallback((writing: boolean) => {
+    setTraxWriting(writing);
+    if (writing) {
+      setDocView("edit");
+      setStudioPhone((v) => (v === "pages" ? "doc" : v));
+    }
+  }, []);
+
+  const jumpTo = useCallback(
+    (section: OutlineSection) => {
+      setStudioPhone("doc");
+      if (docView === "preview") {
+        const scroller = previewRoot?.querySelector<HTMLElement>('[data-slot="agreement-preview-v2"]');
+        const heading = previewRoot?.querySelectorAll<HTMLElement>('[data-slot="agreement-body"] :is(h1,h2,h3)')[section.index];
+        if (scroller && heading) {
+          const top = heading.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop - 24;
+          scroller.scrollTo({ top, behavior: "smooth" });
+        }
+        return;
+      }
+      const headings = Array.from(editor?.view.dom.querySelectorAll<HTMLElement>("h1, h2, h3") ?? []);
+      const match =
+        headings.find((h) => (h.textContent ?? "").replace(/\s+/g, " ").trim() === section.text) ?? headings[section.index];
+      match?.scrollIntoView({ behavior: "smooth", block: "start" });
+    },
+    [docView, previewRoot, editor],
+  );
+
+  /** A page thumbnail: scroll the agreement there, in whichever view is showing. */
+  const jumpToPage = useCallback(
+    (index: number, pages: number) => {
+      setStudioPhone("doc");
+      if (docView === "preview") {
+        const scroller = previewRoot?.querySelector<HTMLElement>('[data-slot="agreement-preview-v2"]');
+        const sheet = previewRoot?.querySelector<HTMLElement>(".agr-sheet");
+        if (!scroller || !sheet) return;
+        const w = sheet.clientWidth;
+        const pageBody = (w * 842) / 595 - ((w * 50) / 595) * 2;
+        const sheetTop = sheet.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
+        scroller.scrollTo({ top: Math.max(0, sheetTop + index * pageBody - 16), behavior: "smooth" });
+        return;
+      }
+      // The editor has no pages: go to the same share of the way down.
+      const host = editScrollRef.current;
+      if (host) host.scrollTo({ top: (index / Math.max(1, pages)) * host.scrollHeight, behavior: "smooth" });
+    },
+    [docView, previewRoot],
+  );
+
   const debounced = useDebouncedValue(content, PREVIEW_DEBOUNCE_MS);
   // One-off edits are individual agreements: nothing supplies the rental
   // variables, so they are highlighted as blanks rather than silently dropped.
@@ -338,8 +440,155 @@ function EditorWorkspace({
   const label = saveLabel ?? DEFAULT_SAVE_LABEL[mode];
   const title = trimmedName || (nameEditable ? "Untitled template" : "Agreement");
 
+  /* The studio has no top bar (Oct 1 2026): the name, the save state and
+     Cancel / Save ride in the agreement column's own header row. */
+  // The name heads the left column, where Trax's heading was: big enough to
+  // read at a glance, and still a field you can click into and rename.
+  // The template's name, as the studio's title: big and bold, wrapping onto a
+  // second line rather than cutting off, and still a field you click to rename
+  // (Enter finishes). No box until you are in it, and then only a soft one.
+  const studioName = (
+    <div className="px-2 pt-[19px] pb-1">
+      {nameEditable ? (
+        <textarea
+          value={name}
+          onChange={(e) => setName(e.target.value.replace(/\n/g, " "))}
+          onBlur={() => {
+            if (!name.trim()) setName(fallbackName);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              e.currentTarget.blur();
+            }
+          }}
+          rows={1}
+          aria-label="Template name"
+          aria-invalid={nameMissing || undefined}
+          placeholder="Name"
+          maxLength={120}
+          // In the accent, in a rounded box: a soft accent tile with an accent
+          // edge that firms up while you type.
+          className="block w-full resize-none rounded-xl border border-primary/15 bg-primary/[0.06] px-3 py-1.5 font-heading text-base leading-snug font-medium tracking-tight text-primary [field-sizing:content] outline-none placeholder:text-primary/40 transition-colors duration-200 ease-out hover:bg-primary/10 focus-visible:border-primary/40 focus-visible:bg-primary/10 motion-reduce:transition-none dark:border-primary/25 dark:bg-primary/[0.12] dark:text-[hsl(var(--v2-link,var(--primary)))] dark:placeholder:text-[hsl(var(--v2-link,var(--primary))/0.45)]"
+        />
+      ) : (
+        <p className="rounded-xl border border-primary/15 bg-primary/[0.06] px-3 py-1.5 font-heading text-base leading-snug font-medium tracking-tight break-words text-primary dark:border-primary/25 dark:bg-primary/[0.12] dark:text-[hsl(var(--v2-link,var(--primary)))]">{title}</p>
+      )}
+    </div>
+  );
+  // Cancel and Save live in the signing dock now (Oct 1 2026), one section each
+  // end, at the dock's own slot size.
+  const studioCancel = (
+    <DockTip label="Cancel" hint="Close without saving. You'll be asked first if anything changed.">
+    <button
+      type="button"
+      onClick={requestClose}
+      disabled={saving || traxWriting}
+      aria-label="Cancel"
+      className="inline-flex h-11 w-12 shrink-0 items-center justify-center rounded-xl text-red-700 transition-colors duration-200 ease-out hover:bg-red-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 motion-reduce:transition-none dark:text-red-400"
+    >
+      <X className="size-5" strokeWidth={2.4} aria-hidden="true" />
+    </button>
+    </DockTip>
+  );
+  const studioSave = (
+    <DockTip label={label} hint={canSave ? "Keep your changes to this template." : "Nothing to save yet."}>
+    <button
+      type="button"
+      onClick={() => void save()}
+      aria-disabled={!canSave || undefined}
+      aria-label={saving ? "Saving…" : label}
+      aria-describedby={duplicateReason ? duplicateReasonId : undefined}
+      className="inline-flex h-11 w-12 shrink-0 items-center justify-center rounded-xl text-sm font-semibold text-primary transition-colors duration-200 ease-out hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-disabled:cursor-default aria-disabled:text-muted-foreground aria-disabled:hover:bg-transparent motion-reduce:transition-none dark:text-[hsl(var(--v2-link,var(--primary)))]"
+    >
+      {saving ? <Loader2 className="size-[18px] animate-spin" aria-hidden="true" /> : <Save className="size-5" strokeWidth={2.4} aria-hidden="true" />}
+    </button>
+    </DockTip>
+  );
+  // One icon for the view: it shows where a click takes you (the eye while
+  // editing, the pen while previewing).
+  const studioViewToggle = (
+    <DockTip
+      label={docView === "edit" ? "Preview" : "Edit"}
+      hint={docView === "edit" ? "See the agreement as the customer gets it." : "Change the wording yourself. Type / for blocks, fields and variables."}
+    >
+    <button
+      type="button"
+      onClick={() => setDocView((v) => (v === "edit" ? "preview" : "edit"))}
+      disabled={traxWriting}
+      aria-label={docView === "edit" ? "Show the preview" : "Edit the agreement"}
+      // The most prominent thing in the dock, without shouting: a solid accent
+      // rounded square a touch larger than the slots around it. No glow, no shadow.
+      className="inline-flex h-11 w-12 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-opacity duration-200 ease-out hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 motion-reduce:transition-none"
+    >
+      {docView === "edit" ? <Eye className="size-[22px]" aria-hidden="true" /> : <PenLine className="size-[22px]" aria-hidden="true" />}
+    </button>
+    </DockTip>
+  );
+  const studioActions = (
+    // Cancel and Save side by side, no box behind them: just the two icons,
+    // a little stronger in colour and weight so they read on the wash.
+    <div className="flex shrink-0 items-center gap-0.5 [&>button]:rounded-lg [&_svg]:size-[18px] [&_svg]:stroke-[2.4]">
+      {/* No "Unsaved changes" label: leaving with changes asks in a dialog instead. */}
+      {/* Icons only (Oct 1 2026); the words stay as their names and tooltips. */}
+      {/* No outlined circle: the cross alone, in red. */}
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        className="text-red-700 hover:bg-red-500/10 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+        onClick={requestClose}
+        disabled={saving || traxWriting}
+        aria-label="Cancel"
+        title="Cancel"
+      >
+        <X />
+      </Button>
+      {/* No filled circle: the icon alone, in the accent. */}
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        className="text-primary hover:bg-primary/10 hover:text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] [&_svg]:brightness-90 dark:[&_svg]:brightness-100"
+        onClick={() => void save()}
+        disabled={!canSave}
+        aria-label={saving ? "Saving…" : label}
+        title={label}
+        aria-describedby={duplicateReason ? duplicateReasonId : undefined}
+      >
+        {saving ? <Loader2 className="animate-spin" /> : <Save />}
+      </Button>
+    </div>
+  );
+  const studioNotices =
+    saveError || blank || nameMissing || duplicateReason ? (
+      <div className="flex flex-col gap-1 border-b border-border px-4 py-2">
+        {saveError && (
+          <p role="alert" className="flex items-start gap-1.5 text-sm text-destructive">
+            <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+            <span>Not saved. {saveError}</span>
+          </p>
+        )}
+        {duplicateReason && (
+          <p id={duplicateReasonId} role="alert" data-slot="duplicate-signer-fields" className="flex items-start gap-1.5 text-xs text-destructive">
+            <AlertTriangle className="mt-px size-3.5 shrink-0" aria-hidden="true" />
+            <span>{duplicateReason}</span>
+          </p>
+        )}
+        {blank && <p className="text-xs text-muted-foreground">The agreement is empty. Add some wording to save it.</p>}
+        {nameMissing && <p className="text-xs text-destructive">Give the template a name.</p>}
+      </div>
+    ) : null;
+
   return (
     <DialogPortal>
+      {/* The overlay is what carries Radix's scroll lock. Without one, a
+          dialog this editor is opened from (Manage agreement templates) keeps
+          ITS lock, which lets the wheel scroll only inside that dialog, so
+          nothing in the editor could scroll. With it, this editor holds the
+          top lock and everything inside it scrolls. It sits under the
+          full-screen content, so it is never seen. */}
+      <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-background" />
       <DialogPrimitive.Content
         data-slot="agreement-editor-v2"
         onOpenAutoFocus={(e) => e.preventDefault()}
@@ -350,10 +599,24 @@ function EditorWorkspace({
         }}
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
-        className="agr-editor-v2 fixed inset-0 z-50 flex h-dvh w-screen flex-col bg-background text-foreground outline-none"
+        // The studio wears the app's page wash (bg-app-gradient, styles/v2-theme.css);
+        // the half-and-half editor keeps its plain ground.
+        className={cn(
+          "agr-editor-v2 fixed inset-0 z-50 flex h-dvh w-screen flex-col bg-background text-foreground outline-none",
+          trax && "bg-app-gradient agr-studio",
+        )}
       >
         <style>{EDITOR_CSS}</style>
         <TooltipProvider delayDuration={300}>
+          {trax && (
+            <>
+              <DialogTitle className="sr-only">{`Edit ${title}`}</DialogTitle>
+              <DialogDescription className="sr-only">
+                {hint ?? "Trax on the left writes with you; the agreement is in the middle; its pages are on the right."}
+              </DialogDescription>
+            </>
+          )}
+          {!trax && (
           <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border px-4 py-3 sm:px-6">
             <div className="flex min-w-0 flex-[1_1_16rem] flex-col gap-1">
               {nameEditable ? (
@@ -362,6 +625,9 @@ function EditorWorkspace({
                   <Input
                     value={name}
                     onChange={(e) => setName(e.target.value)}
+                    onBlur={() => {
+                      if (!name.trim()) setName(fallbackName);
+                    }}
                     aria-label="Template name"
                     aria-invalid={nameMissing || undefined}
                     placeholder="Name this template"
@@ -389,7 +655,7 @@ function EditorWorkspace({
                   <span>{duplicateReason}</span>
                 </p>
               )}
-              <Button type="button" variant="outline" onClick={requestClose} disabled={saving}>
+              <Button type="button" variant="outline" onClick={requestClose} disabled={saving || traxWriting}>
                 Cancel
               </Button>
               <Button
@@ -415,7 +681,120 @@ function EditorWorkspace({
               </div>
             )}
           </header>
+          )}
 
+          {trax ? (
+            <>
+              {/* Phones: one pane at a time. */}
+              <div className="flex border-b border-border px-4 py-2 lg:hidden" role="group" aria-label="Show">
+                <div className="inline-flex rounded-full bg-muted p-1">
+                  {(["trax", "doc", "pages"] as const).map((view) => (
+                    <button
+                      key={view}
+                      type="button"
+                      aria-pressed={studioPhone === view}
+                      onClick={() => setStudioPhone(view)}
+                      className={cn(
+                        "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium text-muted-foreground",
+                        studioPhone === view && "bg-background text-foreground",
+                      )}
+                    >
+                      {view === "trax" ? <TraxIcon size={16} /> : view === "doc" ? <PenLine className="size-4" aria-hidden="true" /> : <FileText className="size-4" aria-hidden="true" />}
+                      {view === "trax" ? "Trax" : view === "doc" ? "Document" : "Pages"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(320px,380px)_minmax(0,1fr)_248px]">
+                <div className={cn("min-h-0 flex-col lg:flex", studioPhone === "trax" ? "flex" : "hidden")}>
+                  <TraxAgreementPane
+                    // No heading over Trax: the template's name heads the Pages sidebar.
+                    header={null}
+                    editor={editor}
+                    templateName={trimmedName || initialName || ""}
+                    scrollHost={() => editScrollRef.current}
+                    onWritingChange={onTraxWriting}
+                  />
+                </div>
+
+                <section
+                  aria-label="The agreement"
+                  className={cn("relative min-h-0 flex-col overflow-hidden lg:flex", studioPhone === "doc" ? "flex" : "hidden")}
+                >
+                  {studioNotices}
+
+                  <div className="relative min-h-0 flex-1">
+                    <div className={cn("absolute inset-0 flex flex-col", docView === "edit" ? VIEW_SHOWN : VIEW_HIDDEN)}>
+                      {/* Notion-style: no toolbar. "/" opens blocks, signer fields and
+                          variables; selecting text shows a small formatting bar. */}
+                      <SlashMenuV2 editor={editor} />
+                      <SelectionBarV2 editor={editor} />
+                      <div
+                        ref={editScrollRef}
+                        className={cn("min-h-0 flex-1 overflow-y-auto", traxWriting && "cursor-progress")}
+                        onMouseDown={(e) => {
+                          if (e.target === e.currentTarget && editor && !traxWriting) {
+                            e.preventDefault();
+                            editor.commands.focus("end");
+                          }
+                        }}
+                      >
+                        <EditorContent editor={editor} className="h-full" />
+                      </div>
+                    </div>
+                    <div ref={setPreviewRoot} className={cn("absolute inset-0 flex", docView === "preview" ? VIEW_SHOWN : VIEW_HIDDEN)}>
+                      {/* pb-28: the end of the agreement scrolls clear of the signing dock. */}
+                      <AgreementPreviewV2 html={previewHtml} banner={previewBanner} className="min-h-0 flex-1 bg-transparent pb-28 sm:pb-28" />
+                    </div>
+                    <SigningDockV2
+                      leading={
+                        <>
+                          {studioCancel}
+                          {studioViewToggle}
+                        </>
+                      }
+                      trailing={studioSave}
+                      tip={
+                        docView === "edit" ? (
+                          <>
+                            Type <kbd className="rounded border border-border bg-muted px-1 font-mono text-xs text-foreground">/</kbd> to add blocks, fields and variables
+                          </>
+                        ) : (
+                          <>
+                            In edit, type <kbd className="rounded border border-border bg-muted px-1 font-mono text-xs text-foreground">/</kbd> to add blocks, fields and variables
+                          </>
+                        )
+                      }
+                      content={content}
+                      hidden={traxWriting}
+                      onInsertText={insertText}
+                      onFieldDragStart={() => setDocView("edit")}
+                      onInsertSignature={insertSignature}
+                      className="absolute bottom-5 left-1/2 z-20 -translate-x-1/2"
+                    />
+                    <EditorSidePanelV2
+                      id={panelId}
+                      // The studio has no Fields & variables button (Oct 1 2026): signer fields
+                      // and your signatures live in the dock, variables come through Trax.
+                      open={false}
+                      onClose={() => setPanelOpen(false)}
+                      content={content}
+                      onInsertText={insertText}
+                      onInsertSignature={insertSignature}
+                      tab={panelTab}
+                      onTabChange={setPanelTab}
+                    />
+                  </div>
+                </section>
+
+                <div className={cn("min-h-0 flex-col border-border lg:flex lg:border-l", studioPhone === "pages" ? "flex" : "hidden")}>
+                  <AgreementOutlinePane previewRoot={previewRoot} content={debounced} onJumpToPage={jumpToPage} heading={studioName} />
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
           {/* Phones: one half at a time. */}
           <div className="flex border-b border-border px-4 py-2 md:hidden" role="group" aria-label="Show">
             <div className="inline-flex rounded-full bg-muted p-1">
@@ -492,6 +871,8 @@ function EditorWorkspace({
               />
             </section>
           </div>
+            </>
+          )}
         </TooltipProvider>
 
         <UnsavedChangesDialog

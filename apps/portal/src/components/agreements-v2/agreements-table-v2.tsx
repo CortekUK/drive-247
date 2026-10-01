@@ -55,9 +55,26 @@ const Blank = () => <span className="text-muted-foreground">—</span>;
 /** The three statuses as the list prints them (D16), and their hue. */
 export const AGREEMENT_STATUS_LABEL_V2: Record<AgreementStatusV2, string> = {
   signed: "Signed",
-  pending: "Pending signature",
+  pending: "Pending",
   failed: "Failed",
 };
+
+/** What an agreement is linked to: its rental, or (sent from the tab) the customer. */
+export const AGREEMENT_LINK_LABEL_V2: Record<AgreementRowV2["kind"], string> = {
+  rental: "Rental",
+  individual: "Customer",
+};
+
+/**
+ * The reference the Reference column shows: the rental's number for a rental
+ * agreement, the customer's ID for one linked to a customer. Customers carry
+ * no number of their own, so the ID is the short form of their record id,
+ * written like a rental reference (`C-1a2b3c`).
+ */
+export function agreementReferenceV2(row: Pick<AgreementRowV2, "kind" | "rentalRef" | "customerId">): string | null {
+  if (row.kind === "rental") return row.rentalRef;
+  return row.customerId ? `C-${row.customerId.replace(/-/g, "").slice(0, 6)}` : null;
+}
 
 export const AGREEMENT_STATUS_TONE_LIST_V2: Record<AgreementStatusV2, ListTone> = {
   signed: "success",
@@ -186,30 +203,39 @@ export function AgreementsListTableV2({
           Customer takes the most room and truncates with a title; the email
           truncates too. Sent holds "Sep 21, 2025, 12:45 PM" whole and Status
           "Pending signature" whole. */}
-      <ListTable rows={agreementRows} minWidth="min-w-[760px]">
+      <ListTable rows={agreementRows} minWidth="min-w-[920px]">
         <ListTableHeader>
-          <ListHead className="w-[30%]">Customer</ListHead>
-          <ListHead className="w-[30%]">Email</ListHead>
+          <ListHead className="w-[20%]">Customer</ListHead>
+          <ListHead className="w-[25%]">Email</ListHead>
+          <ListHead className="w-[12%]">Linked to</ListHead>
+          <ListHead className="w-[12%]">Reference</ListHead>
           <ListHead className="w-[19%]">Sent</ListHead>
-          <ListHead className="w-[13%]">Status</ListHead>
-          {/* 10%, not 6%: the actions are two icon buttons in the row now, not
-              one ⋯ trigger, and two 32px buttons do not fit 6% of the 760px
-              floor (~46px). Taken from Status, which holds its longest value
-              ("Pending signature") in 13%. */}
-          <ListHead className="w-[10%] text-right">
-            <span className="sr-only">Actions</span>
-          </ListHead>
+          <ListHead className="w-[12%]">Status</ListHead>
         </ListTableHeader>
         <ListBody>
           {agreementRows.visible.map((row) => {
-            const actions = agreementRowActionsV2(row, canResend);
-            const isViewing = viewingId === row.id;
-            const isDownloading = downloadingId === row.id;
-            const isResending = resendingId === row.id;
             const who = row.customerName || row.customerEmail || "this agreement";
+            const reference = agreementReferenceV2(row);
 
             return (
-              <ListRow key={row.id} data-agreement-kind={row.kind} data-agreement-status={row.status}>
+              // The whole row opens the agreement (View: the document, Download PDF,
+              // Resend and the activity), by click or by Enter / Space.
+              <ListRow
+                key={row.id}
+                data-agreement-kind={row.kind}
+                data-agreement-status={row.status}
+                onOpen={() => onView(row)}
+                tabIndex={0}
+                aria-label={`Open the agreement for ${who}`}
+                aria-busy={viewingId === row.id || undefined}
+                onKeyDown={(e) => {
+                  if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
+                    e.preventDefault();
+                    onView(row);
+                  }
+                }}
+                className="focus-visible:bg-muted/60 focus-visible:outline-none"
+              >
                 <ListCell>
                   <span
                     className={`block truncate ${LIST_CLASSES.identifier}`}
@@ -217,15 +243,23 @@ export function AgreementsListTableV2({
                   >
                     {row.customerName || <Blank />}
                   </span>
-                  {/* A rental row names its rental; an individual one says so. */}
-                  <span className="block truncate text-xs text-muted-foreground">
-                    {row.kind === "rental" ? row.rentalRef || "Rental" : "Individual"}
-                  </span>
                 </ListCell>
                 <ListCell>
                   {row.customerEmail ? (
                     <span className={`block truncate ${LIST_CLASSES.text}`} title={row.customerEmail}>
                       {row.customerEmail}
+                    </span>
+                  ) : (
+                    <Blank />
+                  )}
+                </ListCell>
+                <ListCell>
+                  <span className={LIST_CLASSES.text}>{AGREEMENT_LINK_LABEL_V2[row.kind]}</span>
+                </ListCell>
+                <ListCell className="tabular-nums">
+                  {reference ? (
+                    <span className={`block truncate ${LIST_CLASSES.text}`} title={row.kind === "individual" ? row.customerId ?? undefined : undefined}>
+                      {reference}
                     </span>
                   ) : (
                     <Blank />
@@ -239,39 +273,6 @@ export function AgreementsListTableV2({
                   <ListStatusText tone={AGREEMENT_STATUS_TONE_LIST_V2[row.status]}>
                     {AGREEMENT_STATUS_LABEL_V2[row.status]}
                   </ListStatusText>
-                </ListCell>
-                {/* The actions are IN the row, not behind a ⋯ menu.
-                    A row never has more than two: View is always there, and
-                    Download and Resend are mutually exclusive by status
-                    (`agreementRowActionsV2` — Download once signed, Resend only
-                    while it is not). So the whole menu was one click standing
-                    between the operator and a choice of at most two, in a
-                    column with room for both. */}
-                <ListCell className="px-1 text-right" onClick={(e) => e.stopPropagation()}>
-                  <div className="flex items-center justify-end gap-0.5">
-                    <RowIconAction
-                      label={`View the agreement for ${who}`}
-                      icon={Eye}
-                      busy={isViewing}
-                      onClick={() => onView(row)}
-                    />
-                    {actions.download && (
-                      <RowIconAction
-                        label={`Download the signed PDF for ${who}`}
-                        icon={Download}
-                        busy={isDownloading}
-                        onClick={() => onDownload(row)}
-                      />
-                    )}
-                    {actions.resend && (
-                      <RowIconAction
-                        label={`Resend the agreement to ${who}`}
-                        icon={RotateCw}
-                        busy={isResending}
-                        onClick={() => onResend(row)}
-                      />
-                    )}
-                  </div>
                 </ListCell>
               </ListRow>
             );

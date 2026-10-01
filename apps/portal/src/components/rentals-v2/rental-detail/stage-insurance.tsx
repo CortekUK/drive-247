@@ -598,7 +598,7 @@ export function StageInsurance({ detail, onStage, refetch }: StageProps) {
                     {v.ai_findings?.reasoning && (
                       <div className={cn(insetCls, "mt-3 px-4 py-3")}>
                         <div className="mb-1.5 flex items-center gap-1.5">
-                          <Sparkles className="size-3 text-primary" />
+                          <Sparkles className="size-3 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" />
                           <span className="text-[11px] font-medium">What the checker saw</span>
                         </div>
                         <p className="text-xs leading-relaxed text-muted-foreground">
@@ -651,7 +651,7 @@ export function StageInsurance({ detail, onStage, refetch }: StageProps) {
         <button
           type="button"
           onClick={() => onStage("when")}
-          className="cursor-pointer font-medium text-primary underline-offset-2 hover:underline"
+          className="cursor-pointer font-medium text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] underline-offset-2 hover:underline"
         >
           Change the dates
         </button>{" "}

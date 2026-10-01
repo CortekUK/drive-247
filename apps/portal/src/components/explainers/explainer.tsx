@@ -137,7 +137,9 @@ export type ExplainerChipVariant =
   /** Filled pill. For empty states, where the video is a real second action. */
   | "chip"
   /** Text-only, sits inline on a dense row. For setup-guide checklist items. */
-  | "link";
+  | "link"
+  /** A rounded square tile, the same size as the empty state's action tiles. */
+  | "tile";
 
 export interface ExplainerChipProps {
   id: ExplainerId;
@@ -190,13 +192,17 @@ export function ExplainerChip({
           "inline-flex shrink-0 items-center gap-1.5 transition-colors",
           variant === "chip"
             ? "rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary hover:bg-primary/20"
-            : "rounded-md px-1.5 py-0.5 text-[11px] font-medium text-primary hover:bg-primary/10",
+            : variant === "tile"
+              ? // A rounded square action tile (empty states): icon top-left, label bottom-left.
+                "h-[100px] w-[120px] items-center justify-center rounded-2xl bg-primary/10 text-primary hover:bg-primary/15 [&>svg]:size-14"
+              : "rounded-md px-1.5 py-0.5 text-[11px] font-medium text-primary hover:bg-primary/10",
           className
         )}
       >
         <Play className="h-3 w-3 fill-current" />
-        {label}
-        {duration && <span className="tabular-nums opacity-70">({duration})</span>}
+        {/* The tile is icon only — a big play button; its name stays in aria-label. */}
+        {variant !== "tile" && label}
+        {variant !== "tile" && duration && <span className="tabular-nums opacity-70">({duration})</span>}
       </button>
 
       <ExplainerDialog

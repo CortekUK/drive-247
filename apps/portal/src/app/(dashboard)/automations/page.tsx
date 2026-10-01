@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { Plus, Workflow } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -20,12 +20,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { useAutomations, useCreateAutomation } from "@/hooks/use-automations";
+import { useAutomations, useCreateAutomation, type AutomationRow } from "@/hooks/use-automations";
 import { TRIGGER_OPTIONS, eventLabel } from "@/lib/automation-event-registry";
 import { notFound, useRouter } from "next/navigation";
 import { useTenant } from "@/contexts/TenantContext";
 import { useIsAreaHidden } from "@/lib/lean-context";
 import { cn } from "@/lib/utils";
+import { useV2 } from "@/lib/v2-context";
+import { AutoSkeleton } from "@/components/skeleton-v2/auto-skeleton";
+import { skeletonRows } from "@/lib/skeleton-data";
+import { useSkeletonLoading } from "@/hooks/use-skeleton-loading";
 
 const STATUS_HUES = {
   draft: "bg-zinc-100 text-zinc-700",
@@ -33,13 +37,34 @@ const STATUS_HUES = {
   archived: "bg-zinc-50 text-zinc-500",
 };
 
+/** Placeholder automations for the v2 skeleton: only their shapes are seen. */
+const SKELETON_AUTOMATIONS = skeletonRows(6, (f) => ({
+  id: f.id,
+  name: f.text(2, 4),
+  trigger_type: "lead.created",
+  status: f.pick(["draft", "published"] as const),
+  version: 1,
+  published_at: null,
+})) as unknown as AutomationRow[];
+
+/** v1's stand-in for <AutoSkeleton>: renders the region as it always was. */
+function PlainRegion({ children }: { loading: boolean; className?: string; children: ReactNode }) {
+  return <>{children}</>;
+}
+
 export default function AutomationsPage() {
   const { tenantSlug } = useTenant();
   const automationsHidden = useIsAreaHidden("automations");
   if (automationsHidden) notFound();
 
   const router = useRouter();
-  const { data: automations = [], isLoading } = useAutomations();
+  const { data: loadedAutomations = [], isLoading: automationsLoading } = useAutomations();
+  // v2: while loading, placeholder automations render through the real cards
+  // and <AutoSkeleton> draws the bones. v1 keeps its "Loading…" line.
+  const v2Chrome = useV2("chrome");
+  const isLoading = useSkeletonLoading(automationsLoading);
+  const automations = v2Chrome && isLoading ? SKELETON_AUTOMATIONS : loadedAutomations;
+  const SkeletonRegion = v2Chrome ? AutoSkeleton : PlainRegion;
   const create = useCreateAutomation();
   const [addOpen, setAddOpen] = useState(false);
   const [name, setName] = useState("");
@@ -68,7 +93,7 @@ export default function AutomationsPage() {
         </Button>
       </header>
 
-      {isLoading ? (
+      {isLoading && !v2Chrome ? (
         <div className="text-sm text-[#737373]">Loading…</div>
       ) : automations.length === 0 ? (
         <div className="rounded-lg border border-dashed border-[#f1f5f9] bg-white p-12 text-center">
@@ -79,6 +104,7 @@ export default function AutomationsPage() {
           </p>
         </div>
       ) : (
+        <SkeletonRegion loading={isLoading}>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {automations.map((a) => (
             <Link
@@ -101,6 +127,7 @@ export default function AutomationsPage() {
             </Link>
           ))}
         </div>
+        </SkeletonRegion>
       )}
 
       <Dialog open={addOpen} onOpenChange={setAddOpen}>

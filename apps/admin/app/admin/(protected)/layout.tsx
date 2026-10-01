@@ -7,7 +7,8 @@ import { useAuthStore } from '@/store/authStore';
 import Sidebar from '@/components/admin/Sidebar';
 import { SidebarProvider } from '@/components/admin/SidebarContext';
 import { SidebarSectionsProvider } from '@/components/admin/sidebar-sections';
-import { Header } from '@/components/admin/Header';
+import { TopBar } from '@/components/admin/TopBar';
+import { AdminNavProvider } from '@/components/admin/admin-nav';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AdminSupportRail } from '@/components/support/AdminSupportRail';
@@ -17,17 +18,19 @@ function LoadingScreen() {
   return (
     <div className="flex h-screen bg-background bg-app-gradient">
       {/* Sidebar skeleton */}
-      <div className="hidden md:flex flex-col h-screen w-[280px] border-r border-border flex-shrink-0 p-4 gap-4">
-        <div className="flex items-center gap-3 h-12">
+      {/* The same 16rem, borderless rail the real sidebar draws, so nothing
+          shifts when the session lands. */}
+      <div className="hidden md:flex flex-col h-screen w-64 flex-shrink-0 p-1.5 pt-4 gap-4">
+        <div className="flex items-center gap-2.5 p-1.5">
           <Skeleton className="h-8 w-8 rounded-lg" />
           <div className="space-y-1.5">
-            <Skeleton className="h-4 w-20" />
-            <Skeleton className="h-3 w-16" />
+            <Skeleton className="h-3.5 w-20" />
+            <Skeleton className="h-3 w-14" />
           </div>
         </div>
-        <div className="space-y-2 mt-4">
+        <div className="space-y-1 px-1.5">
           {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-9 w-full rounded-md" />
+            <Skeleton key={i} className="h-8 w-full rounded-lg" />
           ))}
         </div>
       </div>
@@ -110,38 +113,35 @@ export default function ProtectedLayout({
      */
     <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <SidebarProvider>
-        {/* A page's own sections render in the sidebar rather than as tabs
-            across the top; this is what carries them there. */}
-        <SidebarSectionsProvider>
-        <SupportRailProvider>
-        {/* The brand wash, on every page behind the sign-in — not just the
-            login screen, which is where it used to stop. This is the layer
-            that makes a page read as part of the product rather than as a
-            white box with the product's cards on it. */}
-        <div className="flex h-screen overflow-hidden bg-background bg-app-gradient">
-          {/* On Support a phone keeps the navigation sheet behind the header's menu. */}
-          {isSupport ? <><AdminSupportRail /><Sidebar desktop={false} /></> : <Sidebar />}
-          <div className="flex-1 flex min-w-0 flex-col overflow-hidden">
-            <Header />
-            {/* `data-scrollport` is what the house scrollbar rule in
-                globals.css hooks onto. This element is the ONLY thing that
-                scrolls on a page behind the sign-in — the frame around it is
-                `h-screen overflow-hidden` and the sidebar has its own
-                ScrollArea — so its bar is the one an operator sees. */}
-            <main
-              data-scrollport
-              className={isSupport ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'flex-1 overflow-y-auto'}
-            >
-              <div className={isSupport ? 'flex min-h-0 flex-1 flex-col p-3 sm:p-4' : 'p-4 sm:p-6'}>
-                {children}
-              </div>
-            </main>
-          </div>
+      <AdminNavProvider>
+      {/* A page's own sections render in the sidebar rather than as tabs
+          across the top; this is what carries them there. */}
+      <SidebarSectionsProvider>
+      <SupportRailProvider>
+      {/* Northwind's frame: the brand wash on the provider, bounded to one
+          viewport, so the rail and the page are one surface and `<main>` is
+          the only thing that scrolls. */}
+      <SidebarProvider className="h-svh overflow-hidden bg-background bg-app-gradient">
+        {/* On Support a phone keeps the navigation sheet behind the top bar's menu. */}
+        {isSupport ? <><AdminSupportRail /><Sidebar desktop={false} /></> : <Sidebar />}
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          <TopBar />
+          {/* `data-scrollport` is what the house scrollbar rule in globals.css
+              hooks onto. The top bar already gives the page its breathing room
+              on a desktop, so the page starts close under it, as in Northwind. */}
+          <main
+            data-scrollport
+            className={isSupport ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'min-h-0 flex-1 overflow-y-auto overflow-x-hidden'}
+          >
+            <div className={isSupport ? 'flex min-h-0 flex-1 flex-col p-3 pt-0 sm:p-4 sm:pt-0' : 'p-4 pt-1 sm:p-6 sm:pt-2'}>
+              {children}
+            </div>
+          </main>
         </div>
-        </SupportRailProvider>
-        </SidebarSectionsProvider>
       </SidebarProvider>
+      </SupportRailProvider>
+      </SidebarSectionsProvider>
+      </AdminNavProvider>
     </TooltipProvider>
     </QueryClientProvider>
   );

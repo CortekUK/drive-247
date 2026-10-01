@@ -1,0 +1,177 @@
+/* ===========================================================================
+ * Auto skeleton (components/skeleton-v2/auto-skeleton.tsx)
+ *
+ * While a region loads, the REAL page renders underneath with placeholder
+ * rows, and these rules turn it into its own skeleton: every piece of text,
+ * every picture and every control goes invisible but keeps its space, and the
+ * component draws a bone over each one it measured. Change the page and the
+ * skeleton changes with it, because the skeleton IS the page.
+ *
+ * Kept (drawn as real text): table column headers and anything marked
+ * `data-skeleton-keep` — static labels that are the same once loaded.
+ * Everything here is scoped to [data-auto-skeleton], so no page is touched
+ * unless it opts in.
+ * =========================================================================== */
+
+[data-auto-skeleton] *:not(:is(thead, [role="columnheader"], [data-skeleton-keep]), :is(thead, [role="columnheader"], [data-skeleton-keep]) *) {
+  color: transparent !important;
+  -webkit-text-fill-color: transparent;
+  text-decoration-color: transparent !important;
+  text-shadow: none !important;
+}
+
+/* Kept text would otherwise inherit the transparent colour from its parents.
+   Zero specificity, so any colour the element sets itself still wins. */
+:where([data-auto-skeleton]) :where(thead, [role="columnheader"]) {
+  color: hsl(var(--muted-foreground));
+  -webkit-text-fill-color: currentColor;
+}
+:where([data-auto-skeleton]) :where([data-skeleton-keep]) {
+  color: hsl(var(--foreground));
+  -webkit-text-fill-color: currentColor;
+}
+
+[data-auto-skeleton] :is(img, svg, video, canvas, picture):not(:is(thead, [role="columnheader"], [data-skeleton-keep]) *) {
+  visibility: hidden;
+}
+
+/* Initials avatars are drawn as one circle each (auto-skeleton.tsx), so their
+   own fill steps aside; a bone covers the same round box. */
+[data-auto-skeleton] :is(.rounded-full):not(:empty):not(:is(thead, [role="columnheader"], [data-skeleton-keep]) *) {
+  background-color: transparent !important;
+}
+
+/* Controls are drawn as one bone each, so their own fill and border step aside. */
+[data-auto-skeleton] :is(button, input, textarea, select, [role="button"], [role="combobox"], [role="switch"], [role="checkbox"], [data-skeleton-block]):not(:is(thead, [role="columnheader"], [data-skeleton-keep]) *) {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+[data-auto-skeleton] ::placeholder {
+  color: transparent !important;
+}
+
+/* Old hand-drawn placeholders and bare dots step aside; the bones replace them. */
+[data-auto-skeleton] :is(.animate-pulse, :empty:not(img, input, textarea, select, iframe, video, canvas, br, hr)):not(:is(thead, [role="columnheader"], [data-skeleton-keep]) *) {
+  visibility: hidden;
+}
+
+/* The bone colour is the page's own ink at a whisper, so it sits softly on
+   white cards, tinted rows and the lavender page wash alike, in both themes.
+   One slow sheen in the brand colour passes over every bone at once: the
+   background is fixed to the window, so the light moves across the page
+   rather than each bone blinking on its own. */
+.auto-skeleton-bone {
+  position: absolute;
+  background-color: hsl(var(--foreground) / 0.065);
+  background-image: linear-gradient(
+    100deg,
+    transparent 35%,
+    hsl(var(--primary) / 0.07) 50%,
+    transparent 65%
+  );
+  background-size: 200vw 100%;
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+  animation: auto-skeleton-shimmer 2.4s ease-in-out infinite;
+}
+
+/* The first-load layout: a card shows as an empty container, with the same
+   slow sheen passing over it so it reads as loading, not as blank. */
+.auto-skeleton-sheen {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-image: linear-gradient(
+    100deg,
+    transparent 35%,
+    hsl(var(--primary) / 0.05) 50%,
+    transparent 65%
+  );
+  background-size: 200vw 100%;
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+  animation: auto-skeleton-shimmer 2.4s ease-in-out infinite;
+}
+
+/* A layout block stands for a whole group, so it is quieter than a line. */
+.auto-skeleton-bone-soft {
+  background-color: hsl(var(--foreground) / 0.045);
+}
+
+@keyframes auto-skeleton-shimmer {
+  from { background-position: -100vw 0; }
+  to { background-position: 100vw 0; }
+}
+
+/* A chart area: a soft line and its baseline, breathing gently. */
+.auto-skeleton-chart {
+  position: absolute;
+  overflow: hidden;
+  animation: auto-skeleton-breathe 2.4s ease-in-out infinite;
+}
+.auto-skeleton-chart svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.auto-skeleton-chart-line {
+  fill: none;
+  stroke: hsl(var(--foreground) / 0.12);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+.auto-skeleton-chart-area {
+  fill: hsl(var(--primary) / 0.04);
+}
+.auto-skeleton-chart-base {
+  fill: none;
+  stroke: hsl(var(--foreground) / 0.08);
+  stroke-width: 1;
+}
+
+@keyframes auto-skeleton-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auto-skeleton-sheen {
+    animation: none;
+    background-image: none;
+  }
+  .auto-skeleton-bone {
+    animation: none;
+    background-image: none;
+  }
+  .auto-skeleton-chart {
+    animation: none;
+  }
+}
+
+/* Loaded: the bones fade out (TRAX motion, 200ms ease-in) ... */
+.auto-skeleton-bones[data-leaving] {
+  opacity: 0;
+  transition: opacity 200ms ease-in;
+}
+
+/* ... and the sections arrive one after another: 200ms ease-out, opacity plus
+   a 12px lift, 60ms apart. */
+[data-auto-skeleton-revealed] > * {
+  animation: auto-skeleton-arrive 200ms ease-out both;
+}
+[data-auto-skeleton-revealed] > :nth-child(2) { animation-delay: 60ms; }
+[data-auto-skeleton-revealed] > :nth-child(3) { animation-delay: 120ms; }
+[data-auto-skeleton-revealed] > :nth-child(4) { animation-delay: 180ms; }
+[data-auto-skeleton-revealed] > :nth-child(n + 5) { animation-delay: 240ms; }
+
+@keyframes auto-skeleton-arrive {
+  from { opacity: 0; transform: translateY(12px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-auto-skeleton-revealed] > * {
+    animation: none;
+  }
+}

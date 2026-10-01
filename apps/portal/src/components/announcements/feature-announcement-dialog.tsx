@@ -370,7 +370,10 @@ export function FeatureAnnouncementDialog({
                   back TO, so a disabled Back is furniture that only tells the
                   operator something is unavailable. The pager keyboard handlers
                   are unaffected — `go()` already clamps. */}
-              {total > 1 && (
+              {/* Not on the last slide either (Sep 27 2026): that footer is the
+                  exit — Got it and the feature's own button — and a third
+                  button crowded it. ← still steps back from the keyboard. */}
+              {total > 1 && !isLast && (
                 <button
                   type="button"
                   className={cn(FEATURE_DIALOG_UI.secondaryButton, FOCUS_RING)}

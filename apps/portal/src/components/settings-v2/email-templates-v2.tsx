@@ -14,10 +14,11 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Eye, FileText, Loader2, Pencil, RotateCcw, Search, X } from "lucide-react";
+import { Eye, FileText, Loader2, Pencil, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import { Input } from "@/components/ui-v2/input";
 import { TooltipProvider } from "@/components/ui-v2/tooltip";
+import { usePageSearch } from "@/components/shared/layout/page-search-slot";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -51,19 +52,23 @@ import {
   SettingsNoMatch,
   SettingsReadOnlyNotice,
   SettingsSaveState,
-  SettingsSectionSkeleton,
   TruncatedText,
   describeSaveError,
   useSettingsSaveStatus,
 } from "./section-states";
 import { filterEmailTemplateTypes, isBlankHtml } from "./message-rules";
 import { EditorChip, TemplateEditorShellV2 } from "./template-editor-shell-v2";
+import { AutoSkeleton } from "@/components/skeleton-v2/auto-skeleton";
+import { useSkeletonLoading } from "@/hooks/use-skeleton-loading";
 
 const LIST_HREF = "/settings/email-templates";
 
 /* -------------------------------------------------------------------------- */
 /* List                                                                        */
 /* -------------------------------------------------------------------------- */
+
+/** The skeleton's stand-in for the saved templates: none customized. */
+const NO_CUSTOM_TEMPLATES: NonNullable<ReturnType<typeof useEmailTemplatesStrict>["data"]> = [];
 
 export function EmailTemplatesListV2() {
   const { resetTemplateAsync } = useEmailTemplates();
@@ -75,10 +80,21 @@ export function EmailTemplatesListV2() {
   const [resetOpen, setResetOpen] = useState(false);
   const [resetting, setResetting] = useState(false);
 
-  const custom = strict.data;
+  // While the saved templates load, the list renders every email as a default
+  // one (the list itself is static) and <AutoSkeleton> draws the bones over it.
+  const isLoading = useSkeletonLoading(!strict.data && !strict.isError);
+  const custom = isLoading ? NO_CUSTOM_TEMPLATES : strict.data;
   const customByKey = useMemo(() => new Map((custom ?? []).map((t) => [t.template_key, t])), [custom]);
   const customizedTypes = EMAIL_TEMPLATE_TYPES.filter((t) => customByKey.has(t.key));
   const filtered = useMemo(() => filterEmailTemplateTypes(EMAIL_TEMPLATE_TYPES, query), [query]);
+  // The search lives in the top bar (page-search-slot.tsx), as on every v2 list.
+  usePageSearch({
+    placeholder: "Search emails",
+    value: query,
+    onChange: setQuery,
+    scopeLabel: "Emails",
+    resultCount: filtered.length,
+  });
 
   const handleResetAll = async () => {
     setResetting(true);
@@ -130,10 +146,7 @@ export function EmailTemplatesListV2() {
   );
 
   let body: React.ReactNode;
-  if (!custom && !strict.isError) {
-    // Shaped like the list it becomes: icon rows, not a table.
-    body = <SettingsSectionSkeleton variant="rows" thumbnail rows={6} label="Loading email templates" />;
-  } else if (!custom) {
+  if (!custom) {
     body = (
       <SettingsLoadError
         thing="your email templates"
@@ -144,7 +157,7 @@ export function EmailTemplatesListV2() {
     );
   } else {
     body = (
-      <div className="space-y-4">
+      <AutoSkeleton loading={isLoading} className="space-y-4">
         {strict.isError && (
           <SettingsLoadError
             variant="inline"
@@ -161,33 +174,6 @@ export function EmailTemplatesListV2() {
           Variables like <code className="rounded bg-muted px-1 py-0.5 text-xs">{"{{customer_name}}"}</code> fill in each
           customer&apos;s details.
         </p>
-        <div className="relative max-w-md">
-          <Search
-            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-            aria-hidden="true"
-          />
-          <Input
-            type="search"
-            aria-label="Search email templates"
-            placeholder="Search emails"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            className="pl-9 pr-9"
-          />
-          {query && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              aria-label="Clear search"
-              className="absolute right-2 top-1/2 -translate-y-1/2"
-              onClick={() => setQuery("")}
-            >
-              <X />
-            </Button>
-          )}
-        </div>
-
         {filtered.length === 0 ? (
           <SettingsNoMatch query={query} noun="emails" onClear={() => setQuery("")} />
         ) : (
@@ -235,7 +221,7 @@ export function EmailTemplatesListV2() {
             })}
           </ul>
         )}
-      </div>
+      </AutoSkeleton>
     );
   }
 

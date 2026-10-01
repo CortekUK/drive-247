@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { format } from "date-fns";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -52,6 +52,7 @@ import {
   formatActionName,
   getActionColor,
   AuditLogsFilters,
+  type AuditLog,
 } from "@/hooks/use-audit-logs";
 import { useV2 } from "@/lib/v2-context";
 import { HEADER_ACTIONS_V2, HEADER_PRIMARY_V2 } from "@/components/shared/header-icon-button-v2";
@@ -64,6 +65,27 @@ import {
   countActiveAuditLogFilters,
 } from "@/components/admin-v2/audit-logs-filter-panel";
 import { AuditLogsOverview } from "@/components/admin-v2/audit-logs-overview";
+import { AutoSkeleton } from "@/components/skeleton-v2/auto-skeleton";
+import { skeletonRows } from "@/lib/skeleton-data";
+import { useSkeletonLoading } from "@/hooks/use-skeleton-loading";
+
+/** Placeholder log entries for the v2 skeleton: only their shapes are seen. */
+const SKELETON_LOGS: AuditLog[] = skeletonRows(10, (f) => ({
+  id: f.id,
+  action: f.pick(["rental_created", "customer_updated", "payment_recorded", "vehicle_status_changed"]),
+  actor_id: null,
+  entity_type: f.pick(["rental", "customer", "payment", "vehicle"]),
+  entity_id: null,
+  details: { customer_name: f.text(2, 3), reason: f.text(2, 5) },
+  created_at: f.date(f.int(0, 14)),
+  target_user_id: null,
+  actor: { name: f.text(2, 2), email: "" },
+}));
+
+/** v1's stand-in for <AutoSkeleton>: renders the region as it always was. */
+function PlainRegion({ children }: { loading: boolean; className?: string; children: ReactNode }) {
+  return <>{children}</>;
+}
 
 const AuditLogs = () => {
   const [filters, setFilters] = useState<AuditLogsFilters>({});
@@ -76,7 +98,7 @@ const AuditLogs = () => {
   const pageSize = 25;
   const { toast } = useToast();
 
-  const { data: logs, isLoading } = useAuditLogs(filters);
+  const { data: loadedLogs, isLoading: logsLoading } = useAuditLogs(filters);
   const { data: actions } = useAuditLogActions();
   const { data: adminUsers } = useAdminUsers();
 
@@ -87,6 +109,12 @@ const AuditLogs = () => {
   // Up here, above the loading early return, so the hooks run on every render.
   const v2Chrome = useV2("chrome");
   const { tenant } = useTenant();
+  const isLoading = useSkeletonLoading(logsLoading);
+  // v2: while the log loads, placeholder entries render through the real
+  // overview and table, and <AutoSkeleton> turns them into the skeleton. v1
+  // keeps its own loading block below.
+  const logs = v2Chrome && isLoading ? SKELETON_LOGS : loadedLogs;
+  const SkeletonRegion = v2Chrome ? AutoSkeleton : PlainRegion;
   const logsCapped = v2Chrome && (logs?.length ?? 0) >= AUDIT_LOGS_V2_LIMIT;
   const { data: serverLogCount } = useAuditLogsServerCount(filters, logsCapped);
 
@@ -187,6 +215,7 @@ const AuditLogs = () => {
     v2Chrome
       ? {
           placeholder: "Search log entries…",
+          scopeLabel: "Audit log",
           value: searchTerm,
           onChange: setSearchTerm,
           filters: {
@@ -198,7 +227,7 @@ const AuditLogs = () => {
       : null,
   );
 
-  if (isLoading) {
+  if (isLoading && !v2Chrome) {
     return (
       <div className="container mx-auto p-6 space-y-6">
         <div className="flex items-center justify-between">
@@ -207,17 +236,7 @@ const AuditLogs = () => {
             <Skeleton className="h-4 w-64" />
           </div>
         </div>
-        {/* v2 has no inline filter bar: hold the hero row's shape instead (the
-            graph across the whole row, since this tab has no featured card), so
-            the table does not jump when the rows land. 260px is the loaded
-            graph's height. v1 keeps its one-line bar placeholder. */}
-        {v2Chrome ? (
-          <div className="grid grid-cols-1 gap-6 py-2">
-            <Skeleton className="h-[260px]" />
-          </div>
-        ) : (
         <Skeleton className="h-10 w-full" />
-        )}
         <Card>
           <CardContent className="p-0">
             <div className="space-y-4 p-4">
@@ -248,7 +267,7 @@ const AuditLogs = () => {
           // button, as the 32px pill centred on the subtitle line (team lead
           // Sep 16 2026; the subtitle is text-base from sm, HEADER_ACTIONS_V2's box).
           <div className={`flex items-center gap-2 ${HEADER_ACTIONS_V2}`}>
-            <Button onClick={handleExportCSV} className={`bg-gradient-primary w-full sm:w-auto ${HEADER_PRIMARY_V2}`}>
+            <Button onClick={handleExportCSV} disabled={isLoading} className={`bg-gradient-primary w-full sm:w-auto ${HEADER_PRIMARY_V2}`}>
               <Download className="h-4 w-4 mr-2" />
               Export CSV
             </Button>
@@ -266,6 +285,7 @@ const AuditLogs = () => {
           width because this tab has no featured card (see the overview's own
           header). The five filters that used to sit in a row under the title
           now live on the back face, and the search field is in the top bar. */}
+      <SkeletonRegion loading={isLoading} className="space-y-6">
       {v2Chrome && (
         <OverviewFlip
           flipped={filtersOpen}
@@ -622,6 +642,7 @@ const AuditLogs = () => {
           )}
         </div>
       )}
+      </SkeletonRegion>
     </div>
   );
 };

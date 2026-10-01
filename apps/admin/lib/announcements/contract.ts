@@ -580,7 +580,7 @@ export const TONE_CLASSES: Readonly<Record<AnnouncementTone, ToneClasses>> = {
 
 /** Feature card deck on the v2 dashboard desk band. Structure: see spec §3.4. */
 export const FEATURE_CARD_UI = {
-  root: 'relative isolate h-[352px] w-full min-w-0 overflow-hidden rounded-2xl bg-stone-100 dark:bg-neutral-900',
+  root: 'relative isolate h-[230px] w-full min-w-0 overflow-hidden rounded-2xl border border-black/[0.14] bg-stone-100 dark:border-white/20 dark:bg-neutral-900',
   slide:
     'group absolute inset-0 flex cursor-pointer flex-col justify-end text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500',
   image:
@@ -588,31 +588,31 @@ export const FEATURE_CARD_UI = {
   fallback:
     'absolute inset-0 -z-10 bg-[radial-gradient(circle_at_30%_20%,rgba(99,102,241,0.18),transparent_55%),linear-gradient(180deg,#f7f5f0,#ece8df)] dark:bg-[radial-gradient(circle_at_30%_20%,rgba(129,140,248,0.22),transparent_55%),linear-gradient(180deg,#1c1b19,#121110)]',
   scrim:
-    'pointer-events-none absolute inset-x-0 bottom-0 -z-10 h-[62%] bg-gradient-to-t from-white via-white/85 to-white/0 dark:from-neutral-950 dark:via-neutral-950/80 dark:to-neutral-950/0',
+    'pointer-events-none absolute inset-x-0 bottom-0 -z-10 h-[55%] bg-gradient-to-t from-stone-100 via-stone-100/85 to-stone-100/0 dark:from-neutral-950 dark:via-neutral-950/80 dark:to-neutral-950/0',
   content: 'relative min-w-0 px-5 pb-5 pt-10',
   title: 'line-clamp-2 break-words text-[22px] font-semibold leading-[1.15] tracking-[-0.02em] text-neutral-950 dark:text-white',
   summary: 'mt-1.5 truncate text-[13px] leading-5 text-neutral-700 dark:text-neutral-300',
   more: 'mt-3 inline-flex items-center gap-1 text-[12px] font-semibold text-indigo-600 dark:text-indigo-300',
-  dots: 'absolute right-3 top-3 z-10 flex items-center rounded-full bg-black/35 px-1 backdrop-blur-sm',
+  dots: 'absolute bottom-4 right-4 z-10 flex items-center',
   dotButton:
-    'flex h-6 w-6 cursor-pointer items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-white',
-  dot: 'block h-1.5 w-1.5 rounded-full bg-white/55 transition-colors',
-  dotActive: 'block h-1.5 w-1.5 rounded-full bg-white',
+    'flex h-5 w-3.5 cursor-pointer items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-indigo-500',
+  dot: 'block h-1 w-1 rounded-full bg-neutral-900/20 transition-all dark:bg-white/25',
+  dotActive: 'block h-1 w-2.5 rounded-full bg-neutral-900/55 transition-all dark:bg-white/70',
 } as const;
 
 /** Large feature dialog (2..3 slides). Portal: className of ui-v2 DialogContent. Admin: a static stage. */
 export const FEATURE_DIALOG_UI = {
   overlay: 'bg-black/30 backdrop-blur-md',
   panel:
-    'grid max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-[760px] grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden rounded-[26px] bg-popover p-0 text-popover-foreground sm:w-[92vw] sm:!max-w-[760px]',
-  media: 'relative aspect-[16/9] w-full overflow-hidden bg-stone-100 dark:bg-neutral-900',
+    'grid max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-[560px] grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden rounded-[26px] bg-popover p-0 text-popover-foreground sm:w-[92vw] sm:!max-w-[560px]',
+  media: 'relative aspect-[2/1] w-full overflow-hidden bg-stone-100 dark:bg-neutral-900',
   mediaImage: 'h-full w-full object-cover',
   close:
     'absolute right-3 top-3 z-10 inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-sm transition-colors hover:bg-black/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white',
   body: 'flex min-h-0 flex-col gap-3 overflow-y-auto px-6 pb-2 pt-6 sm:px-8 sm:pt-7',
   eyebrow: 'pr-10 text-[12px] font-semibold uppercase tracking-[0.08em] [overflow-wrap:anywhere] text-indigo-600 dark:text-indigo-300',
-  heading: 'break-words text-[24px] font-semibold leading-tight tracking-[-0.02em] text-foreground',
-  text: 'whitespace-pre-line break-words text-[15px] leading-6 text-muted-foreground',
+  heading: 'break-words text-[20px] font-semibold leading-tight tracking-[-0.02em] text-foreground',
+  text: 'whitespace-pre-line break-words text-[14px] leading-6 text-muted-foreground',
   footer:
     'flex flex-wrap items-center justify-between gap-3 border-t border-black/5 px-6 py-4 dark:border-white/10 sm:px-8',
   dots: 'flex items-center gap-1.5',

@@ -38,25 +38,29 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { addDays, format, isSameDay, startOfWeek } from 'date-fns';
 import {
-  CalendarDays,
   ChevronLeft,
   ChevronRight,
-  Loader2,
-  RotateCcw,
-  Save,
+  Globe,
+  Search,
   SlidersHorizontal,
 } from 'lucide-react';
-import { Button } from '@/components/ui-v2/button';
-import { Switch } from '@/components/ui-v2/switch';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui-v2/select';
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from '@/components/ui-v2/dropdown-menu';
+import { Switch } from '@/components/ui-v2/switch';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui-v2/tooltip';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui-v2/popover';
+import { Calendar } from '@/components/ui-v2/calendar';
+import {
+  HEADER_ACTIONS_V2,
+  HeaderIconButton,
+  headerIconButtonClass,
+} from '@/components/shared/header-icon-button-v2';
 import { useManagerPermissions } from '@/hooks/use-manager-permissions';
-import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { WeekCalendar } from './week-calendar';
 import { WeeklyHoursCard, weeklySummary } from './weekly-hours-card';
@@ -67,8 +71,13 @@ import {
   DialogTitle,
 } from '@/components/ui-v2/dialog';
 import { useAvailabilitySource } from './use-availability-source';
-import { TabTourButton } from '@/components/onboarding/tab-tour-button';
+import { timezoneCountry, timezoneFlag } from './timezone-flags';
+import { AutoSkeleton } from '@/components/skeleton-v2/auto-skeleton';
+import { useSkeletonLoading } from '@/hooks/use-skeleton-loading';
 import { useAvailabilitySave } from './use-availability-save';
+import { useIsLean } from '@/lib/lean-context';
+import { useForcedEmptyState } from '@/hooks/use-forced-empty-state';
+import { BlockedDatesEmptyState } from '@/components/empty-states/blocked-dates-empty-state';
 import {
   blocksForDate,
   isoOf,
@@ -83,6 +92,9 @@ export function AvailabilityV2() {
   const { canEdit } = useManagerPermissions();
   const editable = canEdit('availability');
   const source = useAvailabilitySource();
+  // While the hours and blocks load, the toolbar and week render the fallback
+  // pattern and <AutoSkeleton> draws the skeleton over them.
+  const isLoading = useSkeletonLoading(source.isLoading);
 
   const [weekStart, setWeekStart] = useState(() =>
     startOfWeek(new Date(), { weekStartsOn: 1 }),
@@ -141,32 +153,44 @@ export function AvailabilityV2() {
   };
 
 
-  const exceptionCount = Object.keys(exceptions).length;
   const patternTouched =
     !!draft && JSON.stringify(draft) !== JSON.stringify(source.defaults);
-  const touched = exceptionCount > 0 || patternTouched;
 
   const thisWeek = isSameDay(weekStart, startOfWeek(new Date(), { weekStartsOn: 1 }));
   const TIMEZONE_OPTIONS = useMemo(
     () => buildTimezoneOptions(defaults.timezone),
     [defaults.timezone],
   );
-
-  /**
-   * Reset — discard UNSAVED edits and return to what is in the database.
-   *
-   * It writes nothing. `source.defaults` is the last value read from `tenants`,
-   * and clearing `exceptions` drops the per-date edits that were never saved;
-   * real `blocked_dates` rows are untouched because they were never in this
-   * state to begin with.
-   */
-  const resetDraft = () => {
-    setDraft(source.defaults);
-    setExceptions({});
-  };
+  const [tzOpen, setTzOpen] = useState(false);
+  const [tzSearch, setTzSearch] = useState('');
+  const tzSearchRef = useRef<HTMLInputElement>(null);
+  const filteredZones = useMemo(() => {
+    const q = tzSearch.trim().toLowerCase();
+    if (!q) return TIMEZONE_OPTIONS;
+    return TIMEZONE_OPTIONS.filter((tz) =>
+      `${timezoneLabel(tz)} ${tz.replace(/_/g, ' ')} ${timezoneCountry(tz)}`.toLowerCase().includes(q),
+    );
+  }, [TIMEZONE_OPTIONS, tzSearch]);
 
   const save = useAvailabilitySave();
   const [hoursOpen, setHoursOpen] = useState(false);
+  const [weekPickerOpen, setWeekPickerOpen] = useState(false);
+
+  /**
+   * The teaching empty state — PREVIEW ONLY, via the /dev "force empty" switch
+   * (inert outside development, and inside the lean gate).
+   *
+   * There is deliberately no real trigger. This screen is never empty: every
+   * tenant has weekly hours (the tenants columns default to 9 to 5) and this
+   * calendar is where they are read and edited, while having no blocked dates
+   * is simply the normal state of a business that is open. Replacing the
+   * calendar whenever `blocked_dates` is empty would hide the hours editor from
+   * most tenants. Either action steps into the calendar.
+   */
+  const devForceEmpty = useForcedEmptyState('blocked-dates');
+  const leanTenant = useIsLean();
+  const [teachDismissed, setTeachDismissed] = useState(false);
+  const teachEmpty = leanTenant && devForceEmpty && !teachDismissed;
 
   /**
    * Which of the on-screen exceptions can actually be PERSISTED.
@@ -209,44 +233,99 @@ export function AvailabilityV2() {
     return set;
   }, [source.blocks]);
 
-  const handleSave = () => {
-    if (customHourDates.length > 0) {
-      toast.error('Custom hours for a single date cannot be saved yet', {
-        description:
-          `${customHourDates.length} date(s) use custom hours. The blocked-dates table stores ` +
-          'dates only, with no times, so this needs a schema change. Close the whole day instead, ' +
-          'or remove the override before saving.',
-      });
-      return;
-    }
+  /**
+   * AUTOSAVE — there is no Save button and no Reset (Ghulam, Oct 1 2026).
+   *
+   * Every change the screen CAN persist is written on its own, 800ms after the
+   * operator stops editing: the weekly pattern, 24 hours, the timezone and
+   * whole-day closures. The weekly-hours dialog holds its writes until it
+   * closes, so dragging through a time picker is one save, not ten.
+   *
+   * `pendingKey` is exactly what would be written. `lastSaved` remembers the
+   * last key that went through, so the window between a successful save and the
+   * refetch that brings `source.defaults` level with the draft does not fire
+   * the same write a second time.
+   *
+   * Custom hours for a single date still cannot be stored (blocked_dates has
+   * no times — see `customHourDates`). They stay on screen, are never sent,
+   * and the operator is told once, when such an override first appears,
+   * rather than on every save.
+   */
+  const newClosures = useMemo(
+    () => closureDates.filter((iso) => !alreadyClosed.has(iso)),
+    [closureDates, alreadyClosed],
+  );
+  const pendingKey =
+    editable && (patternTouched || newClosures.length > 0)
+      ? JSON.stringify({ d: patternTouched ? defaults : null, c: newClosures })
+      : null;
+  const lastSaved = useRef<string | null>(null);
 
-    save.mutate(
-      {
-        defaults,
-        addClosures: closureDates.filter((iso) => !alreadyClosed.has(iso)),
-        removeClosureIds: [],
-      },
-      {
-        onSuccess: (result) => {
-          /* The saved values become the new baseline, so Save and Reset both go
-             quiet. `seeded` is released so the refetched row can re-seed the
-             draft rather than the stale one persisting. */
-          seeded.current = false;
-          setExceptions({});
-          toast.success('Availability saved', {
-            description:
-              result.closuresAdded > 0
-                ? `Weekly hours updated and ${result.closuresAdded} date(s) closed.`
-                : 'Weekly hours updated.',
-          });
+  useEffect(() => {
+    if (!pendingKey || pendingKey === lastSaved.current || save.isPending || hoursOpen) return;
+    const timer = setTimeout(() => {
+      lastSaved.current = pendingKey;
+      save.mutate(
+        { defaults, addClosures: newClosures, removeClosureIds: [] },
+        {
+          onSuccess: () => {
+            // Saved closures are now real blocked_dates rows; custom-hours
+            // overrides were never sent, so they stay on screen.
+            setExceptions((prev) =>
+              Object.fromEntries(Object.entries(prev).filter(([, ex]) => ex.kind === 'hours')),
+            );
+          },
+          /* Never silent. The message says which half succeeded — see the hook.
+             Clearing `lastSaved` lets the next edit retry the same write. */
+          onError: (error: Error) => {
+            lastSaved.current = null;
+            toast.error('Could not save availability', { description: error.message });
+          },
         },
-        /* Never silent. The message says which half succeeded — see the hook. */
-        onError: (error: Error) => {
-          toast.error('Could not save availability', { description: error.message });
-        },
-      },
+      );
+    }, 800);
+    return () => clearTimeout(timer);
+    // `defaults` and `newClosures` are captured through `pendingKey`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingKey, save.isPending, hoursOpen]);
+
+  const customHoursWarned = useRef(0);
+  useEffect(() => {
+    if (customHourDates.length > customHoursWarned.current) {
+      toast.warning('Custom hours for a single date are not saved', {
+        description:
+          'The blocked-dates table stores whole dates only. Close the whole day instead to keep it.',
+      });
+    }
+    customHoursWarned.current = customHourDates.length;
+  }, [customHourDates.length]);
+
+
+  if (teachEmpty) {
+    return (
+      <div className="mx-auto flex w-full max-w-[1560px] flex-col gap-3 px-2 pb-2 md:pt-[27px]">
+        <header className="min-w-0">
+          <h1 className="font-heading text-2xl font-semibold leading-tight tracking-tight">
+            Availability
+          </h1>
+          <p className="mt-0.5 text-[13px] text-muted-foreground">
+            Control when customers can book online.
+          </p>
+        </header>
+        <BlockedDatesEmptyState
+          onBlockDate={editable ? () => setTeachDismissed(true) : undefined}
+          onSetHours={
+            editable
+              ? () => {
+                  setTeachDismissed(true);
+                  setHoursOpen(true);
+                }
+              : undefined
+          }
+        />
+      </div>
     );
-  };
+  }
 
   return (
     /* A calendar app, not a settings page that ends in a calendar.
@@ -266,218 +345,222 @@ export function AvailabilityV2() {
        by 34px at md+ (measured). Below md both are unchanged. */
     <div className="mx-auto flex h-[calc(100svh-2rem)] w-full max-w-[1560px] flex-col gap-3 overflow-hidden px-2 pb-2 md:h-[calc(100svh-66px)] md:pt-[27px]">
       {/* ── header ───────────────────────────────────────────────────── */}
-      <header className="flex shrink-0 flex-wrap items-start justify-between gap-4">
+      <header className="mb-3 flex shrink-0 flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="font-heading text-2xl font-semibold leading-tight tracking-tight">
-              Availability
-            </h1>
-            {/* Was a permanent yellow "Preview — changes aren't saved" pill.
-                That was TRUE while this screen could not write anything, and it
-                is false now that Save does. It is replaced by a quiet marker
-                that appears only when there is genuinely something unsaved, and
-                disappears the moment it is saved — which is the same fact,
-                stated when it applies. */}
-            {touched && (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-warning/10 px-2.5 py-1 text-xs font-medium text-muted-foreground ring-1 ring-inset ring-warning/40">
-                <span aria-hidden className="size-1.5 rounded-full bg-warning" />
-                Unsaved changes
-              </span>
-            )}
-          </div>
+          <h1 className="font-heading text-2xl font-semibold leading-tight tracking-tight">
+            Availability
+          </h1>
           <p className="mt-0.5 text-[13px] text-muted-foreground">
             Control when customers can book online.
           </p>
         </div>
 
-        {/* The only thing in the header now. Save, Reset and the week navigator
-            moved into the toolbar below, which is where the settings they act
-            on already live — a header carrying six controls made the title
-            compete with them. The unsaved marker stays beside the title because
-            it is a statement about the page, not a control.
+        {/* Every control lives here, in the header cluster every other v2 page
+            uses (Rentals, Customers, Vehicles): 32px purple icon buttons with
+            their names in tooltips (team lead, Sep 15–16 2026). The separate
+            toolbar card that used to hold them is gone, so the calendar starts
+            directly under the title and gets that row back.
 
-            The tour button stays HERE, matching the other four tab tours, and
-            because it acts on the whole screen rather than on the week.
-
-            It sits on the SUBTITLE line, not the heading (team lead, Sep 16
-            2026): the wrapper is the subtitle's own line box (13px at the
-            inherited 1.5 line-height = 19.5px) pinned to the bottom of the
-            header row, so the 32px button centres on that line. Below `sm` it
-            keeps its natural height. */}
-        <div className="flex sm:h-[19.5px] sm:items-center sm:self-end">
-          <TabTourButton tour="availability" size="h-9" />
-        </div>
-      </header>
-
-      {/* ── the toolbar ──────────────────────────────────────────────────
-          One bar: the settings that shape the week on the left, the actions and
-          the week navigator on the right. They were split between here and the
-          page header, which put "what am I looking at" and "what can I do about
-          it" in two places. `justify-between` on the row, with each side its own
-          flex group, so the two halves stay apart without a fixed gap. */}
-      <div
-        // The tour's fallback for every control step, so they survive the
-        // loading branch that replaces the calendar with a skeleton.
-        data-tour="availability-controls"
-        className="flex shrink-0 flex-wrap items-center justify-between gap-x-6 gap-y-3 rounded-3xl border border-border bg-card px-5 py-2.5"
-      >
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-          {/* The weekly pattern, as a sentence and a button. Seven editable
-              rows lived here permanently and cost roughly 300px above the
-              calendar — the reason the calendar started below the fold. The
-              rows are unchanged; they moved into the dialog. */}
-          <button
-            type="button"
-            // The tour's `availability.pattern` anchor. It pointed at the seven
-            // permanently-rendered cells this button replaced, so it moves here
-            // rather than being dropped: the step is about the weekly pattern,
-            // and this is now where the pattern is read and edited.
-            data-tour="availability-pattern"
-            onClick={() => setHoursOpen(true)}
-            className="flex items-center gap-2 rounded-full bg-muted/50 px-3 py-1.5 text-[13px] transition-colors hover:bg-primary/10 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]"
-          >
-            <SlidersHorizontal className="size-3.5 text-muted-foreground" />
-            <span className="font-medium">Weekly hours</span>
-            <span className="text-muted-foreground">{weeklySummary(defaults)}</span>
-          </button>
-
-          <span className="h-5 w-px bg-border" aria-hidden />
-
-        <label
-          htmlFor="availability-always-open"
-          data-tour="availability-always-open"
-          className="flex cursor-pointer items-center gap-2.5"
+            Order: the settings that shape the week (weekly hours — Open 24
+            hours is inside its dialog — and timezone) · the week navigator. No tour button, no Save, no Reset
+            and no save-status marker (Ghulam, Oct 1 2026): every edit saves
+            itself (see AUTOSAVE above) and only a failure speaks up, as a toast. */}
+        <div
+          // The tour's fallback for every control step.
+          data-tour="availability-controls"
+          className={`flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto sm:flex-1 sm:justify-end ${HEADER_ACTIONS_V2}`}
         >
-          <Switch
-            id="availability-always-open"
-            checked={defaults.alwaysOpen}
-            disabled={!editable}
-            onCheckedChange={(v) => setDraft({ ...defaults, alwaysOpen: v })}
-          />
-          <span className="text-sm font-medium">Open 24 hours</span>
-        </label>
+          {/* The weekly pattern opens in its dialog; the tooltip carries the
+              one-line summary the old pill showed. `availability-pattern` is
+              the tour's anchor for the pattern step. */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                data-tour="availability-pattern"
+                onClick={() => setHoursOpen(true)}
+                className={headerIconButtonClass(undefined, true)}
+              >
+                <SlidersHorizontal />
+                Hours
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={6}>
+              {weeklySummary(defaults)}
+            </TooltipContent>
+          </Tooltip>
 
-        <span className="h-5 w-px bg-border" aria-hidden />
-
-        {/* The timezone every time on this screen is read in. It is a real
-            setting rather than a display preference — an operator in Chicago
-            setting "9 to 5" means 9 to 5 THERE — so it belongs beside the
-            hours it qualifies, not buried in settings. Like every other edit
-            here it is preview-only and not written back. */}
-        <label
-          data-tour="availability-timezone"
-          className="flex items-center gap-2 text-xs text-muted-foreground"
-        >
-          <span className="whitespace-nowrap">Times shown in</span>
-          <Select
-            value={defaults.timezone || ''}
-            disabled={!editable}
-            onValueChange={(tz) => setDraft({ ...defaults, timezone: tz })}
+          {/* The timezone every time on this screen is read in — a real setting
+              (9 to 5 in Chicago means 9 to 5 THERE), saved with the hours. A
+              menu needs to be its own trigger, so this one draws the header
+              button's look itself rather than going through HeaderIconButton. */}
+          <DropdownMenu
+            open={tzOpen}
+            onOpenChange={(open) => {
+              setTzOpen(open);
+              if (!open) setTzSearch('');
+            }}
           >
-            <SelectTrigger className="h-7 w-[190px] text-xs" aria-label="Timezone">
-              <SelectValue placeholder="Choose a timezone" />
-            </SelectTrigger>
-            <SelectContent tone="surface" className="max-h-72">
-              {TIMEZONE_OPTIONS.map((tz) => (
-                <SelectItem key={tz} value={tz} className="text-xs">
-                  {timezoneLabel(tz)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </label>
-
-        </div>
-
-        {/* ── actions and week navigation ────────────────────────────────
-            Save is the only filled control on the page, so it reads as the
-            primary action without needing to be large. Reset is icon-only and
-            secondary; both are inert until something has actually been edited,
-            which is also how an operator can tell whether anything is pending
-            without hunting for the marker by the title. */}
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            data-tour="availability-reset"
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Reset unsaved changes"
-            title="Reset unsaved changes"
-            disabled={!touched || save.isPending || !editable}
-            onClick={resetDraft}
-          >
-            <RotateCcw />
-          </Button>
-          <Button
-            // The tour's `availability.preview` anchor. That step used to point
-            // at a permanent "changes aren't saved" pill and told operators
-            // their edits were a sketch. Save writes for real now, so the step
-            // points at the button that does it — see `lib/tab-tours/
-            // availability.ts`, where the copy was corrected to match.
-            data-tour="availability-preview"
-            size="sm"
-            disabled={!touched || save.isPending || !editable}
-            onClick={handleSave}
-          >
-            {save.isPending ? <Loader2 className="animate-spin" /> : <Save />}
-            {save.isPending ? 'Saving…' : 'Save changes'}
-          </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild disabled={!editable}>
+                  <button
+                    type="button"
+                    data-tour="availability-timezone"
+                    aria-label={`Times shown in ${timezoneLabel(defaults.timezone)}`}
+                    className={headerIconButtonClass(undefined, true)}
+                  >
+                    <Globe />
+                    {timezoneLabel(defaults.timezone)}
+                    {now && (
+                      <span className="tabular-nums opacity-70">{clockIn(defaults.timezone, now)}</span>
+                    )}
+                  </button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>
+                Times shown in {timezoneLabel(defaults.timezone)}
+              </TooltipContent>
+            </Tooltip>
+            <DropdownMenuContent
+              tone="surface"
+              align="end"
+              collisionPadding={16}
+              className="max-h-80 w-72"
+              onOpenAutoFocus={(e) => {
+                e.preventDefault();
+                tzSearchRef.current?.focus();
+              }}
+            >
+              {/* Search sticks to the top while the list scrolls under it. It
+                  matches the city, the full zone id and the country name, so
+                  "india", "kolkata" and "asia/" all find Kolkata. Letter keys
+                  are kept from the menu's own type-to-jump; the arrows still
+                  reach it, so ArrowDown moves from the box into the list. */}
+              <div className="sticky -top-1.5 z-10 -mx-1.5 -mt-1.5 mb-1 border-b border-border bg-popover px-3 pb-2 pt-3">
+                <div className="flex h-8 items-center gap-2 rounded-full bg-muted/60 px-3">
+                  <Search aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
+                  <input
+                    ref={tzSearchRef}
+                    value={tzSearch}
+                    onChange={(e) => setTzSearch(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (!['ArrowDown', 'ArrowUp', 'Escape', 'Tab'].includes(e.key)) e.stopPropagation();
+                    }}
+                    placeholder="Search city or country"
+                    aria-label="Search timezones"
+                    className="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
+                  />
+                </div>
+              </div>
+              {filteredZones.length === 0 ? (
+                <p className="px-3 py-4 text-center text-xs text-muted-foreground">No timezone matches “{tzSearch}”.</p>
+              ) : (
+                <DropdownMenuRadioGroup
+                  value={defaults.timezone || ''}
+                  onValueChange={(tz) => setDraft({ ...defaults, timezone: tz })}
+                >
+                  {filteredZones.map((tz) => (
+                    <DropdownMenuRadioItem key={tz} value={tz} className="text-xs">
+                      <span className="flex w-full items-center gap-2.5">
+                        <span aria-hidden className="w-5 shrink-0 text-center text-[15px] leading-none">
+                          {timezoneFlag(tz)}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate">{timezoneLabel(tz)}</span>
+                        {now && (
+                          <span className="shrink-0 tabular-nums text-muted-foreground">{clockIn(tz, now)}</span>
+                        )}
+                      </span>
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           <span aria-hidden className="mx-1 h-5 w-px bg-border" />
 
-          <Button
-            variant="outline"
-            size="icon-sm"
-            aria-label="Previous week"
-            onClick={() => setWeekStart((w) => addDays(w, -7))}
-          >
+          <HeaderIconButton label="Previous week" onClick={() => setWeekStart((w) => addDays(w, -7))}>
             <ChevronLeft />
-          </Button>
-          <span
-            data-tour="availability-week"
-            className="min-w-[150px] text-center text-[13px] font-medium tabular-nums"
-          >
-            {format(weekStart, 'd MMM')} – {format(addDays(weekStart, 6), 'd MMM yyyy')}
-          </span>
-          <Button
-            variant="outline"
-            size="icon-sm"
-            aria-label="Next week"
-            onClick={() => setWeekStart((w) => addDays(w, 7))}
-          >
+          </HeaderIconButton>
+          {/* The date range IS the date picker: click it for a month calendar,
+              pick any day and the screen jumps to that day's week. "This week"
+              lives inside it rather than as a separate icon (Ghulam, Oct 1). */}
+          <Popover open={weekPickerOpen} onOpenChange={setWeekPickerOpen}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                data-tour="availability-week"
+                aria-label="Choose a week"
+                className="min-w-[132px] rounded-full px-2.5 py-1 text-center text-[13px] font-medium tabular-nums transition-colors duration-200 ease-out hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-expanded:bg-primary/10 motion-reduce:transition-none dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:aria-expanded:bg-[hsl(var(--v2-hover,var(--muted)))]"
+              >
+                {format(weekStart, 'd MMM')} – {format(addDays(weekStart, 6), 'd MMM yyyy')}
+              </button>
+            </PopoverTrigger>
+            {/* Right-aligned to the date range, and kept 16px off the window
+                edge — centred, it ran into the right side of the screen. */}
+            <PopoverContent
+              align="end"
+              sideOffset={8}
+              collisionPadding={16}
+              onOpenAutoFocus={(e) => e.preventDefault()}
+              className="w-auto gap-0 overflow-hidden rounded-xl bg-white p-0 dark:bg-card"
+            >
+              <Calendar
+                mode="range"
+                weekStartsOn={1}
+                defaultMonth={weekStart}
+                selected={{ from: weekStart, to: addDays(weekStart, 6) }}
+                onSelect={() => {}}
+                onDayClick={(day) => {
+                  setWeekStart(startOfWeek(day, { weekStartsOn: 1 }));
+                  setWeekPickerOpen(false);
+                }}
+              />
+              <div className="flex justify-end border-t border-border px-3 py-2">
+                <button
+                  type="button"
+                  disabled={thisWeek}
+                  onClick={() => {
+                    setWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }));
+                    setWeekPickerOpen(false);
+                  }}
+                  className="rounded-full px-2.5 py-1 text-xs font-medium text-primary transition-colors duration-200 ease-out hover:bg-primary/10 disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none"
+                >
+                  This week
+                </button>
+              </div>
+            </PopoverContent>
+          </Popover>
+          <HeaderIconButton label="Next week" onClick={() => setWeekStart((w) => addDays(w, 7))}>
             <ChevronRight />
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={thisWeek}
-            onClick={() => setWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }))}
-          >
-            <CalendarDays />
-            This week
-          </Button>
+          </HeaderIconButton>
         </div>
-      </div>
+      </header>
 
+      {/* The data half — the week — as one skeleton region. The wrapper is the
+          flex-1 row, and `[&>div]` stretches AutoSkeleton's own outer div so
+          the calendar still gets every remaining pixel and scrolls inside
+          itself rather than growing the page. */}
+      <div className="flex min-h-0 flex-1 flex-col [&>div]:flex [&>div]:min-h-0 [&>div]:flex-1 [&>div]:flex-col">
+      <AutoSkeleton loading={isLoading} className="flex min-h-0 flex-1 flex-col gap-3">
       {/* ── the week ─────────────────────────────────────────────────────
           `flex-1 min-h-0` — this takes every pixel the header and toolbar did
           not, and `min-h-0` is what allows it to be SHORTER than its content
           so the grid inside scrolls rather than the page. The weekly pattern
           used to sit above it as a strip; it is a dialog now, because it was
           the reason the calendar began below the fold. */}
-      {source.isLoading && !source.hasRealHours ? (
-        <CalendarSkeleton />
-      ) : (
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-border bg-card">
-
-          <WeekCalendar
-            days={days}
-            defaults={defaults}
-            canEdit={editable}
-            onSet={setException}
-            now={now}
-          />
-        </div>
-      )}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-border bg-card">
+        <WeekCalendar
+          days={days}
+          defaults={defaults}
+          canEdit={editable}
+          onSet={setException}
+          now={now}
+        />
+      </div>
+      </AutoSkeleton>
+      </div>
 
 
       {/* Weekly hours — the same card, in a dialog. Editing a recurring
@@ -488,9 +571,30 @@ export function AvailabilityV2() {
           <DialogHeader>
             <DialogTitle>Weekly hours</DialogTitle>
           </DialogHeader>
+          {/* Open 24 hours lives here, above the days it overrides — it was
+              its own header button (moved in, Ghulam Oct 1 2026). The tour's
+              `availability-always-open` anchor moves with it. */}
+          <label
+            htmlFor="availability-always-open"
+            data-tour="availability-always-open"
+            className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-border px-4 py-3"
+          >
+            <span className="min-w-0">
+              <span className="block text-sm font-medium">Open 24 hours</span>
+              <span className="block text-[12px] text-muted-foreground">
+                Every day is bookable around the clock, and the times below stop applying.
+              </span>
+            </span>
+            <Switch
+              id="availability-always-open"
+              checked={defaults.alwaysOpen}
+              disabled={!editable}
+              onCheckedChange={(v) => setDraft({ ...defaults, alwaysOpen: v })}
+            />
+          </label>
           <WeeklyHoursCard defaults={defaults} onChange={setDraft} canEdit={editable} />
           <p className="text-[12px] text-muted-foreground">
-            Changes apply when you save on the page behind this.
+            Your changes save automatically when you close this.
           </p>
         </DialogContent>
       </Dialog>
@@ -536,20 +640,29 @@ function buildTimezoneOptions(current: string): string[] {
 }
 
 /** "America/New_York" → "New York". The column is an IANA id, not a label. */
+/**
+ * The time it is right now in `tz` ("3:42 PM"), for the timezone button and
+ * each row of its menu. `now` is the screen's own minute tick, so every clock
+ * moves together and the server render never shows one. An unknown zone shows
+ * nothing rather than a wrong time.
+ */
+const clockFormats = new Map<string, Intl.DateTimeFormat>();
+function clockIn(tz: string | null | undefined, now: Date): string {
+  if (!tz) return '';
+  try {
+    let fmt = clockFormats.get(tz);
+    if (!fmt) {
+      fmt = new Intl.DateTimeFormat(undefined, { timeZone: tz, hour: 'numeric', minute: '2-digit' });
+      clockFormats.set(tz, fmt);
+    }
+    return fmt.format(now);
+  } catch {
+    return '';
+  }
+}
+
 function timezoneLabel(tz: string): string {
   if (!tz) return 'local';
   const city = tz.split('/').pop() || tz;
   return city.replace(/_/g, ' ');
-}
-
-function CalendarSkeleton() {
-  return (
-    <div className="overflow-hidden rounded-3xl border border-border bg-card">
-      <div className="grid grid-cols-7 gap-px bg-border">
-        {Array.from({ length: 7 }, (_, i) => (
-          <div key={i} className="h-[584px] animate-pulse bg-card" />
-        ))}
-      </div>
-    </div>
-  );
 }

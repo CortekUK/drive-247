@@ -125,7 +125,7 @@ export function AuditLogsFilterPanel({
             variant="outline"
             className={cn("h-8 w-full justify-start text-xs font-normal", !selected && "text-muted-foreground")}
           >
-            <CalendarIcon className="mr-1.5 size-3.5 shrink-0 text-blue-600" />
+            <CalendarIcon className="mr-1.5 size-3.5 shrink-0 text-blue-600 dark:text-blue-400" />
             {selected ? format(selected, "MMM d, yyyy") : placeholder}
           </Button>
         </PopoverTrigger>
@@ -145,7 +145,7 @@ export function AuditLogsFilterPanel({
     // back faces read as one component.
     <FilterShell onClear={onClear} onClose={onClose} activeCount={countActiveAuditLogFilters(filters)}>
       <FilterSection
-        icon={<Layers className="size-3.5 text-primary" />}
+        icon={<Layers className="size-3.5 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" />}
         tint="bg-primary/10"
         title="Entity"
         className="lg:col-span-2"
@@ -164,7 +164,7 @@ export function AuditLogsFilterPanel({
       </FilterSection>
 
       <FilterSection
-        icon={<Zap className="size-3.5 text-violet-600" />}
+        icon={<Zap className="size-3.5 text-violet-600 dark:text-violet-400" />}
         tint="bg-violet-500/10"
         title="Action"
         className="lg:col-span-2"
@@ -187,7 +187,7 @@ export function AuditLogsFilterPanel({
       </FilterSection>
 
       <FilterSection
-        icon={<User className="size-3.5 text-blue-600" />}
+        icon={<User className="size-3.5 text-blue-600 dark:text-blue-400" />}
         tint="bg-blue-500/10"
         title="Performed by"
         className="lg:col-span-2"
@@ -205,7 +205,7 @@ export function AuditLogsFilterPanel({
       </FilterSection>
 
       <FilterSection
-        icon={<CalendarIcon className="size-3.5 text-blue-600" />}
+        icon={<CalendarIcon className="size-3.5 text-blue-600 dark:text-blue-400" />}
         tint="bg-blue-500/10"
         title="Date range"
         className="lg:col-span-2"

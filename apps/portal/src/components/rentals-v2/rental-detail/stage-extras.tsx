@@ -318,7 +318,7 @@ export function StageExtras({ detail }: StageProps) {
                 const perDay = s.billing_type_at_booking === "per_day";
                 return (
                   <div key={s.id} className="flex items-start gap-4 px-5 py-4">
-                    <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-primary-light text-primary">
+                    <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-primary-light text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
                       <Package className="size-4" />
                     </span>
                     <div className="min-w-0 flex-1">

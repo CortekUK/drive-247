@@ -43,6 +43,7 @@ import {
   useProgressiveRows,
   type ListTone,
 } from "@/components/shared/list-table-v2";
+import { AutoSkeleton } from "@/components/skeleton-v2/auto-skeleton";
 import { formatCurrency } from "@/lib/format-utils";
 import { parseLocalDate } from "@/lib/date-utils";
 import { cn } from "@/lib/utils";
@@ -92,9 +93,6 @@ export function plateStatusV2(status: string | null | undefined): { label: strin
   }
 }
 
-/** Placeholder bar widths per column while the first load is out. */
-const SKELETON_BARS = ["w-20", "w-24", "w-20", "w-16", "w-14", "w-16", "w-24", "w-14", "w-6"];
-
 export function PlatesTableV2<T extends PlateRowV2>({
   plates,
   resetKey,
@@ -118,6 +116,7 @@ export function PlatesTableV2<T extends PlateRowV2>({
   plates: T[];
   /** Changes with the result set only: see `useProgressiveRows`. */
   resetKey: string;
+  /** While true, `plates` are the page's placeholders and render as a skeleton. */
   isLoading: boolean;
   hasActiveFilters: boolean;
   currencyCode: string;
@@ -135,7 +134,9 @@ export function PlatesTableV2<T extends PlateRowV2>({
   onClearFilters: () => void;
   onAddPlate: () => void;
 }) {
-  const plateRows = useProgressiveRows(plates, resetKey);
+  // The placeholders and the real result are different sets, so the fill
+  // starts over when the real one lands.
+  const plateRows = useProgressiveRows(plates, `${isLoading ? "skeleton|" : ""}${resetKey}`);
 
   // Nothing to list: v1's empty-row message and link on their own, with no
   // table header around them, as the other v2 lists show theirs.
@@ -162,7 +163,7 @@ export function PlatesTableV2<T extends PlateRowV2>({
   }
 
   return (
-    <>
+    <AutoSkeleton loading={isLoading}>
       <ListTable rows={plateRows} minWidth="min-w-[880px]">
         <ListTableHeader>
           {/* Widths, measured in Manrope on a 944px card (and still whole at
@@ -184,27 +185,7 @@ export function PlatesTableV2<T extends PlateRowV2>({
           </ListHead>
         </ListTableHeader>
         <ListBody>
-          {isLoading
-            ? Array.from({ length: 8 }, (_, row) => (
-                <ListRow key={row}>
-                  {SKELETON_BARS.map((bar, cell) => (
-                    <ListCell key={cell}>
-                      {/* Left like the cells they stand in for; the last is
-                          the actions column, which stays right. A bar is a
-                          block div, so it needs the margin — text-align cannot
-                          move it. */}
-                      <div
-                        className={cn(
-                          "h-3 animate-pulse rounded-full bg-muted",
-                          cell === SKELETON_BARS.length - 1 && "ml-auto",
-                          bar,
-                        )}
-                      />
-                    </ListCell>
-                  ))}
-                </ListRow>
-              ))
-            : plateRows.visible.map((plate) => {
+          {plateRows.visible.map((plate) => {
                 const status = plateStatusV2(plate.status);
                 const makeModel = [plate.vehicles?.make, plate.vehicles?.model].filter(Boolean).join(" ");
                 // v1's rules: a cost of 0 also shows a blank.
@@ -343,6 +324,6 @@ export function PlatesTableV2<T extends PlateRowV2>({
         </ListBody>
       </ListTable>
       {!isLoading && <ListFooter rows={plateRows} one="plate" many="plates" />}
-    </>
+    </AutoSkeleton>
   );
 }

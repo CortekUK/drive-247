@@ -194,8 +194,8 @@ const STEPS: readonly TourStep[] = [
      */
     id: 'availability.preview',
     label: 'Saving',
-    title: 'Your changes are saved when you say so',
-    body: 'Edit the week freely — nothing reaches your customers until you press Save changes. Until then the page marks itself as having unsaved work, and Reset throws it away.',
+    title: 'Every change saves itself',
+    body: 'There is no Save button. Each change is saved a moment after you make it, and you will only hear from me if one could not be saved.',
     route: '/blocked-dates',
     anchors: ['[data-tour="availability-preview"]', ...LIST_HEADING],
     side: 'bottom',
@@ -204,7 +204,7 @@ const STEPS: readonly TourStep[] = [
     id: 'availability.week',
     label: 'The week',
     title: 'One week at a time',
-    body: 'Everything on the page describes these seven dates. The arrows step a week either way, and This week brings you back to the one you are in.',
+    body: 'Everything on the page describes these seven dates. The arrows step a week either way; click the dates to pick any week from a calendar, or jump back to this one.',
     route: '/blocked-dates',
     anchors: ['[data-tour="availability-week"]', ...LIST_HEADING],
     side: 'bottom',
@@ -222,7 +222,7 @@ const STEPS: readonly TourStep[] = [
     id: 'availability.pattern',
     label: 'Weekly pattern',
     title: 'The pattern under the week',
-    body: 'Your opening hours for each weekday, summarised here. Open it to change them, and every date below that you have not edited by hand follows.',
+    body: 'Your opening hours for each weekday. Hover to see them, click to change them, and every date below that you have not edited by hand follows.',
     route: '/blocked-dates',
     anchors: ['[data-tour="availability-pattern"]', ...LIST_HEADING],
     // `bottom` now: this anchors a button in the toolbar with the calendar
@@ -243,7 +243,7 @@ const STEPS: readonly TourStep[] = [
     id: 'availability.hours24',
     label: 'Open 24 hours',
     title: 'Open around the clock',
-    body: 'One switch for the whole operation. Turn it on and every day is open around the clock, and the opening times in the strip stop applying.',
+    body: 'Inside Weekly hours, one switch covers the whole operation. Turn it on and every day is open around the clock, and the daily opening times stop applying.',
     route: '/blocked-dates',
     anchors: ['[data-tour="availability-always-open"]', CONTROLS, ...LIST_HEADING],
     side: 'bottom',
@@ -275,22 +275,6 @@ const STEPS: readonly TourStep[] = [
         anchors: ['[data-tour="availability-now"]'],
       },
     ],
-  },
-  {
-    /*
-     * Was `availability.counts`, describing an open/closed/exceptions tally in
-     * the control bar. The toolbar rebuild removed that readout, so the step
-     * had nothing left to point at and its body described a thing not on the
-     * screen. What survives is the part that is still true and still useful:
-     * Reset, which is the only undo here.
-     */
-    id: 'availability.reset',
-    label: 'Undo',
-    title: 'Throwing the week away',
-    body: 'Reset drops every unsaved change at once and puts your saved hours back. It is all-or-nothing, and it does nothing once you have saved.',
-    route: '/blocked-dates',
-    anchors: ['[data-tour="availability-reset"]', CONTROLS, ...LIST_HEADING],
-    side: 'bottom',
   },
   {
     /**

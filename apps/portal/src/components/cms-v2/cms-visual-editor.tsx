@@ -356,7 +356,7 @@ export function CmsVisualEditor({
               hello();
               startStallTimer();
             }}
-            className={cn("size-full border-0 bg-white transition-opacity", !ready && "opacity-0")}
+            data-keep-light className={cn("size-full border-0 bg-white transition-opacity", !ready && "opacity-0")}
           />
         </div>
       </div>

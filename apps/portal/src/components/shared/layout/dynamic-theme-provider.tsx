@@ -8,7 +8,15 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { TenantNotFound } from '@/components/shared/layout/tenant-not-found';
 import { useV2 } from '@/lib/v2-context';
 
-export function DynamicThemeProvider({ children }: { children: React.ReactNode }) {
+export function DynamicThemeProvider({
+  children,
+  fallback,
+}: {
+  children: React.ReactNode;
+  /** What shows while the brand loads. v2 passes the page's own skeleton, so a
+   *  hard refresh is one skeleton from first paint to data, with no spinner. */
+  fallback?: React.ReactNode;
+}) {
   // This hook applies dynamic theme colors from org settings. On the v2 theme
   // it writes the brand parameters to <body> instead of v1's tokens to <html>,
   // which the `.v2-theme` class would override.
@@ -52,6 +60,7 @@ export function DynamicThemeProvider({ children }: { children: React.ReactNode }
 
   // Show loading state while tenant/branding is loading
   if (!isReady) {
+    if (fallback !== undefined) return <>{fallback}</>;
     return (
       <div className="min-h-screen bg-background">
         <div className="flex h-16 items-center justify-between px-6 border-b">

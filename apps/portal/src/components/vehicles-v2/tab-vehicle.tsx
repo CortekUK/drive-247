@@ -130,7 +130,7 @@ export function VehicleTab({
                       className="size-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
                     />
                     {isCover && (
-                      <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-card/90 px-2.5 py-1 text-[11px] font-medium text-primary backdrop-blur-sm">
+                      <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-card/90 px-2.5 py-1 text-[11px] font-medium text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] backdrop-blur-sm">
                         <Star className="size-3" strokeWidth={2.5} />
                         Cover
                       </span>

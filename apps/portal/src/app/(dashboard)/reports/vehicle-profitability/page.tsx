@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/sheet";
 import { useFeatureAccess } from "@/hooks/use-feature-access";
 import { useV2 } from "@/lib/v2-context";
+import { usePageSearch } from "@/components/shared/layout/page-search-slot";
 import {
   useVehicleProfitability,
   type ProfitabilityPeriod,
@@ -79,6 +80,19 @@ export default function VehicleProfitabilityPage() {
       return (av - bv) * dir;
     });
   }, [query.data, search, showDisposed, sortKey, sortDir]);
+
+  // v2: the search lives in the top bar (page-search-slot.tsx).
+  usePageSearch(
+    v2Chrome
+      ? {
+          placeholder: "Search reg, make, model…",
+          value: search,
+          onChange: setSearch,
+          scopeLabel: "Vehicles",
+          resultCount: query.isLoading ? undefined : sortedVehicles.length,
+        }
+      : null,
+  );
 
   if (access.isLoading) {
     // v2 (switch row alignment): the same md top as the loaded page, so the
@@ -172,10 +186,12 @@ export default function VehicleProfitabilityPage() {
 
       {/* Filters */}
       <div className="mb-3 flex flex-wrap items-center gap-2">
+        {!v2Chrome && (
         <div className="relative flex-1 max-w-xs">
           <Search className="absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
           <Input placeholder="Search reg, make, model…" value={search} onChange={(e) => setSearch(e.target.value)} className="h-9 pl-7 text-xs" />
         </div>
+        )}
         <label className="flex items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1.5 text-xs">
           <input type="checkbox" checked={showDisposed} onChange={(e) => setShowDisposed(e.target.checked)} className="h-3 w-3" />
           Include disposed

@@ -61,12 +61,37 @@ export function PremiumCrown({ className, title = "Premium integration" }: { cla
   );
 }
 
-/** The Beta flag. */
+/**
+ * The paid-integration flag, on a board card and beside the dialog title.
+ * "Add-on", not "Premium": it is added to the monthly Drive247 bill, not a
+ * better tier. Grey outline on purpose — Beta already owns the indigo accent,
+ * and amber read as a warning beside status chips. Same shape as `BetaPill`.
+ */
+export function AddOnPill({ className, title = "Add-on integration" }: { className?: string; title?: string }) {
+  return (
+    <span
+      title={title}
+      className={cn(
+        "inline-flex shrink-0 items-center rounded-full border border-border bg-transparent px-1.5 py-px text-[10px] font-semibold uppercase leading-4 tracking-wide text-muted-foreground",
+        className,
+      )}
+    >
+      Add-on
+    </span>
+  );
+}
+
+/**
+ * The Beta flag — plain capitals in the accent colour beside the name, NOT a
+ * pill. Pills are the card's state and live only in its top-left slot; Beta
+ * says what the product is, so it reads as part of the name — and at the
+ * name's own size: no font size of its own, it inherits the title's.
+ */
 export function BetaPill({ className }: { className?: string }) {
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center rounded-full border border-primary/30 bg-primary/10 px-1.5 py-px text-[10px] font-semibold uppercase leading-4 tracking-wide text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]",
+        "shrink-0 font-semibold uppercase tracking-wide text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]",
         className,
       )}
     >
@@ -226,7 +251,7 @@ function PremiumSection({
             </p>
             <p className="text-xs text-muted-foreground">
               To stop it, email{" "}
-              <a href="mailto:support@drive-247.com" className="font-medium text-primary hover:underline">
+              <a href="mailto:support@drive-247.com" className="font-medium text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] hover:underline">
                 support@drive-247.com
               </a>
               .
@@ -319,7 +344,7 @@ function PremiumSection({
               <p className="text-xs leading-relaxed text-foreground">
                 {blocked}{" "}
                 {!comingSoon && !unpriced && planState !== "not_monthly" && planState !== "currency" && (
-                  <Link href="/subscription" className="font-medium text-primary hover:underline">
+                  <Link href="/subscription" className="font-medium text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] hover:underline">
                     Go to Billing
                   </Link>
                 )}

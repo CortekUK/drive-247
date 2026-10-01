@@ -522,3 +522,11 @@ html[data-system-banner] [data-bounded-height] {
     top: calc(var(--system-banner-h, 0px) + 0.75rem);
   }
 }
+
+/* Mount-time entrances (the Trax motion) stay still under reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-slide-up,
+  .animate-fade-in {
+    animation: none;
+  }
+}

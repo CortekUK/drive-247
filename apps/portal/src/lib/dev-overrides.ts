@@ -233,6 +233,41 @@ export function setBillingSampleData(on: boolean, storage?: Storage | null): voi
   }
 }
 
+/* ── Hold skeletons ─────────────────────────────────────────────────────────
+   Keeps every <AutoSkeleton> page in its loading state, so the skeletons can
+   be reviewed at rest instead of in the half second a real load lasts. Read
+   through `useSkeletonLoading` (hooks/use-skeleton-loading.ts).
+   ─────────────────────────────────────────────────────────────────────────── */
+
+export const HOLD_SKELETONS_KEY = "d247.dev.holdSkeletons";
+
+export function readHoldSkeletons(storage?: Storage | null): boolean {
+  if (process.env.NODE_ENV === "development") {
+    const store = resolve(storage);
+    if (!store) return false;
+    try {
+      return store.getItem(HOLD_SKELETONS_KEY) === "on";
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
+export function setHoldSkeletons(on: boolean, storage?: Storage | null): void {
+  if (process.env.NODE_ENV === "development") {
+    const store = resolve(storage);
+    if (!store) return;
+    try {
+      if (on) store.setItem(HOLD_SKELETONS_KEY, "on");
+      else store.removeItem(HOLD_SKELETONS_KEY);
+    } catch {
+      return;
+    }
+    if (typeof window !== "undefined") window.dispatchEvent(new Event(DEV_OVERRIDES_EVENT));
+  }
+}
+
 /**
  * The listing pages that carry a teaching empty state, in the order they sit
  * in the sidebar. Each `id` is what the page passes to `useForcedEmptyState`,
@@ -247,6 +282,23 @@ export const EMPTY_STATE_PAGES = [
   { id: "insurances", label: "Insurances", href: "/insurances" },
   { id: "invoices", label: "Invoices", href: "/invoices" },
   { id: "payments", label: "Payments", href: "/payments" },
+  { id: "pending-bookings", label: "Pending bookings", href: "/pending-bookings" },
+  { id: "enquiries", label: "Enquiries", href: "/enquiries" },
+  { id: "leads", label: "Leads", href: "/leads" },
+  { id: "quotes", label: "Quotes", href: "/quotes" },
+  { id: "messages", label: "Messages", href: "/messages" },
+  { id: "reminders", label: "Reminders", href: "/reminders" },
+  { id: "support", label: "Support", href: "/support" },
+  { id: "expenses", label: "Expenses", href: "/expenses" },
+  { id: "fines", label: "Fines", href: "/fines" },
+  { id: "documents", label: "Documents", href: "/documents" },
+  { id: "blocked-dates", label: "Availability", href: "/blocked-dates" },
+  { id: "blocked-customers", label: "Blocked customers", href: "/blocked-customers" },
+  { id: "promotions", label: "Promotions", href: "/promotions" },
+  { id: "users", label: "Users", href: "/users" },
+  { id: "referrals", label: "Referrals", href: "/referrals" },
+  { id: "vehicle-owners", label: "Vehicle owners", href: "/vehicle-owners" },
+  { id: "owner-payouts", label: "Owner payouts", href: "/owner-payouts" },
 ] as const;
 
 export type EmptyStatePageId = (typeof EMPTY_STATE_PAGES)[number]["id"];

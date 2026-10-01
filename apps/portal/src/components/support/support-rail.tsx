@@ -16,12 +16,15 @@ import {
 } from "@/components/ui-v2/sidebar";
 import { Button } from "@/components/ui-v2/button";
 import { cn } from "@/lib/utils";
-import { Skeleton } from "@/components/ui-v2/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui-v2/tooltip";
 import { UserMenuV2 } from "@/components/shared/layout/user-menu-v2";
 import { useTenant } from "@/contexts/TenantContext";
 import { useTraxSupportOptional } from "@/components/trax/support/trax-support-context";
-import { TicketList } from "../../../../../shared/trax-support/inbox-ui";
+import { TicketList, TicketRow } from "../../../../../shared/trax-support/inbox-ui";
+import type { HumanTicket } from "../../../../../shared/trax-support/use-support-inbox";
+import { AutoSkeleton } from "@/components/skeleton-v2/auto-skeleton";
+import { skeletonRows } from "@/lib/skeleton-data";
+import { useSkeletonLoading } from "@/hooks/use-skeleton-loading";
 import { useSupportRail } from "../../../../../shared/trax-support/support-rail";
 import { RetentionDialog } from "./retention-dialog";
 
@@ -41,6 +44,20 @@ import { RetentionDialog } from "./retention-dialog";
  * the rail tells the page whether the list is on screen. A collapsed sidebar or a
  * phone's closed sheet is not, and the page then shows the list itself.
  */
+/** Placeholder tickets for the rail's skeleton: only their shapes are seen. */
+const SKELETON_TICKETS: HumanTicket[] = skeletonRows(5, (f) => ({
+  id: f.id,
+  reference: f.word(8, 10),
+  summary: f.text(3, 8),
+  status: "open" as const,
+  tenant_name: "",
+  requester: "",
+  updated_at: f.date(),
+  created_at: f.date(),
+}));
+
+const noop = () => {};
+
 export function SupportRail() {
   const { state, isMobile, setOpenMobile, toggleSidebar } = useSidebar();
   const collapsed = state === "collapsed" && !isMobile;
@@ -56,6 +73,13 @@ export function SupportRail() {
     closeMobile();
   };
   const canStartNew = !!inbox && !inbox.busy && !inbox.creating;
+  // Before the page lends its inbox, or while the first page of tickets loads,
+  // placeholder tickets render through the real rows under <AutoSkeleton>. Only
+  // the unfiltered first load: a search that comes back empty keeps its box
+  // (and the typing focus) where it is.
+  const ticketsLoading = useSkeletonLoading(
+    !inbox || (inbox.loading && inbox.tickets.length === 0 && !inbox.search && !inbox.filter),
+  );
 
   if (collapsed) {
     return (
@@ -110,14 +134,19 @@ export function SupportRail() {
 
       {/* The list scrolls inside itself, so the content area must not scroll too. */}
       <SidebarContent className="gap-0 overflow-hidden">
-        {inbox ? (
+        {inbox && !ticketsLoading ? (
           <TicketList inbox={inbox} onChosen={closeMobile} />
+        ) : inbox ? (
+          /* The real list, search and filter included, fed placeholder tickets. */
+          <AutoSkeleton loading>
+            <TicketList inbox={{ ...inbox, tickets: SKELETON_TICKETS, next: null }} />
+          </AutoSkeleton>
         ) : (
-          <div className="flex flex-col gap-2 px-3 pt-1" aria-busy="true" aria-label="Loading tickets">
-            {[88, 72, 80].map((w) => (
-              <Skeleton key={w} className="h-14 rounded-lg bg-muted/80" style={{ width: `${w}%` }} />
+          <AutoSkeleton loading className="flex flex-col gap-0.5 px-1.5">
+            {SKELETON_TICKETS.map((ticket) => (
+              <TicketRow key={ticket.id} ticket={ticket} selected={false} onSelect={noop} />
             ))}
-          </div>
+          </AutoSkeleton>
         )}
       </SidebarContent>
 

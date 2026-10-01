@@ -42,12 +42,15 @@
  * refresh. Settings already works this way (`?tab=`).
  */
 
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
-import { useRentalDetailV2 } from "./use-rental-detail-v2";
+import { deriveRentalDetail, useRentalDetailV2, type RentalRow } from "./use-rental-detail-v2";
+import { AutoSkeleton } from "@/components/skeleton-v2/auto-skeleton";
+import { skeletonFaker } from "@/lib/skeleton-data";
+import { useSkeletonLoading } from "@/hooks/use-skeleton-loading";
 import { STAGES, readStage, stageHref, type StageId, type StageProps } from "./stages";
 import { StageCustomer } from "./stage-customer";
 import { StageVehicle } from "./stage-vehicle";
@@ -69,6 +72,61 @@ import { EmptyHint, Panel } from "./_kit";
  * screens land one at a time. Adding a stage is one line in this map plus one
  * file; nothing else in this component changes.
  */
+/**
+ * A valid uuid that matches no row. The stages and the rail read their own data
+ * off the customer and car ids, so the placeholder hands them one that fetches
+ * nothing rather than a string Postgres would reject.
+ */
+const NO_ROW = "00000000-0000-0000-0000-000000000000";
+
+/**
+ * The placeholder rental the skeleton is drawn from: only its shapes are ever
+ * seen. The rental id is the REAL one from the URL, so the payment plan and
+ * ledger the stages read start loading alongside the rental itself.
+ */
+function skeletonRental(id: string): RentalRow {
+  const f = skeletonFaker(0);
+  return {
+    id,
+    rental_number: `R-${f.word(5, 6)}`,
+    status: "active",
+    start_date: f.date(3).slice(0, 10),
+    end_date: f.date(-4).slice(0, 10),
+    pickup_time: null,
+    return_time: null,
+    customer_id: NO_ROW,
+    vehicle_id: NO_ROW,
+    tenant_id: null,
+    total_amount: f.money(),
+    customers: {
+      id: NO_ROW,
+      name: f.text(2, 3),
+      email: `${f.word(6, 10)}@${f.word(5, 8)}.com`,
+      phone: "+1 555 000 0000",
+      created_at: f.date(200),
+      date_of_birth: null,
+      identity_verification_status: null,
+      license_number: f.word(8, 10),
+      license_state: null,
+      is_blocked: false,
+      blocked_reason: null,
+    },
+    vehicles: {
+      id: NO_ROW,
+      reg: f.word(6, 8),
+      make: f.word(4, 8),
+      model: f.word(3, 7),
+      year: 2024,
+      status: null,
+      daily_rent: f.money(40, 200),
+      weekly_rent: null,
+      monthly_rent: null,
+      lockbox_code: null,
+      lockbox_instructions: null,
+    },
+  };
+}
+
 const STAGE_VIEWS: Partial<Record<StageId, React.ComponentType<StageProps>>> = {
   customer: StageCustomer,
   vehicle: StageVehicle,
@@ -88,7 +146,13 @@ export function RentalDetailV2() {
   const id = (params?.id as string) ?? null;
   const stage = readStage(searchParams.get("stage"));
 
-  const { detail, isLoading, notFound, error, refetch } = useRentalDetailV2(id);
+  const { detail: loadedDetail, isLoading: detailLoading, notFound, error, refetch } = useRentalDetailV2(id);
+  const isLoading = useSkeletonLoading(detailLoading);
+
+  // While the rental loads, the real screen renders a placeholder rental and
+  // <AutoSkeleton> turns it into the skeleton.
+  const placeholder = useMemo(() => (id ? deriveRentalDetail(skeletonRental(id)) : null), [id]);
+  const detail = isLoading ? placeholder : loadedDetail;
 
   /**
    * Move to another stage.
@@ -121,17 +185,7 @@ export function RentalDetailV2() {
 
   /* ── the states before a stage can mount ────────────────────────────── */
 
-  if (isLoading) {
-    return (
-      <Frame>
-        <div className="flex h-full items-center justify-center">
-          <Loader2 className="size-5 animate-spin text-muted-foreground" />
-        </div>
-      </Frame>
-    );
-  }
-
-  if (error || notFound || !detail) {
+  if (!detail || (!isLoading && (error || notFound))) {
     return (
       <Frame>
         <div className="flex h-full min-h-0 w-full max-w-3xl flex-col">
@@ -160,7 +214,11 @@ export function RentalDetailV2() {
 
   const View = STAGE_VIEWS[stage];
   const meta = STAGES.find((s) => s.id === stage)!;
+  // Remount the stage and the rail when the real rental lands, so nothing a
+  // stage seeded into its own state from the placeholder outlives it.
+  const phase = isLoading ? "skeleton" : "loaded";
   return (
+    <AutoSkeleton loading={isLoading}>
     <Frame>
       {/* Keyed on the stage so the scroll container is a NEW node each time.
           Without it the panel keeps the previous stage's scroll offset and you
@@ -171,7 +229,7 @@ export function RentalDetailV2() {
           own height, so the last row of a stage clears the pill instead of
           sitting under it. */}
       <div
-        key={stage}
+        key={`${stage}:${phase}`}
         className={`flex min-w-0 flex-1 flex-col overflow-hidden md:pr-6${docked ? " " + DOCK_CLEARANCE : ""}`}
       >
         {View ? (
@@ -188,7 +246,7 @@ export function RentalDetailV2() {
 
       {contextFits ? (
         <ContextColumn label="Payment Plan & activity">
-          <RightRail detail={detail} refetch={onRefetch} />
+          <RightRail key={phase} detail={detail} refetch={onRefetch} />
         </ContextColumn>
       ) : null}
 
@@ -226,6 +284,7 @@ export function RentalDetailV2() {
         }
       />
     </Frame>
+    </AutoSkeleton>
   );
 }
 

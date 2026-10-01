@@ -110,7 +110,7 @@ export function SectionMoney({ c, onJump, canEdit, currency }: SectionProps) {
               <p
                 className={cn(
                   "mt-1 font-heading text-3xl font-semibold tracking-tight tabular-nums",
-                  totals.net > 0 ? "text-primary" : "text-success"
+                  totals.net > 0 ? "text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" : "text-success"
                 )}
               >
                 {money(Math.abs(totals.net))}

@@ -129,7 +129,7 @@ describe('FeatureAnnouncementDeck — the card', () => {
     render(<FeatureAnnouncementDeck features={[feature('f-1', 'Expense tracker', { summary: long })]} />);
     const root = section();
     expect(root.getAttribute('aria-roledescription')).toBe('carousel');
-    expect(root.className).toContain('h-[352px]');
+    expect(root.className).toContain('h-[230px]');
     expect(within(root).getByRole('heading', { level: 3, name: 'Expense tracker' }).className).toContain('line-clamp-2');
     const summary = within(root).getByText(long);
     expect(summary.getAttribute('title')).toBe(long);

@@ -544,7 +544,7 @@ export default function BoldSignPanel({ tenant, onClose }: IntegrationPanelProps
             <Link
               href="/settings/agreement-templates"
               onClick={onClose}
-              className="text-primary hover:underline"
+              className="text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] hover:underline"
             >
               {activity.data!.hasCustomTemplate ? "Custom" : "Platform default"}
             </Link>
@@ -814,7 +814,7 @@ export default function BoldSignPanel({ tenant, onClose }: IntegrationPanelProps
           <Link
             href="/agreements"
             onClick={onClose}
-            className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+            className="inline-flex items-center gap-1 text-sm text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] hover:underline"
           >
             All agreements
             <ExternalLink className="size-3" />

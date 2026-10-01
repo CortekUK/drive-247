@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -11,8 +11,11 @@ import {
 } from "recharts";
 import { ArrowLeft, Info } from "lucide-react";
 import { format, subMonths, startOfMonth } from "date-fns";
-import { useReminders } from "@/hooks/use-reminders";
+import { useReminders, type Reminder } from "@/hooks/use-reminders";
 import { useV2 } from "@/lib/v2-context";
+import { AutoSkeleton } from "@/components/skeleton-v2/auto-skeleton";
+import { skeletonRows } from "@/lib/skeleton-data";
+import { useSkeletonLoading } from "@/hooks/use-skeleton-loading";
 
 const capitalize = (str: string) => str.charAt(0).toUpperCase() + str.slice(1);
 
@@ -47,12 +50,30 @@ const monthlyConfig: ChartConfig = {
   count: { label: 'Reminders', color: '#6366f1' },
 };
 
+/** Placeholder reminders for the v2 skeleton, spread over the chart buckets. */
+const SKELETON_REMINDERS = skeletonRows(12, (f) => ({
+  id: f.id,
+  severity: f.pick(["info", "warning", "critical"] as const),
+  object_type: f.pick(["Vehicle", "Rental", "Customer", "Fine"] as const),
+  created_at: f.date(),
+})) as unknown as Reminder[];
+
+/** v1's stand-in for <AutoSkeleton>: renders the region as it always was. */
+function PlainRegion({ children }: { loading: boolean; className?: string; children: ReactNode }) {
+  return <>{children}</>;
+}
+
 export default function RemindersAnalyticsPage() {
-  const { data: reminders = [], isLoading } = useReminders({});
+  const { data: loadedReminders = [], isLoading: remindersLoading } = useReminders({});
   // v2 chrome (northwind only; fails closed to v1). Used only to put this page's
   // header on the sidebar switch's row at md; every other tenant renders the
   // classes it did before. Above the early returns, as every hook must be.
   const v2Chrome = useV2("chrome");
+  const isLoading = useSkeletonLoading(remindersLoading);
+  // v2: placeholder reminders feed the real charts while loading, and
+  // <AutoSkeleton> draws the bones. v1 keeps its loading block below.
+  const reminders = v2Chrome && isLoading ? SKELETON_REMINDERS : loadedReminders;
+  const SkeletonRegion = v2Chrome ? AutoSkeleton : PlainRegion;
 
   const severityDonutData = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -86,7 +107,7 @@ export default function RemindersAnalyticsPage() {
     return months;
   }, [reminders]);
 
-  if (isLoading) {
+  if (isLoading && !v2Chrome) {
     // v2 (switch row alignment): the same md top as the loaded page, so the bar
     // starts where the title will (y=74), not 8px lower.
     return (<div className={`container mx-auto py-8 space-y-6${v2Chrome ? " md:pt-6" : ""}`}><div className="h-8 bg-muted animate-pulse rounded"></div><div className="h-96 bg-muted animate-pulse rounded"></div></div>);
@@ -104,6 +125,7 @@ export default function RemindersAnalyticsPage() {
         </div>
       </div>
 
+      <SkeletonRegion loading={isLoading}>
       <TooltipProvider>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Severity Breakdown Donut */}
@@ -194,6 +216,7 @@ export default function RemindersAnalyticsPage() {
           </div>
         </div>
       </TooltipProvider>
+      </SkeletonRegion>
     </div>
   );
 }

@@ -200,6 +200,25 @@ export const SETTINGS_INDEX_SECTIONS: SettingsIndexSection[] = [
       },
     ],
   },
+  // Notifications is the second group (Ghulam, Oct 1 2026).
+  {
+    // One page for every notification (build-spec D7): it replaced Team emails
+    // and Push notifications, whose old `?tab=reminders` / `?tab=push` links
+    // open it at the email and push setup.
+    title: "Notifications",
+    items: [
+      {
+        title: "Notifications",
+        description: "Every email, push and in-app message you and your customers get: when it is sent, what it says and who gets it.",
+        href: "/settings?tab=notifications",
+        tab: "notifications",
+        keywords:
+          "email push in-app in app bell alerts templates team emails push notifications reminders " +
+          "sender from address reply to send test preview subject variables " +
+          "phone browser install home screen payment reminders reminder rules",
+      },
+    ],
+  },
   {
     // What a customer is charged on top of the rental price, and what comes
     // off it: tax, fees and the deposit, discounts, add-ons, then weekend and
@@ -247,52 +266,10 @@ export const SETTINGS_INDEX_SECTIONS: SettingsIndexSection[] = [
       },
     ],
   },
-  {
-    // How and when a customer pays. Not "Payments": the payment provider
-    // (Stripe, Square) is set up on the Integrations board, not here.
-    title: "Payment plans",
-    items: [
-      {
-        title: "Installments",
-        description: "Let customers split the cost of a longer rental into weekly or monthly payments instead of paying it all at once.",
-        href: "/settings?tab=installments",
-        tab: "installments",
-        keywords: "installment installments instalment split payment plan weekly monthly",
-      },
-      {
-        title: "Pay as you go",
-        description: "Bill long rentals day by day while the car is out, instead of asking the customer to pay everything upfront.",
-        href: "/settings?tab=payg",
-        tab: "payg",
-        keywords: "payg pay as you go daily billing arrears",
-      },
-      {
-        title: "Auto-extension",
-        description: "Let rentals renew automatically each week or month, with the customer billed before every new period starts.",
-        href: "/settings?tab=auto-extend",
-        tab: "auto-extend",
-        keywords: "auto extend auto-extend extension renew renewal recurring subscription",
-      },
-    ],
-  },
-  {
-    // One page for every notification (build-spec D7): it replaced Team emails
-    // and Push notifications, whose old `?tab=reminders` / `?tab=push` links
-    // open it at the email and push setup.
-    title: "Notifications",
-    items: [
-      {
-        title: "Notifications",
-        description: "Every email, push and in-app message you and your customers get: when it is sent, what it says and who gets it.",
-        href: "/settings?tab=notifications",
-        tab: "notifications",
-        keywords:
-          "email push in-app in app bell alerts templates team emails push notifications reminders " +
-          "sender from address reply to send test preview subject variables " +
-          "phone browser install home screen payment reminders reminder rules",
-      },
-    ],
-  },
+  // The "Payment plans" group (Installments, Pay as you go, Auto-extension) was
+  // taken off the index on Oct 1 2026 at Ghulam's request. The pages are
+  // untouched: `?tab=installments`, `?tab=payg` and `?tab=auto-extend` still open.
+  //
   // The "Templates" group — one card, Customer messages — was here until Sep 24
   // 2026. Taken off the index at the team lead's request: a message is edited
   // from the screen that sends it (Lockbox's own Templates link opens the
@@ -342,6 +319,7 @@ export function SettingsIndexV2({
   // The top bar's search field filters this page, the way Stripe's does.
   usePageSearch({
     placeholder: "Search settings",
+    scopeLabel: "Settings",
     value: query,
     onChange: setQuery,
     tourAnchor: "settings-search",

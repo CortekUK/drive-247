@@ -756,7 +756,7 @@ export default function TeslaPanel({ tenant, onClose }: IntegrationPanelProps) {
               "On the rental you decide, per session, whether to charge the customer or waive it.",
             ].map((step, i) => (
               <li key={step} className="flex gap-2">
-                <span className="shrink-0 text-primary">{i + 1}.</span>
+                <span className="shrink-0 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">{i + 1}.</span>
                 <span>{step}</span>
               </li>
             ))}
@@ -1012,7 +1012,7 @@ export default function TeslaPanel({ tenant, onClose }: IntegrationPanelProps) {
                   const car = fleet.find((v) => v.id === s.vehicle_id);
                   return (
                     <div key={s.id} className="flex items-center gap-2.5 px-3.5 py-2">
-                      <Zap className={cn("size-3.5 shrink-0", s.rental_id ? "text-primary" : "text-muted-foreground/50")} />
+                      <Zap className={cn("size-3.5 shrink-0", s.rental_id ? "text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" : "text-muted-foreground/50")} />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm text-foreground">
                           {formatMoney(Number(s.amount || 0), s.currency)}

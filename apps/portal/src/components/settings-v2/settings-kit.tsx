@@ -87,7 +87,7 @@
 import { createContext, useContext, useEffect, useRef, type ReactNode } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
-import { Skeleton } from "@/components/ui-v2/skeleton";
+import { AutoSkeleton } from "@/components/skeleton-v2/auto-skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui-v2/tabs";
 import { SettingsSaveState } from "@/components/settings-v2/section-states";
 import { settingsSectionId } from "@/components/settings-v2/settings-shell-state";
@@ -184,14 +184,14 @@ export function SettingsPageHeader({
  *  the loaded page's first panel will. Decorative only; pair it with a
  *  skeleton that carries the loading label. */
 export function SettingsPageHeaderSkeleton() {
+  // The real header's markup with placeholder words; <AutoSkeleton> draws a
+  // bone over each line, at the title's and the description's real sizes.
   return (
-    <div aria-hidden="true" className="space-y-1.5">
-      <div className="flex h-8 items-center">
-        <Skeleton className="h-6 w-48 max-w-full rounded-full" />
-      </div>
-      <div className="flex h-5 items-center">
-        <Skeleton className="h-3.5 w-80 max-w-full rounded-full" />
-      </div>
+    <div aria-hidden="true">
+      <AutoSkeleton loading className="space-y-1.5">
+        <p className={SETTINGS_PAGE_TITLE}>Xxxxxxx xxxxxxxx</p>
+        <p className="max-w-2xl text-sm">Xxxxx xxx xxxxxxxx xxxx xxxxxxxxx xxx xxxx xxxxxxx.</p>
+      </AutoSkeleton>
     </div>
   );
 }
@@ -574,7 +574,18 @@ export function SettingsRow({
   const inherited = useContext(SettingsRowAlignContext);
   const end = (align ?? inherited) === "end";
   return (
-    <div className={cn("py-4", className)}>
+    // A very soft hairline under every row, so each reads as its own setting
+    // (Ghulam, Oct 1 2026: rows ran into each other). The last row in a group
+    // has none: the section's own spacing ends it. Scoped to `.v2-theme` (on
+    // <body> for v2 tenants only): this row also renders on screens every
+    // tenant sees, and v1 must not change.
+    <div
+      data-settings-row=""
+      className={cn(
+        "py-4 [.v2-theme_&]:border-b [.v2-theme_&]:border-border/60 [.v2-theme_&:last-child]:border-b-0",
+        className,
+      )}
+    >
       <div
         className={
           end

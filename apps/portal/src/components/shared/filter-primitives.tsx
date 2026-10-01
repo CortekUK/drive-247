@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode } from "react";
+import { type CSSProperties, type ReactNode } from "react";
 import { X, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import { cn } from "@/lib/utils";
@@ -32,9 +32,13 @@ export function FilterChip({
 }) {
   // Inline rather than a class, because the colour comes from data — the status
   // palette — and Tailwind can only generate classes it can see at build time.
+  // The text reads the colour through `--chip` so dark mode can lift it: a
+  // 600-weight status hex (#2563eb, #dc2626, #64748b) is only 3.5–4:1 as 12px
+  // text on the dark tinted chip, so dark mixes it 40% toward white — same
+  // hue, readable weight. Only v2 filter panels import this file.
   const style =
     active && color
-      ? { backgroundColor: `${color}1a`, color, borderColor: `${color}55` }
+      ? ({ backgroundColor: `${color}1a`, borderColor: `${color}55`, "--chip": color } as CSSProperties)
       : undefined;
 
   return (
@@ -47,7 +51,7 @@ export function FilterChip({
         "cursor-pointer rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
         active
           ? color
-            ? ""
+            ? "text-[var(--chip)] dark:text-[color-mix(in_srgb,var(--chip)_60%,white)]"
             : "border-primary/40 bg-primary/10 text-primary dark:border-[hsl(var(--v2-link,var(--primary))_/_0.4)] dark:text-[hsl(var(--v2-link,var(--primary)))]"
           : "border-border bg-transparent text-muted-foreground hover:border-primary/30 hover:bg-primary/5 hover:text-foreground dark:hover:border-[hsl(var(--v2-link,var(--primary))_/_0.3)] dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))]"
       )}

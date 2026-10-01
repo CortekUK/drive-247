@@ -497,7 +497,7 @@ function NotConnected({
           "Square brings you back to this portal's Settings → Payments page when it is done. This card updates the next time you open it.",
         ].map((step, i) => (
           <li key={step} className="flex gap-2">
-            <span className="shrink-0 text-primary">{i + 1}.</span>
+            <span className="shrink-0 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">{i + 1}.</span>
             <span>{step}</span>
           </li>
         ))}
@@ -650,7 +650,7 @@ function Connection({
             {connection.scopes.map((scope) => (
               <span
                 key={scope}
-                className="rounded-md border border-primary/20 bg-primary/5 px-2 py-0.5 font-mono text-[11px] text-primary"
+                className="rounded-md border border-primary/20 bg-primary/5 px-2 py-0.5 font-mono text-[11px] text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]"
               >
                 {scope}
               </span>

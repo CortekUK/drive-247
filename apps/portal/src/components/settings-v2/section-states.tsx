@@ -69,7 +69,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import { Card, CardContent } from "@/components/ui-v2/card";
-import { Skeleton } from "@/components/ui-v2/skeleton";
+import { AutoSkeleton } from "@/components/skeleton-v2/auto-skeleton";
+import { skeletonFaker } from "@/lib/skeleton-data";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui-v2/tooltip";
 import { LIST_CLASSES, LIST_SETTINGS_SURFACE, type ListSurface } from "@/components/shared/list-table-v2";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
@@ -156,9 +157,22 @@ export interface SettingsSectionSkeletonProps {
   className?: string;
 }
 
-/** Varied widths so a skeleton reads as text, not as a barcode. */
-const BAR_WIDTHS = ["w-3/4", "w-1/2", "w-2/3", "w-2/5", "w-3/5"];
+/**
+ * Placeholder text for the skeleton: a few words, fixed per slot, so a row
+ * reads as text of varied length (not as a barcode) and never jitters between
+ * renders. Only its length is ever seen; <AutoSkeleton> draws the bones.
+ */
+const words = (slot: number, min = 1, max = 3) => skeletonFaker(slot).text(min, max);
 
+/** A control-shaped box: drawn as one bone, whatever is inside it. */
+const Block = ({ className }: { className: string }) => <div data-skeleton-block className={className} />;
+
+/**
+ * The loading state of a settings section. The shapes below are the section's
+ * real layout (table rows, label/field pairs, cards) filled with placeholder
+ * words, and <AutoSkeleton> measures them and lays a bone over each line and
+ * control — the same bones every other v2 page loads with.
+ */
 export function SettingsSectionSkeleton({
   variant = "table",
   rows = 5,
@@ -174,8 +188,8 @@ export function SettingsSectionSkeleton({
     <>
       <div className="flex h-10 items-center gap-6 border-b px-3">
         {Array.from({ length: columns }).map((_, c) => (
-          <div key={c} className="min-w-0 flex-1">
-            <Skeleton className={cn("h-2.5 rounded-full", c === 0 ? "w-24 max-w-full" : "w-16 max-w-full")} />
+          <div key={c} className="min-w-0 flex-1 truncate text-xs font-medium">
+            {words(90 + c, 1, c === 0 ? 2 : 1)}
           </div>
         ))}
       </div>
@@ -185,8 +199,8 @@ export function SettingsSectionSkeleton({
           className={cn("flex h-[45px] items-center gap-6 px-3", r < count - 1 && "border-b")}
         >
           {Array.from({ length: columns }).map((_, c) => (
-            <div key={c} className="min-w-0 flex-1">
-              <Skeleton className={cn("h-3.5 rounded-full", BAR_WIDTHS[(r + c) % BAR_WIDTHS.length])} />
+            <div key={c} className="min-w-0 flex-1 truncate text-sm">
+              {words(r * 17 + c, 1, c === 0 ? 3 : 2)}
             </div>
           ))}
         </div>
@@ -199,102 +213,96 @@ export function SettingsSectionSkeleton({
       aria-busy="true"
       aria-live="polite"
       data-settings-state="loading"
-      className={cn("space-y-4", className)}
+      className={className}
     >
-      {header && (
-        <div aria-hidden="true" className="flex items-center justify-between gap-4">
-          <div className="space-y-2">
-            <Skeleton className="h-5 w-40 rounded-full" />
-            <Skeleton className="h-3.5 w-64 max-w-[60vw] rounded-full" />
+      <AutoSkeleton loading className="space-y-4">
+        {header && (
+          <div aria-hidden="true" className="flex items-center justify-between gap-4">
+            <div className="space-y-1">
+              <p className="text-lg font-semibold">{words(70, 2, 3)}</p>
+              <p className="text-sm">{words(71, 5, 9)}</p>
+            </div>
+            <Block className="h-8 w-28 rounded-full" />
           </div>
-          <Skeleton className="h-8 w-28 rounded-full" />
-        </div>
-      )}
+        )}
 
-      {variant === "table" &&
-        // Same shell as `ListTable`: the v2 Card with a p-0 body, a 40px head
-        // row and 45px body rows (py-3 cell + 20px line + 1px row border).
-        // `min-w-0` on every column: the fixed-width header bars otherwise set
-        // a minimum that pushed the last one past the card edge on a phone.
-        (surface === "settings" ? (
-          <div aria-hidden="true" data-list-surface="settings" className={LIST_SETTINGS_SURFACE}>
-            {tableRows}
+        {variant === "table" &&
+          // Same shell as `ListTable`: the v2 Card with a p-0 body, a 40px head
+          // row and 45px body rows (py-3 cell + 20px line + 1px row border).
+          // `min-w-0` on every column keeps the last one inside the card edge on
+          // a phone.
+          (surface === "settings" ? (
+            <div aria-hidden="true" data-list-surface="settings" className={LIST_SETTINGS_SURFACE}>
+              {tableRows}
+            </div>
+          ) : (
+            <Card aria-hidden="true">
+              <CardContent className="p-0">{tableRows}</CardContent>
+            </Card>
+          ))}
+
+        {variant === "rows" && (
+          <div aria-hidden="true" className="space-y-2">
+            {Array.from({ length: count }).map((_, r) => (
+              <div key={r} className="flex items-start gap-3 rounded-2xl bg-muted/40 px-4 py-3">
+                {thumbnail && <Block className="size-10 shrink-0 rounded-lg" />}
+                <div className="min-w-0 flex-1 space-y-0.5">
+                  <p className="truncate text-sm font-medium">{words(r * 13, 2, 4)}</p>
+                  <p className="truncate text-xs">{words(r * 13 + 1, 3, 6)}</p>
+                  <p className="truncate text-xs">{words(r * 13 + 2, 4, 8)}</p>
+                </div>
+                <Block className="size-8 shrink-0 rounded-full" />
+              </div>
+            ))}
           </div>
-        ) : (
-          <Card aria-hidden="true">
-            <CardContent className="p-0">{tableRows}</CardContent>
-          </Card>
-        ))}
+        )}
 
-      {variant === "rows" && (
-        <div aria-hidden="true" className="space-y-2">
-          {Array.from({ length: count }).map((_, r) => (
-            <div key={r} className="flex items-start gap-3 rounded-2xl bg-muted/40 px-4 py-3">
-              {thumbnail && <Skeleton className="size-10 shrink-0 rounded-lg" />}
-              <div className="min-w-0 flex-1 space-y-2 py-0.5">
-                <Skeleton className={cn("h-3.5 rounded-full", BAR_WIDTHS[r % BAR_WIDTHS.length])} />
-                <Skeleton className="h-3 w-1/2 rounded-full" />
-                <Skeleton className="h-3 w-2/3 rounded-full" />
+        {variant === "form" && (
+          // Flush, like the `SettingsPanel` it stands in for (settings-kit.tsx):
+          // a card here would flash a box the loaded panel no longer draws, and
+          // slide every label sideways by its padding as it went.
+          <div aria-hidden="true" className="space-y-5">
+            {Array.from({ length: count }).map((_, r) => (
+              <div key={r} className="grid gap-2 sm:grid-cols-[minmax(0,14rem)_minmax(0,1fr)] sm:items-center sm:gap-6">
+                <div className="min-w-0 space-y-0.5">
+                  <p className="text-sm font-medium">{words(r * 11, 1, 3)}</p>
+                  <p className="text-[13px]">{words(r * 11 + 1, 3, 6)}</p>
+                </div>
+                <Block className="h-9 w-full rounded-3xl" />
               </div>
-              <Skeleton className="size-8 shrink-0 rounded-full" />
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
 
-      {variant === "form" && (
-        // Flush, like the `SettingsPanel` it stands in for (settings-kit.tsx):
-        // a card here would flash a box the loaded panel no longer draws, and
-        // slide every label sideways by its padding as it went.
-        <div aria-hidden="true" className="space-y-5">
-          {Array.from({ length: count }).map((_, r) => (
-            <div key={r} className="grid gap-2 sm:grid-cols-[minmax(0,14rem)_minmax(0,1fr)] sm:items-center sm:gap-6">
-              <div className="space-y-1.5">
-                <Skeleton className="h-3.5 w-28 rounded-full" />
-                <Skeleton className="h-3 w-40 max-w-full rounded-full" />
+        {variant === "stack" && (
+          <div aria-hidden="true" className="space-y-4">
+            {Array.from({ length: count }).map((_, r) => (
+              <div key={r} className="space-y-3 rounded-2xl bg-card p-5">
+                <div className="flex items-center gap-3">
+                  <Block className="size-5 shrink-0 rounded-full" />
+                  <p className="truncate text-sm font-medium">{words(r * 7, 2, 4)}</p>
+                </div>
+                <p className="text-sm">{words(r * 7 + 1, 5, 9)}</p>
+                <Block className="h-14 w-full rounded-xl" />
               </div>
-              <Skeleton className="h-9 w-full rounded-3xl" />
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
 
-      {variant === "stack" && (
-        <div aria-hidden="true" className="space-y-4">
-          {Array.from({ length: count }).map((_, r) => (
-            <div key={r} className="space-y-3 rounded-2xl bg-card p-5">
-              <div className="flex items-center gap-3">
-                <Skeleton className="size-5 shrink-0 rounded-full" />
-                <Skeleton className={cn("h-4 rounded-full", BAR_WIDTHS[r % BAR_WIDTHS.length], "max-w-xs")} />
+        {variant === "cards" && (
+          <div aria-hidden="true" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: count }).map((_, r) => (
+              <div key={r} className="space-y-3 rounded-2xl bg-card p-5">
+                <div className="flex items-center gap-3">
+                  <Block className="size-9 shrink-0 rounded-xl" />
+                  <p className="truncate text-sm font-medium">{words(r * 5, 1, 3)}</p>
+                </div>
+                <p className="text-xs">{words(r * 5 + 1, 6, 10)}</p>
               </div>
-              <Skeleton className="h-3 w-2/3 rounded-full" />
-              <Skeleton className="h-14 w-full rounded-xl" />
-            </div>
-          ))}
-        </div>
-      )}
-
-      {variant === "cards" && (
-        <div aria-hidden="true" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: count }).map((_, r) => (
-            <div key={r} className="space-y-3 rounded-2xl bg-card p-5">
-              <div className="flex items-center gap-3">
-                <Skeleton className="size-9 rounded-xl" />
-                <Skeleton className="h-4 w-1/2 rounded-full" />
-              </div>
-              <Skeleton className="h-3 w-full rounded-full" />
-              <Skeleton className="h-3 w-2/3 rounded-full" />
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Last, not first: as the first child it made the first shape a later
-          sibling, so space-y-4 gave it a 16px top margin. Inside a fieldset,
-          grid or flex item that margin cannot collapse away, and the skeleton
-          sat 16px below where the loaded section appears (Fees & tax, Deposit,
-          Installments, Pricing rules, Locations); after a space-y-3 heading it
-          sat 4px low. */}
+            ))}
+          </div>
+        )}
+      </AutoSkeleton>
       <span className="sr-only">{label}</span>
     </div>
   );

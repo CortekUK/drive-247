@@ -29,10 +29,10 @@
  */
 
 import dynamic from "next/dynamic";
-import { Component, useEffect, useId, useMemo, useState, type ErrorInfo, type ReactNode } from "react";
+import { Component, createContext, useContext, useEffect, useId, useMemo, useState, type ErrorInfo, type ReactNode } from "react";
 import { RotateCcw, X } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
-import { Skeleton } from "@/components/ui-v2/skeleton";
+import { AutoSkeleton } from "@/components/skeleton-v2/auto-skeleton";
 import { Switch } from "@/components/ui-v2/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui-v2/tabs";
 import { fillVariables, getVariable } from "@/lib/notifications-v2/variables";
@@ -89,9 +89,12 @@ function EditorSkeleton() {
       data-editor-loading=""
       className="min-h-[258px] space-y-3 rounded-xl border bg-card px-4 py-4"
     >
-      <Skeleton className="h-3.5 w-2/3 rounded-full" />
-      <Skeleton className="h-3.5 w-1/2 rounded-full" />
-      <Skeleton className="h-3.5 w-3/5 rounded-full" />
+      {/* Placeholder lines; <AutoSkeleton> draws their bones. */}
+      <AutoSkeleton loading className="space-y-3">
+        <p className="text-sm">Xxxxx xxxxxxxx xxxx xxxxxxx xxxx xxxxxx xx</p>
+        <p className="text-sm">Xxxx xxxxxxxxx xxxx xxxxxx</p>
+        <p className="text-sm">Xxxxxxx xxxx xxxxxxxx xxxxx xxxxx</p>
+      </AutoSkeleton>
     </div>
   );
 }
@@ -253,6 +256,58 @@ interface ChannelProps {
   context: NotificationPreviewContext;
 }
 
+/**
+ * Which half of a channel to draw. The tabbed panel draws both side by side
+ * (no slot); the split page (notifications-page-v2) draws each channel twice —
+ * its fields in the middle column and its preview in the right rail — so the
+ * same channel component serves both without a second copy of its logic.
+ */
+export type ChannelSlot =
+  /** today line + Send test + the inputs */
+  | "fields"
+  /** the inputs alone (the right rail's "Edit manually") */
+  | "inputs"
+  /** today line + Send test alone (above the main preview) */
+  | "status"
+  /** Send test alone (the main view's top row) */
+  | "test"
+  | "preview";
+const ChannelSlotContext = createContext<ChannelSlot | null>(null);
+
+export interface NotificationChannelViewProps {
+  slot: ChannelSlot;
+  channel: NotificationChannel;
+  item: NotificationItem;
+  edit: ChannelEdit;
+  onChange: (next: ChannelEdit) => void;
+  canEdit: boolean;
+  canSendTests: boolean;
+  sendTestBlockedReason?: string | null;
+  context: NotificationPreviewContext;
+}
+
+/** One channel of one notification, only its fields or only its preview. */
+export function NotificationChannelView({ slot, channel, item, edit, onChange, ...rest }: NotificationChannelViewProps) {
+  const variables = useMemo(
+    () => item.variables.map((key) => getVariable(key)).filter((v): v is NotificationVariable => !!v),
+    [item],
+  );
+  const props: ChannelProps = { item, variables, edit, onChange, ...rest };
+  return (
+    <ChannelSlotContext.Provider value={slot}>
+      <PanelBoundary>
+        {channel === "email" ? (
+          <EmailChannel {...props} />
+        ) : channel === "push" ? (
+          <PushChannel {...props} />
+        ) : (
+          <InAppChannel {...props} />
+        )}
+      </PanelBoundary>
+    </ChannelSlotContext.Provider>
+  );
+}
+
 /** The caption over each half, in the same recipe as the row's channel header. */
 const COLUMN_CAPTION = "text-[11px] font-medium uppercase tracking-wide text-muted-foreground";
 
@@ -283,6 +338,39 @@ function ChannelLayout({
    */
   fill?: boolean;
 }) {
+  const slot = useContext(ChannelSlotContext);
+  if (slot === "preview") return <div className="min-w-0" data-channel-preview="">{preview}</div>;
+  if (slot === "inputs") {
+    return (
+      <div className="flex min-w-0 flex-col gap-4" data-channel-fields="">
+        {fields}
+      </div>
+    );
+  }
+  if (slot === "test") return <div className="flex min-w-0 justify-end" data-channel-test="">{test}</div>;
+  if (slot === "status") {
+    return (
+      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
+        <div className="min-w-0 flex-1 basis-64">{today}</div>
+        <div className="flex min-w-0 shrink-0 justify-end" data-channel-test="">
+          {test}
+        </div>
+      </div>
+    );
+  }
+  if (slot === "fields") {
+    return (
+      <div className="flex min-w-0 flex-col gap-4" data-channel-fields="">
+        <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
+          <div className="min-w-0 flex-1 basis-64">{today}</div>
+          <div className="flex min-w-0 shrink-0 justify-end" data-channel-test="">
+            {test}
+          </div>
+        </div>
+        {fields}
+      </div>
+    );
+  }
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2">

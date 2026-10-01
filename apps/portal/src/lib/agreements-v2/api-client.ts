@@ -344,3 +344,30 @@ export async function fetchAgreementDocumentV2(id: string): Promise<AgreementDoc
   if (data.kind === 'html' && typeof data.html === 'string') return { kind: 'html', html: data.html };
   throw new Error('No document came back.');
 }
+
+/** One entry in an agreement's activity log (the `history` action). */
+export interface AgreementEventV2 {
+  at: string;
+  type: string;
+  label: string;
+  detail?: string;
+}
+
+/**
+ * Everything that happened to an agreement, oldest first: created, sent, the
+ * signing email, opened, signed, completed, reminders. `partial` means the
+ * signing service could not be asked, so only our own records are listed.
+ */
+export async function fetchAgreementHistoryV2(
+  id: string,
+  kind: 'rental' | 'individual',
+): Promise<{ events: AgreementEventV2[]; partial: boolean }> {
+  const reply = await call({ action: 'history', id, kind });
+  if (reply.kind === 'missing') throw new Error(AGREEMENTS_SERVICE_MISSING_V2);
+  if (reply.kind === 'http') throw failure(reply.status, reply.body);
+  const data = reply.data;
+  const events = Array.isArray(data.events)
+    ? (data.events as AgreementEventV2[]).filter((e) => e && typeof e.at === 'string' && typeof e.label === 'string')
+    : [];
+  return { events, partial: data.partial === true };
+}

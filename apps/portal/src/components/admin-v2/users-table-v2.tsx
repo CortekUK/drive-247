@@ -40,7 +40,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui-v2/dropdown-menu";
-import { Skeleton } from "@/components/ui-v2/skeleton";
 import {
   LIST_CLASSES,
   LIST_ROW_ACTION,
@@ -57,6 +56,20 @@ import {
 import { describeLoadError } from "@/components/settings-v2/section-states";
 import { cn } from "@/lib/utils";
 import type { AppUser } from "@/stores/auth-store";
+import { AutoSkeleton } from "@/components/skeleton-v2/auto-skeleton";
+import { skeletonRows } from "@/lib/skeleton-data";
+import { useSkeletonLoading } from "@/hooks/use-skeleton-loading";
+
+/** Placeholder people for the list's skeleton: only their shapes are seen. */
+const SKELETON_USERS = skeletonRows(4, (f) => ({
+  id: f.id,
+  name: f.text(2, 3),
+  email: `${f.word(5, 10)}@${f.word(5, 9)}.com`,
+  role: f.pick(["admin", "manager", "ops"]),
+  is_active: true,
+  auth_user_id: f.id,
+  must_change_password: false,
+})) as unknown as AppUser[];
 
 /** Hover text for the "Can't sign in" flag. v1's own wording. */
 export const CANT_SIGN_IN_HINT =
@@ -156,6 +169,7 @@ export function UsersTableV2<T extends AppUser>({
   onRetry,
   retrying = false,
   roleLabel,
+  emptyMessage,
   ...actions
 }: RowActions<T> & {
   /** Every user the page query returned, in its order. `undefined` while none have arrived. */
@@ -170,8 +184,15 @@ export function UsersTableV2<T extends AppUser>({
   retrying?: boolean;
   /** The page's `getRoleDisplay`. */
   roleLabel: (role: string) => string;
+  /** Replaces the "no one added yet" line — for a search that matched nobody,
+   *  where that line would be untrue. */
+  emptyMessage?: string;
 }) {
-  const rows = users ?? [];
+  const loadedRows = users ?? [];
+  // While the first rows load, placeholder people render through the real
+  // table and phone rows, and <AutoSkeleton> turns them into the skeleton.
+  const isLoading = useSkeletonLoading(loading && loadedRows.length === 0 && !error);
+  const rows = isLoading ? (SKELETON_USERS as T[]) : loadedRows;
 
   /*
    * The kit's rows shell. `ListTable` needs it for the scroll root and the
@@ -187,7 +208,7 @@ export function UsersTableV2<T extends AppUser>({
    */
   const rowsShell = useProgressiveRows(rows, "team");
 
-  if (rows.length === 0 && error) {
+  if (!isLoading && rows.length === 0 && error) {
     return (
       <div role="alert" data-team-state="error" className="py-10 text-center">
         <p className="font-medium text-foreground">{TEAM_LIST_COPY.errorTitle}</p>
@@ -208,37 +229,17 @@ export function UsersTableV2<T extends AppUser>({
     );
   }
 
-  if (rows.length === 0 && loading) {
-    return (
-      <div role="status" aria-busy="true" data-team-state="loading">
-        <span className="sr-only">{TEAM_LIST_COPY.loading}</span>
-        <div aria-hidden="true" className="divide-y">
-          {[0, 1, 2].map((row) => (
-            <div key={row} className="flex items-center gap-6 py-4">
-              <div className="min-w-0 flex-1 space-y-2">
-                <Skeleton className="h-3.5 w-40 max-w-full rounded-full" />
-                <Skeleton className="h-3 w-56 max-w-full rounded-full" />
-              </div>
-              <Skeleton className="hidden h-3.5 w-20 rounded-full lg:block" />
-              <Skeleton className="h-3.5 w-16 rounded-full" />
-              <Skeleton className="size-8 shrink-0 rounded-full" />
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
   if (rows.length === 0) {
     return (
       <p data-team-state="empty" className="py-10 text-center text-sm text-muted-foreground">
-        {TEAM_LIST_COPY.empty}
+        {emptyMessage ?? TEAM_LIST_COPY.empty}
       </p>
     );
   }
 
   return (
-    <>
+    <AutoSkeleton loading={isLoading}>
+      {isLoading && <span role="status" className="sr-only">{TEAM_LIST_COPY.loading}</span>}
       {/* Phones and narrow windows: one stacked row per person. The table
           below is hidden here. */}
       <ul className="divide-y lg:hidden" aria-label="Team">
@@ -311,6 +312,6 @@ export function UsersTableV2<T extends AppUser>({
           </ListBody>
         </ListTable>
       </div>
-    </>
+    </AutoSkeleton>
   );
 }

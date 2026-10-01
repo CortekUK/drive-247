@@ -64,7 +64,6 @@ import {
   Mail,
   Newspaper,
   Plug,
-  Gift,
 } from "lucide-react";
 // CRITICAL: `ui/sidebar` and `ui-v2/sidebar` each define their OWN React
 // context. The dashboard layout pairs this component with ui-v2's
@@ -95,7 +94,6 @@ import { useIsAreaHidden } from "@/lib/lean-context";
 import { usePendingBookingsCount } from "@/hooks/use-pending-bookings";
 import { useAuthStore } from "@/stores/auth-store";
 import { useTenantSubscription } from "@/hooks/use-tenant-subscription";
-import { useSoftSubscriptionBlock } from "@/hooks/use-soft-subscription-block";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useCMSPages } from "@/hooks/use-cms-pages";
 import { useCmsOutline } from "@/stores/cms-outline-store";
@@ -202,7 +200,7 @@ interface NavItem {
  * put routine servicing at the same visual weight as an unpaid invoice.
  */
 const BADGE_TONE_CLASS: Record<NonNullable<NavItem["badgeTone"]>, string> = {
-  destructive: "text-white bg-destructive",
+  destructive: "text-destructive-foreground bg-destructive",
   amber: "text-white bg-amber-600",
 };
 
@@ -301,7 +299,6 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   const reportsHidden = useIsAreaHidden("reports");
   const plDashboardHidden = useIsAreaHidden("pl-dashboard");
   const welcomeHidden = useIsAreaHidden("welcome");
-  // The Drive247 referral programme page — its own gate area (lib/v2.ts).
   const fleetHealthHidden = useIsAreaHidden("fleet-health");
   // Website rail + its publish switches. React Query dedupes this against the
   // /cms dashboard's own read, so the extra mount costs nothing.
@@ -353,11 +350,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   // moment the window closed the badge fell back to a green "Live" chip sitting
   // behind a modal telling the operator their access had been canceled — the two
   // surfaces flatly contradicting each other at the worst possible moment.
-  // SOFT BLOCK also lights this chip. That tenant sits at `canceled`, not
-  // `past_due`, so neither grace flag is true for them — see the note in
-  // payment-due-bar.tsx. The chip is the desktop half of that pair.
-  const { active: softBlock } = useSoftSubscriptionBlock();
-  const paymentDue = isInGracePeriod || isGraceExpired || softBlock;
+  const paymentDue = isInGracePeriod || isGraceExpired;
   const paymentDueCritical = graceSeverity === "critical" || isGraceExpired;
   // The client's wording, verbatim.
   const paymentDueLabel = "Your payment is due.";
@@ -547,6 +540,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   // but v1 customers would get a rail navigating sections their screen does not
   // have.
   const customersV2 = useV2("customers");
+  const financesV2 = useV2("finances");
   const isCustomerDetailPage = !!customerDetailId && customersV2;
   const activeCustomerSection = readCustomerSection(searchParams.get("section"), searchParams.get("tab"));
   // Called unconditionally (hooks may not be conditional) but fetches nothing off
@@ -558,6 +552,11 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
 
   const isActive = (path: string) => {
     if (path === "/") return pathname === "/";
+    // The three lists' own routes (details, analytics, new fine) still exist
+    // and are still linked to; Finances stays lit on all of them.
+    if (path === "/finances") {
+      return ["/finances", "/payments", "/invoices", "/fines"].some((p) => pathname?.startsWith(p));
+    }
     return pathname?.startsWith(path) || false;
   };
 
@@ -633,9 +632,17 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
     // `/blocked-dates` is the route; "Availability" is what the page is FOR,
     // which is why the two do not match.
     { name: "Availability", href: "/blocked-dates", icon: CalendarDays },
-    { name: "Payments", href: "/payments", icon: CreditCard },
-    { name: "Invoices", href: "/invoices", icon: Receipt },
-    { name: "Fines", href: "/fines", icon: BadgeAlert },
+    // Finances — Payments, Invoices and Fines as one row opening one tabbed
+    // screen (`/finances`), behind its own area gate. Tenants outside it keep
+    // the three separate rows. `/finances` has no ROUTE_TO_TAB entry: the
+    // screen itself shows a manager only the tabs they hold a grant for.
+    ...(financesV2
+      ? [{ name: "Finances", href: "/finances", icon: CreditCard }]
+      : [
+          { name: "Payments", href: "/payments", icon: CreditCard },
+          { name: "Invoices", href: "/invoices", icon: Receipt },
+          { name: "Fines", href: "/fines", icon: BadgeAlert },
+        ]),
     // Support — moved here from the profile menu so it is one click away, with its
     // unread-message badge. Same destination as TRAX's Support control. Not given a
     // ROUTE_TO_TAB entry: every staff role may reach its own tickets, and the
@@ -1605,7 +1612,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                   <SidebarMenuItem>
                     <SidebarMenuButton
                       asChild
-                      isActive={isActive("/subscription") || isActive("/credits")}
+                      isActive={isActive("/subscription") || isActive("/credits") || isActive("/referrals")}
                       tooltip={collapsed ? "Billing" : undefined}
                       className={NAV_ROW}
                     >
@@ -1615,28 +1622,6 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
-
-                  {/* Referrals — the operator's Drive247 referral programme: their
-                      code and link, and the reward on their own Drive247 bill.
-                      Beside Billing because it is money between the operator and
-                      us. The route maps to the Subscription permission, so a
-                      manager without it is refused there. */}
-                  {/* Every tenant now — see lib/v2.ts. */}
-                  {true && (
-                  <SidebarMenuItem>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={isActive("/referrals")}
-                      tooltip={collapsed ? "Referrals" : undefined}
-                      className="h-11 md:h-8 [&>svg]:size-[18px] md:[&>svg]:size-4 transition-colors"
-                    >
-                      <Link href="/referrals" onClick={closeMobileOnNav}>
-                        <Gift className="h-4 w-4 shrink-0" />
-                        <span className={`text-[15px] md:text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>Referrals</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                  )}
 
                   {/* Welcome pack, kept from v1 — the source worktree dropped
                       it, but `/welcome` is a live route this branch's v1 rail
@@ -1776,12 +1761,12 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                                 </span>
                               </div>
                               {!collapsed && item.badge !== undefined && item.badge > 0 && (
-                                <span className={`inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-semibold leading-none rounded-full shrink-0 animate-in fade-in ${BADGE_TONE_CLASS[item.badgeTone ?? "destructive"]}`}>
+                                <span className={`inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-semibold leading-none rounded-full shrink-0 animate-in fade-in-0 duration-200 ease-out motion-reduce:animate-none ${BADGE_TONE_CLASS[item.badgeTone ?? "destructive"]}`}>
                                   {item.badge}
                                 </span>
                               )}
                               {collapsed && item.badge !== undefined && item.badge > 0 && (
-                                <span className={`absolute -top-1 -right-1 inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold leading-none rounded-full animate-in fade-in ${BADGE_TONE_CLASS[item.badgeTone ?? "destructive"]}`}>
+                                <span className={`absolute -top-1 -right-1 inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold leading-none rounded-full animate-in fade-in-0 duration-200 ease-out motion-reduce:animate-none ${BADGE_TONE_CLASS[item.badgeTone ?? "destructive"]}`}>
                                   {item.badge > 9 ? '9+' : item.badge}
                                 </span>
                               )}
@@ -1835,12 +1820,12 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                                 {/* Right-aligned inside the row; the label is flex-1 and
                                     the digits tabular, so a changing count never moves it. */}
                                 {!collapsed && count > 0 && (
-                                  <span aria-hidden className={`ml-auto inline-flex min-w-[18px] shrink-0 items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none tabular-nums animate-in fade-in ${BADGE_TONE_CLASS[item.badgeTone ?? "destructive"]}`}>
+                                  <span aria-hidden className={`ml-auto inline-flex min-w-[18px] shrink-0 items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none tabular-nums animate-in fade-in-0 duration-200 ease-out motion-reduce:animate-none ${BADGE_TONE_CLASS[item.badgeTone ?? "destructive"]}`}>
                                     {count > 99 ? "99+" : count}
                                   </span>
                                 )}
                                 {collapsed && count > 0 && (
-                                  <span aria-hidden className={`absolute -top-1 -right-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-0.5 text-[10px] font-bold leading-none tabular-nums animate-in fade-in ${BADGE_TONE_CLASS[item.badgeTone ?? "destructive"]}`}>
+                                  <span aria-hidden className={`absolute -top-1 -right-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-0.5 text-[10px] font-bold leading-none tabular-nums animate-in fade-in-0 duration-200 ease-out motion-reduce:animate-none ${BADGE_TONE_CLASS[item.badgeTone ?? "destructive"]}`}>
                                     {count > 9 ? "9+" : count}
                                   </span>
                                 )}
@@ -1891,7 +1876,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                                 )}
                               </SidebarMenuButton>
                               {collapsed && totalBadge > 0 && (
-                                <span className="absolute -top-1 -right-1 inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold leading-none text-white bg-destructive rounded-full pointer-events-none">
+                                <span className="absolute -top-1 -right-1 inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold leading-none text-destructive-foreground bg-destructive rounded-full pointer-events-none">
                                   {totalBadge > 9 ? "9+" : totalBadge}
                                 </span>
                               )}

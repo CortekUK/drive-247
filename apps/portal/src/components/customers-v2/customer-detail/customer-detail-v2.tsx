@@ -50,10 +50,10 @@
  *                       column rather than being restated on every section.
  */
 
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { AlertTriangle, ArrowLeft, Loader2 } from "lucide-react";
+import { AlertTriangle, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import { useCustomerDetailV2 } from "./use-customer-detail-v2";
 import { SECTIONS, SECTION_GROUPS, readSectionFrom, sectionHref, type SectionId, type SectionProps } from "./sections";
@@ -73,6 +73,111 @@ import { ContextColumn, DOCK_CLEARANCE, RecordDock, RecordDockNav, contextTabPan
 import { EmptyHint, Panel, expiryOf, fmtDate } from "./kit";
 import type { Drift } from "./kit";
 import type { CustomerRecord } from "./types";
+import { AutoSkeleton } from "@/components/skeleton-v2/auto-skeleton";
+import { useSkeletonLoading } from "@/hooks/use-skeleton-loading";
+import { skeletonFaker, skeletonRows } from "@/lib/skeleton-data";
+
+/**
+ * A placeholder customer for the skeleton: drawn through the real sections and
+ * the overview while the record loads, so the bones are the loaded screen's
+ * own shape. Only the lengths are ever seen. It has no blocks, rejection or
+ * expired licence, so no alert strip claims space the real record may not use.
+ * The id is swapped for the real one at render, so a section's own query (the
+ * documents, the gig proofs) asks about the right customer from the start.
+ */
+const SKELETON_RECORD: CustomerRecord = (() => {
+  const f = skeletonFaker(0);
+  return {
+    id: "skeleton",
+    createdAt: f.date(120),
+    identity: {
+      name: f.text(2, 2),
+      email: `${f.word(6, 9)}@${f.word(5, 7)}.com`,
+      phone: "(555) 555-0100",
+      dob: f.date(12000).slice(0, 10),
+      street: f.text(3, 3),
+      city: f.word(5, 9),
+      state: "CA",
+      zip: "90210",
+      timezone: "America/Los_Angeles",
+      customerType: "Individual",
+      companyName: "",
+      companyRegistration: "",
+      profilePhotoUrl: null,
+      nok: { name: f.text(2, 2), relationship: f.word(5, 7), phone: "(555) 555-0101", email: "", address: "" },
+    },
+    licence: {
+      number: f.word(8, 10),
+      state: "CA",
+      idNumber: "",
+      issued: f.date(900),
+      expiry: f.date(-900),
+      isGigDriver: false,
+      gigProofs: [],
+    },
+    docs: skeletonRows(2, (d) => ({
+      id: d.id,
+      type: d.text(1, 2),
+      name: `${d.word(6, 10)}.pdf`,
+      vehicle: null,
+      from: null,
+      until: null,
+      verified: true,
+      uploadedAt: d.date(),
+      fileUrl: null,
+      scan: { status: "passed" as const, confidence: null, reasons: [] },
+    })),
+    ai: {
+      state: "passed",
+      completedAt: f.date(100),
+      faceMatchScore: 92,
+      photos: { face: null, selfie: null, docFront: null, docBack: null },
+      extracted: null,
+      declineReason: null,
+      acceptedBaseline: null,
+    },
+    cmd: {
+      present: false,
+      state: "none",
+      holder: "",
+      number: "",
+      expires: null,
+      place: "",
+      lastEventAt: null,
+      linkExpiresAt: null,
+      channels: [],
+      documents: [],
+      applicantVerificationId: null,
+    },
+    account: { status: "Active", rejection: null, blockedHere: null, globalBlocks: [] },
+    consent: { sms: true, smsAt: f.date(110), whatsapp: false },
+    rentals: skeletonRows(3, (r) => ({
+      id: r.id,
+      ref: r.word(6, 8),
+      vehicle: r.text(2, 3),
+      reg: r.word(6, 8),
+      start: r.date(r.int(10, 90)),
+      end: r.date(r.int(0, 9)),
+      total: r.money(200, 2400),
+      outstanding: 0,
+      status: "Completed" as const,
+    })),
+    ledger: skeletonRows(4, (l) => ({
+      id: l.id,
+      date: l.date(),
+      label: l.text(2, 3),
+      ref: l.word(6, 8),
+      kind: l.pick(["charge", "payment"] as const),
+      amount: l.money(),
+    })),
+    links: [],
+    fines: [],
+    reviews: [],
+    summary: null,
+    events: skeletonRows(4, (e) => ({ label: e.text(2, 4), at: e.date(), done: true })),
+    billing: { stripeCustomerId: null, methodsUsed: [] },
+  };
+})();
 
 /**
  * Which component draws which section.
@@ -109,8 +214,22 @@ export function CustomerDetailV2() {
   const id = (params?.id as string) ?? "";
   const section = readSectionFrom(searchParams.get("section"), searchParams.get("tab"));
 
-  const { record, isLoading, notFound, set, saving, verifyDrift, reviewDrift, canEdit, currency } =
-    useCustomerDetailV2(id);
+  const {
+    record: loadedRecord,
+    isLoading: recordLoading,
+    notFound,
+    set,
+    saving,
+    verifyDrift,
+    reviewDrift,
+    canEdit,
+    currency,
+  } = useCustomerDetailV2(id);
+  // While the record loads, the placeholder is drawn through the real layout
+  // under <AutoSkeleton> instead of a spinner in an empty frame.
+  const isLoading = useSkeletonLoading(recordLoading);
+  const skeletonRecord = useMemo(() => ({ ...SKELETON_RECORD, id }), [id]);
+  const record = isLoading ? skeletonRecord : loadedRecord;
 
   /**
    * Move to another section.
@@ -139,17 +258,7 @@ export function CustomerDetailV2() {
 
   /* ── the states before a section can mount ──────────────────────────── */
 
-  if (isLoading) {
-    return (
-      <Frame>
-        <div className="flex h-full w-full items-center justify-center">
-          <Loader2 className="size-5 animate-spin text-muted-foreground" />
-        </div>
-      </Frame>
-    );
-  }
-
-  if (notFound || !record) {
+  if (!record || (!isLoading && notFound)) {
     return (
       <Frame>
         <div className="flex h-full min-h-0 w-full max-w-3xl flex-col">
@@ -176,6 +285,9 @@ export function CustomerDetailV2() {
   const meta = SECTIONS.find((s) => s.id === section)!;
   const props: ViewProps = { c: record, set, onJump, canEdit, currency, verifyDrift, reviewDrift };
   const alert = blockingAlert(record);
+  // Remount the placeholder's views when the real record lands, so nothing
+  // treats placeholder-to-real as an edit (the overview's Live highlights).
+  const phase = isLoading ? "skeleton" : "record";
 
   return (
     <Frame>
@@ -183,7 +295,7 @@ export function CustomerDetailV2() {
           Without it the panel keeps the previous section's scroll offset and
           you land halfway down a screen you have never seen. */}
       <div
-        key={section}
+        key={`${section}-${phase}`}
         className={`flex min-w-0 flex-1 flex-col overflow-hidden md:pr-6${docked ? " " + DOCK_CLEARANCE : ""}`}
       >
         {/* The one fact that changes what every other section means, so it
@@ -211,7 +323,10 @@ export function CustomerDetailV2() {
           </div>
         )}
 
-        <div className="min-h-0 flex-1">
+        {/* One stretched grid cell, so the AutoSkeleton wrapper hands the
+            panel the full height its own scroll container needs. */}
+        <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)]">
+          <AutoSkeleton loading={isLoading} className="h-full min-h-0">
           {View ? (
             <View {...props} />
           ) : (
@@ -222,6 +337,7 @@ export function CustomerDetailV2() {
               </EmptyHint>
             </Panel>
           )}
+          </AutoSkeleton>
         </div>
       </div>
 
@@ -242,14 +358,20 @@ export function CustomerDetailV2() {
           drops out and the middle takes the space instead. */}
       {overviewFits ? (
         <ContextColumn label="Timeline & at a glance" width={344}>
-          <OverviewRail
-            c={record}
-            verifyDrift={verifyDrift}
-            reviewDrift={reviewDrift}
-            onJump={onJump}
-            currency={currency}
-            saving={saving}
-          />
+          {/* Same stretched-cell trick as the middle column. */}
+          <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)]">
+            <AutoSkeleton loading={isLoading} className="flex h-full min-h-0 flex-col">
+              <OverviewRail
+                key={phase}
+                c={record}
+                verifyDrift={verifyDrift}
+                reviewDrift={reviewDrift}
+                onJump={onJump}
+                currency={currency}
+                saving={saving}
+              />
+            </AutoSkeleton>
+          </div>
         </ContextColumn>
       ) : null}
 

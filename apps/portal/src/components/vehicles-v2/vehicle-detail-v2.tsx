@@ -64,6 +64,9 @@ import { useVehiclePricingOverrides } from "@/hooks/use-vehicle-pricing-override
 import { useVehicleServices } from "@/hooks/use-vehicle-services";
 import { useWeekendPricing } from "@/hooks/use-weekend-pricing";
 import { getSiteV2BaseUrl } from "@/lib/site-v2-url";
+import { skeletonFaker } from "@/lib/skeleton-data";
+import { useSkeletonLoading } from "@/hooks/use-skeleton-loading";
+import { AutoSkeleton } from "@/components/skeleton-v2/auto-skeleton";
 import type { DistanceUnit } from "@/lib/format-utils";
 
 import { FormatProvider, daysBetween, daysUntil, todayISO } from "./kit";
@@ -86,6 +89,7 @@ import {
   useVehiclePhotos,
   useVehicleRecord,
   useVehicleRentals,
+  type VehicleRecord,
 } from "./use-vehicle-record";
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -110,6 +114,83 @@ const EXPIRY_WARNING_DAYS = 30;
 
 /** Rental statuses that mean the car is spoken for right now. */
 const OPEN_RENTAL_STATUSES = ["Active", "Pending", "Confirmed"];
+
+/**
+ * The car drawn while the real one loads. Only its shapes are seen: the page
+ * renders it through the real tabs and rail and <AutoSkeleton> lays bones over
+ * them. Rates are set and every hire length is on so the placeholder reads as
+ * an ordinary listed car, not a wall of "not set" warnings.
+ */
+const SKELETON_VEHICLE: VehicleRecord = (() => {
+  const f = skeletonFaker(0);
+  return {
+    id: f.id,
+    tenant_id: null,
+    reg: f.word(6, 8),
+    make: f.word(4, 8),
+    model: f.text(1, 2),
+    year: 2022,
+    colour: f.word(3, 7),
+    vin: f.word(17, 17),
+    fuel_type: "Petrol",
+    category: f.word(4, 8),
+    description: f.text(12, 20),
+    photo_url: null,
+    daily_rent: f.money(40, 150),
+    weekly_rent: f.money(250, 900),
+    monthly_rent: f.money(900, 3000),
+    security_deposit: f.money(200, 500),
+    available_daily: true,
+    available_weekly: true,
+    available_monthly: true,
+    daily_mileage: 150,
+    weekly_mileage: 1000,
+    monthly_mileage: 3000,
+    excess_mileage_rate: 0.25,
+    unlimited_mileage_available: false,
+    unlimited_mileage_price_daily: null,
+    unlimited_mileage_price_weekly: null,
+    unlimited_mileage_price_monthly: null,
+    status: "Available",
+    is_paused: false,
+    paused_reason: null,
+    paused_at: null,
+    pickup_location_id: null,
+    garaging_state: null,
+    lockbox_code: null,
+    lockbox_instructions: null,
+    mot_due_date: f.date(-200).slice(0, 10),
+    tax_due_date: f.date(-150).slice(0, 10),
+    warranty_start_date: f.date(400).slice(0, 10),
+    warranty_end_date: f.date(-300).slice(0, 10),
+    current_mileage: f.int(10_000, 60_000),
+    last_service_date: f.date(60).slice(0, 10),
+    last_service_mileage: f.int(5_000, 9_000),
+    has_service_plan: false,
+    has_logbook: true,
+    has_spare_key: true,
+    spare_key_holder: f.text(1, 2),
+    spare_key_notes: null,
+    has_tracker: false,
+    has_remote_immobiliser: false,
+    security_notes: null,
+    acquisition_type: "Purchase",
+    acquisition_date: f.date(400).slice(0, 10),
+    purchase_price: f.money(12_000, 40_000),
+    monthly_payment: null,
+    initial_payment: null,
+    term_months: null,
+    balloon: null,
+    finance_start_date: null,
+    is_disposed: false,
+    disposal_date: null,
+    sale_proceeds: null,
+    disposal_buyer: null,
+    disposal_notes: null,
+    created_at: f.date(400),
+    updated_at: f.date(5),
+  };
+})();
 
 /* ══════════════════════════════════════════════════════════════════════════
  * Screen
@@ -171,7 +252,19 @@ export function VehicleDetailV2({ vehicleId }: { vehicleId: string }) {
 
   /* ── data ───────────────────────────────────────────────────────────── */
 
-  const { vehicle, isLoading, notFound, patch, patchNow, saving } = useVehicleRecord(vehicleId);
+  const {
+    vehicle: loadedVehicle,
+    isLoading: recordLoading,
+    notFound,
+    patch,
+    patchNow,
+    saving,
+  } = useVehicleRecord(vehicleId);
+  const isLoading = useSkeletonLoading(recordLoading);
+  // While the record loads, the screen renders a placeholder car through its
+  // real tabs and rail, and <AutoSkeleton> turns that into the skeleton. The
+  // content is inert meanwhile, so nothing can `patch` the placeholder.
+  const vehicle = isLoading ? SKELETON_VEHICLE : loadedVehicle;
   const { photos, upload, remove, makeCover, isUploading } = useVehiclePhotos(vehicleId);
   const { rentals } = useVehicleRentals(vehicleId);
   const { pl } = useVehiclePL(vehicleId);
@@ -659,9 +752,7 @@ export function VehicleDetailV2({ vehicleId }: { vehicleId: string }) {
    * Render
    * ═════════════════════════════════════════════════════════════════════ */
 
-  if (isLoading) return <LoadingFrame />;
-
-  if (notFound || !vehicle) {
+  if (!vehicle || (notFound && !isLoading)) {
     return (
       <div className="flex h-[calc(100dvh-1rem)] items-center justify-center">
         <div className="max-w-sm text-center">
@@ -669,7 +760,7 @@ export function VehicleDetailV2({ vehicleId }: { vehicleId: string }) {
           <p className="mt-2 text-sm text-muted-foreground">
             It may have been deleted, or it belongs to a different account.
           </p>
-          <a href="/vehicles" className="mt-5 inline-block text-sm font-medium text-primary">
+          <a href="/vehicles" className="mt-5 inline-block text-sm font-medium text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
             Back to Vehicles
           </a>
         </div>
@@ -694,7 +785,7 @@ export function VehicleDetailV2({ vehicleId }: { vehicleId: string }) {
           sidebars side by side inside `(dashboard)/layout.tsx`. The two agree
           on which section is showing through `?section=` and `sections.ts`, and
           share nothing else. */}
-      <div className="flex h-[calc(100dvh-1rem)] min-h-[600px]">
+      <AutoSkeleton loading={isLoading} className="flex h-[calc(100dvh-1rem)] min-h-[600px]">
         {/* ── panel ─────────────────────────────────────────────────────── */}
         <main
           className={`relative min-w-0 flex-1 overflow-hidden px-4 py-5 md:px-8 md:py-6${docked ? " " + DOCK_CLEARANCE : ""}`}
@@ -916,80 +1007,55 @@ export function VehicleDetailV2({ vehicleId }: { vehicleId: string }) {
             />
           </ContextColumn>
         ) : null}
+      </AutoSkeleton>
 
-        {/* The same dock the rental and customer screens carry, so a record is
-            a record whichever one you opened. */}
-        <RecordDock
-          back={{ href: "/vehicles", label: "All vehicles", icon: ArrowLeft }}
-          primary={
-            railFits
-              ? undefined
-              : {
-                  id: "sections",
-                  label: sectionMeta.label,
-                  icon: sectionMeta.icon,
-                  description: "Every part of this vehicle's record. You are on " + sectionMeta.label + ".",
-                  content: (close: () => void) => (
-                    <RecordDockNav
-                      groups={SECTION_GROUPS}
-                      current={section}
-                      onSelect={goToSection}
-                      close={close}
-                    />
-                  ),
-                }
-          }
-          secondary={
-            readoutFits
-              ? []
-              : /* One icon per context view: Overview, Activity, Timeline. */
-                contextTabPanels(
-                  vehicleRailTabs<SectionId>({
-                    name: vehicleName,
-                    plate: hidePlate ? "" : vehicle.reg,
-                    coverSrc: photos[0]?.photo_url ?? vehicle.photo_url ?? null,
-                    statusLabel: status.label,
-                    statusTone: status.tone,
-                    listingLine,
-                    attention,
-                    vitals,
-                    events,
-                    eventsLoading,
-                    onJump: goToSection,
-                    timeline: <ConnectedTimeline scope={{ kind: "vehicle", id: vehicleId }} compact heading="Vehicle timeline" />,
-                  }),
-                )
-          }
-        />
-      </div>
+      {/* The same dock the rental and customer screens carry, so a record is
+          a record whichever one you opened. It sits outside the skeleton so
+          "All vehicles" still works while the record loads. */}
+      <RecordDock
+        back={{ href: "/vehicles", label: "All vehicles", icon: ArrowLeft }}
+        primary={
+          railFits
+            ? undefined
+            : {
+                id: "sections",
+                label: sectionMeta.label,
+                icon: sectionMeta.icon,
+                description: "Every part of this vehicle's record. You are on " + sectionMeta.label + ".",
+                content: (close: () => void) => (
+                  <RecordDockNav
+                    groups={SECTION_GROUPS}
+                    current={section}
+                    onSelect={goToSection}
+                    close={close}
+                  />
+                ),
+              }
+        }
+        secondary={
+          // Not while loading: the dock's panels sit outside the skeleton and
+          // would show the placeholder car's text as it is.
+          readoutFits || isLoading
+            ? []
+            : /* One icon per context view: Overview, Activity, Timeline. */
+              contextTabPanels(
+                vehicleRailTabs<SectionId>({
+                  name: vehicleName,
+                  plate: hidePlate ? "" : vehicle.reg,
+                  coverSrc: photos[0]?.photo_url ?? vehicle.photo_url ?? null,
+                  statusLabel: status.label,
+                  statusTone: status.tone,
+                  listingLine,
+                  attention,
+                  vitals,
+                  events,
+                  eventsLoading,
+                  onJump: goToSection,
+                  timeline: <ConnectedTimeline scope={{ kind: "vehicle", id: vehicleId }} compact heading="Vehicle timeline" />,
+                }),
+              )
+        }
+      />
     </FormatProvider>
-  );
-}
-
-/* ── first paint ───────────────────────────────────────────────────────── */
-
-/**
- * The frame, drawn before the record lands.
- *
- * Deliberately the real two-column shape rather than a centred spinner: the
- * layout does not jump when the data arrives, so the operator's eye is already
- * in the right place. The nav rail is not skeletoned here because it is not
- * this page's to draw — the sidebar renders it immediately from the URL, which
- * needs no fetch.
- */
-function LoadingFrame() {
-  return (
-    <div className="flex h-[calc(100dvh-1rem)] min-h-[600px]">
-      <main className="min-w-0 flex-1 space-y-6 px-8 py-6">
-        <div className="h-8 w-48 animate-pulse rounded-lg bg-muted/60" />
-        <div className="h-56 animate-pulse rounded-4xl bg-muted/40" />
-        <div className="h-64 animate-pulse rounded-4xl bg-muted/40" />
-      </main>
-      <aside className="hidden w-[336px] shrink-0 flex-col gap-4 border-l border-foreground/10 p-3 xl:flex">
-        <div className="h-40 animate-pulse rounded-3xl bg-muted/40" />
-        <div className="h-24 animate-pulse rounded-2xl bg-muted/40" />
-        <div className="h-40 animate-pulse rounded-2xl bg-muted/40" />
-      </aside>
-    </div>
   );
 }

@@ -120,7 +120,7 @@ export function SectionRentals({ c, onJump, currency }: SectionProps) {
                           run. A Pending booking with nothing owed has not been
                           settled — it has not been invoiced. */}
                       {r.outstanding > 0 ? (
-                        <p className="mt-0.5 text-xs font-medium tabular-nums text-primary">
+                        <p className="mt-0.5 text-xs font-medium tabular-nums text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
                           {money(r.outstanding)} owed
                         </p>
                       ) : r.status === "Active" || r.status === "Completed" ? (

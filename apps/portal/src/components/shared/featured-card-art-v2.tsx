@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type CSSProperties } from "react";
-import { ArrowRight, Ban, CalendarDays, CarFront, Check, FileSpreadsheet, Link2, Sparkles, User } from "lucide-react";
+import { ArrowRight, Ban, CalendarDays, CarFront, Check, CreditCard, FileSpreadsheet, Link2, Sparkles, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { FeaturedArtKey } from "@/lib/featured-cards";
 
@@ -399,6 +399,37 @@ function SuggestionArt({ still }: ArtProps) {
   );
 }
 
+/** A saved card, and a charge landing on its own, row after row. */
+function AutoChargeArt({ still }: ArtProps) {
+  return (
+    <div className="flex items-center gap-3">
+      <span
+        className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-primary/25 bg-primary/10"
+        style={loop(still, FLOAT)}
+      >
+        <CreditCard className="size-5 text-primary" />
+      </span>
+      <ArrowRight
+        className="size-3.5 shrink-0 text-primary/60"
+        style={loop(still, "arrow-nudge 3.6s ease-in-out infinite")}
+      />
+      <div className="flex-1 space-y-2">
+        {[0, 0.45, 0.9].map((delay) => (
+          <div key={delay} className="flex items-center gap-1.5">
+            <span className="relative h-1.5 flex-1 rounded-full bg-primary/15">
+              <span
+                className="absolute inset-0 origin-left rounded-full bg-primary/50"
+                style={loop(still, GROW, delay)}
+              />
+            </span>
+            <Check className="size-3 shrink-0 text-primary/70" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 const ARTS: Record<FeaturedArtKey, (props: ArtProps) => JSX.Element> = {
   calendar: CalendarArt,
   trax: TraxArt,
@@ -409,6 +440,7 @@ const ARTS: Record<FeaturedArtKey, (props: ArtProps) => JSX.Element> = {
   availability: AvailabilityArt,
   announcement: AnnouncementArt,
   suggestion: SuggestionArt,
+  autocharge: AutoChargeArt,
 };
 
 export function FeaturedCardArt({ art, still }: { art: FeaturedArtKey; still: boolean }) {

@@ -4,7 +4,7 @@ import { useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
-import type { AgreementTemplateCategoryV2, AgreementTemplateV2 } from '@/lib/agreements-v2/types';
+import type { AgreementTemplateCategoryV2, AgreementTemplateStatusV2, AgreementTemplateV2 } from '@/lib/agreements-v2/types';
 
 /**
  * Agreements v2 — the tenant's agreement templates, every category, as ONE list.
@@ -48,9 +48,15 @@ interface TemplateRow {
   template_category: string | null;
   is_active: boolean | null;
   updated_at: string | null;
+  template_status?: string | null;
 }
 
-const SELECT = 'id, template_name, template_content, template_category, is_active, updated_at';
+const SELECT = 'id, template_name, template_content, template_category, is_active, updated_at, template_status';
+
+const STATUSES: ReadonlySet<string> = new Set(['draft', 'active', 'archived']);
+
+/** Only an active template can be sent, picked for a rental, or be the default. */
+export const isUsableTemplateV2 = (t: Pick<AgreementTemplateV2, 'status'>) => (t.status ?? 'active') === 'active';
 
 export function toTemplateV2(row: TemplateRow): AgreementTemplateV2 {
   const category = CATEGORIES.has(row.template_category ?? '')
@@ -63,6 +69,7 @@ export function toTemplateV2(row: TemplateRow): AgreementTemplateV2 {
     category,
     isDefault: row.is_active === true,
     updatedAt: row.updated_at ?? null,
+    status: STATUSES.has(row.template_status ?? '') ? (row.template_status as AgreementTemplateStatusV2) : 'active',
   };
 }
 
@@ -119,13 +126,16 @@ export function useAgreementTemplatesV2() {
         .select(SELECT)
         .eq('tenant_id', tenantId!);
       if (error) throw error;
-      return sortTemplatesV2(((data ?? []) as TemplateRow[]).map(toTemplateV2));
+      return sortTemplatesV2(((data ?? []) as unknown as TemplateRow[]).map(toTemplateV2));
     },
     enabled: !!tenantId,
   });
 
+  const templates = query.data ?? [];
   return {
-    templates: query.data ?? [],
+    templates,
+    /** Active only: what the send dialog and a rental's template choice may offer. */
+    usableTemplates: templates.filter(isUsableTemplateV2),
     isLoading: query.isLoading,
     error: query.error,
     refetch: query.refetch,
@@ -184,6 +194,8 @@ export function useAgreementTemplateMutationsV2() {
             template_content: input.content ?? '',
             template_category: 'standard',
             is_active: false,
+            // A new template is a draft until the operator makes it active.
+            template_status: 'draft',
           })
           .select(SELECT)
           .single();
@@ -193,7 +205,7 @@ export function useAgreementTemplateMutationsV2() {
           throw error;
         }
         await invalidate();
-        return toTemplateV2(data as TemplateRow);
+        return toTemplateV2(data as unknown as TemplateRow);
       }
       throw new Error('Could not find a free name for this template.');
     },
@@ -246,15 +258,20 @@ export function useAgreementTemplateMutationsV2() {
     async (id: string): Promise<void> => {
       const tid = requireTenant();
 
-      const { data: target, error: targetError } = await supabase
+      const { data: targetRow, error: targetError } = await supabase
         .from('agreement_templates')
-        .select('id, template_category, is_active')
+        .select('id, template_category, is_active, template_status')
         .eq('id', id)
         .eq('tenant_id', tid)
         .maybeSingle();
       if (targetError) throw targetError;
+      // `template_status` is newer than the generated types (ops/agreement_templates_status_v2.sql).
+      const target = targetRow as unknown as { template_category: string; is_active: boolean | null; template_status: string | null } | null;
       if (!target) throw new Error('That template was not found.');
       if (target.is_active === true) return;
+      if ((target.template_status ?? 'active') !== 'active') {
+        throw new Error('Only an active template can be the default. Make it active first.');
+      }
 
       const category = target.template_category;
 
@@ -331,5 +348,35 @@ export function useAgreementTemplateMutationsV2() {
     [requireTenant, invalidate],
   );
 
-  return { create, update, setDefault, remove };
+  /**
+   * Draft, active or archived. The DEFAULT always stays active (it is what a
+   * rental sends): moving it off active is refused here, and the write itself
+   * only matches a non-default row, so a template that became the default a
+   * moment ago in another tab is never archived on a stale check.
+   */
+  const setStatus = useCallback(
+    async (id: string, status: AgreementTemplateStatusV2): Promise<void> => {
+      const tid = requireTenant();
+      if (!STATUSES.has(status)) throw new Error('Unknown status.');
+      let q = supabase
+        .from('agreement_templates')
+        .update({ template_status: status, updated_at: new Date().toISOString() } as never)
+        .eq('id', id)
+        .eq('tenant_id', tid);
+      if (status !== 'active') q = q.or('is_active.is.null,is_active.eq.false');
+      const { data, error } = await q.select('id');
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error(
+          status === 'active'
+            ? 'That template was not found.'
+            : 'This is your default template, so it stays active. Make another one the default first.',
+        );
+      }
+      await invalidate();
+    },
+    [requireTenant, invalidate],
+  );
+
+  return { create, update, setDefault, remove, setStatus };
 }

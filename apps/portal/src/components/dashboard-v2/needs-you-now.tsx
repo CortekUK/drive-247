@@ -13,7 +13,6 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui-v2/card';
-import { Skeleton } from '@/components/ui-v2/skeleton';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/lib/format-utils';
 import { useTenant } from '@/contexts/TenantContext';
@@ -23,6 +22,9 @@ import { usePendingBookingsCount } from '@/hooks/use-pending-bookings';
 import { useTodayOperations } from '@/hooks/use-today-operations';
 import { AttentionWash } from './attention-wash';
 import { CardSurface } from './card-surface';
+import { AutoSkeleton } from '@/components/skeleton-v2/auto-skeleton';
+import { useSkeletonLoading } from '@/hooks/use-skeleton-loading';
+import { skeletonRows } from '@/lib/skeleton-data';
 
 /**
  * Everything blocked on a human decision, in one ranked list.
@@ -50,6 +52,16 @@ interface Item {
   tone: Tone;
   href: string;
 }
+
+/** Placeholder rows for the skeleton: only their lengths are ever seen. */
+const SKELETON_ITEMS: Item[] = skeletonRows(3, (f) => ({
+  id: f.id,
+  icon: Timer,
+  label: f.text(3, 4),
+  detail: f.word(4, 7),
+  tone: 'info',
+  href: '',
+}));
 
 /**
  * Icons and values sit on their own near-white chips.
@@ -113,8 +125,9 @@ export function NeedsYouNow({ className }: { className?: string }) {
   const { canView } = useManagerPermissions();
   const { data: kpis } = useDashboardKPIs();
   const { data: pendingBookings } = usePendingBookingsCount();
-  const { pickups, returns, overdue, staleCount, staleAfterDays, isLoading } =
+  const { pickups, returns, overdue, staleCount, staleAfterDays, isLoading: opsLoading } =
     useTodayOperations();
+  const isLoading = useSkeletonLoading(opsLoading);
 
   const currencyCode = tenant?.currency_code || 'USD';
   const canSeeRentals = canView('rentals');
@@ -132,13 +145,13 @@ export function NeedsYouNow({ className }: { className?: string }) {
       maximumFractionDigits: 0,
     });
 
-  const items: Item[] = [];
+  const realItems: Item[] = [];
 
   // 1. A car that should be back and is not. Nothing else on this card is
   //    worth more per hour of inattention.
   if (canSeeRentals && overdue.length > 0) {
     const worst = Math.max(...overdue.map((o) => o.daysLate ?? 0));
-    items.push({
+    realItems.push({
       id: 'overdue-vehicles',
       icon: AlertTriangle,
       label: overdue.length === 1 ? '1 vehicle not returned' : `${overdue.length} vehicles not returned`,
@@ -150,7 +163,7 @@ export function NeedsYouNow({ className }: { className?: string }) {
 
   // 2. A customer is waiting on a yes. This decays fastest of anything here.
   if (canView('pending_bookings') && (pendingBookings ?? 0) > 0) {
-    items.push({
+    realItems.push({
       id: 'pending-bookings',
       icon: Inbox,
       label:
@@ -163,7 +176,7 @@ export function NeedsYouNow({ className }: { className?: string }) {
 
   // 3. Money already earned and not collected.
   if (canSeePayments && kpis && kpis.overdue.count > 0) {
-    items.push({
+    realItems.push({
       id: 'overdue-payments',
       icon: Receipt,
       label:
@@ -175,7 +188,7 @@ export function NeedsYouNow({ className }: { className?: string }) {
   }
 
   if (canSeePayments && kpis && kpis.dueToday.count > 0) {
-    items.push({
+    realItems.push({
       id: 'due-today',
       icon: Timer,
       label: kpis.dueToday.count === 1 ? '1 payment due today' : `${kpis.dueToday.count} payments due today`,
@@ -188,7 +201,7 @@ export function NeedsYouNow({ className }: { className?: string }) {
   // 4. Fines get more expensive on a deadline, so only the ones with a clock
   //    on them belong on a "now" list — the rest live on /fines.
   if (canView('fines') && kpis && kpis.finesOpen.dueSoonCount > 0) {
-    items.push({
+    realItems.push({
       id: 'fines-due-soon',
       icon: ScrollText,
       label:
@@ -204,7 +217,7 @@ export function NeedsYouNow({ className }: { className?: string }) {
   // 5. Today's physical work. Real, but it is scheduled rather than blocked.
   const handovers = pickups.length + returns.length;
   if (canSeeRentals && handovers > 0) {
-    items.push({
+    realItems.push({
       id: 'handovers',
       icon: KeyRound,
       label: handovers === 1 ? '1 handover today' : `${handovers} handovers today`,
@@ -217,7 +230,7 @@ export function NeedsYouNow({ className }: { className?: string }) {
   // 6. Housekeeping, and last on purpose: rentals so far past their end date
   //    that they are a data problem rather than a missing car.
   if (canSeeRentals && staleCount > 0) {
-    items.push({
+    realItems.push({
       id: 'stale-rentals',
       icon: Timer,
       label: `${staleCount} rentals never closed off`,
@@ -227,6 +240,7 @@ export function NeedsYouNow({ className }: { className?: string }) {
     });
   }
 
+  const items = isLoading ? SKELETON_ITEMS : realItems;
   const hasCritical = items.some((i) => i.tone === 'critical');
 
   return (
@@ -259,13 +273,11 @@ export function NeedsYouNow({ className }: { className?: string }) {
           )}
         </h2>
 
-        {isLoading ? (
-          <div className="space-y-1.5 px-2 py-1">
-            <Skeleton className="h-11 w-full bg-white/40" />
-            <Skeleton className="h-11 w-full bg-white/40" />
-            <Skeleton className="h-11 w-full bg-white/40" />
-          </div>
-        ) : items.length === 0 ? (
+        {/* One stretched grid cell, so the AutoSkeleton wrapper hands its full
+            height to the centred list and the empty state. */}
+        <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)]">
+        <AutoSkeleton loading={isLoading} className="flex h-full min-h-0 flex-col">
+        {items.length === 0 ? (
           /* An empty list is the good outcome, so it reads as a result rather
              than as a card that failed to load. */
           <div className="flex flex-1 flex-col items-center justify-center gap-1.5 py-6 text-center">
@@ -287,6 +299,8 @@ export function NeedsYouNow({ className }: { className?: string }) {
             ))}
           </div>
         )}
+        </AutoSkeleton>
+        </div>
       </CardContent>
     </Card>
   );

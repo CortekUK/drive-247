@@ -50,11 +50,14 @@ export function useOperatorSignatureV2() {
   const query = useQuery({
     queryKey: key,
     queryFn: async (): Promise<string | null> => {
+      // Oct 1 2026: signatures live in operator_signatures_v2 (several each,
+      // one primary). "Your signature" is the primary one.
       const { data, error } = await supabaseUntyped
-        .from('agreement_operator_signatures_v2')
+        .from('operator_signatures_v2')
         .select('image_data')
         .eq('app_user_id', appUserId)
         .eq('tenant_id', tenantId)
+        .eq('is_primary', true)
         .maybeSingle();
       if (error) {
         if (isMissingTableError(error)) return null;
@@ -74,22 +77,28 @@ export function useOperatorSignatureV2() {
       }
       if (!tenantId || !appUserId) return { persisted: false };
 
-      const { error } = await supabaseUntyped
-        .from('agreement_operator_signatures_v2')
-        .upsert(
-          {
-            app_user_id: appUserId,
-            tenant_id: tenantId,
-            image_data: dataUrl,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: 'app_user_id' },
-        );
+      // Saved as a new signature that becomes the primary (the old primary
+      // stays in the list, under Manage signatures).
+      const { error: clearError } = await supabaseUntyped
+        .from('operator_signatures_v2')
+        .update({ is_primary: false })
+        .eq('app_user_id', appUserId)
+        .eq('tenant_id', tenantId)
+        .eq('is_primary', true);
+      if (clearError && !isMissingTableError(clearError)) throw clearError;
+      const { error } = await supabaseUntyped.from('operator_signatures_v2').insert({
+        app_user_id: appUserId,
+        tenant_id: tenantId,
+        image_data: dataUrl,
+        source: 'drawn',
+        is_primary: true,
+      });
       if (error) {
         if (isMissingTableError(error)) return { persisted: false };
         throw error;
       }
       queryClient.setQueryData(operatorSignatureV2QueryKey(tenantId, appUserId), dataUrl);
+      void queryClient.invalidateQueries({ queryKey: ['operator-signatures-v2', tenantId, appUserId] });
       return { persisted: true };
     },
     [tenantId, appUserId, queryClient],

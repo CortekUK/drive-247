@@ -9,6 +9,8 @@ import { getBrandInitials } from "@/components/shared/layout/brand-logo";
 import { BRAND_MARK_FALLBACK_INITIALS } from "@/lib/appearance/logo";
 import { bookingOriginFor } from "@/lib/booking-origin";
 import { cn } from "@/lib/utils";
+import { LOGO_TONE_CLASS, useLogoTone } from "@/lib/appearance/logo-tone";
+import { useTenantDarkIcon } from "@/hooks/use-tenant-dark-icon";
 
 /**
  * Square tenant mark for the avatar-sized slot at the top of the v2 sidebar.
@@ -29,7 +31,9 @@ import { cn } from "@/lib/utils";
  *
  * The image sits straight on the sidebar ground: no tile or padding of ours
  * around it, so any edge a person sees belongs to their own image (team lead,
- * Sep 2026: the white edges around the logo were ours, and had to go).
+ * Sep 2026: the white edges around the logo were ours, and had to go). The
+ * one exception is dark mode, for an icon that would otherwise vanish there —
+ * measured, not assumed (see `useLogoTone`).
  *
  * `preview` is Settings → Branding drawing this same mark from its unsaved
  * form (the image and name being edited) instead of the saved branding, so the
@@ -38,6 +42,8 @@ import { cn } from "@/lib/utils";
 export interface OrgMarkPreview {
   /** The image to show, or null for the initials chip. */
   src: string | null;
+  /** The dark-mode icon being edited, if any (Settings → Branding). */
+  darkSrc?: string | null;
   /** The name the initials come from. */
   name: string;
   alt?: string;
@@ -45,31 +51,55 @@ export interface OrgMarkPreview {
 
 export function OrgMark({ className, preview }: { className?: string; preview?: OrgMarkPreview }) {
   const { branding, brandName } = useTenantBranding();
+  const { darkIconUrl } = useTenantDarkIcon();
 
   const logoUrl = preview ? preview.src : branding?.favicon_url;
+  const darkUrl = preview ? preview.darkSrc ?? null : darkIconUrl;
   const name = preview ? preview.name : brandName;
+  // Dark mode only: a plate or an outline for an icon that would vanish on
+  // the dark sidebar, nothing for one that reads (lib/appearance/logo-tone.ts).
+  // Unused when the tenant uploaded their own dark-mode icon.
+  const tone = useLogoTone(darkUrl ? null : logoUrl);
 
-  if (logoUrl) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={logoUrl}
-        alt={preview?.alt ?? name}
-        className={cn("h-8 w-8 shrink-0 rounded-lg object-contain", className)}
-      />
-    );
-  }
-
-  return (
+  // The light face: the square icon, else the initials chip. When a dark-mode
+  // icon exists it swaps in by CSS (`dark:`), so there is no flash on load and
+  // no theme read in JS.
+  const lightFace = logoUrl ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={logoUrl}
+      alt={preview?.alt ?? name}
+      className={cn(
+        "h-8 w-8 shrink-0 rounded-lg object-contain",
+        darkUrl ? "dark:hidden" : LOGO_TONE_CLASS[tone],
+        className
+      )}
+    />
+  ) : (
     <div
       title={name}
       className={cn(
         "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-[12px] font-semibold text-primary-foreground",
+        darkUrl && "dark:hidden",
         className
       )}
     >
       {getBrandInitials(name) || BRAND_MARK_FALLBACK_INITIALS}
     </div>
+  );
+
+  if (!darkUrl) return lightFace;
+
+  return (
+    <>
+      {lightFace}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={darkUrl}
+        alt={preview?.alt ?? name}
+        className={cn("hidden h-8 w-8 shrink-0 rounded-lg object-contain dark:block", className)}
+      />
+    </>
   );
 }
 

@@ -9,6 +9,10 @@
  * complaint that reached us was "the dropdowns don't look professional", which
  * is what a panel that snaps into existence looks like.
  *
+ * Since the portal-wide motion standard (src/lib/motion.ts, `MOTION_FLOATING`)
+ * the pair is the Trax motion: fade + a 12px offset from Radix's side, 200ms
+ * ease-out in / ease-in out, no zoom, and still under reduced motion.
+ *
  * These assertions are on the RENDERED element, not on the source text, so a
  * refactor that moves or reformats the class string keeps passing — while
  * re-adding an unconditional `animate-none`, or dropping the exit half (which
@@ -34,16 +38,26 @@ import {
 } from '@/components/ui-v2/dropdown-menu';
 
 const ENTER = [
-  'data-[state=open]:animate-in',
-  'data-[state=open]:fade-in-0',
-  'data-[state=open]:zoom-in-95',
+  'animate-in',
+  'fade-in-0',
+  'duration-200',
+  'ease-out',
+  'data-[side=bottom]:slide-in-from-top-3',
 ] as const;
 
 const EXIT = [
   'data-[state=closed]:animate-out',
   'data-[state=closed]:fade-out-0',
-  'data-[state=closed]:zoom-out-95',
+  'data-[state=closed]:duration-200',
+  'data-[state=closed]:ease-in',
+  'data-[side=bottom]:slide-out-to-top-3',
 ] as const;
+
+/** No zoom anywhere in the pair, and reduced motion is honoured. */
+const expectTraxMotion = (classes: string[]) => {
+  expect(classes.filter((c) => c.includes('zoom-'))).toEqual([]);
+  expect(classes).toContain('motion-reduce:!animate-none');
+};
 
 /**
  * Two jsdom gaps these primitives walk straight into. Patched here rather than
@@ -118,6 +132,7 @@ describe('the v2 Select panel animates', () => {
     for (const token of [...ENTER, ...EXIT]) {
       expect(classes, token).toContain(token);
     }
+    expectTraxMotion(classes);
 
     // THE REGRESSION. An unconditional `animate-none` (with or without `!`)
     // silently disables everything above it.
@@ -127,7 +142,7 @@ describe('the v2 Select panel animates', () => {
 
   it('keeps the one deliberate exception: item-aligned panels stay still', async () => {
     // `position="item-aligned"` lays the panel OVER the trigger with the
-    // selected row on top of it; zooming that reads as the page jumping.
+    // selected row on top of it; animating that reads as the page jumping.
     await mount(
       <Select open value="km">
         <SelectTrigger>
@@ -143,7 +158,7 @@ describe('the v2 Select panel animates', () => {
     // Conditional, so it only suppresses the animation for that position — the
     // enter classes are still present for every other one.
     expect(classes).toContain('data-[align-trigger=true]:animate-none');
-    expect(classes).toContain('data-[state=open]:animate-in');
+    expect(classes).toContain('animate-in');
   });
 });
 
@@ -162,6 +177,7 @@ describe('the v2 dropdown menu panel animates', () => {
     for (const token of [...ENTER, ...EXIT]) {
       expect(classes, token).toContain(token);
     }
+    expectTraxMotion(classes);
     expect(classes).not.toContain('animate-none');
     expect(classes).not.toContain('!animate-none');
   });

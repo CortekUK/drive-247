@@ -51,18 +51,27 @@ const STATE_DOT: Record<State, string> = {
  */
 export const HOME_PALETTE = `
   .pv {
-    --pv-paper: #ffffff;
-    --pv-wash: #f7f8fc;
-    --pv-line: #e8eaf2;
-    --pv-line-2: #d6d9e6;
+    /* Surfaces, ink and accent come from the portal theme tokens, so every
+       widget follows dark mode and the tenant's brand colour. These used to be
+       literals (white paper, a fixed #5b5bd6 indigo), which left the dashboard
+       white on a dark page and indigo on a teal tenant. In light mode each
+       value lands on or next to the old literal. */
+    --pv-paper: hsl(var(--card));
+    --pv-wash: color-mix(in srgb, hsl(var(--foreground)) 3%, hsl(var(--card)));
+    --pv-line: hsl(var(--border));
+    --pv-line-2: color-mix(in srgb, hsl(var(--foreground)) 16%, hsl(var(--card)));
 
-    --pv-ink: #12141c;
-    --pv-ink-2: #4d5364;
-    --pv-ink-3: #878da0;
+    --pv-ink: hsl(var(--foreground));
+    --pv-ink-2: color-mix(in srgb, hsl(var(--foreground)) 72%, hsl(var(--card)));
+    --pv-ink-3: hsl(var(--muted-foreground));
 
-    --pv-accent: #5b5bd6;
-    --pv-accent-30: #5b5bd64d;
-    --pv-accent-bg: #ececfb;
+    --pv-accent: hsl(var(--primary));
+    --pv-on-accent: hsl(var(--primary-foreground));
+    --pv-accent-30: hsl(var(--primary) / 0.3);
+    --pv-accent-bg: color-mix(in srgb, hsl(var(--primary)) 11%, hsl(var(--card)));
+    /* Accent as TEXT. Equals --pv-accent in light; in dark it is the lighter
+       --v2-link step, since the button colour is too dim to read as type. */
+    --pv-accent-ink: hsl(var(--v2-link, var(--primary)));
 
     --pv-late: #d93025;
     --pv-late-bg: #fdeceb;
@@ -70,6 +79,16 @@ export const HOME_PALETTE = `
     --pv-wait-bg: #fdf3e7;
     --pv-clear: #12a594;
     --pv-clear-bg: #e4f6f3;
+  }
+  /* Status colours in dark: the same hues, lifted to read on the soft dark
+     card, with their washes as deep tints rather than pastel slabs. */
+  .dark .pv {
+    --pv-late: #ef7b73;
+    --pv-late-bg: color-mix(in srgb, #ef7b73 14%, hsl(var(--card)));
+    --pv-wait: #e0a458;
+    --pv-wait-bg: color-mix(in srgb, #e0a458 14%, hsl(var(--card)));
+    --pv-clear: #3dbfae;
+    --pv-clear-bg: color-mix(in srgb, #3dbfae 14%, hsl(var(--card)));
   }
 `;
 
@@ -142,7 +161,7 @@ export function Band({
         {action && (
           <button
             type="button"
-            className="shrink-0 text-[12px] font-medium text-[var(--pv-accent)] transition-opacity hover:opacity-70"
+            className="shrink-0 text-[12px] font-medium text-[var(--pv-accent-ink)] transition-opacity hover:opacity-70"
           >
             {action}
           </button>
@@ -201,7 +220,7 @@ export function Card({
         {action && (
           <button
             type="button"
-            className="text-[11px] font-medium text-[var(--pv-accent)] transition-opacity hover:opacity-70"
+            className="text-[11px] font-medium text-[var(--pv-accent-ink)] transition-opacity hover:opacity-70"
           >
             {action}
           </button>
@@ -267,17 +286,26 @@ export function Lead({
  * margin instead of an unfinished card, and it puts the link where you arrive
  * after reading rather than above where you start.
  */
-export function CardFooter({ label, icon }: { label: string; icon?: ReactNode }) {
+export function CardFooter({
+  label,
+  icon,
+  onClick,
+}: {
+  label: string;
+  icon?: ReactNode;
+  onClick?: () => void;
+}) {
   return (
     <button
       type="button"
+      onClick={onClick}
       className="group mt-auto flex w-full items-center gap-2.5 border-t border-[var(--pv-line)] px-6 py-3.5 text-left transition-colors hover:bg-[var(--pv-wash)]"
     >
       {icon}
       <span className="flex-1 text-[12px] text-[var(--pv-ink-3)] transition-colors group-hover:text-[var(--pv-ink-2)]">
         {label}
       </span>
-      <span className="text-[12px] text-[var(--pv-ink-3)] transition-colors group-hover:text-[var(--pv-accent)]">
+      <span className="text-[12px] text-[var(--pv-ink-3)] transition-colors group-hover:text-[var(--pv-accent-ink)]">
         →
       </span>
     </button>
@@ -403,10 +431,10 @@ export function FlowRow({ m, past }: { m: Movement; past?: boolean }) {
 export function NowDivider({ label, next }: { label: string; next: string }) {
   return (
     <div className="flex items-center gap-2 px-6 py-3">
-      <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--pv-accent)]">
+      <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--pv-accent-ink)]">
         Now
       </span>
-      <span className="text-[10px] font-semibold tabular-nums text-[var(--pv-accent)]">{label}</span>
+      <span className="text-[10px] font-semibold tabular-nums text-[var(--pv-accent-ink)]">{label}</span>
       <span className="h-px flex-1 bg-[var(--pv-accent-30)]" />
       <span className="text-[10px] text-[var(--pv-ink-3)]">{next}</span>
     </div>
@@ -420,7 +448,7 @@ export function TodoRow({ todo }: { todo: Todo }) {
         className={cn(
           'mt-px flex size-[15px] shrink-0 items-center justify-center rounded-[5px] border transition-colors',
           todo.done
-            ? 'border-[var(--pv-clear)] bg-[var(--pv-clear)] text-white'
+            ? 'border-[var(--pv-clear)] bg-[var(--pv-clear)] text-[var(--pv-paper)]'
             : 'border-[var(--pv-line-2)] group-hover:border-[var(--pv-accent)]'
         )}
       >
@@ -466,7 +494,7 @@ export function AddNote() {
       type="button"
       className="group mt-auto flex w-full items-center gap-2.5 border-t border-[var(--pv-line)] px-6 py-4 text-left transition-colors hover:bg-[var(--pv-wash)]"
     >
-      <span className="flex size-[15px] shrink-0 items-center justify-center rounded-[5px] border border-dashed border-[var(--pv-line-2)] text-[var(--pv-ink-3)] group-hover:border-[var(--pv-accent)] group-hover:text-[var(--pv-accent)]">
+      <span className="flex size-[15px] shrink-0 items-center justify-center rounded-[5px] border border-dashed border-[var(--pv-line-2)] text-[var(--pv-ink-3)] group-hover:border-[var(--pv-accent)] group-hover:text-[var(--pv-accent-ink)]">
         <Plus className="size-2.5" strokeWidth={3} />
       </span>
       <span className="text-[12px] text-[var(--pv-ink-3)] group-hover:text-[var(--pv-ink-2)]">

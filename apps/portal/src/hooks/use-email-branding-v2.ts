@@ -19,13 +19,15 @@ import type { EmailBrand } from "@/lib/notifications-v2/types";
  */
 
 export const EMAIL_BRANDING_V2_COLUMNS =
-  "company_name, logo_url, primary_color, accent_color, contact_email, contact_phone, phone, slug";
+  "company_name, logo_url, favicon_url, primary_color, accent_color, contact_email, contact_phone, phone, slug";
 
 export const emailBrandingV2QueryKey = (tenantId: string | null | undefined) => ["email-branding-v2", tenantId] as const;
 
 export interface EmailBrandingRow {
   company_name?: string | null;
   logo_url?: string | null;
+  /** The square icon (the app icon phones show beside a push). */
+  favicon_url?: string | null;
   primary_color?: string | null;
   accent_color?: string | null;
   contact_email?: string | null;
@@ -90,6 +92,8 @@ export function useEmailBrandingV2() {
     /** For the sender line (settings-model `senderAddress`). */
     slug: text(row?.slug) ?? tenant?.slug ?? null,
     companyName: text(row?.company_name) ?? tenant?.company_name ?? null,
+    /** Square icon for push previews; null when the tenant has none. */
+    iconUrl: text(row?.favicon_url),
     isLoading: query.isLoading,
     error: query.error as Error | null,
   };

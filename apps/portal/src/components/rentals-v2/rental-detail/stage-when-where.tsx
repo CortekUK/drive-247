@@ -268,7 +268,7 @@ export function StageWhenWhere({ detail, refetch }: StageProps) {
         <div className={cn(cardCls, "p-6")}>
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2.5">
-              <span className="flex size-8 items-center justify-center rounded-full bg-primary-light text-primary">
+              <span className="flex size-8 items-center justify-center rounded-full bg-primary-light text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
                 <KeyRound className="size-4" />
               </span>
               <div>
@@ -382,7 +382,7 @@ function LegCard({
     <div className={cn(cardCls, "p-6")}>
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
-          <span className="flex size-8 items-center justify-center rounded-full bg-primary-light text-primary">
+          <span className="flex size-8 items-center justify-center rounded-full bg-primary-light text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
             {isOut ? <Truck className="size-4" /> : <Store className="size-4" />}
           </span>
           <div>

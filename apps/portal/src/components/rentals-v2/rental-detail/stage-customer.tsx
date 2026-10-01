@@ -279,7 +279,7 @@ function useCustomerRentalCount(customerId: string | null) {
  */
 const RATING_TONE = {
   good: { text: "text-success", bar: "bg-success", tile: "bg-success-light text-success" },
-  fair: { text: "text-primary", bar: "bg-primary", tile: "bg-primary-light text-primary" },
+  fair: { text: "text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]", bar: "bg-primary", tile: "bg-primary-light text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" },
   poor: { text: "text-destructive", bar: "bg-destructive", tile: "bg-destructive-light text-destructive" },
 } as const;
 
@@ -360,7 +360,7 @@ export function StageCustomer({ detail }: StageProps) {
         ? "bg-success-light text-success"
         : state === "not_started"
           ? "bg-muted text-muted-foreground"
-          : "bg-primary-light text-primary";
+          : "bg-primary-light text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]";
 
   const verifyHeadline = {
     not_started: "Not verified",
@@ -429,7 +429,7 @@ export function StageCustomer({ detail }: StageProps) {
       {/* ── who ─────────────────────────────────────────────────────────── */}
       <Surface>
         <div className="flex items-start gap-4">
-          <span className="flex size-12 shrink-0 items-center justify-center rounded-3xl bg-primary-light font-heading text-sm font-semibold text-primary">
+          <span className="flex size-12 shrink-0 items-center justify-center rounded-3xl bg-primary-light font-heading text-sm font-semibold text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
             {initials(customer.name)}
           </span>
           <div className="min-w-0 flex-1">
@@ -651,7 +651,7 @@ export function StageCustomer({ detail }: StageProps) {
             {reviewSummary?.summary ? (
               <div className={cn(insetCls, "mt-5 px-5 py-4")}>
                 <div className="mb-2 flex items-center gap-2">
-                  <Sparkles className="size-3.5 text-primary" />
+                  <Sparkles className="size-3.5 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" />
                   <span className="text-xs font-medium">Summary</span>
                   <Pill tone="primary">Written for you</Pill>
                 </div>

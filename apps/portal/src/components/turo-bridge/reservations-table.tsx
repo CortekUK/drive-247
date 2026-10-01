@@ -27,7 +27,10 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
+import { useV2 } from "@/lib/v2-context";
+import { usePageSearch } from "@/components/shared/layout/page-search-slot";
+import { useSkeletonLoading } from "@/hooks/use-skeleton-loading";
+import { skeletonRows } from "@/lib/skeleton-data";
 import {
   Dialog,
   DialogContent,
@@ -72,14 +75,43 @@ import {
 
 const COLUMNS = 8;
 
+/**
+ * Placeholder trips for the skeleton: only their shapes are ever seen. The
+ * page's <AutoSkeleton> draws over them, so they fill only what a row renders
+ * (the readers treat everything else as absent).
+ */
+const SKELETON_TRIPS = skeletonRows(6, (f) => ({
+  id: f.id,
+  tenant_id: null,
+  reservation_id: String(f.int(10_000_000, 99_999_999)),
+  source: "extension",
+  guest_name: f.text(2, 2),
+  vehicle_label: f.text(2, 4),
+  starts_at: f.date(f.int(-10, 10)),
+  ends_at: f.date(f.int(-20, 0)),
+  status: "booked",
+  total_amount: f.money(150, 1200),
+  currency: null,
+  raw: {},
+  synced_at: f.date(1),
+  created_at: f.date(5),
+  updated_at: f.date(1),
+})) as unknown as TuroBridgeRow[];
+
 type StateFilter = TuroSyncState | "all";
 
 export function ReservationsScreen({
   currency,
   onGoToMapping,
+  skeleton = false,
 }: {
   currency: string;
   onGoToMapping: () => void;
+  /**
+   * The page is showing its skeleton (its own <AutoSkeleton> wraps this
+   * screen), e.g. while the tenant resolves, before this hook can even start.
+   */
+  skeleton?: boolean;
 }) {
   const [search, setSearch] = useState("");
   const [stateFilter, setStateFilter] = useState<StateFilter>("all");
@@ -92,8 +124,26 @@ export function ReservationsScreen({
     foundationApplied,
     filterUnavailable,
     filterUnavailableReason,
-    isLoading,
+    isLoading: rowsLoading,
   } = useTuroStagedReservations({ syncState: stateFilter, search });
+  // While loading, the table renders placeholder trips for the page's
+  // <AutoSkeleton> to draw over, so the "no trips" message never flashes.
+  const isLoading = useSkeletonLoading(skeleton || rowsLoading);
+  const shownRows = isLoading ? SKELETON_TRIPS : rows;
+
+  // v2: the search lives in the top bar (page-search-slot.tsx).
+  const v2Chrome = useV2("chrome");
+  usePageSearch(
+    v2Chrome
+      ? {
+          placeholder: "Search by trip ID, guest, vehicle, plate or status…",
+          value: search,
+          onChange: setSearch,
+          scopeLabel: "Reservations",
+          resultCount: isLoading ? undefined : rows.length,
+        }
+      : null,
+  );
 
   return (
     <div className="space-y-6">
@@ -130,6 +180,7 @@ export function ReservationsScreen({
 
       {/* Filter bar */}
       <div className="flex flex-wrap items-center gap-3">
+        {!v2Chrome && (
         <div className="relative flex-1 min-w-[260px] max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -139,6 +190,7 @@ export function ReservationsScreen({
             className="pl-9"
           />
         </div>
+        )}
         <div className="flex flex-wrap items-center gap-1.5">
           <SlidersHorizontal className="h-4 w-4 text-muted-foreground mr-1" />
           <FilterChip
@@ -193,15 +245,7 @@ export function ReservationsScreen({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isLoading ? (
-                Array.from({ length: 4 }).map((_, i) => (
-                  <TableRow key={i}>
-                    <TableCell colSpan={COLUMNS}>
-                      <Skeleton className="h-8 w-full" />
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : rows.length === 0 ? (
+              {shownRows.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={COLUMNS} className="text-center py-12">
                     <p className="text-muted-foreground text-sm">
@@ -224,7 +268,7 @@ export function ReservationsScreen({
                   </TableCell>
                 </TableRow>
               ) : (
-                rows.map((r) => (
+                shownRows.map((r) => (
                   <ReservationRow
                     key={r.id}
                     row={r}

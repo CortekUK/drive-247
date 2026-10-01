@@ -30,7 +30,10 @@ import { format } from "date-fns";
 import { Car, CalendarDays, ExternalLink, Mail, Phone, Sparkles } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui-v2/avatar";
 import { Button } from "@/components/ui-v2/button";
-import { useCustomerRentals } from "@/hooks/use-customer-rentals";
+import { useCustomerRentals, type CustomerRental } from "@/hooks/use-customer-rentals";
+import { AutoSkeleton } from "@/components/skeleton-v2/auto-skeleton";
+import { skeletonRows } from "@/lib/skeleton-data";
+import { useSkeletonLoading } from "@/hooks/use-skeleton-loading";
 import type { ChatChannel } from "@/hooks/use-chat-channels";
 import type { MessageChannel } from "@/contexts/RealtimeChatContext";
 import { NO_SCROLLBAR } from "@/components/messages-v2/no-scrollbar";
@@ -74,12 +77,28 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+/** A placeholder rental for the Rental card's skeleton: only its shape is seen. */
+const [SKELETON_RENTAL] = skeletonRows<CustomerRental>(1, (f) => ({
+  id: f.id,
+  start_date: f.date(10),
+  end_date: f.date(-10),
+  monthly_amount: 0,
+  status: "Active",
+  approval_status: null,
+  schedule: "",
+  created_at: f.date(10),
+  vehicle: { id: f.id, reg: f.word(6, 8), make: f.word(4, 8), model: f.text(1, 2) },
+}));
+
 export function CustomerContext({ channel }: { channel: ChatChannel }) {
   const customerId = channel.customer_id;
   const name = channel.customer?.name || "Customer";
   const email = channel.customer?.email || null;
   const phone = channel.customer?.phone || null;
-  const { data: rentals = [], isLoading } = useCustomerRentals(customerId);
+  const { data: loadedRentals = [], isLoading: rentalsLoading } = useCustomerRentals(customerId);
+  const isLoading = useSkeletonLoading(rentalsLoading);
+  // While loading, one placeholder rental renders through the real card below.
+  const rentals = isLoading ? [SKELETON_RENTAL] : loadedRentals;
 
   /* The rental this conversation is most likely about: the live one, else the
      most recent. Sorting here rather than trusting order — the hook does not
@@ -106,7 +125,7 @@ export function CustomerContext({ channel }: { channel: ChatChannel }) {
         <div className="flex flex-col items-center text-center">
           <Avatar className="h-14 w-14">
             <AvatarImage src={channel.customer?.profile_photo_url || undefined} alt={name} />
-            <AvatarFallback className="bg-primary/10 text-base font-semibold text-primary">
+            <AvatarFallback className="bg-primary/10 text-base font-semibold text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
               {initials(name)}
             </AvatarFallback>
           </Avatar>
@@ -168,16 +187,12 @@ export function CustomerContext({ channel }: { channel: ChatChannel }) {
         </Section>
 
         <Section title="Rental">
-          {isLoading ? (
-            <div className="space-y-2 rounded-2xl bg-muted/40 p-3.5">
-              <div className="h-3 w-2/3 animate-pulse rounded-full bg-muted" />
-              <div className="h-3 w-full animate-pulse rounded-full bg-muted/70" />
-            </div>
-          ) : !current ? (
+          {!isLoading && !current ? (
             <p className="rounded-2xl bg-muted/40 px-3.5 py-3 text-[12px] text-muted-foreground">
               No rentals for this customer yet.
             </p>
           ) : (
+            <AutoSkeleton loading={isLoading}>
             <Link
               href={`/rentals/${current.id}`}
               className="block rounded-2xl bg-muted/40 px-3.5 py-3 transition-colors hover:bg-[hsl(var(--v2-hover,var(--accent)_/_0.6))]"
@@ -202,6 +217,7 @@ export function CustomerContext({ channel }: { channel: ChatChannel }) {
                 {current.end_date ? ` – ${format(new Date(current.end_date), "d MMM yyyy")}` : ""}
               </p>
             </Link>
+            </AutoSkeleton>
           )}
         </Section>
 

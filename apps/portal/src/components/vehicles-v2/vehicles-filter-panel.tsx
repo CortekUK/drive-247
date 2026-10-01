@@ -120,7 +120,7 @@ export function VehiclesFilterPanel({
     // faces read as one component.
     <FilterShell onClear={onClear} onClose={onClose} activeCount={activeCount}>
       <FilterSection
-        icon={<Activity className="size-3.5 text-primary" />}
+        icon={<Activity className="size-3.5 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" />}
         tint="bg-primary/10"
         title="Status"
         className="lg:col-span-2"
@@ -140,7 +140,7 @@ export function VehiclesFilterPanel({
       </FilterSection>
 
       <FilterSection
-        icon={<TrendingUp className="size-3.5 text-emerald-600" />}
+        icon={<TrendingUp className="size-3.5 text-emerald-600 dark:text-emerald-400" />}
         tint="bg-emerald-500/10"
         title="P&L"
         className="lg:col-span-2"
@@ -160,7 +160,7 @@ export function VehiclesFilterPanel({
       </FilterSection>
 
       <FilterSection
-        icon={<Car className="size-3.5 text-blue-600" />}
+        icon={<Car className="size-3.5 text-blue-600 dark:text-blue-400" />}
         tint="bg-blue-500/10"
         title="Make"
         className="lg:col-span-2"
@@ -178,7 +178,7 @@ export function VehiclesFilterPanel({
       </FilterSection>
 
       <FilterSection
-        icon={<CalendarDays className="size-3.5 text-violet-600" />}
+        icon={<CalendarDays className="size-3.5 text-violet-600 dark:text-violet-400" />}
         tint="bg-violet-500/10"
         title="Year"
         className="lg:col-span-2"
@@ -201,7 +201,7 @@ export function VehiclesFilterPanel({
 
       {showOwnership && (
         <FilterSection
-          icon={<Users className="size-3.5 text-amber-600" />}
+          icon={<Users className="size-3.5 text-amber-600 dark:text-amber-400" />}
           tint="bg-amber-500/10"
           title="Ownership"
           className="lg:col-span-2"
@@ -222,7 +222,7 @@ export function VehiclesFilterPanel({
 
       {showHealth && (
         <FilterSection
-          icon={<HeartPulse className="size-3.5 text-red-600" />}
+          icon={<HeartPulse className="size-3.5 text-red-600 dark:text-red-400" />}
           tint="bg-red-500/10"
           title="Health"
           className="lg:col-span-2"

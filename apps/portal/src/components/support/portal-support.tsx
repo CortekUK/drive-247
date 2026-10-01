@@ -9,6 +9,9 @@ import { SupportInboxView } from './support-inbox';
 import { RetentionDialog } from './retention-dialog';
 import { useSupportClient } from '@/hooks/use-support-messaging';
 import { useTraxSupportOptional } from '@/components/trax/support/trax-support-context';
+import { useIsLean } from '@/lib/lean-context';
+import { useForcedEmptyState } from '@/hooks/use-forced-empty-state';
+import { SupportTeachingEmptyState } from '@/components/empty-states/support-empty-state';
 
 /**
  * The portal's Support section: tickets on the left, the human conversation in
@@ -72,6 +75,39 @@ export function PortalSupport({ initialTicketId, composeIssueId }: { initialTick
 
   const inbox = useSupportInbox({ call: human.call, scope: human.scope, initialId: initialTicketId, compose, uploadAttachment: human.uploadAttachment });
   const listInRail = useSupportRailHost(inbox);
+
+  /* No tickets at all (lean only): the workspace steps aside for the teaching
+     empty state. "At all" means the unfiltered list came back empty and settled
+     without an error, nothing is open or being written, and the tenant did not
+     arrive with a ticket or a TRAX escalation to open. Starting a ticket from
+     the tile (or the rail) flips `creating`, which brings the composer back.
+     `devForceEmpty` is the /dev preview switch, inert outside development and
+     inside the lean gate. */
+  const leanTenant = useIsLean();
+  const devForceEmpty = useForcedEmptyState('support');
+  const untouched = !inbox.id && !inbox.creating && !initialTicketId && !composeIssueId;
+  const teachEmptySupport =
+    leanTenant &&
+    untouched &&
+    ((!inbox.loading && !inbox.error && !inbox.search && !inbox.filter && inbox.tickets.length === 0) || devForceEmpty);
+
+  if (teachEmptySupport) {
+    return (
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">
+        {/* On a desktop the rail carries the Support heading and New ticket;
+            where it is not showing, the page keeps its own heading. */}
+        {!listInRail && (
+          <header className="shrink-0 px-1 pb-2">
+            <h1 className="text-base font-semibold tracking-tight">Support</h1>
+            <p className="text-[12.5px] text-muted-foreground">Get help from the Drive247 support team.</p>
+          </header>
+        )}
+        <div className="flex flex-1 items-center justify-center pb-6">
+          <SupportTeachingEmptyState onNewTicket={inbox.beginNew} disabled={inbox.busy || inbox.creating} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">

@@ -15,7 +15,9 @@ import {
 import { Plus, Tag } from "lucide-react";
 import { notFound } from "next/navigation";
 import { useTenant } from "@/contexts/TenantContext";
-import { useIsAreaHidden } from "@/lib/lean-context";
+import { useIsAreaHidden, useIsLean } from "@/lib/lean-context";
+import { useForcedEmptyState } from "@/hooks/use-forced-empty-state";
+import { ExpensesEmptyState } from "@/components/empty-states/expenses-empty-state";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format-utils";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
@@ -60,6 +62,8 @@ export default function ExpensesPage() {
   // Page-level data: drives the nav-card totals + mutations (invalidates all tabs).
   const {
     expenses: allExpenses,
+    isLoading: expensesLoading,
+    isError: expensesError,
     addExpenseAsync,
     updateExpenseAsync,
     deleteExpense,
@@ -111,6 +115,16 @@ export default function ExpensesPage() {
 
   const active = TABS[tab];
 
+  // No expenses at all (the "all" list is the tenant's full, unfiltered
+  // history). Lean canary only — and note `expenses` is a lean-hidden area, so
+  // today the notFound() above fires first for every lean tenant and this
+  // never shows; it takes effect only if the area is un-hidden. Everyone else
+  // renders exactly what they did before. `devForceEmpty` is the /dev switch.
+  const devForceEmpty = useForcedEmptyState("expenses");
+  const leanTenant = useIsLean();
+  const teachEmptyExpenses =
+    leanTenant && ((!expensesLoading && !expensesError && allExpenses.length === 0) || devForceEmpty);
+
   return (
     <div className="container mx-auto space-y-6 p-4 sm:p-6">
       {/* Header */}
@@ -121,7 +135,7 @@ export default function ExpensesPage() {
             Track vehicle costs and business overheads, visualised.
           </p>
         </div>
-        {editable && (
+        {editable && !teachEmptyExpenses && (
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => setCategoriesOpen(true)}>
               <Tag className="mr-2 h-4 w-4" />
@@ -135,6 +149,13 @@ export default function ExpensesPage() {
         )}
       </div>
 
+      {teachEmptyExpenses ? (
+        <ExpensesEmptyState
+          onAddExpense={editable ? openAdd : undefined}
+          onManageCategories={editable ? () => setCategoriesOpen(true) : undefined}
+        />
+      ) : (
+      <>
       {/* Nav cards — total per scope, double as the tab switcher */}
       <div className="grid gap-3 sm:grid-cols-3 sm:gap-4">
         {(Object.keys(TABS) as TabKey[]).map((key) => {
@@ -193,6 +214,8 @@ export default function ExpensesPage() {
         onDelete={setDeleting}
         getReceiptUrl={getReceiptUrl}
       />
+      </>
+      )}
 
       {/* Manage categories */}
       <ExpenseCategoriesDialog open={categoriesOpen} onOpenChange={setCategoriesOpen} />

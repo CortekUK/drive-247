@@ -101,7 +101,7 @@ export function TodoImageUpload({ imageUrl, imagePath, onChange, className }: Pr
             alt="Todo cover"
             className="w-full max-h-64 object-cover"
           />
-          <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-2">
+          <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity duration-200 ease-in group-hover:ease-out motion-reduce:transition-none flex items-center justify-center gap-2">
             <Button type="button" size="sm" variant="secondary" onClick={pickFile} disabled={busy}>
               {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : "Replace"}
             </Button>

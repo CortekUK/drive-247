@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 import { useFirstRentalTour } from '@/hooks/use-first-rental-tour';
 import { useSystemAnnouncementPriority } from '@/lib/announcements/system-priority';
 import { routePathname, type ResolvedStep, type TourSide, type TourStep } from '@/lib/first-rental-tour';
+import { MOTION_IN, MOTION_OFFSET, MOTION_OUT } from '@/lib/motion';
 
 /**
  * The first-rental walkthrough — eleven steps across six pages, canary only.
@@ -737,7 +738,7 @@ function TourLayer({
           aria-hidden
           initial={reduceMotion ? false : { opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={reduceMotion ? { duration: 0 } : { duration: 0.2 }}
+          transition={reduceMotion ? { duration: 0 } : MOTION_IN}
           className="absolute inset-0"
           style={{
             background: SCRIM,
@@ -860,10 +861,9 @@ function TourLayer({
           data-first-rental-tour=""
           data-yields-to-system={yieldsToSystem ? '' : undefined}
           data-tour-step={step.id}
-          initial={reduceMotion ? false : { opacity: 0, y: 8, scale: 0.98 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={reduceMotion ? undefined : { opacity: 0, y: -6, scale: 0.98 }}
-          transition={reduceMotion ? { duration: 0 } : { duration: 0.18, ease: 'easeOut' }}
+          initial={reduceMotion ? false : { opacity: 0, y: MOTION_OFFSET }}
+          animate={{ opacity: 1, y: 0, transition: reduceMotion ? { duration: 0 } : MOTION_IN }}
+          exit={reduceMotion ? undefined : { opacity: 0, y: MOTION_OFFSET, transition: MOTION_OUT }}
           className={cn(
             'absolute flex flex-col rounded-3xl bg-card text-card-foreground shadow-md outline-none ring-1 ring-foreground/10 dark:ring-foreground/15',
             isWelcome ? 'gap-5 p-7 sm:p-8' : 'gap-4 p-5',

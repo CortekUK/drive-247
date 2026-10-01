@@ -19,9 +19,11 @@
 
 import { type ComponentType, useEffect, useMemo, useRef, useState } from "react";
 import { useTenant } from "@/contexts/TenantContext";
+import { useV2 } from "@/lib/v2-context";
+import { usePageSearch } from "@/components/shared/layout/page-search-slot";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardTitle } from "@/components/ui-v2/card";
-import { PanelLoading, StatusChip } from "./_panels/_kit";
+import { CardTag, PanelLoading, StatusChip, StatusChipTagMode, type CardTagKind } from "./_panels/_kit";
 import { panelFor } from "./_panels/registry";
 import { partitionByPins, useIntegrationPins } from "./integration-pins";
 import {
@@ -34,7 +36,7 @@ import {
 // The branch drew these two from `@phosphor-icons/react`, which is not a
 // dependency of this app. lucide-react — already the icon set everywhere else
 // in the portal — carries both, and takes the same `size` / `color` props.
-import { Crown, Globe, IdCard, Pin } from "lucide-react";
+import { Globe, IdCard, Pin } from "lucide-react";
 // Integration billing (northwind only): premium, beta, not-available and hidden
 // flags from the super admin's catalog. See premium-integration.tsx.
 import {
@@ -42,8 +44,8 @@ import {
   useIntegrationCatalog,
   useIntegrationSubscriptions,
 } from "@/lib/integration-billing/hooks";
-import { freeEntry, keyForBoardName, type CatalogEntry } from "@/lib/integration-billing/catalog";
-import { BetaPill, IntegrationDialogBody, PremiumCrown } from "./premium-integration";
+import { freeEntry, isPreviewOnly, keyForBoardName, type CatalogEntry } from "@/lib/integration-billing/catalog";
+import { BetaPill, IntegrationDialogBody, AddOnPill } from "./premium-integration";
 
 // logo.dev — publishable key (safe for client-side img.logo.dev)
 const LOGO_TOKEN = "pk_EmodMTbiSPiHDa2fIPUo3w";
@@ -123,6 +125,7 @@ function IntegrationCard({
   onOpen,
   onTogglePin,
   billing,
+  subscribed,
 }: {
   it: Integration;
   tenant: unknown;
@@ -131,25 +134,56 @@ function IntegrationCard({
   onTogglePin: () => void;
   /** The catalog's word on this card — integration-billing tenant only. */
   billing?: CatalogEntry;
+  /** Someone at this tenant is already paying for it. */
+  subscribed?: boolean;
 }) {
   // Resolved per card rather than once for the grid: each integration answers
   // "am I working?" from its own state, and a card whose integration has no
   // panel yet simply shows no chip rather than a guess.
   const CardStatus = panelFor(it.name)?.StatusChip;
 
+  // The card's ONE top-left tag. The first three are known from the catalog
+  // alone; only when none applies does the integration's own status decide,
+  // and then it can only say LIVE, or "!" with the warning on hover.
+  const key = keyForBoardName(it.name);
+  const fixedTag: CardTagKind | null = billing?.isUnavailable
+    ? "unavailable"
+    : key && isPreviewOnly(key)
+      ? "soon"
+      : billing?.isPremium && !subscribed
+        ? "addon"
+        : null;
+
   return (
     <Card
       onClick={onOpen}
       className={cn(
-        "group relative flex cursor-pointer flex-col items-center gap-2 border bg-transparent py-6 text-center shadow-none transition-all duration-200 hover:border-primary/30 hover:bg-gradient-to-br hover:from-primary/15 hover:via-primary/5 hover:to-transparent",
+        "group relative isolate flex cursor-pointer flex-col items-center gap-2 border bg-transparent py-6 text-center shadow-none transition-colors duration-200 ease-in hover:border-primary/30 hover:ease-out motion-reduce:transition-none",
         // Not available: dimmed slightly, still readable and still opens.
         billing?.isUnavailable && "opacity-60",
       )}
     >
-      {/* Premium: a small crown in the corner the pin does not use. */}
-      {billing?.isPremium && (
-        <PremiumCrown className="absolute left-3 top-3 z-10 p-1.5" title="Premium integration" />
-      )}
+      {/* Hover wash. A gradient cannot be transitioned — `background-image`
+          snaps — so it sits on its own layer and fades in on opacity instead.
+          `-z-10` inside the card's `isolate` keeps it above the card's
+          background and beneath every piece of content. */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-0 -z-10 rounded-[inherit] bg-gradient-to-br from-primary/15 via-primary/5 to-transparent opacity-0 transition-opacity duration-200 ease-in group-hover:opacity-100 group-hover:ease-out motion-reduce:transition-none"
+      />
+      {/* The tag slot, top-left: one tag at most (LIVE / SOON / ADD-ON /
+          UNAVAILABLE), plus a "!" when the integration needs attention.
+          Centred on the pin (a 28px button at top-3; the tag is 24px, so top-3.5) so the two corners read
+          as one row. This replaced the status chip that sat under the text. */}
+      <div className="absolute left-4 top-3.5 z-10 flex items-center gap-1.5">
+        {fixedTag ? (
+          <CardTag kind={fixedTag} />
+        ) : CardStatus && tenant ? (
+          <StatusChipTagMode>
+            <CardStatus tenant={tenant as never} />
+          </StatusChipTagMode>
+        ) : null}
+      </div>
       {/* Pin. A real <button> inside a clickable div, so it has to stop the
           click going any further — without `stopPropagation` every pin would
           also open the dialog behind it. The card body is untouched and still
@@ -193,28 +227,13 @@ function IntegrationCard({
           </CardTitle>
         )}
         {it.localLogo && billing?.isBeta && (
-          <div className="flex justify-center">
+          <div className="flex justify-center text-base">
             <BetaPill />
           </div>
         )}
         <p className="text-sm text-muted-foreground">{it.description}</p>
       </CardContent>
 
-      {/* Live status. The card used to carry a Switch that toggled a
-          local boolean and connected nothing — it read as a control
-          over a live integration while acting on nothing at all.
-          Connecting and disconnecting is a real, mostly irreversible
-          operation, so it belongs inside the dialog, behind whatever
-          confirmation that particular provider warrants. */}
-      <div className="px-6 pb-0.5">
-        {billing?.isUnavailable ? (
-          <StatusChip state="disconnected" label="Not available" />
-        ) : CardStatus && tenant ? (
-          <CardStatus tenant={tenant as never} />
-        ) : (
-          <span className="text-xs text-muted-foreground/60">&nbsp;</span>
-        )}
-      </div>
     </Card>
   );
 }
@@ -270,7 +289,6 @@ export function IntegrationsBoard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [billingOn, catalog, subscriptionsByKey],
   );
-  const anyPremium = billingOn && visibleIntegrations.some((it) => billingFor(it)?.isPremium);
 
   const [selected, setSelected] = useState<Integration | null>(null);
   const entry = selected ? panelFor(selected.name) : undefined;
@@ -286,7 +304,34 @@ export function IntegrationsBoard() {
     () => partitionByPins(visibleIntegrations, pinned),
     [visibleIntegrations, pinned],
   );
-  const hasPins = pinnedCards.length > 0;
+
+  /* v2: search the board from the top bar (page-search-slot.tsx) — name,
+     category or description, so "insurance" finds Bonzah and Inshur. The
+     filter runs over each half of the pin split, so a match keeps its place. */
+  const v2Chrome = useV2("chrome");
+  const [boardQuery, setBoardQuery] = useState("");
+  const needle = v2Chrome ? boardQuery.trim().toLowerCase() : "";
+  const matchesQuery = (it: Integration) =>
+    !needle ||
+    it.name.toLowerCase().includes(needle) ||
+    it.category.toLowerCase().includes(needle) ||
+    it.description.toLowerCase().includes(needle);
+  const shownPinned = needle ? pinnedCards.filter(matchesQuery) : pinnedCards;
+  const shownRest = needle ? rest.filter(matchesQuery) : rest;
+  const noMatch = !!needle && shownPinned.length === 0 && shownRest.length === 0;
+  usePageSearch(
+    v2Chrome
+      ? {
+          placeholder: "Search integrations…",
+          value: boardQuery,
+          onChange: setBoardQuery,
+          scopeLabel: "Integrations",
+          resultCount: shownPinned.length + shownRest.length,
+        }
+      : null,
+  );
+
+  const hasPins = shownPinned.length > 0;
 
   // Reopen the right card when a provider sends the operator back here.
   //
@@ -335,13 +380,6 @@ export function IntegrationsBoard() {
         <p className="mt-1.5 text-sm text-muted-foreground">
           Connect the tools that power payments, documents, messaging and more.
         </p>
-        {/* Free vs premium, said once — no filter ("itni cheezein nahi hain"). */}
-        {anyPremium && (
-          <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Crown aria-hidden className="size-3.5 shrink-0 fill-amber-400/30 text-amber-500" />
-            Premium integrations are billed monthly on your Drive247 bill once you subscribe. Everything else has no Drive247 charge.
-          </p>
-        )}
       </div>
 
       {/* Grid.
@@ -356,12 +394,16 @@ export function IntegrationsBoard() {
           the heading says why it moved. Both halves keep the board's own order
           (see `partitionByPins`), so unpinning drops a card straight back where
           it started rather than somewhere new. */}
-      {hasPins ? (
+      {noMatch ? (
+        <p className="py-10 text-center text-sm text-muted-foreground">
+          No integration matches &ldquo;{boardQuery.trim()}&rdquo;.
+        </p>
+      ) : hasPins ? (
         <>
           <section className="space-y-3">
             <h2 className="text-sm font-medium tracking-tight text-muted-foreground">Pinned</h2>
             <div className={GRID_CLASS}>
-              {pinnedCards.map((it) => (
+              {shownPinned.map((it) => (
                 <IntegrationCard
                   key={it.name}
                   it={it}
@@ -370,17 +412,20 @@ export function IntegrationsBoard() {
                   onOpen={() => setSelected(it)}
                   onTogglePin={() => toggle(it.name)}
                   billing={billingFor(it)}
+                  subscribed={!!subscriptionsByKey[keyForBoardName(it.name) ?? ""]}
                 />
               ))}
             </div>
           </section>
 
+          {/* A search can leave only pinned matches: no empty "All" heading then. */}
+          {shownRest.length > 0 && (
           <section className="space-y-3">
             <h2 className="text-sm font-medium tracking-tight text-muted-foreground">
               All integrations
             </h2>
             <div className={GRID_CLASS}>
-              {rest.map((it) => (
+              {shownRest.map((it) => (
                 <IntegrationCard
                   key={it.name}
                   it={it}
@@ -389,14 +434,16 @@ export function IntegrationsBoard() {
                   onOpen={() => setSelected(it)}
                   onTogglePin={() => toggle(it.name)}
                   billing={billingFor(it)}
+                  subscribed={!!subscriptionsByKey[keyForBoardName(it.name) ?? ""]}
                 />
               ))}
             </div>
           </section>
+          )}
         </>
       ) : (
         <div className={GRID_CLASS}>
-          {rest.map((it) => (
+          {shownRest.map((it) => (
             <IntegrationCard
               key={it.name}
               it={it}
@@ -405,6 +452,7 @@ export function IntegrationsBoard() {
               onOpen={() => setSelected(it)}
               onTogglePin={() => toggle(it.name)}
               billing={billingFor(it)}
+              subscribed={!!subscriptionsByKey[keyForBoardName(it.name) ?? ""]}
             />
           ))}
         </div>
@@ -429,7 +477,7 @@ export function IntegrationsBoard() {
                 </div>
                 <DialogTitle className="flex items-center gap-2">
                   {selected.name}
-                  {billingFor(selected)?.isPremium && <PremiumCrown />}
+                  {billingFor(selected)?.isPremium && <AddOnPill />}
                   {billingFor(selected)?.isBeta && <BetaPill />}
                   {billingFor(selected)?.isUnavailable ? (
                     <StatusChip state="disconnected" label="Not available" />

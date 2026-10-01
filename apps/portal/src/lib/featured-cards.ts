@@ -42,7 +42,7 @@ import { safeHref } from '@/lib/safe-href';
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
-export type FeaturedTab = 'rentals' | 'customers' | 'vehicles';
+export type FeaturedTab = 'rentals' | 'customers' | 'vehicles' | 'finances';
 
 /** One small animated art per key; see components/shared/featured-card-art-v2.tsx. */
 export type FeaturedArtKey =
@@ -54,7 +54,8 @@ export type FeaturedArtKey =
   | 'blocked'
   | 'availability'
   | 'announcement'
-  | 'suggestion';
+  | 'suggestion'
+  | 'autocharge';
 
 /** Handlers the registry knows about. Tabs may supply more for recommendations. */
 export type FeaturedHandlerKey = 'openCalendar' | 'openTrax' | 'openInvite' | 'openImport';
@@ -78,7 +79,8 @@ export type FeatureCardId =
   | 'invite-customers'
   | 'import-customers'
   | 'blocked-customers'
-  | 'ask-trax';
+  | 'ask-trax'
+  | 'auto-charge';
 
 /**
  * Everything a gate may read. Built by the deck from hooks; built by hand in
@@ -276,6 +278,21 @@ export const FEATURE_CARDS: readonly FeatureCardDef[] = [
     gate: (ctx) => ctx.isLean && ctx.canView('blocked_customers'),
   },
   {
+    // Auto-charge is the Auto-Extend default "Charge the saved card"
+    // (`auto_extend_default_charge_mode = 'auto_charge'`), set on Settings →
+    // Auto-Extend. That screen is gated on the `settings.rental` grant
+    // (lib/permissions.ts maps 'auto-extend' to it), and the card on the same.
+    id: 'auto-charge',
+    tabs: ['finances'],
+    title: 'Auto-charge',
+    subtitle: 'Bill saved cards automatically',
+    art: 'autocharge',
+    action: { kind: 'href', href: '/settings?tab=auto-extend' },
+    priority: 30,
+    isNewUntil: '2026-11-01',
+    gate: (ctx) => ctx.canView('settings') && ctx.canView('settings.rental'),
+  },
+  {
     id: 'ask-trax',
     tabs: ['rentals', 'customers', 'vehicles'],
     title: 'Ask Trax',
@@ -302,6 +319,7 @@ export const HERO_CARD: Readonly<Record<FeaturedTab, FeatureCardId>> = {
   rentals: 'calendar-view',
   vehicles: 'availability',
   customers: 'invite-customers',
+  finances: 'auto-charge',
 };
 
 /**

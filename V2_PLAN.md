@@ -774,3 +774,59 @@ CLAUDE.md
     load-bearing against the database rather than trusting the prose. It is
     wrong about portal's middleware, among other things (§9).
 ```
+
+---
+
+## 12. Design
+
+Rules for how v2 looks and moves. Every v2 screen follows them; a screen that
+does its own thing is a screen that reads as a different product.
+
+### Motion — one animation, everywhere
+
+**The reference is the Trax panel** — the one that opens from **Help** in the
+top bar (`apps/portal/src/components/trax/trax-panel.tsx`, the `shown` class
+list on the `<aside>`). Every animation matches it — in **every app**: portal
+(v1 and v2), booking site and customer portal, super admin, the Bonzah console
+and the marketing site. This is the one deliberate exception to "v1 never
+moves": the owner chose one motion language for the whole product (Sep 27
+2026), for every tenant. Nothing gets its own duration or its own curve.
+
+It is applied at the **primitive** level — each app's dialog, alert-dialog,
+sheet, popover, dropdown, select, tooltip and toast components — so a new
+screen built from them inherits it for free. Don't restyle motion per screen.
+
+Deliberate exceptions: the filter **flip** (`rentals-overview-flip.tsx`, a
+0.62s card turn — its own animation, on purpose), continuous loaders (spin,
+pulse, skeletons), charts, carousels and drag interactions.
+
+| | In (appear / hover on) | Out (disappear / hover off) |
+|---|---|---|
+| Duration | **200ms** | **200ms** |
+| Easing | **ease-out** — starts fast, settles | **ease-in** — leaves quickly |
+| Opacity | 0 → 1 | 1 → 0 |
+| Movement | rises into place from `translate-y-3` (12px) | sinks back 12px |
+
+```
+in   [transition:transform_200ms_ease-out,opacity_200ms_ease-out]
+out  [transition:transform_200ms_ease-in,opacity_200ms_ease-in]
+     motion-reduce:transition-none      ← always
+```
+
+The rules that follow from it:
+
+- **Animate `transform` and `opacity` only.** Never width, height, top/left or
+  colour snaps. They are the two properties the browser can animate without
+  re-laying out the page.
+- **Things that appear** (panels, popovers, dialogs, toasts, menus) use the
+  full motion: fade plus the 12px lift.
+- **Hover states** use the same 200ms and the same curves, but fade only — a
+  card does not jump 12px under the cursor.
+- **Gradients cannot be transitioned** — `background-image` snaps. Put the
+  gradient on its own `absolute inset-0` layer and fade that layer's opacity
+  (see the hover wash in `app/(dashboard)/integrations/integrations-board.tsx`).
+- **Something that leaves must stay painted until it has left.** If it becomes
+  `invisible` or unmounts, delay that by the 200ms, as the Trax panel does with
+  `visibility_0s_linear_200ms`; otherwise the exit animation never shows.
+- **`motion-reduce:transition-none` on every animated element.** An operator
+  who has asked their OS for less motion gets none.

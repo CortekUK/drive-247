@@ -499,7 +499,7 @@ export default function BonzahOnboardingV2({ tenantId, onExit, onSubmitted }: Pr
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
-              <Check className="size-4 text-primary" />
+              <Check className="size-4 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" />
               Send this to Bonzah?
             </AlertDialogTitle>
             <AlertDialogDescription>

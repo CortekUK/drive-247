@@ -678,7 +678,7 @@ function buttonHtml(attrs: string, label: string, brand: ResolvedBrand, block: b
     ";";
   if (!block) {
     return (
-      "<a" +
+      "<a data-email-button=\"\"" +
       hrefAttr +
       ' style="' +
       linkStyle +
@@ -696,7 +696,7 @@ function buttonHtml(attrs: string, label: string, brand: ResolvedBrand, block: b
     '" style="background-color:' +
     brand.button +
     ';border-radius:8px;">' +
-    "<a" +
+    "<a data-email-button=\"\"" +
     hrefAttr +
     ' style="' +
     linkStyle +
@@ -831,7 +831,12 @@ function logoHtml(b: ResolvedBrand, width?: number | null, height?: number | nul
     size = ' width="' + w + '" height="' + h + '"';
     css = "width:" + w + "px;height:" + h + "px;";
   }
+  // The logo sits on a small white plate (Oct 1 2026): a logo drawn in the
+  // brand's own colour, or in black, vanished into the brand-coloured header.
+  // A table cell, not a styled div, so Outlook draws the plate too.
   return (
+    '<table role="presentation" align="center" border="0" cellpadding="0" cellspacing="0" style="margin:0 auto;border-collapse:separate;">' +
+    '<tr><td data-email-logo-plate="" bgcolor="#ffffff" style="background-color:#ffffff;border-radius:10px;padding:10px 16px;">' +
     '<img src="' +
     escapeAttr(b.logoUrl) +
     '" alt="' +
@@ -844,7 +849,8 @@ function logoHtml(b: ResolvedBrand, width?: number | null, height?: number | nul
     EMAIL_FONT_STACK +
     ";font-size:20px;font-weight:700;color:" +
     b.onPrimary +
-    ';">'
+    ';">' +
+    "</td></tr></table>"
   );
 }
 
@@ -962,7 +968,9 @@ export function renderNotificationEmailHtml(input: RenderNotificationEmailInput)
       EMAIL_FONT_STACK +
       ";font-size:15px;line-height:24px;color:" +
       COLORS.text +
-      ';">' +
+      // data-email-body: the preview finds the message here to let the
+      // operator edit it in place (inline-edit.ts turns it back into a template).
+      ';" data-email-body="">' +
       body +
       "</td></tr>",
     '<tr><td align="center" bgcolor="' +

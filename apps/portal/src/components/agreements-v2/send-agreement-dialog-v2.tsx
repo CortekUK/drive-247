@@ -198,7 +198,8 @@ export function SendAgreementDialogV2({ open, onOpenChange, onSent }: SendAgreem
   const { tenant } = useTenant();
   const creditsRetired = useIntegrationBilling();
   const company = useCompanyDetailsV2();
-  const { templates, isLoading: templatesLoading, error: templatesError, refetch: refetchTemplates } = useAgreementTemplatesV2();
+  // Active templates only: a draft or archived one is never sent.
+  const { usableTemplates: templates, isLoading: templatesLoading, error: templatesError, refetch: refetchTemplates } = useAgreementTemplatesV2();
 
   const [step, setStep] = useState<Step>("details");
   const [recipientName, setRecipientName] = useState("");

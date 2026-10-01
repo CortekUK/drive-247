@@ -30,7 +30,9 @@ import { MetricCard } from '@/components/admin/metric-card';
 import { FilterChip, FilterSearch, FilterSection, FilterShell } from '@/components/admin/filter-primitives';
 import { OverviewFlip } from '@/components/admin/overview-flip';
 import Sidebar from '@/components/admin/Sidebar';
-import { Header } from '@/components/admin/Header';
+import { TopBar } from '@/components/admin/TopBar';
+import { AdminNavProvider } from '@/components/admin/admin-nav';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { SidebarProvider } from '@/components/admin/SidebarContext';
 import { SidebarSectionsProvider, useRegisterSidebarSections } from '@/components/admin/sidebar-sections';
 import { useState } from 'react';
@@ -47,6 +49,8 @@ export default function AdminPreviewPage() {
      signed-out navigation; that is enough to judge the surface, the active
      pill, the group behaviour and the sub-rows. */
   return (
+    <TooltipProvider>
+    <AdminNavProvider>
     <SidebarProvider>
     <SidebarSectionsProvider>
     {/* The SHELL, not an approximation of it.
@@ -58,11 +62,9 @@ export default function AdminPreviewPage() {
         `Header`, then a scroll port with the same padding, so what this page
         shows is what a signed-in page gets. */}
     <div className="flex h-screen overflow-hidden bg-app-gradient">
-      <div className="hidden w-[280px] shrink-0 md:block">
-        <Sidebar />
-      </div>
+      <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-      <Header />
+      <TopBar />
       <main data-scrollport className="flex-1 overflow-y-auto">
       <div className="p-4 sm:p-6">
       <header className="mb-6">
@@ -175,6 +177,8 @@ export default function AdminPreviewPage() {
     </div>
     </SidebarSectionsProvider>
     </SidebarProvider>
+    </AdminNavProvider>
+    </TooltipProvider>
   );
 }
 

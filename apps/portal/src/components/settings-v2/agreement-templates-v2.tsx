@@ -68,6 +68,8 @@ import {
   resolveAgreementEditorParams,
 } from "./message-rules";
 import { EditorChip, IconActionButton, TemplateEditorShellV2 } from "./template-editor-shell-v2";
+import { AutoSkeleton } from "@/components/skeleton-v2/auto-skeleton";
+import { useSkeletonLoading } from "@/hooks/use-skeleton-loading";
 
 function listHref(category: TemplateCategory) {
   return `/settings/agreement-templates${category !== "standard" ? `?category=${category}` : ""}`;
@@ -167,21 +169,16 @@ function AgreementCategorySectionV2({ category, canEdit }: { category: TemplateC
     })();
   }, [readOk, canEdit, defaultTemplate, customTemplate]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!tenant || isLoading || initPhase === "running") {
-    return (
-      <SettingsSectionSkeleton
-        variant="stack"
-        rows={2}
-        label={initPhase === "running" ? "Setting up agreements" : "Loading agreements"}
-      />
-    );
-  }
+  // While the templates load (or the first-time rows are being created), the
+  // real two options render with nothing saved yet — the default wording and
+  // "Not set up" — and <AutoSkeleton> draws the bones over them.
+  const isSkeleton = useSkeletonLoading(!tenant || isLoading || initPhase === "running");
 
-  if (error) {
+  if (!isSkeleton && error) {
     return <SettingsLoadError thing="agreement templates" error={error} onRetry={() => refetch()} />;
   }
 
-  if (initPhase === "failed") {
+  if (!isSkeleton && initPhase === "failed") {
     return (
       <SettingsLoadError
         thing="agreement templates"
@@ -204,7 +201,7 @@ function AgreementCategorySectionV2({ category, canEdit }: { category: TemplateC
     cn("space-y-3 rounded-2xl bg-card p-4 sm:p-5", selected && "ring-2 ring-primary");
 
   return (
-    <div className="space-y-4">
+    <AutoSkeleton loading={isSkeleton} className="space-y-4">
       <RadioGroup
         value={current}
         onValueChange={(value) => {
@@ -350,7 +347,7 @@ function AgreementCategorySectionV2({ category, canEdit }: { category: TemplateC
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </AutoSkeleton>
   );
 }
 

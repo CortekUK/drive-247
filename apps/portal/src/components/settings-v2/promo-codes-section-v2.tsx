@@ -26,11 +26,26 @@ import { TicketPercent } from "lucide-react";
 import {
   SettingsEmptyState,
   SettingsLoadError,
-  SettingsSectionSkeleton,
 } from "@/components/settings-v2/section-states";
 import { PromoCodesTableV2, type PromoCodeRowV2 } from "@/components/settings-v2/promo-codes-table-v2";
 import { toast } from "@/hooks/use-toast";
 import { SETTINGS_SECTION_TITLE } from "@/components/settings-v2/settings-kit";
+import { AutoSkeleton } from "@/components/skeleton-v2/auto-skeleton";
+import { skeletonRows } from "@/lib/skeleton-data";
+import { useSkeletonLoading } from "@/hooks/use-skeleton-loading";
+
+/** Placeholder codes for the list's skeleton: only their shapes are seen. */
+const SKELETON_PROMOS: PromoCodeRowV2[] = skeletonRows(4, (f) => ({
+  id: f.id,
+  name: f.text(2, 3),
+  code: f.word(6, 10).toUpperCase(),
+  type: f.pick(["percentage", "value"]),
+  value: f.int(5, 50),
+  created_at: f.date().slice(0, 10),
+  expires_at: f.date(-30).slice(0, 10),
+  max_users: f.int(10, 200),
+  min_duration_days: null,
+}));
 
 /** Copies to the clipboard and reports what actually happened. */
 export async function copyPromoCode(code: string): Promise<boolean> {
@@ -87,28 +102,26 @@ export function PromoCodesSectionV2<T extends PromoCodeRowV2>({
   /** The page's "Add promo code" button, shown beside the heading. */
   action?: React.ReactNode;
 }) {
+  // Until the first rows arrive, placeholder codes render through the real
+  // table (the flat settings panel, an editor's action column included) and
+  // <AutoSkeleton> turns them into the skeleton.
+  const skeleton = useSkeletonLoading(!Array.isArray(promos) && (isLoading || !error));
   const hasRows = Array.isArray(promos);
 
   let body: React.ReactNode;
-  if (!hasRows && (isLoading || !error)) {
+  if (skeleton) {
     body = (
-      <>
-        <SettingsSectionSkeleton variant="rows" rows={4} label="Loading promo codes" className="sm:hidden" />
-        {/* The shape the rows actually land in, or the table jumps under the
-            operator as they arrive: the flat settings panel `PromoCodesTableV2`
-            draws (`surface="settings"`), not the v2 Card, whose 24px bands
-            above and below the rows are not there afterwards; and one bar per
-            real column — an editor gets the trailing Edit/Delete column, a
-            read-only manager does not. */}
-        <SettingsSectionSkeleton
-          variant="table"
-          rows={4}
-          columns={canEdit ? 8 : 7}
-          surface="settings"
-          label="Loading promo codes"
-          className="hidden sm:block"
+      <AutoSkeleton loading>
+        <PromoCodesTableV2
+          promos={SKELETON_PROMOS as T[]}
+          resetKey="skeleton"
+          currencyCode={currencyCode}
+          canEdit={canEdit}
+          onCopy={() => {}}
+          onEdit={() => {}}
+          onDelete={() => {}}
         />
-      </>
+      </AutoSkeleton>
     );
   } else if (!hasRows) {
     body = <SettingsLoadError thing="promo codes" error={error} onRetry={onRetry} retrying={isFetching} />;
@@ -147,9 +160,9 @@ export function PromoCodesSectionV2<T extends PromoCodeRowV2>({
         </h2>
         {/* Not over the empty state: there the teaching card's own button is
             the one to press, and two Adds side by side read as two things. */}
-        {action && hasRows && promos.length > 0 ? action : null}
+        {action && !skeleton && hasRows && promos.length > 0 ? action : null}
       </div>
-      {hasRows && Boolean(error) && (
+      {!skeleton && hasRows && Boolean(error) && (
         <SettingsLoadError variant="inline" thing="promo codes" error={error} onRetry={onRetry} retrying={isFetching} />
       )}
       {body}

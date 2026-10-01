@@ -252,7 +252,7 @@ export function StageVehicle({ detail, refetch }: StageProps) {
     ? "bg-success-light text-success"
     : mileage.isUnspecified
       ? "bg-muted text-muted-foreground"
-      : "bg-primary-light text-primary";
+      : "bg-primary-light text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]";
 
   const mileageHeadline = mileage.isUnlimited
     ? "Unlimited mileage"
@@ -321,7 +321,7 @@ export function StageVehicle({ detail, refetch }: StageProps) {
 
         <div className="flex items-start gap-4 p-6">
           {!facts?.photo_url && (
-            <span className="flex size-12 shrink-0 items-center justify-center rounded-3xl bg-primary-light text-primary">
+            <span className="flex size-12 shrink-0 items-center justify-center rounded-3xl bg-primary-light text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
               <Car className="size-5" />
             </span>
           )}

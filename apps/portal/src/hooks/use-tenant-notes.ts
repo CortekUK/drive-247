@@ -327,6 +327,54 @@ export function useTenantNotes() {
     onSettled: invalidate,
   });
 
+  /**
+   * Change a to-do's text and, optionally, its reminder time (Sep 29 2026,
+   * the ⋮ → Edit dialog on the dashboard card).
+   * Same shape as toggleDone: tenant-filtered write, optimistic cache, rolled
+   * back if refused.
+   */
+  const editNote = useMutation({
+    mutationFn: async ({
+      note,
+      body,
+      remindAt,
+    }: {
+      note: TenantNote;
+      body: string;
+      /** ISO time, `null` to clear it, or leave out to keep what is there. */
+      remindAt?: string | null;
+    }): Promise<void> => {
+      if (!enabled || !tenantId) throw new Error('No tenant');
+      const trimmed = body.trim().slice(0, MAX_NOTE_LENGTH);
+      if (!trimmed) throw new Error('Empty');
+      const patch: Record<string, unknown> = { body: trimmed, updated_at: new Date().toISOString() };
+      if (remindAt !== undefined) patch.remind_at = remindAt;
+      const { error } = await (supabase as any)
+        .from('tenant_notes')
+        .update(patch)
+        .eq('id', note.id)
+        // §5: without this an id from anywhere would edit another operator's row.
+        .eq('tenant_id', tenantId);
+      if (error) throw error;
+    },
+    onMutate: async ({ note, body, remindAt }: { note: TenantNote; body: string; remindAt?: string | null }) => {
+      await queryClient.cancelQueries({ queryKey: ['tenant-notes', tenantId] });
+      const previous = queryClient.getQueryData<TenantNote[]>(['tenant-notes', tenantId]);
+      queryClient.setQueryData<TenantNote[]>(['tenant-notes', tenantId], (rows) =>
+        (rows ?? []).map((r) =>
+          r.id === note.id
+            ? { ...r, body: body.trim(), ...(remindAt !== undefined ? { remind_at: remindAt } : {}) }
+            : r,
+        ),
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) queryClient.setQueryData(['tenant-notes', tenantId], context.previous);
+    },
+    onSettled: invalidate,
+  });
+
   const deleteNote = useMutation({
     mutationFn: async (note: TenantNote): Promise<void> => {
       if (!enabled || !tenantId) throw new Error('No tenant');
@@ -382,6 +430,7 @@ export function useTenantNotes() {
     isUnavailable: missingRef.current,
     addNote,
     toggleDone,
+    editNote,
     deleteNote,
   };
 }

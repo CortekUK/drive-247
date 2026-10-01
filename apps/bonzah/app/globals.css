@@ -117,3 +117,30 @@
                 0 8px 24px -16px hsl(338 40% 30% / 0.10);
   }
 }
+
+/*
+ * TRAX motion for Sonner toasts — the same enter/exit as every other surface
+ * (see components/ui/motion.ts): a 12px rise and fade in over 200ms ease-out,
+ * a 12px sink and fade out over 200ms ease-in. Sonner's own default is a
+ * full-height slide over 400ms.
+ *
+ * Sonner injects its stylesheet at runtime, after ours, so each rule here is
+ * one attribute more specific than the rule it replaces. Swipes are left on
+ * Sonner's own handling, and its built-in reduced-motion rule (`!important`)
+ * still switches all of this off.
+ */
+[data-sonner-toaster] [data-sonner-toast]:not([data-swiping='true']) {
+  transition: transform 200ms ease-out, opacity 200ms ease-out, height 200ms ease-out, box-shadow 200ms ease-out;
+}
+[data-sonner-toaster] [data-sonner-toast][data-mounted='false'][data-y-position='bottom'] {
+  --y: translateY(12px);
+}
+[data-sonner-toaster] [data-sonner-toast][data-mounted='false'][data-y-position='top'] {
+  --y: translateY(-12px);
+}
+[data-sonner-toaster] [data-sonner-toast][data-removed='true'] {
+  transition-timing-function: ease-in;
+}
+[data-sonner-toaster] [data-sonner-toast][data-removed='true'][data-front='true'][data-swipe-out='false'] {
+  --y: translateY(calc(var(--lift) * -12px));
+}

@@ -65,6 +65,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useV2 } from "@/lib/v2-context";
+import { AutoSkeleton } from "@/components/skeleton-v2/auto-skeleton";
+import { useSkeletonLoading } from "@/hooks/use-skeleton-loading";
 import { useTenant } from "@/contexts/TenantContext";
 import {
   TURO_FOUNDATION_MISSING_DETAIL,
@@ -146,7 +148,8 @@ export default function TuroBridgePage() {
   // the toggle they would be sent to cannot turn it on. Sending them there
   // would burn a support ticket proving us wrong, so they get their own screen.
   if (!onCanary) return <TuroSyncUnavailable />;
-  if (loading) return <TuroSyncResolving />;
+  // While the tenant row is in flight the screen draws its own skeleton.
+  if (loading) return <TuroSyncScreen resolving />;
   if (!enabled) return <TuroSyncOff />;
   return <TuroSyncScreen />;
 }
@@ -167,7 +170,7 @@ function TuroSyncUnavailable() {
         <p className="mt-1 text-sm text-muted-foreground">Not available on this account.</p>
       </div>
       <EmptyState
-        icon={<Puzzle className="h-6 w-6 text-primary" />}
+        icon={<Puzzle className="h-6 w-6 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" />}
         title="Turo Sync is not available on this account"
         body={
           <p>
@@ -177,24 +180,6 @@ function TuroSyncUnavailable() {
           </p>
         }
       />
-    </div>
-  );
-}
-
-/** Decides nothing while the tenant row is still in flight. */
-function TuroSyncResolving() {
-  return (
-    <div className="northwind mx-auto w-full max-w-[1200px] space-y-6 px-1 pb-6 pt-6">
-      <div className="h-9 w-48 animate-pulse rounded-3xl bg-muted" />
-      <div className="h-4 w-full max-w-xl animate-pulse rounded-3xl bg-muted" />
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-5">
-        {[0, 1, 2, 3, 4].map((i) => (
-          <div
-            key={i}
-            className="h-[104px] animate-pulse rounded-4xl bg-card shadow-[var(--shadow-card)] ring-1 ring-foreground/5 dark:ring-foreground/10"
-          />
-        ))}
-      </div>
     </div>
   );
 }
@@ -228,7 +213,7 @@ function TuroSyncOff() {
         </p>
       </div>
       <EmptyState
-        icon={<Puzzle className="h-6 w-6 text-primary" />}
+        icon={<Puzzle className="h-6 w-6 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" />}
         title="Turo Sync is turned off"
         body={
           <>
@@ -279,7 +264,7 @@ function TuroSyncOff() {
  * THE SCREEN
  * ------------------------------------------------------------------------ */
 
-function TuroSyncScreen() {
+function TuroSyncScreen({ resolving = false }: { resolving?: boolean }) {
   const { tenant } = useTenant();
   const currency = tenant?.currency_code || "USD";
   const [tab, setTab] = useState<TabKey>("reservations");
@@ -333,6 +318,10 @@ function TuroSyncScreen() {
     reservations.refetch();
   };
 
+  // `resolving`: the tenant has not landed, so the queries have not even
+  // started; the screen skeletons rather than claim nothing is synced.
+  const isLoading = useSkeletonLoading(resolving || reservations.isLoading);
+
   if (reservations.isError) {
     return (
       <div className="northwind mx-auto w-full max-w-[1200px] space-y-6 px-1 pb-6 pt-6">
@@ -342,16 +331,17 @@ function TuroSyncScreen() {
     );
   }
 
-  const nothingSyncedYet = !reservations.isLoading && counts.total === 0;
+  const nothingSyncedYet = !isLoading && counts.total === 0;
 
   return (
     <div className="northwind mx-auto w-full max-w-[1200px] space-y-6 px-1 pb-6 pt-6">
       <PageHeader onRefresh={refreshAll} isFetching={reservations.isFetching} />
 
+      <AutoSkeleton loading={isLoading} className="space-y-6">
       {/* Stat cards */}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard
-          icon={<DownloadCloud className="h-5 w-5 text-primary" />}
+          icon={<DownloadCloud className="h-5 w-5 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" />}
           label="Trips synced"
           value={String(counts.total)}
           hint={
@@ -361,7 +351,7 @@ function TuroSyncScreen() {
           }
         />
         <StatCard
-          icon={<CalendarDays className="h-5 w-5 text-primary" />}
+          icon={<CalendarDays className="h-5 w-5 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" />}
           label="Upcoming trips"
           value={String(windows.upcoming)}
           hint={`${windows.onTripNow} on trip now · ${windows.finished} finished`}
@@ -374,7 +364,7 @@ function TuroSyncScreen() {
           is nothing to answer.
         */}
         <StatCard
-          icon={<CarFront className="h-5 w-5 text-primary" />}
+          icon={<CarFront className="h-5 w-5 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" />}
           label="Vehicles to match"
           value={foundationApplied ? String(mapQueue.counts.awaiting) : "—"}
           tone={foundationApplied && mapQueue.counts.awaiting > 0 ? "warn" : "default"}
@@ -387,7 +377,7 @@ function TuroSyncScreen() {
           }
         />
         <StatCard
-          icon={<ShieldQuestion className="h-5 w-5 text-primary" />}
+          icon={<ShieldQuestion className="h-5 w-5 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" />}
           label="Needs your decision"
           value={foundationApplied ? String(counts.byState.cancellation_candidate) : "—"}
           tone={
@@ -409,7 +399,7 @@ function TuroSyncScreen() {
         */}
         <div title={freshness.caveat}>
           <StatCard
-            icon={<Timer className="h-5 w-5 text-primary" />}
+            icon={<Timer className="h-5 w-5 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" />}
             label="Last sync"
             value={
               freshness.lastSyncedAt
@@ -507,20 +497,20 @@ function TuroSyncScreen() {
       ) : (
         <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)}>
           <TabsList className="h-auto w-full flex-wrap justify-start gap-1 rounded-3xl bg-muted/60 p-1.5">
-            <TabsTrigger value="reservations" className="gap-1.5 rounded-3xl px-3.5 py-1.5 text-sm data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-[var(--shadow-sm)]">Reservations</TabsTrigger>
-            <TabsTrigger value="vehicles" className="gap-1.5 rounded-3xl px-3.5 py-1.5 text-sm data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-[var(--shadow-sm)]">
+            <TabsTrigger value="reservations" className="gap-1.5 rounded-3xl px-3.5 py-1.5 text-sm data-[state=active]:bg-card data-[state=active]:text-primary dark:data-[state=active]:text-[hsl(var(--v2-link,var(--primary)))] data-[state=active]:shadow-[var(--shadow-sm)]">Reservations</TabsTrigger>
+            <TabsTrigger value="vehicles" className="gap-1.5 rounded-3xl px-3.5 py-1.5 text-sm data-[state=active]:bg-card data-[state=active]:text-primary dark:data-[state=active]:text-[hsl(var(--v2-link,var(--primary)))] data-[state=active]:shadow-[var(--shadow-sm)]">
               Vehicles
               {mapQueue.counts.awaiting > 0 && (
                 <TabBadge count={mapQueue.counts.awaiting} tone="warn" />
               )}
             </TabsTrigger>
-            <TabsTrigger value="review" className="gap-1.5 rounded-3xl px-3.5 py-1.5 text-sm data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-[var(--shadow-sm)]">
+            <TabsTrigger value="review" className="gap-1.5 rounded-3xl px-3.5 py-1.5 text-sm data-[state=active]:bg-card data-[state=active]:text-primary dark:data-[state=active]:text-[hsl(var(--v2-link,var(--primary)))] data-[state=active]:shadow-[var(--shadow-sm)]">
               Import
               {counts.byState.staged > 0 && (
                 <TabBadge count={counts.byState.staged} tone="accent" />
               )}
             </TabsTrigger>
-            <TabsTrigger value="cancellations" className="gap-1.5 rounded-3xl px-3.5 py-1.5 text-sm data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-[var(--shadow-sm)]">
+            <TabsTrigger value="cancellations" className="gap-1.5 rounded-3xl px-3.5 py-1.5 text-sm data-[state=active]:bg-card data-[state=active]:text-primary dark:data-[state=active]:text-[hsl(var(--v2-link,var(--primary)))] data-[state=active]:shadow-[var(--shadow-sm)]">
               Possibly cancelled
               {counts.byState.cancellation_candidate > 0 && (
                 <TabBadge count={counts.byState.cancellation_candidate} tone="warn" />
@@ -533,7 +523,7 @@ function TuroSyncScreen() {
               as "no syncs have run" — which is precisely the thing we cannot
               currently know. SyncHistoryScreen says so itself when opened.
             */}
-            <TabsTrigger value="history" className="gap-1.5 rounded-3xl px-3.5 py-1.5 text-sm data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-[var(--shadow-sm)]">
+            <TabsTrigger value="history" className="gap-1.5 rounded-3xl px-3.5 py-1.5 text-sm data-[state=active]:bg-card data-[state=active]:text-primary dark:data-[state=active]:text-[hsl(var(--v2-link,var(--primary)))] data-[state=active]:shadow-[var(--shadow-sm)]">
               Sync history
               {health.schemaMissing && (
                 <span
@@ -548,6 +538,7 @@ function TuroSyncScreen() {
 
           <TabsContent value="reservations" className="mt-6">
             <ReservationsScreen
+              skeleton={isLoading}
               currency={currency}
               onGoToMapping={() => setTab("vehicles")}
             />
@@ -574,6 +565,7 @@ function TuroSyncScreen() {
           </TabsContent>
         </Tabs>
       )}
+      </AutoSkeleton>
     </div>
   );
 }
@@ -703,7 +695,7 @@ function GettingStarted({
 }) {
   return (
     <EmptyState
-      icon={<Puzzle className="h-6 w-6 text-primary" />}
+      icon={<Puzzle className="h-6 w-6 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" />}
       title="No Turo trips yet"
       body={
         <>
@@ -773,7 +765,7 @@ function GettingStarted({
 function Step({ n, children }: { n: number; children: React.ReactNode }) {
   return (
     <li className="flex gap-3">
-      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-medium text-primary dark:bg-muted">
+      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-medium text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] dark:bg-muted">
         {n}
       </span>
       <span className="text-muted-foreground">{children}</span>

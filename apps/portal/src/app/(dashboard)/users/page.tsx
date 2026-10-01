@@ -52,6 +52,10 @@ import { useAuditLog } from '@/hooks/use-audit-log';
 import { useV2 } from '@/lib/v2-context';
 import { HEADER_ACTIONS_V2, HEADER_PRIMARY_V2 } from '@/components/shared/header-icon-button-v2';
 import { UsersTableV2 } from '@/components/admin-v2/users-table-v2';
+import { usePageSearch } from "@/components/shared/layout/page-search-slot";
+import { useIsLean } from "@/lib/lean-context";
+import { useForcedEmptyState } from "@/hooks/use-forced-empty-state";
+import { UsersTeachingEmptyState } from "@/components/empty-states/users-empty-state";
 import { SETTINGS_COLUMN_BESIDE_TRAX, SETTINGS_PAGE_TITLE } from '@/components/settings-v2/settings-kit';
 import { cn } from '@/lib/utils';
 
@@ -394,6 +398,33 @@ export default function UsersManagement() {
     );
   }, [users, searchQuery]);
 
+  // "Empty" for a team page: the list has loaded and the only person on it is
+  // the signed-in head admin (a tenant always has its owner, so zero rows is
+  // not the beginner state — one row that is you is). Any other row, active
+  // or deactivated, means a team exists and the normal page shows. Lean
+  // canary only; `devForceEmpty` is the /dev preview switch.
+  const devForceEmpty = useForcedEmptyState("users");
+  const leanTenant = useIsLean();
+  const teachEmptyTeam =
+    leanTenant &&
+    appUser?.role === 'head_admin' &&
+    (devForceEmpty || (!!users && users.every((u) => u.id === appUser?.id)));
+
+  /* v2: the search lives in the top bar (page-search-slot.tsx) and filters the
+     team list in place. Only for someone allowed on this page — the refusal
+     below has no list to search. */
+  usePageSearch(
+    v2Chrome && appUser?.role === 'head_admin' && !teachEmptyTeam
+      ? {
+          placeholder: 'Search by name or email…',
+          value: searchQuery,
+          onChange: setSearchQuery,
+          scopeLabel: 'Team',
+          resultCount: usersQuery.isPending ? undefined : filteredUsers.length,
+        }
+      : null,
+  );
+
   // Only head_admin can access this page
   if (!appUser || appUser.role !== 'head_admin') {
     // v2: the same refusal as plain text under the page title, with no alert
@@ -462,6 +493,7 @@ export default function UsersManagement() {
               Add people to your portal and choose what each person can see and change.
             </p>
           </div>
+          {!teachEmptyTeam && (
           <div className={`flex items-center gap-2 ${HEADER_ACTIONS_V2}`}>
             <Button
               onClick={() => setShowAddDialog(true)}
@@ -471,6 +503,7 @@ export default function UsersManagement() {
               Add User
             </Button>
           </div>
+          )}
         </div>
       ) : (
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -483,6 +516,7 @@ export default function UsersManagement() {
             <p className="text-muted-foreground text-sm sm:text-base">Create and manage user accounts for your team</p>
           </div>
         </div>
+        {!teachEmptyTeam && (
         <Button
           onClick={() => setShowAddDialog(true)}
           className="bg-gradient-primary text-primary-foreground w-full sm:w-auto"
@@ -490,10 +524,16 @@ export default function UsersManagement() {
           <Plus className="mr-2 h-4 w-4" />
           Add User
         </Button>
+        )}
       </div>
       )}
 
-      {/* Search Bar. v2 has none: a team is a handful of people. */}
+      {/* Only the owner so far (lean only): heading + the empty state. */}
+      {teachEmptyTeam ? (
+        <UsersTeachingEmptyState onAddUser={() => setShowAddDialog(true)} />
+      ) : (
+      <>
+      {/* Search Bar. v2 draws it in the top bar instead (usePageSearch above). */}
       {!v2Chrome && (
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -512,7 +552,10 @@ export default function UsersManagement() {
         // states. Each menu handler below is v1's own inline body, so the
         // dialogs and mutations run exactly as in v1.
         <UsersTableV2
-          users={users}
+          // Filtered by the top-bar search (usePageSearch above) once there
+          // is a term; the unfiltered list otherwise, loading state included.
+          users={users && searchQuery.trim() ? filteredUsers : users}
+          emptyMessage={searchQuery.trim() ? `No one on your team matches "${searchQuery.trim()}".` : undefined}
           loading={usersQuery.isPending}
           error={usersQuery.isError ? usersQuery.error : undefined}
           onRetry={() => refetch()}
@@ -675,6 +718,8 @@ export default function UsersManagement() {
           )}
         </CardContent>
       </Card>
+      )}
+      </>
       )}
 
       {/* Add User Dialog */}

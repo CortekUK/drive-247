@@ -4,6 +4,7 @@ import * as React from "react"
 import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 
 import { cn } from "@nw/lib/utils"
+import { MOTION_TOOLTIP } from "@nw/components/ui/motion"
 
 function TooltipProvider({
   delayDuration = 150,
@@ -46,7 +47,8 @@ function TooltipContent({
         data-slot="tooltip-content"
         sideOffset={sideOffset}
         className={cn(
-          "z-50 w-fit max-w-xs origin-(--radix-tooltip-content-transform-origin) rounded-lg bg-brand-forest px-3 py-1.5 text-xs leading-relaxed text-balance text-white data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=delayed-open]:animate-in data-[state=delayed-open]:fade-in-0 data-[state=delayed-open]:zoom-in-95",
+          "z-50 w-fit max-w-xs origin-(--radix-tooltip-content-transform-origin) rounded-lg bg-brand-forest px-3 py-1.5 text-xs leading-relaxed text-balance text-white",
+          MOTION_TOOLTIP,
           className
         )}
         {...props}

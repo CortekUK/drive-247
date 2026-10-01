@@ -21,10 +21,21 @@ import { PaymentRequestsTableV2 } from "@/components/invoices-v2/payment-request
 // to `payments`, never to the `invoices` table, so they never appeared on the Invoices
 // page. Status uses the SAME derivePaymentLinks logic + StatusBadge as the per-rental
 // panel, so labels are guaranteed identical across every surface (no new divergence).
-export function PaymentRequestsTab() {
+/**
+ * `search` / `onSearchChange`: the v2 invoices page lifts the search into the
+ * top bar (page-search-slot.tsx) and drives this tab's filter from there. Given
+ * both, the tab uses them and draws no search box of its own; v1 passes neither.
+ */
+export function PaymentRequestsTab({
+  search: liftedSearch,
+  onSearchChange,
+}: { search?: string; onSearchChange?: (next: string) => void } = {}) {
   const { tenant } = useTenant();
   const { data: requests, isLoading } = useTenantPaymentRequests();
-  const [search, setSearch] = useState("");
+  const [ownSearch, setOwnSearch] = useState("");
+  const lifted = liftedSearch !== undefined && !!onSearchChange;
+  const search = lifted ? liftedSearch : ownSearch;
+  const setSearch = lifted ? onSearchChange : setOwnSearch;
   // v2 (northwind) swaps only the populated table for the rentals list's table.
   const v2Chrome = useV2("chrome");
 
@@ -41,6 +52,7 @@ export function PaymentRequestsTab() {
 
   return (
     <div className="space-y-4">
+      {!lifted && (
       <div className="relative w-full sm:max-w-[360px]">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
         <Input
@@ -50,6 +62,7 @@ export function PaymentRequestsTab() {
           className="pl-10"
         />
       </div>
+      )}
 
       {isLoading ? (
         <div className="text-center py-8 text-muted-foreground">Loading payment requests…</div>

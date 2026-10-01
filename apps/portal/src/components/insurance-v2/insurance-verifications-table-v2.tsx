@@ -178,7 +178,7 @@ export function InsuranceVerificationsTableV2({
                     <Button
                       size="icon-sm"
                       variant="ghost"
-                      className="-my-1.5 h-8 w-8 text-red-600 hover:text-red-700"
+                      className="-my-1.5 h-8 w-8 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
                       aria-label={`Delete verification ${v.file_name}`}
                       onClick={() => onDelete(v.id)}
                     >

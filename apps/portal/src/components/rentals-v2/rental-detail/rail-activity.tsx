@@ -104,7 +104,7 @@ const FILTERS: { id: Kind | "all"; label: string }[] = [
 ];
 
 const KIND_TONE: Record<Kind, string> = {
-  money: "text-primary",
+  money: "text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]",
   doc: "text-foreground/70",
   change: "text-muted-foreground/60",
 };
@@ -443,8 +443,8 @@ export function RailActivity({ detail }: { detail: RentalDetailV2 }) {
             className={cn(
               "flex shrink-0 cursor-pointer items-center gap-1.5 rounded-3xl px-2 py-0.5 text-[11px] transition-colors",
               filter === f.id
-                ? "bg-primary/10 font-medium text-primary"
-                : "text-muted-foreground hover:text-primary"
+                ? "bg-primary/10 font-medium text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]"
+                : "text-muted-foreground hover:text-primary dark:hover:text-[hsl(var(--v2-link,var(--primary)))]"
             )}
           >
             {f.label}

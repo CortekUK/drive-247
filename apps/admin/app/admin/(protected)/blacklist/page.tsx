@@ -444,10 +444,10 @@ export default function BlacklistPage() {
       {dialogOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div
-            className="absolute inset-0 bg-black/30 supports-[backdrop-filter]:backdrop-blur-sm"
+            className="absolute inset-0 bg-black/30 supports-[backdrop-filter]:backdrop-blur-sm animate-in fade-in-0 duration-200 ease-out motion-reduce:animate-none"
             onClick={() => !actionLoading && setDialogOpen(false)}
           />
-          <div className="relative bg-dark-card border border-dark-border rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
+          <div className="relative bg-dark-card border border-dark-border rounded-xl shadow-xl w-full max-w-md mx-4 p-6 animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none">
             <h2 className="text-xl font-bold text-foreground mb-1">
               {dialogAction === 'whitelist'
                 ? 'Whitelist Customer'

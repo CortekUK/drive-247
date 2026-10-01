@@ -409,7 +409,7 @@ function ChecklistRow({
               with no circle and no hover. */}
           <span
             aria-hidden="true"
-            className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[var(--pv-accent-bg)] text-[var(--pv-accent)] transition-colors group-hover:bg-[var(--pv-accent-30)]"
+            className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[var(--pv-accent-bg)] text-[var(--pv-accent-ink)] transition-colors group-hover:bg-[var(--pv-accent-30)]"
           >
             <Play className="size-3 translate-x-[0.5px] fill-current" />
           </span>
@@ -447,7 +447,7 @@ function ChecklistRow({
               aria-label={read.label}
               aria-haspopup={read.kind === 'reader' ? 'dialog' : undefined}
               data-read-kind={read.kind}
-              className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[var(--pv-line)] text-[var(--pv-ink-2)] transition-colors hover:bg-[var(--pv-accent-bg)] hover:text-[var(--pv-accent)]"
+              className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[var(--pv-line)] text-[var(--pv-ink-2)] transition-colors hover:bg-[var(--pv-accent-bg)] hover:text-[var(--pv-accent-ink)]"
             >
               <ReadIcon className="size-3.5" aria-hidden="true" />
             </button>

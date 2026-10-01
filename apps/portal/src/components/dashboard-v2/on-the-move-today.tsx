@@ -3,10 +3,22 @@
 import { useRouter } from 'next/navigation';
 import { AlertTriangle, ArrowUpRight, Car, Check, KeyRound } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui-v2/card';
-import { Skeleton } from '@/components/ui-v2/skeleton';
 import { cn } from '@/lib/utils';
 import { useManagerPermissions } from '@/hooks/use-manager-permissions';
 import { useTodayOperations, type Movement } from '@/hooks/use-today-operations';
+import { AutoSkeleton } from '@/components/skeleton-v2/auto-skeleton';
+import { useSkeletonLoading } from '@/hooks/use-skeleton-loading';
+import { skeletonRows } from '@/lib/skeleton-data';
+
+/** Placeholder movements for the skeleton: only their lengths are ever seen. */
+const SKELETON_MOVEMENTS: Movement[] = skeletonRows(4, (f) => ({
+  id: f.id,
+  kind: f.pick(['pickup', 'return'] as const),
+  time: '10:30:00',
+  customerName: f.text(2, 2),
+  vehicleLabel: f.text(2, 3),
+  rentalNumber: null,
+}));
 
 /**
  * Which cars go out today, which come back, and which were due back and have
@@ -77,14 +89,15 @@ function MovementRow({ movement, onClick }: { movement: Movement; onClick: () =>
 export function OnTheMoveToday({ className }: { className?: string }) {
   const router = useRouter();
   const { canView } = useManagerPermissions();
-  const { pickups, returns, overdue, staleCount, staleAfterDays, isLoading } =
+  const { pickups, returns, overdue, staleCount, staleAfterDays, isLoading: opsLoading } =
     useTodayOperations();
+  const isLoading = useSkeletonLoading(opsLoading);
 
   if (!canView('rentals')) return null;
 
   // Overdue leads: a car that should be back and is not is the most expensive
   // thing on this card.
-  const movements: Movement[] = [...overdue, ...pickups, ...returns];
+  const movements: Movement[] = isLoading ? SKELETON_MOVEMENTS : [...overdue, ...pickups, ...returns];
 
   return (
     <Card className={cn('flex flex-col', className)}>
@@ -101,13 +114,11 @@ export function OnTheMoveToday({ className }: { className?: string }) {
           )}
         </h2>
 
-        {isLoading ? (
-          <div className="space-y-1.5 px-2 py-1">
-            <Skeleton className="h-9 w-full" />
-            <Skeleton className="h-9 w-full" />
-            <Skeleton className="h-9 w-full" />
-          </div>
-        ) : movements.length === 0 ? (
+        {/* One stretched grid cell, so the AutoSkeleton wrapper hands its full
+            height to the scrolling list and the centred empty state. */}
+        <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)]">
+        <AutoSkeleton loading={isLoading} className="flex h-full min-h-0 flex-col">
+        {movements.length === 0 ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-1.5 py-6 text-center">
             <span className="flex size-9 items-center justify-center rounded-full bg-success/10 text-success">
               <Check className="size-4" />
@@ -128,6 +139,8 @@ export function OnTheMoveToday({ className }: { className?: string }) {
             ))}
           </div>
         )}
+        </AutoSkeleton>
+        </div>
 
         {/* The overdue list stops at 30 days so a genuinely late car is not
             buried under months-old records. Those are not hidden — they are

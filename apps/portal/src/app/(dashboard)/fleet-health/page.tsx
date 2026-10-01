@@ -36,6 +36,8 @@ import {
 import { useFleetHealth, useFleetHealthStats, useRecomputeFleetHealth } from "@/hooks/use-fleet-health";
 import { useTenant } from "@/contexts/TenantContext";
 import { useIsAreaHidden } from "@/lib/lean-context";
+import { useV2 } from "@/lib/v2-context";
+import { usePageSearch } from "@/components/shared/layout/page-search-slot";
 // The column below renders vehicles.current_mileage, which Fleet Health stores
 // in miles for every tenant. It was printed raw under a unit-less "Mileage"
 // header, so a km tenant read a mile count with nothing saying so.
@@ -143,6 +145,21 @@ export default function FleetHealthPage() {
   // Fails open on an unresolved slug (see isAreaHidden), so the tenants running
   // Fleet Health keep it during the first-paint tick before TenantContext resolves.
   const fleetHealthHidden = useIsAreaHidden("fleet-health");
+  // v2: the search lives in the top bar (page-search-slot.tsx) — only while
+  // there is a list to search, not over the setup screen.
+  const v2Chrome = useV2("chrome");
+  usePageSearch(
+    v2Chrome && !showSetup
+      ? {
+          placeholder: "Search by registration or model",
+          value: search,
+          onChange: setSearch,
+          scopeLabel: "Fleet health",
+          resultCount: isLoading ? undefined : filtered.length,
+        }
+      : null,
+  );
+
   if (fleetHealthHidden) notFound();
 
   return (
@@ -206,6 +223,7 @@ export default function FleetHealthPage() {
         <>
           <Card>
             <CardContent className="flex flex-wrap items-center gap-3 p-4">
+              {!v2Chrome && (
               <div className="relative min-w-[220px] flex-1">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
@@ -215,6 +233,7 @@ export default function FleetHealthPage() {
                   className="pl-9"
                 />
               </div>
+              )}
               <Select
                 value={statusFilter}
                 onValueChange={(v) => setStatusFilter(v as StatusFilter)}

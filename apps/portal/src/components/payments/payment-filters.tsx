@@ -10,6 +10,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { CalendarIcon, X, Search, ChevronDown } from "lucide-react";
 import { formatInTimeZone } from "date-fns-tz";
 import { cn } from "@/lib/utils";
+import { useV2 } from "@/lib/v2-context";
+import { usePageSearch } from "@/components/shared/layout/page-search-slot";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -119,13 +121,29 @@ export const PaymentFilters = ({ onFiltersChange }: PaymentFiltersProps) => {
     { value: 'auto_approved', label: 'Auto-Approved' },
   ];
 
+  /* v2: the search lives in the top bar (page-search-slot.tsx), carrying the
+     `payments-search` tour anchor with it (tab-tours/payments.ts). */
+  const v2Chrome = useV2("chrome");
+  usePageSearch(
+    v2Chrome
+      ? {
+          placeholder: "Search customer or vehicle…",
+          value: filters.customerSearch,
+          onChange: (next) => updateFilters({ customerSearch: next }),
+          tourAnchor: "payments-search",
+          scopeLabel: "Payments",
+        }
+      : null,
+  );
+
   const activeMethod = methodOptions.find(m => m.value === filters.method);
   const activeStatus = statusOptions.find(s => s.value === filters.verificationStatus);
 
   return (
     <div>
       <div className="flex flex-wrap gap-3 items-center">
-        {/* Search */}
+        {/* Search — v2 draws it in the top bar (usePageSearch above). */}
+        {!v2Chrome && (
         <div data-tour="payments-search" className="relative w-full sm:flex-1 sm:min-w-[200px]">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
           <Input
@@ -135,6 +153,7 @@ export const PaymentFilters = ({ onFiltersChange }: PaymentFiltersProps) => {
             className="pl-10 h-8 text-sm"
           />
         </div>
+        )}
 
         {/* Method + Status + Date grouped */}
         <div className="flex items-center">

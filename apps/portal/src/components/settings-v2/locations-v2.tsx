@@ -42,7 +42,7 @@ import { Button } from "@/components/ui-v2/button";
 import { Checkbox } from "@/components/ui-v2/checkbox";
 import { Input } from "@/components/ui-v2/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui-v2/radio-group";
-import { Skeleton } from "@/components/ui-v2/skeleton";
+import { AutoSkeleton } from "@/components/skeleton-v2/auto-skeleton";
 import { Switch } from "@/components/ui-v2/switch";
 import {
   Dialog,
@@ -584,9 +584,13 @@ export function LocationsV2({
       <div className="space-y-6">
         {(["pickup", "return"] as const).map((side) => (
           <div key={side} className="space-y-3">
-            <div aria-hidden="true" className="space-y-1.5 pb-2.5">
-              <Skeleton className="h-4 w-40 rounded-full" />
-              <Skeleton className="h-3 w-56 max-w-full rounded-full" />
+            {/* The heading's two lines in placeholder words; <AutoSkeleton>
+                draws their bones at the real sizes. */}
+            <div aria-hidden="true" className="pb-2.5">
+              <AutoSkeleton loading className="space-y-0.5">
+                <p className="text-base font-semibold">Xxxxxxxx xxxxxxx</p>
+                <p className="text-sm">Xxxxx xxxxxxxxx xxx xxxxxx xxxx.</p>
+              </AutoSkeleton>
             </div>
             <SettingsPanelSkeleton rows={3} label={`Loading ${side} options`} />
           </div>

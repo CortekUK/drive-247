@@ -337,7 +337,7 @@ export function OnboardingDialog() {
           {/* ── body band ───────────────────────────────────────────────── */}
           <div className="max-h-[min(70dvh,560px)] flex-1 overflow-y-auto px-6 py-5">
             {closeConfirmOpen ? (
-              <div className="animate-in fade-in-0 slide-in-from-bottom-2 py-4 text-center duration-300">
+              <div className="animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none py-4 text-center">
                 <TriangleAlert className="mx-auto h-5 w-5 text-amber-600 dark:text-amber-400" />
                 <h3 className="mt-3 text-base font-semibold tracking-tight">Leave setup?</h3>
                 <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
@@ -391,7 +391,7 @@ export function OnboardingDialog() {
                 // the key is stable, so nothing remounts while the user types.
                 <div
                   key={dialogStep}
-                  className="animate-in fade-in-0 slide-in-from-bottom-2 duration-300"
+                  className="animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none"
                 >
                   {dialogStep === "account" ? (
                     <AccountStep

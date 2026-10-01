@@ -40,7 +40,7 @@
  */
 
 import { useEffect, useId, useLayoutEffect, useState, type ReactNode } from "react";
-import { BellOff, Check, Download, Loader2, PlusSquare, Send, Share } from "lucide-react";
+import { Check, Download, Loader2, PlusSquare, Send, Share } from "lucide-react";
 import { Badge } from "@/components/ui-v2/badge";
 import { Button } from "@/components/ui-v2/button";
 import { Switch } from "@/components/ui-v2/switch";
@@ -180,24 +180,10 @@ export function PushSetupV2(props: PushSetupV2Props) {
     );
   }
 
-  if (tenant.push_notifications_enabled !== true) {
-    return (
-      <SetupPanel className={props.className}>
-        <div data-push-setup="off" className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex min-w-0 items-start gap-3">
-            <BellOff className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-            <p className="min-w-0 text-sm text-muted-foreground">
-              <span className="font-medium text-foreground">{PUSH_SETUP_OFF_COPY.headline}</span>{" "}
-              {PUSH_SETUP_OFF_COPY.body}
-            </p>
-          </div>
-          <Button asChild variant="outline" size="sm" className="shrink-0 self-start sm:self-auto">
-            <a href={PUSH_SUPPORT_HREF}>{PUSH_SETUP_OFF_COPY.action}</a>
-          </Button>
-        </div>
-      </SetupPanel>
-    );
-  }
+  // No "isn't switched on, contact support" panel any more (Ghulam, Oct 1
+  // 2026): the install guide below, with its Install app button, is what an
+  // operator sees. The flag still decides whether push can be delivered.
+  if (tenant.push_notifications_enabled !== true) return null;
 
   return <PushSetupSteps {...props} />;
 }

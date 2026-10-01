@@ -1009,7 +1009,7 @@ function HandoffFooter({
 function Step({ n, children }: { n: number; children: React.ReactNode }) {
   return (
     <div className="flex gap-2.5 text-xs leading-relaxed text-muted-foreground">
-      <span className="mt-px flex size-4 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-medium text-primary">
+      <span className="mt-px flex size-4 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-medium text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
         {n}
       </span>
       <span>{children}</span>

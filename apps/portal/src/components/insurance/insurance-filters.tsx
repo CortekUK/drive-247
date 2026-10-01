@@ -26,6 +26,8 @@ import {
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { type InsuranceFilters } from "@/hooks/use-insurance-data";
+import { useV2 } from "@/lib/v2-context";
+import { usePageSearch } from "@/components/shared/layout/page-search-slot";
 
 interface InsuranceFiltersProps {
   filters: InsuranceFilters;
@@ -64,6 +66,19 @@ export function InsuranceFilters({
     });
   };
 
+  // v2: the search lives in the top bar (page-search-slot.tsx).
+  const v2Chrome = useV2("chrome");
+  usePageSearch(
+    v2Chrome
+      ? {
+          placeholder: "Search by policy number, provider, customer, or vehicle…",
+          value: filters.search,
+          onChange: (next) => updateFilters({ search: next }),
+          scopeLabel: "Policies",
+        }
+      : null,
+  );
+
   const hasActiveFilters = 
     filters.search || 
     filters.status !== "all" || 
@@ -74,7 +89,8 @@ export function InsuranceFilters({
     <div className="space-y-4">
       {/* Main Filters Row */}
       <div className="flex flex-wrap gap-4">
-        {/* Search */}
+        {/* Search — v2 draws it in the top bar (usePageSearch above). */}
+        {!v2Chrome && (
         <div className="flex-1 min-w-[300px] relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
           <Input
@@ -84,6 +100,7 @@ export function InsuranceFilters({
             className="pl-10"
           />
         </div>
+        )}
 
         {/* Status Filter */}
         <Select 

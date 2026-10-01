@@ -107,7 +107,7 @@ export function SectionDocuments({ c, onJump, canEdit }: SectionProps) {
           <button
             type="button"
             onClick={() => onJump("verification")}
-            className="cursor-pointer font-medium text-primary underline-offset-2 hover:underline"
+            className="cursor-pointer font-medium text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] underline-offset-2 hover:underline"
           >
             Verification
           </button>

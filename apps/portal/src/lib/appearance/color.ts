@@ -295,7 +295,7 @@ const V2_DARK_TEXT = "0 0% 3.9%";
  *   --brand-fg       near-black button text when the light-mode primary (the
  *                    brand itself) reads better with dark text than white;
  *   --brand-fg-dark  the same for the dark-mode primary, which the stylesheet
- *                    paints at 42% lightness, 2° and 7 points off the brand.
+ *                    paints at 54% lightness and the brand's own saturation.
  * Left out, each falls back to the stylesheet's default.
  *
  * Null for anything that is not a 6- or 3-digit hex, so a caller can remove the
@@ -324,7 +324,7 @@ export function v2BrandVars(hex: string | null | undefined): Record<string, stri
   if (readableForegroundOn(hslToHex(h, s, l)) !== "#FFFFFF") {
     vars["--brand-fg"] = V2_DARK_TEXT;
   }
-  if (readableForegroundOn(hslToHex(h - 2, s - 7, 42)) !== "#FFFFFF") {
+  if (readableForegroundOn(hslToHex(h, s, 54)) !== "#FFFFFF") {
     vars["--brand-fg-dark"] = V2_DARK_TEXT;
   }
 

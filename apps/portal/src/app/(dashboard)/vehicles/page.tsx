@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -65,6 +65,9 @@ import { OverviewFlip } from "@/components/shared/layout/overview-flip";
 import { VehiclesFilterPanel, countActiveVehicleFilters } from "@/components/vehicles-v2/vehicles-filter-panel";
 import { VehiclesOverview } from "@/components/vehicles-v2/vehicles-overview";
 import { useVehiclesOnRentV2 } from "@/hooks/use-vehicles-on-rent-v2";
+import { AutoSkeleton } from "@/components/skeleton-v2/auto-skeleton";
+import { skeletonRows } from "@/lib/skeleton-data";
+import { useSkeletonLoading } from "@/hooks/use-skeleton-loading";
 
 interface VehiclePhoto {
   photo_url: string;
@@ -101,6 +104,20 @@ interface Vehicle {
   vin?: string | null;
   garaging_state?: string | null;
 }
+
+/** Placeholder cars for the v2 skeleton: only their shapes are ever seen. */
+const SKELETON_VEHICLES: Vehicle[] = skeletonRows(8, (f) => ({
+  id: f.id,
+  reg: f.word(6, 8),
+  make: f.word(4, 8),
+  model: f.text(1, 2),
+  colour: f.word(3, 7),
+  year: 2020,
+  acquisition_type: '',
+  is_disposed: false,
+  status: 'Available',
+  vehicle_photos: [],
+}));
 
 type SortField = 'reg' | 'make_model' | 'year' | 'status';
 type SortDirection = 'asc' | 'desc';
@@ -198,6 +215,11 @@ function VehicleFilterPopover({
  * rather than showing a broken image, and the failure is remembered per URL so
  * a replaced cover gets a fresh try.
  */
+/** v1's stand-in for <AutoSkeleton>: renders the region as it always was. */
+function PlainRegion({ children }: { loading: boolean; className?: string; children: ReactNode }) {
+  return <>{children}</>;
+}
+
 function VehicleRegLink({
   vehicleId,
   reg,
@@ -349,7 +371,7 @@ export default function VehiclesListEnhanced() {
   };
 
   // Data fetching
-  const { data: vehicles = [], isLoading: vehiclesLoading } = useQuery({
+  const { data: loadedVehicles = [], isLoading: vehiclesLoading } = useQuery({
     queryKey: ["vehicles-list", tenant?.id],
     queryFn: async () => {
       let query = supabase
@@ -440,7 +462,12 @@ export default function VehiclesListEnhanced() {
     enabled: !!tenant,
   });
 
-  const isLoading = vehiclesLoading || plLoading;
+  const isLoading = useSkeletonLoading(vehiclesLoading || plLoading);
+
+  // v2: while the fleet loads, the page renders these placeholder cars through
+  // its real overview and table, and <AutoSkeleton> turns that into the
+  // skeleton. v1 keeps its own loading block below.
+  const vehicles = v2Chrome && isLoading ? SKELETON_VEHICLES : loadedVehicles;
 
   // Combine vehicle data with P&L
   const enhancedVehicles = useMemo(() => {
@@ -686,10 +713,14 @@ export default function VehiclesListEnhanced() {
     // No sort in the key: v2 has no sort (see `sortField`).
     `${JSON.stringify(filters)}|${inshurFilter}`,
   );
+  // No search or filters on an empty fleet (lean only, via teachEmptyFleet):
+  // there is nothing to search, and the empty state is the page's one job.
   usePageSearch(
-    v2Chrome
+    v2Chrome && !teachEmptyFleet
       ? {
           placeholder: "Search vehicles…",
+          scopeLabel: "Vehicles",
+          resultCount: isLoading ? undefined : filteredVehicles.length,
           value: filters.search,
           onChange: (next) => updateFilters({ search: next }),
           filters: {
@@ -704,7 +735,7 @@ export default function VehiclesListEnhanced() {
       : null,
   );
 
-  if (isLoading) {
+  if (isLoading && !v2Chrome) {
     // v2 (switch row alignment): the loaded page's 24px top padding at md, so this
     // skeleton starts where the title does (y=74, title centred on the sidebar
     // switch's row at 92) instead of at y=50 under the 64px top bar. v1 keeps
@@ -758,6 +789,10 @@ export default function VehiclesListEnhanced() {
     );
   };
 
+  // v2 wraps the data half of the page in the auto skeleton; v1's markup stays
+  // exactly as it was.
+  const SkeletonRegion = v2Chrome ? AutoSkeleton : PlainRegion;
+
   return (
     <div className="container mx-auto p-4 sm:p-6 space-y-6">
       {/* Header */}
@@ -775,14 +810,16 @@ export default function VehiclesListEnhanced() {
           {/* Renders only for the northwind canary — it self-gates on the
               resolved tenant's slug — so the other 56 tenants see this shared
               v1 header exactly as they do today. */}
-          <TabTourButton tour="vehicles" size="h-10" />
+          {/* Empty fleet (lean only): the empty state carries "Watch how", so
+              the tour button, Export and the header Add all step aside. */}
+          {!teachEmptyFleet && <TabTourButton tour="vehicles" size="h-10" />}
           {/* v2: one labelled button (Add Vehicle), every other control an icon. */}
-          {v2Chrome && (
+          {v2Chrome && !teachEmptyFleet && (
             <HeaderIconButton
               label="Export CSV"
               size="icon-lg"
               onClick={handleExportVehiclesCsv}
-              disabled={filteredVehicles.length === 0}
+              disabled={isLoading || filteredVehicles.length === 0}
             >
               <Download className="h-4 w-4" />
             </HeaderIconButton>
@@ -807,7 +844,11 @@ export default function VehiclesListEnhanced() {
             <div
               data-add-vehicle-trigger
               data-tour="add-vehicle"
+              // Hidden, not unmounted, on an empty fleet: the empty state's
+              // "Add your first vehicle" opens the dialog through this trigger.
               className={`flex-1 sm:flex-none [&>button]:w-full sm:[&>button]:w-auto${
+                teachEmptyFleet ? " hidden" : ""
+              }${
                 v2Chrome
                   ? " [&>button]:h-8 [&>button]:gap-1.5 [&>button]:rounded-full [&>button]:px-3.5 [&>button]:text-[13px] [&>button_svg]:!size-3.5 [&>button_svg]:!mr-0"
                   : ""
@@ -819,8 +860,10 @@ export default function VehiclesListEnhanced() {
         </div>
       </div>
 
-      {/* Fleet Summary Cards */}
+      <SkeletonRegion loading={isLoading} className="space-y-6">
+      {/* Fleet Summary Cards — none on an empty fleet (a chart of zeros is noise). */}
       {v2Chrome ? (
+        teachEmptyFleet ? null : (
         <OverviewFlip
           flipped={filtersOpen}
           onFlipBack={() => setFiltersOpen(false)}
@@ -847,12 +890,13 @@ export default function VehiclesListEnhanced() {
             />
           }
         />
+        )
       ) : (
       <FleetSummaryCards vehicles={filteredVehicles} currencyCode={currencyCode} />
       )}
 
       {/* Filters */}
-      {!v2Chrome && (() => {
+      {!v2Chrome && !teachEmptyFleet && (() => {
         const statusOptions = [
           { value: 'all', label: 'All Status' },
           { value: 'available', label: 'Available' },
@@ -1291,6 +1335,7 @@ export default function VehiclesListEnhanced() {
       {v2Chrome && filteredVehicles.length > 0 && !teachEmptyFleet && (
         <ListFooter rows={vehicleRows} one="vehicle" many="vehicles" />
       )}
+      </SkeletonRegion>
       {!v2Chrome && (
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div className="text-sm text-muted-foreground">

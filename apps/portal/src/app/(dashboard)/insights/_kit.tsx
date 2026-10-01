@@ -28,7 +28,10 @@ import { cn } from '@/lib/utils';
  * sequential scale: adjacent steps sit ~6 ΔE apart, below the ≥15 normal-vision
  * floor, so two revenue categories next to each other in a donut would be
  * genuinely indistinguishable. They are used below only where the scale really
- * is ordinal — the ageing buckets — which is what a sequential ramp is for.
+ * is ordinal — the ageing buckets — which is what a sequential ramp is for, and
+ * as ONE step each for the brand-coloured series (revenue, the first mix slot),
+ * so those follow the tenant's theme colour instead of a fixed indigo. The ramp
+ * takes the brand's hue, so it is an indigo ramp only on the default brand.
  */
 
 export type ChartColor = { light: string; dark: string };
@@ -36,7 +39,11 @@ export type ChartColor = { light: string; dark: string };
 /**
  * The two sides of the operating P&L, plus the answer.
  *
- * Revenue takes the brand indigo — it is the page's one accent. Cost takes a
+ * Revenue takes the tenant's brand colour — the page's one accent — via the
+ * v2 chart ramp (`--chart-4` light / `--chart-3` dark: the brand hue at a fixed
+ * mid lightness, so a deep brand like graphite never paints near-black bars
+ * beside the ink-coloured profit line). The indigo↔orange separation figures
+ * below were measured on the default indigo brand. Cost takes a
  * warm orange: it reads as money leaving without being alarming, and the
  * indigo↔orange pair clears the CVD and normal-vision separation floors in both
  * modes. Net profit is drawn in plain ink rather than green, because the line
@@ -44,7 +51,7 @@ export type ChartColor = { light: string; dark: string };
  * operator on a loss.
  */
 export const MONEY_COLORS = {
-  revenue: { light: '#442dd7', dark: '#6461ff' },
+  revenue: { light: 'hsl(var(--chart-4))', dark: 'hsl(var(--chart-3))' },
   cost: { light: '#eb6834', dark: '#d95926' },
   profit: { light: '#0f172a', dark: '#f1f5f9' },
 } satisfies Record<string, ChartColor>;
@@ -61,7 +68,7 @@ export const MONEY_COLORS = {
  * its amount and share, so identity never rests on the colour alone.
  */
 export const MIX_COLORS: ChartColor[] = [
-  { light: '#442dd7', dark: '#6461ff' },
+  { light: 'hsl(var(--chart-4))', dark: 'hsl(var(--chart-3))' },
   { light: '#eb6834', dark: '#d95926' },
   { light: '#1baf7a', dark: '#199e70' },
   { light: '#eda100', dark: '#c98500' },
@@ -74,16 +81,17 @@ export const OTHER_COLOR: ChartColor = { light: '#94a3b8', dark: '#64748b' };
 /**
  * Ageing buckets — genuinely ordinal, so genuinely sequential.
  *
- * Light → dark as the debt gets older, from the v2 theme's own indigo ramp.
+ * Light → dark as the debt gets older, from the v2 theme's own brand ramp
+ * (`--chart-1..5`, which follows the tenant's colour).
  * Deliberately not a green→red status scale: this page reports what is owed, it
  * does not grade the operator's collections, and four bars each carrying its own
  * axis label and value need no colour to be told apart.
  */
 export const AGING_COLORS: ChartColor[] = [
-  { light: '#a3b2ff', dark: '#a3b2ff' },
-  { light: '#6461ff', dark: '#6461ff' },
-  { light: '#442dd7', dark: '#513bf7' },
-  { light: '#372aac', dark: '#442dd7' },
+  { light: 'hsl(var(--chart-1))', dark: 'hsl(var(--chart-1))' },
+  { light: 'hsl(var(--chart-2))', dark: 'hsl(var(--chart-2))' },
+  { light: 'hsl(var(--chart-4))', dark: 'hsl(var(--chart-3))' },
+  { light: 'hsl(var(--chart-5))', dark: 'hsl(var(--chart-4))' },
 ];
 
 /** Diverging pair for profit-per-vehicle. Real polarity: made money / lost money. */

@@ -50,7 +50,10 @@ import {
 import { format } from "date-fns";
 import { parseLocalDate } from "@/lib/date-utils";
 import { useV2 } from "@/lib/v2-context";
+import { usePageSearch } from "@/components/shared/layout/page-search-slot";
 import { PlatesTableV2 } from "@/components/fleet-v2/plates-table-v2";
+import { useSkeletonLoading } from "@/hooks/use-skeleton-loading";
+import { skeletonRows } from "@/lib/skeleton-data";
 import { HEADER_ACTIONS_V2, HEADER_PRIMARY_V2, HeaderIconButton } from "@/components/shared/header-icon-button-v2";
 
 interface Plate {
@@ -74,6 +77,23 @@ interface Plate {
     model: string;
   };
 }
+
+/** Placeholder plates for the v2 skeleton: only their shapes are ever seen. */
+const SKELETON_PLATES: Plate[] = skeletonRows(8, (f) => ({
+  id: f.id,
+  plate_number: f.word(6, 8),
+  vehicle_id: f.id,
+  supplier: f.text(1, 2),
+  order_date: f.date().slice(0, 10),
+  cost: f.money(20, 120),
+  status: f.pick(["ordered", "received", "assigned", "expired"]),
+  notes: f.text(1, 3),
+  document_url: "#",
+  document_name: f.word(6, 12),
+  created_at: f.date(),
+  updated_at: f.date(),
+  vehicles: { id: f.id, reg: f.word(6, 8), make: f.word(4, 8), model: f.word(3, 7) },
+}));
 
 // Helper function to get filename from document URL
 const getDocumentFilename = (url: string | undefined, name: string | undefined): string => {
@@ -129,7 +149,7 @@ export default function PlatesListEnhanced() {
   };
 
   // Fetch plates data
-  const { data: plates, isLoading, refetch } = useQuery({
+  const { data: loadedPlates, isLoading: platesLoading, refetch } = useQuery({
     queryKey: ["plates-enhanced", tenant?.id, debouncedSearch, statusFilter, documentFilter],
     queryFn: async () => {
       let query = supabase
@@ -171,6 +191,11 @@ export default function PlatesListEnhanced() {
     },
   });
 
+  const isLoading = useSkeletonLoading(platesLoading);
+  // v2: while the plates load, the table renders these placeholder plates and
+  // <AutoSkeleton> turns them into the skeleton. v1 keeps its own loading rows.
+  const plates = v2Chrome && isLoading ? SKELETON_PLATES : loadedPlates;
+
   // Paginated and filtered data
   const { paginatedPlates, totalCount } = useMemo(() => {
     if (!plates) return { paginatedPlates: [], totalCount: 0 };
@@ -202,6 +227,20 @@ export default function PlatesListEnhanced() {
   const clearFilters = () => {
     router.push('/plates');
   };
+
+  // v2: the search lives in the top bar (page-search-slot.tsx).
+  usePageSearch(
+    v2Chrome
+      ? {
+          placeholder: "Search plates, vehicles, suppliers…",
+          value: searchTerm,
+          // Wrapped: `handleSearch` may be declared further down this body.
+          onChange: (next) => handleSearch(next),
+          scopeLabel: "Plates",
+          resultCount: isLoading || debouncedSearch !== searchTerm ? undefined : plates?.length,
+        }
+      : null,
+  );
 
   const hasActiveFilters = searchTerm || statusFilter !== "all" || documentFilter !== "all";
 
@@ -417,7 +456,7 @@ export default function PlatesListEnhanced() {
           // 769px and 14px/20px above, so the box follows it: h-6 from sm, h-5
           // from md.
           <div className={`flex items-center gap-2 ${HEADER_ACTIONS_V2} md:h-5`}>
-            <HeaderIconButton label="Export CSV" onClick={exportToCSV}>
+            <HeaderIconButton label="Export CSV" onClick={exportToCSV} disabled={isLoading}>
               <Download className="h-4 w-4" />
             </HeaderIconButton>
             <Button onClick={() => setAddPlateOpen(true)} className={HEADER_PRIMARY_V2}>
@@ -441,6 +480,7 @@ export default function PlatesListEnhanced() {
 
       {/* Filters */}
       <div className="flex flex-wrap gap-4 items-center">
+        {!v2Chrome && (
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -450,6 +490,7 @@ export default function PlatesListEnhanced() {
             className="pl-10"
           />
         </div>
+        )}
         <Select value={statusFilter} onValueChange={handleStatusFilter}>
           <SelectTrigger className="w-[150px]">
             <SelectValue placeholder="All Statuses" />

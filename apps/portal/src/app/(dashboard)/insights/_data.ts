@@ -23,16 +23,21 @@
  */
 
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, supabaseUntyped } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
 import {
   classify,
+  defaultBucket,
+  ruleKey,
   netMargin,
   receiptFor,
   toNumber,
   totalsFor,
+  type Bucket,
   type PnlEntry,
   type Receipt,
+  type Rule,
+  type Rules,
   type Totals,
 } from './_money-model';
 
@@ -284,7 +289,32 @@ export type MixSlice = {
  * description. `useCostDescriptions` in `_receipt-data.ts` resolves those on
  * demand; without it the dialog can only say "Servicing" or "Running costs".
  */
-export type LedgerRow = PnlEntry & { id: string; reference: string | null };
+export type LedgerRow = PnlEntry & {
+  id: string;
+  reference: string | null;
+  /**
+   * The row's bucket once the tenant's own rules are applied — set once in
+   * `useInsights`, so the dialogs read the same answer the totals were summed
+   * with instead of re-classifying without the rules.
+   */
+  bucket?: Bucket | null;
+  /** The ledger's own amount, when the operator re-priced this row. */
+  originalAmount?: number;
+  /** True when an adjustment touches this row — re-priced or left out. */
+  adjusted?: boolean;
+};
+
+/** One (side, category) pair seen in the period, for the "what counts where" editor. */
+export type CategoryTotal = {
+  side: string;
+  category: string;
+  amount: number;
+  count: number;
+  /** Where the page puts it with no override. */
+  defaultRule: Rule;
+  /** Where it is going now — the override if there is one. */
+  rule: Rule;
+};
 
 /** One refund, as the "money you gave back" dialog lists it. */
 export type RefundRow = {
@@ -294,6 +324,10 @@ export type RefundRow = {
   reason: string | null;
   customerName: string | null;
   vehicleId: string | null;
+  /** As on `LedgerRow`: the operator's own correction, never the payment's. */
+  originalAmount?: number;
+  excluded?: boolean;
+  adjusted?: boolean;
 };
 
 /** One customer who owes money, as `view_aging_receivables` reports them. */
@@ -339,6 +373,13 @@ export type InsightsData = {
   receivables: ReceivableRow[];
   /** Vehicle id → the label to print for it. Misses are removed vehicles. */
   vehicleLabels: Map<string, string>;
+
+  /** How many entries and refunds carry an operator adjustment. */
+  adjustedCount: number;
+  /** The tenant's overrides, keyed `side:category`. Empty = all defaults. */
+  rules: Rules;
+  /** Every category in the period plus every one with a rule, for the editor. */
+  categories: CategoryTotal[];
 
   /** True when any read hit the row ceiling, so the screen can say so. */
   truncated: boolean;
@@ -405,6 +446,108 @@ export function vehicleName(labels: Map<string, string>, id: string | null): str
   return labels.get(id) ?? `Removed vehicle (${id.slice(0, 8)})`;
 }
 
+/* ────────────────────────────────────────────────────────────────────────────
+ * What counts where — the tenant's overrides
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+type RuleRow = { side: string; category: string; bucket: Rule };
+
+/**
+ * The tenant's category overrides.
+ *
+ * Any failure reads as "no overrides" rather than failing the page: the
+ * defaults are a complete, correct answer on their own, and a screen about
+ * money must not go blank because an optional preference could not load.
+ * Untyped client because the table is newer than the generated types.
+ */
+async function fetchCategoryRules(tenantId: string): Promise<Rules> {
+  try {
+    const { data, error } = await supabaseUntyped
+      .from('insights_category_rules')
+      .select('side, category, bucket')
+      .eq('tenant_id', tenantId);
+    if (error) return new Map();
+    return new Map(((data ?? []) as RuleRow[]).map((r) => [ruleKey(r.side, r.category), r.bucket]));
+  } catch {
+    return new Map();
+  }
+}
+
+type AdjustmentRow = {
+  pnl_entry_id: string | null;
+  payment_id: string | null;
+  excluded: boolean;
+  amount: number | string | null;
+};
+
+export type Adjustment = { excluded: boolean; amount: number | null };
+export type Adjustments = { entries: Map<string, Adjustment>; payments: Map<string, Adjustment> };
+
+/**
+ * The operator's corrections to single entries. Same failure rule as the
+ * category rules: unreadable means "none", never a broken page.
+ */
+async function fetchAdjustments(tenantId: string): Promise<Adjustments> {
+  const empty: Adjustments = { entries: new Map(), payments: new Map() };
+  try {
+    const { data, error } = await supabaseUntyped
+      .from('insights_entry_adjustments')
+      .select('pnl_entry_id, payment_id, excluded, amount')
+      .eq('tenant_id', tenantId);
+    if (error) return empty;
+    for (const r of (data ?? []) as AdjustmentRow[]) {
+      const adj = { excluded: r.excluded, amount: r.amount == null ? null : toNumber(r.amount) };
+      if (r.pnl_entry_id) empty.entries.set(r.pnl_entry_id, adj);
+      else if (r.payment_id) empty.payments.set(r.payment_id, adj);
+    }
+    return empty;
+  } catch {
+    return empty;
+  }
+}
+
+/** Put an adjustment onto a row, keeping the original beside it. */
+function applyAdjustment<T extends { amount: number | string | null; excluded?: boolean; originalAmount?: number; adjusted?: boolean }>(
+  row: T,
+  adj: Adjustment | undefined,
+): void {
+  if (!adj) return;
+  row.adjusted = true;
+  row.excluded = adj.excluded;
+  if (adj.amount != null) {
+    row.originalAmount = toNumber(row.amount);
+    (row as { amount: unknown }).amount = adj.amount;
+  }
+}
+
+/** Every (side, category) in the period, plus any with a rule but no rows. */
+function categoryTotals(rows: LedgerRow[], rules: Rules): CategoryTotal[] {
+  const byKey = new Map<string, CategoryTotal>();
+  const entry = (side: string, category: string) => {
+    const key = ruleKey(side, category);
+    let t = byKey.get(key);
+    if (!t) {
+      const defaultRule: Rule = defaultBucket({ side, category }) ?? 'ignored';
+      const rule = rules.get(key) ?? defaultRule;
+      t = { side, category, amount: 0, count: 0, defaultRule, rule };
+      byKey.set(key, t);
+    }
+    return t;
+  };
+  for (const row of rows) {
+    if (!row.side || !row.category) continue;
+    const t = entry(row.side, row.category);
+    if (row.excluded) continue;
+    t.amount += toNumber(row.amount);
+    t.count += 1;
+  }
+  for (const key of rules.keys()) {
+    const i = key.indexOf(':');
+    entry(key.slice(0, i), key.slice(i + 1));
+  }
+  return [...byKey.values()].sort((a, b) => b.amount - a.amount);
+}
+
 export function useInsights(months: PeriodMonths) {
   const { tenant } = useTenant();
   const tenantId = tenant?.id;
@@ -419,7 +562,7 @@ export function useInsights(months: PeriodMonths) {
       // Five reads, in parallel. Each one filters on tenant_id — see the file
       // header. `vehicles` is deliberately NOT date-filtered: the denominator of
       // utilisation is the fleet you have, not the fleet that happened to earn.
-      const [ledger, vehicles, rentals, aging, refunds] = await Promise.all([
+      const [ledger, vehicles, rentals, aging, refunds, rules, adjustments] = await Promise.all([
         fetchAll<LedgerRow>(() =>
           supabase
             .from('pnl_entries')
@@ -488,7 +631,17 @@ export function useInsights(months: PeriodMonths) {
             .order('refund_processed_at', { ascending: false })
             .order('id', { ascending: true }) as unknown as PageQuery<PaymentRefundRow>,
         ),
+        fetchCategoryRules(tenantId!),
+        fetchAdjustments(tenantId!),
       ]);
+
+      // Classify once, with the tenant's rules, and keep the answer on the row.
+      // Then the operator's single-entry corrections, so every sum below — and
+      // every dialog — reads the adjusted amount and skips what was left out.
+      for (const row of ledger.rows) {
+        row.bucket = classify(row, rules);
+        applyAdjustment(row, adjustments.entries.get(row.id));
+      }
 
       /*
        * Customer names for the refunds, and only for the refunds.
@@ -514,7 +667,7 @@ export function useInsights(months: PeriodMonths) {
         }
       }
 
-      const totals = totalsFor(ledger.rows);
+      const totals = totalsFor(ledger.rows, rules);
 
       // One pass over the ledger for the three breakdowns, so a row can never be
       // counted in the monthly chart and missed in the mix.
@@ -523,7 +676,8 @@ export function useInsights(months: PeriodMonths) {
       const byCategory = new Map<string, number>();
 
       for (const e of ledger.rows) {
-        const bucket = classify(e);
+        const bucket = e.bucket ?? null;
+        if (e.excluded) continue;
         if (bucket === 'non_revenue' || bucket === 'capital_cost' || bucket === null) continue;
 
         const amount = toNumber(e.amount);
@@ -628,16 +782,20 @@ export function useInsights(months: PeriodMonths) {
         { bucket_0_30: 0, bucket_31_60: 0, bucket_61_90: 0, bucket_90_plus: 0, total: 0 },
       );
 
-      const refundRows: RefundRow[] = refunds.rows.map((r) => ({
-        id: r.id,
-        amount: toNumber(r.refund_amount),
-        date: r.refund_processed_at,
-        reason: r.refund_reason,
-        customerName: r.customer_id ? (customerNames.get(r.customer_id) ?? null) : null,
-        vehicleId: r.vehicle_id,
-      }));
+      const refundRows: RefundRow[] = refunds.rows.map((r) => {
+        const row: RefundRow = {
+          id: r.id,
+          amount: toNumber(r.refund_amount),
+          date: r.refund_processed_at,
+          reason: r.refund_reason,
+          customerName: r.customer_id ? (customerNames.get(r.customer_id) ?? null) : null,
+          vehicleId: r.vehicle_id,
+        };
+        applyAdjustment(row, adjustments.payments.get(r.id));
+        return row;
+      });
 
-      const gaveBack = refundRows.reduce((sum, r) => sum + r.amount, 0);
+      const gaveBack = refundRows.reduce((sum, r) => (r.excluded ? sum : sum + r.amount), 0);
 
       return {
         totals,
@@ -660,6 +818,10 @@ export function useInsights(months: PeriodMonths) {
           rentals.truncated ||
           aging.truncated ||
           refunds.truncated,
+        adjustedCount:
+          ledger.rows.filter((r) => r.adjusted).length + refundRows.filter((r) => r.adjusted).length,
+        rules,
+        categories: categoryTotals(ledger.rows, rules),
         hasLedger: ledger.rows.length > 0,
       };
     },

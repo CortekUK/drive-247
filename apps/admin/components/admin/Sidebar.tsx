@@ -1,534 +1,637 @@
 'use client';
 
+/**
+ * Super Admin's sidebar, drawn the way Northwind draws the portal's
+ * (`apps/portal/src/components/shared/layout/app-sidebar-v2.tsx`): the same
+ * primitive, the same row classes, the same layout from top to bottom —
+ *
+ *   org row (mark · name · open-the-site arrow)
+ *   quick rows, a rule, the fingertip rows
+ *   "More": flat rows, then drill-in sections that take the rail over
+ *   footer: the profile row, with Settings and the account menu at its end
+ *
+ * and it collapses to a 48px icon rail on ⌘B or the hairline at its edge.
+ *
+ * A page that registers sections (`useRegisterSidebarSections`) takes the
+ * whole rail, as a Northwind record does: a way back at the top, the record's
+ * name, then its sections.
+ */
+
+import { Fragment, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Fragment } from 'react';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { ArrowLeft, Check, ChevronRight, ChevronsUpDown, ExternalLink, LogOut } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
-import { useSidebar } from './SidebarContext';
-import { useAdminSupport } from '@/lib/use-support-messaging';
-import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { cn } from '@/lib/utils';
+import {
+  Sidebar as SidebarRoot,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarRail,
+  useSidebar,
+} from '@/components/ui/sidebar';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { cn } from '@/lib/utils';
-import { useSidebarSections, type SidebarSection } from '@/components/admin/sidebar-sections';
-import {
-  ArrowLeft,
-  LayoutDashboard,
-  Building2,
-  Ban,
-  Mail,
-  Settings,
-  Users,
-  ChevronDown,
-  LogOut,
-  Check,
-  ChevronsUpDown,
-  ScrollText,
-  Scale,
-  ListChecks,
-  ClipboardCheck,
-  ArrowUpCircle,
-  Megaphone,
-  MessageSquareText,
-  Sparkles,
-  AlertTriangle,
-  TrendingUp,
-  Activity,
-  BookOpen,
-  BadgeDollarSign,
-  BellRing,
-  TicketPercent,
-  Plug,
-} from 'lucide-react';
+import { useSidebarSections } from '@/components/admin/sidebar-sections';
+import { isNavActive, useAdminNav, type AdminNavGroup, type AdminNavItem } from '@/components/admin/admin-nav';
 
-interface NavItem {
-  name: string;
-  href: string;
-  icon: React.ElementType;
-  badgeCount?: number;
-  badgeUnavailable?: boolean;
+/** Northwind's NAV_ROW: 44px rows and a 15px label in the phone sheet, the rail's own 32px/13px from `md`. */
+const NAV_ROW =
+  'h-11 md:h-8 [&>svg]:size-[18px] md:[&>svg]:size-4 font-medium transition-colors ' +
+  'data-[active=true]:shadow-[inset_0_0_0_1px_hsl(var(--primary)_/_0.12),0_1px_2px_hsl(var(--primary)_/_0.08)]';
+const NAV_ROW_WIDE = NAV_ROW + ' w-full';
+
+/** Label that folds away when the rail collapses to icons. */
+function labelClass(collapsed: boolean, extra = 'truncate') {
+  return `text-[15px] md:text-[13px] ${collapsed ? 'sr-only opacity-0 w-0' : `${extra} opacity-100`}`;
 }
 
-interface NavGroup {
-  label: string;
-  items: NavItem[];
+/** 28px square trailing control — the org row's arrow, the profile row's gear and caret. */
+const ROW_CONTROL =
+  'flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-lg text-muted-foreground outline-none transition-colors hover:bg-primary/10 hover:text-primary';
+
+const MARKETING_SITE = 'https://drive-247.com';
+
+// ─── Org row ────────────────────────────────────────────────────────────────
+
+function OrgMark() {
+  return (
+    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-[12px] font-semibold text-primary-foreground">
+      D
+    </div>
+  );
 }
 
-function useNavigation() {
-  const { user } = useAuthStore();
-  const support = useAdminSupport();
+function OrgRow({ collapsed, salesOnly }: { collapsed: boolean; salesOnly: boolean }) {
+  const label = salesOnly ? 'Sales' : 'Super Admin';
 
-  const salesOnly = !!user?.is_sales_agent && !user?.is_super_admin;
-
-  const salesGroup: NavGroup = {
-    label: 'Sales',
-    items: [
-      { name: 'Onboarding', href: '/admin/sales', icon: TrendingUp },
-      // Drive247 subscription promo codes + operator referral links.
-      { name: 'Promo Codes', href: '/admin/promo-codes', icon: TicketPercent },
-    ],
-  };
-
-  // Sales agents (without super admin) only see the Sales group.
-  if (salesOnly) {
-    return [salesGroup];
+  if (collapsed) {
+    return (
+      <Link
+        data-slot="org-row"
+        href={salesOnly ? '/admin/sales' : '/admin/dashboard'}
+        title="Drive247"
+        className="flex w-full cursor-pointer items-center justify-center rounded-lg p-1.5 outline-none transition-colors hover:bg-primary/10"
+      >
+        <OrgMark />
+      </Link>
+    );
   }
 
-  const groups: NavGroup[] = [
-    salesGroup,
-    {
-      label: 'Overview',
-      items: [
-        { name: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
-      ],
-    },
-    {
-      label: 'Monitoring',
-      items: [
-        { name: 'Platform Rentals', href: '/admin/platform-rentals', icon: Activity },
-      ],
-    },
-    {
-      label: 'Management',
-      items: [
-        { name: 'Rental Companies', href: '/admin/rentals', icon: Building2 },
-        { name: 'Signup Plans', href: '/admin/signup-plans', icon: BadgeDollarSign },
-        { name: 'Global Blacklist', href: '/admin/blacklist', icon: Ban },
-        { name: 'Contact Requests', href: '/admin/contacts', icon: Mail },
-        // Keep the destination discoverable when support is unconfigured or offline.
-        // The page and API still require the separate, server-verified support grant.
-        ...(user?.is_super_admin ? [{ name: 'Support', href: '/admin/support', icon: MessageSquareText, badgeCount: support.allowed ? support.count ?? undefined : undefined, badgeUnavailable: support.allowed && support.count === null }] : []),
-        { name: 'Mode Requests', href: '/admin/requests', icon: ArrowUpCircle },
-        { name: 'Announcements', href: '/admin/announcements', icon: Megaphone },
-        { name: 'Welcome Pack', href: '/admin/welcome-pack', icon: BookOpen },
-        { name: 'Feedbacks', href: '/admin/feedbacks', icon: MessageSquareText },
-        { name: 'Audit Logs', href: '/admin/audit-logs', icon: ScrollText },
-        { name: 'OpenAI Usage', href: '/admin/openai-usage', icon: Sparkles },
-      ],
-    },
-    {
-      label: 'Configuration',
-      items: [
-        { name: 'Settings', href: '/admin/settings', icon: Settings },
-        // Premium integrations: which are paid, their monthly price, first
-        // month free, and the hide / beta / not-available flags on the
-        // operator's Integrations page. Platform-wide; super admins only (the
-        // catalog table's RLS says so too). docs/integration-billing.
-        ...(user?.is_super_admin
-          ? [{ name: 'Integrations', href: '/admin/integrations', icon: Plug }]
-          : []),
-        // The platform's own notification set: what we send operators, what
-        // operators send us, and what we broadcast to everyone. Separate from
-        // Settings because it saves to its own table with its own dirty guard.
-        // Super admins only — the page and the table's RLS say so too.
-        ...(user?.is_super_admin
-          ? [{ name: 'Notifications', href: '/admin/notifications', icon: BellRing }]
-          : []),
-        // Terms of Service and Privacy Policy, as served at drive-247.com.
-        // Not a tenant's rental terms — those are per-tenant CMS content and a
-        // different contract entirely. See ops/platform_legal_documents.sql.
-        { name: 'Legal Pages', href: '/admin/legal', icon: Scale },
-        // The first-run wizard's questions. Platform-wide, not per-tenant.
-        { name: 'Onboarding Questions', href: '/admin/onboarding-questions', icon: ListChecks },
-        // The features an operator has to sit down with once — auto-extension,
-        // installments, pay-as-you-go, Bonzah — each with the video or the
-        // written guide that explains it. Platform-wide, not per-tenant, and
-        // NOT the Welcome Pack above: that is the full manual, this is the
-        // short list of things that cost a live walkthrough every time.
-        { name: 'Setup Checklist', href: '/admin/setup-checklist', icon: ClipboardCheck },
-        ...(user?.is_primary_super_admin
-          ? [{ name: 'Manage Admins', href: '/admin/admins', icon: Users }]
-          : []),
-      ],
-    },
-  ];
-
-  return groups;
+  return (
+    <div data-slot="org-row" className="group/site flex items-center rounded-lg transition-colors hover:bg-primary/10">
+      <Link
+        href={salesOnly ? '/admin/sales' : '/admin/dashboard'}
+        className="flex min-w-0 cursor-pointer items-center gap-2.5 rounded-lg p-1.5 text-left outline-none"
+      >
+        <OrgMark />
+        <span className="min-w-0">
+          <span className="block truncate text-[13px] font-semibold leading-tight">Drive247</span>
+          <span className="block truncate text-[11px] leading-tight text-muted-foreground">{label}</span>
+        </span>
+      </Link>
+      <span aria-hidden className="flex-1" />
+      <a
+        href={MARKETING_SITE}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Open drive-247.com (opens in a new tab)"
+        title="Open drive-247.com"
+        className={ROW_CONTROL}
+      >
+        <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+      </a>
+    </div>
+  );
 }
 
-function NavGroupComponent({
-  group,
-  isActive,
+// ─── Profile row ────────────────────────────────────────────────────────────
+
+function initialsOf(name: string | undefined, email: string | undefined) {
+  return (name || email || 'A')
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
+}
+
+function UserRow({
+  collapsed,
+  settings,
   onNavigate,
 }: {
-  group: NavGroup;
-  isActive: (href: string) => boolean;
-  onNavigate?: () => void;
+  collapsed: boolean;
+  settings: AdminNavItem | null;
+  onNavigate: () => void;
 }) {
-  /*
-   * A group opens because you are IN it, not because everything is open.
-   *
-   * All four started expanded, which put every section's items on screen at
-   * once — and once a page began publishing its own sub-options underneath an
-   * item, that was a sidebar with open menus everywhere. Only the group
-   * holding the current page expands now; the rest stay shut until asked for.
-   *
-   * `useState` with an initial value rather than an effect: this is the
-   * starting position, not a rule. Once you open or close a group by hand it
-   * stays as you left it for as long as the sidebar is mounted, which is what
-   * makes it a sidebar rather than an accordion that fights you.
-   */
-  const [isOpen, setIsOpen] = useState(() => group.items.some((item) => isActive(item.href)));
+  const { user, logout } = useAuthStore();
+  const [menuOpen, setMenuOpen] = useState(false);
+  // A record page (e.g. a rental company) offers its own actions here —
+  // suspend, delete, reset password… They have no other home on the page.
+  const registration = useSidebarSections();
+  const actions = registration?.actions ?? [];
+  if (!user) return null;
 
-  return (
-    <div className="mb-2">
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex w-full items-center justify-between px-4 py-1.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors"
-      >
-        {group.label}
-        <ChevronDown
-          className={cn(
-            'h-3 w-3 transition-transform duration-200',
-            !isOpen && '-rotate-90'
-          )}
-        />
-      </button>
-      {isOpen && (
-        <div className="mt-1 space-y-0.5 px-3">
-          {group.items.map((item) => {
-            const Icon = item.icon;
-            const active = isActive(item.href);
-            const showBadge = (item.badgeCount ?? 0) > 0 || item.badgeUnavailable;
-            return (
-              <Fragment key={item.name}>
-              <Link
-                href={item.href}
-                onClick={onNavigate}
+  const initials = initialsOf(user.name, user.email);
+  const role = user.is_primary_super_admin
+    ? 'Primary Admin'
+    : user.is_super_admin
+      ? 'Super Admin'
+      : 'Sales Agent';
+
+  const avatar = (
+    <Avatar className="h-8 w-8 shrink-0 overflow-hidden rounded-full">
+      <AvatarFallback className="bg-primary/10 text-xs font-medium text-primary">{initials}</AvatarFallback>
+    </Avatar>
+  );
+
+  const menu = (
+    <DropdownMenuContent align="start" side={collapsed ? 'right' : 'top'} sideOffset={8} className="w-64 overflow-hidden rounded-xl p-0">
+      <div className="p-2.5 pb-2">
+        <div className="flex items-center gap-2.5">
+          <Avatar className="h-9 w-9 overflow-hidden rounded-full ring-2 ring-border/50">
+            <AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">{initials}</AvatarFallback>
+          </Avatar>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[13px] font-semibold leading-tight">{user.name || 'Admin'}</div>
+            <div className="truncate text-[11px] leading-tight text-muted-foreground/70">{user.email}</div>
+          </div>
+        </div>
+        <span className="mt-2 inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+          {role}
+        </span>
+      </div>
+      <DropdownMenuSeparator className="m-0" />
+      {actions.length > 0 && (
+        <>
+          <div className="p-1.5">
+            {actions.map((action) => (
+              <DropdownMenuItem
+                key={action.id}
+                onClick={() => registration?.onAction?.(action.id)}
                 className={cn(
-                  /* Below `md` this sidebar is the sheet behind the header's
-                     menu and the only navigation on the screen, so its rows
-                     carry a 44px target and a readable label; from `md` up it
-                     is the desktop rail again at exactly the density it had.
-                     Same pair the portal's rail uses. */
-                  'flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 text-[15px] font-medium transition-all duration-200',
-                  'md:min-h-0 md:text-[13px]',
-                  active
-                    ? 'bg-sidebar-accent text-primary shadow-[inset_0_0_0_1px_hsl(var(--primary)_/_0.12),0_1px_2px_hsl(var(--primary)_/_0.08)]'
-                    : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+                  'cursor-pointer rounded-lg px-2.5 py-1.5 text-[13px]',
+                  action.tone === 'destructive' && 'text-destructive focus:bg-destructive/10 focus:text-destructive',
                 )}
               >
-                <Icon className={cn("size-[18px] md:size-4", active && "text-primary")} />
-                <span className="flex-1">{item.name}</span>
-                {showBadge && (
-                  <span
-                    title={item.badgeUnavailable ? 'Unread count unavailable. Reconnecting…' : undefined}
-                    className={cn(
-                      'inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold tabular-nums',
-                      active
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/40'
-                    )}
-                  >
-                    {item.badgeUnavailable ? '?' : item.badgeCount! > 99 ? '99+' : item.badgeCount}
-                  </span>
-                )}
-              </Link>
-              </Fragment>
-            );
-          })}
-        </div>
+                <span className="flex-1">{action.label}</span>
+                {action.tone === 'active' && <Check className="ml-2 h-4 w-4 text-primary" />}
+              </DropdownMenuItem>
+            ))}
+          </div>
+          <DropdownMenuSeparator className="m-0" />
+        </>
       )}
-    </div>
+      <div className="p-1.5">
+        <DropdownMenuItem
+          onClick={() => void logout()}
+          className="cursor-pointer rounded-lg px-2.5 py-1.5 text-[13px] text-destructive focus:bg-destructive/10 focus:text-destructive"
+        >
+          <LogOut className="mr-2.5 h-4 w-4" />
+          <span>Sign Out</span>
+        </DropdownMenuItem>
+      </div>
+    </DropdownMenuContent>
+  );
+
+  if (collapsed) {
+    return (
+      <div className="flex flex-col items-center gap-1 py-1">
+        {settings && (
+          <Link
+            href={settings.href}
+            onClick={onNavigate}
+            aria-label="Settings"
+            title="Settings"
+            className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-muted-foreground outline-none transition-colors hover:bg-primary/10 hover:text-primary"
+          >
+            <settings.icon className="h-4 w-4" />
+          </Link>
+        )}
+        <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label="Open account menu"
+              className="flex cursor-pointer items-center justify-center rounded-4xl p-1 outline-none transition-colors hover:bg-primary/10"
+            >
+              {avatar}
+            </button>
+          </DropdownMenuTrigger>
+          {menu}
+        </DropdownMenu>
+      </div>
+    );
+  }
+
+  return (
+    <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+      {/* Hover and open states on the CONTAINER, so the highlight covers the
+          gear and the caret too — Northwind's profile row. */}
+      <div
+        className={cn(
+          'flex w-full items-center rounded-lg transition-colors hover:bg-primary/10',
+          menuOpen && 'bg-primary/10',
+        )}
+      >
+        <DropdownMenuTrigger asChild>
+          <button className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2.5 text-left outline-none">
+            {avatar}
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[13px] font-semibold leading-tight">{user.name || 'Admin'}</span>
+              <span className="block truncate text-[11px] leading-tight text-muted-foreground">{user.email}</span>
+            </span>
+          </button>
+        </DropdownMenuTrigger>
+        {settings && (
+          <Link
+            href={settings.href}
+            onClick={onNavigate}
+            aria-label="Settings"
+            title="Settings"
+            className="shrink-0 cursor-pointer rounded-lg p-1.5 text-muted-foreground outline-none transition-colors hover:bg-primary/10 hover:text-primary"
+          >
+            <settings.icon className="h-4 w-4" />
+          </Link>
+        )}
+        {/* A sibling of the trigger, driving the same menu through `open`.
+            stopPropagation keeps the dismissable layer from reading it as an
+            outside click and closing the menu a beat before it reopens. */}
+        <button
+          type="button"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={() => setMenuOpen((o) => !o)}
+          aria-label="Open account menu"
+          className="shrink-0 cursor-pointer rounded-lg p-1.5 text-muted-foreground outline-none transition-colors hover:bg-primary/10 hover:text-primary"
+        >
+          <ChevronsUpDown className="h-4 w-4" />
+        </button>
+      </div>
+      {menu}
+    </DropdownMenu>
   );
 }
 
-/**
- * A page's sections, as the whole rail.
- *
- * Modelled on Northwind's record rail: a way back at the top, the thing you
- * are inside of, then its own sections — and nothing else. The navigation is
- * not beside it, because the point is that this IS the navigation while the
- * page is open.
- *
- * Buttons, not links: these switch a section on a page that is already open,
- * so there is nothing to navigate to.
- */
-function SectionRail({
-  registration,
-  title,
-  onBack,
+// ─── Nav rows ───────────────────────────────────────────────────────────────
+
+function Badge({ item, collapsed }: { item: AdminNavItem; collapsed: boolean }) {
+  const count = item.badge ?? 0;
+  if (count <= 0 && !item.badgeUnavailable) return null;
+  const text = item.badgeUnavailable ? '?' : collapsed ? (count > 9 ? '9+' : String(count)) : count > 99 ? '99+' : String(count);
+  const title = item.badgeUnavailable ? 'Unread count unavailable. Reconnecting…' : undefined;
+
+  if (collapsed) {
+    return (
+      <span
+        aria-hidden
+        title={title}
+        className="absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-0.5 text-[10px] font-bold leading-none tabular-nums text-destructive-foreground animate-in fade-in-0 duration-200 ease-out motion-reduce:animate-none"
+      >
+        {text}
+      </span>
+    );
+  }
+  return (
+    <span
+      aria-hidden
+      title={title}
+      className="ml-auto inline-flex min-w-[18px] shrink-0 items-center justify-center rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-semibold leading-none tabular-nums text-destructive-foreground animate-in fade-in-0 duration-200 ease-out motion-reduce:animate-none"
+    >
+      {text}
+    </span>
+  );
+}
+
+function NavRow({
+  item,
+  active,
+  collapsed,
   onNavigate,
 }: {
-  registration: NonNullable<ReturnType<typeof useSidebarSections>>;
-  title: string;
-  onBack: () => void;
-  onNavigate?: () => void;
+  item: AdminNavItem;
+  active: boolean;
+  collapsed: boolean;
+  onNavigate: () => void;
 }) {
+  const Icon = item.icon;
+  const count = item.badge ?? 0;
   return (
-    <div className="px-3">
-      <button
-        type="button"
-        onClick={onBack}
-        className="mb-3 flex min-h-11 w-full items-center gap-2 rounded-lg px-2 text-[15px] font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground md:min-h-10 md:text-[13px]"
-      >
-        <ArrowLeft className="size-4 shrink-0" aria-hidden="true" />
-        All sections
-      </button>
-
-      <p className="px-2 pb-2 text-sm font-semibold text-sidebar-foreground">{title}</p>
-
-      <div className="space-y-0.5">
-        {registration.sections.map((section: SidebarSection) => {
-          const current = section.id === registration.active;
-          return (
-            <button
-              key={section.id}
-              type="button"
-              aria-current={current ? 'page' : undefined}
-              onClick={() => {
-                registration.onSelect(section.id);
-                onNavigate?.();
-              }}
-              className={cn(
-                'flex min-h-11 w-full items-center rounded-lg px-3 text-left text-[15px] transition-colors md:min-h-9 md:text-[13px]',
-                current
-                  ? 'bg-sidebar-accent font-medium text-primary shadow-[inset_0_0_0_1px_hsl(var(--primary)_/_0.12)]'
-                  : 'text-muted-foreground hover:bg-secondary hover:text-foreground',
-              )}
-            >
-              {section.label}
-            </button>
-          );
-        })}
-      </div>
-    </div>
+    <SidebarMenuItem className="relative">
+      <SidebarMenuButton asChild isActive={active} tooltip={collapsed ? item.name : undefined} className={NAV_ROW}>
+        <Link
+          href={item.href}
+          onClick={onNavigate}
+          aria-label={count > 0 ? `${item.name}, ${count} unread` : undefined}
+        >
+          <Icon className="h-4 w-4 shrink-0" />
+          <span className={labelClass(collapsed, 'min-w-0 flex-1 truncate')}>{item.name}</span>
+          <Badge item={item} collapsed={collapsed} />
+        </Link>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
   );
 }
 
-function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
+// ─── Section rail (a page's own sections) ───────────────────────────────────
+
+function SectionRail({
+  collapsed,
+  onShowNav,
+  onNavigate,
+}: {
+  collapsed: boolean;
+  onShowNav: () => void;
+  onNavigate: () => void;
+}) {
   const pathname = usePathname();
-  const { user, logout } = useAuthStore();
-  const groups = useNavigation();
+  const nav = useAdminNav();
+  const registration = useSidebarSections();
+  if (!registration) return null;
 
-  const salesOnly = !!user?.is_sales_agent && !user?.is_super_admin;
+  const owner = nav.all.find((i) => i.href === registration.href);
+  const title = registration.title ?? owner?.name ?? 'Sections';
+  /* A record below its list goes back to the list ("All rental companies"),
+     as Northwind's "All customers" does. A top-level page like Promo Codes has
+     no list above it, so "back" there means the navigation again. */
+  const isRecord = !!pathname && pathname !== registration.href;
+  const backLabel = isRecord && owner ? `All ${owner.name.toLowerCase()}` : 'Main menu';
 
-  /* The page's own sections, if it published any, and the nav item they
-     belong to — which is where the rail's title comes from. */
+  const backInner = (
+    <>
+      <ArrowLeft className="h-4 w-4 shrink-0" />
+      {!collapsed && <span className="text-[15px] md:text-[13px]">{backLabel}</span>}
+    </>
+  );
+  const backClass = collapsed
+    ? 'flex h-8 w-full cursor-pointer items-center justify-center rounded-full transition-colors hover:bg-primary/10 hover:text-primary'
+    : 'flex h-8 cursor-pointer items-center gap-2 rounded-xl px-1 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary';
+
+  const back = isRecord ? (
+    <Link href={registration.href} onClick={onNavigate} className={backClass} aria-label={backLabel}>
+      {backInner}
+    </Link>
+  ) : (
+    <button type="button" onClick={onShowNav} className={backClass} aria-label={backLabel}>
+      {backInner}
+    </button>
+  );
+
+  return (
+    <>
+      <SidebarHeader className="h-16">
+        <div className="flex h-full w-full items-center px-2 transition-all duration-300 ease-in-out">
+          {collapsed ? (
+            <Tooltip>
+              <TooltipTrigger asChild>{back}</TooltipTrigger>
+              <TooltipContent side="right">{backLabel}</TooltipContent>
+            </Tooltip>
+          ) : (
+            back
+          )}
+        </div>
+      </SidebarHeader>
+
+      {!collapsed && (
+        <div className="px-4 pb-1 pt-4">
+          <h2 className="truncate text-sm font-semibold text-foreground">{title}</h2>
+          {owner && isRecord && <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{owner.name}</p>}
+        </div>
+      )}
+
+      <SidebarContent className="gap-0 transition-all duration-300 ease-in-out">
+        <SidebarGroup className={collapsed ? 'p-1.5' : 'p-1.5 pb-0'}>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {registration.sections.map((section) => {
+                const current = section.id === registration.active;
+                return (
+                  <SidebarMenuItem key={section.id}>
+                    <SidebarMenuButton
+                      isActive={current}
+                      aria-current={current ? 'page' : undefined}
+                      tooltip={collapsed ? section.label : undefined}
+                      onClick={() => {
+                        registration.onSelect(section.id);
+                        onNavigate();
+                      }}
+                      className="h-11 font-medium transition-all duration-200 ease-in-out md:h-8"
+                    >
+                      {collapsed ? (
+                        <span className="text-[11px] font-semibold">{section.label.slice(0, 2)}</span>
+                      ) : (
+                        <span className="text-[15px] md:text-[13px]">{section.label}</span>
+                      )}
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+    </>
+  );
+}
+
+// ─── The sidebar ────────────────────────────────────────────────────────────
+
+/** `desktop={false}`: the phone sheet only — Support's rail has the desktop slot. */
+export default function Sidebar({ desktop = true }: { desktop?: boolean } = {}) {
+  const { state, isMobile, setOpenMobile } = useSidebar();
+  const pathname = usePathname();
+  const nav = useAdminNav();
   const sections = useSidebarSections();
-  const [showNav, setShowNav] = useState(false);
-  /* The record's own name if it gave one, else the nav item's. */
-  const sectionTitle = sections
-    ? sections.title ?? groups.flatMap((g) => g.items).find((i) => i.href === sections.href)?.name
-    : undefined;
 
-  /* Leaving the page takes its sections with it, so the rail must not stay
-     open over the navigation of wherever you landed. */
+  /* In the phone sheet the rail is never collapsed, whatever the desktop
+     state says. */
+  const collapsed = state === 'collapsed' && !isMobile;
+  const closeMobileOnNav = () => {
+    if (isMobile) setOpenMobile(false);
+  };
+
+  const [drillGroup, setDrillGroup] = useState<AdminNavGroup | null>(null);
+  const [showNav, setShowNav] = useState(false);
+
+  /* Leaving a page takes its sections with it, and a drill-in section opened
+     on one page should not still be open over the next. */
   useEffect(() => {
     setShowNav(false);
   }, [pathname]);
 
-  const isActive = (href: string) => {
-    if (href === '/admin/dashboard') return pathname === href;
-    return !!pathname?.startsWith(href);
-  };
+  const isActive = (href: string) => isNavActive(pathname, href);
 
-  /*
-   * The rail paints NO background of its own.
-   *
-   * The shell paints `bg-app-gradient` with `background-attachment: fixed`, so
-   * leaving this transparent means it shows the SAME pixels of the same wash
-   * the main panel does — not a colour chosen to match, which is a match that
-   * drifts the moment either side is adjusted.
-   *
-   * It was `bg-sidebar` (a pale lavender), then pure white when that was asked
-   * for, and both drew a visible seam down the middle of the page. Northwind
-   * has no seam: its rail and its content are one surface.
-   */
-  return (
-    <div className="flex flex-col h-full">
-      {/* Logo */}
-      <div className="flex items-center gap-3 h-16 px-5 border-b border-sidebar-border">
-        <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-primary/15 glow-purple-sm">
-          <span className="text-primary font-bold text-sm">D</span>
-        </div>
-        <div>
-          <h1 className="text-sm font-semibold text-sidebar-foreground">Drive247</h1>
-          <p className="text-[10px] text-sidebar-muted">
-            {salesOnly ? 'Sales Agent' : 'Super Admin'}
-          </p>
-        </div>
-      </div>
+  if (!desktop && !isMobile) return null;
 
-      {/* Navigation */}
-      {/* A plain scroller, not a Radix ScrollArea: that renders a visible
-          bar down the inside edge of the navigation, and Northwind's rail
-          shows none. Same `no-scrollbar` the portal's sidebar body uses. */}
-      <div className="no-scrollbar flex-1 overflow-y-auto py-4">
-        {/* A page with its own sections TAKES the rail, rather than hanging
-            them off a nav item.
-
-            This is what Northwind does on a record: open a customer and the
-            navigation goes, replaced by that customer's own sections with a
-            way back above them. The first attempt here nested the rows under
-            the item instead, which left the whole nav on screen underneath
-            and read as clutter rather than as context.
-
-            `showNav` is the way out. Northwind's back link is a real
-            navigation — "All customers" goes to the list — but a top-level
-            page like Promo Codes has no list above it, so going back here
-            means showing the navigation again rather than leaving the page. */}
-        {sections && !showNav ? (
-          <SectionRail
-            registration={sections}
-            title={sectionTitle ?? 'Sections'}
-            onBack={() => setShowNav(true)}
-            onNavigate={onNavigate}
-          />
-        ) : (
-          groups.map((group) => (
-            <NavGroupComponent
-              key={group.label}
-              group={group}
-              isActive={isActive}
-              onNavigate={onNavigate}
-            />
-          ))
-        )}
-      </div>
-
-      {/* The footer is whichever of two things the page needs.
-
-          ON A RECORD it is that company's controls, and ONLY those. Asked for
-          Sep 26 2026: "the admin tab in which sign out option is available —
-          do not show that in this page." Which also settles a line from the
-          earlier brief that had read as a contradiction: the account options
-          belong to the dashboard and the lists, not to an open record.
-
-          EVERYWHERE ELSE it is the account row, and sign out lives in it.
-
-          Sign out is the ONLY one in this app — there is no second path — so
-          it is moved, never removed. From a record it is one click away: the
-          rail's own "All sections" brings the navigation back, and every page
-          there carries it.
-
-          `side="top"` on both, because this is the last thing in the rail and
-          a menu opening downward would leave the viewport. */}
-      <div className="border-t border-sidebar-border p-2">
-        {sections?.actions?.length ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                className="flex min-h-11 w-full items-center gap-3 rounded-lg p-2 text-left outline-none transition-colors hover:bg-sidebar-accent focus-visible:bg-sidebar-accent md:min-h-0"
-                aria-label="Rental settings"
-              >
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
-                  <Building2 className="h-4 w-4" aria-hidden="true" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[15px] font-medium text-sidebar-foreground md:text-[13px]">
-                    Rental Settings
-                  </p>
-                  {/* Whose settings these are. On a record the rail is already
-                      titled with the company, but the footer is the one part
-                      that does not scroll, so it says so too. */}
-                  <p className="truncate text-[12px] leading-tight text-muted-foreground md:text-[11px]">
-                    {sectionTitle}
-                  </p>
-                </div>
-                <ChevronsUpDown className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-              </button>
-            </DropdownMenuTrigger>
-
-            {/* The actions directly, with no intermediate row: the trigger IS
-                "Rental Settings" now, so nesting them behind a second one
-                would be the same label twice. */}
-            <DropdownMenuContent
-              side="top"
-              align="start"
-              className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-56 p-1.5"
-            >
-              {sections.actions.map((action) => (
-                <DropdownMenuItem
-                  key={action.id}
-                  onClick={() => sections.onAction?.(action.id)}
-                  className={cn(
-                    'cursor-pointer rounded-lg px-2.5 py-1.5 text-[15px] md:text-[13px]',
-                    action.tone === 'destructive' &&
-                      'text-destructive focus:bg-destructive/10 focus:text-destructive',
-                    action.tone === 'active' && 'bg-primary/10 font-medium text-primary',
-                  )}
-                >
-                  <span>{action.label}</span>
-                  {action.tone === 'active' && (
-                    <Check className="ml-auto h-4 w-4" aria-hidden="true" />
-                  )}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                className="flex min-h-11 w-full items-center gap-3 rounded-lg p-2 text-left outline-none transition-colors hover:bg-sidebar-accent focus-visible:bg-sidebar-accent md:min-h-0"
-                aria-label="Account menu"
-              >
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-bold text-primary">
-                  {user?.email?.[0]?.toUpperCase() || 'A'}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[15px] font-medium text-sidebar-foreground md:text-[13px]">
-                    {user?.name || user?.email}
-                  </p>
-                  <p className="truncate text-[12px] leading-tight text-muted-foreground md:text-[11px]">
-                    {user?.email}
-                  </p>
-                </div>
-                <ChevronsUpDown className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-              </button>
-            </DropdownMenuTrigger>
-
-            <DropdownMenuContent
-              side="top"
-              align="start"
-              className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-56 p-1.5"
-            >
-              <DropdownMenuItem
-                onClick={() => logout()}
-                className="cursor-pointer rounded-lg px-2.5 py-1.5 text-[15px] text-destructive focus:bg-destructive/10 focus:text-destructive md:text-[13px]"
-              >
-                <LogOut className="mr-2.5 h-4 w-4" />
-                <span>Sign out</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/** `desktop={false}`: the phone sheet only — Support's rail has the desktop slot. */
-export default function Sidebar({ desktop = true }: { desktop?: boolean } = {}) {
-  const { isMobile, isOpen, close } = useSidebar();
-
-  if (isMobile) {
+  if (sections && !showNav) {
     return (
-      <Sheet open={isOpen} onOpenChange={close}>
-        <SheetContent side="left" className="p-0 w-[260px] border-r-0">
-          <SidebarContent onNavigate={close} />
-        </SheetContent>
-      </Sheet>
+      <SidebarRoot collapsible="icon" className="transition-all duration-300 ease-in-out">
+        <SectionRail collapsed={collapsed} onShowNav={() => setShowNav(true)} onNavigate={closeMobileOnNav} />
+        <SidebarFooter className="p-1.5">
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <UserRow collapsed={collapsed} settings={nav.settings} onNavigate={closeMobileOnNav} />
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarFooter>
+        <SidebarRail />
+      </SidebarRoot>
     );
   }
 
-  if (!desktop) return null;
+  const hasMore = nav.more.length > 0 || nav.groups.length > 0;
 
-  /*
-   * No `border-r`. With the rail transparent the wash already runs through it,
-   * and a hairline down the middle is the very seam that was meant to go — the
-   * rail and the content are one surface in Northwind, with nothing ruled
-   * between them.
-   */
   return (
-    <div className="hidden md:flex flex-col h-screen w-[260px] flex-shrink-0">
-      <SidebarContent />
-    </div>
+    <SidebarRoot collapsible="icon" className="transition-all duration-300 ease-in-out">
+      <SidebarHeader className="p-1.5 pt-4">
+        <OrgRow collapsed={collapsed} salesOnly={nav.salesOnly} />
+      </SidebarHeader>
+
+      <SidebarContent className="gap-0 pt-1 transition-all duration-300 ease-in-out">
+        {nav.quick.length > 0 && (
+          <>
+            <SidebarGroup className="p-1.5 pb-0">
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {nav.quick.map((item) => (
+                    <NavRow
+                      key={item.href}
+                      item={item}
+                      active={isActive(item.href)}
+                      collapsed={collapsed}
+                      onNavigate={closeMobileOnNav}
+                    />
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+
+            <div className="mx-3 my-1.5 h-px bg-sidebar-border/60" />
+          </>
+        )}
+
+        {drillGroup ? (
+          /* Drill-in: the section replaces the nav, with its name as the way back. */
+          <SidebarGroup className="p-1.5 pb-0">
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={() => setDrillGroup(null)}
+                    tooltip={collapsed ? 'Back' : undefined}
+                    className={NAV_ROW}
+                  >
+                    <ArrowLeft className="h-4 w-4 shrink-0" />
+                    <span className={cn(labelClass(collapsed), 'font-medium')}>{drillGroup.label}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                {drillGroup.items.map((item) => (
+                  <NavRow
+                    key={item.href}
+                    item={item}
+                    active={isActive(item.href)}
+                    collapsed={collapsed}
+                    onNavigate={closeMobileOnNav}
+                  />
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ) : (
+          <>
+            <SidebarGroup className="p-1.5 pb-0">
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {nav.topLevel.map((item) => (
+                    <NavRow
+                      key={item.href}
+                      item={item}
+                      active={isActive(item.href)}
+                      collapsed={collapsed}
+                      onNavigate={closeMobileOnNav}
+                    />
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+
+            {hasMore && (
+              <SidebarGroup className="p-1.5 pb-2 pt-1">
+                {!collapsed && (
+                  <p className="px-2.5 pb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                    More
+                  </p>
+                )}
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {nav.more.map((item) => (
+                      <NavRow
+                        key={item.href}
+                        item={item}
+                        active={isActive(item.href)}
+                        collapsed={collapsed}
+                        onNavigate={closeMobileOnNav}
+                      />
+                    ))}
+                    {nav.groups.map((group) => {
+                      const GroupIcon = group.icon;
+                      const hasActive = group.items.some((i) => isActive(i.href));
+                      const totalBadge = group.items.reduce((s, i) => s + (i.badge || 0), 0);
+                      return (
+                        <SidebarMenuItem key={group.label} className="relative">
+                          <SidebarMenuButton
+                            onClick={() => setDrillGroup(group)}
+                            isActive={hasActive}
+                            tooltip={collapsed ? group.label : undefined}
+                            className={NAV_ROW_WIDE}
+                          >
+                            {collapsed ? (
+                              <GroupIcon className="h-4 w-4 shrink-0" />
+                            ) : (
+                              <Fragment>
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <GroupIcon className="h-4 w-4 shrink-0" />
+                                  <span className="truncate text-[15px] md:text-[13px]">{group.label}</span>
+                                </div>
+                                <div className="ml-auto flex shrink-0 items-center gap-1.5">
+                                  {totalBadge > 0 && <span className="h-1.5 w-1.5 rounded-full bg-destructive" />}
+                                  <ChevronRight className="h-4 w-4 text-muted-foreground/60" />
+                                </div>
+                              </Fragment>
+                            )}
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      );
+                    })}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            )}
+          </>
+        )}
+      </SidebarContent>
+
+      <SidebarFooter className="p-1.5">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <UserRow collapsed={collapsed} settings={nav.settings} onNavigate={closeMobileOnNav} />
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
+      <SidebarRail />
+    </SidebarRoot>
   );
 }

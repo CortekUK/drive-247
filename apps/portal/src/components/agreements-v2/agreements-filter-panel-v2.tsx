@@ -65,7 +65,7 @@ export function AgreementsFilterPanelV2({ filters, onChange, onClear, onClose }:
           variant="outline"
           className={cn("h-8 w-full justify-start text-xs font-normal", !value && "text-muted-foreground")}
         >
-          <CalendarIcon className="mr-1.5 size-3.5 shrink-0 text-blue-600" />
+          <CalendarIcon className="mr-1.5 size-3.5 shrink-0 text-blue-600 dark:text-blue-400" />
           {value ? format(value, "MMM d, yyyy") : placeholder}
         </Button>
       </PopoverTrigger>
@@ -77,7 +77,7 @@ export function AgreementsFilterPanelV2({ filters, onChange, onClear, onClose }:
 
   return (
     <FilterShell onClear={onClear} onClose={onClose} activeCount={countActiveAgreementFilters(filters)}>
-      <FilterSection icon={<User className="size-3.5 text-primary" />} tint="bg-primary/10" title="Customer">
+      <FilterSection icon={<User className="size-3.5 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" />} tint="bg-primary/10" title="Customer">
         <Input
           value={filters.customer}
           onChange={(e) => set("customer", e.target.value)}
@@ -88,7 +88,7 @@ export function AgreementsFilterPanelV2({ filters, onChange, onClear, onClose }:
       </FilterSection>
 
       <FilterSection
-        icon={<CalendarIcon className="size-3.5 text-blue-600" />}
+        icon={<CalendarIcon className="size-3.5 text-blue-600 dark:text-blue-400" />}
         tint="bg-blue-500/10"
         title="Sent between"
       >
@@ -109,7 +109,7 @@ export function AgreementsFilterPanelV2({ filters, onChange, onClear, onClose }:
         )}
       </FilterSection>
 
-      <FilterSection icon={<Activity className="size-3.5 text-primary" />} tint="bg-primary/10" title="Status">
+      <FilterSection icon={<Activity className="size-3.5 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" />} tint="bg-primary/10" title="Status">
         <div className="flex flex-wrap gap-2">
           {STATUS_OPTIONS.map((o) => (
             <FilterChip
@@ -124,7 +124,7 @@ export function AgreementsFilterPanelV2({ filters, onChange, onClear, onClose }:
         </div>
       </FilterSection>
 
-      <FilterSection icon={<Layers className="size-3.5 text-emerald-600" />} tint="bg-emerald-500/10" title="Kind">
+      <FilterSection icon={<Layers className="size-3.5 text-emerald-600 dark:text-emerald-400" />} tint="bg-emerald-500/10" title="Kind">
         <div className="flex flex-wrap gap-2">
           {KIND_OPTIONS.map((o) => (
             <FilterChip key={o.value} active={filters.kind === o.value} onClick={() => set("kind", o.value)}>

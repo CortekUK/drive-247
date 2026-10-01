@@ -738,7 +738,7 @@ export function StageAgreement({ detail, onStage, refetch }: StageProps) {
       ) : (
         <Surface>
           <div className="flex flex-wrap items-start gap-4">
-            <span className="flex size-11 shrink-0 items-center justify-center rounded-3xl bg-primary-light text-primary">
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-3xl bg-primary-light text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
               <PenLine className="size-5" />
             </span>
             <div className="min-w-0 flex-1">
@@ -915,7 +915,7 @@ export function StageAgreement({ detail, onStage, refetch }: StageProps) {
         <button
           type="button"
           onClick={() => onStage("customer")}
-          className="cursor-pointer font-medium text-primary underline-offset-2 hover:underline"
+          className="cursor-pointer font-medium text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] underline-offset-2 hover:underline"
         >
           Check who that is
         </button>{" "}

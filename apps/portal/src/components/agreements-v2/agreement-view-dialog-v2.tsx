@@ -23,12 +23,17 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Download, ExternalLink, Loader2, RefreshCw, RotateCw } from "lucide-react";
+import { AgreementActivityV2 } from "@/components/agreements-v2/agreement-activity-v2";
+import { AGREEMENT_PAGE_BACKDROP_V2, AgreementPdfPagesV2 } from "@/components/agreements-v2/agreement-pdf-pages-v2";
 import { Button } from "@/components/ui-v2/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui-v2/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui-v2/tabs";
 import { AgreementPreviewV2 } from "@/components/agreements-v2/agreement-preview-v2";
 import {
+  AGREEMENT_LINK_LABEL_V2,
   AGREEMENT_STATUS_LABEL_V2,
   AGREEMENT_STATUS_TONE_LIST_V2,
+  agreementReferenceV2,
   formatAgreementSentAtV2,
 } from "@/components/agreements-v2/agreements-table-v2";
 import { ListStatusText } from "@/components/shared/list-table-v2";
@@ -122,6 +127,40 @@ export async function downloadSignedAgreementV2(row: AgreementRowV2): Promise<vo
   }
 }
 
+/** Save the PDF the dialog has open, signed or not, under the agreement's name. */
+async function savePdf(url: string, fromBlob: boolean, row: AgreementRowV2): Promise<void> {
+  let href = url;
+  let made = false;
+  try {
+    if (!fromBlob) {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error("The PDF could not be fetched.");
+      href = URL.createObjectURL(await response.blob());
+      made = true;
+    }
+    const a = document.createElement("a");
+    a.href = href;
+    a.download = fileNameFor(row);
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  } finally {
+    if (made) URL.revokeObjectURL(href);
+  }
+}
+
+/**
+ * The Details / Activity switch: a rounded rectangle, and the chosen tab a
+ * white tile with a hairline and a little weight, so which one is open reads
+ * at a glance. Overrides the ui-v2 pill (and its focus ring, which drew a
+ * second outline on the active tab). In dark mode the chosen tile is a lighter
+ * white wash with a brighter edge, since ui-v2's dark active fill is barely
+ * lighter than the track.
+ */
+const VIEW_TABS_LIST = "!h-11 w-full !rounded-xl bg-muted p-1 dark:bg-white/[0.04] dark:ring-1 dark:ring-white/10";
+const VIEW_TABS_TRIGGER =
+  "!h-full flex-1 !rounded-lg text-sm font-medium text-muted-foreground transition-colors duration-200 ease-out hover:text-foreground focus-visible:!ring-0 focus-visible:!outline-none focus-visible:!border-primary/50 data-[state=active]:!border-border data-[state=active]:bg-background data-[state=active]:font-semibold data-[state=active]:text-foreground dark:text-white/55 dark:hover:text-white/80 dark:data-[state=active]:!border-white/25 dark:data-[state=active]:!bg-white/[0.14] dark:data-[state=active]:!text-white motion-reduce:transition-none";
+
 type LoadState =
   | { status: "idle" }
   | { status: "loading" }
@@ -193,70 +232,37 @@ export function AgreementViewDialogV2({
   useEffect(() => freeBlob, []);
 
   const heading = row?.title || (row?.kind === "rental" ? "Rental agreement" : "Agreement");
-  const pdfUrl = state.status === "ready" && state.doc.kind === "pdf" ? state.doc.url : null;
+  const pdfDoc = state.status === "ready" && state.doc.kind === "pdf" ? state.doc : null;
+  const pdfUrl = pdfDoc?.url ?? null;
+  const reference = row ? agreementReferenceV2(row) : null;
+  const canResendRow = !!row && !!onResend && row.status !== "signed" && !!row.customerEmail && !!row.customerName;
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  useEffect(() => setSaveError(null), [row?.id, open]);
+
+  const download = async () => {
+    if (!row || !pdfDoc) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await savePdf(pdfDoc.url, pdfDoc.revoke, row);
+    } catch (e) {
+      setSaveError(e instanceof Error && e.message ? e.message : "The PDF could not be downloaded.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[90vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl">
-        <DialogHeader className="shrink-0 gap-2 border-b px-6 py-4 pr-14">
-          <DialogTitle className="truncate text-lg">{heading}</DialogTitle>
-          {row && (
-            <DialogDescription asChild>
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <span className="font-medium text-foreground">{row.customerName || "—"}</span>
-                {row.customerEmail && <span>{row.customerEmail}</span>}
-                <span className="tabular-nums">Sent {formatAgreementSentAtV2(row.sentAt)}</span>
-                <ListStatusText tone={AGREEMENT_STATUS_TONE_LIST_V2[row.status]}>
-                  {AGREEMENT_STATUS_LABEL_V2[row.status]}
-                </ListStatusText>
-              </div>
-            </DialogDescription>
-          )}
-          {row && (row.cc.length > 0 || row.message || row.rentalRef) && (
-            <dl className="grid gap-1 text-xs text-muted-foreground sm:grid-cols-[auto_1fr] sm:gap-x-3">
-              {row.rentalRef && (
-                <>
-                  <dt className="font-medium">Rental</dt>
-                  <dd className="text-foreground">{row.rentalRef}</dd>
-                </>
-              )}
-              {row.cc.length > 0 && (
-                <>
-                  <dt className="font-medium">CC</dt>
-                  <dd className="break-all text-foreground">{row.cc.join(", ")}</dd>
-                </>
-              )}
-              {row.message && (
-                <>
-                  <dt className="font-medium">Message</dt>
-                  <dd className="whitespace-pre-wrap text-foreground">{row.message}</dd>
-                </>
-              )}
-            </dl>
-          )}
-          {row && (
-            <div className="flex flex-wrap items-center gap-2 pt-1">
-              {row.status === "signed" && onDownload && (
-                <Button variant="outline" size="sm" onClick={() => onDownload(row)} disabled={downloading}>
-                  {downloading ? <Loader2 className="animate-spin" /> : <Download />}
-                  Download signed PDF
-                </Button>
-              )}
-              {pdfUrl && (
-                <Button variant="outline" size="sm" onClick={() => window.open(pdfUrl, "_blank")}>
-                  <ExternalLink />
-                  Open in new tab
-                </Button>
-              )}
-            </div>
-          )}
-        </DialogHeader>
-
-        <div className="min-h-0 flex-1 overflow-hidden bg-muted">
+      {/* The document takes the whole left of the window; everything about it
+          (details, Download, Resend, the activity) sits in the column on the right. */}
+      <DialogContent className="grid h-[92dvh] grid-rows-[minmax(0,1fr)_minmax(0,45%)] gap-0 overflow-hidden p-0 sm:max-w-[min(96vw,1400px)] md:grid-cols-[minmax(0,1fr)_340px] md:grid-rows-1">
+        <div className={`min-h-0 overflow-hidden ${AGREEMENT_PAGE_BACKDROP_V2}`}>
           {state.status === "loading" || state.status === "idle" ? (
             <div className="flex h-full items-center justify-center" role="status">
               <div className="text-center">
-                <Loader2 className="mx-auto size-7 animate-spin text-primary" />
+                <Loader2 className="mx-auto size-7 animate-spin text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" />
                 <p className="mt-2 text-sm text-muted-foreground">Loading the agreement…</p>
               </div>
             </div>
@@ -273,10 +279,11 @@ export function AgreementViewDialogV2({
               </div>
             </div>
           ) : state.doc.kind === "pdf" ? (
-            <iframe src={`${state.doc.url}#toolbar=1&navpanes=0`} className="h-full w-full border-0" title={heading} />
+            // The pages themselves, drawn straight in: no browser PDF viewer.
+            <AgreementPdfPagesV2 url={state.doc.url} title={heading} />
           ) : state.doc.kind === "html" ? (
             <div className="h-full overflow-y-auto p-6">
-              <AgreementPreviewV2 html={state.doc.html} className="mx-auto" />
+              <AgreementPreviewV2 html={state.doc.html} className="mx-auto bg-transparent" />
             </div>
           ) : (
             <div className="flex h-full items-center justify-center p-6">
@@ -296,6 +303,91 @@ export function AgreementViewDialogV2({
             </div>
           )}
         </div>
+
+        <Tabs defaultValue="details" className="flex min-h-0 flex-col gap-0 border-t md:border-t-0 md:border-l">
+          <DialogHeader className="shrink-0 gap-3 border-b px-5 pt-4 pb-3 pr-14 text-left">
+            <DialogTitle className="text-lg leading-snug break-words">{heading}</DialogTitle>
+            <TabsList className={VIEW_TABS_LIST}>
+              <TabsTrigger value="details" className={VIEW_TABS_TRIGGER}>Details</TabsTrigger>
+              <TabsTrigger value="activity" className={VIEW_TABS_TRIGGER}>Activity</TabsTrigger>
+            </TabsList>
+          </DialogHeader>
+
+          <TabsContent value="details" className="flex min-h-0 flex-1 flex-col data-[state=inactive]:hidden">
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+            {row && (
+              <DialogDescription asChild>
+                <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
+                  <dt className="font-medium">Customer</dt>
+                  <dd className="min-w-0 truncate font-medium text-foreground">{row.customerName || "—"}</dd>
+                  {row.customerEmail && (
+                    <>
+                      <dt className="font-medium">Email</dt>
+                      <dd className="min-w-0 truncate text-foreground" title={row.customerEmail}>{row.customerEmail}</dd>
+                    </>
+                  )}
+                  <dt className="font-medium">Sent</dt>
+                  <dd className="text-foreground tabular-nums">{formatAgreementSentAtV2(row.sentAt)}</dd>
+                  <dt className="font-medium">Status</dt>
+                  <dd>
+                    <ListStatusText tone={AGREEMENT_STATUS_TONE_LIST_V2[row.status]}>
+                      {AGREEMENT_STATUS_LABEL_V2[row.status]}
+                    </ListStatusText>
+                  </dd>
+                  <dt className="font-medium">Linked to</dt>
+                  <dd className="text-foreground">
+                    {AGREEMENT_LINK_LABEL_V2[row.kind]}
+                    {reference ? ` · ${reference}` : ""}
+                  </dd>
+                  {row.cc.length > 0 && (
+                    <>
+                      <dt className="font-medium">CC</dt>
+                      <dd className="break-all text-foreground">{row.cc.join(", ")}</dd>
+                    </>
+                  )}
+                  {row.message && (
+                    <>
+                      <dt className="font-medium">Message</dt>
+                      <dd className="whitespace-pre-wrap text-foreground">{row.message}</dd>
+                    </>
+                  )}
+                </dl>
+              </DialogDescription>
+            )}
+            </div>
+            {/* The actions sit at the foot of the column, below everything they act on. */}
+            {row && (
+              <div className="flex shrink-0 flex-col gap-2 border-t px-5 py-4">
+                <Button onClick={() => void download()} disabled={!pdfDoc || saving || downloading} className="w-full">
+                  {saving || downloading ? <Loader2 className="animate-spin" /> : <Download />}
+                  {row.status === "signed" ? "Download signed PDF" : "Download PDF"}
+                </Button>
+                <div className="flex gap-2">
+                  {canResendRow && (
+                    <Button variant="outline" onClick={() => onResend!(row)} className="flex-1">
+                      <RotateCw />
+                      Resend
+                    </Button>
+                  )}
+                  {pdfUrl && (
+                    <Button variant="outline" onClick={() => window.open(pdfUrl, "_blank")} className="flex-1">
+                      <ExternalLink />
+                      New tab
+                    </Button>
+                  )}
+                </div>
+                {state.status === "ready" && state.doc.kind === "html" && (
+                  <p className="text-xs text-muted-foreground">No PDF was produced: it never reached the signing service.</p>
+                )}
+                {saveError && <p className="text-xs text-destructive">{saveError}</p>}
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="activity" className="min-h-0 flex-1 overflow-hidden data-[state=inactive]:hidden">
+            {row && open && <AgreementActivityV2 row={row} className="h-full bg-transparent" />}
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );

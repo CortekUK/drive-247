@@ -162,95 +162,110 @@
 
 .dark .v2-theme {
 
-  --background: 0 0% 3.9%;
-  --foreground: 0 0% 98%;
+  /* Soft dark, after Notion (owner, Sep 28 2026: "softer, nothing higher
+     contrast"). Two rules shape every value below:
+       1. Surfaces are NEUTRAL greys — no brand tint on the page, card,
+          sidebar or borders. A theme changes one accent colour, so the base
+          has to sit under indigo, teal, rose and graphite equally well.
+       2. Nothing is pure white or pure black. Text is an 84% grey on a 10%
+          page (about 11:1 rather than 19:1), and each surface is one small
+          step up from the one beneath it: page 10 → card 12.5 → popover 16,
+          and a 23% hairline between them (owner, Sep 28 2026: lines were
+          "almost non-existent" and a card inside a dialog did not separate).
+     The brand reaches only the accent: buttons, links, the active nav row,
+     the page wash and every `bg-primary/N` tint. It runs at the brand's full
+     saturation (owner, Sep 28 2026: "more prominent") — the calm comes from
+     the neutral ground, not from a washed-out accent — and its
+     lightness is fixed per token so a deep brand (graphite, 17%) or a pale
+     one still lands at a usable step. `v2BrandVars` in lib/appearance/color.ts
+     mirrors the --primary formula to pick the button's text colour. */
+  --background: 0 0% 10%;
+  --foreground: 0 0% 84%;
 
-  --card: 0 0% 9.1%;
-  --card-foreground: 0 0% 98%;
+  --card: 0 0% 12.5%;
+  --card-foreground: 0 0% 84%;
 
-  --popover: 0 0% 9.1%;
-  --popover-foreground: 0 0% 98%;
+  --popover: 0 0% 16%;
+  --popover-foreground: 0 0% 84%;
 
-  /* Dark keeps its own lightness steps whatever the brand's lightness is (a
-     brand-lightness primary would vanish on the dark page); only hue and
-     saturation follow the brand, as offsets from the indigo defaults. */
-  --primary: calc(var(--brand-h) - 2) calc(var(--brand-s) - 7%) 42%;
-  --primary-foreground: var(--brand-fg-dark, 226 100% 97%);
-  --primary-hover: calc(var(--brand-h) - 2) calc(var(--brand-s) - 7%) 50%;
-  --primary-light: calc(var(--brand-h) - 2) calc(var(--brand-s) - 7%) 22%;
+  --primary: var(--brand-h) var(--brand-s) 54%;
+  --primary-foreground: var(--brand-fg-dark, 0 0% 98%);
+  --primary-hover: var(--brand-h) var(--brand-s) 60%;
+  --primary-light: var(--brand-h) calc(var(--brand-s) * 0.5) 22%;
 
-  --secondary: 240 4% 16%;
-  --secondary-foreground: 0 0% 98%;
+  --secondary: 0 0% 18%;
+  --secondary-foreground: 0 0% 84%;
 
-  --muted: 0 0% 15%;
-  --muted-foreground: 0 0% 63%;
+  --muted: 0 0% 18%;
+  --muted-foreground: 0 0% 60%;
 
-  /* The dark purple tint: the old 15% lightness step (so text contrast is
-     unchanged), in the brand hue. See the light block for why both exist. */
-  --accent: calc(var(--brand-h) - 2) calc(var(--brand-s) - 33%) 17%;
-  --accent-foreground: 0 0% 98%;
-  --v2-hover: calc(var(--brand-h) - 2) calc(var(--brand-s) - 33%) 17%;
-  --v2-row-hover: calc(var(--brand-h) - 2) calc(var(--brand-s) - 33%) 17%;
-  /* Dark muted text already clears 4.5 on the dark tints (6.31 on 17%). */
-  --v2-muted-on-tint: var(--muted-foreground);
-  /* Brand-coloured text in dark: the ui-v2 Button `link` variant and every
-     `dark:text-[hsl(var(--v2-link,…))]` (indigo-300 by default). Dark
-     --primary is 1.97:1 as text on the dark page; 82% lightness reads on it
-     in any hue. Outside `.v2-theme` it is undefined and readers fall back. */
-  --v2-link: calc(var(--brand-h) - 18) calc(var(--brand-s) + 26%) 82%;
-  --v2-wash: calc(var(--brand-h) - 2) calc(var(--brand-s) - 7%) 42%;
+  /* The hover tint: a clear step in the brand hue, so the lead's "our hover
+     is a purple tint" reads in dark too. 40% of the brand's saturation keeps
+     muted text above 4.5:1 on it for every preset. */
+  --accent: var(--brand-h) calc(var(--brand-s) * 0.4) 19%;
+  --accent-foreground: 0 0% 90%;
+  --v2-hover: var(--brand-h) calc(var(--brand-s) * 0.4) 19%;
+  --v2-row-hover: var(--brand-h) calc(var(--brand-s) * 0.3) 16%;
+  /* Muted text on the 19% hover tint: 64% keeps it above 4.5:1 for every
+     preset (plain 60% would dip to about 4.1 on teal). */
+  --v2-muted-on-tint: 0 0% 64%;
+  /* Brand-coloured text: links and the ui-v2 Button `link` variant. 72% reads
+     on the dark page in any hue without the neon of a near-white pastel. */
+  --v2-link: var(--brand-h) calc(var(--brand-s) * 0.9) 72%;
+  /* The page wash — the brand glow that is light mode's signature, kept in
+     dark at the same strength (owner, Sep 28 2026: "the gradient is the whole
+     charm"). Same softened saturation as the dark button, a little deeper, so
+     it glows on the 10% page instead of flooding it. */
+  --v2-wash: var(--brand-h) calc(var(--brand-s) * 0.9) 46%;
 
-  --success: 142 76% 52%;
-  --success-foreground: 159 21% 8%;
-  --success-light: 142 76% 18%;
+  --success: 142 40% 52%;
+  --success-foreground: 0 0% 10%;
+  --success-light: 142 25% 16%;
 
-  --warning: 41 92% 65%;
-  --warning-foreground: 159 21% 8%;
-  --warning-light: 41 92% 18%;
+  --warning: 38 65% 60%;
+  --warning-foreground: 0 0% 10%;
+  --warning-light: 38 35% 16%;
 
-  --destructive: 359 100% 70%;
-  --destructive-foreground: 159 21% 8%;
-  --destructive-light: 0 84% 18%;
+  --destructive: 0 62% 64%;
+  --destructive-foreground: 0 0% 10%;
+  --destructive-light: 0 35% 17%;
 
-  --border: 0 0% 100% / 10%;
-  /* Opaque, unlike --border. The ui-v2 controls use it with an opacity
-     modifier (bg-input/50 on Input, Textarea and Select; bg-input/90 on Switch,
-     Checkbox and RadioGroup; dark:bg-input/30 on Tabs and Button hovers), which
-     Tailwind 3 emits as hsl(var(--input) / 0.5). With an alpha already inside
-     the token that became hsl(0 0% 100% / 15% / 0.5), an invalid colour, so
-     those controls had no fill at all in dark mode. 20% grey is roughly the old
-     15% white laid over the dark page and card surfaces (about 18% and 23%),
-     and stays valid under any modifier. */
-  --input: 0 0% 20%;
-  --ring: 0 0% 45%;
+  /* Opaque, like --input. An alpha inside the token made every
+     `border-border/60`-style modifier an invalid colour that fell back to a
+     near-white currentColor line (see the settings rule further down). */
+  --border: 0 0% 23%;
+  --input: 0 0% 19%;
+  --ring: 0 0% 38%;
 
-  --chart-1: calc(var(--brand-h) - 18) calc(var(--brand-s) + 32%) 82%;
-  --chart-2: calc(var(--brand-h) - 7) calc(var(--brand-s) + 32%) 69%;
-  --chart-3: calc(var(--brand-h) - 1) calc(var(--brand-s) + 24%) 60%;
-  --chart-4: var(--brand-h) var(--brand-s) 51%;
-  --chart-5: calc(var(--brand-h) - 2) calc(var(--brand-s) - 7%) 42%;
+  --chart-1: var(--brand-h) calc(var(--brand-s) * 0.85) 78%;
+  --chart-2: var(--brand-h) calc(var(--brand-s) * 0.9) 66%;
+  --chart-3: var(--brand-h) var(--brand-s) 56%;
+  --chart-4: var(--brand-h) var(--brand-s) 46%;
+  --chart-5: var(--brand-h) calc(var(--brand-s) * 0.75) 36%;
 
-  /* Sidebar - Dark Mode (subtle brand tint to match the dark app gradient) */
-  --sidebar-background: var(--brand-h) calc(var(--brand-s) - 54%) 10%;
-  --sidebar-foreground: 0 0% 98%;
-  --sidebar-primary: calc(var(--brand-h) - 7) calc(var(--brand-s) + 32%) 69%;
-  --sidebar-primary-foreground: 226 100% 97%;
-  --sidebar-accent: var(--brand-h) calc(var(--brand-s) - 50%) 17%;
-  --sidebar-accent-foreground: 0 0% 98%;
-  --sidebar-border: var(--brand-h) calc(var(--brand-s) - 38%) 100% / 10%;
-  --sidebar-ring: var(--brand-h) calc(var(--brand-s) - 48%) 45%;
+  /* Sidebar — one tone with the page, as in light mode (owner, Sep 28 2026:
+     no two-tone split). The v2 rail paints no fill of its own, so this only
+     reaches the mobile sheet. Only the active row carries the brand. */
+  --sidebar-background: 0 0% 12%;
+  --sidebar-foreground: 0 0% 84%;
+  --sidebar-primary: var(--brand-h) calc(var(--brand-s) * 0.9) 66%;
+  --sidebar-primary-foreground: 0 0% 10%;
+  --sidebar-accent: var(--brand-h) calc(var(--brand-s) * 0.45) 19%;
+  --sidebar-accent-foreground: 0 0% 92%;
+  --sidebar-border: 0 0% 21%;
+  --sidebar-ring: 0 0% 38%;
 
-  --gradient-primary: linear-gradient(135deg, hsl(calc(var(--brand-h) - 2) calc(var(--brand-s) - 7%) 42%), hsl(calc(var(--brand-h) - 2) calc(var(--brand-s) - 7%) 52%));
-  --gradient-success: linear-gradient(135deg, hsl(142 76% 52%), hsl(142 76% 60%));
-  --gradient-warning: linear-gradient(135deg, hsl(41 92% 65%), hsl(41 92% 75%));
-  --gradient-subtle: linear-gradient(135deg, hsl(159 15% 20%), hsl(159 15% 25%));
+  --gradient-primary: linear-gradient(135deg, hsl(var(--brand-h) var(--brand-s) 54%), hsl(var(--brand-h) var(--brand-s) 60%));
+  --gradient-success: linear-gradient(135deg, hsl(142 40% 52%), hsl(142 40% 58%));
+  --gradient-warning: linear-gradient(135deg, hsl(38 65% 60%), hsl(38 65% 66%));
+  --gradient-subtle: linear-gradient(135deg, hsl(0 0% 14%), hsl(0 0% 17%));
 
-  --ds-shadow-sm: 0 1px 2px 0 hsl(159 21% 4% / 0.5);
-  --ds-shadow-card: 0 4px 6px -1px hsl(159 21% 4% / 0.5), 0 2px 4px -1px hsl(159 21% 4% / 0.4);
-  --ds-shadow-hover: 0 10px 15px -3px hsl(calc(var(--brand-h) - 2) calc(var(--brand-s) - 7%) 42% / 0.3), 0 4px 6px -2px hsl(calc(var(--brand-h) - 2) calc(var(--brand-s) - 7%) 42% / 0.2);
+  --ds-shadow-sm: 0 1px 2px 0 hsl(0 0% 0% / 0.3);
+  --ds-shadow-card: 0 4px 6px -1px hsl(0 0% 0% / 0.3), 0 2px 4px -1px hsl(0 0% 0% / 0.2);
+  --ds-shadow-hover: 0 10px 15px -3px hsl(0 0% 0% / 0.35), 0 4px 6px -2px hsl(0 0% 0% / 0.25);
 
-  --glow-gold-subtle: 0 0 25px -5px hsl(var(--primary) / 0.35), 0 0 50px -10px hsl(var(--primary) / 0.2);
-  --glow-gold-intense: 0 0 35px -5px hsl(var(--primary) / 0.55), 0 0 70px -10px hsl(var(--primary) / 0.3);
+  --glow-gold-subtle: 0 0 25px -5px hsl(var(--primary) / 0.18), 0 0 50px -10px hsl(var(--primary) / 0.1);
+  --glow-gold-intense: 0 0 35px -5px hsl(var(--primary) / 0.3), 0 0 70px -10px hsl(var(--primary) / 0.15);
 }
 
 /* ---------------------------------------------------------------------------
@@ -276,16 +291,16 @@
  * the light one because a dark selected row matches both.
  * Selectors name only `.v2-theme`, `.dark` and attributes — never a utility.
  * Lightness steps are fixed; hue and saturation follow the brand, like the
- * tokens above (defaults: 248 68% 91%, 246 38% 23%, 246 38% 29%).
+ * tokens above (defaults: 248 68% 91%; dark 248 31% 22% and 25%).
  * ------------------------------------------------------------------------- */
 :where(.v2-theme [data-slot="table-row"][data-state="selected"]) * {
   --v2-hover: var(--brand-h) var(--brand-s) 91%;
 }
 :where(.dark .v2-theme [data-slot="table-row"][data-state="selected"]) {
-  --v2-hover: calc(var(--brand-h) - 2) calc(var(--brand-s) - 30%) 23%;
+  --v2-hover: var(--brand-h) calc(var(--brand-s) * 0.45) 22%;
 }
 :where(.dark .v2-theme [data-slot="table-row"]) * {
-  --v2-hover: calc(var(--brand-h) - 2) calc(var(--brand-s) - 30%) 29%;
+  --v2-hover: var(--brand-h) calc(var(--brand-s) * 0.45) 25%;
 }
 /* Muted cell text measures 4.34:1 on a hovered light body row and 4.00:1 on
    a selected one, so while a body row is tinted its muted text reads
@@ -425,7 +440,7 @@
   50% { opacity: 0.9; transform: scale(0.98); }
 }
 @keyframes v2-slide-up {
-  0% { opacity: 0; transform: translateY(10px); }
+  0% { opacity: 0; transform: translateY(0.75rem); }
   100% { opacity: 1; transform: translateY(0); }
 }
 @keyframes v2-fade-in {
@@ -955,19 +970,19 @@ html:has(body.v2-theme)::-webkit-scrollbar-corner {
   color: hsl(41 92% 27%);
 }
 .dark .v2-theme .panel-ink-warn {
-  color: hsl(41 92% 72%);
+  color: hsl(38 70% 70%);
 }
 .v2-theme .panel-ink-danger {
   color: hsl(357 72% 42%);
 }
 .dark .v2-theme .panel-ink-danger {
-  color: hsl(359 100% 76%);
+  color: hsl(0 70% 74%);
 }
 .v2-theme .panel-ink-success {
   color: hsl(142 78% 26%);
 }
 .dark .v2-theme .panel-ink-success {
-  color: hsl(142 70% 62%);
+  color: hsl(142 45% 64%);
 }
 
 /* The two alpha-dimmed variants the panels use for secondary lines start from
@@ -1349,15 +1364,13 @@ html[data-trax-panel] {
 }
 
 /* `border-border/60` compiles to `hsl(var(--border) / 0.6)`. The dark v2
- * `--border` already carries its alpha (`0 0% 100% / 10%`), so that colour is
- * invalid and the border falls back to currentColor: a near-white 1px line
- * round every Installments card and the example dialog's calendar. Inside a
- * settings body, or a dialog that marks itself as one with
- * `data-settings-v2-body`, give it the colour it means: 60% of the 10% white
- * hairline. The light token has no alpha, so light mode is already right. The
- * class is matched as an attribute string, not a class selector (see above). */
+ * `--border` used to carry its own alpha, which made that colour invalid (a
+ * near-white currentColor line round every Installments card). The token is
+ * opaque now, so the modifier is valid everywhere; this rule stays as the
+ * quieter hairline those settings cards were tuned to. The class is matched as
+ * an attribute string, not a class selector (see above). */
 .dark .v2-theme :is(.settings-v2-body, [data-settings-v2-body]) [class~="border-border/60"] {
-  border-color: hsl(0 0% 100% / 6%);
+  border-color: hsl(0 0% 100% / 9%);
 }
 
 /* ── Pointer cursor on clickable controls ─────────────────────────────────────
@@ -1442,3 +1455,561 @@ html[data-trax-panel] {
 }
 /* ── end: pointer cursor on clickable controls (pinned by
  * __tests__/components/v2-cursor-hover-polish.test.ts) ── */
+
+/* ===========================================================================
+ * DARK SAFETY NET — v1 screens and shared primitives, in the soft dark palette.
+ *
+ * Northwind still opens many v1 screens (leads, automations, payments, the old
+ * rental detail…) and v1 primitives, all written for light mode only:
+ * `bg-white`, `text-gray-900`, `bg-blue-50`, the Figma-era `text-[#080812]`.
+ * They cannot be edited — they serve every other tenant (V2_PLAN §3) — so this
+ * block repaints those exact classes, and only under `.dark .v2-theme`:
+ *   greys / white / black  → the theme tokens (card, muted, border, foreground)
+ *   pale tints (-50..-200) → the same hue at 10–20% over the dark surface
+ *   deep text (-600..-950) → the same hue's 400 / 300 step, which reads on dark
+ *   the Figma indigo hexes → the tenant's --primary
+ *
+ * Each rule is `:where(.dark .v2-theme) .class`, so it carries exactly the
+ * class's own weight and wins only on source order (this file loads after
+ * global.css). A component that already styles itself with a `dark:` class
+ * (`.dark .dark\:bg-x`, one class heavier) keeps its own choice.
+ *
+ * Opt out with `data-keep-light` on anything that must stay a light surface in
+ * dark mode (it restores the light tokens inside itself, see the last rule) — the signature pad (its ink goes onto a white PDF), the website
+ * preview iframe, the slider knob. The class combinations in the exclusion are
+ * the same thing for v1 files that cannot take the attribute: the invoice email
+ * preview (`bg-white text-black`), the email-template preview, and the sign-in
+ * logo preview (`h-36`), all of which show a light surface on purpose.
+ *
+ * Generated from a class census of apps/portal/src; regenerate rather than
+ * hand-edit, so every family and shade stays consistent.
+ * =========================================================================== */
+/* >>> DARK SAFETY NET — generated; see the note above it. Do not hand-edit. */
+:where(.dark .v2-theme) :is(.bg-slate-50, .bg-gray-50, .bg-zinc-50, .bg-neutral-50, .bg-stone-50, .bg-\[\#f8fafc\]) { background-color: hsl(var(--muted) / 0.5); }
+:where(.dark .v2-theme) :is(.hover\:bg-slate-50, .hover\:bg-gray-50, .hover\:bg-zinc-50, .hover\:bg-neutral-50, .hover\:bg-stone-50, .hover\:bg-\[\#f8fafc\]):hover { background-color: hsl(var(--muted) / 0.5); }
+:where(.dark .v2-theme) :is(.bg-slate-100, .bg-slate-200, .bg-gray-100, .bg-gray-200, .bg-zinc-100, .bg-zinc-200, .bg-neutral-100, .bg-neutral-200, .bg-stone-100, .bg-stone-200, .bg-\[\#f1f5f9\]) { background-color: hsl(var(--muted)); }
+:where(.dark .v2-theme) :is(.hover\:bg-slate-100, .hover\:bg-slate-200, .hover\:bg-gray-100, .hover\:bg-gray-200, .hover\:bg-zinc-100, .hover\:bg-zinc-200, .hover\:bg-neutral-100, .hover\:bg-neutral-200, .hover\:bg-stone-100, .hover\:bg-stone-200, .hover\:bg-\[\#f1f5f9\]):hover { background-color: hsl(var(--muted)); }
+:where(.dark .v2-theme) :is(.bg-slate-800, .bg-slate-900, .bg-slate-950, .bg-gray-800, .bg-gray-900, .bg-gray-950, .bg-zinc-800, .bg-zinc-900, .bg-zinc-950, .bg-neutral-800, .bg-neutral-900, .bg-neutral-950, .bg-stone-800, .bg-stone-900, .bg-stone-950) { background-color: hsl(0 0% 20%); }
+:where(.dark .v2-theme) :is(.hover\:bg-slate-800, .hover\:bg-slate-900, .hover\:bg-slate-950, .hover\:bg-gray-800, .hover\:bg-gray-900, .hover\:bg-gray-950, .hover\:bg-zinc-800, .hover\:bg-zinc-900, .hover\:bg-zinc-950, .hover\:bg-neutral-800, .hover\:bg-neutral-900, .hover\:bg-neutral-950, .hover\:bg-stone-800, .hover\:bg-stone-900, .hover\:bg-stone-950):hover { background-color: hsl(0 0% 20%); }
+:where(.dark .v2-theme) :is(.text-slate-800, .text-slate-900, .text-slate-950, .text-gray-800, .text-gray-900, .text-gray-950, .text-zinc-800, .text-zinc-900, .text-zinc-950, .text-neutral-800, .text-neutral-900, .text-neutral-950, .text-stone-800, .text-stone-900, .text-stone-950, .text-black, .text-\[\#080812\], .text-\[\#0C1A17\]) { color: hsl(var(--foreground)); }
+:where(.dark .v2-theme) :is(.hover\:text-slate-800, .hover\:text-slate-900, .hover\:text-slate-950, .hover\:text-gray-800, .hover\:text-gray-900, .hover\:text-gray-950, .hover\:text-zinc-800, .hover\:text-zinc-900, .hover\:text-zinc-950, .hover\:text-neutral-800, .hover\:text-neutral-900, .hover\:text-neutral-950, .hover\:text-stone-800, .hover\:text-stone-900, .hover\:text-stone-950, .hover\:text-black):hover { color: hsl(var(--foreground)); }
+:where(.dark .v2-theme) :is(.text-slate-700, .text-gray-700, .text-zinc-700, .text-neutral-700, .text-stone-700, .text-\[\#404040\]) { color: hsl(var(--foreground) / 0.8); }
+:where(.dark .v2-theme) :is(.hover\:text-slate-700, .hover\:text-gray-700, .hover\:text-zinc-700, .hover\:text-neutral-700, .hover\:text-stone-700, .hover\:text-\[\#404040\]):hover { color: hsl(var(--foreground) / 0.8); }
+:where(.dark .v2-theme) :is(.text-slate-500, .text-slate-600, .text-gray-500, .text-gray-600, .text-zinc-500, .text-zinc-600, .text-neutral-500, .text-neutral-600, .text-stone-500, .text-stone-600, .text-\[\#737373\]) { color: hsl(var(--muted-foreground)); }
+:where(.dark .v2-theme) :is(.hover\:text-slate-500, .hover\:text-slate-600, .hover\:text-gray-500, .hover\:text-gray-600, .hover\:text-zinc-500, .hover\:text-zinc-600, .hover\:text-neutral-500, .hover\:text-neutral-600, .hover\:text-stone-500, .hover\:text-stone-600):hover { color: hsl(var(--muted-foreground)); }
+:where(.dark .v2-theme) :is(.border-slate-100, .border-slate-200, .border-slate-300, .border-gray-100, .border-gray-200, .border-gray-300, .border-zinc-100, .border-zinc-200, .border-zinc-300, .border-neutral-100, .border-neutral-200, .border-neutral-300, .border-stone-100, .border-stone-200, .border-stone-300, .border-\[\#f1f5f9\]) { border-color: hsl(var(--border)); }
+:where(.dark .v2-theme) :is(.hover\:border-slate-100, .hover\:border-slate-200, .hover\:border-slate-300, .hover\:border-gray-100, .hover\:border-gray-200, .hover\:border-gray-300, .hover\:border-zinc-100, .hover\:border-zinc-200, .hover\:border-zinc-300, .hover\:border-neutral-100, .hover\:border-neutral-200, .hover\:border-neutral-300, .hover\:border-stone-100, .hover\:border-stone-200, .hover\:border-stone-300):hover { border-color: hsl(var(--border)); }
+:where(.dark .v2-theme) :is(.divide-slate-100, .divide-slate-200, .divide-slate-300, .divide-gray-100, .divide-gray-200, .divide-gray-300, .divide-zinc-100, .divide-zinc-200, .divide-zinc-300, .divide-neutral-100, .divide-neutral-200, .divide-neutral-300, .divide-stone-100, .divide-stone-200, .divide-stone-300, .divide-\[\#f1f5f9\]) > :not([hidden]) ~ :not([hidden]) { border-color: hsl(var(--border)); }
+:where(.dark .v2-theme) :is(.bg-white) { background-color: hsl(var(--card)); }
+:where(.dark .v2-theme) :is(.hover\:bg-white):hover { background-color: hsl(var(--card)); }
+:where(.dark .v2-theme) :is(.bg-white\/50) { background-color: hsl(var(--card) / 0.5); }
+:where(.dark .v2-theme) :is(.hover\:bg-white\/50):hover { background-color: hsl(var(--card) / 0.5); }
+:where(.dark .v2-theme) :is(.bg-white\/60) { background-color: hsl(var(--card) / 0.6); }
+:where(.dark .v2-theme) :is(.hover\:bg-white\/60):hover { background-color: hsl(var(--card) / 0.6); }
+:where(.dark .v2-theme) :is(.bg-white\/70) { background-color: hsl(var(--card) / 0.7); }
+:where(.dark .v2-theme) :is(.hover\:bg-white\/70):hover { background-color: hsl(var(--card) / 0.7); }
+:where(.dark .v2-theme) :is(.bg-white\/75) { background-color: hsl(var(--card) / 0.75); }
+:where(.dark .v2-theme) :is(.hover\:bg-white\/75):hover { background-color: hsl(var(--card) / 0.75); }
+:where(.dark .v2-theme) :is(.bg-white\/80) { background-color: hsl(var(--card) / 0.8); }
+:where(.dark .v2-theme) :is(.hover\:bg-white\/80):hover { background-color: hsl(var(--card) / 0.8); }
+:where(.dark .v2-theme) :is(.bg-white\/90) { background-color: hsl(var(--card) / 0.9); }
+:where(.dark .v2-theme) :is(.hover\:bg-white\/90):hover { background-color: hsl(var(--card) / 0.9); }
+:where(.dark .v2-theme) :is(.bg-white\/95) { background-color: hsl(var(--card) / 0.95); }
+:where(.dark .v2-theme) :is(.hover\:bg-white\/95):hover { background-color: hsl(var(--card) / 0.95); }
+:where(.dark .v2-theme) :is(.bg-red-50) { background-color: rgb(239 68 68 / 0.1); }
+:where(.dark .v2-theme) :is(.hover\:bg-red-50):hover { background-color: rgb(239 68 68 / 0.1); }
+:where(.dark .v2-theme) :is(.bg-red-100) { background-color: rgb(239 68 68 / 0.15); }
+:where(.dark .v2-theme) :is(.hover\:bg-red-100):hover { background-color: rgb(239 68 68 / 0.15); }
+:where(.dark .v2-theme) :is(.bg-red-200) { background-color: rgb(239 68 68 / 0.2); }
+:where(.dark .v2-theme) :is(.hover\:bg-red-200):hover { background-color: rgb(239 68 68 / 0.2); }
+:where(.dark .v2-theme) :is(.text-red-600, .text-\[\#dc2626\]) { color: #f87171; }
+:where(.dark .v2-theme) :is(.hover\:text-red-600):hover { color: #f87171; }
+:where(.dark .v2-theme) :is(.text-red-700, .text-red-800, .text-red-900, .text-red-950) { color: #fca5a5; }
+:where(.dark .v2-theme) :is(.hover\:text-red-700, .hover\:text-red-800, .hover\:text-red-900, .hover\:text-red-950):hover { color: #fca5a5; }
+:where(.dark .v2-theme) :is(.border-red-100, .border-red-200, .border-red-300) { border-color: rgb(239 68 68 / 0.3); }
+:where(.dark .v2-theme) :is(.hover\:border-red-100, .hover\:border-red-200, .hover\:border-red-300):hover { border-color: rgb(239 68 68 / 0.3); }
+:where(.dark .v2-theme) :is(.bg-orange-50) { background-color: rgb(249 115 22 / 0.1); }
+:where(.dark .v2-theme) :is(.hover\:bg-orange-50):hover { background-color: rgb(249 115 22 / 0.1); }
+:where(.dark .v2-theme) :is(.bg-orange-100) { background-color: rgb(249 115 22 / 0.15); }
+:where(.dark .v2-theme) :is(.hover\:bg-orange-100):hover { background-color: rgb(249 115 22 / 0.15); }
+:where(.dark .v2-theme) :is(.bg-orange-200) { background-color: rgb(249 115 22 / 0.2); }
+:where(.dark .v2-theme) :is(.hover\:bg-orange-200):hover { background-color: rgb(249 115 22 / 0.2); }
+:where(.dark .v2-theme) :is(.text-orange-600) { color: #fb923c; }
+:where(.dark .v2-theme) :is(.hover\:text-orange-600):hover { color: #fb923c; }
+:where(.dark .v2-theme) :is(.text-orange-700, .text-orange-800, .text-orange-900, .text-orange-950) { color: #fdba74; }
+:where(.dark .v2-theme) :is(.hover\:text-orange-700, .hover\:text-orange-800, .hover\:text-orange-900, .hover\:text-orange-950):hover { color: #fdba74; }
+:where(.dark .v2-theme) :is(.border-orange-100, .border-orange-200, .border-orange-300) { border-color: rgb(249 115 22 / 0.3); }
+:where(.dark .v2-theme) :is(.hover\:border-orange-100, .hover\:border-orange-200, .hover\:border-orange-300):hover { border-color: rgb(249 115 22 / 0.3); }
+:where(.dark .v2-theme) :is(.bg-amber-50) { background-color: rgb(245 158 11 / 0.1); }
+:where(.dark .v2-theme) :is(.hover\:bg-amber-50):hover { background-color: rgb(245 158 11 / 0.1); }
+:where(.dark .v2-theme) :is(.bg-amber-100) { background-color: rgb(245 158 11 / 0.15); }
+:where(.dark .v2-theme) :is(.hover\:bg-amber-100):hover { background-color: rgb(245 158 11 / 0.15); }
+:where(.dark .v2-theme) :is(.bg-amber-200) { background-color: rgb(245 158 11 / 0.2); }
+:where(.dark .v2-theme) :is(.hover\:bg-amber-200):hover { background-color: rgb(245 158 11 / 0.2); }
+:where(.dark .v2-theme) :is(.text-amber-600, .text-\[\#d97706\]) { color: #fbbf24; }
+:where(.dark .v2-theme) :is(.hover\:text-amber-600):hover { color: #fbbf24; }
+:where(.dark .v2-theme) :is(.text-amber-700, .text-amber-800, .text-amber-900, .text-amber-950) { color: #fcd34d; }
+:where(.dark .v2-theme) :is(.hover\:text-amber-700, .hover\:text-amber-800, .hover\:text-amber-900, .hover\:text-amber-950):hover { color: #fcd34d; }
+:where(.dark .v2-theme) :is(.border-amber-100, .border-amber-200, .border-amber-300) { border-color: rgb(245 158 11 / 0.3); }
+:where(.dark .v2-theme) :is(.hover\:border-amber-100, .hover\:border-amber-200, .hover\:border-amber-300):hover { border-color: rgb(245 158 11 / 0.3); }
+:where(.dark .v2-theme) :is(.bg-yellow-50) { background-color: rgb(234 179 8 / 0.1); }
+:where(.dark .v2-theme) :is(.hover\:bg-yellow-50):hover { background-color: rgb(234 179 8 / 0.1); }
+:where(.dark .v2-theme) :is(.bg-yellow-100) { background-color: rgb(234 179 8 / 0.15); }
+:where(.dark .v2-theme) :is(.hover\:bg-yellow-100):hover { background-color: rgb(234 179 8 / 0.15); }
+:where(.dark .v2-theme) :is(.bg-yellow-200) { background-color: rgb(234 179 8 / 0.2); }
+:where(.dark .v2-theme) :is(.hover\:bg-yellow-200):hover { background-color: rgb(234 179 8 / 0.2); }
+:where(.dark .v2-theme) :is(.text-yellow-600) { color: #facc15; }
+:where(.dark .v2-theme) :is(.hover\:text-yellow-600):hover { color: #facc15; }
+:where(.dark .v2-theme) :is(.text-yellow-700, .text-yellow-800, .text-yellow-900, .text-yellow-950) { color: #fde047; }
+:where(.dark .v2-theme) :is(.hover\:text-yellow-700, .hover\:text-yellow-800, .hover\:text-yellow-900, .hover\:text-yellow-950):hover { color: #fde047; }
+:where(.dark .v2-theme) :is(.border-yellow-100, .border-yellow-200, .border-yellow-300) { border-color: rgb(234 179 8 / 0.3); }
+:where(.dark .v2-theme) :is(.hover\:border-yellow-100, .hover\:border-yellow-200, .hover\:border-yellow-300):hover { border-color: rgb(234 179 8 / 0.3); }
+:where(.dark .v2-theme) :is(.bg-lime-50) { background-color: rgb(132 204 22 / 0.1); }
+:where(.dark .v2-theme) :is(.hover\:bg-lime-50):hover { background-color: rgb(132 204 22 / 0.1); }
+:where(.dark .v2-theme) :is(.bg-lime-100) { background-color: rgb(132 204 22 / 0.15); }
+:where(.dark .v2-theme) :is(.hover\:bg-lime-100):hover { background-color: rgb(132 204 22 / 0.15); }
+:where(.dark .v2-theme) :is(.bg-lime-200) { background-color: rgb(132 204 22 / 0.2); }
+:where(.dark .v2-theme) :is(.hover\:bg-lime-200):hover { background-color: rgb(132 204 22 / 0.2); }
+:where(.dark .v2-theme) :is(.text-lime-600) { color: #a3e635; }
+:where(.dark .v2-theme) :is(.hover\:text-lime-600):hover { color: #a3e635; }
+:where(.dark .v2-theme) :is(.text-lime-700, .text-lime-800, .text-lime-900, .text-lime-950) { color: #bef264; }
+:where(.dark .v2-theme) :is(.hover\:text-lime-700, .hover\:text-lime-800, .hover\:text-lime-900, .hover\:text-lime-950):hover { color: #bef264; }
+:where(.dark .v2-theme) :is(.border-lime-100, .border-lime-200, .border-lime-300) { border-color: rgb(132 204 22 / 0.3); }
+:where(.dark .v2-theme) :is(.hover\:border-lime-100, .hover\:border-lime-200, .hover\:border-lime-300):hover { border-color: rgb(132 204 22 / 0.3); }
+:where(.dark .v2-theme) :is(.bg-green-50, .bg-\[\#f0fdf4\]) { background-color: rgb(34 197 94 / 0.1); }
+:where(.dark .v2-theme) :is(.hover\:bg-green-50):hover { background-color: rgb(34 197 94 / 0.1); }
+:where(.dark .v2-theme) :is(.bg-green-100) { background-color: rgb(34 197 94 / 0.15); }
+:where(.dark .v2-theme) :is(.hover\:bg-green-100):hover { background-color: rgb(34 197 94 / 0.15); }
+:where(.dark .v2-theme) :is(.bg-green-200) { background-color: rgb(34 197 94 / 0.2); }
+:where(.dark .v2-theme) :is(.hover\:bg-green-200):hover { background-color: rgb(34 197 94 / 0.2); }
+:where(.dark .v2-theme) :is(.text-green-600, .text-\[\#16a34a\]) { color: #4ade80; }
+:where(.dark .v2-theme) :is(.hover\:text-green-600):hover { color: #4ade80; }
+:where(.dark .v2-theme) :is(.text-green-700, .text-green-800, .text-green-900, .text-green-950) { color: #86efac; }
+:where(.dark .v2-theme) :is(.hover\:text-green-700, .hover\:text-green-800, .hover\:text-green-900, .hover\:text-green-950):hover { color: #86efac; }
+:where(.dark .v2-theme) :is(.border-green-100, .border-green-200, .border-green-300) { border-color: rgb(34 197 94 / 0.3); }
+:where(.dark .v2-theme) :is(.hover\:border-green-100, .hover\:border-green-200, .hover\:border-green-300):hover { border-color: rgb(34 197 94 / 0.3); }
+:where(.dark .v2-theme) :is(.bg-emerald-50) { background-color: rgb(16 185 129 / 0.1); }
+:where(.dark .v2-theme) :is(.hover\:bg-emerald-50):hover { background-color: rgb(16 185 129 / 0.1); }
+:where(.dark .v2-theme) :is(.bg-emerald-100) { background-color: rgb(16 185 129 / 0.15); }
+:where(.dark .v2-theme) :is(.hover\:bg-emerald-100):hover { background-color: rgb(16 185 129 / 0.15); }
+:where(.dark .v2-theme) :is(.bg-emerald-200) { background-color: rgb(16 185 129 / 0.2); }
+:where(.dark .v2-theme) :is(.hover\:bg-emerald-200):hover { background-color: rgb(16 185 129 / 0.2); }
+:where(.dark .v2-theme) :is(.text-emerald-600) { color: #34d399; }
+:where(.dark .v2-theme) :is(.hover\:text-emerald-600):hover { color: #34d399; }
+:where(.dark .v2-theme) :is(.text-emerald-700, .text-emerald-800, .text-emerald-900, .text-emerald-950) { color: #6ee7b7; }
+:where(.dark .v2-theme) :is(.hover\:text-emerald-700, .hover\:text-emerald-800, .hover\:text-emerald-900, .hover\:text-emerald-950):hover { color: #6ee7b7; }
+:where(.dark .v2-theme) :is(.border-emerald-100, .border-emerald-200, .border-emerald-300) { border-color: rgb(16 185 129 / 0.3); }
+:where(.dark .v2-theme) :is(.hover\:border-emerald-100, .hover\:border-emerald-200, .hover\:border-emerald-300):hover { border-color: rgb(16 185 129 / 0.3); }
+:where(.dark .v2-theme) :is(.bg-teal-50) { background-color: rgb(20 184 166 / 0.1); }
+:where(.dark .v2-theme) :is(.hover\:bg-teal-50):hover { background-color: rgb(20 184 166 / 0.1); }
+:where(.dark .v2-theme) :is(.bg-teal-100) { background-color: rgb(20 184 166 / 0.15); }
+:where(.dark .v2-theme) :is(.hover\:bg-teal-100):hover { background-color: rgb(20 184 166 / 0.15); }
+:where(.dark .v2-theme) :is(.bg-teal-200) { background-color: rgb(20 184 166 / 0.2); }
+:where(.dark .v2-theme) :is(.hover\:bg-teal-200):hover { background-color: rgb(20 184 166 / 0.2); }
+:where(.dark .v2-theme) :is(.text-teal-600) { color: #2dd4bf; }
+:where(.dark .v2-theme) :is(.hover\:text-teal-600):hover { color: #2dd4bf; }
+:where(.dark .v2-theme) :is(.text-teal-700, .text-teal-800, .text-teal-900, .text-teal-950) { color: #5eead4; }
+:where(.dark .v2-theme) :is(.hover\:text-teal-700, .hover\:text-teal-800, .hover\:text-teal-900, .hover\:text-teal-950):hover { color: #5eead4; }
+:where(.dark .v2-theme) :is(.border-teal-100, .border-teal-200, .border-teal-300) { border-color: rgb(20 184 166 / 0.3); }
+:where(.dark .v2-theme) :is(.hover\:border-teal-100, .hover\:border-teal-200, .hover\:border-teal-300):hover { border-color: rgb(20 184 166 / 0.3); }
+:where(.dark .v2-theme) :is(.bg-cyan-50) { background-color: rgb(6 182 212 / 0.1); }
+:where(.dark .v2-theme) :is(.hover\:bg-cyan-50):hover { background-color: rgb(6 182 212 / 0.1); }
+:where(.dark .v2-theme) :is(.bg-cyan-100) { background-color: rgb(6 182 212 / 0.15); }
+:where(.dark .v2-theme) :is(.hover\:bg-cyan-100):hover { background-color: rgb(6 182 212 / 0.15); }
+:where(.dark .v2-theme) :is(.bg-cyan-200) { background-color: rgb(6 182 212 / 0.2); }
+:where(.dark .v2-theme) :is(.hover\:bg-cyan-200):hover { background-color: rgb(6 182 212 / 0.2); }
+:where(.dark .v2-theme) :is(.text-cyan-600) { color: #22d3ee; }
+:where(.dark .v2-theme) :is(.hover\:text-cyan-600):hover { color: #22d3ee; }
+:where(.dark .v2-theme) :is(.text-cyan-700, .text-cyan-800, .text-cyan-900, .text-cyan-950) { color: #67e8f9; }
+:where(.dark .v2-theme) :is(.hover\:text-cyan-700, .hover\:text-cyan-800, .hover\:text-cyan-900, .hover\:text-cyan-950):hover { color: #67e8f9; }
+:where(.dark .v2-theme) :is(.border-cyan-100, .border-cyan-200, .border-cyan-300) { border-color: rgb(6 182 212 / 0.3); }
+:where(.dark .v2-theme) :is(.hover\:border-cyan-100, .hover\:border-cyan-200, .hover\:border-cyan-300):hover { border-color: rgb(6 182 212 / 0.3); }
+:where(.dark .v2-theme) :is(.bg-sky-50) { background-color: rgb(14 165 233 / 0.1); }
+:where(.dark .v2-theme) :is(.hover\:bg-sky-50):hover { background-color: rgb(14 165 233 / 0.1); }
+:where(.dark .v2-theme) :is(.bg-sky-100) { background-color: rgb(14 165 233 / 0.15); }
+:where(.dark .v2-theme) :is(.hover\:bg-sky-100):hover { background-color: rgb(14 165 233 / 0.15); }
+:where(.dark .v2-theme) :is(.bg-sky-200) { background-color: rgb(14 165 233 / 0.2); }
+:where(.dark .v2-theme) :is(.hover\:bg-sky-200):hover { background-color: rgb(14 165 233 / 0.2); }
+:where(.dark .v2-theme) :is(.text-sky-600) { color: #38bdf8; }
+:where(.dark .v2-theme) :is(.hover\:text-sky-600):hover { color: #38bdf8; }
+:where(.dark .v2-theme) :is(.text-sky-700, .text-sky-800, .text-sky-900, .text-sky-950) { color: #7dd3fc; }
+:where(.dark .v2-theme) :is(.hover\:text-sky-700, .hover\:text-sky-800, .hover\:text-sky-900, .hover\:text-sky-950):hover { color: #7dd3fc; }
+:where(.dark .v2-theme) :is(.border-sky-100, .border-sky-200, .border-sky-300) { border-color: rgb(14 165 233 / 0.3); }
+:where(.dark .v2-theme) :is(.hover\:border-sky-100, .hover\:border-sky-200, .hover\:border-sky-300):hover { border-color: rgb(14 165 233 / 0.3); }
+:where(.dark .v2-theme) :is(.bg-blue-50) { background-color: rgb(59 130 246 / 0.1); }
+:where(.dark .v2-theme) :is(.hover\:bg-blue-50):hover { background-color: rgb(59 130 246 / 0.1); }
+:where(.dark .v2-theme) :is(.bg-blue-100) { background-color: rgb(59 130 246 / 0.15); }
+:where(.dark .v2-theme) :is(.hover\:bg-blue-100):hover { background-color: rgb(59 130 246 / 0.15); }
+:where(.dark .v2-theme) :is(.bg-blue-200) { background-color: rgb(59 130 246 / 0.2); }
+:where(.dark .v2-theme) :is(.hover\:bg-blue-200):hover { background-color: rgb(59 130 246 / 0.2); }
+:where(.dark .v2-theme) :is(.text-blue-600) { color: #60a5fa; }
+:where(.dark .v2-theme) :is(.hover\:text-blue-600):hover { color: #60a5fa; }
+:where(.dark .v2-theme) :is(.text-blue-700, .text-blue-800, .text-blue-900, .text-blue-950) { color: #93c5fd; }
+:where(.dark .v2-theme) :is(.hover\:text-blue-700, .hover\:text-blue-800, .hover\:text-blue-900, .hover\:text-blue-950):hover { color: #93c5fd; }
+:where(.dark .v2-theme) :is(.border-blue-100, .border-blue-200, .border-blue-300) { border-color: rgb(59 130 246 / 0.3); }
+:where(.dark .v2-theme) :is(.hover\:border-blue-100, .hover\:border-blue-200, .hover\:border-blue-300):hover { border-color: rgb(59 130 246 / 0.3); }
+:where(.dark .v2-theme) :is(.bg-indigo-50) { background-color: rgb(99 102 241 / 0.1); }
+:where(.dark .v2-theme) :is(.hover\:bg-indigo-50):hover { background-color: rgb(99 102 241 / 0.1); }
+:where(.dark .v2-theme) :is(.bg-indigo-100) { background-color: rgb(99 102 241 / 0.15); }
+:where(.dark .v2-theme) :is(.hover\:bg-indigo-100):hover { background-color: rgb(99 102 241 / 0.15); }
+:where(.dark .v2-theme) :is(.bg-indigo-200) { background-color: rgb(99 102 241 / 0.2); }
+:where(.dark .v2-theme) :is(.hover\:bg-indigo-200):hover { background-color: rgb(99 102 241 / 0.2); }
+:where(.dark .v2-theme) :is(.text-indigo-600) { color: #818cf8; }
+:where(.dark .v2-theme) :is(.hover\:text-indigo-600):hover { color: #818cf8; }
+:where(.dark .v2-theme) :is(.text-indigo-700, .text-indigo-800, .text-indigo-900, .text-indigo-950) { color: #a5b4fc; }
+:where(.dark .v2-theme) :is(.hover\:text-indigo-700, .hover\:text-indigo-800, .hover\:text-indigo-900, .hover\:text-indigo-950):hover { color: #a5b4fc; }
+:where(.dark .v2-theme) :is(.border-indigo-100, .border-indigo-200, .border-indigo-300) { border-color: rgb(99 102 241 / 0.3); }
+:where(.dark .v2-theme) :is(.hover\:border-indigo-100, .hover\:border-indigo-200, .hover\:border-indigo-300):hover { border-color: rgb(99 102 241 / 0.3); }
+:where(.dark .v2-theme) :is(.bg-violet-50) { background-color: rgb(139 92 246 / 0.1); }
+:where(.dark .v2-theme) :is(.hover\:bg-violet-50):hover { background-color: rgb(139 92 246 / 0.1); }
+:where(.dark .v2-theme) :is(.bg-violet-100) { background-color: rgb(139 92 246 / 0.15); }
+:where(.dark .v2-theme) :is(.hover\:bg-violet-100):hover { background-color: rgb(139 92 246 / 0.15); }
+:where(.dark .v2-theme) :is(.bg-violet-200) { background-color: rgb(139 92 246 / 0.2); }
+:where(.dark .v2-theme) :is(.hover\:bg-violet-200):hover { background-color: rgb(139 92 246 / 0.2); }
+:where(.dark .v2-theme) :is(.text-violet-600) { color: #a78bfa; }
+:where(.dark .v2-theme) :is(.hover\:text-violet-600):hover { color: #a78bfa; }
+:where(.dark .v2-theme) :is(.text-violet-700, .text-violet-800, .text-violet-900, .text-violet-950) { color: #c4b5fd; }
+:where(.dark .v2-theme) :is(.hover\:text-violet-700, .hover\:text-violet-800, .hover\:text-violet-900, .hover\:text-violet-950):hover { color: #c4b5fd; }
+:where(.dark .v2-theme) :is(.border-violet-100, .border-violet-200, .border-violet-300) { border-color: rgb(139 92 246 / 0.3); }
+:where(.dark .v2-theme) :is(.hover\:border-violet-100, .hover\:border-violet-200, .hover\:border-violet-300):hover { border-color: rgb(139 92 246 / 0.3); }
+:where(.dark .v2-theme) :is(.bg-purple-50) { background-color: rgb(168 85 247 / 0.1); }
+:where(.dark .v2-theme) :is(.hover\:bg-purple-50):hover { background-color: rgb(168 85 247 / 0.1); }
+:where(.dark .v2-theme) :is(.bg-purple-100) { background-color: rgb(168 85 247 / 0.15); }
+:where(.dark .v2-theme) :is(.hover\:bg-purple-100):hover { background-color: rgb(168 85 247 / 0.15); }
+:where(.dark .v2-theme) :is(.bg-purple-200) { background-color: rgb(168 85 247 / 0.2); }
+:where(.dark .v2-theme) :is(.hover\:bg-purple-200):hover { background-color: rgb(168 85 247 / 0.2); }
+:where(.dark .v2-theme) :is(.text-purple-600) { color: #c084fc; }
+:where(.dark .v2-theme) :is(.hover\:text-purple-600):hover { color: #c084fc; }
+:where(.dark .v2-theme) :is(.text-purple-700, .text-purple-800, .text-purple-900, .text-purple-950) { color: #d8b4fe; }
+:where(.dark .v2-theme) :is(.hover\:text-purple-700, .hover\:text-purple-800, .hover\:text-purple-900, .hover\:text-purple-950):hover { color: #d8b4fe; }
+:where(.dark .v2-theme) :is(.border-purple-100, .border-purple-200, .border-purple-300) { border-color: rgb(168 85 247 / 0.3); }
+:where(.dark .v2-theme) :is(.hover\:border-purple-100, .hover\:border-purple-200, .hover\:border-purple-300):hover { border-color: rgb(168 85 247 / 0.3); }
+:where(.dark .v2-theme) :is(.bg-fuchsia-50) { background-color: rgb(217 70 239 / 0.1); }
+:where(.dark .v2-theme) :is(.hover\:bg-fuchsia-50):hover { background-color: rgb(217 70 239 / 0.1); }
+:where(.dark .v2-theme) :is(.bg-fuchsia-100) { background-color: rgb(217 70 239 / 0.15); }
+:where(.dark .v2-theme) :is(.hover\:bg-fuchsia-100):hover { background-color: rgb(217 70 239 / 0.15); }
+:where(.dark .v2-theme) :is(.bg-fuchsia-200) { background-color: rgb(217 70 239 / 0.2); }
+:where(.dark .v2-theme) :is(.hover\:bg-fuchsia-200):hover { background-color: rgb(217 70 239 / 0.2); }
+:where(.dark .v2-theme) :is(.text-fuchsia-600) { color: #e879f9; }
+:where(.dark .v2-theme) :is(.hover\:text-fuchsia-600):hover { color: #e879f9; }
+:where(.dark .v2-theme) :is(.text-fuchsia-700, .text-fuchsia-800, .text-fuchsia-900, .text-fuchsia-950) { color: #f0abfc; }
+:where(.dark .v2-theme) :is(.hover\:text-fuchsia-700, .hover\:text-fuchsia-800, .hover\:text-fuchsia-900, .hover\:text-fuchsia-950):hover { color: #f0abfc; }
+:where(.dark .v2-theme) :is(.border-fuchsia-100, .border-fuchsia-200, .border-fuchsia-300) { border-color: rgb(217 70 239 / 0.3); }
+:where(.dark .v2-theme) :is(.hover\:border-fuchsia-100, .hover\:border-fuchsia-200, .hover\:border-fuchsia-300):hover { border-color: rgb(217 70 239 / 0.3); }
+:where(.dark .v2-theme) :is(.bg-pink-50) { background-color: rgb(236 72 153 / 0.1); }
+:where(.dark .v2-theme) :is(.hover\:bg-pink-50):hover { background-color: rgb(236 72 153 / 0.1); }
+:where(.dark .v2-theme) :is(.bg-pink-100) { background-color: rgb(236 72 153 / 0.15); }
+:where(.dark .v2-theme) :is(.hover\:bg-pink-100):hover { background-color: rgb(236 72 153 / 0.15); }
+:where(.dark .v2-theme) :is(.bg-pink-200) { background-color: rgb(236 72 153 / 0.2); }
+:where(.dark .v2-theme) :is(.hover\:bg-pink-200):hover { background-color: rgb(236 72 153 / 0.2); }
+:where(.dark .v2-theme) :is(.text-pink-600) { color: #f472b6; }
+:where(.dark .v2-theme) :is(.hover\:text-pink-600):hover { color: #f472b6; }
+:where(.dark .v2-theme) :is(.text-pink-700, .text-pink-800, .text-pink-900, .text-pink-950) { color: #f9a8d4; }
+:where(.dark .v2-theme) :is(.hover\:text-pink-700, .hover\:text-pink-800, .hover\:text-pink-900, .hover\:text-pink-950):hover { color: #f9a8d4; }
+:where(.dark .v2-theme) :is(.border-pink-100, .border-pink-200, .border-pink-300) { border-color: rgb(236 72 153 / 0.3); }
+:where(.dark .v2-theme) :is(.hover\:border-pink-100, .hover\:border-pink-200, .hover\:border-pink-300):hover { border-color: rgb(236 72 153 / 0.3); }
+:where(.dark .v2-theme) :is(.bg-rose-50) { background-color: rgb(244 63 94 / 0.1); }
+:where(.dark .v2-theme) :is(.hover\:bg-rose-50):hover { background-color: rgb(244 63 94 / 0.1); }
+:where(.dark .v2-theme) :is(.bg-rose-100) { background-color: rgb(244 63 94 / 0.15); }
+:where(.dark .v2-theme) :is(.hover\:bg-rose-100):hover { background-color: rgb(244 63 94 / 0.15); }
+:where(.dark .v2-theme) :is(.bg-rose-200) { background-color: rgb(244 63 94 / 0.2); }
+:where(.dark .v2-theme) :is(.hover\:bg-rose-200):hover { background-color: rgb(244 63 94 / 0.2); }
+:where(.dark .v2-theme) :is(.text-rose-600) { color: #fb7185; }
+:where(.dark .v2-theme) :is(.hover\:text-rose-600):hover { color: #fb7185; }
+:where(.dark .v2-theme) :is(.text-rose-700, .text-rose-800, .text-rose-900, .text-rose-950) { color: #fda4af; }
+:where(.dark .v2-theme) :is(.hover\:text-rose-700, .hover\:text-rose-800, .hover\:text-rose-900, .hover\:text-rose-950):hover { color: #fda4af; }
+:where(.dark .v2-theme) :is(.border-rose-100, .border-rose-200, .border-rose-300) { border-color: rgb(244 63 94 / 0.3); }
+:where(.dark .v2-theme) :is(.hover\:border-rose-100, .hover\:border-rose-200, .hover\:border-rose-300):hover { border-color: rgb(244 63 94 / 0.3); }
+:where(.dark .v2-theme) :is(.border-\[\#e0e7ff\]) { border-color: hsl(var(--primary) / 0.3); }
+:where(.dark .v2-theme) :is(.bg-\[\#eef2ff\]) { background-color: hsl(var(--primary) / 0.14); }
+:where(.dark .v2-theme) :is(.hover\:bg-\[\#eef2ff\]):hover { background-color: hsl(var(--primary) / 0.14); }
+:where(.dark .v2-theme) :is(.text-\[\#6366f1\]) { color: hsl(var(--v2-link, var(--primary))); }
+:where(.dark .v2-theme) :is(.hover\:text-\[\#6366f1\]):hover { color: hsl(var(--v2-link, var(--primary))); }
+:where(.dark .v2-theme) :is(.bg-\[\#6366f1\]) { background-color: hsl(var(--primary)); }
+:where(.dark .v2-theme) :is(.border-\[\#6366f1\]) { border-color: hsl(var(--primary)); }
+:where(.dark .v2-theme) :is(.hover\:bg-\[\#4f46e5\]):hover { background-color: hsl(var(--primary-hover)); }
+:where(.dark .v2-theme) :is(.bg-\[\#0f172a\]) { background-color: hsl(0 0% 22%); }
+:where(.dark .v2-theme) :is(.hover\:bg-\[\#0f172a\]\/90):hover { background-color: hsl(0 0% 26%); }
+/* Keep-light islands: light tokens restored inside, so the rules above paint
+   them white with dark ink again. Every class these islands use is a neutral,
+   and every neutral above resolves through these tokens. */
+.dark .v2-theme :is([data-keep-light], .bg-white.text-black, .mt-2.border.rounded-lg.overflow-hidden.bg-white, .rounded-xl.border.bg-white.h-36) {
+  --background: 0 0% 100%;
+  --foreground: 0 0% 3.9%;
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 3.9%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 0 0% 3.9%;
+  --muted: 0 0% 96%;
+  --muted-foreground: 0 0% 45%;
+  --border: 0 0% 90%;
+  --input: 0 0% 90%;
+  color: hsl(var(--foreground));
+  color-scheme: light;
+}
+/* <<< DARK SAFETY NET */
+
+/* ===========================================================================
+ * THEME NET — the tenant's theme colour, on screens that hardcode indigo.
+ *
+ * Indigo was the portal's only accent before themes existed, so v1 screens and
+ * shared primitives say `text-indigo-600`, `bg-indigo-50`, `from-indigo-500`,
+ * and charts draw `fill="#6366f1"`. Northwind opens those screens, and on a
+ * teal or rose theme they stayed indigo. v1 files cannot be edited (V2_PLAN §3),
+ * so under `.v2-theme` each of those exact classes resolves to --primary:
+ *   pale tints (-50..-400)  → the theme colour at the matching strength
+ *   solids (-500..-700)     → --primary (-700+ → --primary-hover)
+ *   text, any shade         → --v2-link (= --primary in light, readable in dark)
+ *   borders / rings         → a light or full --primary
+ *   gradient stops          → Tailwind's --tw-gradient-* variables
+ *   SVG fill / stroke / stop-color attributes with the indigo hexes → --primary
+ *     (a CSS property always beats a presentation attribute)
+ * Light rules carry the class's own weight and win on source order; the dark
+ * block re-states tints after the dark safety net, and repaints existing
+ * `dark:*-indigo-*` classes at their own (heavier) weight.
+ * Only INDIGO is mapped: violet and purple are used as their own categories
+ * (Trax, extensions) and stay what they are. Generated from a class census —
+ * regenerate rather than hand-edit.
+ * =========================================================================== */
+/* >>> THEME NET */
+:where(.v2-theme) .text-indigo-600 { color: hsl(var(--v2-link, var(--primary))); }
+:where(.v2-theme) .text-indigo-700 { color: hsl(var(--v2-link, var(--primary))); }
+:where(.v2-theme) .text-indigo-500 { color: hsl(var(--v2-link, var(--primary))); }
+:where(.v2-theme) .bg-indigo-50 { background-color: hsl(var(--primary) / 0.07); }
+:where(.v2-theme) .border-indigo-200 { border-color: hsl(var(--primary) / 0.25); }
+:where(.v2-theme) .bg-indigo-600 { background-color: hsl(var(--primary)); }
+:where(.v2-theme) .bg-indigo-100 { background-color: hsl(var(--primary) / 0.12); }
+:where(.v2-theme) .bg-indigo-500 { background-color: hsl(var(--primary)); }
+:where(.v2-theme) .from-indigo-500 { --tw-gradient-from: hsl(var(--primary)) var(--tw-gradient-from-position); --tw-gradient-to: hsl(var(--primary) / 0) var(--tw-gradient-to-position); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+:where(.v2-theme) .hover\:bg-indigo-700:hover { background-color: hsl(var(--primary-hover)); }
+:where(.v2-theme) .border-indigo-300 { border-color: hsl(var(--primary) / 0.25); }
+:where(.v2-theme) .bg-indigo-500\/10 { background-color: hsl(var(--primary) / 0.1); }
+:where(.v2-theme) .text-indigo-900 { color: hsl(var(--v2-link, var(--primary))); }
+:where(.v2-theme) .hover\:bg-indigo-50:hover { background-color: hsl(var(--primary) / 0.07); }
+:where(.v2-theme) .bg-indigo-50\/50 { background-color: hsl(var(--primary) / 0.035); }
+:where(.v2-theme) .hover\:text-indigo-700:hover { color: hsl(var(--v2-link, var(--primary))); }
+:where(.v2-theme) .from-indigo-600 { --tw-gradient-from: hsl(var(--primary)) var(--tw-gradient-from-position); --tw-gradient-to: hsl(var(--primary) / 0) var(--tw-gradient-to-position); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+:where(.v2-theme) .border-indigo-500\/30 { border-color: hsl(var(--primary) / 0.3); }
+:where(.v2-theme) .border-indigo-500\/20 { border-color: hsl(var(--primary) / 0.2); }
+:where(.v2-theme) .border-indigo-200\/60 { border-color: hsl(var(--primary) / 0.36); }
+:where(.v2-theme) .bg-indigo-50\/40 { background-color: hsl(var(--primary) / 0.028); }
+:where(.v2-theme) .hover\:text-indigo-600:hover { color: hsl(var(--v2-link, var(--primary))); }
+:where(.v2-theme) .from-indigo-500\/10 { --tw-gradient-from: hsl(var(--primary) / 0.1) var(--tw-gradient-from-position); --tw-gradient-to: hsl(var(--primary) / 0) var(--tw-gradient-to-position); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+:where(.v2-theme) .focus-visible\:ring-indigo-500:focus-visible { --tw-ring-color: hsl(var(--primary)); }
+:where(.v2-theme) .bg-indigo-500\/15 { background-color: hsl(var(--primary) / 0.15); }
+:where(.v2-theme) .bg-indigo-50\/60 { background-color: hsl(var(--primary) / 0.042); }
+:where(.v2-theme) .to-indigo-500\/5 { --tw-gradient-to: hsl(var(--primary) / 0.05) var(--tw-gradient-to-position); }
+:where(.v2-theme) .ring-indigo-200 { --tw-ring-color: hsl(var(--primary) / 0.25); }
+:where(.v2-theme) .hover\:text-indigo-500:hover { color: hsl(var(--v2-link, var(--primary))); }
+:where(.v2-theme) .hover\:border-indigo-200:hover { border-color: hsl(var(--primary) / 0.25); }
+:where(.v2-theme) .border-indigo-600 { border-color: hsl(var(--primary)); }
+:where(.v2-theme) .border-indigo-100 { border-color: hsl(var(--primary) / 0.25); }
+:where(.v2-theme) .bg-indigo-500\/5 { background-color: hsl(var(--primary) / 0.05); }
+:where(.v2-theme) .via-indigo-400 { --tw-gradient-to: hsl(var(--primary) / 0) var(--tw-gradient-to-position); --tw-gradient-stops: var(--tw-gradient-from), hsl(var(--primary)) var(--tw-gradient-via-position), var(--tw-gradient-to); }
+:where(.v2-theme) .text-indigo-800\/90 { color: hsl(var(--v2-link, var(--primary)) / 0.9); }
+:where(.v2-theme) .text-indigo-800\/80 { color: hsl(var(--v2-link, var(--primary)) / 0.8); }
+:where(.v2-theme) .text-indigo-800 { color: hsl(var(--v2-link, var(--primary))); }
+:where(.v2-theme) .text-indigo-400 { color: hsl(var(--v2-link, var(--primary))); }
+:where(.v2-theme) .ring-indigo-500\/40 { --tw-ring-color: hsl(var(--primary) / 0.4); }
+:where(.v2-theme) .ring-indigo-500\/20 { --tw-ring-color: hsl(var(--primary) / 0.2); }
+:where(.v2-theme) .hover\:text-indigo-800:hover { color: hsl(var(--v2-link, var(--primary))); }
+:where(.v2-theme) .hover\:from-indigo-500:hover { --tw-gradient-from: hsl(var(--primary)) var(--tw-gradient-from-position); --tw-gradient-to: hsl(var(--primary) / 0) var(--tw-gradient-to-position); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+:where(.v2-theme) .hover\:border-indigo-300:hover { border-color: hsl(var(--primary) / 0.25); }
+:where(.v2-theme) .hover\:bg-indigo-600:hover { background-color: hsl(var(--primary)); }
+:where(.v2-theme) .hover\:bg-indigo-200\/80:hover { background-color: hsl(var(--primary) / 0.16); }
+:where(.v2-theme) .from-indigo-50 { --tw-gradient-from: hsl(var(--primary) / 0.25) var(--tw-gradient-from-position); --tw-gradient-to: hsl(var(--primary) / 0) var(--tw-gradient-to-position); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+:where(.v2-theme) .border-indigo-500\/15 { border-color: hsl(var(--primary) / 0.15); }
+:where(.v2-theme) .border-indigo-400 { border-color: hsl(var(--primary)); }
+:where(.v2-theme) .bg-indigo-500\/20 { background-color: hsl(var(--primary) / 0.2); }
+:where(.v2-theme) .to-indigo-600 { --tw-gradient-to: hsl(var(--primary)) var(--tw-gradient-to-position); }
+:where(.v2-theme) .to-indigo-500 { --tw-gradient-to: hsl(var(--primary)) var(--tw-gradient-to-position); }
+:where(.v2-theme) .to-indigo-50\/40 { --tw-gradient-to: hsl(var(--primary) / 0.24) var(--tw-gradient-to-position); }
+:where(.v2-theme) .to-indigo-50 { --tw-gradient-to: hsl(var(--primary) / 0.25) var(--tw-gradient-to-position); }
+:where(.v2-theme) .text-indigo-700\/80 { color: hsl(var(--v2-link, var(--primary)) / 0.8); }
+:where(.v2-theme) .text-indigo-700\/70 { color: hsl(var(--v2-link, var(--primary)) / 0.7); }
+:where(.v2-theme) .ring-indigo-500 { --tw-ring-color: hsl(var(--primary)); }
+:where(.v2-theme) .hover\:text-indigo-900:hover { color: hsl(var(--v2-link, var(--primary))); }
+:where(.v2-theme) .hover\:from-indigo-600:hover { --tw-gradient-from: hsl(var(--primary)) var(--tw-gradient-from-position); --tw-gradient-to: hsl(var(--primary) / 0) var(--tw-gradient-to-position); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+:where(.v2-theme) .hover\:border-indigo-500\/40:hover { border-color: hsl(var(--primary) / 0.4); }
+:where(.v2-theme) .hover\:border-indigo-400\/50:hover { border-color: hsl(var(--primary) / 0.5); }
+:where(.v2-theme) .hover\:bg-indigo-500\/5:hover { background-color: hsl(var(--primary) / 0.05); }
+:where(.v2-theme) .hover\:bg-indigo-500\/20:hover { background-color: hsl(var(--primary) / 0.2); }
+:where(.v2-theme) .hover\:bg-indigo-500\/15:hover { background-color: hsl(var(--primary) / 0.15); }
+:where(.v2-theme) .hover\:bg-indigo-50\/50:hover { background-color: hsl(var(--primary) / 0.035); }
+:where(.v2-theme) .hover\:bg-indigo-200:hover { background-color: hsl(var(--primary) / 0.2); }
+:where(.v2-theme) .from-indigo-500\/5 { --tw-gradient-from: hsl(var(--primary) / 0.05) var(--tw-gradient-from-position); --tw-gradient-to: hsl(var(--primary) / 0) var(--tw-gradient-to-position); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+:where(.v2-theme) .from-indigo-50\/70 { --tw-gradient-from: hsl(var(--primary) / 0.42) var(--tw-gradient-from-position); --tw-gradient-to: hsl(var(--primary) / 0) var(--tw-gradient-to-position); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+:where(.v2-theme) .from-indigo-50\/60 { --tw-gradient-from: hsl(var(--primary) / 0.36) var(--tw-gradient-from-position); --tw-gradient-to: hsl(var(--primary) / 0) var(--tw-gradient-to-position); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+:where(.v2-theme) .focus\:ring-indigo-500\/40:focus { --tw-ring-color: hsl(var(--primary) / 0.4); }
+:where(.v2-theme) .focus\:ring-indigo-500:focus { --tw-ring-color: hsl(var(--primary)); }
+:where(.v2-theme) .focus\:border-indigo-400:focus { border-color: hsl(var(--primary)); }
+:where(.v2-theme) .border-indigo-500\/50 { border-color: hsl(var(--primary) / 0.5); }
+:where(.v2-theme) .border-indigo-500\/40 { border-color: hsl(var(--primary) / 0.4); }
+:where(.v2-theme) .border-indigo-500\/25 { border-color: hsl(var(--primary) / 0.25); }
+:where(.v2-theme) .border-indigo-500 { border-color: hsl(var(--primary)); }
+:where(.v2-theme) .border-indigo-400\/60 { border-color: hsl(var(--primary) / 0.6); }
+:where(.v2-theme) .bg-indigo-400\/10 { background-color: hsl(var(--primary) / 0.07); }
+:where(.v2-theme) [fill="#6366f1" i] { fill: hsl(var(--primary)); }
+:where(.v2-theme) [stroke="#6366f1" i] { stroke: hsl(var(--primary)); }
+:where(.v2-theme) [stop-color="#6366f1" i] { stop-color: hsl(var(--primary)); }
+:where(.v2-theme) [fill="#4f46e5" i] { fill: hsl(var(--primary-hover)); }
+:where(.v2-theme) [stroke="#4f46e5" i] { stroke: hsl(var(--primary-hover)); }
+:where(.v2-theme) [stop-color="#4f46e5" i] { stop-color: hsl(var(--primary-hover)); }
+:where(.v2-theme) [fill="#5b5bd6" i] { fill: hsl(var(--primary)); }
+:where(.v2-theme) [stroke="#5b5bd6" i] { stroke: hsl(var(--primary)); }
+:where(.v2-theme) [stop-color="#5b5bd6" i] { stop-color: hsl(var(--primary)); }
+:where(.v2-theme) [fill="#818cf8" i] { fill: hsl(var(--chart-2)); }
+:where(.v2-theme) [stroke="#818cf8" i] { stroke: hsl(var(--chart-2)); }
+:where(.v2-theme) [stop-color="#818cf8" i] { stop-color: hsl(var(--chart-2)); }
+:where(.v2-theme) [fill="#a5b4fc" i] { fill: hsl(var(--chart-1)); }
+:where(.v2-theme) [stroke="#a5b4fc" i] { stroke: hsl(var(--chart-1)); }
+:where(.v2-theme) [stop-color="#a5b4fc" i] { stop-color: hsl(var(--chart-1)); }
+:where(.v2-theme) [fill="#e0e7ff" i] { fill: hsl(var(--primary) / 0.15); }
+:where(.v2-theme) [stroke="#e0e7ff" i] { stroke: hsl(var(--primary) / 0.15); }
+:where(.v2-theme) [stop-color="#e0e7ff" i] { stop-color: hsl(var(--primary) / 0.15); }
+:where(.v2-theme) [fill="#c7d2fe" i] { fill: hsl(var(--primary) / 0.3); }
+:where(.v2-theme) [stroke="#c7d2fe" i] { stroke: hsl(var(--primary) / 0.3); }
+:where(.v2-theme) [stop-color="#c7d2fe" i] { stop-color: hsl(var(--primary) / 0.3); }
+:where(.v2-theme) :is(.bg-indigo-500, .bg-indigo-600, .bg-indigo-700, .bg-\[\#6366f1\]).text-white { color: hsl(var(--primary-foreground)); }  /* white on a pale theme is unreadable; the theme picks its own button ink */
+:where(.dark .v2-theme) .text-indigo-600 { color: hsl(var(--v2-link, var(--primary))); }
+:where(.dark .v2-theme) .text-indigo-700 { color: hsl(var(--v2-link, var(--primary))); }
+.dark .v2-theme .dark\:text-indigo-400 { color: hsl(var(--v2-link, var(--primary))); }
+.dark .v2-theme .dark\:text-indigo-300 { color: hsl(var(--v2-link, var(--primary))); }
+:where(.dark .v2-theme) .text-indigo-500 { color: hsl(var(--v2-link, var(--primary))); }
+:where(.dark .v2-theme) .bg-indigo-50 { background-color: hsl(var(--primary) / 0.112); }
+:where(.dark .v2-theme) .border-indigo-200 { border-color: hsl(var(--primary) / 0.3); }
+:where(.dark .v2-theme) .bg-indigo-100 { background-color: hsl(var(--primary) / 0.192); }
+.dark .v2-theme .dark\:bg-indigo-950\/30 { background-color: hsl(var(--primary) / 0.15); }
+.dark .v2-theme .dark\:border-indigo-900 { border-color: hsl(var(--primary) / 0.35); }
+:where(.dark .v2-theme) .border-indigo-300 { border-color: hsl(var(--primary) / 0.3); }
+:where(.dark .v2-theme) .text-indigo-900 { color: hsl(var(--v2-link, var(--primary))); }
+:where(.dark .v2-theme) .hover\:bg-indigo-50:hover { background-color: hsl(var(--primary) / 0.112); }
+:where(.dark .v2-theme) .bg-indigo-50\/50 { background-color: hsl(var(--primary) / 0.056); }
+:where(.dark .v2-theme) .hover\:text-indigo-700:hover { color: hsl(var(--v2-link, var(--primary))); }
+.dark .v2-theme .dark\:text-indigo-200 { color: hsl(var(--v2-link, var(--primary))); }
+.dark .v2-theme .dark\:bg-indigo-950\/20 { background-color: hsl(var(--primary) / 0.1); }
+:where(.dark .v2-theme) .bg-indigo-50\/40 { background-color: hsl(var(--primary) / 0.045); }
+:where(.dark .v2-theme) .hover\:text-indigo-600:hover { color: hsl(var(--v2-link, var(--primary))); }
+.dark .v2-theme .dark\:border-indigo-800\/60 { border-color: hsl(var(--primary) / 0.21); }
+.dark .v2-theme .dark\:bg-indigo-950\/40 { background-color: hsl(var(--primary) / 0.2); }
+.dark .v2-theme .dark\:bg-indigo-500\/10 { background-color: hsl(var(--primary) / 0.1); }
+:where(.dark .v2-theme) .bg-indigo-50\/60 { background-color: hsl(var(--primary) / 0.067); }
+:where(.dark .v2-theme) .ring-indigo-200 { --tw-ring-color: hsl(var(--primary) / 0.3); }
+:where(.dark .v2-theme) .hover\:text-indigo-500:hover { color: hsl(var(--v2-link, var(--primary))); }
+:where(.dark .v2-theme) .hover\:border-indigo-200:hover { border-color: hsl(var(--primary) / 0.3); }
+.dark .v2-theme .dark\:bg-indigo-500\/20 { background-color: hsl(var(--primary) / 0.2); }
+:where(.dark .v2-theme) .border-indigo-100 { border-color: hsl(var(--primary) / 0.3); }
+:where(.dark .v2-theme) .text-indigo-800\/90 { color: hsl(var(--v2-link, var(--primary)) / 0.9); }
+:where(.dark .v2-theme) .text-indigo-800\/80 { color: hsl(var(--v2-link, var(--primary)) / 0.8); }
+:where(.dark .v2-theme) .text-indigo-800 { color: hsl(var(--v2-link, var(--primary))); }
+:where(.dark .v2-theme) .text-indigo-400 { color: hsl(var(--v2-link, var(--primary))); }
+:where(.dark .v2-theme) .hover\:text-indigo-800:hover { color: hsl(var(--v2-link, var(--primary))); }
+:where(.dark .v2-theme) .hover\:border-indigo-300:hover { border-color: hsl(var(--primary) / 0.3); }
+:where(.dark .v2-theme) .hover\:bg-indigo-200\/80:hover { background-color: hsl(var(--primary) / 0.256); }
+:where(.dark .v2-theme) .from-indigo-50 { --tw-gradient-from: hsl(var(--primary) / 0.3) var(--tw-gradient-from-position); --tw-gradient-to: hsl(var(--primary) / 0) var(--tw-gradient-to-position); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+.dark .v2-theme .dark\:text-indigo-300\/90 { color: hsl(var(--v2-link, var(--primary)) / 0.9); }
+.dark .v2-theme .dark\:text-indigo-300\/80 { color: hsl(var(--v2-link, var(--primary)) / 0.8); }
+.dark .v2-theme .dark\:hover\:text-indigo-200:hover { color: hsl(var(--v2-link, var(--primary))); }
+.dark .v2-theme .dark\:hover\:bg-indigo-500\/30:hover { background-color: hsl(var(--primary) / 0.3); }
+.dark .v2-theme .dark\:from-indigo-950\/30 { --tw-gradient-from: hsl(var(--primary) / 0.105) var(--tw-gradient-from-position); --tw-gradient-to: hsl(var(--primary) / 0) var(--tw-gradient-to-position); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+.dark .v2-theme .dark\:from-indigo-400 { --tw-gradient-from: hsl(var(--primary)) var(--tw-gradient-from-position); --tw-gradient-to: hsl(var(--primary) / 0) var(--tw-gradient-to-position); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+.dark .v2-theme .dark\:border-indigo-800 { border-color: hsl(var(--primary) / 0.35); }
+.dark .v2-theme .dark\:border-indigo-700 { border-color: hsl(var(--primary) / 0.35); }
+.dark .v2-theme .dark\:border-indigo-500\/40 { border-color: hsl(var(--primary) / 0.4); }
+.dark .v2-theme .dark\:border-indigo-400\/30 { border-color: hsl(var(--primary) / 0.3); }
+.dark .v2-theme .dark\:bg-indigo-500\/15 { background-color: hsl(var(--primary) / 0.15); }
+:where(.dark .v2-theme) .to-indigo-50 { --tw-gradient-to: hsl(var(--primary) / 0.3) var(--tw-gradient-to-position); }
+:where(.dark .v2-theme) .text-indigo-700\/80 { color: hsl(var(--v2-link, var(--primary)) / 0.8); }
+:where(.dark .v2-theme) .text-indigo-700\/70 { color: hsl(var(--v2-link, var(--primary)) / 0.7); }
+:where(.dark .v2-theme) .hover\:text-indigo-900:hover { color: hsl(var(--v2-link, var(--primary))); }
+:where(.dark .v2-theme) .hover\:bg-indigo-50\/50:hover { background-color: hsl(var(--primary) / 0.056); }
+:where(.dark .v2-theme) .hover\:bg-indigo-200:hover { background-color: hsl(var(--primary) / 0.32); }
+.dark .v2-theme .dark\:to-indigo-950\/30 { --tw-gradient-to: hsl(var(--primary) / 0.105) var(--tw-gradient-to-position); }
+.dark .v2-theme .dark\:to-indigo-950\/20 { --tw-gradient-to: hsl(var(--primary) / 0.07) var(--tw-gradient-to-position); }
+.dark .v2-theme .dark\:ring-indigo-500\/30 { --tw-ring-color: hsl(var(--primary) / 0.3); }
+.dark .v2-theme .dark\:ring-indigo-500\/20 { --tw-ring-color: hsl(var(--primary) / 0.2); }
+.dark .v2-theme .dark\:hover\:text-indigo-300:hover { color: hsl(var(--v2-link, var(--primary))); }
+.dark .v2-theme .dark\:hover\:text-indigo-100:hover { color: hsl(var(--v2-link, var(--primary))); }
+.dark .v2-theme .dark\:hover\:border-indigo-300\/30:hover { border-color: hsl(var(--primary) / 0.18); }
+.dark .v2-theme .dark\:hover\:bg-indigo-950:hover { background-color: hsl(var(--primary) / 0.5); }
+.dark .v2-theme .dark\:hover\:bg-indigo-500\/15:hover { background-color: hsl(var(--primary) / 0.15); }
+.dark .v2-theme .dark\:hover\:bg-indigo-500\/10:hover { background-color: hsl(var(--primary) / 0.1); }
+.dark .v2-theme .dark\:from-indigo-950\/40 { --tw-gradient-from: hsl(var(--primary) / 0.14) var(--tw-gradient-from-position); --tw-gradient-to: hsl(var(--primary) / 0) var(--tw-gradient-to-position); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+.dark .v2-theme .dark\:border-indigo-900\/40 { border-color: hsl(var(--primary) / 0.14); }
+.dark .v2-theme .dark\:border-indigo-500\/30 { border-color: hsl(var(--primary) / 0.3); }
+.dark .v2-theme .dark\:border-indigo-500\/20 { border-color: hsl(var(--primary) / 0.2); }
+.dark .v2-theme .dark\:bg-indigo-950\/50 { background-color: hsl(var(--primary) / 0.25); }
+.dark .v2-theme .dark\:bg-indigo-950 { background-color: hsl(var(--primary) / 0.5); }
+:where(.dark .v2-theme) .bg-indigo-400\/10 { background-color: hsl(var(--primary) / 0.112); }
+/* Accent in dark. The button colour (--primary, 54%) is too dim as TEXT or as
+   a hairline on the dark card, and a tint tuned on white (primary/5–10) all but
+   vanishes on dark. So in dark: every text-primary variant — faded (/60, /80),
+   hover, active, selected — reads the --v2-link step at the same opacity;
+   faint accent fills are 1.6x stronger; accent borders take the link step.
+   A component that sets its own `dark:` colour keeps it (it is heavier). */
+:where(.dark .v2-theme) .text-primary { color: hsl(var(--v2-link, var(--primary))); }
+:where(.dark .v2-theme) .hover\:text-primary:hover { color: hsl(var(--v2-link, var(--primary))); }
+:where(.dark .v2-theme) .focus\:text-primary:focus { color: hsl(var(--v2-link, var(--primary))); }
+:where(.dark .v2-theme) .focus-visible\:text-primary:focus-visible { color: hsl(var(--v2-link, var(--primary))); }
+:where(.dark .v2-theme) .data-\[state\=active\]\:text-primary[data-state="active"] { color: hsl(var(--v2-link, var(--primary))); }
+:where(.dark .v2-theme) .data-\[state\=checked\]\:text-primary[data-state="checked"] { color: hsl(var(--v2-link, var(--primary))); }
+:where(.dark .v2-theme) .data-\[active\=true\]\:text-primary[data-active="true"] { color: hsl(var(--v2-link, var(--primary))); }
+:where(.dark .v2-theme) .aria-selected\:text-primary[aria-selected="true"] { color: hsl(var(--v2-link, var(--primary))); }
+:where(.dark .v2-theme) .aria-expanded\:text-primary[aria-expanded="true"] { color: hsl(var(--v2-link, var(--primary))); }
+:where(.dark .v2-theme) .group:hover .group-hover\:text-primary { color: hsl(var(--v2-link, var(--primary))); }
+:where(.dark .v2-theme) :is(.\[\&_svg\]\:text-primary svg, .\[\&\>svg\]\:text-primary > svg) { color: hsl(var(--v2-link, var(--primary))); }
+:where(.dark .v2-theme) .text-primary\/15 { color: hsl(var(--v2-link, var(--primary)) / 0.15); }
+:where(.dark .v2-theme) .text-primary\/40 { color: hsl(var(--v2-link, var(--primary)) / 0.4); }
+:where(.dark .v2-theme) .text-primary\/45 { color: hsl(var(--v2-link, var(--primary)) / 0.45); }
+:where(.dark .v2-theme) .text-primary\/50 { color: hsl(var(--v2-link, var(--primary)) / 0.5); }
+:where(.dark .v2-theme) .text-primary\/60 { color: hsl(var(--v2-link, var(--primary)) / 0.6); }
+:where(.dark .v2-theme) .text-primary\/70 { color: hsl(var(--v2-link, var(--primary)) / 0.7); }
+:where(.dark .v2-theme) .text-primary\/75 { color: hsl(var(--v2-link, var(--primary)) / 0.75); }
+:where(.dark .v2-theme) .text-primary\/80 { color: hsl(var(--v2-link, var(--primary)) / 0.8); }
+:where(.dark .v2-theme) .text-primary\/90 { color: hsl(var(--v2-link, var(--primary)) / 0.9); }
+:where(.dark .v2-theme) .hover\:text-primary\/80:hover { color: hsl(var(--v2-link, var(--primary)) / 0.8); }
+:where(.dark .v2-theme) .bg-primary\/5 { background-color: hsl(var(--primary) / 0.08); }
+:where(.dark .v2-theme) .hover\:bg-primary\/5:hover { background-color: hsl(var(--primary) / 0.08); }
+:where(.dark .v2-theme) .bg-primary\/\[0\.03\] { background-color: hsl(var(--primary) / 0.048); }
+:where(.dark .v2-theme) .hover\:bg-primary\/\[0\.03\]:hover { background-color: hsl(var(--primary) / 0.048); }
+:where(.dark .v2-theme) .bg-primary\/\[0\.04\] { background-color: hsl(var(--primary) / 0.064); }
+:where(.dark .v2-theme) .hover\:bg-primary\/\[0\.04\]:hover { background-color: hsl(var(--primary) / 0.064); }
+:where(.dark .v2-theme) .bg-primary\/\[0\.05\] { background-color: hsl(var(--primary) / 0.08); }
+:where(.dark .v2-theme) .hover\:bg-primary\/\[0\.05\]:hover { background-color: hsl(var(--primary) / 0.08); }
+:where(.dark .v2-theme) .bg-primary\/\[0\.06\] { background-color: hsl(var(--primary) / 0.096); }
+:where(.dark .v2-theme) .hover\:bg-primary\/\[0\.06\]:hover { background-color: hsl(var(--primary) / 0.096); }
+:where(.dark .v2-theme) .bg-primary\/\[0\.07\] { background-color: hsl(var(--primary) / 0.112); }
+:where(.dark .v2-theme) .hover\:bg-primary\/\[0\.07\]:hover { background-color: hsl(var(--primary) / 0.112); }
+:where(.dark .v2-theme) .bg-primary\/\[0\.08\] { background-color: hsl(var(--primary) / 0.128); }
+:where(.dark .v2-theme) .hover\:bg-primary\/\[0\.08\]:hover { background-color: hsl(var(--primary) / 0.128); }
+:where(.dark .v2-theme) .bg-primary\/10 { background-color: hsl(var(--primary) / 0.16); }
+:where(.dark .v2-theme) .hover\:bg-primary\/10:hover { background-color: hsl(var(--primary) / 0.16); }
+:where(.dark .v2-theme) .border-primary\/10 { border-color: hsl(var(--v2-link, var(--primary)) / 0.1); }
+:where(.dark .v2-theme) .hover\:border-primary\/10:hover { border-color: hsl(var(--v2-link, var(--primary)) / 0.1); }
+:where(.dark .v2-theme) .border-primary\/15 { border-color: hsl(var(--v2-link, var(--primary)) / 0.15); }
+:where(.dark .v2-theme) .hover\:border-primary\/15:hover { border-color: hsl(var(--v2-link, var(--primary)) / 0.15); }
+:where(.dark .v2-theme) .border-primary\/20 { border-color: hsl(var(--v2-link, var(--primary)) / 0.2); }
+:where(.dark .v2-theme) .hover\:border-primary\/20:hover { border-color: hsl(var(--v2-link, var(--primary)) / 0.2); }
+:where(.dark .v2-theme) .border-primary\/25 { border-color: hsl(var(--v2-link, var(--primary)) / 0.25); }
+:where(.dark .v2-theme) .hover\:border-primary\/25:hover { border-color: hsl(var(--v2-link, var(--primary)) / 0.25); }
+:where(.dark .v2-theme) .border-primary\/30 { border-color: hsl(var(--v2-link, var(--primary)) / 0.3); }
+:where(.dark .v2-theme) .hover\:border-primary\/30:hover { border-color: hsl(var(--v2-link, var(--primary)) / 0.3); }
+:where(.dark .v2-theme) .border-primary\/40 { border-color: hsl(var(--v2-link, var(--primary)) / 0.4); }
+:where(.dark .v2-theme) .hover\:border-primary\/40:hover { border-color: hsl(var(--v2-link, var(--primary)) / 0.4); }
+:where(.dark .v2-theme) .border-primary\/50 { border-color: hsl(var(--v2-link, var(--primary)) / 0.5); }
+:where(.dark .v2-theme) .hover\:border-primary\/50:hover { border-color: hsl(var(--v2-link, var(--primary)) / 0.5); }
+:where(.dark .v2-theme) .border-primary\/60 { border-color: hsl(var(--v2-link, var(--primary)) / 0.6); }
+:where(.dark .v2-theme) .hover\:border-primary\/60:hover { border-color: hsl(var(--v2-link, var(--primary)) / 0.6); }
+:where(.dark .v2-theme) .\[\&\>\[data-slot\=bubble-content\]\]\:text-primary > [data-slot=bubble-content] { color: hsl(var(--v2-link, var(--primary))); }
+:where(.dark .v2-theme) .\[\&\:hover_svg\]\:text-primary:hover svg { color: hsl(var(--v2-link, var(--primary))); }
+:where(.dark .v2-theme) .\!text-primary { color: hsl(var(--v2-link, var(--primary))) !important; }
+:where(.dark .v2-theme) .group:focus-within .group-focus-within\:text-primary { color: hsl(var(--v2-link, var(--primary))); }
+:where(.dark .v2-theme) .group.toast .group-\[\.toast\]\:text-primary { color: hsl(var(--v2-link, var(--primary))); }
+:where(.dark .v2-theme) .disabled\:text-primary:disabled { color: hsl(var(--v2-link, var(--primary))); }
+:where(.dark .v2-theme) a.\[a\&\]\:hover\:text-primary:hover { color: hsl(var(--v2-link, var(--primary))); }
+:where(.dark .v2-theme) .\[\&_a\]\:text-primary a { color: hsl(var(--v2-link, var(--primary))); }
+:where(.dark .v2-theme) .\[\&\[data-active\=true\]_svg\]\:text-primary[data-active=true] svg { color: hsl(var(--v2-link, var(--primary))); }
+:where(.dark .v2-theme) .\[\&\[data-active\=true\]\>svg\]\:text-primary[data-active=true] > svg { color: hsl(var(--v2-link, var(--primary))); }
+:where(.dark .v2-theme) .\[\&\>button\:hover\]\:text-primary > button:hover { color: hsl(var(--v2-link, var(--primary))); }
+:where(.dark .v2-theme) .\[\&\:focus-visible_svg\]\:text-primary:focus-visible svg { color: hsl(var(--v2-link, var(--primary))); }
+/* <<< THEME NET */

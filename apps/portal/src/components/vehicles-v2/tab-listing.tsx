@@ -89,7 +89,7 @@ export function ListingTab<K extends string>({
             href={`${siteUrl}/fleet`}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-primary transition-opacity hover:opacity-70"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] transition-opacity hover:opacity-70"
           >
             View the site
             <ArrowUpRight className="size-4" />

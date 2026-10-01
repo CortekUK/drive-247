@@ -123,7 +123,7 @@ export function SectionVerification({ c, onJump, canEdit, drift }: SectionProps 
     success: "bg-success-light text-success",
     warning: "bg-warning-light text-warning",
     destructive: "bg-destructive/10 text-destructive",
-    primary: "bg-primary-light text-primary",
+    primary: "bg-primary-light text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]",
     muted: "bg-muted text-muted-foreground",
   } as const;
 
@@ -140,7 +140,7 @@ export function SectionVerification({ c, onJump, canEdit, drift }: SectionProps 
         <button
           type="button"
           onClick={() => onJump("identity")}
-          className="cursor-pointer font-medium text-primary underline-offset-2 hover:underline"
+          className="cursor-pointer font-medium text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] underline-offset-2 hover:underline"
         >
           Identity
         </button>
@@ -148,7 +148,7 @@ export function SectionVerification({ c, onJump, canEdit, drift }: SectionProps 
         <button
           type="button"
           onClick={() => onJump("licence")}
-          className="cursor-pointer font-medium text-primary underline-offset-2 hover:underline"
+          className="cursor-pointer font-medium text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] underline-offset-2 hover:underline"
         >
           Licence &amp; driving
         </button>
@@ -401,7 +401,7 @@ export function SectionVerification({ c, onJump, canEdit, drift }: SectionProps 
                   <button
                     type="button"
                     onClick={() => onJump("consent")}
-                    className="cursor-pointer font-medium text-primary underline-offset-2 hover:underline"
+                    className="cursor-pointer font-medium text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] underline-offset-2 hover:underline"
                   >
                     Consent
                   </button>{" "}

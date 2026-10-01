@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { Search, Link2, Check, Mail, Phone, UserRound, ShieldCheck, CalendarDays, CarFront } from "lucide-react";
-import { motion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
+import { motionRise } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
 export interface CustomerLite {
@@ -29,6 +30,7 @@ interface CustomerListProps {
 }
 
 export function CustomerList({ selected, onSelect, onInvite, customers }: CustomerListProps) {
+  const reduceMotion = useReducedMotion();
   // No mock fallback. The legacy source substituted six invented customers when
   // the tenant had none, but these ids ("c1"…) are not UUIDs — selecting one
   // walks the operator through the whole flow and then fails at insert. An
@@ -107,9 +109,7 @@ export function CustomerList({ selected, onSelect, onInvite, customers }: Custom
                   </div>
                   {isActive && (
                     <motion.span
-                      initial={{ scale: 0.6, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      transition={{ duration: 0.18 }}
+                      {...motionRise(reduceMotion)}
                       className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground"
                     >
                       <Check className="h-3 w-3" strokeWidth={3} />
@@ -144,7 +144,7 @@ export function CustomerList({ selected, onSelect, onInvite, customers }: Custom
 function CustomerInfo({ customer }: { customer: CustomerLite }) {
   // MOCK enrichment — these would come from the customer record in the real flow.
   const stats = [
-    { icon: ShieldCheck, label: "Verification", value: "Verified", accent: "text-emerald-600" },
+    { icon: ShieldCheck, label: "Verification", value: "Verified", accent: "text-emerald-600 dark:text-emerald-400" },
     { icon: CalendarDays, label: "Member since", value: "Jan 2025" },
     { icon: CarFront, label: "Total rentals", value: "3" },
   ];
@@ -153,12 +153,12 @@ function CustomerInfo({ customer }: { customer: CustomerLite }) {
     <div className="p-6">
       {/* Identity */}
       <div className="flex items-center gap-4">
-        <span className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-primary text-lg font-semibold text-white">
+        <span className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-primary text-lg font-semibold text-primary-foreground">
           {initials(customer.name)}
         </span>
         <div className="min-w-0">
           <h2 className="text-xl font-semibold text-foreground truncate">{customer.name}</h2>
-          <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-600">
+          <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
             <ShieldCheck className="h-3 w-3" />
             Verified customer
           </span>

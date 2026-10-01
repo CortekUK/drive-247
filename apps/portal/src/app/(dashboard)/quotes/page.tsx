@@ -17,7 +17,9 @@ import {
 import { notFound } from "next/navigation";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
-import { useIsAreaHidden } from "@/lib/lean-context";
+import { useIsAreaHidden, useIsLean } from "@/lib/lean-context";
+import { useForcedEmptyState } from "@/hooks/use-forced-empty-state";
+import { QuotesTeachingEmptyState } from "@/components/empty-states/quotes-empty-state";
 import { useFleetQuote, type FleetQuoteSearch } from "@/hooks/use-fleet-quote";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useAuditLog } from "@/hooks/use-audit-log";
@@ -101,6 +103,15 @@ export default function FleetQuotesPage() {
   const [note, setNote] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+
+  // Teaching empty state (illustration-guide §4a). Quotes are not stored, so
+  // "empty" is the moment before the operator starts one on this visit: lean
+  // tenants see the teaching state until they press Start, then the generator
+  // exactly as before. The /dev force switch sits inside the lean gate.
+  const leanTenant = useIsLean();
+  const devForceEmpty = useForcedEmptyState("quotes");
+  const [quoteStarted, setQuoteStarted] = useState(false);
+  const teachEmptyQuotes = leanTenant && !quoteStarted && (result === null || devForceEmpty);
 
   const currency = tenant?.currency_code || "USD";
   const companyName = tenant?.company_name || "Vehicle Rental Quote";
@@ -394,6 +405,10 @@ export default function FleetQuotesPage() {
         </p>
       </div>
 
+      {teachEmptyQuotes ? (
+        <QuotesTeachingEmptyState onStartQuote={() => setQuoteStarted(true)} />
+      ) : (
+      <>
       <Card>
         <CardHeader>
           <CardTitle>1. Rental period</CardTitle>
@@ -529,6 +544,8 @@ export default function FleetQuotesPage() {
             </Card>
           )}
         </>
+      )}
+      </>
       )}
     </div>
   );

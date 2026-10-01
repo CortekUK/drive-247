@@ -51,7 +51,13 @@ import {
   type ListTone,
 } from "@/components/shared/list-table-v2";
 import { useV2 } from "@/lib/v2-context";
+import { AutoSkeleton } from "@/components/skeleton-v2/auto-skeleton";
+import { skeletonRows } from "@/lib/skeleton-data";
+import { useSkeletonLoading } from "@/hooks/use-skeleton-loading";
 import { HEADER_ACTIONS_V2, HEADER_PRIMARY_V2, HeaderIconButton } from "@/components/shared/header-icon-button-v2";
+import { useIsLean } from "@/lib/lean-context";
+import { useForcedEmptyState } from "@/hooks/use-forced-empty-state";
+import { FinesEmptyState } from "@/components/empty-states/fines-empty-state";
 
 // v2 only: the Status column's hue, by meaning, keyed on the lower-cased label.
 // Open waits on the operator (charge or waive); Charged, Partially Paid and the
@@ -95,6 +101,30 @@ const formatFineDateV2 = (value: string | null | undefined): string | null => {
   return d.getFullYear() === new Date().getFullYear() ? FINE_DATE_V2.format(d) : FINE_DATE_WITH_YEAR_V2.format(d);
 };
 
+/** Placeholder fines for the v2 skeleton: only their shapes are ever seen. */
+const SKELETON_FINES: EnhancedFine[] = skeletonRows(8, (f) => ({
+  id: f.id,
+  type: f.pick(['PCN', 'Speeding', 'Toll']),
+  reference_no: f.word(8, 10),
+  issue_date: f.date().slice(0, 10),
+  due_date: f.date(f.int(-30, 10)).slice(0, 10),
+  amount: f.money(30, 400),
+  status: f.pick(['Open', 'Charged', 'Paid', 'Waived']),
+  notes: null,
+  customer_id: null,
+  vehicle_id: f.id,
+  created_at: f.date(),
+  rental_id: null,
+  customers: { name: f.text(2, 3) },
+  vehicles: { reg: f.word(6, 8), make: f.word(4, 8), model: f.word(3, 7) },
+  rentals: { rental_number: f.word(6, 7) },
+  authority_payments: [],
+  isOverdue: false,
+  daysUntilDue: 10,
+  hasAuthorityPayments: false,
+  isAuthoritySettled: false,
+}));
+
 const FinesList = () => {
   const router = useRouter();
   const { toast } = useToast();
@@ -126,7 +156,7 @@ const FinesList = () => {
   const v2Chrome = useV2("chrome");
 
   // Fetch fines data with current filters
-  const { data: finesData, isLoading, error } = useFinesData({
+  const { data: finesData, isLoading: finesLoading, error } = useFinesData({
     filters,
     sortBy,
     sortOrder,
@@ -138,12 +168,34 @@ const FinesList = () => {
   });
 
   // All fines with pagination
-  const allFines = finesData?.fines || [];
+  const isLoading = useSkeletonLoading(finesLoading);
+  // v2: while the fines load, the table renders these placeholder rows and
+  // <AutoSkeleton> turns them into the skeleton. v1 keeps its loading line.
+  const allFines = v2Chrome && isLoading ? SKELETON_FINES : (finesData?.fines || []);
   const totalFines = allFines.length;
   const totalPages = Math.ceil(totalFines / pageSize);
   const startIndex = (currentPage - 1) * pageSize;
   const endIndex = Math.min(startIndex + pageSize, totalFines);
   const filteredFines = allFines.slice(startIndex, endIndex);
+
+  // No fines at all, rather than "the filters matched none": the query ran
+  // with no filter set and came back empty. Lean canary only; everyone else
+  // renders exactly what they did before. `devForceEmpty` is the /dev preview
+  // switch — inert outside development, and inside the lean gate.
+  const devForceEmpty = useForcedEmptyState("fines");
+  const leanTenant = useIsLean();
+  const finesFiltered =
+    filters.status.length > 0 ||
+    !!filters.search ||
+    !!filters.vehicleSearch ||
+    !!filters.customerSearch ||
+    !!filters.issueDateFrom ||
+    !!filters.issueDateTo ||
+    !!filters.dueDateFrom ||
+    !!filters.dueDateTo ||
+    !!filters.quickFilter;
+  const teachEmptyFines =
+    leanTenant && ((!isLoading && !error && allFines.length === 0 && !finesFiltered) || devForceEmpty);
 
   // Reset to page 1 when filters change
   const handleFiltersChange = (newFilters: FineFilterState) => {
@@ -747,6 +799,9 @@ const FinesList = () => {
             line (HEADER_ACTIONS_V2 / HEADER_PRIMARY_V2, team lead Sep 16 2026).
             v1 keeps "flex items-center gap-2" and its outline icon Button byte
             for byte. */}
+        {/* No fines yet (lean only): the heading stays, its controls step
+            aside — the empty state below carries Add. */}
+        {!teachEmptyFines && (
         <div className={`flex items-center gap-2${v2Chrome ? ` ${HEADER_ACTIONS_V2}` : ""}`}>
           {allFines.length > 0 && (
             v2Chrome ? (
@@ -771,8 +826,13 @@ const FinesList = () => {
             </Button>
           )}
         </div>
+        )}
       </div>
 
+      {teachEmptyFines ? (
+        <FinesEmptyState onAddFine={canEdit('fines') ? () => setShowAddFineDialog(true) : undefined} />
+      ) : (
+      <>
       {/* KPIs */}
       <FineKPIs />
 
@@ -795,11 +855,11 @@ const FinesList = () => {
       )}
 
       {/* Fines Table */}
-      {isLoading ? (
+      {isLoading && !v2Chrome ? (
         <div className="text-center py-8">Loading fines...</div>
       ) : (
         v2Chrome && allFines.length > 0 ? (
-          renderFinesTableV2()
+          <AutoSkeleton loading={isLoading}>{renderFinesTableV2()}</AutoSkeleton>
         ) : v2Chrome && allFines.length === 0 ? (
           // v2, nothing to list: the v1 empty row's message on its own, with
           // no table header or View column around it, as the other v2 lists
@@ -853,6 +913,8 @@ const FinesList = () => {
           )}
         </>
         )
+      )}
+      </>
       )}
     </div>
 

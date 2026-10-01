@@ -9,6 +9,8 @@ import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { Search, Calendar, X, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useV2 } from "@/lib/v2-context";
+import { usePageSearch } from "@/components/shared/layout/page-search-slot";
 
 interface FineFiltersProps {
   onFiltersChange: (filters: FineFilterState) => void;
@@ -46,6 +48,21 @@ export const FineFilters = ({ onFiltersChange }: FineFiltersProps) => {
   const [statusOpen, setStatusOpen] = useState(false);
   const [issueDateOpen, setIssueDateOpen] = useState(false);
   const [dueDateOpen, setDueDateOpen] = useState(false);
+
+  /* v2: the search lives in the top bar (page-search-slot.tsx). The bar already
+     waits 400ms before pushing, so it commits straight to the filter rather
+     than through `localSearch`'s second 400ms. */
+  const v2Chrome = useV2("chrome");
+  usePageSearch(
+    v2Chrome
+      ? {
+          placeholder: "Search by reference, vehicle, or customer…",
+          value: filters.search || "",
+          onChange: (next) => updateFilter("search", next),
+          scopeLabel: "Fines",
+        }
+      : null,
+  );
 
   // Debounce search
   useEffect(() => {
@@ -130,7 +147,8 @@ export const FineFilters = ({ onFiltersChange }: FineFiltersProps) => {
   return (
     <div>
       <div className="flex flex-wrap gap-3 items-center">
-        {/* Search */}
+        {/* Search — v2 draws it in the top bar (usePageSearch above). */}
+        {!v2Chrome && (
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
           <Input
@@ -140,6 +158,7 @@ export const FineFilters = ({ onFiltersChange }: FineFiltersProps) => {
             className="pl-10 h-8 text-sm"
           />
         </div>
+        )}
 
         {/* Status + Issue Date + Due Date grouped */}
         <div className="flex items-center">

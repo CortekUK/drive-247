@@ -23,6 +23,12 @@ export type AgreementStatusV2 = 'signed' | 'pending' | 'failed';
 
 export type AgreementTemplateCategoryV2 = 'standard' | 'payg' | 'extension' | 'installment';
 
+/**
+ * `agreement_templates.template_status` (ops/agreement_templates_status_v2.sql).
+ * Only an `active` template can be sent, picked for a rental, or be the default.
+ */
+export type AgreementTemplateStatusV2 = 'draft' | 'active' | 'archived';
+
 export interface AgreementTemplateV2 {
   id: string;
   name: string;
@@ -31,6 +37,8 @@ export interface AgreementTemplateV2 {
   /** `agreement_templates.is_active === true`: the template a rental sends. */
   isDefault: boolean;
   updatedAt: string | null;
+  /** Optional so older fixtures still type; a row without one reads as active. */
+  status?: AgreementTemplateStatusV2;
 }
 
 export interface AgreementRowV2 {
@@ -46,6 +54,8 @@ export interface AgreementRowV2 {
   rentalId: string | null;
   /** `rentals.rental_number`, else the first 8 characters of the rental id. */
   rentalRef: string | null;
+  /** The customer the agreement is for: the rental's customer, or the individual agreement's `customer_id` (null when sent to someone who is not a customer). */
+  customerId?: string | null;
   /** The signing provider's document id. */
   documentId: string | null;
   templateId: string | null;

@@ -23,8 +23,10 @@ import { HeaderSearch } from "@/components/shared/layout/header-search";
 import { UserMenu } from "@/components/shared/layout/user-menu";
 import { AppSidebar } from "@/components/shared/layout/app-sidebar";
 import { useV2 } from "@/lib/v2-context";
+import { GenericFrameSkeleton, ShapeSkeleton, useShapeRecorder } from "@/components/skeleton-v2/shape-snapshot";
 import { AppSidebarV2 } from "@/components/shared/layout/app-sidebar-v2";
 import { TopBarV2 } from "@/components/shared/layout/top-bar-v2";
+import { MobileTabBar } from "@/components/shared/layout/mobile-tab-bar";
 import { TraxV2Provider } from "@/components/trax/support/trax-support-context";
 import { TraxPanel } from "@/components/trax/trax-panel";
 import { SupportRailProvider } from "../../../../../shared/trax-support/support-rail";
@@ -475,6 +477,18 @@ export default function DashboardLayout({
     (!!tenant || tenantLoading) &&
     !gateStateKnown;
 
+  // v2: remember each route's shape once it has loaded, so the next cold load
+  // can draw it while sign-in and billing are checked (shape-snapshot.tsx).
+  useShapeRecorder(v2Chrome && authReady && !holdForGateState && tenant?.status !== "suspended");
+  // The first-load skeleton: v2 draws the route as it last looked (the generic
+  // one on a first visit); v1 keeps its generic skeleton exactly as it was.
+  const frameWash = v2Theme ? "bg-background bg-app-gradient" : "bg-background";
+  const loadingView = v2Chrome ? (
+    <ShapeSkeleton className={frameWash} fallback={<GenericFrameSkeleton className={frameWash} />} />
+  ) : (
+    <LoadingSkeleton />
+  );
+
   useEffect(() => {
     if (!loading) {
       // Signed out — go to login.
@@ -525,7 +539,7 @@ export default function DashboardLayout({
 
   // Show loading skeleton while checking auth
   if (loading) {
-    return <LoadingSkeleton />;
+    return loadingView;
   }
 
   // Signed in, but we could not load the profile. Offer a way out instead of
@@ -552,12 +566,12 @@ export default function DashboardLayout({
 
   // Not authenticated - show nothing while redirecting
   if (!user || !appUser || !appUser.is_active) {
-    return <LoadingSkeleton />;
+    return loadingView;
   }
 
   // Billing state not yet known — do not paint an unprotected dashboard.
   if (holdForGateState) {
-    return <LoadingSkeleton />;
+    return loadingView;
   }
 
   // Suspended tenants are frozen: no dashboard, no way past this screen. Only a
@@ -567,7 +581,7 @@ export default function DashboardLayout({
   }
 
   return (
-    <DynamicThemeProvider>
+    <DynamicThemeProvider fallback={v2Chrome ? loadingView : undefined}>
       {/* The full-width system announcement banner, for every tenant in both
           chromes. It is `position: fixed` across the top of the viewport and
           renders its own in-flow spacer, so it sits OUTSIDE the sidebar wrapper
@@ -624,6 +638,8 @@ export default function DashboardLayout({
            which is how Messages and Trax found it, and is now true of every v2
            route. No attribute at all on a window-scrolling v1 page. */
         data-bounded-height={boundedShell ? "" : undefined}
+        /* What the shape recorder measures (shape-snapshot.tsx); v2 only. */
+        data-shape-root={v2Chrome ? "" : undefined}
       >
         <TraxWrap>
         <SearchSlotWrap>
@@ -816,7 +832,7 @@ export default function DashboardLayout({
             className={
               isBoundedHeight
                 ? `flex min-h-0 flex-1 flex-col overflow-hidden p-0${v2Chrome ? " min-w-0" : ""}`
-                : `flex flex-1 flex-col gap-4 p-4${v2Chrome ? " min-h-0 min-w-0 overflow-y-auto overflow-x-hidden outline-none md:[header+&]:pt-0 md:[header+&>*:first-child]:-mt-3.5" : " pt-0"}`
+                : `flex flex-1 flex-col gap-4 p-4${v2Chrome ? " min-h-0 min-w-0 overflow-y-auto overflow-x-hidden outline-none md:[header+&]:pt-0 md:[header+&>*:first-child]:-mt-3.5 max-md:pb-[calc(env(safe-area-inset-bottom,0px)+4.5rem)]" : " pt-0"}`
             }
           >
             {children}
@@ -917,6 +933,10 @@ export default function DashboardLayout({
             own that nothing reaches any more — it comes out with the v1 file
             when this area is widened, not before. */}
         {v2Chrome ? <FeedbackDialogV2 /> : <FeedbackDialog />}
+        {/* v2 phone navigation (mobile-tab-bar.tsx). Not in the bounded
+            workspaces (Messages, Trax, Support), whose own composers own the
+            bottom edge. */}
+        {v2Chrome && !isBoundedHeight && <MobileTabBar />}
         <FeedbackForcePrompt suppressed={promptsSuppressed} />
 
         {/* First-login nudge toward the welcome pack. Dismissible, and

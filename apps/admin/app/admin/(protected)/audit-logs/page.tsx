@@ -278,7 +278,7 @@ function TenantPicker({
       </button>
 
       {open && (
-        <div className="absolute z-[200] mt-1 w-full rounded-md border bg-popover shadow-md animate-in fade-in-0 zoom-in-95">
+        <div className="absolute z-[200] mt-1 w-full rounded-md border bg-popover shadow-md animate-in fade-in-0 slide-in-from-top-3 duration-200 ease-out motion-reduce:animate-none">
           <div className="p-2 border-b border-border/40">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
