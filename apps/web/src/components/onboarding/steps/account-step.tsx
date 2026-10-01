@@ -413,21 +413,27 @@ export function AccountStep({
   };
 
   /**
-   * "Continue with Google" — validated BEFORE the browser leaves.
+   * "Continue with Google" — straight through, nothing asked first.
    *
-   * The redirect is one-way: an operator who is bounced to Google with an empty
-   * business name comes back signed in, with a real auth user, and has to be
-   * asked for it afterwards. Checking here means the only thing that can go
-   * wrong on the far side is Google itself.
+   * This used to validate the business name and web address BEFORE leaving,
+   * reasoning that "the redirect is one-way: an operator who is bounced to
+   * Google with an empty business name comes back signed in, with a real auth
+   * user, and has to be asked for it afterwards."
+   *
+   * Being asked afterwards is the point. `accountMode` becomes `"tenant"` on
+   * the far side and the step drops to exactly those fields, so the question is
+   * already asked in the one place it belongs — after the identity exists.
+   * Demanding them first made the frictionless path the longest one on screen:
+   * the operator met a form, filled it in, and only then got to the button that
+   * was supposed to save them the typing.
+   *
+   * Whatever HAS been typed is still carried across — `tenantValues()` is sent
+   * either way, and the draft survives the redirect — so someone who filled the
+   * fields in before noticing the button loses nothing.
    */
   const handleGoogle = () => {
     if (busy) return;
-    const found = tenantErrors();
-    setErrors(found ?? {});
-    if (found) {
-      focusFirst(found, TENANT_FIELD_ORDER);
-      return;
-    }
+    setErrors({});
     onGoogle(tenantValues());
   };
 
