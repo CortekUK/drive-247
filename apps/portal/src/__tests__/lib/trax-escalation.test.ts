@@ -147,3 +147,44 @@ describe('the authenticated tenant cannot be overridden from the prompt', () => 
     expect(auth.superAdmin).toBe(true);
   });
 });
+
+/**
+ * A long message is not an attachment.
+ *
+ * The attachment rule was `[A-Za-z0-9+/=_-]{100,}` — any hundred characters
+ * without a space. That is a LENGTH test, not a base64 test, and a support
+ * message typed as one long unbroken string matched it: the operator's whole
+ * message was replaced with "[attachment removed]" and the text was lost.
+ * Reported 1 Oct 2026 from the portal's support tab.
+ *
+ * Base64 is distinguishable by its ALPHABET, not its length — mixed case with
+ * digits, usually `+`, `/` or `=` padding. Erring towards keeping text is the
+ * right way round: a missed blob is noise in a ticket, a wrongly redacted
+ * message is a report nobody can read.
+ */
+describe('redactSupportText keeps long prose and still strips attachments', () => {
+  it('keeps a long message typed without spaces', () => {
+    const typed = 'dkeniidnekinfkiewnfkienfkiewnikfnewikfnlewnfkiewnfklenwfnewiknfkiewnfkiewnkfinewifnkienf'.repeat(4);
+    const out = redactSupportText(typed, 4000);
+    expect(out).not.toContain('[attachment removed]');
+    expect(out.startsWith('dkeniidnekinf')).toBe(true);
+  });
+
+  it('keeps a long ordinary sentence', () => {
+    const prose = 'The customer called about a payment that failed twice and wants to know whether the hold was released. '.repeat(6);
+    expect(redactSupportText(prose, 4000)).not.toContain('[attachment removed]');
+  });
+
+  it('still strips a pasted data: URI', () => {
+    const out = redactSupportText('here is the screenshot data:image/png;base64,iVBORw0KGgoAAAANSUhEUg== thanks', 4000);
+    expect(out).toContain('[attachment removed]');
+    expect(out).not.toContain('iVBORw0KGgo');
+  });
+
+  it('still strips a bare base64 blob', () => {
+    const blob = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='.repeat(3);
+    const out = redactSupportText(`look at this ${blob} please`, 4000);
+    expect(out).toContain('[attachment removed]');
+    expect(out).not.toContain('iVBORw0KGgo');
+  });
+});
