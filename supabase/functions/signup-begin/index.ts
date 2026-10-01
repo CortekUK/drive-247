@@ -21,6 +21,8 @@ import { handleCors, errorResponse, jsonResponse } from "../_shared/cors.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { getSignupPlan } from "../_shared/signup-plans.ts";
 import { getSignupStripeMode } from "../_shared/signup-stripe.ts";
+import { mintOtp, otpEmailHtml } from "../_shared/signup-otp.ts";
+import { sendEmail } from "../_shared/resend-service.ts";
 import {
   checkThrottle,
   clientIp,
@@ -34,6 +36,16 @@ import {
 import { clean, EMAIL_RE, MAX } from "../_shared/tenant-provisioning.ts";
 
 const LOG = "[signup-begin]";
+
+/**
+ * Email verification, off by default.
+ *
+ * ON means a new account is created UNCONFIRMED and must clear
+ * `signup-verify-otp` before it can go further. Only turn it on once the client
+ * can render the verification screen — an unconfirmed user with nowhere to go
+ * is the dead end the old `email_confirm: true` comment warned about.
+ */
+const OTP_ENABLED = Deno.env.get("SIGNUP_OTP_ENABLED") === "true";
 
 /** A human cannot type a name, an email and a 10-char password this fast. */
 const MIN_DWELL_MS = 1500;
@@ -314,7 +326,22 @@ Deno.serve(async (req) => {
     const { data: created, error: createError } = await supabase.auth.admin.createUser({
       email,
       password,
-      email_confirm: true,
+      /*
+       * OTP, BEHIND A FLAG.
+       *
+       * This was an unconditional `true`, with the note: "apps/web has NO
+       * confirmation route to send anyone to, and `custom-auth-email`
+       * explicitly skips signup emails — a pending confirmation would be a dead
+       * end nobody could clear." Both halves of that are now addressed: the
+       * route is `signup-verify-otp`, and the code is sent from here rather
+       * than by GoTrue, so `custom-auth-email` is not involved at all.
+       *
+       * It stays flag-gated because the dead end it describes is real: if the
+       * verification screen is not deployed, an unconfirmed user has nowhere to
+       * go. SIGNUP_OTP_ENABLED must only be turned on once the client can show
+       * that screen.
+       */
+      email_confirm: !OTP_ENABLED,
       user_metadata: { name: fullName, role: "head_admin" },
       app_metadata: { [SIGNUP_META_KEY]: meta },
     });
@@ -354,6 +381,33 @@ Deno.serve(async (req) => {
       plan_id: plan.id,
       outcome: "ok",
     });
+
+    /*
+     * THE CODE. Sent from here rather than by GoTrue, so `custom-auth-email`
+     * (which skips signup mail) is not in the path at all.
+     *
+     * A send failure is NOT fatal and must never be: the account exists, and
+     * failing the whole call would leave the user staring at an error for a
+     * signup that actually succeeded. They land on the verification screen and
+     * use Resend, which is the same path as "it went to spam".
+     */
+    if (OTP_ENABLED) {
+      try {
+        const { code: otpCode, otp } = await mintOtp();
+        await supabase.auth.admin.updateUserById(created.user.id, {
+          app_metadata: { d247_signup: { ...meta, otp } },
+        });
+        const sent = await sendEmail(
+          email,
+          "Your Drive247 verification code",
+          otpEmailHtml(otpCode),
+          supabase,
+        );
+        if (!sent?.success) console.error(`${LOG} OTP email not delivered for ${created.user.id}`);
+      } catch (e) {
+        console.error(`${LOG} OTP send threw for ${created.user.id}`, e);
+      }
+    }
 
     // The password is NOT echoed and NOT stored anywhere: the browser already
     // has it and signs in with it immediately.

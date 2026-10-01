@@ -95,6 +95,19 @@ export interface SignupMetadata {
   paidAt?: string;
   business?: SignupBusinessSnapshot;
   /**
+   * The in-flight email verification code — the HASH, never the code. Present
+   * only between `signup-begin` and `signup-verify-otp`, and deleted the moment
+   * it is spent so it cannot be replayed. See _shared/signup-otp.ts.
+   */
+  otp?: {
+    hash: string;
+    expiresAt: string;
+    attempts: number;
+    sentAt: string;
+  };
+  /** Set by `signup-verify-otp`. Absent on every signup made before OTP existed. */
+  emailVerifiedAt?: string;
+  /**
    * Set the moment `signup-provision` inserts the tenant row, and cleared when
    * it is promoted to `tenantId` (or rolled back).
    *
