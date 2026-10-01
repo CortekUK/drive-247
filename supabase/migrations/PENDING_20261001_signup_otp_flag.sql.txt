@@ -32,7 +32,7 @@ ALTER TABLE public.admin_settings
   ADD COLUMN IF NOT EXISTS signup_otp_enabled boolean NOT NULL DEFAULT false;
 
 COMMENT ON COLUMN public.admin_settings.signup_otp_enabled IS
-  'Super-admin switch (Signup Plans tab): when true, self-serve signup emails a 6-digit code and will not continue to the company details or payment until the address is verified. Read by supabase/functions/signup-begin as "true if any row is true". Default off; a failed read is treated as off.';
+  'Super-admin switch (Signup Plans tab): when true, self-serve signup emails a 6-digit code and will not continue to the company details or payment until the address is verified. Read by supabase/functions/signup-begin as "true if any row is true". Default off, and a failed read is treated as off.';
 
 -- Make the API see the new column straight away, rather than answering
 -- "column does not exist" until its schema cache next refreshes.
