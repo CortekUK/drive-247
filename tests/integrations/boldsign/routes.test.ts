@@ -744,7 +744,11 @@ describe("boldsign/routes — the guards the other routes do hold", () => {
     const at = positionsOf(src, {
       missingId: "Missing agreement ID",
       notFound: "Agreement not found",
-      alreadySigned: "already been signed",
+      // Was "already been signed". The route now answers a renter who has
+      // already signed with a page headed "Already signed" rather than a line
+      // of plain text, and decides it from DONE_STATUSES across every
+      // agreement on the rental — see the signing-redirect suite.
+      alreadySigned: "Already signed",
       link: "getEmbeddedSignLink",
       redirect: "NextResponse.redirect",
     });

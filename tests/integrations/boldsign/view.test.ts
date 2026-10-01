@@ -197,15 +197,31 @@ describe("boldsign/view — opening the SIGNING page", () => {
     // Both entry points: the operator's in-portal signing dialog and the link
     // in the customer's email. A second signature on an executed agreement is
     // not a UI annoyance — it produces a second signed artefact for one rental.
-    for (const [name, file] of [["sign route", SIGN_ROUTE], ["signing-redirect", REDIRECT_ROUTE]] as const) {
-      const src = blankComments(readRepoSource(file));
-      expect(
-        src,
-        `${name} no longer refuses a completed/signed document. The customer could sign ` +
-          `an agreement that is already executed.`,
-      ).toMatch(/=== ['"]completed['"]/);
-      expect(src, `${name} no longer refuses a 'signed' document`).toMatch(/=== ['"]signed['"]/);
-    }
+    const sign = blankComments(readRepoSource(SIGN_ROUTE));
+    expect(
+      sign,
+      "sign route no longer refuses a completed/signed document. The customer could sign " +
+        "an agreement that is already executed.",
+    ).toMatch(/=== ['"]completed['"]/);
+    expect(sign, "sign route no longer refuses a 'signed' document").toMatch(/=== ['"]signed['"]/);
+
+    // signing-redirect states it as a SET, because it now has two questions to
+    // answer — "can this be signed" and "has it already been" — across every
+    // agreement on the rental, not just the one named in the email.
+    const redirect = blankComments(readRepoSource(REDIRECT_ROUTE));
+    expect(
+      redirect,
+      "signing-redirect no longer names the done statuses. The customer could be sent " +
+        "to sign an agreement that is already executed.",
+    ).toMatch(/DONE_STATUSES = new Set\(\['completed', 'signed'\]\)/);
+    expect(
+      redirect,
+      "signing-redirect no longer refuses a done agreement — the check that reads that set is gone",
+    ).toMatch(/DONE_STATUSES\.has/);
+    expect(
+      redirect,
+      "a renter who already signed is no longer told so; they would be sent to BoldSign instead",
+    ).toContain("Already signed");
   });
 
   it("the signing link is fetched per click, not baked into the email", () => {
@@ -226,9 +242,14 @@ describe("boldsign/view — opening the SIGNING page", () => {
   it("a BoldSign failure at click time is explained, not swallowed into a blank page", () => {
     const src = blankComments(readRepoSource(REDIRECT_ROUTE));
     expect(src, "the 502 for an unavailable signing page is gone").toContain("502");
-    expect(src, "the customer-facing explanation for an expired document is gone").toMatch(
-      /may have expired or already been signed/i,
+    // The wording moved into a rendered page: the reader is a renter on a
+    // phone, and a bare line of text looks like the site is broken. What must
+    // survive is that they are told what to do next, which is to ask the
+    // operator — they cannot fix a BoldSign failure themselves.
+    expect(src, "the customer-facing explanation for a failed signing page is gone").toMatch(
+      /We could not open your agreement/i,
     );
+    expect(src, "the renter is no longer told who can fix it").toMatch(/contact the rental company/i);
   });
 
   it("status reads prefer our own record and only then ask BoldSign", () => {
