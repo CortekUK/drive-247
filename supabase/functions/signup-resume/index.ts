@@ -182,8 +182,42 @@ Deno.serve(async (req) => {
     // -----------------------------------------------------------------------
     // Which step.
     // -----------------------------------------------------------------------
-    let resumeStep: "account" | "payment" | "business" | "provisioning" | "done";
-    if (!paid) {
+    let resumeStep:
+      | "account"
+      | "payment"
+      | "business"
+      | "setup"
+      | "provisioning"
+      | "done";
+
+    /*
+     * THE COMBINED SETUP STEP, behind a flag.
+     *
+     * `setup` is company + web address + card on ONE screen with one submit.
+     * It subsumes `business` and `payment`, so the question it answers is a
+     * single "is there anything left to collect" rather than two ordered ones.
+     *
+     * The old pair is left untouched below and is still what every live signup
+     * gets. Enabling this before the client can render `setup` would send a
+     * resuming operator to a step the dialog has no component for, which is a
+     * blank panel they cannot leave — so the flag only moves once that screen
+     * ships.
+     */
+    const SETUP_STEP_ENABLED = Deno.env.get("SIGNUP_SETUP_STEP_ENABLED") === "true";
+    const businessDone = !!current.business?.companyName && !!current.business?.slug;
+
+    if (SETUP_STEP_ENABLED) {
+      const provisionInFlight =
+        current.status === "provisioning" &&
+        current.provisionLockAt &&
+        Date.now() - new Date(current.provisionLockAt).getTime() < PROVISION_LOCK_MS;
+      // Anything still missing lands on the one screen that collects all of it.
+      resumeStep = !businessDone || !paid
+        ? "setup"
+        : provisionInFlight
+          ? "provisioning"
+          : "provisioning";
+    } else if (!paid) {
       resumeStep = "payment";
     } else if (
       current.status === "provisioning" &&
