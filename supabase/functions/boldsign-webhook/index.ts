@@ -40,6 +40,38 @@ function mapBoldSignStatus(eventType: string): string {
   return statusMap[eventType] || 'pending';
 }
 
+/**
+ * A SIGNED AGREEMENT NEVER BECOMES UNSIGNED AGAIN.
+ *
+ * BoldSign keeps sending events after a document is finished — a renter who
+ * re-opens their copy raises another `Viewed`, which maps to 'delivered'. That
+ * was written straight over 'completed', and the agreement went back to looking
+ * unsigned: the operator chases a renter who already signed, re-sends, revokes
+ * the renter's link doing it, and the renter is told to sign something BoldSign
+ * will not open because it is already complete. Every loop adds an email.
+ *
+ * Found on Moore Luxe, 2 Oct 2026: four agreements holding an
+ * `envelope_completed_at` — only ever written on completion — while their
+ * status read 'delivered'. Signed on 6, 8, 12 and 19 Sep; still being chased
+ * three weeks later.
+ *
+ * The ladder is sent → delivered → signed → completed. Anything in FINAL is the
+ * end of the line: nothing moves a document out of it. Ranked statuses may only
+ * move forward. An unranked incoming status (declined, voided, expired) is a
+ * real outcome and is allowed from any non-final state.
+ */
+const STATUS_RANK: Record<string, number> = { pending: 0, sent: 1, delivered: 2, signed: 3, completed: 4 };
+const FINAL_STATUSES = new Set(['completed', 'declined', 'voided', 'expired']);
+
+function isStatusRegression(current: string | null | undefined, incoming: string): boolean {
+  if (!current || current === incoming) return false;
+  if (FINAL_STATUSES.has(current)) return true;
+  const from = STATUS_RANK[current];
+  const to = STATUS_RANK[incoming];
+  if (from === undefined || to === undefined) return false;
+  return to < from;
+}
+
 async function downloadSignedDocument(
   supabaseClient: ReturnType<typeof createClient>,
   documentId: string,
@@ -111,7 +143,7 @@ async function handleBoldSignWebhook(supabaseClient: ReturnType<typeof createCli
     // Step 1: Look up rental_agreements by document_id (new table)
     const { data: agreement } = await supabaseClient
       .from('rental_agreements')
-      .select('id, rental_id, tenant_id, agreement_type, boldsign_mode')
+      .select('id, rental_id, tenant_id, agreement_type, boldsign_mode, document_status')
       .eq('document_id', documentId)
       .maybeSingle();
 
@@ -156,8 +188,14 @@ async function handleBoldSignWebhook(supabaseClient: ReturnType<typeof createCli
 
     const mappedStatus = mapBoldSignStatus(eventType);
 
-    // Always update rental_agreements row if we have one
-    if (agreementId) {
+    // Always update rental_agreements row if we have one — unless the event
+    // would walk a finished agreement backwards. See isStatusRegression.
+    if (agreementId && isStatusRegression(agreement?.document_status as string | null, mappedStatus)) {
+      console.log(
+        `Ignoring '${eventType}' for agreement ${agreementId}: it would move ` +
+          `${agreement?.document_status} back to ${mappedStatus}`,
+      );
+    } else if (agreementId) {
       const agreementUpdate: Record<string, unknown> = {
         document_status: mappedStatus,
       };
@@ -181,7 +219,12 @@ async function handleBoldSignWebhook(supabaseClient: ReturnType<typeof createCli
     }
 
     // For original agreements (or fallback without agreement row): update rentals too
-    if (agreementType === 'original') {
+    if (agreementType === 'original' && isStatusRegression(rental?.document_status as string | null, mappedStatus)) {
+      console.log(
+        `Ignoring '${eventType}' for rental ${rental.id}: it would move ` +
+          `${rental?.document_status} back to ${mappedStatus}`,
+      );
+    } else if (agreementType === 'original') {
       const rentalUpdate: Record<string, unknown> = {
         document_status: mappedStatus,
       };
