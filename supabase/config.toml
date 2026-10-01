@@ -456,6 +456,15 @@ verify_jwt = true
 [functions.signup-begin]
 verify_jwt = false
 
+# The verification code, for a user who by definition has no confirmed account
+# yet. Same reasoning as signup-begin: there is no session to verify, so the
+# gate is in code — the caller must present the address they are proving they
+# own, and every failure answers identically so the endpoint cannot be used to
+# ask whether an address has an account. Without this line the gateway returns
+# 401 before the function runs, and the code screen can never be cleared.
+[functions.signup-verify-otp]
+verify_jwt = false
+
 # The Google half of step 1. NOT DEPLOYED — see the banner at the top of
 # supabase/functions/signup-begin-oauth/index.ts. Listed here so that whenever it
 # IS deployed it lands with the right setting: JWT-verified, because it acts on
