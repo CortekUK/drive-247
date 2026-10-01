@@ -247,12 +247,34 @@ export function readPendingOauth():
   | { planId: SignupPlanId; values: TenantFormValues }
   | null {
   const raw = readJson(OAUTH_KEY);
-  const values = toDraft(raw);
-  if (!values) return null;
+  if (!raw || typeof raw !== "object") return null;
   const blob = raw as Partial<StoredOauthPending>;
+  if (blob.v !== DRAFT_VERSION) return null;
+  /*
+   * THE PLAN IS THE ONLY REQUIRED PART.
+   *
+   * This used to run the whole blob through `toDraft`, which rejects a company
+   * name under two characters and an empty slug. That was correct while the
+   * fields were collected BEFORE the redirect — but it also meant that a Google
+   * signup started without them came back to a `null` handoff, and
+   * `completeGoogleReturn` bailed silently: signed in, stranded on the home
+   * page, with only a console warning to say why.
+   *
+   * The business details are now collected on the far side, so they are
+   * genuinely optional here and an empty string is a real answer. `planId` is
+   * the one thing that cannot be recovered after the redirect — nothing else in
+   * the return knows which plan was being bought.
+   */
   if (!isSignupPlanId(blob.planId)) return null;
   if (typeof blob.at !== "number" || Date.now() - blob.at > OAUTH_PENDING_TTL_MS) return null;
-  return { planId: blob.planId, values };
+  return {
+    planId: blob.planId,
+    values: {
+      companyName: typeof blob.companyName === "string" ? blob.companyName : "",
+      slug: typeof blob.slug === "string" ? blob.slug : "",
+      acceptedTerms: blob.acceptedTerms === true,
+    },
+  };
 }
 
 export function clearPendingOauth(): void {

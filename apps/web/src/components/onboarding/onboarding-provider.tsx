@@ -490,6 +490,14 @@ export function OnboardingProvider({
   const [planSwitchBlocked, setPlanSwitchBlocked] = useState<SignupPlanId | null>(null);
   const [accountMode, setAccountMode] = useState<AccountStepMode>("create");
 
+  /*
+   * `submitTenantDetails` needs `startPayment`, which is declared further down
+   * this component — a const cannot be closed over before it exists. The ref is
+   * assigned right after that declaration, and only ever read inside an async
+   * handler, long after the first render has run.
+   */
+  const startPaymentRef = useRef<(() => Promise<void>) | null>(null);
+
   // Async work reads state through this ref, never through the closure it was
   // created in: a poller created once must see the newest state on every tick.
   const stateRef = useRef(state);
@@ -1312,6 +1320,27 @@ export function OnboardingProvider({
 
         resumeHintRef.current = await fetchSignupMeta();
         setHasResumableSignup(true);
+
+        /*
+         * ASK FOR THE BUSINESS BEFORE THE CARD.
+         *
+         * A Google signup can now start without the company name and web
+         * address — that is the whole point of the button. The server would
+         * answer `payment` for a freshly stamped signup, and paying first would
+         * leave `signup-provision` with nothing to name the tenant after.
+         *
+         * `tenant` mode renders the account step as just those two fields plus
+         * the terms, which is exactly the screen this flow needs. It is the same
+         * mode the post-payment recovery path uses; the difference is only that
+         * nothing has been charged yet, and `submitTenantDetails` branches on
+         * that.
+         */
+        if (!pending.values.companyName.trim() || !pending.values.slug.trim()) {
+          setAccountMode("tenant");
+          dispatch({ type: "resumeTo", step: "account" });
+          return;
+        }
+
         // The server decides the step, exactly as it does for a password resume.
         // For a signup that has just been stamped that is always `payment`.
         await resolveResume(pending.planId);
@@ -1508,6 +1537,25 @@ export function OnboardingProvider({
         dispatch({ type: "business", patch: draftToBusiness(tenant) });
         await saveTenantDraft(tenant);
         setAccountMode("create");
+
+        /*
+         * WHERE THIS GOES NEXT DEPENDS ON WHETHER THE CARD HAS RUN.
+         *
+         * This step had one caller — the post-payment recovery path, where the
+         * money is already in and the only thing missing is a name — so it went
+         * straight to provisioning.
+         *
+         * The Google flow now arrives here too, BEFORE paying. Provisioning
+         * then would build a tenant nobody has paid for; `signup-provision`
+         * verifies the charge against Stripe and would refuse, stranding them
+         * on a boot screen with no way forward.
+         */
+        if (!s.payment.paid) {
+          dispatch({ type: "goto", step: "payment" });
+          await startPaymentRef.current?.();
+          return;
+        }
+
         dispatch({ type: "goto", step: "provisioning" });
         await runProvision(buildProvisionRequest(tenant));
       } catch (e) {
@@ -1672,6 +1720,9 @@ export function OnboardingProvider({
     },
     [startPaymentInternal],
   );
+
+  // See the note on `startPaymentRef`.
+  startPaymentRef.current = startPayment;
 
   const markPaid = useCallback(async () => {
     const s = stateRef.current;

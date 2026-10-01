@@ -413,21 +413,26 @@ export function AccountStep({
   };
 
   /**
-   * "Continue with Google" — validated BEFORE the browser leaves.
+   * "Continue with Google" — nothing asked before the redirect.
    *
-   * The redirect is one-way: an operator who is bounced to Google with an empty
-   * business name comes back signed in, with a real auth user, and has to be
-   * asked for it afterwards. Checking here means the only thing that can go
-   * wrong on the far side is Google itself.
+   * This validated the business name and web address first, because the far
+   * side had nowhere to ask: the handoff stash rejected an empty draft, and the
+   * return path bailed silently when it got one — signed in, stranded, with
+   * only a console warning. That was a real constraint, and removing the check
+   * without removing the constraint is exactly how this broke on 1 Oct.
+   *
+   * Both halves are now answered. The stash keeps a handoff that carries only
+   * the plan, and `completeGoogleReturn` puts the dialog into `tenant` mode
+   * when it comes back without a company name — the two fields and the terms,
+   * asked once, after the identity exists and before the card.
+   *
+   * Whatever was typed first is still carried across: `tenantValues()` is sent
+   * either way, so someone who filled the fields in before noticing the button
+   * skips the second screen entirely.
    */
   const handleGoogle = () => {
     if (busy) return;
-    const found = tenantErrors();
-    setErrors(found ?? {});
-    if (found) {
-      focusFirst(found, TENANT_FIELD_ORDER);
-      return;
-    }
+    setErrors({});
     onGoogle(tenantValues());
   };
 
