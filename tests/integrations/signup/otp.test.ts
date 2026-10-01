@@ -76,9 +76,25 @@ describe('the verify endpoint', () => {
     expect(verify).toMatch(/code: "OTP_INVALID"/);
   });
 
-  it('treats an already-confirmed user as success, not an error', () => {
-    // A double-submit or a second tab must not strand someone who is verified.
+  it('treats an already-confirmed user as success — for that user only', () => {
+    /*
+     * A double-submit or a second tab must not strand someone who is verified.
+     * The first version answered that from the EMAIL alone, and a live probe
+     * caught what that meant: unknown address 400, real address 200, so anyone
+     * could ask this endpoint which addresses have accounts by sending a junk
+     * code. The genuine caller always has a session by then — submitAccount
+     * signs in right after signup-begin — so the shortcut costs a token.
+     */
     expect(verify).toMatch(/alreadyVerified: true/);
+    expect(verify).toMatch(/supabase\.auth\.getUser\(bearer\)/);
+    expect(verify).toMatch(/sameUser \? jsonResponse\(\{ ok: true, alreadyVerified: true \}\) : vague\(\)/);
+  });
+
+  it('never answers already-verified to an anonymous caller', () => {
+    // That is the oracle. The fall-through must be `vague()`, the same answer
+    // a wrong code against an unknown address gets.
+    const block = verify.slice(verify.indexOf('if (user.email_confirmed_at)'), verify.indexOf('const verdict'));
+    expect(block).toMatch(/vague\(\)/);
   });
 
   it('rate-limits resend separately from verify', () => {

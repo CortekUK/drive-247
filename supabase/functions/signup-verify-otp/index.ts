@@ -96,9 +96,30 @@ Deno.serve(async (req) => {
     }
 
     // ── verify ──────────────────────────────────────────────────────────────
-    // Already confirmed is a SUCCESS, not an error: a double-submit, or a
-    // second tab, must not strand someone who is genuinely verified.
-    if (user.email_confirmed_at) return jsonResponse({ ok: true, alreadyVerified: true });
+    /*
+     * ALREADY CONFIRMED IS A SUCCESS — BUT ONLY FOR THE PERSON IT BELONGS TO.
+     *
+     * A double-submit, or a second tab, must not strand someone who is already
+     * verified. The first version answered that from the email alone, and a
+     * live probe caught what that means: an unknown address returned 400 and a
+     * real one returned 200, so anyone could ask this endpoint which addresses
+     * have Drive247 accounts by sending a junk code.
+     *
+     * The genuine caller always has a session — `submitAccount` signs in with
+     * the password immediately after `signup-begin`, before this screen is ever
+     * shown. So the shortcut now costs a token that proves who they are. An
+     * anonymous caller falls through to the same answer every other failure
+     * gets, and learns nothing.
+     */
+    if (user.email_confirmed_at) {
+      const bearer = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
+      let sameUser = false;
+      if (bearer) {
+        const { data } = await supabase.auth.getUser(bearer);
+        sameUser = data?.user?.id === user.id;
+      }
+      return sameUser ? jsonResponse({ ok: true, alreadyVerified: true }) : vague();
+    }
 
     const verdict = await checkOtp(meta.otp, code);
 
