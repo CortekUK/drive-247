@@ -65,19 +65,41 @@ describe('it waits for the profile before judging membership', () => {
   });
 });
 
-describe('both login screens carry it', () => {
-  const screens = [
-    'apps/portal/src/app/(auth)/login/page.tsx',
-    'apps/portal/src/components/auth-v2/login-v2.tsx',
-  ];
-  for (const rel of screens) {
-    it(`${rel.includes('auth-v2') ? 'v2' : 'v1'}: renders the button behind the hook's own flag`, () => {
-      const src = strip(readFileSync(resolve(__dirname, '../../../../../', rel), 'utf8'));
-      expect(src).toMatch(/useGoogleSignIn\(\)/);
-      expect(src).toMatch(/google\.enabled &&/);
-      expect(src).toMatch(/Continue with Google/);
-    });
-  }
+const V1 = 'apps/portal/src/app/(auth)/login/page.tsx';
+const V2 = 'apps/portal/src/components/auth-v2/login-v2.tsx';
+const screen = (rel: string) => strip(readFileSync(resolve(__dirname, '../../../../../', rel), 'utf8'));
+
+describe('the v2 login carries it', () => {
+  it("renders the button behind the hook's own flag", () => {
+    const src = screen(V2);
+    expect(src).toMatch(/useGoogleSignIn\(\)/);
+    expect(src).toMatch(/google\.enabled &&/);
+    expect(src).toMatch(/Continue with Google/);
+  });
+});
+
+/*
+ * The v1 login is password-only, by decision and not by oversight: the button
+ * and its OR divider were taken off that screen deliberately. The hook and the
+ * flag still exist for v2, so the quiet way for this to come back is somebody
+ * "restoring" what reads like an accidentally deleted block. These pin the
+ * absence, so putting it back has to be a choice someone makes on purpose.
+ */
+describe('the v1 login does not offer Google', () => {
+  it('renders no provider button', () => {
+    expect(screen(V1)).not.toMatch(/Continue with Google/);
+  });
+
+  it('does not call the hook at all', () => {
+    const src = screen(V1);
+    expect(src).not.toMatch(/useGoogleSignIn/);
+    expect(src).not.toMatch(/google\.(enabled|start|busy|error)/);
+  });
+
+  it('leaves no orphaned OR divider where the button used to be', () => {
+    // The divider existed only to separate the password form from the provider.
+    expect(screen(V1)).not.toMatch(/>or</i);
+  });
 });
 
 /*
@@ -111,16 +133,11 @@ describe("the button carries Google's mark", () => {
     expect(strip(mark)).not.toMatch(/className="[^"]*size-/);
   });
 
-  for (const rel of [
-    'apps/portal/src/app/(auth)/login/page.tsx',
-    'apps/portal/src/components/auth-v2/login-v2.tsx',
-  ]) {
-    it(`${rel.includes('auth-v2') ? 'v2' : 'v1'}: shows it beside the label`, () => {
-      const src = strip(readFileSync(resolve(__dirname, '../../../../../', rel), 'utf8'));
-      expect(src).toMatch(/<GoogleMark/);
-      expect(src).toMatch(/from ["']@\/components\/ui\/google-mark["']/);
-      // Beside the label, not instead of it.
-      expect(src).toMatch(/<GoogleMark[^>]*\/>\s*\n?\s*Continue with Google/);
-    });
-  }
+  it('v2 shows it beside the label', () => {
+    const src = screen(V2);
+    expect(src).toMatch(/<GoogleMark/);
+    expect(src).toMatch(/from ["']@\/components\/ui\/google-mark["']/);
+    // Beside the label, not instead of it.
+    expect(src).toMatch(/<GoogleMark[^>]*\/>\s*\n?\s*Continue with Google/);
+  });
 });

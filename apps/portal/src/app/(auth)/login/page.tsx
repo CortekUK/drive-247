@@ -6,9 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useAuth, useAuthStore } from "@/stores/auth-store";
-import { useGoogleSignIn } from "@/hooks/use-google-sign-in";
 import { Button } from "@/components/ui/button";
-import { GoogleMark } from "@/components/ui/google-mark";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -56,7 +54,6 @@ function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, signIn, loading, appUser } = useAuth();
-  const google = useGoogleSignIn();
   const { branding } = useTenantBranding();
   const { tenant } = useTenant();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -503,50 +500,9 @@ function LoginPageContent() {
                   )}
                 </Button>
 
-                {/* CONTINUE WITH GOOGLE.
-                    Below the password submit, not above it: the operators who
-                    use this screen every day sign in with a password, and a
-                    provider button on top pushes the thing they came for under
-                    the fold on a phone. Renders nothing unless
-                    NEXT_PUBLIC_PORTAL_GOOGLE_ENABLED is on — see
-                    hooks/use-google-sign-in.ts for why the switch is explicit. */}
-                {google.enabled && (
-                  <>
-                    <div className="relative py-1">
-                      <div className="absolute inset-0 flex items-center">
-                        <span className="w-full border-t" />
-                      </div>
-                      <div className="relative flex justify-center text-xs uppercase">
-                        <span className="bg-card px-2 text-muted-foreground">or</span>
-                      </div>
-                    </div>
-
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="w-full"
-                      disabled={google.busy || isSubmitting}
-                      onClick={() => void google.start()}
-                    >
-                      {google.busy ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Connecting to Google...
-                        </>
-                      ) : (
-                        <>
-                          <GoogleMark />
-                          Continue with Google
-                        </>
-                      )}
-                    </Button>
-
-                    {google.error && (
-                      <p className="text-center text-sm text-destructive">{google.error}</p>
-                    )}
-                  </>
-                )}
-
+                {/* No "Continue with Google" on this screen. The provider
+                    button is offered on the v2 login only; this one is
+                    password-only, so the hook is not called here at all. */}
                 {rateLimitStatus.attemptsRemaining < 5 &&
                   rateLimitStatus.attemptsRemaining > 0 && (
                     <div className="text-center text-sm text-amber-600">
