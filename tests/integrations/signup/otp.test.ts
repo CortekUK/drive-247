@@ -30,6 +30,7 @@ const strip = (s: string) =>
 const helper = strip(read('supabase/functions/_shared/signup-otp.ts'));
 const verify = strip(read('supabase/functions/signup-verify-otp/index.ts'));
 const begin = strip(read('supabase/functions/signup-begin/index.ts'));
+const reset = strip(read('supabase/functions/signup-password-reset/index.ts'));
 const adminSwitch = strip(read('apps/admin/components/admin/signup-otp-switch.tsx'));
 
 describe('the code itself', () => {
@@ -168,5 +169,27 @@ describe('signup-begin stays safe while the screen does not exist', () => {
     // signup that actually succeeded.
     expect(begin).toMatch(/OTP email not delivered/);
     expect(begin).toMatch(/OTP send threw/);
+  });
+});
+
+describe('nobody can be stranded unverified', () => {
+  /*
+   * A real operator has no Supabase and no Vercel. Every way out of a
+   * half-finished signup has to be inside the product, so there are two:
+   * the code screen they are sent back to, and this one.
+   */
+  it('a completed password reset confirms the address as well', () => {
+    // Getting this far means a code we emailed came back correct — the same
+    // proof of inbox control verification asks for. Without it, someone
+    // unconfirmed resets their password, is told to sign in with it, and is
+    // refused again, because the password was never what was wrong.
+    expect(reset).toMatch(/password: newPassword,\s*email_confirm: true,/);
+  });
+
+  it('the reset still spends the code before it sets anything', () => {
+    const consume = reset.indexOf('.delete()');
+    const update = reset.indexOf('password: newPassword');
+    expect(consume).toBeGreaterThan(-1);
+    expect(consume).toBeLessThan(update);
   });
 });

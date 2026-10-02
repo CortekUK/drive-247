@@ -652,8 +652,24 @@ Deno.serve(async (req) => {
       );
     }
 
+    /*
+     * THE RESET ALSO CONFIRMS THE ADDRESS, and that is not a shortcut.
+     *
+     * Reaching this line means a code we emailed to this address came back
+     * correct — the same proof of inbox control that signup verification asks
+     * for, spent the same way. Confirming here costs nothing in strength and
+     * closes a trap: an operator whose signup is waiting on its code, who
+     * cannot sign in BECAUSE it is unconfirmed, and who therefore reaches for
+     * "Forgot password?". Without this they set a new password, are told to
+     * sign in with it, and are refused again — the password was never what was
+     * wrong. They have no Supabase access to dig themselves out, so the product
+     * has to.
+     *
+     * Already-confirmed users are unaffected: it is the value they hold.
+     */
     const { error: pwErr } = await admin.auth.admin.updateUserById(user.id, {
       password: newPassword,
+      email_confirm: true,
     });
     if (pwErr) {
       // The code is already spent — say so plainly rather than pretend it can
