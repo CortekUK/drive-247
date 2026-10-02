@@ -30,6 +30,18 @@ interface ChatMessageProps {
   onRetryTicket?: () => void;
 }
 
+/**
+ * A stored message is not a live reply, and only live replies are validated on
+ * the way in: `call()` rejects a response whose evidence entries are missing
+ * their arrays, but `resumedMessages` are rendered straight out of storage,
+ * where an older shape can still be sitting.
+ *
+ * One such entry, with no `checks`, threw while rendering — and because the
+ * TRAX panel is mounted in the providers, the throw went past every segment
+ * error.tsx to global-error: reopening a single conversation replaced the whole
+ * portal with "The portal didn't load". Evidence that cannot be read is now
+ * skipped, and so is navigation that is not an array.
+ */
 export function ChatMessage({ message, onConfirmAction, onRejectAction, onNavigate, onVerifyNavigation, onCheckAgain, onOpenSupport, onRetryTicket, isLoading }: ChatMessageProps) {
   const isUser = message.role === 'user';
   const [copied, setCopied] = useState(false);
@@ -188,7 +200,8 @@ export function ChatMessage({ message, onConfirmAction, onRejectAction, onNaviga
             <p className="mt-1">{message.sources?.map((source) => source.title).filter(Boolean).join(', ') || 'Phase 1 support scope'} · Guide {message.provenance.knowledgeVersion}. Release match has not been verified. This conversation is kept in browser memory only.</p>
           </details>
         )}
-        {!isUser && message.evidence?.filter(result=>result.checks.length||result.findings.length||result.limitations.length).map((result,index)=>(
+        {!isUser && message.evidence?.filter(result=>Array.isArray(result?.checks)&&Array.isArray(result?.findings)&&Array.isArray(result?.limitations)
+          &&(result.checks.length||result.findings.length||result.limitations.length)).map((result,index)=>(
           <div key={index} className="w-full rounded-lg border border-border/60 bg-background/60 p-3 text-xs">
             <p className="font-medium">{result.status==='verified'?'Record check':result.status==='needs_input'?'More context needed':'Incomplete check'} · {new Date(result.observedAt).toLocaleString()}</p>
             {result.findings.length>0 && <ul className="mt-2 space-y-2">{result.findings.map((finding,i)=><li key={i}>{finding.summary}</li>)}</ul>}
@@ -223,7 +236,7 @@ export function ChatMessage({ message, onConfirmAction, onRejectAction, onNaviga
           </button>
         )}
         {!isUser && message.canRecheck && onCheckAgain && <button type="button" disabled={isLoading} onClick={()=>void onCheckAgain()} className={cn("rounded-lg border border-border px-3 py-2 text-xs font-medium focus-visible:outline focus-visible:outline-2 disabled:opacity-50", SIDEBAR_HIGHLIGHT_HOVER, SIDEBAR_HIGHLIGHT_FOCUS)}>Check Again</button>}
-        {!isUser && onVerifyNavigation && !!message.navigation?.length && (
+        {!isUser && onVerifyNavigation && Array.isArray(message.navigation) && !!message.navigation.length && (
           <div className="flex flex-wrap gap-2">
             {message.navigation.map((action) => (
               <button
