@@ -66,7 +66,7 @@ import {
   Bell,
   Pencil,
 } from "lucide-react";
-import { Wheel } from "@/components/ui/wheel";
+import { CarMark } from "@/components/ui/car-mark";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
@@ -372,7 +372,7 @@ function useRentalActivity(rental: Record<string, any>, tenantId: string | null 
           id: `sw-${s.id}`,
           at: s.created_at,
           kind: "change",
-          icon: Wheel,
+          icon: CarMark,
           text: `Vehicle swapped${s.reason ? ` — ${s.reason}` : ""}`,
           by: s.swapped_by ?? null,
         });

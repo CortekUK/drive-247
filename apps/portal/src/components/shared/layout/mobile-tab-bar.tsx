@@ -26,7 +26,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Ellipsis, FileText, LayoutGrid, Users, type LucideIcon } from "lucide-react";
-import { Wheel } from "@/components/ui/wheel";
+import { CarMark } from "@/components/ui/car-mark";
 import { cn } from "@/lib/utils";
 import { useSidebar } from "@/components/ui-v2/sidebar";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
@@ -41,7 +41,7 @@ const TABS: Tab[] = [
   { label: "Home", href: "/", icon: LayoutGrid },
   { label: "Rentals", href: "/rentals", icon: FileText },
   { label: "Customers", href: "/customers", icon: Users },
-  { label: "Vehicles", href: "/vehicles", icon: Wheel },
+  { label: "Vehicles", href: "/vehicles", icon: CarMark },
 ];
 
 const ITEM =

@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import { Search, Check, Gauge, Banknote, ShieldCheck } from "lucide-react";
-import { Wheel } from "@/components/ui/wheel";
 import { CarMark } from "@/components/ui/car-mark";
 import { motion, useReducedMotion } from "motion/react";
 import { motionRise } from "@/lib/motion";
@@ -90,7 +89,7 @@ export function VehicleList({ selected, onSelect, vehicles, currency = "$" }: Ve
                       isActive ? "bg-primary text-primary-foreground" : "bg-muted text-foreground/60"
                     )}
                   >
-                    <Wheel className="h-4 w-4" />
+                    <CarMark className="h-4 w-4" />
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-foreground truncate">
@@ -118,7 +117,7 @@ export function VehicleList({ selected, onSelect, vehicles, currency = "$" }: Ve
         {!current ? (
           <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
             <span className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
-              <Wheel className="h-7 w-7" />
+              <CarMark className="h-7 w-7" />
             </span>
             <p className="text-sm text-muted-foreground">Select a vehicle to see its details</p>
           </div>

@@ -3,7 +3,7 @@
 import { useMemo, type CSSProperties, type ReactNode } from "react";
 import { format } from "date-fns";
 import { Plus } from "lucide-react";
-import { Wheel } from "@/components/ui/wheel";
+import { CarMark } from "@/components/ui/car-mark";
 import { parseLocalDate } from "@/lib/date-utils";
 import { formatCurrency } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
@@ -70,7 +70,7 @@ export function DateGrid({ data, bookings, blocks, perspective, start, dates, co
         const height = Math.max(!compact && row.label.length > 22 && row.detail ? 60 : 0, caption + 20 + lineArea + (priced ? 20 : 0));
         return <div className="tl-grid-row" key={row.id} data-row-id={row.id} style={{ height }}>
           <div className="tl-identity" title={`${row.label}${row.detail ? ` · ${row.detail}` : ""}`}>
-            {row.vehicle && (row.vehicle.photoUrl ? <img src={row.vehicle.photoUrl} alt="" className="tl-vehicle-thumb" loading="lazy" /> : <span className="tl-vehicle-placeholder"><Wheel size={17} /></span>)}
+            {row.vehicle && (row.vehicle.photoUrl ? <img src={row.vehicle.photoUrl} alt="" className="tl-vehicle-thumb" loading="lazy" /> : <span className="tl-vehicle-placeholder"><CarMark size={17} /></span>)}
             <div><strong>{row.label}</strong>{row.detail && <small>{row.detail}</small>}</div>
           </div>
           <div className="tl-row-dates">

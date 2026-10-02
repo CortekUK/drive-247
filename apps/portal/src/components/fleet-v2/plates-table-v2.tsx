@@ -21,7 +21,7 @@
 
 import { format } from "date-fns";
 import { Clock, Copy, Edit, FileText, History, MoreHorizontal, Trash2, UserX } from "lucide-react";
-import { Wheel } from "@/components/ui/wheel";
+import { CarMark } from "@/components/ui/car-mark";
 import { Button } from "@/components/ui-v2/button";
 import {
   DropdownMenu,
@@ -292,7 +292,7 @@ export function PlatesTableV2<T extends PlateRowV2>({
                           <DropdownMenuSeparator />
                           {!plate.vehicle_id ? (
                             <DropdownMenuItem onClick={() => onAssign(plate)}>
-                              <Wheel className="h-4 w-4" />
+                              <CarMark className="h-4 w-4" />
                               Assign
                             </DropdownMenuItem>
                           ) : (
