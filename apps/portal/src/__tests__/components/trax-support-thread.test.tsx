@@ -107,6 +107,19 @@ describe('TraxSupportThread in the Trax panel', () => {
     render();
     expect(document.body.textContent).toContain('not connected to an AI model');
   });
+
+  it('says nothing about the model when the context call never answered', () => {
+    /* `capabilities` arrives with the context reply. When that request fails
+       there is no reply, and the old copy read the absence as "no model" —
+       announcing a configuration fact nobody had established. Reported from a
+       portal where the real problem was a network failure, and the panel
+       blamed the AI model for it. */
+    mocks.support.capabilities = undefined;
+    mocks.support.error = 'TRAX could not reach the server. Check your connection and try again.';
+    render();
+    expect(document.body.textContent).not.toContain('not connected to an AI model');
+    expect(document.querySelector('[role="alert"]')?.textContent).toContain('could not reach the server');
+  });
   it('hands the workspace the current view so the header can open the history', () => {
     mocks.state.view = 'history';
     render();

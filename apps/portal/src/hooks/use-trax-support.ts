@@ -70,7 +70,20 @@ export function useTraxSupport(enabled = true, surfaceVisible = true): UseChatRe
     const {data:{session}}=await supabase.auth.getSession();
     if(signal.aborted)throw new DOMException('Cancelled','AbortError');
     if(!session?.access_token || session.user.id!==userId)throw new ChatFailure('Sign in again to use TRAX.','unauthorized');
-    const result=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${session.access_token}`},body:JSON.stringify({...body,tenantId:tenant?.id}),signal,cache:'no-store'});
+    /* A fetch that never reaches the server rejects with a TypeError whose
+       message is the browser's own — "Failed to fetch" in Chrome, "Load failed"
+       in Safari, "NetworkError when attempting to fetch resource" in Firefox.
+       That string was being shown to the operator verbatim, which reads as a
+       broken portal and says nothing about what to do. An abort is NOT one of
+       these: it has to pass through untouched, or a cancelled request would be
+       reported as a failure. */
+    let result:Response;
+    try{
+      result=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${session.access_token}`},body:JSON.stringify({...body,tenantId:tenant?.id}),signal,cache:'no-store'});
+    }catch(networkError){
+      if(networkError instanceof DOMException&&networkError.name==='AbortError')throw networkError;
+      throw new ChatFailure('TRAX could not reach the server. Check your connection and try again.','network');
+    }
     const data=await result.json();
     if(!result.ok)throw new ChatFailure(data.error||'TRAX could not verify access.',data.code||'service_unavailable');
     // Do not silently consume an old deployed RAG endpoint with live-looking data.
