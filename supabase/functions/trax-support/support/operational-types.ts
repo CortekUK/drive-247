@@ -36,7 +36,12 @@ export interface OperationalReads {
 }
 export type EvidenceStatus = 'verified' | 'partial' | 'restricted' | 'missing' | 'error' | 'needs_input';
 export interface Evidence {
-  id: string; table: 'vehicles' | 'rentals' | 'pickup_locations' | 'blocked_dates' | 'rental_key_handovers' | 'availability_check' | 'account_summary' | 'payment_check' | 'stripe_account_summary' | 'payment_evidence' | 'business_query';
+  id: string; table: 'vehicles' | 'rentals' | 'pickup_locations' | 'blocked_dates' | 'rental_key_handovers' | 'availability_check' | 'account_summary' | 'payment_check' | 'stripe_account_summary' | 'payment_evidence' | 'business_query'
+    // Integration connection state (on the tenant's own row) and a generated
+    // report's job record. Both have been cited by shipped tools for some time;
+    // nothing typechecks this directory, so the union simply never caught up.
+    // The client's allowlist in use-trax-support.ts already accepts both.
+    | 'tenants' | 'trax_report_jobs';
   recordId?: string; title: string; observedAt: string;
 }
 export interface Finding { code: string; summary: string; sourceIds: string[]; blocking: boolean }

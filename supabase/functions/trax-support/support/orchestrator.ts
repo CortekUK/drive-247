@@ -184,8 +184,16 @@ export async function modelConversation(message:string,locale:Locale,conversatio
         object(input);
         const status=await readIntegrationStatus(env.auth,env.integrations,env.now);
         result=status;
+        // This branch pushes its evidence straight onto the list instead of going
+        // through the tool path, so it also has to do what that path does for it:
+        // register the source in `sources`. It did not, and the citation line is
+        // built by looking every cited id up in that map — so the lookup missed,
+        // the turn shipped a sources list of [null], and reopening that
+        // conversation from history took the whole portal down.
+        const integrationSource:Evidence={id:'integrations:'+env.auth.tenant.id,table:'tenants',title:'Integration connection state',observedAt:status.observedAt};
+        sources.set(integrationSource.id,integrationSource);
         evidence.push({status:'verified',observedAt:status.observedAt,checks:['integration_status'],findings:[],
-          sources:[{id:'integrations:'+env.auth.tenant.id,table:'tenants',title:'Integration connection state',observedAt:status.observedAt}],
+          sources:[integrationSource],
           navigation:[],limitations:[],data:status as unknown as Record<string,unknown>});
       } else if(Object.hasOwn(BUSINESS_TOOLS,name)||Object.hasOwn(BALANCE_TOOLS,name)||Object.hasOwn(REPORT_TOOLS,name)) {
         const a=object(input);
@@ -355,8 +363,13 @@ export async function modelConversation(message:string,locale:Locale,conversatio
     issue.excerpts=[...issue.excerpts,{role:'user' as const,content:redactSupportText(message),at:new Date(env.now).toISOString()},{role:'assistant' as const,content:redactSupportText(answer),at:new Date(env.now).toISOString()}].slice(-8);
     // Always retain canonical diagnostic findings and limitations, even if the
     // model omits one in its explanation. Never let prose hide partial coverage.
-    const shownSources=[...new Set([...answerSources,...evidence.flatMap(e=>e.sources.map(s=>s.id))])].map(id=>sources.get(id)!);
-    return {response:answer,sources:shownSources,navigation:[...new Set([...answerNavigation,...evidence.flatMap(e=>e.navigation.map(navId))])].map(id=>actions.get(id)!).filter(a=>a.target!=='rental_return'||!conflictingReturns.has(a.entityId??'')).slice(0,8),evidence,engine:'model',model:env.model.name,canRecheck:!!conversation.diagnostic||!!conversation.paymentCheck};
+    // These two lookups used to end in `!`, asserting every cited id was in the
+    // map. When one was not, the gap became `undefined`, JSON.stringify turned it
+    // into `null`, and the null travelled to the browser and into storage. A
+    // citation that cannot be resolved is survivable; a null in the list is not,
+    // so an unresolvable id is dropped here instead of asserted away.
+    const shownSources=[...new Set([...answerSources,...evidence.flatMap(e=>e.sources.map(s=>s.id))])].flatMap(id=>{const s=sources.get(id);return s?[s]:[];});
+    return {response:answer,sources:shownSources,navigation:[...new Set([...answerNavigation,...evidence.flatMap(e=>e.navigation.map(navId))])].flatMap(id=>{const a=actions.get(id);return a?[a]:[];}).filter(a=>a.target!=='rental_return'||!conflictingReturns.has(a.entityId??'')).slice(0,8),evidence,engine:'model',model:env.model.name,canRecheck:!!conversation.diagnostic||!!conversation.paymentCheck};
   }
   throw new ModelUnavailable();
 }

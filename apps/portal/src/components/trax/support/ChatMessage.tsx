@@ -197,7 +197,7 @@ export function ChatMessage({ message, onConfirmAction, onRejectAction, onNaviga
             <summary className="cursor-pointer rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2">
               {message.provenance.engine==='model'?'AI answer':'Prepared guidance fallback'} · {message.provenance.liveDataChecked?'Live records checked':'Live records not checked'}
             </summary>
-            <p className="mt-1">{message.sources?.map((source) => source.title).filter(Boolean).join(', ') || 'Phase 1 support scope'} · Guide {message.provenance.knowledgeVersion}. Release match has not been verified. This conversation is kept in browser memory only.</p>
+            <p className="mt-1">{message.sources?.map((source) => source?.title).filter(Boolean).join(', ') || 'Phase 1 support scope'} · Guide {message.provenance.knowledgeVersion}. Release match has not been verified. This conversation is kept in browser memory only.</p>
           </details>
         )}
         {!isUser && message.evidence?.filter(result=>Array.isArray(result?.checks)&&Array.isArray(result?.findings)&&Array.isArray(result?.limitations)
