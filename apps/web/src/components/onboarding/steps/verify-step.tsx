@@ -193,9 +193,15 @@ export function VerifyStep({
         ) : null}
       </div>
 
+      {/*
+        The same indigo the dialog's own primary buttons use — "Continue to
+        payment" sits a few pixels below this one, and the default variant read
+        as a dead grey slab beside it. Disabled still dims, so the button is
+        honest about not being pressable until six digits are in.
+      */}
       <Button
         type="button"
-        className="w-full"
+        className="w-full bg-indigo-600 text-white shadow-lg shadow-indigo-600/25 transition-all hover:bg-indigo-700 hover:shadow-xl hover:shadow-indigo-600/30 disabled:opacity-60 disabled:shadow-none dark:bg-indigo-500 dark:hover:bg-indigo-600"
         disabled={code.length !== 6 || busy || submitting}
         onClick={() => void submit(code)}
       >
