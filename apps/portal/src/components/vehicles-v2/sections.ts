@@ -26,8 +26,8 @@ import {
   Package,
   ShieldCheck,
   TrendingUp,
-  Disc3,
 } from "lucide-react";
+import { Wheel } from "@/components/ui/wheel";
 
 export type SectionId =
   | "vehicle"
@@ -63,7 +63,7 @@ export type VehicleSectionGroup = {
 export const SECTION_GROUPS: readonly VehicleSectionGroup[] = [
   {
     label: "The car",
-    items: [{ id: "vehicle", label: "Vehicle", icon: Disc3 }],
+    items: [{ id: "vehicle", label: "Vehicle", icon: Wheel }],
   },
   {
     label: "Pricing",

@@ -63,8 +63,8 @@ import {
   Mail,
   Newspaper,
   Plug,
-  Disc3,
 } from "lucide-react";
+import { Wheel } from "@/components/ui/wheel";
 // CRITICAL: `ui/sidebar` and `ui-v2/sidebar` each define their OWN React
 // context. The dashboard layout pairs this component with ui-v2's
 // SidebarProvider, so `useSidebar` MUST come from ui-v2 or every render throws
@@ -166,7 +166,7 @@ const CMS_PAGE_ORDER = [
 const CMS_PAGE_ICONS: Record<string, any> = {
   home: Home,
   about: Info,
-  fleet: Disc3,
+  fleet: Wheel,
   reviews: Star,
   promotions: Megaphone,
   contact: Mail,
@@ -593,7 +593,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   // up here; everything else lives under "More" below.
   const rawTopLevel: NavItem[] = ([
     { name: "Customers", href: "/customers", icon: Users },
-    { name: "Vehicles", href: "/vehicles", icon: Disc3 },
+    { name: "Vehicles", href: "/vehicles", icon: Wheel },
     { name: "Rentals", href: "/rentals", icon: FileText },
   ] as NavItem[]).filter(filterItem);
 
