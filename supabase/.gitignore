@@ -1,0 +1,19 @@
+# Supabase CLI scratch state. `supabase init` ships this file; it was missing
+# here, so .temp/ was committed instead — nine files of per-machine state (the
+# linked project ref, a pooler connection string, the CLI and Postgres versions)
+# that the CLI rewrites whenever it runs.
+#
+# The cost was not theoretical: the tree went dirty on its own, which is enough
+# for `git pull --rebase` to refuse ("cannot pull with rebase: You have unstaged
+# changes"), and two people on different CLI versions conflicted on a file
+# neither had edited.
+#
+# Nothing here is needed to build or deploy. `supabase link` regenerates it.
+.branches
+.temp
+
+# Secrets. These never belong in the repo.
+.env
+.env.keys
+.env.local
+.env.*.local
