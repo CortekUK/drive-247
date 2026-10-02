@@ -43,7 +43,9 @@ export const ORIGINAL_ONLY_SEGMENTS: readonly string[] = [
   'checkout',
   'offer',
   'pay',
-  'register',
+  // 'register' (customer invite links) moved to the new design for northwind
+  // on Oct 2 2026 — (northwind)/northwind-site/register/[token]. Every other
+  // tenant never reads this list and keeps (legacy)/register.
   'sms-opt-in',
   'verify',
 ];

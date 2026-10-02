@@ -327,10 +327,10 @@ export function contextTabPanels(tabs: ContextTab[]): DockPanel[] {
  * column and its docked twin cannot drift apart.
  */
 export function ContextColumn({
-  label, width = 360, children,
-}: { label: string; width?: number; children: ReactNode }) {
+  label, width = 360, bordered = true, children,
+}: { label: string; width?: number; bordered?: boolean; children: ReactNode }) {
   return (
-    <aside className="flex min-h-0 shrink-0 flex-col border-l border-foreground/10" style={{ width }} aria-label={label}>
+    <aside className={`flex min-h-0 shrink-0 flex-col${bordered ? " border-l border-foreground/10" : ""}`} style={{ width }} aria-label={label}>
       {children}
     </aside>
   );

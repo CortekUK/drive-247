@@ -3,15 +3,20 @@
 /**
  * The Vehicle stage of the rental control centre — real data, real actions.
  *
- * The design is the playground's `rental-create-fake/_vehicle-tab.tsx`; the data
- * is not, and neither is the shape. The sandbox was a CREATE screen, so its
- * Vehicle tab was a search box over a grid of photo cards — walk the lot, pick a
- * car. THAT DOES NOT BELONG HERE. This rental already has a car: it is on the
- * agreement, it is on the insurance policy, and on an Active rental it is
- * physically with the customer. A picker on this screen would be an invitation
- * to silently reassign a live rental, and reassignment is not a click — it is
- * `SwapVehicleDialog`, which checks the new car is free for the dates, re-prices
- * the rental, and can block the old car out for maintenance on the way past.
+ * LAYOUT (Oct 2026, island UI — the Customer stage's grammar): three stacked
+ * cards — a slim identity strip (Open vehicle for the full file), a mileage
+ * card and a pricing card (the same three tiers each, this hire marked)
+ * stacked on the left, the car's photos on the right — four sections. Mileage
+ * and pricing are read-only for now. The pane never scrolls.
+ *
+ * CHANGING THE CAR is "Clear vehicle" on the description line, exactly where
+ * Customer has "Clear customer". It does not open a dialog: the stage turns
+ * into an in-pane picker (`vehicle-picker.tsx`) — search, an illustrated empty
+ * state, then a list that says per car whether it is free for these dates.
+ * Saving is v1's `swap_rental_vehicle` RPC via `useVehicleSwap`, which moves
+ * the car, frees the old one and records the swap. It does NOT re-price the
+ * rental. Allowed while the rental is pending or active (a car can be swapped
+ * mid-hire, e.g. a breakdown); a closed rental's car is a matter of record.
  *
  * What survives from the prototype is its SELECTED view, which was always the
  * interesting half: which car went out, and what mileage it went out on.
@@ -48,7 +53,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { Car, ExternalLink, Gauge, Repeat, Info } from "lucide-react";
+import { Car, ExternalLink, Gauge, Image as ImageIcon, Undo2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
@@ -56,26 +61,11 @@ import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { formatCurrency, formatDistance, type DistanceUnit } from "@/lib/format-utils";
 import { resolveAgreementMileage } from "@/lib/agreement-mileage";
 import { getUnlimitedMileageOption } from "@/lib/mileage-utils";
-// v1's dialog, reused as it stands rather than re-skinned. It is the ONLY route
-// to `swap_rental_vehicle`, and it does considerably more than change a foreign
-// key — availability check, re-pricing, optional maintenance block on the car
-// coming off. A v2 copy would be a second call-site for that RPC that has to be
-// kept in step with the first. A modal in v1's grammar over a v2 screen is the
-// cheaper mismatch, and it is the same trade the Customer stage makes.
-import { SwapVehicleDialog } from "@/components/rentals/swap-vehicle-dialog";
 import { Button } from "@/components/ui-v2/button";
 import type { StageProps } from "./stages";
-import {
-  insetCls,
-  ActionButton,
-  EmptyHint,
-  HeroChip,
-  Panel,
-  Pill,
-  Section,
-  StatBlock,
-  Surface,
-} from "./_kit";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui-v2/hover-card";
+import { VehiclePicker } from "./vehicle-picker";
+import { insetCls, EmptyHint, HeroChip, Panel, Pill, StageAction, Surface } from "./_kit";
 
 /* ══════════════════════════════════════════════════════════════════════════
    The car's own row
@@ -181,30 +171,39 @@ function useExcessMileageCharge(rentalId: string) {
    ══════════════════════════════════════════════════════════════════════════ */
 
 const TIER_WORD = { daily: "day", weekly: "week", monthly: "month" } as const;
+/** For the slim tier lines, where every character counts. */
+const TIER_SHORT = { daily: "day", weekly: "wk", monthly: "mo" } as const;
 
 export function StageVehicle({ detail, refetch }: StageProps) {
   const { tenant } = useTenant();
   const { canEdit } = useManagerPermissions();
-  const [swapOpen, setSwapOpen] = useState(false);
+  /** Cleared: the stage shows the picker instead of the car. Nothing is written until a pick. */
+  const [picking, setPicking] = useState(false);
 
   const vehicle = detail.vehicle;
   const { data: facts, isLoading: factsLoading } = useVehicleFacts(vehicle?.id ?? null);
   const { data: excessCharge } = useExcessMileageCharge(detail.rental.id);
+  const { data: photos } = useVehiclePhotos(vehicle?.id ?? null);
 
   const currency = tenant?.currency_code || "USD";
   const distanceUnit = (tenant?.distance_unit || "miles") as DistanceUnit;
   const monthlyTierDays = tenant?.monthly_tier_days ?? 30;
 
-  /* A rental with no vehicle row is a broken record, not an empty state — the
-     FK is set on creation. Cheaper to say so plainly than to render a screen of
-     dashes that reads like a car with no details. */
+  /* No car yet: a rental started from "New Rental" (a draft — Pending, no
+     customer or car) is created empty and filled in here. The stage IS the
+     picker until a car is chosen; picking goes through the same swap path. */
   if (!vehicle) {
     return (
-      <Panel title="Vehicle" description="Which car went out.">
-        <EmptyHint>
-          This rental has no vehicle attached to it. Nothing here can describe a car until one is — open it in
-          the rentals list and set a vehicle.
-        </EmptyHint>
+      <Panel fill title="Vehicle" description="Which car goes out? Pick one to put it on this rental.">
+        <VehiclePicker
+          rentalId={detail.rental.id}
+          currentVehicleId={null}
+          startDate={detail.rental.start_date ? String(detail.rental.start_date).slice(0, 10) : null}
+          endDate={detail.rental.end_date ? String(detail.rental.end_date).slice(0, 10) : null}
+          onDone={(changed) => {
+            if (changed) refetch();
+          }}
+        />
       </Panel>
     );
   }
@@ -248,12 +247,6 @@ export function StageVehicle({ detail, refetch }: StageProps) {
     ? getUnlimitedMileageOption(facts, Math.max(1, detail.days ?? 1), monthlyTierDays)
     : { available: false, tier: mileage.tier, flatAmount: 0 };
 
-  const mileageTone = mileage.isUnlimited
-    ? "bg-success-light text-success"
-    : mileage.isUnspecified
-      ? "bg-muted text-muted-foreground"
-      : "bg-primary-light text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]";
-
   const mileageHeadline = mileage.isUnlimited
     ? "Unlimited mileage"
     : mileage.isUnspecified
@@ -279,237 +272,309 @@ export function StageVehicle({ detail, refetch }: StageProps) {
   const swappable = detail.status.value === "active" || detail.status.value === "pending";
   const mayEdit = canEdit("rentals");
 
+  const swapBlocked = !mayEdit
+    ? "Your role cannot change rentals."
+    : !swappable
+      ? "A completed or cancelled rental's car is a matter of record — swapping is only offered while it is pending or active."
+      : null;
+
+  const tierLabel = mileage.isUnlimited
+    ? "Unlimited"
+    : mileage.isUnspecified
+      ? "Not specified"
+      : `${mileage.tier.charAt(0).toUpperCase() + mileage.tier.slice(1)} tier`;
+
+  const subline = [vehicle.year, facts?.colour, facts?.fuel_type, facts?.category].filter(Boolean).join(" · ");
+  const photoSlots = (photos?.length ? photos : facts?.photo_url ? [facts.photo_url] : []).slice(0, 3);
+  const cover = photoSlots[0] ?? null;
+
   return (
     <Panel
+      fill
       title="Vehicle"
       description="Which car went out, and the mileage it went out on."
-      footer={
-        <div className="flex flex-wrap items-center gap-3">
-          <ActionButton
-            variant="outline"
-            onClick={() => setSwapOpen(true)}
-            disabled={!swappable || !mayEdit}
-            title={
-              !mayEdit
-                ? "Your role cannot change rentals."
-                : !swappable
-                  ? "A completed or cancelled rental's car is a matter of record — swapping is only offered while it is pending or active."
-                  : undefined
-            }
-          >
-            <Repeat className="size-4" />
-            Swap the car
-          </ActionButton>
-          <p className="text-xs text-muted-foreground">
-            Swapping checks the new car is free for these dates and re-prices the rental.
-          </p>
-        </div>
+      action={
+        picking ? (
+          /* Back out: the rental still has its car — clearing wrote nothing. */
+          <StageAction icon={Undo2} label={`Keep the ${vehicle.model || vehicle.reg}`} onClick={() => setPicking(false)} />
+        ) : (
+          /* Same place, same grammar as Customer's "Clear customer". Allowed
+             while the rental is pending or active (v1's rule — a car can be
+             swapped mid-hire, e.g. a breakdown). */
+          <StageAction icon={X} label="Clear vehicle" onClick={() => setPicking(true)} disabledReason={swapBlocked} />
+        )
       }
     >
-      {/* ── the car ──────────────────────────────────────────────────────── */}
-      <Surface className="overflow-hidden p-0">
-        {facts?.photo_url && (
-          <div className="aspect-[21/8] w-full overflow-hidden bg-muted">
-            {/* A plain <img>, not next/image: these URLs come from whatever
-                storage host the row happens to carry, and next/image throws at
-                runtime on a host that is not in `remotePatterns`. Same call the
-                vehicles-v2 gallery makes. */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={facts.photo_url} alt="" className="size-full object-cover" />
-          </div>
-        )}
-
-        <div className="flex items-start gap-4 p-6">
-          {!facts?.photo_url && (
-            <span className="flex size-12 shrink-0 items-center justify-center rounded-3xl bg-primary-light text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
-              <Car className="size-5" />
-            </span>
-          )}
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="font-heading text-lg font-semibold tracking-tight">{name}</h3>
-              <Pill tone="neutral">{vehicle.reg}</Pill>
-              {/* The car's PRESENT status, which is a fact about the car and not
-                  about this rental — an Available car on an Active rental is
-                  worth seeing, because it means the fleet thinks it is on the
-                  lot. The rental's own status lives in the right rail. */}
-              <HeroChip tone={vehicle.status === "Available" ? "success" : "muted"}>
-                {vehicle.status || "No status"}
-              </HeroChip>
+      {picking ? (
+        <VehiclePicker
+          rentalId={rental.id}
+          currentVehicleId={vehicle.id}
+          startDate={rental.start_date ? String(rental.start_date).slice(0, 10) : null}
+          endDate={rental.end_date ? String(rental.end_date).slice(0, 10) : null}
+          onDone={(changed) => {
+            setPicking(false);
+            if (changed) refetch();
+          }}
+        />
+      ) : (
+        /* Island layout, the Customer stage's three cards: a slim identity
+           strip, a compact summary, and the visual card filling the rest. */
+        <div className="flex h-full min-h-0 flex-col gap-4">
+          {/* ── which car — brief; its full file is one click away ──────── */}
+          <Surface className="shrink-0 px-5 py-4">
+            <div className="flex items-center gap-3.5">
+              <span className="relative flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-3xl bg-primary-light text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
+                {cover ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={cover} alt="" className="absolute inset-0 size-full object-cover" />
+                ) : (
+                  <Car className="size-5" />
+                )}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="font-heading text-base font-semibold tracking-tight">{name}</h3>
+                  {/* The car's PRESENT status — a fact about the car, not this
+                      rental. An Available car on an Active rental is worth
+                      seeing: the fleet thinks it is on the lot. */}
+                  <HeroChip tone={vehicle.status === "Available" ? "success" : "muted"}>
+                    {vehicle.status || "No status"}
+                  </HeroChip>
+                </div>
+                <p className="mt-0.5 truncate text-[13px] text-muted-foreground">
+                  <span className="font-mono tracking-wide">{vehicle.reg}</span>
+                  {subline && <> · <span className="capitalize">{subline}</span></>}
+                </p>
+              </div>
+              <Button variant="outline" size="sm" asChild>
+                <Link href={`/vehicles/${vehicle.id}`}>
+                  <ExternalLink />
+                  Open vehicle
+                </Link>
+              </Button>
             </div>
-            <p className="mt-1 truncate text-sm text-muted-foreground">
-              {[vehicle.year, facts?.colour, facts?.fuel_type, facts?.category]
-                .filter(Boolean)
-                .join(" · ") || "No description on file"}
-            </p>
-          </div>
-          {/* The one navigation off this stage. The car's own page is where you
-              edit it, photograph it, or read its whole file; this stage answers
-              a question about THIS rental and hands off for the rest. */}
-          <Button variant="outline" size="sm" asChild>
-            <Link href={`/vehicles/${vehicle.id}`}>
-              <ExternalLink />
-              Open vehicle
-            </Link>
-          </Button>
+          </Surface>
+
+          {/* Four sections, always stacked vertically — never arranged side by
+              side (Ghulam, Oct 2 2026): the strip, mileage, pricing (the same
+              three tiers each, this hire's tier marked in both), then the
+              photos filling what is left. Mileage and pricing are read-only. */}
+              {/* ── mileage — one slim line: the tiers, then the terms ─────────
+                  Little to read here, so it gives the height to the photos. */}
+              <Surface className="flex flex-none flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3.5">
+                <h3 className="w-16 shrink-0 font-heading text-sm font-semibold">Mileage</h3>
+                <TierRow
+                  activeTier={mileage.isUnlimited ? null : mileage.tier}
+                  tiers={(["daily", "weekly", "monthly"] as const).map((tier) => {
+                    const allowance = mileage.isUnlimited
+                      ? null
+                      : (rental[`${tier}_mileage_override`] ?? facts?.[`${tier}_mileage`] ?? null);
+                    return {
+                      tier,
+                      value: mileage.isUnlimited
+                        ? "Unlimited"
+                        : allowance != null && Number(allowance) > 0
+                          ? `${formatDistance(Number(allowance), distanceUnit)}/${TIER_SHORT[tier]}`
+                          : "—",
+                    };
+                  })}
+                />
+                <span className="ml-auto flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  {overridden && (
+                    <span title="These figures were set for this rental. The car's own defaults are on its page.">
+                      <Pill tone="neutral">Set for this rental</Pill>
+                    </span>
+                  )}
+                  {/* The hire ran over. Neither amber nor red: a charge, not a
+                      fault. Whether it is settled is the Payments stage's answer. */}
+                  {excessCharge && excessCharge.amount > 0 && (
+                    <span title={`Reckoned at ${mileage.excessRate}. What has been paid against it is on the Payments stage.`}>
+                      <Pill tone={excessCharge.remaining <= 0 ? "success" : "primary"}>
+                        Over by {formatCurrency(excessCharge.amount, currency)} ·{" "}
+                        {excessCharge.remaining <= 0
+                          ? "paid"
+                          : excessCharge.remaining < excessCharge.amount
+                            ? "part paid"
+                            : "unpaid"}
+                      </Pill>
+                    </span>
+                  )}
+                  <span>
+                    Excess{" "}
+                    <span className="font-medium text-foreground">
+                      {mileage.isUnlimited
+                        ? "none"
+                        : facts?.excess_mileage_rate != null || rental.excess_mileage_rate_override != null
+                          ? `${formatCurrency(Number(rental.excess_mileage_rate_override ?? facts?.excess_mileage_rate), currency)}/${distanceUnit === "km" ? "km" : "mi"}`
+                          : "not set"}
+                    </span>
+                  </span>
+                  <span>
+                    Odo{" "}
+                    <span className="font-medium text-foreground">
+                      {facts?.current_mileage != null ? formatDistance(facts.current_mileage, distanceUnit) : "—"}
+                    </span>
+                  </span>
+                  <MileageHover
+                    tone={mileage.isUnlimited ? "success" : mileage.isUnspecified ? "neutral" : "primary"}
+                    label={mileage.isUnlimited ? "Unlimited" : mileage.isUnspecified ? "Not specified" : factsLoading ? "…" : mileage.allowance.split(" (")[0]}
+                    blurb={factsLoading ? "Reading the car's mileage terms…" : mileageBlurb}
+                    upgrade={
+                      !mileage.isUnlimited && upgrade.available
+                        ? `This car offers unlimited on the ${upgrade.tier} tier for ${formatCurrency(upgrade.flatAmount, currency)} — but only at booking. Adding it later would need a ledger charge, and nothing raises one.`
+                        : null
+                    }
+                  />
+                </span>
+              </Surface>
+
+              {/* ── pricing — the same slim line ──────────────────────────────── */}
+              <Surface className="flex flex-none flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3.5">
+                <h3 className="w-16 shrink-0 font-heading text-sm font-semibold">Pricing</h3>
+                <TierRow
+                  activeTier={mileage.tier}
+                  tiers={(
+                    [
+                      ["daily", vehicle.daily_rent],
+                      ["weekly", vehicle.weekly_rent],
+                      ["monthly", vehicle.monthly_rent],
+                    ] as const
+                  ).map(([tier, rate]) => ({
+                    tier,
+                    value: rate != null && Number(rate) > 0 ? `${formatCurrency(Number(rate), currency)}/${TIER_SHORT[tier]}` : "—",
+                  }))}
+                />
+                <span className="ml-auto text-xs text-muted-foreground">
+                  This rental{" "}
+                  <span className="font-semibold text-foreground">
+                    {rental.monthly_amount != null ? formatCurrency(Number(rental.monthly_amount), currency) : "—"}
+                  </span>
+                  {detail.days != null && ` for ${detail.days} ${detail.days === 1 ? "day" : "days"}`}
+                </span>
+              </Surface>
+
+            {/* ── photos — the car, filling what is left ───────────────────── */}
+            <Surface className="flex min-h-0 flex-1 flex-col p-5">
+              <div className="flex items-center gap-2.5">
+                <h3 className="font-heading text-sm font-semibold">Photos</h3>
+                <span className="flex-1 text-xs text-muted-foreground">
+                  {photos?.length ? `${photos.length} on file` : ""}
+                </span>
+              </div>
+              <div className="mt-4 grid min-h-24 flex-1 grid-cols-3 gap-3">
+                {[0, 1, 2].map((i) => (
+                  <div key={i} className={cn(insetCls, "relative min-h-0 overflow-hidden")}>
+                    {photoSlots[i] ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={photoSlots[i]} alt="" className="absolute inset-0 size-full object-cover" />
+                    ) : (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 text-muted-foreground/50">
+                        <ImageIcon className="size-4" />
+                        <span className="text-[10px]">{i === 0 ? "No photos on file" : "No photo"}</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </Surface>
         </div>
-      </Surface>
-
-      {/* ── mileage ──────────────────────────────────────────────────────── */}
-      <Section
-        title="Mileage"
-        description="What this hire includes, and what it costs to go past it."
-        right={
-          mileage.isUnlimited ? (
-            <Pill tone="success">Unlimited</Pill>
-          ) : mileage.isUnspecified ? (
-            <Pill tone="neutral">Not specified</Pill>
-          ) : (
-            <Pill tone="primary">
-              {mileage.tier.charAt(0).toUpperCase() + mileage.tier.slice(1)} tier
-            </Pill>
-          )
-        }
-      >
-        <div className="flex items-start gap-4">
-          <span className={cn("flex size-11 shrink-0 items-center justify-center rounded-3xl", mileageTone)}>
-            <Gauge className="size-5" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="font-heading text-sm font-semibold">
-              {factsLoading ? "Reading the car's mileage terms…" : mileageHeadline}
-            </p>
-            {!factsLoading && (
-              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{mileageBlurb}</p>
-            )}
-          </div>
-        </div>
-
-        <div className="mt-5 grid gap-2 sm:grid-cols-3">
-          <StatBlock
-            label="Allowance"
-            value={
-              mileage.isUnlimited
-                ? "Unlimited"
-                : mileage.perUnit != null
-                  ? formatDistance(Math.round(mileage.perUnit), distanceUnit)
-                  : "—"
-            }
-            hint={
-              mileage.isUnlimited
-                ? "No limit on this rental"
-                : mileage.perUnit != null
-                  ? `per ${TIER_WORD[mileage.tier]}, pro-rata across the hire`
-                  : "Nothing configured"
-            }
-          />
-          <StatBlock
-            label="Excess"
-            value={
-              mileage.isUnlimited
-                ? "None"
-                : facts?.excess_mileage_rate != null || rental.excess_mileage_rate_override != null
-                  ? formatCurrency(
-                      Number(rental.excess_mileage_rate_override ?? facts?.excess_mileage_rate),
-                      currency
-                    )
-                  : "—"
-            }
-            hint={
-              mileage.isUnlimited
-                ? "Unlimited rentals cannot run over"
-                : `per additional ${distanceUnit === "km" ? "km" : "mile"}`
-            }
-          />
-          <StatBlock
-            label="Odometer"
-            value={
-              facts?.current_mileage != null ? formatDistance(facts.current_mileage, distanceUnit) : "—"
-            }
-            hint={facts?.current_mileage != null ? "Latest reading on the car" : "No reading on file"}
-          />
-        </div>
-
-        {/* The hire ran over. Neither amber nor red — amber on this screen means
-            "out of date" and red means a fault, and a customer who drove further
-            than they bought is neither. It is a charge, and whether it has been
-            settled is the Payments stage's answer, not this one's. */}
-        {excessCharge && excessCharge.amount > 0 && (
-          <div className={cn(insetCls, "mt-4 flex flex-wrap items-center justify-between gap-3 px-5 py-4")}>
-            <div className="min-w-0">
-              <p className="text-sm font-medium">
-                This hire went over its allowance — {formatCurrency(excessCharge.amount, currency)} charged
-              </p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                Reckoned at {mileage.excessRate}. What has been paid against it is on the Payments stage.
-              </p>
-            </div>
-            <Pill
-              tone={
-                excessCharge.remaining <= 0
-                  ? "success"
-                  : excessCharge.remaining < excessCharge.amount
-                    ? "primary"
-                    : "neutral"
-              }
-            >
-              {excessCharge.remaining <= 0
-                ? "Paid"
-                : excessCharge.remaining < excessCharge.amount
-                  ? "Part paid"
-                  : "Unpaid"}
-            </Pill>
-          </div>
-        )}
-
-        {overridden && (
-          <div className={cn(insetCls, "mt-4 flex items-start gap-3 px-5 py-4")}>
-            <Info className="mt-0.5 size-4 shrink-0 text-muted-foreground/70" />
-            <p className="text-xs text-muted-foreground">
-              These figures were set for this rental specifically. The car&rsquo;s own defaults are on its page
-              and are not what this hire runs on.
-            </p>
-          </div>
-        )}
-
-        {/* The upgrade the car offers but this rental did not take. Stated, not
-            offered: unlimited mileage is only ever written at rental creation
-            (`rentals/new` and `rental-create-v2` are the sole writers of
-            `is_unlimited_mileage`), and taking it later would mean raising a
-            ledger charge as well as flipping a flag. There is no path for that,
-            so the button says so rather than doing nothing. */}
-        {!mileage.isUnlimited && upgrade.available && (
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            <ActionButton
-              variant="outline"
-              disabled
-              title="Unlimited mileage is only ever set when the rental is created — adding it later would need a ledger charge as well, and nothing raises one. Cancel and rebook, or add the charge on the Payments stage."
-            >
-              Add unlimited mileage
-            </ActionButton>
-            <p className="text-xs text-muted-foreground">
-              This car offers unlimited on the {upgrade.tier} tier for{" "}
-              {formatCurrency(upgrade.flatAmount, currency)} — but only at booking.
-            </p>
-          </div>
-        )}
-      </Section>
-
-      {/* ── the reused v1 dialog ─────────────────────────────────────────── */}
-      {/* Re-read on close, always. `useVehicleSwap` invalidates v1's key
-          (`["rental", id]`) and five list keys, but not `rental-detail-v2` —
-          the control centre reads a different column set under a different key
-          on purpose (see `use-rental-detail-v2`). Without this the swap lands
-          in the database and the screen keeps showing the old car. Refetching
-          on a cancelled dialog too is the cheaper half of the trade. */}
-      <SwapVehicleDialog
-        open={swapOpen}
-        onOpenChange={(open) => {
-          setSwapOpen(open);
-          if (!open) refetch();
-        }}
-        rental={detail.rental}
-      />
+      )}
     </Panel>
   );
 }
+
+/**
+ * Three tiers in one line — daily, weekly, monthly — the one this hire runs
+ * on filled in. Mileage and Pricing both use it, so the two read the same.
+ */
+function TierRow({
+  tiers,
+  activeTier,
+}: {
+  tiers: { tier: "daily" | "weekly" | "monthly"; value: string }[];
+  activeTier: "daily" | "weekly" | "monthly" | null;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {tiers.map((t) => {
+        const active = t.tier === activeTier;
+        return (
+          <span
+            key={t.tier}
+            title={active ? "The tier this hire runs on" : undefined}
+            className={cn(
+              "inline-flex items-baseline gap-2 rounded-full px-3 py-1.5 ring-1",
+              active
+                ? "bg-primary/[0.08] ring-primary/25"
+                : "bg-muted/40 ring-foreground/5"
+            )}
+          >
+            <span
+              className={cn(
+                "text-[10px] font-medium uppercase tracking-wider",
+                active ? "text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" : "text-muted-foreground"
+              )}
+            >
+              {t.tier}
+            </span>
+            <span className="text-sm font-semibold">{t.value}</span>
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * The car's gallery, in display order. Tenant-scoped like every read here
+ * (RLS is off — V2_PLAN §5).
+ */
+function useVehiclePhotos(vehicleId: string | null) {
+  const { tenant } = useTenant();
+  return useQuery({
+    queryKey: ["rental-stage-vehicle-photos-v2", tenant?.id, vehicleId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("vehicle_photos")
+        .select("photo_url, display_order")
+        .eq("vehicle_id", vehicleId!)
+        .eq("tenant_id", tenant!.id)
+        .order("display_order", { ascending: true });
+      if (error) throw error;
+      return ((data ?? []) as { photo_url: string | null }[]).map((p) => p.photo_url).filter(Boolean) as string[];
+    },
+    enabled: !!vehicleId && !!tenant?.id,
+  });
+}
+
+/** The tier chip; hover explains the terms, in Trax's white explainer card. */
+function MileageHover({
+  tone,
+  label,
+  blurb,
+  upgrade,
+}: {
+  tone: "success" | "neutral" | "primary";
+  label: string;
+  blurb: string;
+  upgrade: string | null;
+}) {
+  return (
+    <HoverCard openDelay={120} closeDelay={60}>
+      <HoverCardTrigger asChild>
+        <span className="inline-flex cursor-default">
+          <Pill tone={tone}>
+            <Gauge />
+            {label}
+          </Pill>
+        </span>
+      </HoverCardTrigger>
+      <HoverCardContent side="top" align="start" sideOffset={8} collisionPadding={16} className="w-80 rounded-2xl p-4 text-left">
+        <p className="text-[13px] font-semibold text-foreground">How mileage works on this hire</p>
+        <p className="mt-1.5 text-[12.5px] leading-snug text-muted-foreground">{blurb}</p>
+        {upgrade && <p className="mt-3 border-t border-foreground/5 pt-3 text-[12px] text-muted-foreground">{upgrade}</p>}
+      </HoverCardContent>
+    </HoverCard>
+  );
+}
+

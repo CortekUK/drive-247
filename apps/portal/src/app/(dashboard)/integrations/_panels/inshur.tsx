@@ -31,7 +31,7 @@ import { CalendarClock, MapPin, Receipt, ShieldCheck } from "lucide-react";
  * colour on the cards where it matters.
  */
 export function InshurStatus(_props: { tenant: PanelTenant }) {
-  return <StatusChip state="disconnected" label="Coming soon" />;
+  return <StatusChip state="disconnected" label="Soon" />;
 }
 
 /** What the integration will give the operator, drawn from the real implementation. */

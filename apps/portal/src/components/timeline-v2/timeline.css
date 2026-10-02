@@ -216,3 +216,69 @@
 .tl-legacy-detail .tl-context-body { padding-right: 12px; }
 
 .tl-row-caption { z-index: 6; background: hsl(var(--card)); border-radius: 3px; }
+
+/* ── fill (the Rentals page calendar) ────────────────────────────────────────
+   The board takes its parent's measured height and only the grid scrolls; the
+   grid's last row (.tl-filler) stretches so the day columns, weekend shading
+   and the today line run to the bottom instead of stopping after the rows. */
+.rental-timeline.tl-fill { height: 100%; display: flex; flex-direction: column; }
+.tl-fill > .tl-toolbar, .tl-fill > .tl-window-meta, .tl-fill > .tl-footer, .tl-fill > .tl-empty, .tl-fill > .tl-day-detail { flex-shrink: 0; }
+.tl-fill .tl-scroll { flex: 1 1 0; min-height: 0; max-height: none; display: flex; flex-direction: column; }
+.tl-fill .tl-scroll > .tl-axis { flex: 1 0 auto; display: flex; flex-direction: column; }
+.tl-fill .tl-grid-body { flex: 1 0 auto; display: flex; flex-direction: column; }
+.tl-fill .tl-filler { flex: 1 0 0; min-height: 0; border-bottom: 0; }
+.tl-fill .tl-filler .tl-row-dates, .tl-fill .tl-filler .tl-cells { height: 100%; }
+/* Edge to edge: no card frame. The board spans the content area from the
+   sidebar to the window edge (the wrapper's -mx-10), so its own inner edges
+   take the page's 40px gutter back — the toolbar, meta row, footer and the
+   identity column line up with the page title above. */
+.rental-timeline.tl-fill { border: 0; border-radius: 0; box-shadow: none; border-top: 1px solid hsl(var(--border)); }
+.tl-fill > .tl-toolbar, .tl-fill > .tl-window-meta, .tl-fill > .tl-footer { padding-left: 40px; padding-right: 40px; }
+.tl-fill .tl-identity { padding-left: 40px; }
+
+/* ── the full-screen calendar's toolbar and colour (tl-fill only) ─────────────
+   Two tidy rows instead of three loose ones:
+     row 1 · title · ‹ Today › · the date range ········ Week|2w|Month · tools · List view
+     row 2 · Rental|Vehicle|Customer ······················ search · Filters · Block dates
+   The three source groups are flattened with `display: contents` and placed
+   on one grid by area, so no markup is duplicated for this view. */
+.tl-fill > .tl-toolbar {
+  display: grid; align-items: center; gap: 12px 10px; padding-top: 18px; padding-bottom: 14px;
+  grid-template-columns: auto auto minmax(0, 1fr) auto auto auto;
+  grid-template-areas:
+    "title nav   range  periods actions actions"
+    "persp persp search search  filters block";
+  background: linear-gradient(180deg, hsl(var(--primary) / .07), hsl(var(--primary) / .025));
+}
+.tl-fill > .tl-toolbar > .tl-toolbar-heading,
+.tl-fill > .tl-toolbar > .tl-controls,
+.tl-fill > .tl-toolbar > .tl-navigation { display: contents; }
+.tl-fill .tl-toolbar-heading h3 { grid-area: title; font-size: 18px; font-weight: 600; margin-right: 10px; color: hsl(var(--foreground)); }
+.tl-fill .tl-period-nav { grid-area: nav; }
+.tl-fill .tl-range-label { grid-area: range; font-size: 13px; color: hsl(var(--v2-link, var(--primary))); }
+.tl-fill .tl-periods { grid-area: periods; margin-left: 0; }
+.tl-fill .tl-actions { grid-area: actions; margin-left: 0; justify-self: end; }
+.tl-fill .tl-perspectives { grid-area: persp; justify-self: start; }
+.tl-fill .tl-controls > .tl-search { grid-area: search; justify-self: end; width: 300px; max-width: 100%; margin-left: 0; flex: none; }
+.tl-fill .tl-filter-btn { grid-area: filters; }
+.tl-fill .tl-block-btn { grid-area: block; }
+.tl-fill .tl-active-filters { grid-column: 1 / -1; }
+
+/* Accent, not white: tinted controls, an accent active state, a washed
+   header and identity column, accent weekends and accent-tinted grid lines. */
+.tl-fill .tl-perspectives, .tl-fill .tl-periods { background: hsl(var(--primary) / .08); }
+.tl-fill .tl-perspectives button, .tl-fill .tl-periods button { color: hsl(var(--v2-link, var(--primary)) / .75); }
+.tl-fill .tl-perspectives button[aria-pressed=true], .tl-fill .tl-periods button[aria-pressed=true] { background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); box-shadow: none; }
+.tl-fill .tl-search { background: hsl(var(--card)); border-color: hsl(var(--primary) / .2); }
+.tl-fill .tl-window-meta { background: hsl(var(--primary) / .06); color: hsl(var(--v2-link, var(--primary))); border-top-color: hsl(var(--primary) / .12); }
+.tl-fill .tl-scroll { border-top-color: hsl(var(--primary) / .12); }
+/* Sticky parts stay opaque — the tint is layered over the card colour, or the
+   rows would show through as they scroll under. */
+.tl-fill .tl-grid-header { background: linear-gradient(hsl(var(--primary) / .05), hsl(var(--primary) / .05)), hsl(var(--card)); box-shadow: 0 1px 0 hsl(var(--primary) / .15); }
+.tl-fill .tl-grid-header .tl-identity { background: linear-gradient(hsl(var(--primary) / .07), hsl(var(--primary) / .07)), hsl(var(--card)); }
+.tl-fill .tl-date > span { color: hsl(var(--v2-link, var(--primary)) / .7); }
+.tl-fill .tl-identity { background: linear-gradient(hsl(var(--primary) / .03), hsl(var(--primary) / .03)), hsl(var(--card)); border-right-color: hsl(var(--primary) / .14); }
+.tl-fill .tl-date, .tl-fill .tl-cell { border-right-color: hsl(var(--primary) / .08); }
+.tl-fill .tl-grid-row { border-bottom-color: hsl(var(--primary) / .08); }
+.tl-fill .tl-weekend { background: hsl(var(--primary) / .045); }
+.tl-fill .tl-footer { background: hsl(var(--primary) / .04); border-top-color: hsl(var(--primary) / .12); }

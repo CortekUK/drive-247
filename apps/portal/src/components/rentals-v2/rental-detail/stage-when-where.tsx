@@ -1,519 +1,535 @@
 "use client";
 
 /**
- * The When & where stage of the rental control centre — real data, real actions.
+ * The When & where stage of the rental control centre — WHEN, HOW, WHERE.
  *
- * The design is the playground's `rental-create-fake/_when-where-tab.tsx`, and
- * its central argument is kept: this is ONE stage, not four.
+ * Island layout (Oct 2026, the Customer stage's grammar), as simple as it
+ * gets: two sections, Pickup and Return, each with WHEN (date and time), HOW
+ * the car changes hands, and WHERE, with its fee — then a map filling the rest
+ * (`where-map.tsx`): P and R pins joined by a dashed line, a hover card on each
+ * with its date, time, how and address, your places and delivery area under it.
  *
- * Dates, times, delivery mode and location look like four separate questions
- * until you try to answer them. Whether the car is delivered changes what
- * LOCATION even means — one of your own sites becomes an address of the
- * customer's — and whether a lockbox is in play depends on the car and on the
- * tenant, not on the calendar. Split apart, an operator answers one by bouncing
- * between three others. Kept together it reads as one sentence: the car leaves
- * HERE at THIS time and comes back THERE at THAT one.
+ * ── the three "how"s, as Settings → Locations defines them ────────────────
  *
- * The two halves stay mirrored — Out and Back carry the same four facts in the
- * same order — but the prototype's "comes back the same way" switch is gone.
- * That switch was a create-time shortcut for filling a form; this rental's two
- * legs are already recorded, and hiding the return behind a toggle would hide a
- * fact rather than save a click. Where the two legs match, the Back card simply
- * says so in a line.
+ *   fixed     the customer comes to the tenant's fixed address — no fee
+ *   location  one of the tenant's saved locations — that location's fee
+ *   area      the tenant delivers to the customer's address within a radius —
+ *             one fee, or priced by distance (`resolveDeliveryFee`, the same
+ *             function the create flow's LocationPicker uses)
  *
- * ── what the prototype invented, and what is actually here ─────────────────
+ * `rentals.delivery_option` records the pickup's how, as the create flow
+ * writes it. The return's how is not stored on its own, so it is read back from
+ * what the return carries (a saved location, the fixed address, or an address).
  *
- * The sandbox had a geocoder-shaped address book, so it could show a live
- * distance and light up the matching delivery band. A real rental stores no
- * distance — `rentals` carries the addresses, the two fees, and nothing about
- * how far apart they are. So the band ladder is shown as the operator's own
- * price list (what it WOULD cost further out, which is the question they get on
- * the phone) with no band lit, and the fee shown is the one actually on the
- * rental. Inventing a matched band would be inventing a distance.
+ * ── editing, in place ─────────────────────────────────────────────────────
  *
- * ── editing ────────────────────────────────────────────────────────────────
+ * No edit button: while the rental can still change, the fields ARE the
+ * display, and a Save bar appears over the map once something differs. Locked
+ * past its first four stages (`update_rental_terms_v2`'s own guard, asked with
+ * `p_dry_run`), it reads as plain text and says why in the stage-action spot.
  *
- * `EditPickupReturnDialog` is the only writer, and it deliberately writes TIMES
- * AND LOCATIONS ONLY. Dates are frozen at creation because moving them would
- * desync the price, the insurance policy and a signed agreement — so this stage
- * says that rather than offering a date field that does nothing.
+ * Moving the dates moves the money, so saving RE-PRICES (Ghulam, Oct 2 2026):
+ * the rental price is re-run with the same engine bookings use
+ * (`calculateRentalPriceBreakdown`: tiers, weekend/holiday surcharges, per-car
+ * overrides and day prices), tax and service fee with the same rules as the
+ * create flow, and `update_rental_terms_v2` rewrites the invoice and
+ * regenerates the still-unpaid charges in one transaction. The new total is on
+ * screen before Save. When only times or places change, the rental price is
+ * left exactly as it is — only the delivery and collection fees move.
  */
 
-import { useMemo, useState } from "react";
-import {
-  AlertTriangle,
-  CalendarDays,
-  Clock,
-  KeyRound,
-  Lock,
-  MapPin,
-  Pencil,
-  Store,
-  Truck,
-} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Building2, Lock, MapPin, Truck } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
-import { useManagerPermissions } from "@/hooks/use-manager-permissions";
+import { useToast } from "@/hooks/use-toast";
 import { usePickupLocations, type PickupLocation } from "@/hooks/use-pickup-locations";
 import { useRentalSettings } from "@/hooks/use-rental-settings";
-import { formatCurrency } from "@/lib/format-utils";
+import { useWeekendPricing } from "@/hooks/use-weekend-pricing";
+import { useTenantHolidays } from "@/hooks/use-tenant-holidays";
+import { useVehiclePricingOverrides } from "@/hooks/use-vehicle-pricing-overrides";
+import { useVehicleDailyPrices } from "@/hooks/use-vehicle-daily-prices";
+import { calculateRentalPriceBreakdown } from "@/lib/calculate-rental-price";
+import { formatCurrency, type DistanceUnit } from "@/lib/format-utils";
 import { resolveAgreementTimeZone } from "@/lib/agreement-datetime";
-// v1's dialog, reused as it stands. It is the only writer of pickup/return
-// times and locations, it clears the saved-location FKs when a freeform address
-// is typed, and it writes an audit-log entry. A v2 copy would be a second
-// writer of the same four columns.
-import { EditPickupReturnDialog } from "@/components/rentals/edit-pickup-return-dialog";
+import { LocationAutocomplete } from "@/components/ui/location-autocomplete";
+import { Button } from "@/components/ui-v2/button";
 import type { RentalRow } from "./use-rental-detail-v2";
 import type { StageProps } from "./stages";
-import {
-  cardCls,
-  fmtDate,
-  fmtDateTime,
-  insetCls,
-  ActionButton,
-  EmptyHint,
-  Panel,
-  Pill,
-} from "./_kit";
+import { WhereMap, type MapPlace } from "./where-map";
+import { RentalDatesDialog } from "./rental-dates-dialog";
+import { fmtDate, Panel, Pill, StageAction, Surface } from "./_kit";
 
-/* ══════════════════════════════════════════════════════════════════════════
-   Reading a leg off the rental
-   ══════════════════════════════════════════════════════════════════════════ */
+type How = "fixed" | "location" | "area";
+type End = { how: How; address: string; locationId: string | null; fee: number; outOfRadius?: boolean };
 
-/**
- * "14:00:00" → "2:00 PM".
- *
- * `rentals.pickup_time` is a bare `time` column with no date and no zone — it
- * means "two in the afternoon wherever the car is". Built against an arbitrary
- * local date rather than parsed as an instant, because there is no instant to
- * parse; the zone it should be read in is stated once in the footer.
- */
-function fmtClock(raw: string | null | undefined): string | null {
-  if (!raw) return null;
-  const [h, m] = String(raw).split(":");
-  const hours = Number(h);
-  const minutes = Number(m);
-  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
-  const d = new Date(2000, 0, 1, hours, minutes);
-  return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-}
-
-/** One end of the rental, as the row actually records it. */
-type Leg = {
-  /** The `date` column for this end. Null on a rental with no return date. */
-  date: string | null;
-  time: string | null;
-  /** True when WE move the car, rather than the customer coming to us. */
-  delivered: boolean;
-  /** A saved location row, when the rental points at one. */
-  location: PickupLocation | null;
-  /** Whatever address the rental carries — freeform, or the delivery address. */
-  address: string | null;
-  /** What this leg adds to the rental. */
-  fee: number;
+const HOW_LABEL: Record<How, { out: string; back: string; icon: typeof Building2 }> = {
+  fixed: { out: "Collects from us", back: "Returns to us", icon: Building2 },
+  location: { out: "At one of our locations", back: "At one of our locations", icon: MapPin },
+  area: { out: "We deliver", back: "We collect", icon: Truck },
 };
 
-/**
- * The Out and Back legs, read exactly the way v1's Pickup & Return card reads
- * them (`rentals/[id]/page.tsx:5823`): the freeform column first, the legacy
- * delivery column as the fallback, and the same pair of location FKs.
- *
- * `uses_delivery_service` is the explicit flag; an address in `delivery_address`
- * / `collection_address` is the older way of saying the same thing. Either is
- * enough. A FEE ON ITS OWN IS NOT — a rental can carry a delivery fee with no
- * address (they exist), and treating money as evidence of a delivery would
- * invent a delivery that never happened. The mismatch gets its own line below
- * instead.
- */
-function readLegs(rental: RentalRow, locations: PickupLocation[]): { out: Leg; back: Leg } {
-  const byId = (id: string | null | undefined) =>
-    id ? (locations.find((l) => l.id === id) ?? null) : null;
+/** "14:00:00" → "2:00 PM"; null when unset. A bare wall-clock time — no zone. */
+function fmtClock(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const [h, m] = String(raw).split(":").map(Number);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+  return new Date(2000, 0, 1, h, m).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
 
-  const delivers = rental.uses_delivery_service === true;
+/** date + "HH:MM[:SS]" → "yyyy-MM-ddTHH:mm" for the picker; 10:00 when unset. */
+const joinAt = (date: string | null | undefined, time: string | null | undefined) =>
+  date ? `${String(date).slice(0, 10)}T${time ? String(time).slice(0, 5) : "10:00"}` : "";
 
+/** Read each end's HOW back off the rental, the way the create flow wrote it. */
+function readEnds(rental: RentalRow, fixedOut: string | null, fixedBack: string | null): { out: End; back: End } {
+  const opt = String(rental.delivery_option ?? "");
+  const outAddr = rental.pickup_location || rental.delivery_address || "";
+  const backAddr = rental.return_location || rental.collection_address || "";
+  const outHow: How =
+    opt === "location" || opt === "area" || opt === "fixed"
+      ? (opt as How)
+      : rental.pickup_location_id
+        ? "location"
+        : rental.uses_delivery_service || rental.delivery_address
+          ? "area"
+          : "fixed";
+  const backHow: How = rental.return_location_id
+    ? "location"
+    : backAddr && fixedBack && backAddr === fixedBack
+      ? "fixed"
+      : backAddr && backAddr === outAddr
+        ? outHow
+        : rental.collection_address || (opt === "area" && backAddr)
+          ? "area"
+          : "fixed";
   return {
     out: {
-      date: rental.start_date ?? null,
-      time: rental.pickup_time ?? null,
-      delivered: delivers || !!rental.delivery_address,
-      location: byId(rental.pickup_location_id ?? rental.delivery_location_id),
-      address: rental.pickup_location || rental.delivery_address || null,
+      how: outHow,
+      address: outAddr || (outHow === "fixed" ? (fixedOut ?? "") : ""),
+      locationId: rental.pickup_location_id ?? null,
       fee: Number(rental.delivery_fee) || 0,
     },
     back: {
-      date: rental.end_date ?? null,
-      time: rental.return_time ?? null,
-      delivered: delivers || !!rental.collection_address,
-      location: byId(rental.return_location_id ?? rental.collection_location_id),
-      address: rental.return_location || rental.collection_address || null,
+      how: backHow,
+      address: backAddr || (backHow === "fixed" ? (fixedBack ?? "") : ""),
+      locationId: rental.return_location_id ?? null,
       fee: Number(rental.collection_fee) || 0,
     },
   };
 }
 
-/** Are both ends the same place, handled the same way? */
-const sameBothWays = (out: Leg, back: Leg) =>
-  out.delivered === back.delivered &&
-  (out.location?.id ?? null) === (back.location?.id ?? null) &&
-  (out.address ?? "") === (back.address ?? "");
-
-const miles = (km: number) => Math.round(km / 1.609);
-
-/* ══════════════════════════════════════════════════════════════════════════
-   The stage
-   ══════════════════════════════════════════════════════════════════════════ */
+/** May this rental's terms still change? The database's answer, never a guess. */
+function useTermsEditable(rentalId: string) {
+  return useQuery({
+    queryKey: ["rental-terms-editable-v2", rentalId],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("update_rental_terms_v2", {
+        p_rental_id: rentalId,
+        p_terms: {},
+        p_dry_run: true,
+      });
+      if (error) throw error;
+      return data as { ok: boolean; reason?: string };
+    },
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+  });
+}
 
 export function StageWhenWhere({ detail, refetch }: StageProps) {
   const { tenant } = useTenant();
-  const { canEdit } = useManagerPermissions();
-  const { locations, locationSettings } = usePickupLocations();
-  const { settings } = useRentalSettings();
-  const [editOpen, setEditOpen] = useState(false);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { locationSettings: ls, pickupLocations, returnLocations } = usePickupLocations();
+  const { settings: rentalSettings } = useRentalSettings();
+  const { settings: weekend } = useWeekendPricing();
+  const { holidays } = useTenantHolidays();
+  const vehicleId = detail.vehicle?.id;
+  const { overrides } = useVehiclePricingOverrides(vehicleId);
+  const { prices: dayPrices } = useVehicleDailyPrices(vehicleId);
+  const editable = useTermsEditable(detail.rental.id);
 
   const rental = detail.rental;
   const currency = tenant?.currency_code || "USD";
-
-  const { out, back } = useMemo(() => readLegs(rental, locations), [rental, locations]);
-
-  const mirrored = sameBothWays(out, back);
-  const anyDelivery = out.delivered || back.delivered;
-
-  /* A fee with no delivery behind it. Not an error and not amber — amber on this
-     screen means "out of date" and nothing else — but an operator reading the
-     rental deserves to know the money and the arrangement disagree. */
-  const orphanFee =
-    (!out.delivered && out.fee > 0) || (!back.delivered && back.fee > 0);
-
-  const lockboxOffered = settings?.lockbox_enabled === true;
-  const lockboxChosen = String(rental.delivery_method ?? "") === "lockbox";
-  const lockboxFitted = !!detail.vehicle?.lockbox_code;
-
-  const mayEdit = canEdit("rentals");
+  const unit = (tenant?.distance_unit || "miles") as DistanceUnit;
   const timezone = resolveAgreementTimeZone(rental as never, tenant as never);
+  const mtd = tenant?.monthly_tier_days ?? 30;
 
-  /* Neither end has an address. Not a broken record — a rental created before
-     the locations feature, or one an operator has not filled in — so it says
-     what is missing rather than rendering two empty cards. */
-  const nothingRecorded = !out.address && !back.address && !out.location && !back.location;
+  const current = useMemo(
+    () => readEnds(rental, ls.fixed_pickup_address, ls.fixed_return_address),
+    [rental, ls.fixed_pickup_address, ls.fixed_return_address]
+  );
+
+  /* ── the draft — live whenever the rental can still change ───────────── */
+  const canEdit = editable.data?.ok === true;
+  const [datesOpen, setDatesOpen] = useState(false);
+  const [pickupAt, setPickupAt] = useState("");
+  const [returnAt, setReturnAt] = useState("");
+  const [out, setOut] = useState<End>(current.out);
+  const [back, setBack] = useState<End>(current.back);
+  const origPickup = joinAt(rental.start_date, rental.pickup_time);
+  const origReturn = joinAt(rental.end_date, rental.return_time);
+  const reset = () => {
+    setPickupAt(origPickup);
+    setReturnAt(origReturn);
+    setOut(current.out);
+    setBack(current.back);
+  };
+  // Re-seed from the rental whenever it (or the settings it is read with) changes.
+  useEffect(reset, [origPickup, origReturn, current]); // eslint-disable-line react-hooks/exhaustive-deps
+  const sameEnd = (a: End, b: End) => a.how === b.how && a.address === b.address && a.locationId === b.locationId && a.fee === b.fee;
+  const dirty =
+    pickupAt !== origPickup || returnAt !== origReturn || !sameEnd(out, current.out) || !sameEnd(back, current.back);
+  const backEnd: End = back;
+
+  /* ── the re-price, only when the dates move ───────────────────────────── */
+  const newStart = pickupAt.slice(0, 10);
+  const newEnd = returnAt.slice(0, 10);
+  const datesMoved =
+    canEdit &&
+    (newStart !== String(rental.start_date ?? "").slice(0, 10) || newEnd !== String(rental.end_date ?? "").slice(0, 10));
+  const reprice = useMemo(() => {
+    if (!datesMoved || !newStart || !newEnd || newEnd <= newStart || !detail.vehicle) return null;
+    const breakdown = calculateRentalPriceBreakdown(
+      newStart,
+      newEnd,
+      {
+        daily_rent: Number(detail.vehicle.daily_rent) || 0,
+        weekly_rent: Number(detail.vehicle.weekly_rent) || 0,
+        monthly_rent: Number(detail.vehicle.monthly_rent) || 0,
+      },
+      weekend as never,
+      holidays as never,
+      overrides as never,
+      vehicleId,
+      mtd,
+      rental.auto_extend_enabled === true,
+      false,
+      dayPrices as never
+    );
+    const price = Math.round(breakdown.rentalPrice * 100) / 100;
+    const discounted = price - (Number(rental.discount_applied) || 0);
+    const rs = rentalSettings as any;
+    const tax =
+      rs?.tax_enabled && rs?.tax_percentage ? Math.round(discounted * (rs.tax_percentage / 100) * 100) / 100 : 0;
+    let service = 0;
+    if (rs?.service_fee_enabled) {
+      const v = Number(rs.service_fee_value ?? rs.service_fee_amount ?? 0) || 0;
+      service = rs.service_fee_type === "percentage" ? Math.round(((discounted * v) / 100) * 100) / 100 : v;
+    }
+    return { price, tax, service, days: breakdown.rentalDays, tier: breakdown.pricingTier };
+  }, [datesMoved, newStart, newEnd, detail.vehicle, weekend, holidays, overrides, vehicleId, mtd, rental, dayPrices, rentalSettings]);
+
+  const save = useMutation({
+    mutationFn: async () => {
+      if (!pickupAt || !returnAt) throw new Error("Both a pickup and a return date are needed.");
+      if (newEnd <= newStart) throw new Error("The return has to be after the pickup.");
+      if (!out.address.trim()) throw new Error("Say where the car goes out.");
+      if (!backEnd.address.trim()) throw new Error("Say where the car comes back.");
+      const terms: Record<string, unknown> = {
+        start_date: newStart,
+        end_date: newEnd,
+        pickup_time: pickupAt.slice(11, 16),
+        return_time: returnAt.slice(11, 16),
+        pickup_location: out.address.trim(),
+        return_location: backEnd.address.trim(),
+      };
+      // A changed address no longer points at a saved location.
+      if (out.address !== current.out.address) terms.pickup_location_id = "";
+      if (backEnd.address !== current.back.address) terms.return_location_id = "";
+      if (reprice) Object.assign(terms, { monthly_amount: reprice.price, tax_amount: reprice.tax, service_fee: reprice.service });
+      const { data, error } = await (supabase as any).rpc("update_rental_terms_v2", {
+        p_rental_id: rental.id,
+        p_terms: terms,
+        p_dry_run: false,
+      });
+      if (error) throw error;
+      if (!data?.ok) throw new Error(data?.reason ?? "Nothing was saved.");
+      return data as { ok: true; total: number };
+    },
+    onSuccess: (data) => {
+      toast({ title: `Saved. This rental now comes to ${formatCurrency(Number(data.total) || 0, currency)}.` });
+      void queryClient.invalidateQueries({ queryKey: ["rental-detail-v2", rental.id] });
+      void queryClient.invalidateQueries({ queryKey: ["rental-terms-editable-v2", rental.id] });
+      refetch();
+    },
+    onError: (e: Error) => toast({ title: "Nothing was saved", description: e.message, variant: "destructive" }),
+  });
+
+  const period =
+    detail.days == null
+      ? "No return date set"
+      : `${detail.days} day${detail.days === 1 ? "" : "s"}${
+          rental.rental_period_type ? ` · billed ${String(rental.rental_period_type).toLowerCase()}` : ""
+        }`;
+
+  /* ── what the cards show ──────────────────────────────────────────────── */
+  const area =
+    (ls.pickup_area_enabled || ls.return_area_enabled) && ls.area_center_lat != null && ls.area_center_lon != null
+      ? {
+          lat: Number(ls.area_center_lat),
+          lng: Number(ls.area_center_lon),
+          radiusKm: Number((ls.pickup_area_enabled ? ls.pickup_area_radius_km : ls.return_area_radius_km) || 25),
+        }
+      : null;
+
+  const shownOut = canEdit ? out : current.out;
+  const shownBack = canEdit ? back : current.back;
+  const whenText = (at: string, date: string | null | undefined, time: string | null | undefined) =>
+    canEdit && at
+      ? `${fmtDate(at.slice(0, 10))}, ${fmtClock(at.slice(11, 16)) ?? ""}`
+      : `${date ? fmtDate(date) : "No date"}${time ? `, ${fmtClock(time)}` : ""}`;
+  const howText = (side: "out" | "back", e: End, locs: PickupLocation[]) => {
+    const l = e.locationId ? locs.find((x) => x.id === e.locationId) : null;
+    return e.how === "location" && l ? `At ${l.name}` : side === "out" ? HOW_LABEL[e.how].out : HOW_LABEL[e.how].back;
+  };
+
+  const mapPlaces: MapPlace[] = [
+    ...(ls.fixed_pickup_address
+      ? [{ key: "fixed", label: "Your address", address: ls.fixed_pickup_address, kind: "site" as const }]
+      : []),
+    ...[...pickupLocations, ...returnLocations]
+      .filter((l, i, all) => all.findIndex((x) => x.id === l.id) === i)
+      .map((l) => ({ key: l.id, label: l.name, address: l.address, kind: "site" as const })),
+    ...(shownOut.address
+      ? [{
+          key: "out",
+          label: "Pickup",
+          address: shownOut.address,
+          kind: "out" as const,
+          when: whenText(pickupAt, rental.start_date, rental.pickup_time),
+          how: howText("out", shownOut, pickupLocations),
+        }]
+      : []),
+    ...(shownBack.address
+      ? [{
+          key: "back",
+          label: "Drop-off",
+          address: shownBack.address,
+          kind: "back" as const,
+          when: whenText(returnAt, rental.end_date, rental.return_time),
+          how: howText("back", shownBack, returnLocations),
+        }]
+      : []),
+  ];
+
 
   return (
     <Panel
+      fill
       title="When & where"
-      description="One stage, because it is one decision. Where the car changes hands depends on whether you are delivering it, and the lockbox depends on the car."
-      footer={
-        <div className="flex flex-wrap items-center gap-3">
-          <ActionButton
-            variant="outline"
-            onClick={() => setEditOpen(true)}
-            disabled={!mayEdit}
-            title={mayEdit ? undefined : "Your role cannot change rentals."}
-          >
-            <Pencil className="size-4" />
-            Edit times &amp; locations
-          </ActionButton>
-          <p className="text-xs text-muted-foreground">
-            Dates are fixed after creation — moving them would desync price, cover and agreement.
-          </p>
-        </div>
+      description="When the car goes out and comes back, how it changes hands, and where."
+      action={
+        !canEdit && editable.data ? (
+          /* Locked past Extras — say so, in the stage-action spot. */
+          <StageAction icon={Lock} label="Locked" onClick={() => {}} disabledReason={editable.data.reason ?? null} />
+        ) : null
       }
     >
-      {nothingRecorded ? (
-        <EmptyHint>
-          No pickup or return location is recorded on this rental. The dates below are real; where the car
-          changes hands has simply never been filled in.
-        </EmptyHint>
-      ) : null}
+      <div className="flex h-full min-h-0 flex-col gap-4">
+        {/* ── picker one: the dates — the whole bar is the button ──────────── */}
+        <DateBar
+          editable={canEdit}
+          onOpen={() => setDatesOpen(true)}
+          pickup={canEdit ? pickupAt : joinAt(rental.start_date, rental.pickup_time)}
+          ret={canEdit ? returnAt : joinAt(rental.end_date, rental.return_time)}
+          hasPickupTime={canEdit || !!rental.pickup_time}
+          hasReturnTime={canEdit || !!rental.return_time}
+          summary={canEdit && reprice ? `${reprice.days} days · ${reprice.tier}` : period}
+          timezone={timezone}
+        />
+        <RentalDatesDialog
+          open={datesOpen}
+          onOpenChange={setDatesOpen}
+          vehicleId={detail.vehicle?.id ?? null}
+          vehicleName={detail.vehicleName ?? "car"}
+          rentalId={rental.id}
+          pickupAt={pickupAt}
+          returnAt={returnAt}
+          onApply={(p, r) => {
+            setPickupAt(p);
+            setReturnAt(r);
+          }}
+        />
 
-      {/* ── out ──────────────────────────────────────────────────────────── */}
-      <LegCard kind="out" leg={out} currency={currency} />
-
-      {/* ── the time that passes ──────────────────────────────────────────
-          Between the two halves, where it actually elapses. */}
-      <div className="flex items-center gap-3">
-        <span className="h-px flex-1 bg-foreground/10" />
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-muted/70 px-3 py-1 text-[11px] font-medium text-muted-foreground">
-          <Clock className="size-3" />
-          {detail.days == null
-            ? "No return date set"
-            : `${detail.days} day${detail.days === 1 ? "" : "s"}${
-                rental.rental_period_type ? ` · billed ${String(rental.rental_period_type).toLowerCase()}` : ""
-              }`}
-        </span>
-        <span className="h-px flex-1 bg-foreground/10" />
-      </div>
-
-      {/* ── back ─────────────────────────────────────────────────────────── */}
-      <LegCard kind="back" leg={back} currency={currency} mirrors={mirrored} />
-
-      {orphanFee && (
-        <div className={cn(insetCls, "flex items-start gap-3 px-5 py-4")}>
-          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-muted-foreground/70" />
-          <p className="text-xs text-muted-foreground">
-            A delivery or collection fee is on this rental, but neither end is recorded as a delivery. The money
-            is real — the arrangement behind it was never written down.
-          </p>
-        </div>
-      )}
-
-      {/* ── delivery ──────────────────────────────────────────────────────
-          Only once the rental actually says a car is being moved. */}
-      {anyDelivery && <DeliveryBlock settings={locationSettings} currency={currency} />}
-
-      {/* ── lockbox ───────────────────────────────────────────────────────
-          Two conditions, both real: the car is being DELIVERED (a customer
-          standing at your counter is handed the keys by a person), and the
-          tenant has lockboxes turned on at all. A disabled lockbox control on a
-          tenant that does not run lockboxes would be a promise nothing keeps. */}
-      {anyDelivery && lockboxOffered && (
-        <div className={cn(cardCls, "p-6")}>
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5">
-              <span className="flex size-8 items-center justify-center rounded-full bg-primary-light text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
-                <KeyRound className="size-4" />
-              </span>
-              <div>
-                <p className="font-heading text-sm font-semibold">Keys</p>
-                <p className="text-[11px] text-muted-foreground">How the customer gets into the car</p>
-              </div>
-            </div>
-            <Pill tone={lockboxChosen ? "primary" : "neutral"}>
-              {lockboxChosen ? "Lockbox" : "In person"}
-            </Pill>
+        {/* ── picker two: pickup and drop-off places, over their map ──────── */}
+        <Surface className="relative flex min-h-0 flex-1 flex-col overflow-hidden p-0">
+          <div className="shrink-0 space-y-3 px-5 py-4">
+            <PlaceRow
+              side="out"
+              title="Pickup"
+              editable={canEdit}
+              end={shownOut}
+              setEnd={setOut}
+            />
+            <div className="h-px bg-foreground/5" />
+            <PlaceRow
+              side="back"
+              title="Drop-off"
+              editable={canEdit}
+              end={shownBack}
+              setEnd={setBack}
+            />
           </div>
 
-          {lockboxChosen ? (
-            lockboxFitted ? (
-              <div className={cn(insetCls, "px-5 py-4")}>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                      Code
-                    </p>
-                    <p className="mt-1 font-heading text-lg font-semibold tracking-tight tabular-nums">
-                      {detail.vehicle?.lockbox_code}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                      Where the box is
-                    </p>
-                    <p className="mt-1 text-sm">
-                      {detail.vehicle?.lockbox_instructions || "Not recorded on the car."}
-                    </p>
-                  </div>
-                </div>
-                <p className="mt-4 text-xs text-muted-foreground">
-                  {rental.lockbox_sent_at
-                    ? `Sent ${fmtDateTime(rental.lockbox_sent_at)}`
-                    : settings?.lockbox_send_offset_minutes
-                      ? `Goes out ${settings.lockbox_send_offset_minutes} minutes before the handover.`
-                      : "Not sent yet."}
-                  {Array.isArray(settings?.lockbox_notification_methods) &&
-                    settings.lockbox_notification_methods.length > 0 &&
-                    ` By ${settings.lockbox_notification_methods.join(" and ")}.`}
-                </p>
-              </div>
-            ) : (
-              <div className={cn(insetCls, "flex items-start gap-3 px-5 py-4")}>
-                <Lock className="mt-0.5 size-4 shrink-0 text-muted-foreground/70" />
-                <p className="text-xs text-muted-foreground">
-                  This rental is set to a lockbox handover, but no lockbox code is recorded on{" "}
-                  {detail.vehicle?.reg ?? "the car"}. Nothing can be sent until one is — it is set on the
-                  vehicle.
-                </p>
-              </div>
-            )
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              Somebody hands the keys over. Lockbox delivery is chosen when the rental is created, and the
-              handover itself is recorded on the Handover stage.
-            </p>
+          <div className="relative min-h-40 flex-1 border-t border-foreground/5">
+            <WhereMap places={mapPlaces} area={area} />
+            <div className={cn("pointer-events-none absolute bottom-4 left-4 flex flex-wrap gap-1.5", canEdit && dirty && "hidden")}>
+              <Legend dot="bg-primary" label="P pickup · R drop-off" />
+              <Legend dot="bg-[#9a9aa6]" label="Your places" />
+              {area && <Legend dot="bg-primary/30 ring-1 ring-primary/50" label="Delivery area" />}
+            </div>
+          </div>
+
+          {/* Once something changed: what saving does to the money, then Save. */}
+          {canEdit && dirty && (
+            <div className="absolute inset-x-4 bottom-4 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-3xl bg-card/95 px-5 py-3 shadow-md ring-1 ring-foreground/10 backdrop-blur">
+              {reprice ? (
+                <span className="text-xs text-muted-foreground">
+                  Rental{" "}
+                  <span className="font-semibold text-foreground">
+                    {formatCurrency(Number(rental.monthly_amount) || 0, currency)} → {formatCurrency(reprice.price, currency)}
+                  </span>
+                  {reprice.tax > 0 && <> · Tax {formatCurrency(reprice.tax, currency)}</>}
+                  {reprice.service > 0 && <> · Service {formatCurrency(reprice.service, currency)}</>}
+                </span>
+              ) : (
+                <span className="text-xs text-muted-foreground">Same dates — the rental price stays as it is.</span>
+              )}
+              <span className="ml-auto flex items-center gap-2">
+                <Button size="sm" variant="ghost" onClick={reset}>
+                  Undo
+                </Button>
+                <Button size="sm" disabled={save.isPending} onClick={() => save.mutate()}>
+                  {save.isPending ? "Saving…" : reprice ? "Save and re-price" : "Save"}
+                </Button>
+              </span>
+            </div>
           )}
-        </div>
-      )}
-
-      <p className="text-xs italic text-muted-foreground">Times shown in {timezone}.</p>
-
-      {/* ── the reused v1 dialog ─────────────────────────────────────────── */}
-      {/* Re-read on close, always. The dialog invalidates v1's key
-          (`["rental", id]`) and three list keys, but not `rental-detail-v2` —
-          the control centre reads a different column set under a different key
-          on purpose. Without this the edit lands in the database and this
-          screen keeps showing the old time. */}
-      <EditPickupReturnDialog
-        open={editOpen}
-        onOpenChange={(open) => {
-          setEditOpen(open);
-          if (!open) refetch();
-        }}
-        rental={rental}
-      />
+        </Surface>
+      </div>
     </Panel>
   );
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   One half
+   Pieces
    ══════════════════════════════════════════════════════════════════════════ */
 
-function LegCard({
-  kind,
-  leg,
-  currency,
-  mirrors,
-}: {
-  kind: "out" | "back";
-  leg: Leg;
-  currency: string;
-  /** Only the Back card notes that it repeats the Out card. */
-  mirrors?: boolean;
-}) {
-  const isOut = kind === "out";
-  const clock = fmtClock(leg.time);
-
-  /* A saved location wins the headline — an operator knows "DFW International"
-     and would have to read the street address to recognise it. Where the rental
-     only carries freeform text (which is what the edit dialog writes, since it
-     clears the FKs), that text IS the place. */
-  const place = leg.location?.name ?? leg.address ?? null;
-  const placeDetail = leg.location?.address ?? null;
-
+function Legend({ dot, label }: { dot: string; label: string }) {
   return (
-    <div className={cn(cardCls, "p-6")}>
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <span className="flex size-8 items-center justify-center rounded-full bg-primary-light text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
-            {isOut ? <Truck className="size-4" /> : <Store className="size-4" />}
-          </span>
-          <div>
-            <p className="font-heading text-sm font-semibold">{isOut ? "Out" : "Back"}</p>
-            <p className="text-[11px] text-muted-foreground">
-              {isOut ? "The car leaves you" : "The car returns to you"}
-            </p>
-          </div>
-        </div>
-        <Pill tone={leg.delivered ? "primary" : "neutral"}>
-          {leg.delivered ? (isOut ? "We deliver" : "We collect") : isOut ? "Customer collects" : "Customer returns it"}
-        </Pill>
-      </div>
-
-      <div className="grid gap-2 sm:grid-cols-2">
-        <div className={cn(insetCls, "px-4 py-3")}>
-          <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-            {isOut ? "Pickup date" : "Return date"}
-          </p>
-          <p className="mt-1 flex items-center gap-2 font-heading text-sm font-semibold">
-            <CalendarDays className="size-3.5 text-muted-foreground" />
-            {leg.date ? fmtDate(leg.date) : "Open-ended"}
-          </p>
-        </div>
-        <div className={cn(insetCls, "px-4 py-3")}>
-          <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-            {isOut ? "Pickup time" : "Return time"}
-          </p>
-          <p
-            className={cn(
-              "mt-1 flex items-center gap-2 font-heading text-sm font-semibold",
-              !clock && "font-normal text-muted-foreground"
-            )}
-          >
-            <Clock className="size-3.5 text-muted-foreground" />
-            {clock ?? "No time set"}
-          </p>
-        </div>
-      </div>
-
-      <div className={cn(insetCls, "mt-2 flex items-start gap-3 px-5 py-4")}>
-        <MapPin className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-        <div className="min-w-0 flex-1">
-          {place ? (
-            <>
-              <p className="text-[13px] font-medium">{place}</p>
-              {placeDetail && <p className="mt-0.5 text-xs text-muted-foreground">{placeDetail}</p>}
-              {leg.location?.description && (
-                <p className="mt-0.5 text-xs text-muted-foreground">{leg.location.description}</p>
-              )}
-            </>
-          ) : (
-            <p className="text-[13px] text-muted-foreground">
-              {isOut ? "No pickup location recorded." : "No return location recorded."}
-            </p>
-          )}
-          {mirrors && (
-            <p className="mt-1.5 text-xs text-muted-foreground">Same place, same way, as the pickup.</p>
-          )}
-        </div>
-        {leg.fee > 0 && (
-          <span className="shrink-0 text-xs font-medium text-muted-foreground">
-            +{formatCurrency(leg.fee, currency)}
-          </span>
-        )}
-      </div>
-    </div>
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-card/90 px-2.5 py-1 text-[11px] text-muted-foreground shadow-sm ring-1 ring-foreground/5 backdrop-blur">
+      <span className={cn("size-2 rounded-full", dot)} />
+      {label}
+    </span>
   );
 }
 
-/* ══════════════════════════════════════════════════════════════════════════
-   Delivery bands
-   ══════════════════════════════════════════════════════════════════════════ */
+/**
+ * Picker one — the rental's dates, start to end, as ONE bar. The whole bar is
+ * the button: it opens the car's calendar (`rental-dates-dialog.tsx`), where
+ * both days and both times are picked together.
+ */
+function DateBar({
+  editable,
+  onOpen,
+  pickup,
+  ret,
+  hasPickupTime,
+  hasReturnTime,
+  summary,
+  timezone,
+}: {
+  editable: boolean;
+  onOpen: () => void;
+  /** "yyyy-MM-ddTHH:mm" */
+  pickup: string;
+  ret: string;
+  hasPickupTime: boolean;
+  hasReturnTime: boolean;
+  summary: string;
+  timezone: string;
+}) {
+  const End = ({ label, at, hasTime }: { label: string; at: string; hasTime: boolean }) => (
+    <div className="min-w-0">
+      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className="mt-0.5 truncate font-heading text-lg font-semibold tracking-tight">
+        {at ? fmtDate(at.slice(0, 10)) : label === "Drop-off" ? "Open-ended" : "No date"}
+        <span className="ml-2 text-sm font-normal text-muted-foreground">
+          {at && hasTime ? fmtClock(at.slice(11, 16)) : "no time set"}
+        </span>
+      </p>
+    </div>
+  );
+  const body = (
+    <>
+      <End label="Pickup" at={pickup} hasTime={hasPickupTime} />
+      <span className="text-muted-foreground">→</span>
+      <End label="Drop-off" at={ret} hasTime={hasReturnTime} />
+      <span className="ml-auto shrink-0 text-right text-xs text-muted-foreground">
+        <span className="block font-medium text-foreground">{summary}</span>
+        Times in {timezone}
+      </span>
+    </>
+  );
+  const cls =
+    "flex flex-none items-center gap-6 rounded-4xl bg-card px-5 py-4 text-left shadow-md ring-1 ring-foreground/5 dark:ring-foreground/10";
+  return editable ? (
+    <button
+      type="button"
+      onClick={onOpen}
+      className={cn(cls, "transition-shadow duration-200 ease-out hover:ring-primary/30 motion-reduce:transition-none")}
+    >
+      {body}
+    </button>
+  ) : (
+    <div className={cls}>{body}</div>
+  );
+}
 
 /**
- * The operator's own delivery price list.
- *
- * NO BAND IS LIT, and that is the honest part. `rentals` stores the fee that was
- * charged but never the distance it was charged for, so which band applied is
- * not recoverable — the sandbox knew because it made the distance up. What the
- * ladder still answers is the question an operator gets on the phone: what would
- * it cost if they were ten miles further out. The fee actually on this rental is
- * shown on the leg card above, where the money belongs.
- *
- * Bands are stored in kilometres (matching `pickup_area_radius_km`) and shown in
- * miles, exactly as the settings screen and the booking flow show them.
+ * One row of picker two: just the address this end happens at — typed with the
+ * app's Google address search. No "how", no fee (Ghulam, Oct 2 2026: "just the
+ * pickup and drop-off address"); the rental's existing delivery fees are left
+ * exactly as they are.
  */
-function DeliveryBlock({
-  settings,
-  currency,
+function PlaceRow({
+  side,
+  title,
+  editable,
+  end,
+  setEnd,
 }: {
-  settings: ReturnType<typeof usePickupLocations>["locationSettings"];
-  currency: string;
+  side: "out" | "back";
+  title: string;
+  editable: boolean;
+  end: End;
+  setEnd: (e: End) => void;
 }) {
-  const tiers = settings?.delivery_tiers_enabled ? (settings.delivery_distance_tiers ?? []) : [];
-  const capKm = settings?.delivery_max_distance_km ?? null;
-
-  if (tiers.length === 0) {
-    // Flat-fee tenant, or no delivery pricing configured at all. One line beats
-    // an empty ladder.
-    return (
-      <div className={cn(insetCls, "flex items-center justify-between gap-3 px-5 py-3.5")}>
-        <p className="text-xs text-muted-foreground">Your delivery charge</p>
-        <p className="text-sm font-semibold">
-          {settings?.area_delivery_fee ? formatCurrency(settings.area_delivery_fee, currency) : "Not set"}
-        </p>
-      </div>
-    );
-  }
-
   return (
-    <div className={cn(insetCls, "overflow-hidden")}>
-      <p className="px-5 py-3.5 text-xs font-medium text-muted-foreground">
-        Your delivery bands — the rental&rsquo;s own fee is on the card above
-      </p>
-      <div className="divide-y divide-foreground/5 border-t border-foreground/5">
-        {tiers.map((t, i) => (
-          <div
-            key={i}
-            className="flex items-center justify-between px-5 py-2.5 text-xs text-muted-foreground"
-          >
-            <span>{t.up_to_km === null ? "Anywhere further" : `Up to ${miles(t.up_to_km)} miles`}</span>
-            <span>{formatCurrency(t.fee, currency)}</span>
-          </div>
-        ))}
+    <div className="flex items-center gap-x-5">
+      <h3 className="w-16 shrink-0 font-heading text-sm font-semibold">{title}</h3>
+      <div className="min-w-0 flex-1">
+        {editable ? (
+          <LocationAutocomplete
+            id={`${side}-address`}
+            value={end.address}
+            // A typed address replaces any saved location — v1's dialog clears
+            // the FK the same way.
+            onChange={(address) => setEnd({ ...end, address, locationId: null })}
+            placeholder={side === "out" ? "Pickup address" : "Drop-off address"}
+            v2States
+          />
+        ) : (
+          <p className="truncate text-sm font-medium">
+            {end.address || <span className="font-normal text-muted-foreground">Not recorded</span>}
+          </p>
+        )}
       </div>
-      {capKm !== null && (
-        <p className="border-t border-foreground/5 px-5 py-2.5 text-[11px] text-muted-foreground">
-          You deliver up to {miles(capKm)} miles.
-        </p>
-      )}
     </div>
   );
 }

@@ -33,8 +33,8 @@ import { ArrowLeft } from "lucide-react";
 import { BulkMessageModal } from "@/components/chat";
 import { ConversationRail } from "@/components/messages-v2/conversation-rail";
 import { CustomerContext } from "@/components/messages-v2/customer-context";
+import { BulkDim, BulkSelectProvider } from "@/components/messages-v2/bulk-select";
 import { useChatChannels } from "@/hooks/use-chat-channels";
-import { useV2 } from "@/lib/v2-context";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useIsLean } from "@/lib/lean-context";
 import { useForcedEmptyState } from "@/hooks/use-forced-empty-state";
@@ -50,12 +50,12 @@ export default function MessagesLayout({ children }: { children: React.ReactNode
 
   const selected = selectedId ? channels.find((c) => c.id === selectedId) ?? null : null;
 
-  /* The v2 quick dock is `fixed right-0`, so on every other page it floats over
-     whatever happens to be at the right edge. Here that was the customer
-     overview's contact rows. Reserving its lane costs 48px and is the only way
-     the right column can be read at its full width; v1 tenants never mount the
-     dock, so they never pay for it. */
-  const hasQuickDock = useV2("chrome");
+  /* No right-edge lane. This used to reserve 48px (`pr-12`) for the v2 quick
+     dock, which floated `fixed right-0` over the customer overview — but the
+     dock is no longer mounted (its Messages and Notifications moved into
+     TopBarV2), so the reservation was an empty strip down the right of the
+     workspace. The three columns now run edge to edge. v1 tenants never had
+     the padding, so nothing changes for them. */
 
   /* No conversations at all (lean only): the whole workspace steps aside for
      the teaching empty state, since a rail with nothing in it and an empty
@@ -75,7 +75,7 @@ export default function MessagesLayout({ children }: { children: React.ReactNode
 
   if (teachEmptyMessages) {
     return (
-      <div className={`flex h-full min-h-0 flex-col overflow-y-auto ${hasQuickDock ? "pr-12" : ""}`}>
+      <div className="flex h-full min-h-0 flex-col overflow-y-auto">
         {/* The rail's own header, heading and way out, since the workspace
             takes the whole window and the portal nav is not on screen. */}
         <div className="flex shrink-0 items-start gap-1.5 px-3 py-3">
@@ -110,33 +110,42 @@ export default function MessagesLayout({ children }: { children: React.ReactNode
        long thread makes the container as tall as the thread, and then the
        PAGE scrolls all three columns together instead of the history scrolling
        inside one. */
-    <div className={`flex h-full min-h-0 overflow-hidden ${hasQuickDock ? "pr-12" : ""}`}>
+    /* BulkSelectProvider: the composer (centre) starts an in-place bulk send
+       and the rail (left) finishes it, so the state sits above both. While
+       it is active every column but the rail dims and goes inert. */
+    <BulkSelectProvider>
+    <div className="flex h-full min-h-0 overflow-hidden">
       {/* Left — compact, and the only always-visible column on a narrow window.
           Hidden once a conversation is open on small screens so the thread gets
           the whole width; the thread carries its own Back control there. */}
       <div
-        className={`w-full min-h-0 shrink-0 md:flex md:w-[292px] ${
+        className={`w-full min-h-0 shrink-0 md:flex md:w-[320px] lg:w-[360px] ${
           selectedId ? "hidden md:flex" : "flex"
         }`}
       >
-        <ConversationRail
-          selectedId={selectedId}
-          onBulkMessage={canEdit("messages") ? () => setBulkOpen(true) : undefined}
-        />
+        {/* No bulk icon in the rail header any more: bulk is started from the
+            composer (write the message, press Bulk, tick recipients in place).
+            The modal stays for the empty-inbox teaching state below. */}
+        <ConversationRail selectedId={selectedId} />
       </div>
 
       {/* Centre — the workspace. `min-w-0` lets a long message shrink it rather
           than pushing the right column off the edge. */}
-      <main className={`min-h-0 min-w-0 flex-1 ${selectedId ? "flex" : "hidden md:flex"} flex-col`}>
+      <BulkDim as="main" className={`min-h-0 min-w-0 flex-1 ${selectedId ? "flex" : "hidden md:flex"} flex-col`}>
         {children}
-      </main>
+      </BulkDim>
 
       {/* Right — the customer overview, only once somebody is selected. It is
           the first thing to go as the window narrows: everything on it also
           lives on the customer and rental screens. */}
-      {selected && <CustomerContext channel={selected} />}
+      {selected && (
+        <BulkDim className="flex min-h-0">
+          <CustomerContext channel={selected} />
+        </BulkDim>
+      )}
 
       <BulkMessageModal open={bulkOpen} onOpenChange={setBulkOpen} />
     </div>
+    </BulkSelectProvider>
   );
 }

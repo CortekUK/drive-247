@@ -60,6 +60,12 @@ import { StagePayments } from "./stage-payments";
 import { StageAgreement } from "./stage-agreement";
 import { StageInsurance } from "./stage-insurance";
 import { StageHandover } from "./stage-handover";
+import { readExtension, readOverview, readPeriod } from "./extension-flow";
+import { RentalOverview } from "./rental-overview";
+import { ExtensionView } from "./extension-view";
+import { PeriodView } from "./period-view";
+import { previewPeriods } from "./rail-preview";
+import { useV2 } from "@/lib/v2-context";
 import { RightRail, rentalRailTabs } from "./right-rail";
 import { ContextColumn, DOCK_CLEARANCE, RecordDock, RecordDockNav, contextTabPanels, useWiderThan } from "@/components/ui-v2/record-dock";
 import { EmptyHint, Panel } from "./_kit";
@@ -145,6 +151,15 @@ export function RentalDetailV2() {
 
   const id = (params?.id as string) ?? null;
   const stage = readStage(searchParams.get("stage"));
+  /* An open extension (Management → Add period) takes the stage panel's place;
+     the left rail swaps to its steps from the same URL. See extension-flow.ts. */
+  const extension = readExtension(searchParams);
+  /* A period opened from its Management card (`?period=`). Periods are the
+     northwind preview for now (rail-preview.ts), so only the v2 chrome has any. */
+  const periodView = extension ? null : readPeriod(searchParams);
+  /* The whole rental at a glance (`?overview=1`, Management's Overview card). */
+  const overview = !extension && !periodView && readOverview(searchParams);
+  const previewOn = useV2("chrome");
 
   const { detail: loadedDetail, isLoading: detailLoading, notFound, error, refetch } = useRentalDetailV2(id);
   const isLoading = useSkeletonLoading(detailLoading);
@@ -229,10 +244,20 @@ export function RentalDetailV2() {
           own height, so the last row of a stage clears the pill instead of
           sitting under it. */}
       <div
-        key={`${stage}:${phase}`}
+        key={`${extension ? `ext-${extension.step}` : periodView ? `period-${periodView.period}-${periodView.step}` : overview ? "overview" : stage}:${phase}`}
         className={`flex min-w-0 flex-1 flex-col overflow-hidden md:pr-6${docked ? " " + DOCK_CLEARANCE : ""}`}
       >
-        {View ? (
+        {extension ? (
+          <ExtensionView detail={detail} state={extension} />
+        ) : overview ? (
+          <RentalOverview detail={detail} />
+        ) : periodView ? (
+          <PeriodView
+            detail={detail}
+            state={periodView}
+            period={previewOn ? previewPeriods(detail).find((p) => p.id === periodView.period) ?? null : null}
+          />
+        ) : View ? (
           <View detail={detail} onStage={onStage} refetch={onRefetch} />
         ) : (
           <Panel title={meta.label} description={meta.prompt}>
@@ -245,8 +270,32 @@ export function RentalDetailV2() {
       </div>
 
       {contextFits ? (
-        <ContextColumn label="Payment Plan & activity">
-          <RightRail key={phase} detail={detail} refetch={onRefetch} />
+        <ContextColumn label="Management & activity" bordered={false}>
+          {/* One flat accent tone, end to end (Oct 2 2026): a 9% --chart-3
+              (the brand's violet, a step off the page wash) over the card
+              colour, opaque, so the page gradient does not run through the
+              rail. Quiet on purpose — the stage panel is the work, this is
+              its context. The column reaches into main's 16px right padding
+              (`md:-mr-4`) so the tab divider meets the window edge, and the
+              tint reaches the top and bottom edges the same way. Its left edge
+              is not a line: the tint starts at the stage cards' edge, 24px out in
+              the gutter, and fades in over 56px (a mask), so the page wash
+              melts into it without washing over the cards. Light only —
+              dark mode stays one tone.
+
+              The override is for this screen only, so the shared
+              `timeline.css` is untouched: even 16px padding either side (the
+              shared body pads 12px left / 40px right, which put this content
+              off centre). The tab strip is context-rail.tsx's icon strip. */}
+          <div className="relative flex min-h-0 flex-1 flex-col md:-mr-4 [&_.tl-context-body]:!px-4">
+            <div
+              aria-hidden
+              className="pointer-events-none absolute -bottom-4 -left-6 -top-4 right-0 [mask-image:linear-gradient(to_right,transparent,black_3.5rem)] [background:linear-gradient(hsl(var(--chart-3)/0.09),hsl(var(--chart-3)/0.09)),hsl(var(--card))] dark:hidden"
+            />
+            <div className="relative flex min-h-0 flex-1 flex-col">
+              <RightRail key={phase} detail={detail} refetch={onRefetch} />
+            </div>
+          </div>
         </ContextColumn>
       ) : null}
 
@@ -278,7 +327,7 @@ export function RentalDetailV2() {
         secondary={
           contextFits
             ? []
-            : /* One icon per context view: Payment Plan, Messages, Activity.
+            : /* One icon per context view: Management, Messages, Trax, Notifications, Activity.
                  Each is a tap, not a tap-then-a-tab. */
               contextTabPanels(rentalRailTabs(detail))
         }
@@ -311,21 +360,15 @@ export function RentalDetailV2() {
  * alternative — subtracting a height nothing measures — would be wrong on
  * every screen where no banner is showing.
  *
- * Desktop (md and up): the title sits on the sidebar switch's row. There the
- * layout's <main> starts 50px down (no top padding, tucked 14px under the
- * transparent top bar) so page titles centre on the Portal / Website switch at
- * y=92. The record rail replaces the sidebar here, but the frame keeps the same
- * line so the title does not jump between the list and the record: 26px of top
- * padding puts the 32px panel title (and the 32px Back button on the error
- * screen) at 50 + 26 + 16 = 92. The height is re-derived for that top: the
- * viewport less the 50px above the frame and main's 16px bottom padding, so
- * `100svh - 66px`, padding included. That fits exactly, where the old
- * `100svh - 2rem` below an 80px start overran the viewport by 64px (the top
- * bar) and the document scrolled. Below md nothing changes.
+ * Desktop (md and up): no top bar. The layout drops TopBarV2 on this route
+ * at md and up (Oct 2 2026, `isRentalDetailV2` in `(dashboard)/layout.tsx`),
+ * so <main> starts at its own 16px padding and the frame fills the viewport
+ * less main's 16px top and bottom — the same `100svh - 2rem` as a phone. The
+ * 32px panel title then centres at 16 + 16 = 32.
  */
 function Frame({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex h-[calc(100svh-2rem)] min-h-0 w-full overflow-hidden md:h-[calc(100svh-66px)] md:pt-[26px]">
+    <div className="flex h-[calc(100svh-2rem)] min-h-0 w-full overflow-hidden md:overflow-visible">
       {children}
     </div>
   );

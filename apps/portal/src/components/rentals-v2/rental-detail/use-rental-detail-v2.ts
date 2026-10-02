@@ -202,7 +202,13 @@ export function deriveRentalDetail(rental: RentalRow): RentalDetailV2 {
     dateRangeShort,
     dateRangeLong,
     days,
-    status: deriveStatus(rental.status),
+    /* A draft is a Pending rental with nobody on it yet — what "New Rental"
+       creates (v2). The database has no Draft status (its check allows five),
+       so the screen derives it rather than storing it. */
+    status:
+      String(rental.status ?? "").toLowerCase() === "pending" && !rental.customer_id
+        ? { value: "draft", label: "Draft", tone: "muted" as StatusTone }
+        : deriveStatus(rental.status),
     rentalNumber: rental.rental_number ?? null,
   };
 }

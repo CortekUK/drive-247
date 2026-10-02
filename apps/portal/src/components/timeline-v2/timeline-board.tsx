@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { addMonths, format, getDaysInMonth, startOfMonth } from "date-fns";
 import { ArrowRight, CalendarDays, Car, Check, ChevronLeft, ChevronRight, CircleSlash, Filter, ListFilter, Maximize2, Plus, RotateCcw, Search, User, X } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
@@ -19,6 +19,10 @@ export type TimelineRange = { start: string; days: number; period: Period };
 export type TimelineView = { perspective: Perspective; search: string; records: string[]; statuses: string[]; selectedDate: string | null; selectedBooking: string | null };
 export const initialTimelineView = (perspective: Perspective = "rental"): TimelineView => ({ perspective, search: "", records: [], statuses: [], selectedDate: null, selectedBooking: null });
 export type TimelineBoardProps = {
+  /** Fill the parent's height (the Rentals page calendar): the grid scrolls inside it. */
+  fill?: boolean;
+  /** Extra controls at the end of the heading row (the full-screen calendar's way back). */
+  actions?: ReactNode;
   data: TimelineData; range: TimelineRange; onRange: (r: TimelineRange) => void; today: string;
   currency: string; timezone?: string | null; compact?: boolean; perspective?: Perspective;
   fixedPerspective?: boolean; loading?: boolean; error?: string | null; onRetry?: () => void;
@@ -83,7 +87,7 @@ function BlockLine({ block, data, start, days, top }: { block: TimelineBlock; da
   </button></PopoverTrigger><PopoverContent className="tl-info-popover"><strong className="text-sm">{label} · Blocked dates</strong><p className="mt-2 text-xs">{prettyDay(block.start)} — {prettyDay(block.end)}</p><p className="mt-2 text-xs text-muted-foreground">{block.reason || "No reason recorded"}</p>{block.preview && <p className="tl-info-note">Unsaved preview. Fleet availability has not changed.</p>}</PopoverContent></Popover>;
 }
 
-export function TimelineBoard({ data, range, onRange, today, currency, timezone, compact = false, perspective: initialPerspective = "rental", fixedPerspective, loading, error, onRetry, onExpand, onBlock, onOpenRental, extensionEnd, onExtend, heading, viewState, itemLabel = "booking" }: TimelineBoardProps) {
+export function TimelineBoard({ data, range, onRange, today, currency, timezone, compact = false, perspective: initialPerspective = "rental", fixedPerspective, loading, error, onRetry, onExpand, onBlock, onOpenRental, extensionEnd, onExtend, heading, viewState, itemLabel = "booking", fill = false, actions }: TimelineBoardProps) {
   const localView = useState(() => initialTimelineView(initialPerspective));
   const [{ perspective, search, records, statuses, selectedDate, selectedBooking }, setView] = viewState ?? localView;
   const setPerspective = (value: Perspective) => setView(v => ({ ...v, perspective: value }));
@@ -130,13 +134,13 @@ export function TimelineBoard({ data, range, onRange, today, currency, timezone,
   const dayBookings = selectedDate ? filtered.filter(b => onDay(b, selectedDate)) : [];
   const dayBlocks = selectedDate ? blocks.filter(b => b.start <= selectedDate && b.end >= selectedDate) : [];
   const plusOffset = extensionEnd ? dayNumber(extensionEnd) + 1 - dayNumber(range.start) : -1;
-  return <section className={cn("rental-timeline", compact && "tl-compact")} aria-label={heading || "Rental timeline"} data-testid="timeline">
+  return <section className={cn("rental-timeline", compact && "tl-compact", fill && "tl-fill")} aria-label={heading || "Rental timeline"} data-testid="timeline">
     <div className="tl-toolbar">
-      <div className="tl-toolbar-heading"><h3>{heading || "Booking calendar"}</h3>{onExpand && <Button size="icon-sm" variant="ghost" onClick={onExpand} aria-label="Expand timeline" className="ml-auto"><Maximize2 size={16} /></Button>}</div>
+      <div className="tl-toolbar-heading"><h3>{heading || "Booking calendar"}</h3>{actions && <div className="tl-actions ml-auto flex items-center gap-2">{actions}</div>}{onExpand && <Button size="icon-sm" variant="ghost" onClick={onExpand} aria-label="Expand timeline" className="ml-auto"><Maximize2 size={16} /></Button>}</div>
       <div className="tl-controls">
         {!fixedPerspective && <div className="tl-perspectives" role="group" aria-label="Timeline perspective">{(["rental", "vehicle", "customer"] as Perspective[]).map(p => <button type="button" key={p} aria-pressed={perspective === p} onClick={() => { setPerspective(p); setRecords([]); setRecordSearch(""); }}>{p === "rental" ? <ListFilter size={14} /> : p === "vehicle" ? <Car size={14} /> : <User size={14} />}{p[0].toUpperCase() + p.slice(1)}</button>)}</div>}
         {!compact && <label className="tl-search"><Search size={15} /><input aria-label="Search timeline" value={search} onChange={e => setSearch(e.target.value)} placeholder={`Search ${perspective}s…`} />{search && <button type="button" onClick={() => setSearch("")} aria-label="Clear search"><X size={14} /></button>}</label>}
-        <Popover><PopoverTrigger asChild><Button size="sm" variant="outline" aria-label="Filter timeline"><Filter size={14} />Filters{records.length + statuses.length > 0 && <span className="tl-count">{records.length + statuses.length}</span>}</Button></PopoverTrigger>
+        <Popover><PopoverTrigger asChild><Button size="sm" variant="outline" aria-label="Filter timeline" className="tl-filter-btn"><Filter size={14} />Filters{records.length + statuses.length > 0 && <span className="tl-count">{records.length + statuses.length}</span>}</Button></PopoverTrigger>
           <PopoverContent align="end" className="tl-filter-popover" collisionPadding={12}>
             <div className="tl-popover-heading"><strong>Filter timeline</strong><button type="button" onClick={reset}>Reset</button></div>
             {compact && <label className="tl-search"><Search size={14} /><input aria-label="Search timeline" placeholder="Search bookings…" value={search} onChange={e => setSearch(e.target.value)} /></label>}
@@ -144,7 +148,7 @@ export function TimelineBoard({ data, range, onRange, today, currency, timezone,
             {!fixedPerspective && <><p className="tl-field-label">Select {perspective}s <small>All when none selected</small></p><label className="tl-search"><Search size={14} /><input aria-label="Find records" placeholder={`Find a ${perspective}…`} value={recordSearch} onChange={e => setRecordSearch(e.target.value)} /></label><div className="tl-record-options">{matchingOptions.map(o => <label key={o.id}><input type="checkbox" checked={records.includes(o.id)} onChange={() => toggle(o.id, records, setRecords)} /><span>{o.label}</span></label>)}{!matchingOptions.length && <p className="tl-info-note">{recordSearch ? "No matching records." : "No records in this window."}</p>}</div></>}
           </PopoverContent>
         </Popover>
-        {onBlock && <Button size="sm" variant="outline" onClick={() => onBlock(selectedDate || today)}><CircleSlash size={14} />Block dates</Button>}
+        {onBlock && <Button size="sm" variant="outline" className="tl-block-btn" onClick={() => onBlock(selectedDate || today)}><CircleSlash size={14} />Block dates</Button>}
       </div>
       <div className="tl-navigation">
         <div className="tl-period-nav"><Button variant="outline" size="icon-sm" aria-label="Previous period" onClick={() => step(-1)}><ChevronLeft size={15} /></Button><Button variant="outline" size="sm" onClick={() => move(shiftDay(today, compact ? -1 : -2))}>Today</Button><Button variant="outline" size="icon-sm" aria-label="Next period" onClick={() => step(1)}><ChevronRight size={15} /></Button></div>
@@ -161,7 +165,7 @@ export function TimelineBoard({ data, range, onRange, today, currency, timezone,
           <DateGrid data={data} bookings={filtered} blocks={blocks} perspective={perspective}
             start={range.start} dates={dates} compact={compact} today={today} selectedDate={selectedDate}
             onDate={setSelectedDate} currency={currency} scopedVehicle={!!fixedPerspective && initialPerspective === "vehicle"}
-            extensionEnd={extensionEnd} onExtend={onExtend}
+            extensionEnd={extensionEnd} onExtend={onExtend} fill={fill}
             renderBooking={({ booking, position }, top) => <BookingLine key={booking.id} booking={booking} perspective={perspective} position={position} top={top} currency={currency} onOpen={onOpenRental} selected={booking.id === selectedBooking} onSelect={setSelectedBooking} />}
             renderBlock={(block, top) => <BlockLine key={block.id} block={block} data={data} start={range.start} days={range.days} top={top} />}
           />

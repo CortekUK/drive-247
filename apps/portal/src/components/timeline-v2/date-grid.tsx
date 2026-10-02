@@ -17,11 +17,13 @@ type Props = {
   renderBooking: (item: Lane, top: number) => ReactNode;
   renderBlock: (block: TimelineBlock, top: number) => ReactNode;
   extensionEnd?: string | null; onExtend?: () => void;
+  /** The board fills its box: a last row stretches the day columns to the bottom. */
+  fill?: boolean;
 };
 
 /** A single scroll surface owns both axes. Daily cells and intervals share the
  * same percentage coordinate system; identity columns never affect duration. */
-export function DateGrid({ data, bookings, blocks, perspective, start, dates, compact, today, selectedDate, onDate, currency, scopedVehicle, renderBooking, renderBlock, extensionEnd, onExtend }: Props) {
+export function DateGrid({ data, bookings, blocks, perspective, start, dates, compact, today, selectedDate, onDate, currency, scopedVehicle, renderBooking, renderBlock, extensionEnd, onExtend, fill }: Props) {
   const rows = useMemo(() => {
     const result: GridRow[] = bookingRows(bookings, perspective, start, dates.length).map(group => {
       const b = group.bookings[0];
@@ -48,7 +50,8 @@ export function DateGrid({ data, bookings, blocks, perspective, start, dates, co
   }, [bookings, blocks, perspective, start, dates.length, data.vehicles, scopedVehicle]);
   const todayOffset = dayNumber(today) - dayNumber(start);
   const plusOffset = extensionEnd ? dayNumber(extensionEnd) + 1 - dayNumber(start) : -1;
-  const identity = compact ? "0px" : "176px";
+  // Filling (edge to edge) the identity column carries the page's 40px gutter too.
+  const identity = compact ? "0px" : fill ? "204px" : "176px";
   return <div className="tl-axis" style={{ "--tl-days": dates.length, "--tl-min-day": compact ? "36px" : dates.length > 14 ? "34px" : "40px", "--tl-identity": identity } as CSSProperties}>
     <div className="tl-grid-header">
       <div className="tl-identity tl-identity-heading">{perspective === "rental" ? "Rental" : perspective === "vehicle" ? "Vehicle" : "Customer"}<small>{format(parseLocalDate(start), "MMM yyyy")}</small></div>
@@ -87,6 +90,9 @@ export function DateGrid({ data, bookings, blocks, perspective, start, dates, co
           </div>
         </div>;
       })}
+      {/* Filling the box: one more row, no identity, that takes the rest of
+          the height so the day columns, weekends and today run to the bottom. */}
+      {fill && rows.length > 0 && <div className="tl-grid-row tl-filler" aria-hidden="true"><div className="tl-identity" /><div className="tl-row-dates"><div className="tl-cells">{dates.map(date => <div className={cn("tl-cell", [0, 6].includes(parseLocalDate(date).getDay()) && "tl-weekend")} key={date} />)}</div></div></div>}
       {!rows.length && <div className="tl-grid-row tl-vacant-row"><div className="tl-identity" /><div className="tl-row-dates"><div className="tl-cells">{dates.map(date => <div className={cn("tl-cell", [0, 6].includes(parseLocalDate(date).getDay()) && "tl-weekend")} key={date} />)}</div></div></div>}
       {todayOffset >= 0 && todayOffset < dates.length && <div className="tl-today-track"><div className="tl-today-line" aria-label="Today indicator" style={{ left: `calc(var(--tl-day) * ${todayOffset + .5})` }} /></div>}
     </div>

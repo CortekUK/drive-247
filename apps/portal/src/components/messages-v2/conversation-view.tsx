@@ -38,10 +38,10 @@
  */
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { format, isSameDay } from "date-fns";
+import { format, isSameDay, isToday, isYesterday } from "date-fns";
 import {
   ArrowLeft, Car, Mail, MessageCircle, MessageSquare, Phone,
-  PhoneCall, Send, Loader2, Info, Paperclip, X, AlertTriangle, ChevronDown,
+  PhoneCall, Send, Loader2, Info, Paperclip, X, AlertTriangle, ChevronDown, Users,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui-v2/avatar";
 import { Button } from "@/components/ui-v2/button";
@@ -50,11 +50,17 @@ import { Textarea } from "@/components/ui-v2/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useChatMessages, type ChatMessage } from "@/hooks/use-chat-messages";
 import { useSocket, type MessageChannel } from "@/contexts/RealtimeChatContext";
-import { DateSeparator, VoiceCallBar } from "@/components/chat";
+import { VoiceCallBar } from "@/components/chat";
 import { TimelineItem } from "@/components/messages-v2/timeline-item";
 import { mockMessages } from "@/components/messages-v2/mock-conversation";
 import { readMessagesScenario, subscribeDevOverrides } from "@/lib/dev-overrides";
 import { useVoiceCall } from "@/hooks/use-voice-call";
+import { useTwilioVoice } from "@/hooks/use-twilio-voice";
+import { PhoneCallPreview } from "@/components/messages-v2/phone-call-preview";
+import { CallRecordCard, useCallRecords } from "@/components/messages-v2/call-record";
+import { useV2 } from "@/lib/v2-context";
+import { useContactOverride } from "@/components/messages-v2/contact-override";
+import { supabase } from "@/integrations/supabase/client";
 import type { BookingReference } from "@/components/chat/BookingPicker";
 import { AttachMenu } from "@/components/messages-v2/attach-menu";
 import { NO_SCROLLBAR } from "@/components/messages-v2/no-scrollbar";
@@ -62,6 +68,11 @@ import { AutoSkeleton } from "@/components/skeleton-v2/auto-skeleton";
 import { skeletonRows } from "@/lib/skeleton-data";
 import { useSkeletonLoading } from "@/hooks/use-skeleton-loading";
 import { useChatAttachments } from "@/components/messages-v2/use-chat-attachments";
+import type { SuggestInput } from "@/components/messages-v2/trax-reply-suggestions";
+import { STYLE_LABEL, useTraxReplies } from "@/components/messages-v2/use-trax-replies";
+import { useBulkSelect } from "@/components/messages-v2/bulk-select";
+import { useManagerPermissions } from "@/hooks/use-manager-permissions";
+import { TraxGhostText, TraxGutterMark, useTraxGhost } from "@/components/messages-v2/trax-ghost-reply";
 import type { ChatChannel } from "@/hooks/use-chat-channels";
 
 type Mode = MessageChannel | "call";
@@ -81,6 +92,51 @@ const MODES: { key: Mode; label: string; icon: typeof Mail }[] = [
   { key: "call", label: "Call", icon: Phone },
 ];
 
+/**
+ * The composer surface. The one deliberately DEFINED thing in this workspace:
+ * everything else is flat and borderless, so the box gets a clear indigo rim
+ * (a touch heavier along the bottom, for thickness) plus a layered 3D lift — a
+ * lift alone blended into the page's light gradient. The
+ * rim strengthens while you are typing in it. (Dark: a plain-slash rim on
+ * `--v2-link`, since v2 dark `--border` already carries an alpha.)
+ */
+const COMPOSER =
+  "rounded-3xl border border-primary/30 border-b-primary/45 bg-card " +
+  "dark:border-[hsl(var(--v2-link,var(--primary))_/_0.35)] " +
+  "focus-within:border-primary/55 dark:focus-within:border-[hsl(var(--v2-link,var(--primary))_/_0.6)] " +
+  /* Depth, in layers: a white inner highlight along the top edge (the lit
+     face), a tight contact shadow, and two wider indigo shadows falling below
+     — together they read as a slab sitting ON the page, not printed on it. */
+  "shadow-[inset_0_1px_0_hsl(0_0%_100%/0.9),0_1px_2px_hsl(var(--foreground)/0.08),0_4px_8px_-2px_hsl(var(--primary)/0.14),0_16px_32px_-12px_hsl(var(--primary)/0.38),0_28px_56px_-28px_hsl(var(--primary)/0.3)] " +
+  "dark:shadow-[inset_0_1px_0_hsl(0_0%_100%/0.06),0_1px_2px_hsl(0_0%_0%/0.4),0_16px_32px_-12px_hsl(0_0%_0%/0.6)] " +
+  "transition-[box-shadow,border-color] duration-200 ease-out motion-reduce:transition-none";
+
+/** A field that is part of the composer surface, not a box inside it. */
+const BARE_FIELD =
+  "rounded-none border-0 bg-transparent shadow-none focus-visible:border-0 focus-visible:ring-0 dark:bg-transparent";
+
+/**
+ * The day label between messages — a quiet word, no rules either side. The
+ * shared `DateSeparator` (still used by v1's ChatWindow) draws a hairline to
+ * each edge; in this borderless workspace the label alone is the divider.
+ */
+function DayLabel({ date }: { date: string }) {
+  const d = new Date(date);
+  const label = Number.isNaN(d.getTime())
+    ? ""
+    : isToday(d)
+      ? "Today"
+      : isYesterday(d)
+        ? "Yesterday"
+        : format(d, "MMMM d, yyyy");
+  if (!label) return null;
+  return (
+    <div className="my-6 flex justify-center">
+      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+    </div>
+  );
+}
+
 function ChannelSwitcher({
   mode, setMode, disabled,
 }: {
@@ -89,7 +145,10 @@ function ChannelSwitcher({
   disabled: Partial<Record<Mode, string>>;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-1.5 rounded-full bg-muted/60 p-1.5">
+    /* Sits INSIDE the composer's bottom row now, on its white surface — so no
+       grey track, and the active channel takes the sidebar's active tint
+       rather than a white chip that would vanish against white. */
+    <div className="flex min-w-0 flex-wrap items-center gap-0.5">
       {MODES.map(({ key, label, icon: Icon }) => {
         const why = disabled[key];
         const active = mode === key;
@@ -100,9 +159,9 @@ function ChannelSwitcher({
             disabled={!!why}
             title={why}
             onClick={() => setMode(key)}
-            className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-all ${
+            className={`flex h-8 items-center gap-1.5 rounded-full px-3 text-[12.5px] font-medium outline-none transition-colors duration-200 ease-out focus-visible:ring-2 focus-visible:ring-ring/40 motion-reduce:transition-none ${
               active
-                ? "bg-card text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] shadow-sm"
+                ? "bg-primary/10 text-primary dark:bg-[hsl(var(--v2-hover,var(--muted)))] dark:text-[hsl(var(--v2-link,var(--primary)))]"
                 : why
                   ? "cursor-not-allowed text-muted-foreground/40"
                   : "text-muted-foreground hover:text-foreground"
@@ -180,8 +239,13 @@ const SKELETON_MESSAGES: ChatMessage[] = skeletonRows(6, (f, i) => ({
 export function ConversationView({ channel }: { channel: ChatChannel }) {
   const customerId = channel.customer_id;
   const name = channel.customer?.name || "Customer";
-  const email = channel.customer?.email || null;
-  const phone = channel.customer?.phone || null;
+  /* The contact IN USE for this conversation: a one-off override set in the
+     right rail (this chat only — the customer record is never changed), else
+     what is on file. Everything below — the email "To", the call, the
+     disabled-channel checks — reads these. */
+  const { override: contactOverride } = useContactOverride(channel.id);
+  const email = contactOverride.email || channel.customer?.email || null;
+  const phone = contactOverride.phone || channel.customer?.phone || null;
 
   const { messages: realMessages, isLoading: realLoading, loadMore, hasMore, isLoadingMore } =
     useChatMessages(channel.id, customerId);
@@ -206,7 +270,12 @@ export function ConversationView({ channel }: { channel: ChatChannel }) {
   const { sendMessage, markRead, joinRoom, onNewMessage } = useSocket();
   const { toast } = useToast();
 
-  const [mode, setMode] = useState<Mode>(channel.last_channel || "in_app");
+  const [mode, setMode] = useState<Mode>(contactOverride.channel || channel.last_channel || "in_app");
+  /* A "usual channel" chosen for this chat in the right rail's edit dialog
+     switches the composer to it straight away. */
+  useEffect(() => {
+    if (contactOverride.channel) setMode(contactOverride.channel);
+  }, [contactOverride.channel]);
   const [body, setBody] = useState("");
   const [subject, setSubject] = useState("");
   const [booking, setBooking] = useState<BookingReference | null>(null);
@@ -225,6 +294,16 @@ export function ConversationView({ channel }: { channel: ChatChannel }) {
      device in the browser with status, duration, mute and hold. Call mode does
      NOT send a message — it places a call. */
   const voiceCall = useVoiceCall();
+  /* No Twilio Voice on this tenant (northwind has none): Start call opens the
+     iPhone call preview instead of failing with "Voice is not enabled", so the
+     flow can be shown end to end. A tenant with voice set up never sees it. */
+  const { status: voiceSetup } = useTwilioVoice();
+  const voiceLive = !!voiceSetup?.isEnabled;
+  /* The preview is a demo surface, so it is v2-only: a real tenant without
+     voice must never be shown a call that did not happen. */
+  const previewCalls = useV2("chrome") && !voiceLive;
+  const [phonePreview, setPhonePreview] = useState(false);
+  const callRecords = useCallRecords(channel.id);
   const { upload, uploading, progress } = useChatAttachments();
 
   /* Join and clear unread on open — the same two calls the old window made. */
@@ -287,6 +366,35 @@ export function ConversationView({ channel }: { channel: ChatChannel }) {
     [phone, email],
   );
 
+  /* Trax's suggested reply, typed as ghost text into the EMPTY chat box. It
+     reads the real thread (or the preview's), and steps aside the moment the
+     operator types, sends, or switches to email or call. Tab takes the whole
+     suggestion, even half-typed. */
+  const chatMode = mode === "in_app" || mode === "sms";
+  const lastMessage = isLoading ? null : messages[messages.length - 1] ?? null;
+  const { replies } = useTraxReplies({
+    channelId: channel.id,
+    lastMessageId: lastMessage?.id ?? null,
+    mode: mode === "sms" ? "sms" : "in_app",
+    enabled: chatMode && !isLoading,
+    fallback: {
+      messages: messages as SuggestInput["messages"],
+      customerFirstName: name.split(" ")[0],
+      mode: mode === "sms" ? "sms" : "in_app",
+    },
+  });
+  const suggestions = useMemo(() => replies.map((r) => r.text), [replies]);
+  const ghostOn = chatMode && !disabled[mode] && !sending && body === "" && suggestions.length > 0;
+  const ghost = useTraxGhost(suggestions, ghostOn);
+
+  /* Bulk, in place: the text written here goes to whoever the operator ticks
+     in the rail. Text only — files and booking cards stay with the one
+     conversation they were attached in. */
+  const bulk = useBulkSelect();
+  const { canEdit } = useManagerPermissions();
+  const canBulk = !!bulk && chatMode && !disabled[mode] && canEdit("messages");
+  const ghostStyle = replies.find((r) => r.text === ghost.current)?.style;
+
   async function handleSend() {
     const text = body.trim();
     if (disabled[mode] || mode === "call") return;
@@ -329,6 +437,38 @@ export function ConversationView({ channel }: { channel: ChatChannel }) {
        retyping a paragraph because the network blinked is unforgivable. */
     const held = { body, subject, booking, files };
     setBody(""); setSubject(""); setBooking(null); setFiles([]);
+
+    /* An override on the channel being sent: the v1 senders only deliver to
+       the details on file, so this one send goes through the v2 function with
+       the destination in hand. In-app is unaffected — it has no address. */
+    const overrideTo =
+      mode === "sms" ? contactOverride.phone : mode === "email" ? contactOverride.email : undefined;
+    if (overrideTo) {
+      try {
+        const { data, error } = await supabase.functions.invoke("send-conversation-message-v2", {
+          body: {
+            channelId: channel.id,
+            channel: mode,
+            content,
+            to: overrideTo,
+            subject: mode === "email" ? held.subject.trim() : undefined,
+            metadata: Object.keys(metadata).length ? metadata : undefined,
+          },
+        });
+        if (error || data?.success === false) throw new Error(data?.error || error?.message);
+        if (mode === "email") toast({ title: "Email sent", description: `Sent to ${overrideTo}.` });
+      } catch (e) {
+        setBody(held.body); setSubject(held.subject);
+        setBooking(held.booking); setFiles(held.files);
+        setSendError(
+          `The ${mode === "sms" ? "text" : "email"} to ${overrideTo} could not be sent.` +
+            (e instanceof Error && e.message ? ` ${e.message}` : ""),
+        );
+      } finally {
+        setSending(false);
+      }
+      return;
+    }
 
     try {
       const result = await sendMessage(
@@ -374,12 +514,33 @@ export function ConversationView({ channel }: { channel: ChatChannel }) {
        Two components each claiming `h-[calc(100vh-4rem)]` is precisely how the
        nested scrollbars appeared — the inner one could not shrink, so it
        overflowed the outer one, and both drew a track. */
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+    <div className="relative isolate flex min-h-0 min-w-0 flex-1 flex-col">
+      {/* A faint line grid behind the conversation, so the middle column has a
+          surface rather than reading as empty page. Its own layer under
+          everything (`isolate` + `-z-10` keeps it beneath the history and the
+          composer without touching their stacking), fixed while the history
+          scrolls over it, and faded out toward the edges by a radial mask so
+          it never meets a column edge as a hard line. Dark uses the v2 link
+          tint, since `--primary` at 7% vanishes on the dark surface. */}
+      <div
+        aria-hidden
+        className={
+          "pointer-events-none absolute inset-0 -z-10 bg-[size:32px_32px] " +
+          "bg-[linear-gradient(to_right,hsl(var(--primary)/0.07)_1px,transparent_1px),linear-gradient(to_bottom,hsl(var(--primary)/0.07)_1px,transparent_1px)] " +
+          "dark:bg-[linear-gradient(to_right,hsl(var(--v2-link,var(--primary))/0.06)_1px,transparent_1px),linear-gradient(to_bottom,hsl(var(--v2-link,var(--primary))/0.06)_1px,transparent_1px)] " +
+          "[mask-image:radial-gradient(ellipse_75%_70%_at_50%_45%,black_35%,transparent_100%)]"
+        }
+      />
       {/* ── header ─────────────────────────────────────────────────────── */}
       {/* `shrink-0`: the history between these two is the only thing that gives
           way. Without it a flex column will compress the header and composer
-          before it shrinks the scroll region. */}
-      <header className="flex shrink-0 items-center gap-4 border-b border-border/50 px-6 py-4">
+          before it shrinks the scroll region.
+          `xl:hidden`: from xl up the customer rail sits beside the thread and
+          already carries the avatar, name, email and phone, and calling is the
+          composer's Call channel, so this header only repeated both. Below xl
+          that rail is hidden, so the header stays — it is then the only place
+          the identity and the mobile Back control live. */}
+      <header className="flex shrink-0 items-center gap-4 px-6 py-4 xl:hidden">
         {/* The sidebar becomes a Back rail on this route, but a Back control
             has to exist inside the view too: the rail collapses to an icon on
             narrow screens and disappears entirely on mobile. */}
@@ -434,9 +595,9 @@ export function ConversationView({ channel }: { channel: ChatChannel }) {
       <div
         ref={scrollRef}
         onScroll={onScroll}
-        className={`relative min-h-0 flex-1 overflow-y-auto no-scrollbar px-6 py-8 lg:px-10 ${NO_SCROLLBAR}`}
+        className={`relative min-h-0 flex-1 overflow-y-auto no-scrollbar px-6 pb-8 pt-4 lg:px-10 ${NO_SCROLLBAR}`}
       >
-        {!isLoading && messages.length === 0 ? (
+        {!isLoading && messages.length === 0 && callRecords.records.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center text-center">
             <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
               <MessageCircle className="h-6 w-6" />
@@ -456,9 +617,12 @@ export function ConversationView({ channel }: { channel: ChatChannel }) {
                 </Button>
               </div>
             )}
-            {rows.map(({ message, newDay, isFirstInGroup, isLastInGroup }) => (
-              <div key={message.id}>
-                {newDay && <DateSeparator date={message.created_at} />}
+            {/* The history starts at the top. The first day divider drops the
+                day label's `my-6` top margin — together with the old `py-8` it
+                left ~56px of nothing above the first message. */}
+            {rows.map(({ message, newDay, isFirstInGroup, isLastInGroup }, i) => (
+              <div key={message.id} className={i === 0 ? "[&>div:first-child]:mt-0" : undefined}>
+                {newDay && <DayLabel date={message.created_at} />}
                 <TimelineItem
                   message={message}
                   isFirstInGroup={isFirstInGroup}
@@ -469,33 +633,39 @@ export function ConversationView({ channel }: { channel: ChatChannel }) {
                 />
               </div>
             ))}
+            {/* Calls made from the preview phone, newest last — they happened
+                after everything above. */}
+            {callRecords.records.map((r) => (
+              <CallRecordCard key={r.id} record={r} customerName={name} />
+            ))}
             <div ref={endRef} />
           </AutoSkeleton>
         )}
       </div>
 
       {/* ── composer ───────────────────────────────────────────────────── */}
-      <div className="shrink-0 border-t border-border/50 px-6 py-4 lg:px-10">
+      <div className="shrink-0 px-6 py-4 lg:px-10">
         {/* `max-w-5xl` here is the SAME cap the history uses, which is what
             makes the column width independent of the composer mode: Email
             swaps a one-line box for a subject + body and grows DOWNWARDS, and
             the thread above never moves a pixel sideways. */}
         <div className="mx-auto w-full max-w-5xl space-y-3">
-          <ChannelSwitcher mode={mode} setMode={setMode} disabled={disabled} />
-
-          {disabled[mode] ? (
-            <p className="rounded-2xl bg-amber-500/10 px-4 py-3 text-[13px] text-amber-700 dark:text-amber-300">
-              {disabled[mode]}. Add one on the customer record to use this channel.
-            </p>
-          ) : mode === "call" ? (
-            /* A call is not a message, so this is an action rather than a text
-               box. It drives the SAME integration ChatWindow uses —
-               useVoiceCall, a Twilio Voice device in the browser — not a tel:
-               link, which would hand the call to the operating system and lose
-               the status, duration and hangup this UI can show. */
-            <div className="flex flex-col items-start gap-3 rounded-2xl bg-muted/50 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="min-w-0">
-                <p className="text-[13px] font-medium">Call {name}</p>
+          {/* ONE raised surface: what you write on top, how it is sent along
+              its bottom edge — the channel, attachments and the send action
+              live inside the box rather than as a separate strip above it. */}
+          <div className={COMPOSER}>
+            {disabled[mode] ? (
+              <p className="mx-3 mt-3 rounded-2xl bg-amber-500/10 px-4 py-3 text-[13px] text-amber-700 dark:text-amber-300">
+                {disabled[mode]}. Add one on the customer record to use this channel.
+              </p>
+            ) : mode === "call" ? (
+              /* A call is not a message, so this is an action rather than a
+                 text box. It drives the SAME integration ChatWindow uses —
+                 useVoiceCall, a Twilio Voice device in the browser — not a tel:
+                 link, which would hand the call to the operating system and
+                 lose the status, duration and hangup this UI can show. */
+              <div className="px-5 pb-2 pt-4">
+                <p className="text-[14px] font-medium">Call {name}</p>
                 <p className="mt-0.5 text-[12px] text-muted-foreground">
                   {voiceCall.status === "idle"
                     ? phone
@@ -504,90 +674,141 @@ export function ConversationView({ channel }: { channel: ChatChannel }) {
                       : `In call · ${phone}`}
                 </p>
               </div>
-              <Button
-                className="gap-2 rounded-full"
-                disabled={voiceCall.status !== "idle"}
-                onClick={() => {
-                  if (!phone) return;
-                  if (voiceCall.status !== "idle") {
-                    toast({ title: "Call in progress", description: "End the current call first." });
-                    return;
-                  }
-                  voiceCall.makeCall(phone);
-                }}
-              >
-                {voiceCall.status === "connecting"
-                  ? <Loader2 className="h-4 w-4 animate-spin" />
-                  : <PhoneCall className="h-4 w-4" />}
-                {voiceCall.status === "idle" ? "Start call" : "On a call"}
-              </Button>
-            </div>
-          ) : mode === "email" ? (
-            /* Email gets a real composer. A subject squeezed into a chat input
-               is how subject-less email gets sent. */
-            <div className="space-y-3 rounded-2xl bg-muted/40 p-4">
-              <div className="flex items-center gap-3 text-[13px]">
-                <span className="w-16 shrink-0 text-muted-foreground">To</span>
-                <span className="truncate font-medium">{email}</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="w-16 shrink-0 text-[13px] text-muted-foreground">Subject</span>
-                <Input
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
-                  placeholder="What is this about?"
-                  className="h-10 rounded-full"
+            ) : mode === "email" ? (
+              /* Email gets a real composer. A subject squeezed into a chat
+                 input is how subject-less email gets sent. */
+              <div className="space-y-1 px-5 pt-4">
+                <div className="flex items-center gap-3 text-[13px]">
+                  <span className="w-14 shrink-0 text-muted-foreground">To</span>
+                  <span className="truncate font-medium">{email}</span>
+                  {contactOverride.email && (
+                    <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-px text-[10px] font-semibold text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
+                      This chat
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="w-14 shrink-0 text-[13px] text-muted-foreground">Subject</span>
+                  <Input
+                    value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
+                    placeholder="What is this about?"
+                    className={`h-9 px-0 font-medium ${BARE_FIELD}`}
+                  />
+                </div>
+                <Textarea
+                  value={body}
+                  onChange={(e) => setBody(e.target.value)}
+                  placeholder={`Write to ${name.split(" ")[0]}…`}
+                  className={`min-h-[160px] resize-y px-0 text-[14px] ${BARE_FIELD} ${NO_SCROLLBAR}`}
                 />
               </div>
-              <Textarea
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                placeholder={`Write to ${name.split(" ")[0]}…`}
-                className={`min-h-[160px] resize-y rounded-2xl ${NO_SCROLLBAR}`}
-              />
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <AttachMenu
-                  customerId={customerId}
-                  onFiles={(f) => setFiles((p) => [...p, ...f])}
-                  onBooking={setBooking}
+            ) : (
+              <div className="relative">
+                {/* Same padding, size and leading as the textarea, so the ghost's
+                    letters sit exactly where typed ones would. */}
+                {/* Text starts at 50px (20 padding + the 20px mark + 10 gap) in all
+                  three — ghost, caret and typed text — so nothing shifts when
+                  the operator starts typing over a suggestion. */}
+              <TraxGutterMark />
+              {ghostOn && <TraxGhostText text={ghost.shown} done={ghost.shown === ghost.current} label={ghostStyle ? STYLE_LABEL[ghostStyle] : undefined} className="pl-[50px] pr-5 pt-4 text-[14px] leading-5" />}
+                <Textarea
+                  value={body}
+                  onChange={(e) => setBody(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Tab" && !e.shiftKey && ghostOn && ghost.current) {
+                      e.preventDefault();
+                      setBody(ghost.current);
+                      return;
+                    }
+                    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void handleSend(); }
+                  }}
+                  /* No native placeholder while Trax is suggesting — the two
+                     would sit on top of each other. */
+                  placeholder={ghostOn ? "" : mode === "sms" ? `Text ${name.split(" ")[0]}…` : `Message ${name.split(" ")[0]}…`}
+                  className={`max-h-48 min-h-[76px] pb-1 pl-[50px] pr-5 pt-4 text-[14px] leading-5 ${BARE_FIELD} ${NO_SCROLLBAR}`}
                 />
-                <Button onClick={handleSend} disabled={sending} className="gap-2 rounded-full">
-                  {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                  {uploading
-                    ? `Uploading ${progress.done + 1} of ${progress.total}…`
-                    : sending
-                      ? "Sending…"
-                      : "Send email"}
-                </Button>
               </div>
+            )}
+
+            {/* The bottom row: channel on the left, the mode's own actions on
+                the right. */}
+            <div className="flex items-center justify-between gap-2 px-2.5 pb-2.5 pt-1.5">
+              <ChannelSwitcher mode={mode} setMode={setMode} disabled={disabled} />
+              {!disabled[mode] && (
+                <div className="flex shrink-0 items-center gap-1.5">
+                  {mode === "call" ? (
+                    <Button
+                      className="h-9 gap-2 rounded-full"
+                      disabled={voiceCall.status !== "idle"}
+                      onClick={() => {
+                        if (!phone) return;
+                        if (previewCalls) { setPhonePreview(true); return; }
+                        if (voiceCall.status !== "idle") {
+                          toast({ title: "Call in progress", description: "End the current call first." });
+                          return;
+                        }
+                        voiceCall.makeCall(phone);
+                      }}
+                    >
+                      {voiceCall.status === "connecting"
+                        ? <Loader2 className="h-4 w-4 animate-spin" />
+                        : <PhoneCall className="h-4 w-4" />}
+                      {voiceCall.status === "idle" ? "Start call" : "On a call"}
+                    </Button>
+                  ) : (
+                    <>
+                      {canBulk && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          disabled={!body.trim() || sending}
+                          title={body.trim() ? "Send this message to several customers" : "Write a message first"}
+                          onClick={() => {
+                            /* Starts with this conversation's customer ticked —
+                               they are who the message was written to. */
+                            bulk!.start(body.trim(), mode as "in_app" | "sms", () => setBody(""));
+                            bulk!.toggle(customerId);
+                          }}
+                          className="h-9 gap-1.5 rounded-full px-3 text-[12.5px] font-medium text-muted-foreground hover:text-foreground"
+                        >
+                          <Users className="h-4 w-4" />
+                          Bulk
+                        </Button>
+                      )}
+                      <AttachMenu
+                        compact
+                        customerId={customerId}
+                        onFiles={(f) => setFiles((p) => [...p, ...f])}
+                        onBooking={setBooking}
+                      />
+                      {mode === "email" ? (
+                        <Button onClick={handleSend} disabled={sending} className="h-9 gap-2 rounded-full">
+                          {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                          {uploading
+                            ? `Uploading ${progress.done + 1} of ${progress.total}…`
+                            : sending
+                              ? "Sending…"
+                              : "Send email"}
+                        </Button>
+                      ) : (
+                        <Button
+                          onClick={handleSend}
+                          aria-label="Send"
+                          title={uploading ? `Uploading ${progress.done + 1} of ${progress.total}` : "Send"}
+                          disabled={sending || (!body.trim() && !booking && !files.length)}
+                          size="icon"
+                          className="h-9 w-9 shrink-0 rounded-full"
+                        >
+                          {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                        </Button>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
             </div>
-          ) : (
-            <div className="flex items-end gap-2">
-              <AttachMenu
-                customerId={customerId}
-                onFiles={(f) => setFiles((p) => [...p, ...f])}
-                onBooking={setBooking}
-              />
-              <Textarea
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void handleSend(); }
-                }}
-                placeholder={mode === "sms" ? `Text ${name.split(" ")[0]}…` : `Message ${name.split(" ")[0]}…`}
-                className={`max-h-40 min-h-[44px] flex-1 resize-none rounded-3xl py-3 ${NO_SCROLLBAR}`}
-              />
-              <Button
-                onClick={handleSend}
-                title={uploading ? `Uploading ${progress.done + 1} of ${progress.total}` : undefined}
-                disabled={sending || (!body.trim() && !booking && !files.length)}
-                size="icon"
-                className="h-11 w-11 shrink-0 rounded-full"
-              >
-                {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              </Button>
-            </div>
-          )}
+          </div>
 
           {sendError && (
             /* Tinted, specific, and dismissible — and the composer still holds
@@ -609,6 +830,25 @@ export function ConversationView({ channel }: { channel: ChatChannel }) {
           />
         </div>
       </div>
+
+      <PhoneCallPreview
+        open={phonePreview}
+        onOpenChange={setPhonePreview}
+        name={name}
+        phone={phone ?? ""}
+        avatarUrl={channel.customer?.profile_photo_url}
+        onEnded={() => {
+          /* The record is scripted from what the customer has been writing
+             about, so the demo call reads as THIS conversation's call. */
+          const context = messages
+            .filter((m) => m.sender_type === "customer")
+            .slice(-4)
+            .map((m) => m.content)
+            .join(" ");
+          callRecords.add(context);
+          setTimeout(() => endRef.current?.scrollIntoView({ behavior: "smooth" }), 80);
+        }}
+      />
     </div>
   );
 }

@@ -207,3 +207,28 @@ export function stageValues(detail: RentalDetailV2 | null | undefined): Record<S
           : null,
   };
 }
+
+/** One line of a rail note — optionally led by a tiny tag ("P", "R"). */
+export type NoteLine = { tag?: string; text: string };
+
+/**
+ * Quieter lines under a stage's answer in the rail — only where the answer
+ * alone leaves out something an operator wants at a glance.
+ *
+ * When & where: the dates are the answer; WHERE the car goes is the note — one
+ * line per end, tagged P and R like the map's pins, each place cut to the part
+ * before its first comma. One untagged line when both ends are the same place.
+ */
+export function stageNotes(detail: RentalDetailV2 | null | undefined): Partial<Record<StageId, NoteLine[] | null>> {
+  const r = detail?.rental;
+  const short = (a: unknown) => (typeof a === "string" && a.trim() ? a.split(",")[0].trim() : null);
+  const from = short(r?.pickup_location || r?.delivery_address);
+  const to = short(r?.return_location || r?.collection_address);
+  const when: NoteLine[] | null =
+    from && to && from === to
+      ? [{ text: `At ${from}` }]
+      : from || to
+        ? [...(from ? [{ tag: "P", text: from }] : []), ...(to ? [{ tag: "R", text: to }] : [])]
+        : null;
+  return { when };
+}

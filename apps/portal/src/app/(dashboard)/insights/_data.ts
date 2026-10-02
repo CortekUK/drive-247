@@ -292,6 +292,8 @@ export type MixSlice = {
 export type LedgerRow = PnlEntry & {
   id: string;
   reference: string | null;
+  customer_id?: string | null;
+  rental_id?: string | null;
   /**
    * The row's bucket once the tenant's own rules are applied — set once in
    * `useInsights`, so the dialogs read the same answer the totals were summed
@@ -357,6 +359,8 @@ export type InsightsData = {
   utilisation: number | null;
   fleetSize: number;
   monthly: MonthPoint[];
+  /** Every car that earned or cost anything in the period, best first. */
+  vehicleProfits: VehicleProfit[];
   bestVehicles: VehicleProfit[];
   worstVehicles: VehicleProfit[];
   mix: MixSlice[];
@@ -371,6 +375,12 @@ export type InsightsData = {
   refunds: RefundRow[];
   /** Everyone who owes money, worst debt first. NOT period-scoped. */
   receivables: ReceivableRow[];
+  /** Every rental overlapping the period, newest start first. */
+  rentals: RentalSummary[];
+  /** Every payment dated in the period, newest first. */
+  paymentsIn: PaymentIn[];
+  /** Customer id → name, for every customer the period's rows mention. */
+  customerNames: Map<string, string>;
   /** Vehicle id → the label to print for it. Misses are removed vehicles. */
   vehicleLabels: Map<string, string>;
 
@@ -413,7 +423,55 @@ function foldMix(byCategory: Map<string, number>, keep: number): MixSlice[] {
  * ──────────────────────────────────────────────────────────────────────────── */
 
 type VehicleRow = { id: string; make: string | null; model: string | null; year: number | null; reg: string | null; status: string | null };
-type RentalRow = { start_date: string | null; end_date: string | null; status: string | null };
+type RentalRow = {
+  id: string;
+  rental_number: string | null;
+  customer_id: string | null;
+  vehicle_id: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  status: string | null;
+  source: string | null;
+  pickup_location: string | null;
+  delivery_address: string | null;
+};
+type PaymentInRow = {
+  id: string;
+  customer_id: string | null;
+  vehicle_id: string | null;
+  rental_id: string | null;
+  amount: number | string | null;
+  payment_date: string | null;
+  method: string | null;
+  payment_type: string | null;
+  status: string | null;
+};
+
+/** One rental overlapping the period, for the rental register and due-back reports. */
+export type RentalSummary = {
+  id: string;
+  number: string | null;
+  customerName: string | null;
+  vehicleId: string | null;
+  start: string | null;
+  end: string | null;
+  status: string | null;
+  source: string | null;
+  /** Where the car went: the delivery address when delivered, else the pickup. */
+  location: string | null;
+};
+
+/** One payment taken in the period — what should have landed in the bank. */
+export type PaymentIn = {
+  id: string;
+  date: string | null;
+  customerName: string | null;
+  vehicleId: string | null;
+  amount: number;
+  method: string | null;
+  type: string | null;
+  status: string | null;
+};
 type AgingRow = {
   customer_id: string | null;
   customer_name: string | null;
@@ -562,11 +620,11 @@ export function useInsights(months: PeriodMonths) {
       // Five reads, in parallel. Each one filters on tenant_id — see the file
       // header. `vehicles` is deliberately NOT date-filtered: the denominator of
       // utilisation is the fleet you have, not the fleet that happened to earn.
-      const [ledger, vehicles, rentals, aging, refunds, rules, adjustments] = await Promise.all([
+      const [ledger, vehicles, rentals, aging, refunds, rules, adjustments, paymentsRead] = await Promise.all([
         fetchAll<LedgerRow>(() =>
           supabase
             .from('pnl_entries')
-            .select('id, entry_date, side, category, amount, vehicle_id, reference')
+            .select('id, entry_date, side, category, amount, vehicle_id, reference, customer_id, rental_id')
             .eq('tenant_id', tenantId!)
             .gte('entry_date', from)
             .lte('entry_date', to)
@@ -586,14 +644,15 @@ export function useInsights(months: PeriodMonths) {
         fetchAll<RentalRow>(() =>
           supabase
             .from('rentals')
-            .select('start_date, end_date, status')
+            .select('id, rental_number, customer_id, vehicle_id, start_date, end_date, status, source, pickup_location, delivery_address')
             .eq('tenant_id', tenantId!)
             // Overlap, not containment: a rental that began before the window
             // and is still running occupies days inside it, and a containment
             // filter would drop exactly the long rentals that matter most.
             .lte('start_date', to)
             .gte('end_date', from)
-            .order('start_date', { ascending: true }) as unknown as PageQuery<RentalRow>,
+            .order('start_date', { ascending: true })
+            .order('id', { ascending: true }) as unknown as PageQuery<RentalRow>,
         ),
         fetchAll<AgingRow>(() =>
           supabase
@@ -633,6 +692,18 @@ export function useInsights(months: PeriodMonths) {
         ),
         fetchCategoryRules(tenantId!),
         fetchAdjustments(tenantId!),
+        // Payments taken in the period — the "what reached the bank" report.
+        // `payment_date` is a calendar date, so an inclusive `to` is right here.
+        fetchAll<PaymentInRow>(() =>
+          supabase
+            .from('payments')
+            .select('id, customer_id, vehicle_id, rental_id, amount, payment_date, method, payment_type, status')
+            .eq('tenant_id', tenantId!)
+            .gte('payment_date', from)
+            .lte('payment_date', to)
+            .order('payment_date', { ascending: false })
+            .order('id', { ascending: true }) as unknown as PageQuery<PaymentInRow>,
+        ),
       ]);
 
       // Classify once, with the tenant's rules, and keep the answer on the row.
@@ -644,14 +715,20 @@ export function useInsights(months: PeriodMonths) {
       }
 
       /*
-       * Customer names for the refunds, and only for the refunds.
-       *
-       * Second-stage rather than parallel because the ids come out of the read
-       * above. Bounded by the number of refunds, which is small — the whole
-       * platform has 17 — so this is a cheap round trip and never a table scan.
+       * Customer names, for every customer the period's rows mention — refunds,
+       * rentals, payments and ledger lines. Second-stage because the ids come
+       * out of the reads above; chunked under the URL limit (`IN_CHUNK`), and
+       * bounded by the customers one tenant dealt with in at most a year.
        */
       const refundCustomerIds = [
-        ...new Set(refunds.rows.map((r) => r.customer_id).filter((id): id is string => !!id)),
+        ...new Set(
+          [
+            ...refunds.rows.map((r) => r.customer_id),
+            ...rentals.rows.map((r) => r.customer_id),
+            ...paymentsRead.rows.map((r) => r.customer_id),
+            ...ledger.rows.map((r) => r.customer_id),
+          ].filter((id): id is string => !!id),
+        ),
       ];
       const customerNames = new Map<string, string>();
       for (let i = 0; i < refundCustomerIds.length; i += IN_CHUNK) {
@@ -804,6 +881,7 @@ export function useInsights(months: PeriodMonths) {
         utilisation: computeUtilisation({ rentals: rentals.rows, fleetSize, from, to }),
         fleetSize,
         monthly,
+        vehicleProfits: ranked,
         bestVehicles,
         worstVehicles,
         mix: foldMix(byCategory, 5),
@@ -811,13 +889,38 @@ export function useInsights(months: PeriodMonths) {
         ledger: ledger.rows,
         refunds: refundRows,
         receivables,
+        rentals: rentals.rows
+          .map((r) => ({
+            id: r.id,
+            number: r.rental_number,
+            customerName: r.customer_id ? (customerNames.get(r.customer_id) ?? null) : null,
+            vehicleId: r.vehicle_id,
+            start: r.start_date,
+            end: r.end_date,
+            status: r.status,
+            source: r.source,
+            location: r.delivery_address?.trim() || r.pickup_location?.trim() || null,
+          }))
+          .sort((a, b) => (b.start ?? '').localeCompare(a.start ?? '')),
+        paymentsIn: paymentsRead.rows.map((r) => ({
+          id: r.id,
+          date: r.payment_date,
+          customerName: r.customer_id ? (customerNames.get(r.customer_id) ?? null) : null,
+          vehicleId: r.vehicle_id,
+          amount: toNumber(r.amount),
+          method: r.method,
+          type: r.payment_type,
+          status: r.status,
+        })),
+        customerNames,
         vehicleLabels,
         truncated:
           ledger.truncated ||
           vehicles.truncated ||
           rentals.truncated ||
           aging.truncated ||
-          refunds.truncated,
+          refunds.truncated ||
+          paymentsRead.truncated,
         adjustedCount:
           ledger.rows.filter((r) => r.adjusted).length + refundRows.filter((r) => r.adjusted).length,
         rules,

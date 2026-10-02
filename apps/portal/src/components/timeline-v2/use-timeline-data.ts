@@ -58,7 +58,8 @@ export function useTimelineData(scope: TimelineScope, start: string, end: string
         .gte("date", start).lte("date", end).order("id")) : [];
       return {
         ...EMPTY_TIMELINE,
-        bookings: rentals.map(r => ({
+        // A draft from "New Rental" (no customer and no car yet) is not a booking.
+        bookings: rentals.filter(r => r.customers || r.vehicles).map(r => ({
           id: r.id, rentalId: r.id, number: r.rental_number || "Unnumbered rental", start: r.start_date, end: r.end_date,
           pickupTime: r.pickup_time, returnTime: r.return_time, originalEnd: r.original_end_date,
           paymentMode: r.payment_mode, isPayAsYouGo: r.is_pay_as_you_go === true, autoExtendEnabled: r.auto_extend_enabled === true,

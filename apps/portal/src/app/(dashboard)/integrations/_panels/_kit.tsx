@@ -28,7 +28,7 @@ import { AutoSkeleton } from "@/components/skeleton-v2/auto-skeleton";
 import { skeletonFaker } from "@/lib/skeleton-data";
 import { AlertTriangle, Check, Copy, ExternalLink } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui-v2/tooltip";
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { Button } from "@/components/ui-v2/button";
 
 /* ───────────────────────────── contract ─────────────────────────────────── */
@@ -50,6 +50,18 @@ export type IntegrationPanelProps = {
   tenant: PanelTenant;
   /** Closes the dialog. Call after a destructive action that ends the session. */
   onClose: () => void;
+  /**
+   * Back from a panel's FIRST screen — returns to the education screens.
+   * Only given to panels that run their own screens (`ownsScreens`), and only
+   * when the operator came through the education.
+   */
+  onBack?: () => void;
+  /**
+   * The operator just pressed the education's last button ("Set up Stripe").
+   * A panel that has ONE obvious first action takes it straight away, instead
+   * of showing a second screen asking for the same click.
+   */
+  fromIntro?: boolean;
 };
 
 /**
@@ -79,6 +91,11 @@ export type IntegrationState =
 export type IntegrationPanelEntry = {
   Panel: ComponentType<IntegrationPanelProps>;
   StatusChip: ComponentType<{ tenant: PanelTenant }>;
+  /**
+   * The panel draws its own screens and Back / Next (the screen standard,
+   * `_screens.tsx`), so the dialog must not page it or add a second nav.
+   */
+  ownsScreens?: boolean;
 };
 
 /* ─────────────────────────── presentation ───────────────────────────────── */
@@ -191,6 +208,15 @@ export function AttentionMark({ warning }: { warning: string }) {
  * Done here, once, so none of the thirteen panel files had to change.
  */
 const StatusChipModeContext = createContext<"chip" | "tag">("chip");
+
+/**
+ * Lets the dialog LISTEN to an integration's state without each of the
+ * thirteen panel files exporting it. The board wraps the header chip in this;
+ * every chip reports the state it is drawing, and the dialog uses it to decide
+ * whether to open on the education screens (not set up yet) or straight on the
+ * working screens (active).
+ */
+export const StatusReportContext = createContext<((state: IntegrationState) => void) | null>(null);
 export const StatusChipTagMode = ({ children }: { children: ReactNode }) => (
   <StatusChipModeContext.Provider value="tag">{children}</StatusChipModeContext.Provider>
 );
@@ -212,6 +238,10 @@ export function StatusChip({
   className?: string;
 }) {
   const mode = useContext(StatusChipModeContext);
+  const report = useContext(StatusReportContext);
+  useEffect(() => {
+    report?.(state);
+  }, [report, state]);
   if (mode === "tag") {
     if (state === "connected") return <CardTag kind="live" />;
     if (state === "attention") return <AttentionMark warning={label ?? STATE_LABEL.attention} />;
@@ -324,7 +354,10 @@ export function PanelRow({
       </div>
       <div
         className={cn(
-          "min-w-0 shrink-0 text-right text-sm text-foreground",
+          // Shrinks and wraps rather than `shrink-0`: a long email, URL or id
+          // used to push the row wider than the dialog (no horizontal scroll,
+          // Ghulam Oct 1 2026). `overflow-wrap:anywhere` breaks unspaced ids.
+          "min-w-0 text-right text-sm text-foreground [overflow-wrap:anywhere]",
           mono && "font-mono text-[13px]",
         )}
       >
@@ -365,7 +398,9 @@ export function PanelNote({
     <div
       className={cn(
         PANEL_TEXT,
-        "rounded-xl border px-3.5 py-2.5 text-xs leading-relaxed",
+        // `overflow-wrap:anywhere`: notes carry raw error messages and URLs,
+        // which must wrap inside the note, never widen the dialog.
+        "rounded-xl border px-3.5 py-2.5 text-xs leading-relaxed [overflow-wrap:anywhere]",
         tone === "info" && "border-border bg-muted/30 text-muted-foreground",
         // `text-warning` / `text-destructive` are the ACCENT ramp — sized for a
         // solid button, not for 12px type on a 10% wash of themselves, where

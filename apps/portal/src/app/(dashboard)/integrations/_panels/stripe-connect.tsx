@@ -36,12 +36,11 @@
 // `.eq('id', tenant.id)` and every edge-function call passes this tenant's id
 // explicitly. There is no database net beneath either.
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   ArrowUpRight,
-  Ban,
   CheckCircle2,
   Link2,
   Loader2,
@@ -55,17 +54,10 @@ import { useIsTestModeUiHidden } from "@/lib/lean-context";
 import { Button } from "@/components/ui-v2/button";
 
 import type { IntegrationPanelProps, IntegrationState, PanelTenant } from "./_kit";
-import {
-  CopyValue,
-  PanelCard,
-  PanelError,
-  PanelLink,
-  PanelLoading,
-  PanelNote,
-  PanelRow,
-  PanelSection,
-  StatusChip,
-} from "./_kit";
+import { CopyValue, PanelCard, PanelError, PanelLoading, PanelRow, StatusChip } from "./_kit";
+import { ConnectionTest, DisconnectScreen, Hero, QuietNav, ScreenNav, SubScreen, demoCheck } from "./_screens";
+import { PaymentsEmptyArt } from "@/components/illustrations-v2/scenes/payments";
+import { OwnerPayoutsEmptyArt } from "@/components/illustrations-v2/scenes/owner-payouts";
 
 /* ─────────────────────────────── data ───────────────────────────────────── */
 
@@ -504,10 +496,88 @@ async function invokeFn<T>(name: string, body: Record<string, unknown>): Promise
   return { data: null, status: context?.status ?? null, message };
 }
 
+/* ─────────────────────────── first-run demo ─────────────────────────────── */
+
+/**
+ * FIRST-RUN DEMO — northwind only, on screen only (Ghulam, Oct 2 2026).
+ *
+ * northwind's real Stripe account is linked, so its dialog can never show the
+ * flow a brand-new operator meets. For demoing that flow, this pretends — in
+ * the browser, nowhere else — that no account was ever connected: the chip and
+ * the panel read a STAND-IN row derived from the real one with the account
+ * columns emptied, so the education screens and "Connect your Stripe account"
+ * appear. Pressing Connect then plays the outcome (Stripe opening → linked →
+ * taking payments) instead of calling `stripe-oauth-start`, because a real
+ * OAuth hand-off would re-point where northwind's money lands.
+ *
+ * NOTHING IS WRITTEN. No query, no edge function, no column. The real row is
+ * still fetched exactly as before; only what is drawn from it changes. Closing
+ * the dialog resets the demo so it can be shown again.
+ *
+ * To remove: delete this block, the two `useDemoRow` calls, and the demo
+ * branch in `connect`. Keyed on SLUG (V2_PLAN §2), never on an id.
+ */
+const STRIPE_FIRST_RUN_DEMO_SLUGS: readonly string[] = ["northwind"];
+
+type DemoStage = "fresh" | "opening" | "linked" | "live";
+
+/** One tiny store so the header chip and the panel always agree on the stage. */
+const demoStore = (() => {
+  let stage: DemoStage = "fresh";
+  const listeners = new Set<() => void>();
+  return {
+    get: () => stage,
+    set: (next: DemoStage) => {
+      stage = next;
+      listeners.forEach((l) => l());
+    },
+    subscribe: (l: () => void) => {
+      listeners.add(l);
+      return () => listeners.delete(l);
+    },
+  };
+})();
+
+function useDemoStage(enabled: boolean): DemoStage | null {
+  const stage = useSyncExternalStore(demoStore.subscribe, demoStore.get, demoStore.get);
+  return enabled ? stage : null;
+}
+
+/** The real row, re-drawn for the demo stage. Never sent anywhere. */
+function demoRow(row: StripeRow, stage: DemoStage): StripeRow {
+  const linked = stage === "linked" || stage === "live";
+  return {
+    ...row,
+    payment_provider: "stripe",
+    payment_model: "own",
+    // `live` is what makes derive() call the account "receiving payments";
+    // before that the stand-in trades in test, which is what keeps an empty
+    // own account reading as "Not connected" rather than "Payments failing".
+    stripe_mode: stage === "live" ? "live" : "test",
+    own_stripe_account_id: linked ? row.own_stripe_account_id ?? row.stripe_account_id ?? "acct_demo" : null,
+    own_stripe_connected_at: linked ? new Date().toISOString() : null,
+    stripe_account_id: null,
+    stripe_onboarding_complete: null,
+    stripe_charges_enabled: linked ? true : null,
+    stripe_payouts_enabled: linked ? true : null,
+    stripe_requirements_due: [],
+    stripe_account_disabled_reason: null,
+    stripe_status_synced_at: null,
+  };
+}
+
+function useDemoRow(tenant: PanelTenant, row: StripeRow | undefined) {
+  const enabled = STRIPE_FIRST_RUN_DEMO_SLUGS.includes(tenant.slug);
+  const stage = useDemoStage(enabled);
+  const data = useMemo(() => (row && stage ? demoRow(row, stage) : row), [row, stage]);
+  return { demo: enabled, stage, data };
+}
+
 /* ────────────────────────────── panel ───────────────────────────────────── */
 
 export function StripeConnectStatus({ tenant }: { tenant: PanelTenant }) {
-  const { data, isLoading, isError } = useStripeConnect(tenant);
+  const { data: realData, isLoading, isError } = useStripeConnect(tenant);
+  const { data } = useDemoRow(tenant, realData);
 
   if (isLoading) return <StatusChip state="loading" />;
   // A failed READ is not a disconnected integration. Saying "Not connected"
@@ -519,9 +589,16 @@ export function StripeConnectStatus({ tenant }: { tenant: PanelTenant }) {
   return <StatusChip state={view.state} label={view.label} />;
 }
 
-export default function StripeConnectPanel({ tenant }: IntegrationPanelProps) {
+export default function StripeConnectPanel({ tenant, onBack, fromIntro }: IntegrationPanelProps) {
   const queryClient = useQueryClient();
-  const { data, isLoading, isError, error, refetch } = useStripeConnect(tenant);
+  const { data: realData, isLoading, isError, error, refetch } = useStripeConnect(tenant);
+  const { demo, data } = useDemoRow(tenant, realData);
+  // The demo starts fresh every time the dialog opens, and is put back when it
+  // closes, so it can be shown again from the top.
+  useEffect(() => {
+    if (!demo) return;
+    return () => demoStore.set("fresh");
+  }, [demo]);
 
   // Read from the auth store rather than queried: `sync-connect-status` is
   // super-admin only, and whether this caller HAS that control is a property of
@@ -541,6 +618,8 @@ export default function StripeConnectPanel({ tenant }: IntegrationPanelProps) {
   // latched rather than cleared on success — the button must keep spinning
   // until the browser actually leaves.
   const [connecting, setConnecting] = useState(false);
+  /** Which screen: the main one, or a small one behind a quiet link. */
+  const [screen, setScreen] = useState<"home" | "details" | "needs" | "disconnect">("home");
 
   const invalidate = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: queryKeyFor(tenant.id) });
@@ -551,6 +630,18 @@ export default function StripeConnectPanel({ tenant }: IntegrationPanelProps) {
   const connect = useCallback(async () => {
     if (!data || !view) return;
     setConnecting(true);
+    if (demo) {
+      // Plays the hand-off: Stripe opens in a new tab (its public sign-up
+      // page — no account is created or linked), the button spins while the
+      // operator "finishes there", then the dialog lands on connected. A real
+      // connect instead leaves this page for Stripe's onboarding below.
+      window.open("https://dashboard.stripe.com/register", "_blank", "noopener,noreferrer");
+      window.setTimeout(() => {
+        demoStore.set("live");
+        setConnecting(false);
+      }, 2600);
+      return;
+    }
     try {
       if (view.model === "own") {
         // The operator links their OWN account, so this is Stripe's OAuth flow
@@ -598,7 +689,40 @@ export default function StripeConnectPanel({ tenant }: IntegrationPanelProps) {
       });
       setConnecting(false);
     }
-  }, [data, view, tenant.id]);
+  }, [data, view, tenant.id, demo]);
+
+  /* ── straight from the education ───────────────────────────────────────── */
+
+  // "Set up Stripe" on the last education screen IS the connect button: when
+  // the operator arrives from it with nothing linked, connect at once rather
+  // than show a second screen asking for the same click. Only ever for the
+  // not-linked case — a half-finished or broken account lands on its own
+  // screen, where the right action is spelled out. Once per open.
+  const [autoStarted, setAutoStarted] = useState(false);
+  useEffect(() => {
+    if (!fromIntro || autoStarted || !view || !data) return;
+    if (!view.usesStripe || view.accountId || view.brokenRouting) return;
+    setAutoStarted(true);
+    void connect();
+  }, [fromIntro, autoStarted, view, data, connect]);
+
+  /* ── disconnect ───────────────────────────────────────────────────────── */
+
+  // Same bar as the function itself: admin / head_admin of this tenant, or a
+  // super admin (whom the auth store presents as head_admin).
+  const canManage = isSuperAdmin || appUser?.role === "head_admin" || appUser?.role === "admin";
+
+  const disconnect = useMutation({
+    mutationFn: async () => {
+      const res = await invokeFn<{ success?: boolean }>("stripe-disconnect-v2", { tenantId: tenant.id });
+      if (!res.data?.success) throw new Error(res.message || "Could not disconnect Stripe");
+    },
+    onSuccess: () => {
+      invalidate();
+      toast({ title: "Stripe disconnected", description: "New bookings no longer pay into that account." });
+    },
+    onError: (e: Error) => toast({ title: "Could not disconnect Stripe", description: e.message, variant: "destructive" }),
+  });
 
   /* ── refresh from Stripe ──────────────────────────────────────────────── */
 
@@ -665,6 +789,14 @@ export default function StripeConnectPanel({ tenant }: IntegrationPanelProps) {
   });
 
   /* ── render ───────────────────────────────────────────────────────────── */
+  //
+  // THE SCREEN STANDARD (Ghulam, Oct 2 2026 — see `_screens.tsx`). One main
+  // screen per state: a picture, a headline for the state, the one sentence of
+  // truth `derive` already writes, and ONE button. Everything else — the
+  // account details, what Stripe is asking for, why there is no disconnect —
+  // is a small screen behind a quiet link, with Back. No logic changed: every
+  // rule above (which account is real, what may be re-checked, why connect
+  // redirects) is exactly what it was; only where it is drawn moved.
 
   if (isLoading) return <PanelLoading rows={4} />;
   if (isError || !data || !view) {
@@ -681,20 +813,22 @@ export default function StripeConnectPanel({ tenant }: IntegrationPanelProps) {
   // could never come back through.
   if (!view.usesStripe) {
     return (
-      <div className="space-y-4 pt-1">
-        <PanelNote>{view.headline}</PanelNote>
-        <p className="text-xs leading-relaxed text-muted-foreground">
-          Your payment processor is fixed once money has been taken, because a refund has to go back
-          through whoever took the charge. Talk to Drive247 support if this looks wrong.
-        </p>
-      </div>
+      <>
+        <Hero art={PaymentsEmptyArt} eyebrow="Not in use" title="Square takes your payments.">
+          {view.headline} Your payment processor is fixed once money has been taken, because a refund
+          has to go back through whoever took the charge. Talk to Drive247 support if this looks wrong.
+        </Hero>
+        <ScreenNav className="mt-8" onBack={onBack} />
+      </>
     );
   }
 
   const syncedRelative = relativeTime(view.syncedAt);
   const connectedOn = formatDate(view.connectedAt);
   const isConnected = !!view.accountId;
-  const canCheckNow = syncPlan(view, data, isSuperAdmin).length > 0;
+  // Never in the demo: its account is a stand-in, and a re-check would run a
+  // real `sync-connect-status` against northwind.
+  const canCheckNow = !demo && syncPlan(view, data, isSuperAdmin).length > 0;
 
   // Where the operator finishes what Stripe is asking for. A Standard account
   // holder uses their own dashboard; an Express account holder has no full
@@ -713,38 +847,39 @@ export default function StripeConnectPanel({ tenant }: IntegrationPanelProps) {
         ? "Finish setup in Stripe"
         : null;
 
-  return (
-    <div className="space-y-5 pt-1">
-      {/* The headline. Tone tracks how much money is on the line: `danger` only
-          for the state where every payment is actively failing. */}
-      <PanelNote
-        tone={view.brokenRouting ? "danger" : view.state === "attention" ? "warn" : "info"}
-      >
-        {view.headline}
-      </PanelNote>
+  const home = () => setScreen("home");
 
-      {/* What Stripe is waiting for. Listed rather than counted — "3 requirements
-          outstanding" tells an operator to go hunting; naming them tells them
-          what to bring. */}
-      {view.requirementsDue.length > 0 && (
-        <PanelSection
-          title="Stripe still needs"
-          description="Provide these in Stripe. Nothing needs to be re-entered here."
+  // Straight from "Set up Stripe": keep the education's last screen up, its
+  // button spinning, while Stripe opens — one continuous step, not a jump to
+  // a different screen and back.
+  if (fromIntro && connecting && !isConnected) {
+    return (
+      <>
+        <Hero
+          art={OwnerPayoutsEmptyArt}
+          title="Set up once with Stripe."
+          actions={
+            <div className="flex justify-center">
+              <Button className="h-10 rounded-2xl px-6" disabled>
+                <Loader2 className="animate-spin" />
+                Opening Stripe…
+              </Button>
+            </div>
+          }
         >
-          <PanelCard>
-            <ul className="space-y-1.5 py-0.5">
-              {view.requirementsDue.map((key) => (
-                <li key={key} className="flex items-start gap-2 text-sm">
-                  <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-warning" />
-                  <span>{describeRequirement(key)}</span>
-                </li>
-              ))}
-            </ul>
-          </PanelCard>
-        </PanelSection>
-      )}
+          Finish in the Stripe tab — sign in or create an account, and confirm your business and bank
+          details. I&rsquo;ll pick it up here the moment Stripe approves it.
+        </Hero>
+        <ScreenNav className="mt-8" onBack={onBack} />
+      </>
+    );
+  }
 
-      <PanelSection title="Account">
+  /* ── small screens ─────────────────────────────────────────────────────── */
+
+  if (screen === "details") {
+    return (
+      <SubScreen title="Account details" description="What Stripe has told us about the account your bookings settle into." onBack={home}>
         <PanelCard className="divide-y divide-border/60">
           <PanelRow
             label="Receiving payments"
@@ -767,7 +902,6 @@ export default function StripeConnectPanel({ tenant }: IntegrationPanelProps) {
               <span className="text-muted-foreground">Not yet</span>
             )}
           </PanelRow>
-
           <PanelRow label="Payouts to your bank">
             {view.payoutsEnabled === true ? (
               "Enabled"
@@ -777,36 +911,20 @@ export default function StripeConnectPanel({ tenant }: IntegrationPanelProps) {
               <span className="text-muted-foreground">{isConnected ? "Not confirmed yet" : "—"}</span>
             )}
           </PanelRow>
-
-          <PanelRow
-            label="Stripe account"
-            hint={isConnected ? undefined : "Nothing is linked to your business yet."}
-          >
-            {view.accountId ? (
-              <CopyValue value={view.accountId} />
-            ) : (
-              <span className="text-muted-foreground">—</span>
-            )}
+          <PanelRow label="Stripe account" hint={isConnected ? undefined : "Nothing is linked to your business yet."}>
+            {view.accountId ? <CopyValue value={view.accountId} /> : <span className="text-muted-foreground">—</span>}
           </PanelRow>
-
           {connectedOn && <PanelRow label="Linked on">{connectedOn}</PanelRow>}
-
           {/* Mode is a concept the lean product does not have. Shown to everyone
               else because for them "test" is the difference between a rehearsal
               and a real charge. */}
-          {!hideModeUi && (
-            <PanelRow label="Stripe mode">
-              {view.mode === "live" ? "Live" : "Test"}
-            </PanelRow>
-          )}
-
+          {!hideModeUi && <PanelRow label="Stripe mode">{view.mode === "live" ? "Live" : "Test"}</PanelRow>}
           <PanelRow
             label="Last checked with Stripe"
             hint={
-              // A stale timestamp is not automatically a problem here: Stripe
-              // pushes `account.updated` to us the moment anything changes, and
-              // this row only records the times we asked. Saying so stops the
-              // screen crying wolf at an account that is perfectly healthy.
+              // Stripe pushes `account.updated` the moment anything changes; this
+              // row only records the times we asked. Saying so stops the screen
+              // crying wolf at an account that is perfectly healthy.
               !view.syncedAt && isConnected
                 ? "Stripe also tells us the moment anything changes, so an empty value here is not itself a problem."
                 : undefined
@@ -819,97 +937,159 @@ export default function StripeConnectPanel({ tenant }: IntegrationPanelProps) {
             )}
           </PanelRow>
         </PanelCard>
-      </PanelSection>
-
-      {/* Actions. Connect first when there is nothing linked — for the canary
-          that is the state an operator actually arrives in. */}
-      <div className="flex flex-wrap items-center gap-2">
-        {primaryLabel && (
-          <Button onClick={() => void connect()} disabled={connecting}>
-            {connecting ? <Loader2 className="animate-spin" /> : <Link2 />}
-            {connecting ? "Opening Stripe…" : primaryLabel}
-          </Button>
-        )}
-
         {/* Rendered only when a truthful re-read exists for this tenant — see
             syncPlan. A button that would report the PLATFORM's shared account
             as this operator's is worse than no button. */}
-        {canCheckNow && (
-          <Button
-            variant="outline"
-            onClick={() => syncMutation.mutate()}
-            disabled={syncMutation.isPending}
-          >
-            {syncMutation.isPending ? <Loader2 className="animate-spin" /> : <RefreshCw />}
-            {syncMutation.isPending ? "Checking…" : "Check with Stripe"}
-          </Button>
-        )}
-
         {isConnected && (
-          <Button variant="ghost" asChild>
+          // A real re-check only where one exists for this tenant (syncPlan);
+          // otherwise the card says why there is none — no button that can't
+          // prove anything.
+          <ConnectionTest
+            idle="Ask Stripe for this account's current state."
+            run={
+              demo
+                ? () => demoCheck("Working · Stripe confirmed payments and payouts")
+                : canCheckNow
+                  ? async () => {
+                      const { full } = await syncMutation.mutateAsync();
+                      return full ? "Working · this is Stripe's current answer" : "Working · account status refreshed";
+                    }
+                  : null
+            }
+            unavailable="Stripe tells me the moment anything changes, so this keeps itself current."
+          />
+        )}
+      </SubScreen>
+    );
+  }
+
+  if (screen === "needs") {
+    return (
+      <SubScreen title="What Stripe still needs" description="Provide these in Stripe. Nothing needs to be re-entered here." onBack={home}>
+        {/* Listed rather than counted — "3 requirements outstanding" tells an
+            operator to go hunting; naming them tells them what to bring. */}
+        <PanelCard>
+          <ul className="space-y-1.5 py-0.5">
+            {view.requirementsDue.map((key) => (
+              <li key={key} className="flex items-start gap-2 text-sm">
+                <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-warning" />
+                <span>{describeRequirement(key)}</span>
+              </li>
+            ))}
+          </ul>
+        </PanelCard>
+        <div className="flex justify-center">
+          <Button variant="outline" className="rounded-2xl" asChild>
             <a href={stripeHref} target="_blank" rel="noopener noreferrer">
               Open Stripe
               <ArrowUpRight />
             </a>
           </Button>
-        )}
-      </div>
+        </div>
+      </SubScreen>
+    );
+  }
 
-      {/* Said out loud rather than hidden, because "where is the refresh
-          button?" is otherwise the obvious next question. There is genuinely no
-          existing function that can re-read a linked-but-not-yet-routing
-          account on demand; the webhook is what finishes it. */}
-      {isConnected && !canCheckNow && (
-        <p className="text-xs leading-relaxed text-muted-foreground">
-          Stripe tells us the moment anything changes on this account, so what you see here keeps
-          itself current. There is no manual re-check to run from this screen.
-        </p>
-      )}
+  if (screen === "disconnect") {
+    // Unlinking is allowed from here (Ghulam, Oct 2). Real tenants go through
+    // `stripe-disconnect-v2` (own model only — a Drive247-made Express
+    // account is refused with a "support unlinks it" sentence); the demo just
+    // puts itself back to the start.
+    return (
+      <DisconnectScreen
+        name="Stripe"
+        canManage={canManage}
+        pending={disconnect.isPending}
+        onBack={home}
+        onConfirm={() => {
+          if (demo) {
+            demoStore.set("fresh");
+            home();
+            return;
+          }
+          disconnect.mutate(undefined, { onSuccess: home });
+        }}
+        consequence={
+          <>
+            New bookings stop being paid into your Stripe account straight away, and rentals in progress
+            can&rsquo;t be charged until you connect again. Money already in Stripe stays there.
+          </>
+        }
+      />
+    );
+  }
 
-      {/* Why there is no Disconnect button.
-          There is no operator-facing disconnect in this codebase, and the two
-          functions that come closest are not it: `delete-connected-account`
-          DELETES the Stripe account outright (a tenant-teardown tool), and the
-          revert path runs off Stripe's own `account.application.deauthorized`
-          webhook. Inventing a button here would either destroy an account or
-          leave the tenant on a routing decision with nothing behind it, which
-          fails every subsequent charge. So: say what actually works. */}
-      {isConnected && (
-        <PanelSection title="Disconnecting">
-          <p className="flex items-start gap-2 text-xs leading-relaxed text-muted-foreground">
-            <Ban className="mt-0.5 size-3.5 shrink-0" />
-            <span>
-              Unlinking is not something you can do from here — it changes where your customers&rsquo;
-              money goes, and in-progress rentals stop being chargeable the moment it happens.{" "}
-              {view.model === "own"
-                ? "If you do need to, revoke Drive247's access from your own Stripe settings — Stripe tells us straight away — but talk to support first if you have live rentals."
-                : "This account was created for you by Drive247, so ask support to unlink it rather than closing it in Stripe."}
-            </span>
-          </p>
-        </PanelSection>
-      )}
+  /* ── the main screen ───────────────────────────────────────────────────── */
 
-      {!isConnected && (
-        <PanelSection title="What happens when you connect">
-          <ol className="space-y-1.5 text-xs leading-relaxed text-muted-foreground">
-            {[
-              "Sign in to your Stripe account, or create one — it takes about two minutes.",
-              "Stripe asks for your business details and the bank account you want paying.",
-              "Once Stripe confirms the account, your bookings start settling straight into it.",
-              "Stripe pays out to your bank on its own schedule from then on.",
-            ].map((step, i) => (
-              <li key={step} className="flex gap-2">
-                <span className="shrink-0 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">{i + 1}.</span>
-                <span>{step}</span>
-              </li>
-            ))}
-          </ol>
-          <p className="text-xs text-muted-foreground">
-            Prefer to read it first?{" "}
-            <PanelLink href="https://stripe.com/connect">How Stripe Connect works</PanelLink>
-          </p>
-        </PanelSection>
-      )}
-    </div>
+  const title = TITLE_BY_LABEL[view.label] ?? "Stripe Connect";
+  const eyebrow = view.state === "connected" ? "Live" : view.label;
+
+  const action = primaryLabel ? (
+    <Button className="h-10 rounded-2xl px-6" onClick={() => void connect()} disabled={connecting}>
+      {connecting ? <Loader2 className="animate-spin" /> : <Link2 />}
+      {connecting ? "Opening Stripe…" : primaryLabel}
+    </Button>
+  ) : isConnected ? (
+    <Button className="h-10 rounded-2xl px-6" asChild>
+      <a href={stripeHref} target="_blank" rel="noopener noreferrer">
+        Open Stripe
+        <ArrowUpRight />
+      </a>
+    </Button>
+  ) : null;
+
+  const links = [
+    ...(view.requirementsDue.length > 0 ? [{ label: "What Stripe still needs", onClick: () => setScreen("needs") }] : []),
+    ...(isConnected || view.brokenRouting ? [{ label: "Account details", onClick: () => setScreen("details") }] : []),
+    ...(isConnected ? [{ label: "Disconnecting", onClick: () => setScreen("disconnect") }] : []),
+  ];
+
+  return (
+    <>
+      <Hero
+        art={isConnected ? PaymentsEmptyArt : OwnerPayoutsEmptyArt}
+        eyebrow={eyebrow}
+        title={title}
+        actions={action && <div className="flex justify-center">{action}</div>}
+        footer={
+          links.length > 0 ? (
+            <QuietNav items={links} />
+          ) : (
+            !isConnected && (
+              <a
+                href="https://stripe.com/connect"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-muted-foreground underline-offset-4 transition-colors duration-200 hover:text-foreground hover:underline"
+              >
+                How Stripe Connect works
+              </a>
+            )
+          )
+        }
+      >
+        {view.headline}
+      </Hero>
+      {/* mt-5, not the intro's mt-8: this screen carries a button AND a link
+          under its text, and at a laptop's height the extra 12px scrolled. */}
+      <ScreenNav className="mt-5" onBack={onBack} />
+    </>
   );
 }
+
+/**
+ * The main screen's headline for each state `derive` can produce, keyed by
+ * its chip label — one plain sentence of where the operator stands. The body
+ * under it is `derive`'s own headline, unchanged.
+ */
+const TITLE_BY_LABEL: Record<string, string> = {
+  "Payments failing": "Payments are failing.",
+  "Not connected": "Connect your Stripe account.",
+  "Restricted by Stripe": "Stripe has restricted your account.",
+  "Cannot take payments": "Stripe needs something from you.",
+  "Setup unfinished": "Finish setting up with Stripe.",
+  "Information needed": "Stripe needs a few details.",
+  "Payouts paused": "Your payouts are paused.",
+  "Not receiving yet": "Almost there.",
+  Connected: "You're taking payments.",
+};

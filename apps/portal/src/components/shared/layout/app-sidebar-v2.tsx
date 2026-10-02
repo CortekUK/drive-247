@@ -64,6 +64,8 @@ import {
   Mail,
   Newspaper,
   Plug,
+  Copy,
+  Check,
 } from "lucide-react";
 // CRITICAL: `ui/sidebar` and `ui-v2/sidebar` each define their OWN React
 // context. The dashboard layout pairs this component with ui-v2's
@@ -82,6 +84,7 @@ import {
   SidebarRail,
   useSidebar,
 } from "@/components/ui-v2/sidebar";
+import { CoupeIcon } from "@/components/icons/coupe-icon";
 import { Input } from "@/components/ui-v2/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui-v2/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui-v2/tooltip";
@@ -115,13 +118,18 @@ import { useSupportUnreadMessages } from "@/hooks/use-support-messaging";
 // `isRentalDetailPage` below.
 import { useV2 } from "@/lib/v2-context";
 import { useRentalDetailV2 } from "@/components/rentals-v2/rental-detail/use-rental-detail-v2";
+import { useExtrasOverview } from "@/components/rentals-v2/rental-detail/use-extras-overview";
 import {
   STAGES,
   readStage,
   stageHref,
   stageValues,
+  stageNotes,
 } from "@/components/rentals-v2/rental-detail/stages";
 import { StageItem, HeroChip } from "@/components/rentals-v2/rental-detail/_kit";
+import { EXTENSION_STEPS, EXTENSION_TITLE, extensionHref, extensionValues, periodHref, readExtension, readPeriod } from "@/components/rentals-v2/rental-detail/extension-flow";
+import { periodValues } from "@/components/rentals-v2/rental-detail/period-view";
+import { previewPeriods } from "@/components/rentals-v2/rental-detail/rail-preview";
 // The vehicle record's section rail — the third scoped rail this sidebar
 // becomes, after Settings and the rental control centre. See
 // `isVehicleDetailPage` below.
@@ -493,6 +501,9 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   // shares a query key with the screen itself, so the two read one request.
   const { detail: rentalDetail } = useRentalDetailV2(isRentalDetailPage ? rentalDetailId : null);
   const rentalStageValues = stageValues(rentalDetail);
+  const rentalStageNotes = stageNotes(rentalDetail);
+  // Extras' answer lives in two tables the shared read does not join.
+  const extrasOverview = useExtrasOverview(isRentalDetailPage ? rentalDetailId : null);
 
   /* ── vehicle record mode ───────────────────────────────────────────────
    *
@@ -586,7 +597,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   // up here; everything else lives under "More" below.
   const rawTopLevel: NavItem[] = ([
     { name: "Customers", href: "/customers", icon: Users },
-    { name: "Vehicles", href: "/vehicles", icon: Car },
+    { name: "Vehicles", href: "/vehicles", icon: CoupeIcon },
     { name: "Rentals", href: "/rentals", icon: FileText },
   ] as NavItem[]).filter(filterItem);
 
@@ -903,42 +914,53 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
    * menu is for.
    */
   if (isRentalDetailPage && rentalDetailId && !isMobile) {
-    const heroTitle = rentalDetail
-      ? (rentalDetail.customerName ?? rentalDetail.rentalNumber ?? "Rental")
-      : "Rental";
-    const heroSubtitle = rentalDetail
-      ? [rentalDetail.rentalNumber, rentalDetail.vehicleLabel].filter(Boolean).join(" · ")
-      : "Loading…";
+    /* An open extension (Management → Add period) swaps the eight stages for
+       its own four steps, read from the same URL the main pane reads
+       (rentals-v2/rental-detail/extension-flow.ts). */
+    const railExtension = readExtension(searchParams);
+    const extValues = railExtension ? extensionValues(railExtension, rentalDetail?.rental.end_date ?? null) : null;
+    /* Or an existing period opened from its Management card (`?period=`) —
+       the same four steps, answered. Preview periods only, on the v2 canary. */
+    const railPeriodView = railExtension ? null : readPeriod(searchParams);
+    const railPeriod =
+      railPeriodView && rentalDetail ? previewPeriods(rentalDetail).find((p) => p.id === railPeriodView.period) ?? null : null;
+    const periodVals = railPeriod ? periodValues(railPeriod) : null;
+    const railItems = railPeriodView && railPeriod
+      ? EXTENSION_STEPS.map((s) => ({
+          id: s.id, label: s.label, icon: s.icon, prompt: s.prompt,
+          value: periodVals![s.id] as string | null,
+          active: railPeriodView.step === s.id,
+          href: periodHref(rentalDetailId, { period: railPeriodView.period, step: s.id }),
+        }))
+      : railExtension
+      ? EXTENSION_STEPS.map((s) => ({
+          id: s.id, label: s.label, icon: s.icon, prompt: s.prompt,
+          value: extValues![s.id],
+          active: railExtension.step === s.id,
+          href: extensionHref(rentalDetailId, { ...railExtension, step: s.id }),
+        }))
+      : STAGES.map((s) => ({
+          id: s.id, label: s.label, icon: s.icon, prompt: s.prompt,
+          value: s.id === "extras" ? extrasOverview.value : rentalStageValues[s.id],
+          note: s.id === "extras" ? extrasOverview.note : (rentalStageNotes[s.id] ?? null),
+          active: activeStage === s.id,
+          href: stageHref(rentalDetailId, s.id),
+        }));
 
     return (
       <Sidebar collapsible="icon" className="transition-all duration-300 ease-in-out">
-        <SidebarHeader className="h-16">
-          <div className="flex items-center w-full h-full px-2 transition-all duration-300 ease-in-out">
-            {collapsed ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Link href="/rentals" className="flex items-center justify-center w-full h-8 rounded-full hover:bg-primary/10 hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-[hsl(var(--v2-link,var(--primary)))] transition-colors">
-                    <ArrowLeft className="h-4 w-4 shrink-0" />
-                  </Link>
-                </TooltipTrigger>
-                <TooltipContent side="right">Back to rentals</TooltipContent>
-              </Tooltip>
-            ) : (
-              <Link href="/rentals" className="flex items-center gap-2 h-8 px-1 rounded-xl hover:bg-primary/10 transition-colors text-muted-foreground hover:text-primary dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:hover:text-[hsl(var(--v2-link,var(--primary)))]">
-                <ArrowLeft className="h-4 w-4 shrink-0" />
-                <span className="text-[15px] md:text-[13px]">All rentals</span>
-              </Link>
-            )}
-          </div>
-        </SidebarHeader>
+        {/* No "All rentals" link up here (removed Oct 2 2026, at Ghulam's
+            ask) — the record starts with its reference. On desktop the
+            browser's Back is now the way out; phones keep the dock's Back. */}
 
-        {/* Who this rental is for, and which car. The identity of the record,
-            in the same slot Settings puts its own title. */}
-        {!collapsed && (
+        {/* The rental's reference, in bold — copy it on hover. */}
+        {!collapsed && rentalDetail?.rentalNumber && (
           <div className="px-4 pt-4 pb-1">
-            <h2 className="truncate text-sm font-semibold text-foreground">{heroTitle}</h2>
-            {heroSubtitle && (
-              <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{heroSubtitle}</p>
+            <CopyableRef value={rentalDetail.rentalNumber} />
+            {(railExtension || railPeriod) && (
+              <p className="mt-1 text-[11px] font-semibold uppercase tracking-wider text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
+                {EXTENSION_TITLE[(railExtension?.kind ?? railPeriod?.kind)!]}
+              </p>
             )}
           </div>
         )}
@@ -950,17 +972,17 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
             // of this sidebar does at this width.
             <SidebarGroup className="p-1.5">
               <SidebarMenu>
-                {STAGES.map((s) => (
+                {railItems.map((s) => (
                   <SidebarMenuItem key={s.id}>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <SidebarMenuButton
                           asChild
-                          isActive={activeStage === s.id}
+                          isActive={s.active}
                           className="h-8 transition-all duration-200 ease-in-out"
                         >
                           <Link
-                            href={stageHref(rentalDetailId, s.id)}
+                            href={s.href}
                             replace
                             scroll={false}
                             prefetch={false}
@@ -971,7 +993,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                         </SidebarMenuButton>
                       </TooltipTrigger>
                       <TooltipContent side="right">
-                        {rentalStageValues[s.id] ? `${s.label} — ${rentalStageValues[s.id]}` : s.label}
+                        {s.value ? `${s.label} — ${s.value}` : s.label}
                       </TooltipContent>
                     </Tooltip>
                   </SidebarMenuItem>
@@ -980,15 +1002,16 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
             </SidebarGroup>
           ) : (
             <div className="space-y-2 p-3">
-              {STAGES.map((s, i) => (
+              {railItems.map((s, i) => (
                 <StageItem
                   key={s.id}
                   index={i}
                   label={s.label}
-                  value={rentalStageValues[s.id]}
+                  value={s.value}
+                  note={"note" in s ? (s.note as any) : null}
                   prompt={s.prompt}
-                  active={activeStage === s.id}
-                  href={stageHref(rentalDetailId, s.id)}
+                  active={s.active}
+                  href={s.href}
                   onClick={closeMobileOnNav}
                 />
               ))}
@@ -996,20 +1019,8 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
           )}
         </SidebarContent>
 
-        {/* Status lives in the footer — the same slot the ordinary sidebar uses
-            for its billing chip, and the same slot the prototype used. */}
-        <SidebarFooter className="p-3">
-          {!collapsed && rentalDetail && (
-            <div className="flex flex-wrap gap-1.5">
-              <HeroChip tone={rentalDetail.status.tone}>{rentalDetail.status.label}</HeroChip>
-              {rentalDetail.dateRangeShort && (
-                <HeroChip tone="muted" dot={false}>
-                  {rentalDetail.dateRangeShort}
-                </HeroChip>
-              )}
-            </div>
-          )}
-        </SidebarFooter>
+        {/* No status / dates chips in the footer (removed Oct 2 2026, at
+            Ghulam's ask). */}
         <SidebarRail />
       </Sidebar>
     );
@@ -1075,9 +1086,6 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
         {!collapsed && (
           <div className="px-4 pt-4 pb-1">
             <h2 className="truncate text-sm font-semibold text-foreground">{heroTitle}</h2>
-            {heroSubtitle && (
-              <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{heroSubtitle}</p>
-            )}
           </div>
         )}
 
@@ -1975,5 +1983,42 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
         fixed={fixedRows}
       />
     </Sidebar>
+  );
+}
+
+/**
+ * A reference number that copies itself. The copy icon fades in on hover
+ * (200ms, Trax motion) and turns into a tick for a moment once copied.
+ */
+function CopyableRef({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard blocked — nothing to do; the text is still selectable */
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      title={copied ? "Copied" : "Copy rental reference"}
+      className="group flex max-w-full items-center gap-2 rounded-lg text-left"
+    >
+      {/* Same size as the stage panel's title (`Panel` in rentals-v2 _kit), bolder, and
+          both start 16px down, so the reference sits on the title's line. */}
+      <span className="truncate font-heading text-2xl font-extrabold tracking-tight text-foreground">{value}</span>
+      <span
+        className={
+          "shrink-0 text-muted-foreground transition-opacity duration-200 ease-in group-hover:opacity-100 group-hover:ease-out group-focus-visible:opacity-100 motion-reduce:transition-none " +
+          (copied ? "opacity-100" : "opacity-0")
+        }
+      >
+        {copied ? <Check className="size-4 text-success" /> : <Copy className="size-4" />}
+      </span>
+    </button>
   );
 }

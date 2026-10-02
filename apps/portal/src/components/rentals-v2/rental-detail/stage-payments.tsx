@@ -54,40 +54,33 @@
  * plain.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  ArrowUpRight,
-  Check,
-  ChevronDown,
-  CreditCard,
-  Link2,
-  Loader2,
-  Lock,
-  PenLine,
-  ShieldAlert,
-} from "lucide-react";
+import { useMemo, useState } from "react";
+import { ChevronRight, CornerDownRight, CreditCard, ExternalLink, Loader2, Lock, Plus, ReceiptText, ShieldAlert, Undo2 } from "lucide-react";
+import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui-v2/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui-v2/dialog";
+import { useTenant } from "@/contexts/TenantContext";
 import { useRentalPaymentLinks } from "@/hooks/use-payment-links";
 import { useRentalExtensionTotals } from "@/hooks/use-rental-extension-totals";
-import { SHOW_MULTI_PERIOD } from "./multi-period";
 import { useRentalTotals } from "@/hooks/use-rental-ledger-data";
+import { PaymentSourceIcon } from "@/components/finances-v2/payment-source-icon";
+import { ReceiptView } from "@/components/finances-v2/receipt-view";
+import { paymentLabel, receiptNumber, refundOf, type FinancePayment } from "@/components/finances-v2/finance-data";
+import { SHOW_MULTI_PERIOD } from "./multi-period";
 import type { StageProps } from "./stages";
-import { EmptyHint, Panel, cardCls, fmtDateTime } from "./_kit";
+import { EmptyHint, Panel, StageAction, Surface, cardCls, fmtDateTime, insetCls } from "./_kit";
 import {
   counts,
   day,
   heldOn,
   linkWords,
-  methodWord,
   parseAt,
-  provenance,
   remainingOn,
-  sum,
   totals,
-  unallocatedOn,
   usd,
   useRentalLedgerRows,
+  sum,
   type Charge,
   type Ledger,
   type Payment,
@@ -99,121 +92,6 @@ const NO_ROWS: any[] = [];
 const NO_LINKS = new Map<string, string>();
 
 const when = (iso: string | null | undefined) => (iso ? fmtDateTime(parseAt(String(iso))) : "—");
-
-/* ══════════════════════════════════════════════════════════════════════════
-   Bits — one row family for charges, payments and deductions alike
-   ══════════════════════════════════════════════════════════════════════════ */
-
-function Heading({ title, right }: { title: string; right?: React.ReactNode }) {
-  return (
-    <div className="flex items-baseline justify-between gap-4">
-      <h3 className="font-heading text-sm font-semibold">{title}</h3>
-      {right && <p className="text-[12px] text-muted-foreground tabular-nums">{right}</p>}
-    </div>
-  );
-}
-
-/** The label above a block inside an expansion. */
-function Label({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50">{children}</p>
-  );
-}
-
-/** An amount and what it is — the line shape every expansion uses. */
-function Line({ amount, muted, children }: { amount: number; muted?: boolean; children: React.ReactNode }) {
-  return (
-    <div className="flex items-baseline gap-2.5 text-[11px]">
-      <span
-        className={cn("w-[74px] shrink-0 text-right tabular-nums", muted ? "text-muted-foreground" : "font-medium")}
-      >
-        {usd(amount)}
-      </span>
-      <span className="min-w-0 flex-1">{children}</span>
-    </div>
-  );
-}
-
-/** A cross-reference. Opens the target row, scrolls to it, flashes it. */
-function Jump({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
-  return (
-    <Button variant="link" size="xs" className="h-auto gap-0.5 p-0 text-[11px] font-normal" onClick={onClick}>
-      {children}
-      <ArrowUpRight className="size-3" />
-    </Button>
-  );
-}
-
-/** Every event, in order, with its moment in a column so the eye can run down it. */
-function Trail({ trail }: { trail: { at: string; event: string }[] }) {
-  if (trail.length === 0) return <p className="text-[11px] text-muted-foreground">Nothing is recorded.</p>;
-  return (
-    <ol className="space-y-0.5">
-      {trail.map((e, i) => (
-        <li key={`${e.at}-${i}`} className="flex gap-2.5 text-[11px]">
-          <span className="w-[104px] shrink-0 text-right text-[10px] leading-4 text-muted-foreground/60 tabular-nums">
-            {when(e.at)}
-          </span>
-          <span>{e.event}</span>
-        </li>
-      ))}
-    </ol>
-  );
-}
-
-function Chevron({ open, hidden }: { open: boolean; hidden?: boolean }) {
-  return (
-    <ChevronDown
-      className={cn(
-        "size-3.5 shrink-0 text-muted-foreground/40 transition-transform",
-        open && "rotate-180",
-        hidden && "invisible"
-      )}
-    />
-  );
-}
-
-/**
- * The one row. `min-h-11` keeps a one-line charge the same height as a two-line
- * payment, so both lists share one rhythm. Every row expands; every action on a
- * row lives inside its expansion, so nothing is hover-only.
- */
-function Row({
-  lead,
-  title,
-  meta,
-  right,
-  open,
-  onToggle,
-  children,
-}: {
-  lead: React.ReactNode;
-  title: React.ReactNode;
-  meta?: React.ReactNode;
-  right: React.ReactNode;
-  open: boolean;
-  onToggle: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <>
-      <button
-        type="button"
-        onClick={onToggle}
-        className="flex min-h-11 w-full cursor-pointer items-center gap-3 py-1.5 text-left"
-      >
-        <span className="flex size-4 shrink-0 items-center justify-center">{lead}</span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-[13px] leading-snug">{title}</span>
-          {meta && <span className="mt-0.5 block truncate text-[11px] leading-snug text-muted-foreground">{meta}</span>}
-        </span>
-        <span className="shrink-0 text-[13px] tabular-nums">{right}</span>
-        <Chevron open={open} />
-      </button>
-      {open && <div className="mb-3 ml-7 space-y-3 border-l border-foreground/10 pl-4">{children}</div>}
-    </>
-  );
-}
 
 /* ══════════════════════════════════════════════════════════════════════════
    The stage
@@ -244,17 +122,14 @@ export function StagePayments({ detail, refetch }: StageProps) {
     linkStateById
   );
 
+  const { tenant } = useTenant();
   const [request, setRequest] = useState<ActionRequest | null>(null);
-  const [open, setOpen] = useState<Set<string>>(() => new Set());
-  const [flash, setFlash] = useState<string | null>(null);
-  const rows = useRef(new Map<string, HTMLElement>());
-
-  useEffect(() => {
-    if (!flash) return;
-    rows.current.get(flash)?.scrollIntoView({ behavior: "smooth", block: "center" });
-    const id = setTimeout(() => setFlash(null), 1400);
-    return () => clearTimeout(id);
-  }, [flash]);
+  /* Which charges show their payments. Null until touched: every charge that
+     has a payment starts open, like a receipt you can read top to bottom. */
+  const [expanded, setExpanded] = useState<Set<string> | null>(null);
+  const [receiptOpen, setReceiptOpen] = useState<string | null>(null);
+  /* The full view open over the stage, if any. */
+  const [listOpen, setListOpen] = useState<"charges" | "payments" | null>(null);
 
   const onChanged = () => {
     void refetchLedger();
@@ -263,7 +138,7 @@ export function StagePayments({ detail, refetch }: StageProps) {
 
   if (isLoading || !ledger) {
     return (
-      <Panel title="Payments" description="What is owed, what arrived, and what stands behind it.">
+      <Panel fill title="Payments" description="What is owed, what arrived, and what stands behind it.">
         {error ? (
           <EmptyHint>The ledger would not load. {error.message}</EmptyHint>
         ) : (
@@ -277,617 +152,784 @@ export function StagePayments({ detail, refetch }: StageProps) {
   }
 
   const t = totals(ledger);
+  /* What is still owed reads first; settled lines follow in billing order. */
+  const chargesOwedFirst = [...ledger.charges].sort(
+    (a, b) => Number(remainingOn(ledger, b.id) > 0) - Number(remainingOn(ledger, a.id) > 0)
+  );
+  const toggle = (id: string, hasPayments: boolean) =>
+    setExpanded((prev) => {
+      const next = new Set(
+        prev ?? ledger.charges.filter((c) => ledger.payments.some((p) => counts(p) && p.allocations.some((a) => a.chargeId === c.id))).map((c) => c.id)
+      );
+      next.has(id) || !hasPayments ? next.delete(id) : next.add(id);
+      return next;
+    });
   const deposit = ledger.deposit;
   const held = heldOn(deposit);
 
-  const toggle = (key: string) =>
-    setOpen((prev) => {
-      const n = new Set(prev);
-      if (n.has(key)) n.delete(key);
-      else n.add(key);
-      return n;
-    });
-
-  const jump = (key: string) => {
-    setOpen((prev) => new Set(prev).add(key));
-    setFlash(key);
-  };
-
-  const bind = (key: string) => (el: HTMLElement | null) => {
-    if (el) rows.current.set(key, el);
-    else rows.current.delete(key);
-  };
-
-  const flashCls = (key: string) => cn("rounded-2xl transition-colors duration-700", flash === key && "bg-primary/5");
-
-  /* ── what the lists hold ───────────────────────────────────────────────── */
-
   /**
-   * The one cross-check worth showing, and only when it fails.
-   *
-   * v1's `useRentalTotals` sums `ledger_entries.remaining_amount` — the
-   * allocator's own column. This screen derives outstanding from
-   * `payment_applications` instead. They agree unless something wrote the
-   * column directly without recording an application, which is exactly what
-   * `deduct-from-deposit` and the Stripe webhooks do for excess mileage. The
-   * deposit is subtracted because it never enters this screen's totals.
+   * The one cross-check worth showing, and only when it fails: v1's
+   * `useRentalTotals` sums `ledger_entries.remaining_amount`; this screen
+   * derives outstanding from `payment_applications`. They agree unless money
+   * was written straight into the column without an application.
    */
-  const v1Outstanding =
-    v1Totals == null ? null : Math.round(v1Totals.outstanding * 100) - deposit.chargeOutstanding;
+  const v1Outstanding = v1Totals == null ? null : Math.round(v1Totals.outstanding * 100) - deposit.chargeOutstanding;
   const drift = v1Outstanding == null ? 0 : t.outstanding - v1Outstanding;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const overdue = ledger.charges.some((c) => c.dueDate && c.dueDate.slice(0, 10) < today && remainingOn(ledger, c.id) > 0);
+  const remainingTone =
+    t.outstanding === 0 ? "text-success" : overdue ? "text-destructive" : "text-warning";
+  const paidShare = t.charged > 0 ? Math.min(1, t.applied / t.charged) : 0;
+
+  const depositWord =
+    deposit.status === "held"
+      ? `${usd(held)} held`
+      : deposit.status === "not_held"
+        ? deposit.charged > 0
+          ? `${usd(deposit.charged)} billed`
+          : "No deposit"
+        : deposit.status === "released"
+          ? "Released"
+          : deposit.status === "captured"
+            ? "Captured"
+            : deposit.status === "needs_review"
+              ? "Needs review"
+              : deposit.status === "failed"
+                ? "Hold failed"
+                : "Expired";
+
+  const openReceipt = receiptOpen ? ledger.payments.find((p) => p.id === receiptOpen) ?? null : null;
 
   return (
     <Panel
+      fill
       title="Payments"
       description="What is owed, what arrived, and what stands behind it."
-      toolbar={
-        /* The demand, pinned — the figure stays in view whatever row you are
-           reading. */
-        <div
-          className="flex items-end justify-between gap-6 border-b border-foreground/10 pb-5"
-          data-tour="rental-outstanding"
-        >
-          <div className="min-w-0">
-            <p className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground/60">Outstanding</p>
-            <p className="mt-1 font-heading text-[40px] font-medium leading-none tracking-tight tabular-nums">
-              {usd(t.outstanding)}
-            </p>
-            <p className="mt-3 text-[12px] text-muted-foreground tabular-nums">
-              {usd(t.charged)} charged · {usd(t.applied)} paid
-              {/* Named rather than folded in: without it the deposit's money is
-                  an unexplained gap between what the Payments list says was
-                  received and what these two figures account for. */}
-              {t.depositApplied > 0 && ` · ${usd(t.depositApplied)} to the deposit`}
-              {t.unapplied > 0 && ` · ${usd(t.unapplied)} not applied`}
-              {t.refunded > 0 && ` · ${usd(t.refunded)} refunded`}
-            </p>
-          </div>
-
-          {/* Apart on purpose: a hold is not money in, and the fastest way to
-              make every figure on the left suspect is to let it sit in the same
-              sentence. */}
-          <button
-            type="button"
-            onClick={() => setFlash("deposit")}
-            className="shrink-0 cursor-pointer text-right transition-colors hover:text-primary dark:hover:text-[hsl(var(--v2-link,var(--primary)))]"
-          >
-            <p className="flex items-center justify-end gap-1 text-[11px] font-medium uppercase tracking-widest text-muted-foreground/60">
-              <Lock className="size-3" />
-              Deposit
-            </p>
-            <p className="mt-1 text-[15px] font-medium tabular-nums">
-              {deposit.status === "held"
-                ? `${usd(held)} held`
-                : deposit.status === "not_held"
-                  ? deposit.charged > 0
-                    ? `${usd(deposit.charged)} billed`
-                    : "None"
-                  : deposit.status === "released"
-                    ? "Released"
-                    : deposit.status === "captured"
-                      ? "Captured"
-                      : deposit.status === "needs_review"
-                        ? "Needs review"
-                        : deposit.status === "failed"
-                          ? "Hold failed"
-                          : "Expired"}
-            </p>
-            <p className="mt-0.5 text-[11px] text-muted-foreground tabular-nums">
-              {deposit.status === "not_held" && deposit.charged === 0
-                ? "nothing against damage"
-                : deposit.amountCents > 0
-                  ? `of ${usd(deposit.amountCents)}${t.depositDeducted > 0 ? ` · ${usd(t.depositDeducted)} deducted` : ""}`
-                  : "on the ledger, not on a card"}
-            </p>
-          </button>
-        </div>
-      }
-      footer={
-        <PaymentActions
-          ledger={ledger}
-          rental={detail.rental}
-          request={request}
-          onClose={() => setRequest(null)}
-          refetch={onChanged}
-        />
+      action={
+        <span className="inline-flex items-center gap-4">
+          <StageAction
+            icon={CreditCard}
+            label="Take a payment"
+            onClick={() => setRequest({ kind: "take" })}
+            disabledReason={t.outstanding === 0 ? "Nothing is owed on this rental." : null}
+          />
+          <StageAction icon={Plus} label="Add a charge" onClick={() => setRequest({ kind: "fine" })} />
+        </span>
       }
     >
-      {/* ── the honest exceptions, said once and only when true ──────────── */}
-      {t.stuck > 0 && (
-        <div className="rounded-4xl bg-destructive-light px-6 py-5 ring-1 ring-destructive/20">
-          <p className="flex items-center gap-2 font-heading text-sm font-semibold text-destructive">
-            <ShieldAlert className="size-4" />
-            {usd(t.stuck)} cannot be settled by any payment
-          </p>
-          <p className="mt-1.5 text-xs leading-relaxed text-destructive/80">
-            Its category is missing from the provider&rsquo;s allocation table, so a payment aimed at it is accepted
-            and then applied to something else. The charge has to be cleared another way — a deposit deduction, or a
-            correction on the ledger. Marked on the rows below.
-          </p>
-        </div>
-      )}
-
-      {drift !== 0 && (
-        <div className="rounded-4xl bg-muted/40 px-6 py-5 ring-1 ring-foreground/5">
-          <p className="font-heading text-sm font-semibold">Two sources disagree by {usd(Math.abs(drift))}</p>
-          <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-            This screen adds up what payments were actually applied to each charge. The ledger&rsquo;s own
-            <code className="mx-1 rounded bg-foreground/5 px-1 py-0.5 text-[11px]">remaining_amount</code> column says{" "}
-            {usd(v1Outstanding ?? 0)}. The gap is money written straight into that column without an application
-            recorded against it, so it has no trail — worth reconciling before anything is refunded.
-          </p>
-        </div>
-      )}
-
-      {/* ═══ the ledger — two lists ═════════════════════════════════════════ */}
-      <div className={cn(cardCls, "space-y-8 p-6")}>
-        {/* ── charges ──────────────────────────────────────────────────────── */}
-        <section>
-          {/* The figures the per-period group headings used to carry. Never
-              "$592.00 · $592.00 outstanding": when nothing has been paid the
-              two figures are one figure. */}
-          <Heading
-            title="Charges"
-            right={
-              ledger.charges.length === 0
-                ? undefined
-                : t.outstanding === 0
-                  ? `${usd(t.charged)} · paid`
-                  : t.outstanding === t.charged
-                    ? `${usd(t.charged)} outstanding`
-                    : `${usd(t.charged)} · ${usd(t.outstanding)} outstanding`
-            }
-          />
-
-          {ledger.charges.length === 0 ? (
-            <p className="mt-2 text-[12px] text-muted-foreground">
-              Nothing has been charged on this rental yet. Daily and weekly hires get no charges from the monthly
-              billing job — they are raised when a payment is taken.
-            </p>
-          ) : (
-            <div className="mt-1 divide-y divide-foreground/5">
-              {ledger.charges.map((c) => {
-                const key = `c:${c.id}`;
-                const left = remainingOn(ledger, c.id);
-                const paid = left === 0;
-                const applied = ledger.payments
-                  .filter(counts)
-                  .flatMap((p) =>
-                    p.allocations.filter((a) => a.chargeId === c.id).map((a) => ({ p, amount: a.amountCents }))
-                  );
-                const stuck = !c.settleable && left > 0;
-                return (
-                  <div key={c.id} ref={bind(key)} className={flashCls(key)}>
-                    <Row
-                      open={open.has(key)}
-                      onToggle={() => toggle(key)}
-                      lead={
-                        paid ? (
-                          <Check className="size-4 text-muted-foreground/40" strokeWidth={2.5} />
-                        ) : stuck ? (
-                          <ShieldAlert className="size-4 text-destructive" />
-                        ) : null
-                      }
-                      title={<span className={cn(paid && "text-muted-foreground")}>{c.label}</span>}
-                      meta={
-                        [
-                          c.note,
-                          stuck ? "no payment can settle this category" : null,
-                          c.dueDate ? `due ${day(c.dueDate)}` : null,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ") || undefined
-                      }
-                      right={
-                        paid ? (
-                          <span className="text-muted-foreground/60">{usd(c.amountCents)}</span>
-                        ) : left === c.amountCents ? (
-                          <span className={cn("font-medium", stuck && "text-destructive")}>
-                            {usd(c.amountCents)}
-                          </span>
-                        ) : (
-                          <>
-                            <span className="text-muted-foreground">{usd(c.amountCents)} · </span>
-                            <span className={cn("font-medium", stuck && "text-destructive")}>
-                              {usd(left)} outstanding
-                            </span>
-                          </>
-                        )
-                      }
-                    >
-                      <div className="space-y-1">
-                        {applied.map(({ p, amount }) => (
-                          <Line key={p.id} amount={amount}>
-                            <Jump onClick={() => jump(`p:${p.id}`)}>
-                              {provenance(p)} · {when(p.at)}
-                            </Jump>
-                          </Line>
-                        ))}
-                        {left > 0 && (
-                          <Line amount={left}>
-                            <span className="text-muted-foreground">outstanding</span>
-                          </Line>
-                        )}
-                        {/* The allocator's own column, shown only when
-                            it disagrees with what the applications
-                            account for — the signature of money moved
-                            without a trail. */}
-                        {c.remainingOnRow !== left && (
-                          <Line amount={c.remainingOnRow} muted>
-                            <span className="text-muted-foreground">
-                              the ledger column says this is still outstanding
-                            </span>
-                          </Line>
-                        )}
-                        <p className="pt-1 text-[11px] text-muted-foreground">
-                          Raised {day(c.createdAt)} · {c.category}
-                        </p>
-                      </div>
-
-                      {!paid && (
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            size="xs"
-                            disabled={stuck}
-                            title={
-                              stuck
-                                ? `${c.category} is not in payment_apply_fifo_v2's category table, so a payment cannot be applied to it.`
-                                : undefined
-                            }
-                            onClick={() => setRequest({ kind: "take" })}
-                          >
-                            Take a payment for this
-                          </Button>
-                        </div>
-                      )}
-                    </Row>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </section>
-
-        {/* ── payments ─────────────────────────────────────────────────────── */}
-        <section>
-          <Heading title="Payments" right={`${usd(t.received)} received`} />
-
-          {ledger.payments.length === 0 ? (
-            <p className="mt-2 text-[12px] text-muted-foreground">Nothing has arrived yet.</p>
-          ) : (
-            <div className="mt-1 divide-y divide-foreground/5">
-              {ledger.payments.map((p) => (
-                <PaymentRow
-                  key={p.id}
-                  ledger={ledger}
-                  payment={p}
-                  bind={bind}
-                  flashCls={flashCls}
-                  open={open.has(`p:${p.id}`)}
-                  onToggle={() => toggle(`p:${p.id}`)}
-                  onJumpToCharge={(c) => jump(`c:${c.id}`)}
-                  onRefund={() => setRequest({ kind: "refund", paymentId: p.id })}
-                />
-              ))}
-            </div>
-          )}
-
-          {/* Refund rows the platform never tied to a payment. Shown only when
-              their total disagrees with what the payments themselves report, so
-              a healthy rental never has to read this. */}
-          {ledger.untiedRefunds.length > 0 &&
-            sum(ledger.untiedRefunds.map((r) => r.amountCents)) !== t.refunded && (
-              <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
-                The ledger also carries {usd(sum(ledger.untiedRefunds.map((r) => r.amountCents)))} of refund rows that
-                name no payment — <code className="rounded bg-foreground/5 px-1 py-0.5">payment_id</code> is null on
-                every refund the platform writes — against {usd(t.refunded)} reported by the payments themselves.
+      {/* Island layout, the Finances grammar: the balance on top — Total −
+          Paid = Remaining — then charges and payments as two full-width cards
+          sharing the height. Long lists scroll inside their own card; detail
+          and receipts open in dialogs. */}
+      <div className="flex h-full min-h-0 flex-col gap-4">
+        {/* ── the balance ─────────────────────────────────────────────────── */}
+        <Surface className="shrink-0 px-6 py-5">
+          <div className="flex flex-wrap items-end gap-x-10 gap-y-4" data-tour="rental-outstanding">
+            <div className="min-w-0">
+              <p className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
+                {t.outstanding === 0 ? "Settled" : overdue ? "Overdue" : "Remaining"}
               </p>
-            )}
-        </section>
-      </div>
-
-      {/* ═══ the deposit — its own surface, never in the totals ══════════════ */}
-      {(deposit.status !== "not_held" || deposit.charged > 0 || deposit.events.length > 0) && (
-        <div
-          ref={bind("deposit")}
-          className={cn(cardCls, "p-6 transition-shadow duration-700", flash === "deposit" && "ring-primary/40")}
-        >
-          <Heading
-            title="Security deposit"
-            right={deposit.status === "held" ? `${usd(held)} held` : undefined}
-          />
-
-          <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
-            {deposit.amountCents > 0 ? (
-              <>
-                {usd(deposit.amountCents)} authorised
-                {deposit.heldAt && ` ${when(deposit.heldAt)}`}
-                {deposit.card.brand && ` · ${deposit.card.brand}${deposit.card.last4 ? ` ···· ${deposit.card.last4}` : ""}`}
-                {deposit.intentId && (
+              <p className={cn("mt-1 font-heading text-4xl font-semibold leading-none tracking-tight tabular-nums", remainingTone)}>
+                {usd(t.outstanding)}
+              </p>
+            </div>
+            {/* Total − Paid = Remaining: the equation the Finances table reads in. */}
+            <p className="pb-1 text-sm tabular-nums text-muted-foreground">
+              <span className="text-foreground">{usd(t.charged)}</span> total
+              <span className="mx-2 text-muted-foreground/50">−</span>
+              <span className="text-foreground">{usd(t.applied)}</span> paid
+              <span className="mx-2 text-muted-foreground/50">=</span>
+              <span className={cn("font-semibold", remainingTone)}>{usd(t.outstanding)}</span>
+            </p>
+            <span className="flex-1" />
+            {/* Apart on purpose: a hold is not money in. */}
+            <div className="flex items-center gap-3 rounded-3xl bg-muted/40 px-4 py-2.5 ring-1 ring-foreground/5">
+              <Lock className="size-4 text-muted-foreground" />
+              <div className="min-w-0">
+                <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Deposit</p>
+                <p className="text-sm font-medium tabular-nums">{depositWord}</p>
+              </div>
+              <span className="ml-1 flex items-center gap-1">
+                {deposit.status === "held" && (
                   <>
-                    {" · "}
-                    <span className="font-mono text-foreground/80">{deposit.intentId}</span>
+                    <Button size="xs" variant="outline" onClick={() => setRequest({ kind: "deposit-charge" })}>
+                      Charge
+                    </Button>
+                    <Button size="xs" variant="ghost" onClick={() => setRequest({ kind: "deposit-release" })}>
+                      Release
+                    </Button>
                   </>
                 )}
-                {deposit.status === "held" && deposit.expiresAt && ` · good until ${day(deposit.expiresAt)}`}
-              </>
-            ) : (
-              "Nothing is frozen on a card."
-            )}
-          </p>
+                {deposit.status === "not_held" && deposit.charged === 0 && (
+                  <Button size="xs" variant="outline" onClick={() => setRequest({ kind: "deposit-take" })}>
+                    Take one
+                  </Button>
+                )}
+                {(deposit.status === "expired" || deposit.status === "failed") && (
+                  <Button size="xs" variant="outline" onClick={() => setRequest({ kind: "deposit-hold" })}>
+                    Hold again
+                  </Button>
+                )}
+              </span>
+            </div>
+          </div>
 
-          {/* Billed and frozen are two different things and are regularly
-              confused. They are said separately here, or not at all. */}
-          {deposit.charged > 0 && (
-            <p className="mt-1 text-[11px] text-muted-foreground tabular-nums">
-              {usd(deposit.charged)} is also billed on the ledger
-              {deposit.chargeOutstanding > 0 ? ` · ${usd(deposit.chargeOutstanding)} of it unpaid` : " · paid"}
-              {deposit.refunded > 0 && ` · ${usd(deposit.refunded)} refunded`}
+          {/* Paid share of what was charged — one quiet bar. */}
+          <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-foreground/[0.06]">
+            <div className="h-full rounded-full bg-success transition-[width] duration-500" style={{ width: `${paidShare * 100}%` }} />
+          </div>
+
+          {/* The honest exceptions — one line each, only when true. */}
+          {(t.stuck > 0 || drift !== 0 || t.unapplied > 0 || t.refunded > 0) && (
+            <p className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+              {t.stuck > 0 && (
+                <span className="flex items-center gap-1 text-destructive" title="Its category is missing from the allocator's table, so no payment can settle it — clear it with a deposit deduction or a ledger correction.">
+                  <ShieldAlert className="size-3.5" />
+                  {usd(t.stuck)} no payment can settle
+                </span>
+              )}
+              {t.unapplied > 0 && <span className="text-muted-foreground">{usd(t.unapplied)} received but not applied</span>}
+              {t.refunded > 0 && <span className="text-muted-foreground">{usd(t.refunded)} refunded</span>}
+              {drift !== 0 && (
+                <span className="text-muted-foreground" title="Money written straight into ledger_entries.remaining_amount without an application — reconcile before refunding.">
+                  The ledger column disagrees by {usd(Math.abs(drift))}
+                </span>
+              )}
             </p>
           )}
+        </Surface>
 
-          {deposit.deductions.length > 0 && (
-            <div className="mt-3 divide-y divide-foreground/5">
-              {deposit.deductions.map((d, i) => (
-                <div key={`${d.at}-${i}`} className="flex min-h-11 items-center gap-3 py-1.5">
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[13px] leading-snug">{d.reason}</span>
-                    <span className="mt-0.5 block truncate text-[11px] leading-snug text-muted-foreground">
-                      {when(d.at)}
-                      {d.by && ` · ${d.by}`}
-                    </span>
-                  </span>
-                  <span className="shrink-0 text-[13px] font-medium tabular-nums">{usd(d.amountCents)}</span>
-                </div>
-              ))}
-            </div>
+        {/* ── charges — a calm summary; the whole card opens the full view ── */}
+        <SummaryCard
+          className="flex-[3]"
+          title="Charges"
+          openLabel="Open all charges"
+          onOpen={() => setListOpen("charges")}
+          aside={
+            <span className="inline-flex items-baseline whitespace-nowrap pr-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+              <span className="w-24 text-right">Total</span>
+              <Op>−</Op>
+              <span className="w-24 text-right">Paid</span>
+              <Op>=</Op>
+              <span className="w-24 text-right">Remaining</span>
+            </span>
+          }
+        >
+          {ledger.charges.length === 0 ? (
+            <Quiet>Nothing has been charged on this rental yet.</Quiet>
+          ) : (
+            <ChargesTree ledger={ledger} charges={chargesOwedFirst} today={today} isOpen={(id, has) => has && !!id} />
           )}
+        </SummaryCard>
 
-          {/* The hold's own attempts. Only the ones that failed are worth the
-              space: a working hold explains itself with the line above. */}
-          {deposit.events.some((e) => e.outcome === "failed") && (
-            <div className="mt-4">
-              <Label>Attempts that failed</Label>
-              <Trail
-                trail={deposit.events
-                  .filter((e) => e.outcome === "failed")
-                  .map((e) => ({
-                    at: e.at,
-                    event: `${e.action} · ${e.errorMessage ?? "no reason recorded"}${e.actor ? ` · ${e.actor}` : ""}`,
-                  }))}
+        {/* ── payments — the same: a summary that opens the full list ───── */}
+        <SummaryCard
+          className="flex-[2]"
+          title="Payments"
+          openLabel="Open all payments"
+          onOpen={() => setListOpen("payments")}
+          aside={
+            <span className="text-xs text-muted-foreground">
+              {ledger.payments.filter(counts).length} received · {usd(t.received)}
+            </span>
+          }
+        >
+          {ledger.payments.length === 0 ? (
+            <Quiet>Nothing has arrived yet.</Quiet>
+          ) : (
+            <PaymentsList ledger={ledger} />
+          )}
+        </SummaryCard>
+      </div>
+
+      {/* Dialogs only — `contents` keeps them out of the column's spacing. */}
+      <div className="contents">
+      {/* ── every charge, in full ─────────────────────────────────────────── */}
+      <Dialog open={listOpen === "charges"} onOpenChange={(o) => !o && setListOpen(null)}>
+        <DialogContent showCloseButton={false} className="flex max-h-[88vh] flex-col gap-0 bg-white p-0 sm:max-w-3xl dark:bg-card">
+          <ListHeader
+            title="Charges"
+            sub={`${detail.rentalNumber ?? "This rental"} · ${ledger.charges.length} charge${ledger.charges.length === 1 ? "" : "s"}`}
+            onClose={() => setListOpen(null)}
+          >
+            <Button size="sm" variant="outline" onClick={() => (setListOpen(null), setRequest({ kind: "fine" }))}>
+              <Plus />
+              Add a charge
+            </Button>
+            {t.outstanding > 0 && (
+              <Button size="sm" onClick={() => (setListOpen(null), setRequest({ kind: "take" }))}>
+                <CreditCard />
+                Take a payment
+              </Button>
+            )}
+          </ListHeader>
+          <div className="min-h-0 overflow-y-auto px-9 pb-9 no-scrollbar">
+            <Facts
+              items={[
+                { label: "Total", value: usd(t.charged) },
+                { label: "Paid", value: usd(t.applied) },
+                { label: "Remaining", value: usd(t.outstanding), tone: remainingTone },
+                {
+                  label: "Lines",
+                  value: String(ledger.charges.length),
+                  sub: overdue ? "Something is overdue" : `${ledger.charges.filter((c) => remainingOn(ledger, c.id) === 0).length} settled`,
+                },
+              ]}
+            />
+            <div className="mt-6 flex items-baseline justify-end pr-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+              <span className="w-24 text-right">Total</span>
+              <Op>−</Op>
+              <span className="w-24 text-right">Paid</span>
+              <Op>=</Op>
+              <span className="w-24 text-right">Remaining</span>
+            </div>
+            <ChargesTree
+              ledger={ledger}
+              charges={chargesOwedFirst}
+              today={today}
+              detailed
+              isOpen={(id, has) => (expanded === null ? has : expanded.has(id))}
+              onToggle={toggle}
+              onReceipt={(id) => setReceiptOpen(id)}
+              onPay={() => (setListOpen(null), setRequest({ kind: "take" }))}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── every payment, in full ─────────────────────────────────────── */}
+      <Dialog open={listOpen === "payments"} onOpenChange={(o) => !o && setListOpen(null)}>
+        <DialogContent showCloseButton={false} className="flex max-h-[88vh] flex-col gap-0 bg-white p-0 sm:max-w-3xl dark:bg-card">
+          <ListHeader
+            title="Payments"
+            sub={`${detail.rentalNumber ?? "This rental"} · ${ledger.payments.length} payment${ledger.payments.length === 1 ? "" : "s"}`}
+            onClose={() => setListOpen(null)}
+          >
+            {t.outstanding > 0 && (
+              <Button size="sm" onClick={() => (setListOpen(null), setRequest({ kind: "take" }))}>
+                <CreditCard />
+                Take a payment
+              </Button>
+            )}
+          </ListHeader>
+          <div className="min-h-0 overflow-y-auto px-9 pb-9 no-scrollbar">
+            <Facts
+              items={[
+                { label: "Received", value: usd(t.received), tone: "text-success" },
+                { label: "Refunded", value: usd(t.refunded), tone: t.refunded > 0 ? "text-destructive" : undefined },
+                {
+                  label: "Waiting",
+                  value: usd(sum(ledger.payments.filter((p) => p.status === "pending").map((p) => p.amountCents))),
+                  tone: ledger.payments.some((p) => p.status === "pending") ? "text-warning" : undefined,
+                },
+                { label: "Declined", value: String(ledger.payments.filter((p) => p.status === "failed").length) },
+              ]}
+            />
+            <div className="mt-6">
+              <PaymentsList
+                ledger={ledger}
+                detailed
+                onReceipt={(id) => setReceiptOpen(id)}
+                onRefund={(id) => (setListOpen(null), setRequest({ kind: "refund", paymentId: id }))}
               />
             </div>
-          )}
-
-          <div className="mt-5 flex flex-wrap gap-2">
-            {deposit.status === "held" && (
-              <>
-                <Button variant="outline" size="sm" onClick={() => setRequest({ kind: "deposit-charge" })}>
-                  Charge the hold
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => setRequest({ kind: "deposit-release" })}>
-                  Release {usd(held)}
-                </Button>
-              </>
-            )}
-            {(deposit.status === "expired" || deposit.status === "failed" || deposit.status === "not_held") && (
-              <Button variant="outline" size="sm" onClick={() => setRequest({ kind: "deposit-hold" })}>
-                {deposit.status === "not_held" ? "Put a hold on the card" : "Put the hold back"}
-              </Button>
-            )}
-            {deposit.status === "expired" && (
-              <Button variant="outline" size="sm" onClick={() => setRequest({ kind: "deposit-charge" })}>
-                Refresh, then charge
-              </Button>
-            )}
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ── a receipt — the Finances tab's own paper slip ────────────────── */}
+      <Dialog open={!!openReceipt} onOpenChange={(o) => !o && setReceiptOpen(null)}>
+        {openReceipt && (
+          <DialogContent className="max-h-[90vh] overflow-y-auto no-scrollbar sm:max-w-md" aria-describedby={undefined}>
+            <DialogHeader>
+              <DialogTitle>Receipt</DialogTitle>
+            </DialogHeader>
+            <ReceiptView
+              payment={asFinancePayment(openReceipt)}
+              companyName={tenant?.company_name ?? "Your company"}
+              invoiceNumber={detail.rentalNumber ?? "—"}
+              customerName={detail.customerName ?? null}
+              vehicle={detail.vehicleLabel ?? null}
+              appliedTo={openReceipt.allocations.map((a) => {
+                const c = ledger.charges.find((x) => x.id === a.chargeId);
+                return { category: c?.category ?? "Charge", amount: a.amountCents / 100, date: c?.dueDate ?? null };
+              })}
+              currencyCode={tenant?.currency_code || "USD"}
+            />
+          </DialogContent>
+        )}
+      </Dialog>
+
+      {/* ── the real actions — v1's dialogs, opened from anywhere above ──── */}
+      <PaymentActions
+        headless
+        ledger={ledger}
+        rental={detail.rental}
+        request={request}
+        onClose={() => setRequest(null)}
+        refetch={onChanged}
+      />
+      </div>
     </Panel>
   );
 }
 
-/* ══════════════════════════════════════════════════════════════════════════
-   One payment — provenance, allocations, trail
-   ══════════════════════════════════════════════════════════════════════════ */
+/** The quiet "−" and "=" of the Finances sum. */
+const Op = ({ children }: { children: string }) => (
+  <span aria-hidden className="mx-1.5 text-muted-foreground/50">
+    {children}
+  </span>
+);
 
-function PaymentRow({
+/** "Sep 30". */
+const shortDay = (iso: string) => format(new Date(iso), "MMM d");
+
+/**
+ * A tree node, its connector drawn by the <li> itself — the Finances invoice
+ * sheet's: a rail down the left (stopping at the elbow on the last child) and
+ * an elbow into the middle of the row.
+ */
+function treeNode(last: boolean, child = false) {
+  return cn(
+    "relative pl-5",
+    "before:absolute before:left-0 before:top-0 before:border-l before:border-border before:content-['']",
+    last ? (child ? "before:h-[16px]" : "before:h-[18px]") : "before:h-full",
+    "after:absolute after:left-0 after:w-3.5 after:border-t after:border-border after:content-['']",
+    child ? "after:top-[16px]" : "after:top-[18px]"
+  );
+}
+
+/**
+ * One payment, Finances-style: where it came from (the Stripe / Square /
+ * manual mark), how and when, an exception word only when there is one, then
+ * the amount — "+", the receipt icon standing in for the currency sign — which
+ * cross-fades to "View receipt" on hover. Money that never landed has no
+ * receipt: its figure is plain and struck through.
+ */
+function PaymentLine({
+  p,
+  label,
+  cents,
+  onReceipt,
+  onRefund,
+}: {
+  p: Payment;
+  label: string;
+  cents: number;
+  /** Absent → read-only (the stage card): no hover, no receipt. */
+  onReceipt?: () => void;
+  onRefund?: () => void;
+}) {
+  const landed = counts(p);
+  const live = landed && !!onReceipt;
+  const exception =
+    p.status === "pending"
+      ? p.proof.source === "link"
+        ? "Link sent · waiting"
+        : "Pending"
+      : p.status === "failed"
+        ? p.deadReason === "declined"
+          ? "Declined"
+          : linkWords(p.proof.source === "link" ? p.proof.state : null)
+        : null;
+  return (
+    <div
+      {...(live
+        ? {
+            role: "button",
+            tabIndex: 0,
+            onClick: onReceipt,
+            onKeyDown: (e: React.KeyboardEvent) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onReceipt!();
+              }
+            },
+          }
+        : {})}
+      className={cn(
+        "group/pay flex h-8 items-center gap-3 rounded-xl px-2 text-sm",
+        live &&
+          "cursor-pointer transition-colors duration-200 ease-out hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none"
+      )}
+    >
+      <span className="flex min-w-0 flex-1 items-center gap-1.5 text-muted-foreground">
+        <PaymentSourceIcon provider={providerOf(p)} />
+        <span className="truncate">{label}</span>
+        {exception && (
+          <span className={cn("ml-1.5 shrink-0 text-xs font-medium", p.status === "failed" ? "text-destructive" : "text-warning")}>
+            {exception}
+          </span>
+        )}
+      </span>
+      {onRefund && (
+        <Button
+          size="xs"
+          variant="ghost"
+          className="opacity-0 transition-opacity duration-200 ease-out group-hover/pay:opacity-100 focus-visible:opacity-100 motion-reduce:transition-none"
+          onClick={(e) => (e.stopPropagation(), onRefund())}
+        >
+          <Undo2 />
+          Refund
+        </Button>
+      )}
+      {landed && !live ? (
+        <span className="flex w-28 shrink-0 items-center justify-end gap-0.5 font-medium tabular-nums text-foreground">
+          <span aria-hidden className="mr-1 text-muted-foreground">+</span>
+          <ReceiptText className="size-3.5 shrink-0 text-muted-foreground" />
+          {(cents / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        </span>
+      ) : landed ? (
+        <span className="relative w-28 shrink-0">
+          <span className="flex items-center justify-end gap-0.5 font-medium tabular-nums text-foreground transition-opacity duration-100 ease-out group-hover/pay:opacity-0 group-focus-visible/pay:opacity-0 motion-reduce:transition-none">
+            <span aria-hidden className="mr-1 text-muted-foreground">+</span>
+            <ReceiptText className="size-3.5 shrink-0 text-muted-foreground" />
+            {(cents / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </span>
+          <span
+            aria-hidden
+            className="absolute inset-0 flex items-center justify-end gap-1 text-xs font-medium text-primary opacity-0 transition-opacity duration-100 ease-in group-hover/pay:opacity-100 group-focus-visible/pay:opacity-100 motion-reduce:transition-none dark:text-[hsl(var(--v2-link,var(--primary)))]"
+          >
+            <ReceiptText className="size-3.5 shrink-0" />
+            View receipt
+          </span>
+        </span>
+      ) : (
+        <span className="w-28 shrink-0 text-right font-medium tabular-nums text-muted-foreground line-through decoration-muted-foreground/40">
+          {usd(cents)}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** A refund, under the payment it gave back: money OUT, in red, "−". */
+function RefundLine({ provider, cents, at, pending }: { provider: "stripe" | "square" | "manual"; cents: number; at: string | null; pending: boolean }) {
+  return (
+    <div className="flex h-7 items-center gap-3 px-2 text-sm">
+      <span className="flex min-w-0 flex-1 items-center gap-1.5 pl-3 text-muted-foreground">
+        <CornerDownRight aria-hidden className="size-3 shrink-0 text-muted-foreground/60" />
+        <PaymentSourceIcon provider={provider} />
+        <span className="truncate">
+          {provider === "manual" ? "Manual refund" : "Refund · to card"}
+          {at && ` · ${shortDay(at)}`}
+        </span>
+        {pending && <span className="ml-1.5 text-xs font-medium text-warning">Processing</span>}
+      </span>
+      <span className="w-28 shrink-0 text-right font-medium tabular-nums text-destructive">− {usd(cents)}</span>
+    </div>
+  );
+}
+
+/**
+ * A summary card on the stage: its rows are read-only, and the whole card is
+ * one button that opens the full view — the Verification card's pattern, with
+ * the same quiet ExternalLink mark that brightens on hover.
+ */
+function SummaryCard({
+  title,
+  aside,
+  openLabel,
+  onOpen,
+  className,
+  children,
+}: {
+  title: string;
+  aside?: React.ReactNode;
+  openLabel: string;
+  onOpen: () => void;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      aria-label={openLabel}
+      onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
+      className={cn(
+        cardCls,
+        "group flex min-h-0 cursor-pointer flex-col p-5 text-left outline-none transition-colors duration-200 ease-out focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none",
+        className
+      )}
+    >
+      <div className="flex items-center gap-2.5">
+        <h3 className="flex-1 font-heading text-sm font-semibold">{title}</h3>
+        {aside}
+        <ExternalLink
+          aria-hidden
+          className="size-4 shrink-0 text-muted-foreground transition-colors duration-200 ease-out group-hover:text-foreground motion-reduce:transition-none"
+        />
+      </div>
+      <div className="mt-2 min-h-0 flex-1 overflow-hidden">{children}</div>
+    </div>
+  );
+}
+
+/** A full-view dialog's header: title and count, its actions, and Close. No ×. */
+function ListHeader({ title, sub, onClose, children }: { title: string; sub: string; onClose: () => void; children?: React.ReactNode }) {
+  return (
+    <div className="flex items-start justify-between gap-4 px-9 pb-5 pt-8">
+      <div className="min-w-0">
+        <DialogTitle className="text-lg font-semibold">{title}</DialogTitle>
+        <DialogDescription className="mt-0.5">{sub}</DialogDescription>
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        <Button variant="ghost" size="sm" onClick={onClose}>
+          Close
+        </Button>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/** Four labelled figures in one quiet strip — the top of every full view. */
+function Facts({ items }: { items: { label: string; value: string; tone?: string; sub?: string }[] }) {
+  return (
+    <div className={cn(insetCls, "grid grid-cols-4 px-5 py-4")}>
+      {items.map((f) => (
+        <div key={f.label} className="min-w-0">
+          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{f.label}</p>
+          <p className={cn("mt-1 truncate text-lg font-semibold tabular-nums", f.tone)}>{f.value}</p>
+          {f.sub && <p className="truncate text-xs text-muted-foreground">{f.sub}</p>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * The Finances invoice tree: each charge, its sum, and under it the payments
+ * that paid it (and any refund on them). Read-only on the card; in the full
+ * view (`detailed`) charges fold, Pay shows on hover, rows open receipts, and
+ * each charge carries when it was raised and its note.
+ */
+function ChargesTree({
   ledger,
-  payment: p,
-  bind,
-  flashCls,
-  open,
+  charges,
+  today,
+  isOpen,
   onToggle,
-  onJumpToCharge,
+  detailed,
+  onReceipt,
+  onPay,
+}: {
+  ledger: Ledger;
+  charges: Charge[];
+  today: string;
+  isOpen: (id: string, hasPayments: boolean) => boolean;
+  onToggle?: (id: string, hasPayments: boolean) => void;
+  detailed?: boolean;
+  onReceipt?: (paymentId: string) => void;
+  onPay?: () => void;
+}) {
+  return (
+    <ul className="pl-1">
+      {charges.map((c, ci) => {
+        const left = remainingOn(ledger, c.id);
+        const paid = c.amountCents - left;
+        const late = !!c.dueDate && c.dueDate.slice(0, 10) < today && left > 0;
+        const stuck = !c.settleable && left > 0;
+        const allocs = ledger.payments
+          .filter(counts)
+          .flatMap((p) => p.allocations.filter((a) => a.chargeId === c.id).map((a) => ({ p, applied: a.amountCents })));
+        const open = isOpen(c.id, allocs.length > 0);
+        const tone = left === 0 ? "text-success" : late || stuck ? "text-destructive" : "text-warning";
+        const toggle = onToggle ? () => onToggle(c.id, allocs.length > 0) : undefined;
+        return (
+          <li key={c.id} className={treeNode(ci === charges.length - 1)}>
+            <div
+              {...(toggle
+                ? {
+                    role: "button",
+                    tabIndex: 0,
+                    "aria-expanded": open,
+                    onClick: toggle,
+                    onKeyDown: (e: React.KeyboardEvent) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        toggle();
+                      }
+                    },
+                  }
+                : {})}
+              className={cn(
+                "group/charge flex h-9 items-center gap-2 rounded-xl px-2 text-sm",
+                toggle && "cursor-pointer transition-colors duration-200 ease-out hover:bg-muted/50 motion-reduce:transition-none"
+              )}
+            >
+              <ChevronRight
+                className={cn(
+                  "size-3.5 shrink-0 text-muted-foreground transition-transform duration-200 ease-out motion-reduce:transition-none",
+                  open && "rotate-90",
+                  allocs.length === 0 && "opacity-30"
+                )}
+              />
+              <span className="flex min-w-0 flex-1 items-center gap-2">
+                {stuck && <ShieldAlert className="size-3.5 shrink-0 text-destructive" />}
+                <span className="truncate font-medium">{c.label}</span>
+                {c.dueDate && (
+                  <span className={cn("shrink-0 text-xs tabular-nums", late ? "font-medium text-destructive" : "text-muted-foreground")}>
+                    {late ? "Overdue · " : "Due "}
+                    {day(c.dueDate)}
+                  </span>
+                )}
+                {detailed && c.note && <span className="truncate text-xs text-muted-foreground">· {c.note}</span>}
+              </span>
+              {onPay && left > 0 && c.settleable && (
+                <Button
+                  size="xs"
+                  className="rounded-full opacity-0 transition-opacity duration-200 ease-out group-hover/charge:opacity-100 focus-visible:opacity-100 motion-reduce:transition-none"
+                  onClick={(e) => (e.stopPropagation(), onPay())}
+                >
+                  Pay
+                </Button>
+              )}
+              <span className="inline-flex items-baseline whitespace-nowrap tabular-nums">
+                <span className="w-24 text-right text-[13px] text-muted-foreground">{usd(c.amountCents)}</span>
+                <Op>−</Op>
+                <span className="w-24 text-right text-[13px] text-muted-foreground">{usd(paid)}</span>
+                <Op>=</Op>
+                <span className={cn("w-24 text-right text-[15px]", left === 0 ? "font-medium" : "font-semibold", tone)}>{usd(left)}</span>
+              </span>
+            </div>
+
+            {open && (
+              <ul className="ml-3.5 pb-3">
+                {allocs.map(({ p, applied }, ai) => {
+                  const fp = asFinancePayment(p);
+                  const split = p.amountCents !== applied;
+                  const refund = refundOf(fp);
+                  const refundCents = refund ? Math.round((p.refundedCents * applied) / Math.max(1, p.amountCents)) : 0;
+                  return (
+                    <li key={p.id + ai} className={treeNode(ai === allocs.length - 1, true)}>
+                      <PaymentLine
+                        p={p}
+                        label={`${paymentLabel(fp)}${split ? ` · of a ${usd(p.amountCents)} payment` : ""} · ${shortDay(p.at)}`}
+                        cents={applied}
+                        onReceipt={onReceipt ? () => onReceipt(p.id) : undefined}
+                      />
+                      {refundCents > 0 && (
+                        <RefundLine provider={refund!.provider} cents={refundCents} at={p.refundedAt} pending={refund!.pending} />
+                      )}
+                    </li>
+                  );
+                })}
+                {detailed && allocs.length === 0 && (
+                  <li className={treeNode(true, true)}>
+                    <p className="flex h-8 items-center px-2 text-xs text-muted-foreground">No payment has gone toward this yet.</p>
+                  </li>
+                )}
+              </ul>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/**
+ * Every payment, newest first. On the card: one line each. In the full view
+ * (`detailed`): where each one went, its receipt number and provider id, and
+ * Refund on hover.
+ */
+function PaymentsList({
+  ledger,
+  detailed,
+  onReceipt,
   onRefund,
 }: {
   ledger: Ledger;
-  payment: Payment;
-  bind: (key: string) => (el: HTMLElement | null) => void;
-  flashCls: (key: string) => string;
-  open: boolean;
-  onToggle: () => void;
-  onJumpToCharge: (c: Charge) => void;
-  onRefund: () => void;
+  detailed?: boolean;
+  onReceipt?: (paymentId: string) => void;
+  onRefund?: (paymentId: string) => void;
 }) {
-  const key = `p:${p.id}`;
-  const pr = p.proof;
-  const dead = p.status === "failed";
-  const pending = p.status === "pending";
-  const manual = pr.source === "manual";
-  const spare = unallocatedOn(p);
-  const Icon = pr.source === "card" ? CreditCard : pr.source === "link" ? Link2 : PenLine;
-
-  /* Coloured is one of us, solid is the customer, faded is nobody's word but
-     the typist's. Destructive is reserved for a real fault — a card that was
-     refused — never for a link that merely expired. */
-  const declined = p.deadReason === "declined";
-  const glyph = declined
-    ? "text-destructive"
-    : dead
-      ? "text-muted-foreground/50"
-      : pr.source === "card"
-        ? "text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]"
-        : pr.source === "link"
-          ? "text-foreground/80"
-          : "text-muted-foreground/50";
-
-  /* The title says the thing that most needs knowing: normally where the money
-     came from, and on a failure the failure. Provenance then moves into the
-     meta line rather than being lost. */
-  const headline = declined
-    ? "Reversed"
-    : dead
-      ? linkWords(pr.source === "link" ? pr.state : null)
-      : pending
-        ? `${provenance(p)} · not paid yet`
-        : provenance(p);
-
-  const meta = [
-    dead && provenance(p),
-    when(p.at),
-    manual && methodWord(pr.method),
-    // The one fact a manual payment must never lose. Not a pill, not a warning
-    // — a plain statement of what does and does not stand behind the money.
-    manual && "no provider record",
-    p.refundedCents > 0 && (p.status === "refunded" ? "refunded in full" : `${usd(p.refundedCents)} refunded`),
-    spare > 0 && `${usd(spare)} not applied`,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-
   return (
-    <div ref={bind(key)} className={flashCls(key)}>
-      <Row
-        open={open}
-        onToggle={onToggle}
-        lead={<Icon className={cn("size-4", glyph)} />}
-        title={
-          <span className={cn(declined ? "text-destructive" : (manual || pending || dead) && "text-muted-foreground")}>
-            {headline}
-          </span>
-        }
-        meta={meta}
-        right={
-          <span
-            className={cn(
-              "font-medium",
-              declined && "text-destructive",
-              (pending || dead) && "text-muted-foreground line-through decoration-muted-foreground/40"
+    <ul className={cn(detailed && "divide-y divide-foreground/5")}>
+      {ledger.payments.map((p) => {
+        const fp = asFinancePayment(p);
+        const refund = refundOf(fp);
+        const went = p.allocations
+          .map((a) => {
+            const c = ledger.charges.find((x) => x.id === a.chargeId);
+            return c ? `${c.label} ${usd(a.amountCents)}` : null;
+          })
+          .filter(Boolean)
+          .join(" · ");
+        const providerId = p.proof.source === "manual" ? null : p.proof.source === "link" ? p.proof.sessionId : p.proof.intentId;
+        return (
+          <li key={p.id} className={cn(detailed && "py-2")}>
+            <PaymentLine
+              p={p}
+              label={`${paymentLabel(fp)} · ${shortDay(p.at)}`}
+              cents={p.amountCents}
+              onReceipt={onReceipt ? () => onReceipt(p.id) : undefined}
+              onRefund={
+                onRefund && counts(p) && p.amountCents - p.refundedCents > 0 ? () => onRefund(p.id) : undefined
+              }
+            />
+            {refund && <RefundLine provider={refund.provider} cents={p.refundedCents} at={p.refundedAt} pending={refund.pending} />}
+            {detailed && (
+              <p className="truncate pl-[2.1rem] pr-2 text-xs text-muted-foreground">
+                {counts(p) ? (went ? `Paid ${went}` : "Not applied to a charge yet") : p.status === "pending" ? "Nothing is applied until it is paid" : "No money moved"}
+                {" · "}
+                {when(p.at)}
+                {counts(p) && ` · ${receiptNumber(p.id)}`}
+                {providerId && <span className="font-mono"> · {providerId}</span>}
+              </p>
             )}
-          >
-            {usd(p.amountCents)}
-          </span>
-        }
-      >
-        {/* ── proof ───────────────────────────────────────────────────── */}
-        <div>
-          <Label>Proof</Label>
-          {pr.source === "card" && (
-            <p className="text-[11px]">
-              <span className="font-mono text-foreground/80">{pr.intentId}</span>
-              {pr.provider && <span className="text-muted-foreground"> · {pr.provider}</span>}
-            </p>
-          )}
-          {pr.source === "link" && (
-            <p className="text-[11px]">
-              <span className="font-mono text-foreground/80">{pr.sessionId}</span>
-              {pr.intentId && (
-                <>
-                  {" · "}
-                  <span className="font-mono text-foreground/80">{pr.intentId}</span>
-                </>
-              )}
-              {pr.state && <span className="text-muted-foreground"> · {linkWords(pr.state).toLowerCase()}</span>}
-            </p>
-          )}
-          {pr.source === "manual" && (
-            <p className="text-[11px] text-muted-foreground">
-              No provider record — only what was typed here. Nothing outside this database knows this money exists,
-              and no name is stored against it.
-            </p>
-          )}
-          {p.refundedCents > 0 && (
-            <p className="mt-1 text-[11px]">
-              <span className="text-muted-foreground">
-                Refund of {usd(p.refundedCents)}
-                {p.refundedAt && ` · ${when(p.refundedAt)}`}
-                {p.refundReason && ` · ${p.refundReason}`}
-              </span>
-              {p.refundIntentId && (
-                <>
-                  {" · "}
-                  <span className="font-mono text-foreground/80">{p.refundIntentId}</span>
-                </>
-              )}
-            </p>
-          )}
-        </div>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
 
-        {/* ── applied to ──────────────────────────────────────────────── */}
-        {counts(p) && (
-          <div>
-            <Label>Applied to</Label>
-            <div className="space-y-1">
-              {p.allocations.map((a) => {
-                const c = ledger.charges.find((x) => x.id === a.chargeId);
-                return (
-                  <Line key={a.chargeId} amount={a.amountCents}>
-                    {c ? (
-                      <Jump onClick={() => onJumpToCharge(c)}>
-                        {c.label}
-                        {c.createdAt ? ` · raised ${day(c.createdAt)}` : ""}
-                      </Jump>
-                    ) : (
-                      <span className="text-muted-foreground">a charge that is not on this rental</span>
-                    )}
-                  </Line>
-                );
-              })}
-              {/* Money that settled the deposit charge. It is not in the lists
-                  above because a deposit is not revenue, but it IS where this
-                  money went — without this line a payment that cleared the
-                  deposit in full would read as unapplied. */}
-              {p.depositAppliedCents > 0 && (
-                <Line amount={p.depositAppliedCents}>
-                  <span className="text-muted-foreground">the security deposit, which is held apart</span>
-                </Line>
-              )}
-              {p.allocations.length === 0 && p.depositAppliedCents === 0 && (
-                <p className="text-[11px] text-muted-foreground">Nothing yet</p>
-              )}
-              {spare > 0 && (
-                <Line amount={spare}>
-                  <span className="text-muted-foreground">not applied to anything</span>
-                </Line>
-              )}
-              {/* The allocator's own figure, when it differs from what this
-                  rental's applications account for — the fingerprint of a
-                  payment partly applied to another rental's charges. */}
-              {counts(p) && p.remainingOnRow !== spare && (
-                <Line amount={p.remainingOnRow} muted>
-                  <span className="text-muted-foreground">unapplied according to the payment row itself</span>
-                </Line>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* ── trail ───────────────────────────────────────────────────── */}
-        <div>
-          <Label>Trail</Label>
-          <Trail trail={p.trail} />
-        </div>
-
-        {counts(p) && p.amountCents - p.refundedCents > 0 && (
-          <div className="flex gap-2">
-            <Button variant="outline" size="xs" onClick={onRefund}>
-              Refund
-            </Button>
-          </div>
-        )}
-      </Row>
+/** A card's empty body: one quiet line, centred in the space it fills. */
+function Quiet({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="mt-3 flex min-h-16 flex-1 items-center justify-center rounded-3xl bg-muted/30 px-6 text-center ring-1 ring-foreground/5">
+      <p className="text-sm text-muted-foreground">{children}</p>
     </div>
   );
+}
+
+/** Who took the money, for the Finances source mark. */
+function providerOf(p: Payment): "stripe" | "square" | "manual" {
+  if (p.proof.source === "manual") return "manual";
+  return String(p.proof.provider ?? "").toLowerCase() === "square" ? "square" : "stripe";
+}
+
+/** The ledger's payment, in the shape the Finances receipt reads. */
+function asFinancePayment(p: Payment): FinancePayment {
+  const pr = p.proof as any;
+  return {
+    id: p.id,
+    amount: p.amountCents / 100,
+    payment_date: p.at,
+    paid_at: p.at,
+    method: pr.source === "manual" ? pr.method : "Card",
+    status: p.status === "paid" ? "Applied" : p.status,
+    refund_amount: p.refundedCents ? p.refundedCents / 100 : null,
+    stripe_checkout_session_id: pr.sessionId ?? null,
+    stripe_payment_intent_id: pr.intentId ?? null,
+    square_payment_id: null,
+    square_payment_link_id: null,
+    booking_source: p.bookingSource,
+    payment_provider: pr.source === "manual" ? null : (pr.provider ?? "stripe"),
+    refund_status: p.refundStatus,
+    refund_processed_at: p.refundedAt,
+    refund_scheduled_date: null,
+    stripe_refund_id: p.refundIntentId && !String(p.refundIntentId).startsWith("sq") ? p.refundIntentId : null,
+    square_refund_id: null,
+  };
 }

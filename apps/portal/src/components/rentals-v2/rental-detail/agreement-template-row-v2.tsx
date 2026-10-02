@@ -63,7 +63,7 @@ import { ensureSignatureTag, escapeHtml, renderAgreementHtml } from "@/lib/agree
 import { isBlankHtml } from "@/components/settings-v2/message-rules";
 import type { AgreementTemplateCategoryV2 } from "@/lib/agreements-v2/types";
 import type { RentalRow } from "./use-rental-detail-v2";
-import { listCls, Pill, Section } from "./_kit";
+import { cardCls, listCls, Pill, Section } from "./_kit";
 
 /* ══════════════════════════════════════════════════════════════════════════
    The route's own choice, mirrored
@@ -330,9 +330,14 @@ export interface AgreementTemplateRowV2Props {
   canEdit: boolean;
   /** A send is in flight: the selection holds still until it lands. */
   busy?: boolean;
+  /**
+   * Show the filled-in document right in the card, under the template row,
+   * filling the card's height (the rental detail's Agreement stage).
+   */
+  inlinePreview?: boolean;
 }
 
-export function AgreementTemplateRowV2({ rental, choice, mileage, canEdit, busy }: AgreementTemplateRowV2Props) {
+export function AgreementTemplateRowV2({ rental, choice, mileage, canEdit, busy, inlinePreview }: AgreementTemplateRowV2Props) {
   const { tenant } = useTenant();
   const { toast } = useToast();
   const { update } = useAgreementTemplateMutationsV2();
@@ -341,7 +346,7 @@ export function AgreementTemplateRowV2({ rental, choice, mileage, canEdit, busy 
   const [previewing, setPreviewing] = useState(false);
   const [editing, setEditing] = useState(false);
 
-  const sources = useRentalPreviewSourcesV2(rental, previewing || editing);
+  const sources = useRentalPreviewSourcesV2(rental, previewing || editing || !!inlinePreview);
 
   const { selected, routeChoice, pickable, category, ready } = choice;
   const isRouteChoice = !!selected && selected.id === routeChoice?.id;
@@ -370,8 +375,9 @@ export function AgreementTemplateRowV2({ rental, choice, mileage, canEdit, busy 
   const previewTransform = useMemo(() => rentalPreviewTransformV2(injection), [injection]);
 
   const previewHtml = useMemo(
-    () => (selected && previewing ? renderRentalAgreementPreviewV2(selected.content, previewData, injection) : ""),
-    [selected, previewing, previewData, injection]
+    () =>
+      selected && (previewing || inlinePreview) ? renderRentalAgreementPreviewV2(selected.content, previewData, injection) : "",
+    [selected, previewing, inlinePreview, previewData, injection]
   );
 
   const saveToTemplate = useCallback(
@@ -393,8 +399,9 @@ export function AgreementTemplateRowV2({ rental, choice, mileage, canEdit, busy 
         ? `Your default for ${CATEGORY_NOUN[category]}. This is what goes out unless you change it.`
         : `Your default for rentals. It goes out because you have no default for ${CATEGORY_NOUN[category]}.`;
 
+  const Shell = inlinePreview ? InlineShell : Section;
   return (
-    <Section
+    <Shell
       title="Selected template"
       description="Whatever your default template is, that is what a rental sends. Change it here for this rental."
     >
@@ -464,6 +471,23 @@ export function AgreementTemplateRowV2({ rental, choice, mileage, canEdit, busy 
         </div>
       </div>
 
+      {/* ── the document itself, filling the card (inline mode) ─────────── */}
+      {inlinePreview && (
+        <div className="mt-4 min-h-0 flex-1 overflow-y-auto rounded-3xl bg-muted p-5 no-scrollbar">
+          {!selected ? (
+            <p className="flex h-full items-center justify-center text-sm text-muted-foreground">
+              The built-in agreement is filled in when it is sent — pick a template to see it here.
+            </p>
+          ) : sources.isLoading ? (
+            <div className="flex h-full items-center justify-center" role="status">
+              <Loader2 className="size-6 animate-spin text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" />
+            </div>
+          ) : (
+            <AgreementPreviewV2 html={previewHtml} banner={choice.banner} className="mx-auto" />
+          )}
+        </div>
+      )}
+
       {/* ── Change ──────────────────────────────────────────────────────── */}
       <Dialog open={picking} onOpenChange={setPicking}>
         <DialogContent className="flex max-h-[85vh] flex-col gap-4 sm:max-w-lg">
@@ -521,8 +545,21 @@ export function AgreementTemplateRowV2({ rental, choice, mileage, canEdit, busy 
           nameEditable={false}
         />
       )}
-    </Section>
+    </Shell>
   );
 }
 
 export default AgreementTemplateRowV2;
+
+/** Section's look, as a column that fills its parent — for the inline preview. */
+function InlineShell({ title, description, children }: { title?: string; description?: string; children: React.ReactNode }) {
+  return (
+    <div className={`${cardCls} flex h-full min-h-0 flex-col p-6`}>
+      <div className="mb-5 shrink-0">
+        <h3 className="font-heading text-sm font-semibold">{title}</h3>
+        {description && <p className="mt-1 text-xs text-muted-foreground">{description}</p>}
+      </div>
+      {children}
+    </div>
+  );
+}

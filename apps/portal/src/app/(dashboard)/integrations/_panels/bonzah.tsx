@@ -47,21 +47,19 @@
 // `components/settings/bonzah-onboarding/` is touched (V2_PLAN §3) — the other
 // 56 tenants reach it unchanged.
 
-import { useEffect, useMemo, useState } from "react";
+import { type ComponentType, type ReactNode, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
+  ArrowLeft,
   ArrowRight,
-  Bell,
-  Check,
   CheckCircle2,
   FileText,
   Loader2,
   RefreshCw,
   ShieldAlert,
   Unplug,
-  Wallet,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -100,11 +98,20 @@ import {
   PanelLoading,
   PanelNote,
   PanelRow,
-  PanelSection,
   StatusChip,
   type IntegrationState,
 } from "./_kit";
 import BonzahOnboardingV2 from "./bonzah-onboarding-v2";
+import { NORTHWIND } from "@/lib/v2";
+import { useNarrowDialog } from "./_screens";
+import { InsurancesEmptyArt } from "@/components/illustrations-v2/scenes/insurances";
+import {
+  BonzahApplyArt,
+  BonzahLoginArt,
+  BonzahReturnedArt,
+  BonzahReviewArt,
+  BonzahWalletArt,
+} from "@/components/illustrations-v2/scenes/bonzah";
 
 /* ─────────────────────────────── shape ──────────────────────────────────── */
 
@@ -421,12 +428,15 @@ export default function BonzahPanel({ tenant, onClose }: IntegrationPanelProps) 
    * own header does not.
    */
   const [applying, setApplying] = useState(false);
-  const [showCredentialForm, setShowCredentialForm] = useState(false);
+  /** Which screen the panel is on. Every screen fits the dialog; none scrolls. */
+  const [view, setView] = useState<View>("home");
+  const [introStep, setIntroStep] = useState(0);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
   const [confirmPause, setConfirmPause] = useState(false);
   const [brochure, setBrochure] = useState<string | null>(null);
+  const [showFullDecision, setShowFullDecision] = useState(false);
 
   // Seed the editable fields once the row lands. The username is prefilled
   // because it is not a secret and retyping an email to fix a password is
@@ -481,11 +491,8 @@ export default function BonzahPanel({ tenant, onClose }: IntegrationPanelProps) 
   const balanceError = balanceQuery.error instanceof Error ? balanceQuery.error.message : null;
   const credentialsRejected = !!balanceError && isAuthFailure(balanceError);
 
-  // A rejected login is repaired by re-entering it, so open the form rather
-  // than making the operator find it under a disclosure.
-  useEffect(() => {
-    if (credentialsRejected) setShowCredentialForm(true);
-  }, [credentialsRejected]);
+  // A rejected login gets its own screen ("I can't sign in to Bonzah") with
+  // the fix as its one button, so nothing needs to open on its own here.
 
   /* ── policies stranded by an empty wallet ──────────────────────────────── */
 
@@ -513,7 +520,9 @@ export default function BonzahPanel({ tenant, onClose }: IntegrationPanelProps) 
   /* ── low-balance alert ─────────────────────────────────────────────────── */
 
   const { config: alertConfig, updateConfig } = useBonzahAlertConfig();
-  const [alertOpen, setAlertOpen] = useState(false);
+  // The alert editor is its own screen; "open" just means being on it.
+  const alertOpen = view === "alert";
+  const setAlertOpen = (open: boolean) => setView(open ? "alert" : "home");
   const [alertEnabled, setAlertEnabled] = useState(false);
   const [alertThreshold, setAlertThreshold] = useState("");
 
@@ -610,7 +619,7 @@ export default function BonzahPanel({ tenant, onClose }: IntegrationPanelProps) 
       if (writeError) throw writeError;
 
       setPassword("");
-      setShowCredentialForm(false);
+      setView("home");
       await invalidate();
       // Only re-test when the account is actually live on its own credentials.
       // On a not-yet-activated account the balance call would resolve to the
@@ -684,6 +693,7 @@ export default function BonzahPanel({ tenant, onClose }: IntegrationPanelProps) 
       if (error) throw error;
       setUsername("");
       setPassword("");
+      setView("home");
       await invalidate();
       toast({
         title: "Bonzah disconnected",
@@ -744,6 +754,9 @@ export default function BonzahPanel({ tenant, onClose }: IntegrationPanelProps) 
     return (
       <BonzahOnboardingV2
         tenantId={tenant.id}
+        // The canary walks the wizard unvalidated while it is being built.
+        // Keyed on SLUG (V2_PLAN §2); every other tenant validates as normal.
+        skipValidation={tenant.slug === NORTHWIND}
         onExit={() => setApplying(false)}
         onSubmitted={async () => {
           setApplying(false);
@@ -759,528 +772,179 @@ export default function BonzahPanel({ tenant, onClose }: IntegrationPanelProps) 
     (submission?.status === "rejected" && submission.reject_reason) ||
     submission?.admin_note ||
     null;
+  const decisionTitle = submission?.status === "approved" ? "Message from Bonzah" : "What Bonzah asked for";
 
   const connectedSince = shortDate(submission?.activated_at ?? row.bonzah_partner_id_set_at);
+  const submittedOn = shortDate(submission?.submitted_at);
 
-  // The credential form is the exception, not the route in. Bonzah's reviewer
-  // normally writes these columns during approval, so an operator who has not
-  // been approved yet has nothing to type — showing them a login box next to
-  // "apply" invites them to hunt for credentials that do not exist. It opens on
-  // its own only where it IS the next step: an approval that never landed
-  // credentials, or a login Bonzah has since rejected.
-  const credentialFormOpen =
-    showCredentialForm ||
-    (!hasCredentials && stage === "approved_not_activated") ||
-    // An email with no password is a half-written account that fails every
-    // call; the form is the only fix, so it is not hidden behind a disclosure.
-    (hasCredentials && !row.hasPassword);
+  // The newest three only — the application screen is one screen, not a log.
+  const events = eventsQuery.data ?? [];
+  const recentEvents = events.slice(-3).reverse();
+  const olderEvents = events.length - recentEvents.length;
 
-  return (
-    <div className="space-y-6">
-      {/* ── where the operator is ─────────────────────────────────────────── */}
-      <PanelSection>
-        <StageRail stage={stage} />
-        <PanelNote tone={STAGE_CHIP[stage].state === "attention" ? "warn" : "info"}>
-          {stageCopy(stage, { leanUi, submittedOn: shortDate(submission?.submitted_at) })}
-        </PanelNote>
+  /** A saved login Bonzah will not accept — the failure this integration actually suffers. */
+  const loginBroken = hasCredentials && (!row.hasPassword || credentialsRejected);
 
-        {submissionQuery.isError && !hasCredentials && (
-          <p className="text-[11px] leading-snug text-muted-foreground">
-            Your application&rsquo;s status could not be read just now, so this may be out of date.
-            Nothing has been changed.
-          </p>
-        )}
+  const home = () => setView("home");
+  const stepEyebrow = `Step ${RAIL_INDEX[stage] + 1} of ${RAIL.length} · ${RAIL[RAIL_INDEX[stage]]}`;
 
-        {/* Bonzah's own words to this operator, on either decision. Dropped
-            once the account is working: an approval message is guidance about
-            getting connected, and it turns into noise the moment they are. */}
-        {decisionNote && submission?.status !== "pending" && stage !== "live" && stage !== "selling_off" && (
+  const applicationLink =
+    submission && !hasCredentials ? { label: "View your application", onClick: () => setView("application") } : null;
+
+  // ── LAYOUT (Ghulam, Oct 2 2026) ─────────────────────────────────────────
+  // One idea per screen: a picture, a headline, a line or two in Trax's voice,
+  // and ONE primary action. Everything else — the application details, the
+  // connection, the alert, the brochure — is its own small screen behind a
+  // quiet link, with a Back. As many screens as it takes; none of them scroll.
+  let screen: ReactNode;
+  let screenKey: string = view;
+
+  if (view === "application" && submission) {
+    screen = (
+      <SubScreen title="Your application" onBack={home}>
+        <PanelCard>
+          {submission.business_trade_name && (
+            <PanelRow label="Applied as">{submission.business_trade_name}</PanelRow>
+          )}
+          {submission.primary_contact_email && (
+            <PanelRow label="Contact">{submission.primary_contact_email}</PanelRow>
+          )}
+          <PanelRow label="Sent">{submittedOn}</PanelRow>
+          {submission.reviewed_at && <PanelRow label="Reviewed">{shortDate(submission.reviewed_at)}</PanelRow>}
+        </PanelCard>
+        {recentEvents.length > 0 && (
           <PanelCard>
             <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-              {submission?.status === "approved" ? "Message from Bonzah" : "What to update"}
+              Latest activity
             </p>
-            <p className="mt-1 whitespace-pre-wrap text-sm">{decisionNote}</p>
-          </PanelCard>
-        )}
-
-        {stage === "not_started" && (
-          <Button className="w-full" onClick={() => setApplying(true)}>
-            Start the Bonzah application
-            <ArrowRight className="ml-1.5 size-4" />
-          </Button>
-        )}
-
-        {stage === "changes_requested" && (
-          <Button className="w-full" onClick={() => setApplying(true)}>
-            Update and resubmit
-            <ArrowRight className="ml-1.5 size-4" />
-          </Button>
-        )}
-
-        {/* The application itself — what was sent, and what has happened to it
-            since. This is v1's `submission-status.tsx` reproduced where the
-            operator now lives: Settings' insurance tab is being hidden from the
-            canary, and `reviewed_at` and the event trail exist nowhere else.
-            Dropped once credentials arrive, when the application stops
-            describing anything the operator can act on. */}
-        {submission && !hasCredentials && (
-          <div className="space-y-2">
-            <PanelCard>
-              {submission.business_trade_name && (
-                <PanelRow label="Applied as">{submission.business_trade_name}</PanelRow>
-              )}
-              {submission.primary_contact_email && (
-                <PanelRow label="Contact">{submission.primary_contact_email}</PanelRow>
-              )}
-              <PanelRow label="Submitted">{shortDate(submission.submitted_at)}</PanelRow>
-              {submission.reviewed_at && (
-                <PanelRow label="Reviewed">{shortDate(submission.reviewed_at)}</PanelRow>
-              )}
-            </PanelCard>
-
-            {eventsQuery.data && eventsQuery.data.length > 0 && (
-              <PanelCard>
-                <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                  Activity
-                </p>
-                <ol className="mt-2 space-y-2.5">
-                  {eventsQuery.data.map((ev) => (
-                    <li key={ev.id} className="flex gap-2.5">
-                      <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-primary/60" />
-                      <div className="min-w-0">
-                        <p className="text-sm capitalize leading-tight text-foreground">
-                          {ev.event_type.replace(/_/g, " ")}
-                        </p>
-                        {ev.note && (
-                          <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
-                            {ev.note}
-                          </p>
-                        )}
-                        <p className="mt-0.5 text-[11px] text-muted-foreground">
-                          {shortDate(ev.created_at)}
-                        </p>
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-              </PanelCard>
-            )}
-
-            {stage === "in_review" && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full"
-                disabled={submissionQuery.isFetching || eventsQuery.isFetching}
-                onClick={() => {
-                  void submissionQuery.refetch();
-                  void eventsQuery.refetch();
-                }}
-              >
-                {submissionQuery.isFetching || eventsQuery.isFetching ? (
-                  <Loader2 className="mr-1.5 size-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="mr-1.5 size-4" />
-                )}
-                Check for an update
-              </Button>
-            )}
-          </div>
-        )}
-
-        {!hasCredentials && !credentialFormOpen && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-auto px-1 py-0 text-xs text-muted-foreground"
-            onClick={() => setShowCredentialForm(true)}
-          >
-            I already have a Bonzah login
-          </Button>
-        )}
-      </PanelSection>
-
-      {/* ── how it works ──────────────────────────────────────────────────── */}
-      {!hasCredentials && <HowItWorks />}
-
-      {/* ── the account ───────────────────────────────────────────────────── */}
-      {hasCredentials && (
-        <PanelSection title="Bonzah account">
-          <PanelCard>
-            <PanelRow label="Signed in as">
-              <CopyValue value={row.bonzah_username!} />
-            </PanelRow>
-            {!row.hasPassword && (
-              <PanelRow label="Password">
-                <span className="panel-ink-danger">Missing</span>
-              </PanelRow>
-            )}
-            {/* Bonzah's own id for this operator. Nothing in the portal writes
-                it today, so it is rendered only when something already has. */}
-            {row.bonzah_partner_id && (
-              <PanelRow label="Partner ID">
-                <CopyValue value={row.bonzah_partner_id} />
-              </PanelRow>
-            )}
-            {connectedSince && <PanelRow label="Active since">{connectedSince}</PanelRow>}
-          </PanelCard>
-
-          {!row.hasPassword && (
-            <PanelNote tone="danger">
-              This account has an email on file but no password, so every Bonzah call will fail.
-              Enter the password below.
-            </PanelNote>
-          )}
-
-          {/* The headline control. */}
-          {canReadOwnBalance && (
-            <div className="space-y-2">
-              <Button
-                variant="outline"
-                className="w-full"
-                disabled={balanceQuery.isFetching}
-                onClick={() => balanceQuery.refetch()}
-              >
-                {balanceQuery.isFetching ? (
-                  <Loader2 className="mr-1.5 size-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="mr-1.5 size-4" />
-                )}
-                Test connection
-              </Button>
-
-              {credentialsRejected && (
-                <PanelNote tone="danger">
-                  Bonzah rejected the login saved for this account, so no policy can be issued right
-                  now. This almost always means the password was changed or reset on Bonzah&rsquo;s
-                  side rather than here. Enter the current Bonzah password below and test again.
-                </PanelNote>
-              )}
-
-              {balanceError && !credentialsRejected && (
-                <PanelNote tone="warn">
-                  Bonzah could not be reached. Nothing has been changed.
-                  <span className="mt-1 block font-mono text-[11px] opacity-80">{balanceError}</span>
-                </PanelNote>
-              )}
-
-              {!balanceError && balanceQuery.isSuccess && (
-                <PanelNote>
-                  <span className="panel-ink-success inline-flex items-center gap-1.5">
-                    <CheckCircle2 className="size-3.5" />
-                    Bonzah accepted the saved login.
+            <ol className="mt-2 space-y-1.5">
+              {recentEvents.map((ev) => (
+                <li key={ev.id} className="flex items-baseline gap-2.5">
+                  <span className="size-1.5 shrink-0 -translate-y-px rounded-full bg-primary/60" />
+                  <span className="min-w-0 flex-1 truncate text-sm text-foreground" title={ev.note ?? undefined}>
+                    <span className="capitalize">{ev.event_type.replace(/_/g, " ")}</span>
+                    {ev.note && <span className="text-muted-foreground"> — {ev.note}</span>}
                   </span>
-                </PanelNote>
-              )}
-            </div>
+                  <span className="shrink-0 text-[11px] text-muted-foreground">{shortDate(ev.created_at)}</span>
+                </li>
+              ))}
+            </ol>
+            {olderEvents > 0 && (
+              <p className="mt-1.5 text-[11px] text-muted-foreground">+{olderEvents} earlier</p>
+            )}
+          </PanelCard>
+        )}
+      </SubScreen>
+    );
+  } else if (view === "login") {
+    screen = (
+      <SubScreen
+        title={hasCredentials ? "Update your Bonzah login" : "Add your Bonzah login"}
+        description={
+          hasCredentials
+            ? "Use this when Bonzah changes or resets the password on their side. I check it with Bonzah before I save it."
+            : "Bonzah sends this when they approve you. I check it with Bonzah before I save it."
+        }
+        onBack={home}
+      >
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="min-w-0 space-y-1.5">
+            <Label htmlFor="bonzah-email" className="text-xs">Bonzah email</Label>
+            <Input
+              id="bonzah-email"
+              type="email"
+              autoComplete="off"
+              placeholder="you@example.com"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+            />
+          </div>
+          <div className="min-w-0 space-y-1.5">
+            <Label htmlFor="bonzah-password" className="text-xs">Bonzah password</Label>
+            {/* Write-only. The stored password is never sent to this screen,
+                so the box starts empty even for a connected account. */}
+            <Input
+              id="bonzah-password"
+              type="password"
+              autoComplete="new-password"
+              placeholder="Current password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </div>
+        </div>
+        <Button
+          className="w-full"
+          disabled={busy === "credentials" || !username.trim() || !password.trim()}
+          onClick={saveCredentials}
+        >
+          {busy === "credentials" ? (
+            <Loader2 className="mr-1.5 size-4 animate-spin" />
+          ) : (
+            <CheckCircle2 className="mr-1.5 size-4" />
           )}
+          Verify and save
+        </Button>
+        {!hasCredentials && <PartnerFinePrint verb="connecting" />}
+      </SubScreen>
+    );
+  } else if (view === "connection" && hasCredentials) {
+    screen = (
+      <SubScreen title="Connection" onBack={home}>
+        <PanelCard>
+          <PanelRow label="Signed in as">
+            <CopyValue value={row.bonzah_username!} />
+          </PanelRow>
+          {/* Bonzah's own id for this operator. Nothing in the portal writes
+              it today, so it is rendered only when something has. */}
+          {row.bonzah_partner_id && (
+            <PanelRow label="Partner ID">
+              <CopyValue value={row.bonzah_partner_id} />
+            </PanelRow>
+          )}
+          {connectedSince && <PanelRow label="Active since">{connectedSince}</PanelRow>}
+        </PanelCard>
 
-          {!credentialFormOpen && (
+        <div className="flex gap-2">
+          {canReadOwnBalance && (
             <Button
-              variant="ghost"
-              size="sm"
-              className="h-auto px-1 py-0 text-xs text-muted-foreground"
-              onClick={() => setShowCredentialForm(true)}
+              variant="outline"
+              className="flex-1"
+              disabled={balanceQuery.isFetching}
+              onClick={() => balanceQuery.refetch()}
             >
-              Update the Bonzah login
+              {balanceQuery.isFetching ? (
+                <Loader2 className="mr-1.5 size-4 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-1.5 size-4" />
+              )}
+              Test connection
             </Button>
           )}
-        </PanelSection>
-      )}
-
-      {/* ── credentials ───────────────────────────────────────────────────── */}
-      {credentialFormOpen && (
-        <PanelSection
-          title={hasCredentials ? "Update the Bonzah login" : "Already have a Bonzah login?"}
-          description={
-            hasCredentials
-              ? "Use this when Bonzah changes or resets the password on their side."
-              : "Bonzah normally sets this up for you when they approve your application. Enter it here only if they sent you a login directly."
-          }
-        >
-          <div className="space-y-2.5">
-            <div className="space-y-1.5">
-              <Label htmlFor="bonzah-email" className="text-xs">
-                Bonzah email
-              </Label>
-              <Input
-                id="bonzah-email"
-                type="email"
-                autoComplete="off"
-                placeholder="you@example.com"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="bonzah-password" className="text-xs">
-                Bonzah password
-              </Label>
-              {/* Write-only. The stored password is never sent to this screen,
-                  so the box starts empty even for a connected account. */}
-              <Input
-                id="bonzah-password"
-                type="password"
-                autoComplete="new-password"
-                placeholder="Enter the current password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-            <div className="flex gap-2">
-              <Button
-                className="flex-1"
-                disabled={busy === "credentials" || !username.trim() || !password.trim()}
-                onClick={saveCredentials}
-              >
-                {busy === "credentials" ? (
-                  <Loader2 className="mr-1.5 size-4 animate-spin" />
-                ) : (
-                  <CheckCircle2 className="mr-1.5 size-4" />
-                )}
-                Verify and save
-              </Button>
-              {showCredentialForm && (
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    setShowCredentialForm(false);
-                    setPassword("");
-                  }}
-                >
-                  Cancel
-                </Button>
-              )}
-            </div>
-          </div>
-        </PanelSection>
-      )}
-
-      {/* ── selling ───────────────────────────────────────────────────────── */}
-      {hasCredentials && (
-        <PanelSection title="Offer insurance at checkout">
-          <PanelCard className="flex items-center justify-between gap-4">
-            <div className="min-w-0">
-              <p className="text-sm">
-                {row.integration_bonzah === true ? "On" : "Off"}
-              </p>
-              <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
-                {row.integration_bonzah === true
-                  ? "Customers can add cover while they book."
-                  : "Customers are not shown cover."}
-              </p>
-            </div>
-            <Switch
-              checked={row.integration_bonzah === true}
-              disabled={busy === "selling"}
-              onCheckedChange={(next) => {
-                // Turning it off takes insurance out of a live checkout, so it
-                // gets a confirmation. Turning it on takes effect immediately
-                // and is reversible with the same switch, so it does not.
-                if (!next) setConfirmPause(true);
-                else void setSelling(true);
-              }}
-            />
-          </PanelCard>
-
-          {/* Enabled but still unable to sell — the state a plain "Connected"
-              would hide. Mirrors isBonzahSellable() so the screen can never
-              offer something the server will refuse. */}
-          {row.integration_bonzah === true && !sellable && (
-            <PanelNote tone="warn">
-              {leanUi
-                ? "Bonzah has not activated this account for live policies yet. Until they do, no cover is offered at checkout and no policy can be issued."
-                : "This account is in test mode, so any policy issued would be a sandbox policy and not real cover. Bonzah switches the account to live once onboarding is complete."}
-            </PanelNote>
-          )}
-        </PanelSection>
-      )}
-
-      {/* ── balance ─────────────────────────────────────────────────────────
-          "Bonzah balance", not "Prepaid balance".
-
-          What the code proves is that a spendable balance exists, that Bonzah
-          draws policies down against it, and that issuance fails when it runs
-          out (`bonzah-get-balance` reads it; `bonzah-confirm-payment` parks a
-          policy as `insufficient_balance` when Bonzah's payment call comes back
-          on any of insufficient/balance/fund/credit/allocat). It does NOT prove
-          HOW the operator settles with Bonzah. v1's Settings copy claims a
-          monthly invoice; nothing in this repo issues, reads or reconciles one,
-          and `bonzah-get-balance` documents an agency-level wallet instead. The
-          two claims are unreconciled, so this says only what is demonstrable and
-          makes no settlement claim at all. Do not add one back without a
-          source. */}
-      {canReadOwnBalance && (
-        <PanelSection
-          title="Bonzah balance"
-          description="Policies are paid from this. When it runs out, Bonzah stops issuing them."
-        >
-          <PanelCard>
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5">
-                <Wallet className="size-4 text-muted-foreground" />
-                <span className="text-xl font-medium tabular-nums">
-                  {balanceQuery.isFetching && balanceNumber == null
-                    ? "—"
-                    : balanceNumber != null
-                      ? usd(balanceNumber)
-                      : "Unavailable"}
-                </span>
-              </div>
-              <PanelLink href={portalUrl}>Top up</PanelLink>
-            </div>
-          </PanelCard>
-
-          {/* Policies a customer has already paid for that Bonzah would not
-              issue because the wallet was empty. Retrying after a top-up is
-              what turns them into real cover. */}
-          {stuck.length > 0 && (
-            <PanelNote tone="danger">
-              <span className="flex items-start gap-2">
-                <ShieldAlert className="mt-0.5 size-3.5 shrink-0" />
-                <span className="min-w-0">
-                  {stuck.length} {stuck.length === 1 ? "policy is" : "policies are"} waiting on
-                  funds — {usd(stuckTotal)} needed. Top up, then retry.
-                  {retryProgress.isRetrying && (
-                    <span className="mt-1 block opacity-80">
-                      Retrying {retryProgress.completed + retryProgress.failed} of{" "}
-                      {retryProgress.total}…
-                    </span>
-                  )}
-                  <span className="mt-2 flex flex-wrap gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs"
-                      disabled={retryProgress.isRetrying}
-                      onClick={async () => {
-                        await retryAll(stuck);
-                        await Promise.all([stuckQuery.refetch(), balanceQuery.refetch()]);
-                      }}
-                    >
-                      {retryProgress.isRetrying ? (
-                        <Loader2 className="mr-1 size-3 animate-spin" />
-                      ) : (
-                        <RefreshCw className="mr-1 size-3" />
-                      )}
-                      Retry all
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs"
-                      onClick={() => {
-                        onClose();
-                        router.push("/rentals?bonzahStatus=ins_pending");
-                      }}
-                    >
-                      View rentals
-                    </Button>
-                  </span>
-                </span>
-              </span>
-            </PanelNote>
-          )}
-
-          {/* Low-balance alert */}
-          {!alertOpen ? (
-            <PanelCard className="flex items-center justify-between gap-4">
-              <div className="flex min-w-0 items-center gap-2.5">
-                <Bell className="size-4 shrink-0 text-muted-foreground" />
-                <p className="truncate text-xs text-muted-foreground">
-                  {alertConfig?.enabled
-                    ? `Warn me below ${usd(alertConfig.threshold)}`
-                    : "No low-balance warning set"}
-                </p>
-              </div>
-              <Button variant="outline" size="sm" onClick={() => setAlertOpen(true)}>
-                {alertConfig?.enabled ? "Edit" : "Set"}
-              </Button>
-            </PanelCard>
-          ) : (
-            <PanelCard className="space-y-3">
-              <div className="flex items-center justify-between gap-4">
-                <Label htmlFor="bonzah-alert" className="text-sm">
-                  Warn me when the balance is low
-                </Label>
-                <Switch id="bonzah-alert" checked={alertEnabled} onCheckedChange={setAlertEnabled} />
-              </div>
-              {alertEnabled && (
-                <div className="space-y-1.5">
-                  <Label htmlFor="bonzah-threshold" className="text-xs">
-                    Warn below ($)
-                  </Label>
-                  <Input
-                    id="bonzah-threshold"
-                    type="number"
-                    min="1"
-                    step="0.01"
-                    placeholder="500"
-                    value={alertThreshold}
-                    onChange={(e) => setAlertThreshold(e.target.value)}
-                  />
-                </div>
-              )}
-              <div className="flex gap-2">
-                <Button size="sm" disabled={updateConfig.isPending} onClick={saveAlert}>
-                  {updateConfig.isPending && <Loader2 className="mr-1.5 size-3.5 animate-spin" />}
-                  Save
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => setAlertOpen(false)}>
-                  Cancel
-                </Button>
-              </div>
-            </PanelCard>
-          )}
-        </PanelSection>
-      )}
-
-      {/* ── what customers see ────────────────────────────────────────────── */}
-      {hasCredentials && (
-        <PanelSection
-          title="Coverage brochure"
-          description="The PDF shown to customers when they pick cover. Leave blank to show none."
-        >
-          <div className="flex gap-2">
-            <Input
-              type="url"
-              placeholder="https://…/bonzah-coverage.pdf"
-              value={brochure ?? ""}
-              onChange={(e) => setBrochure(e.target.value)}
-            />
-            {(brochure ?? "").trim() !== (row.bonzah_brochure_url ?? "") ? (
-              <Button size="sm" disabled={busy === "brochure"} onClick={saveBrochure}>
-                {busy === "brochure" && <Loader2 className="mr-1.5 size-3.5 animate-spin" />}
-                Save
-              </Button>
-            ) : (
-              row.bonzah_brochure_url && (
-                <Button variant="outline" size="sm" asChild>
-                  <a href={row.bonzah_brochure_url} target="_blank" rel="noopener noreferrer">
-                    <FileText className="mr-1 size-3.5" />
-                    Open
-                  </a>
-                </Button>
-              )
-            )}
-          </div>
-        </PanelSection>
-      )}
-
-      {/* ── links + disconnect ────────────────────────────────────────────── */}
-      <PanelSection>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
-          <PanelLink href={portalUrl}>Bonzah portal</PanelLink>
-          {/* The operator is Bonzah's business partner, so this is their
-              contract — not the consumer terms the renter accepts at checkout.
-              The Privacy Policy sits beside it because those two are the pair
-              v1's Settings screen made the operator agree to when connecting,
-              and that screen is no longer reachable for the canary. */}
-          <PanelLink href={BONZAH_LINKS.businessPartnerTerms}>Business Partner Terms</PanelLink>
-          <PanelLink href={BONZAH_LINKS.privacyPolicy}>Privacy Policy</PanelLink>
+          <Button variant="outline" className="flex-1" onClick={() => setView("login")}>
+            Update the login
+          </Button>
         </div>
 
-        {hasCredentials && (
+        {canReadOwnBalance && balanceError && !credentialsRejected && (
+          <PanelNote tone="warn">
+            I could not reach Bonzah just now. Nothing has been changed.
+            <span className="mt-1 block truncate font-mono text-[11px] opacity-80" title={balanceError}>
+              {balanceError}
+            </span>
+          </PanelNote>
+        )}
+        {canReadOwnBalance && !balanceError && balanceQuery.isSuccess && (
+          <PanelNote>
+            <span className="panel-ink-success inline-flex items-center gap-1.5">
+              <CheckCircle2 className="size-3.5" />
+              Bonzah accepted the saved login.
+            </span>
+          </PanelNote>
+        )}
+
+        <div className="flex items-center justify-between gap-4 pt-1">
+          <PanelLink href={portalUrl}>Bonzah portal</PanelLink>
           <Button
             variant="ghost"
             size="sm"
@@ -1290,8 +954,380 @@ export default function BonzahPanel({ tenant, onClose }: IntegrationPanelProps) 
             <Unplug className="mr-1.5 size-3.5" />
             Disconnect Bonzah
           </Button>
+        </div>
+      </SubScreen>
+    );
+  } else if (view === "alert" && canReadOwnBalance) {
+    screen = (
+      <SubScreen
+        title="Low-balance alert"
+        description="I tell you before your Bonzah balance runs out, so cover never stops at checkout."
+        onBack={home}
+      >
+        <PanelCard className="flex items-center justify-between gap-4">
+          <Label htmlFor="bonzah-alert" className="text-sm">Warn me when the balance is low</Label>
+          <Switch id="bonzah-alert" checked={alertEnabled} onCheckedChange={setAlertEnabled} />
+        </PanelCard>
+        {alertEnabled && (
+          <div className="space-y-1.5">
+            <Label htmlFor="bonzah-threshold" className="text-xs">Warn me below ($)</Label>
+            <Input
+              id="bonzah-threshold"
+              type="number"
+              min="1"
+              step="0.01"
+              placeholder="500"
+              value={alertThreshold}
+              onChange={(e) => setAlertThreshold(e.target.value)}
+            />
+          </div>
         )}
-      </PanelSection>
+        <Button className="w-full" disabled={updateConfig.isPending} onClick={saveAlert}>
+          {updateConfig.isPending && <Loader2 className="mr-1.5 size-4 animate-spin" />}
+          Save
+        </Button>
+      </SubScreen>
+    );
+  } else if (view === "brochure" && hasCredentials) {
+    screen = (
+      <SubScreen
+        title="Coverage brochure"
+        description="The PDF your customers see when they choose cover. Leave it blank to show none."
+        onBack={home}
+      >
+        <Input
+          type="url"
+          placeholder="https://…/bonzah-coverage.pdf"
+          value={brochure ?? ""}
+          onChange={(e) => setBrochure(e.target.value)}
+        />
+        {(brochure ?? "").trim() !== (row.bonzah_brochure_url ?? "") ? (
+          <Button className="w-full" disabled={busy === "brochure"} onClick={saveBrochure}>
+            {busy === "brochure" && <Loader2 className="mr-1.5 size-4 animate-spin" />}
+            Save
+          </Button>
+        ) : (
+          row.bonzah_brochure_url && (
+            <Button variant="outline" className="w-full" asChild>
+              <a href={row.bonzah_brochure_url} target="_blank" rel="noopener noreferrer">
+                <FileText className="mr-1.5 size-4" />
+                Open the brochure
+              </a>
+            </Button>
+          )
+        )}
+      </SubScreen>
+    );
+  } else if (stage === "not_started") {
+    // The introduction: four screens, one idea each, and the only button that
+    // matters at the end.
+    const slide = INTRO[introStep];
+    const last = introStep === INTRO.length - 1;
+    screenKey = `intro-${introStep}`;
+    screen = (
+      <>
+      <Hero
+        art={slide.Art}
+        title={slide.title}
+        actions={
+          last && (
+            // Two rectangular choices side by side: the accent one starts the
+            // application, the light-accent one is for an operator Bonzah has
+            // already given a login.
+            <div className="grid grid-cols-2 gap-3">
+              <Button className="h-11 rounded-2xl" onClick={() => setApplying(true)}>
+                Start the application
+                <ArrowRight className="ml-1.5 size-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                className="h-11 rounded-2xl bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]"
+                onClick={() => setView("login")}
+              >
+                I already have a login
+              </Button>
+            </div>
+          )
+        }
+        footer={
+          last && (
+            <PartnerFinePrint verb="applying" />
+          )
+        }
+      >
+        {slide.body}
+      </Hero>
+      {/* Back bottom-left, Next bottom-right — where each step is expected.
+          The first screen has no Back; the last has no Next (its two
+          buttons are the way on). An empty span holds each corner. */}
+      <div className="mt-8 flex items-center justify-between">
+        {introStep > 0 ? (
+          <Button variant="outline" onClick={() => setIntroStep(introStep - 1)}>
+            <ArrowLeft className="mr-1.5 size-4" />
+            Back
+          </Button>
+        ) : (
+          <span />
+        )}
+        {!last ? (
+          <Button variant="outline" onClick={() => setIntroStep(introStep + 1)}>
+            Next
+            <ArrowRight className="ml-1.5 size-4" />
+          </Button>
+        ) : (
+          <span />
+        )}
+      </div>
+      </>
+    );
+  } else if (loginBroken) {
+    screenKey = "broken";
+    screen = (
+      <Hero
+        art={BonzahLoginArt}
+        eyebrow="Needs your attention"
+        title="I can't sign in to Bonzah."
+        actions={
+          <Button className="w-full" onClick={() => setView("login")}>
+            Enter the current password
+            <ArrowRight className="ml-1.5 size-4" />
+          </Button>
+        }
+        footer={<QuietNav items={[{ label: "Connection", onClick: () => setView("connection") }]} />}
+      >
+        {!row.hasPassword
+          ? "There is a Bonzah email on file but no password, so every request I send to Bonzah fails. Until you add it, customers aren't offered cover and no policy can be issued."
+          : "Bonzah turned down the saved login. This almost always means the password was changed or reset on Bonzah's side, not here. Until it's updated, customers aren't offered cover and no policy can be issued."}
+      </Hero>
+    );
+  } else if (stage === "in_review") {
+    screenKey = "in_review";
+    screen = (
+      <Hero
+        art={BonzahReviewArt}
+        eyebrow={stepEyebrow}
+        title="Bonzah is reviewing your application."
+        actions={
+          <Button
+            variant="outline"
+            className="w-full"
+            disabled={submissionQuery.isFetching || eventsQuery.isFetching}
+            onClick={() => {
+              void submissionQuery.refetch();
+              void eventsQuery.refetch();
+            }}
+          >
+            {submissionQuery.isFetching || eventsQuery.isFetching ? (
+              <Loader2 className="mr-1.5 size-4 animate-spin" />
+            ) : (
+              <RefreshCw className="mr-1.5 size-4" />
+            )}
+            Check for an update
+          </Button>
+        }
+        footer={applicationLink && <QuietNav items={[applicationLink]} />}
+      >
+        {submittedOn
+          ? `You sent it on ${submittedOn}, and it is with Bonzah's team now. When they approve it, they set your account up from their side and email you a login. There is nothing for you to do in the meantime — I'll show you here the moment anything changes.`
+          : "It is with Bonzah's team now. When they approve it, they set your account up from their side and email you a login. There is nothing for you to do in the meantime — I'll show you here the moment anything changes."}
+      </Hero>
+    );
+  } else if (stage === "changes_requested") {
+    screenKey = "changes_requested";
+    screen = (
+      <Hero
+        art={BonzahReturnedArt}
+        eyebrow={stepEyebrow}
+        title="Bonzah asked for a few changes."
+        actions={
+          <Button className="w-full" onClick={() => setApplying(true)}>
+            Update and resubmit
+            <ArrowRight className="ml-1.5 size-4" />
+          </Button>
+        }
+        footer={applicationLink && <QuietNav items={[applicationLink]} />}
+      >
+        {decisionNote ? (
+          <DecisionQuote text={decisionNote} onReadAll={() => setShowFullDecision(true)} />
+        ) : (
+          "Bonzah sent your application back with a few questions. Open it, update the details they asked about and send it again. Everything else you entered is kept, so it only takes a minute."
+        )}
+      </Hero>
+    );
+  } else if (stage === "approved_not_activated") {
+    screenKey = "approved";
+    screen = (
+      <Hero
+        art={BonzahLoginArt}
+        eyebrow={stepEyebrow}
+        title="You're approved."
+        actions={
+          <Button className="w-full" onClick={() => setView("login")}>
+            Add my Bonzah login
+            <ArrowRight className="ml-1.5 size-4" />
+          </Button>
+        }
+        footer={
+          <QuietNav
+            items={[
+              ...(decisionNote ? [{ label: decisionTitle, onClick: () => setShowFullDecision(true) }] : []),
+              ...(applicationLink ? [applicationLink] : []),
+            ]}
+          />
+        }
+      >
+        Bonzah has approved your business and emails you a login for your new account. Add it here and I'll check it with Bonzah and connect everything for you. If the email hasn't arrived, check your spam folder or contact Bonzah to resend it.
+      </Hero>
+    );
+  } else if (stage === "connected_not_activated") {
+    screenKey = "connected_not_activated";
+    screen = (
+      <Hero
+        art={BonzahReviewArt}
+        eyebrow={stepEyebrow}
+        title="Waiting for Bonzah to switch you on."
+        footer={
+          <QuietNav
+            items={[
+              { label: "Connection", onClick: () => setView("connection") },
+              { label: "Coverage brochure", onClick: () => setView("brochure") },
+            ]}
+          />
+        }
+      >
+        {leanUi
+          ? "Your Bonzah login is saved and working. The last step is on Bonzah's side: they activate the account for live policies. As soon as they do, I start offering cover at checkout — you won't need to come back here."
+          : "Your Bonzah login is saved, but the account is still in test mode, so nothing sold would be real cover. Bonzah switches it to live once onboarding is complete, and then I start offering cover at checkout."}
+      </Hero>
+    );
+  } else {
+    // live / selling_off — the working account.
+    const on = row.integration_bonzah === true;
+    screenKey = "home-live";
+    screen = (
+      <Hero
+        art={InsurancesEmptyArt}
+        eyebrow={on ? "Live" : "Paused"}
+        title={on ? "Cover is on at checkout." : "Cover is paused."}
+        actions={
+          <div className="space-y-2.5">
+            {canReadOwnBalance && (
+              <PanelCard className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[11px] text-muted-foreground">Bonzah balance</p>
+                  <p className="text-lg font-medium leading-tight tabular-nums text-foreground">
+                    {balanceQuery.isFetching && balanceNumber == null
+                      ? "—"
+                      : balanceNumber != null
+                        ? usd(balanceNumber)
+                        : "Unavailable"}
+                  </p>
+                </div>
+                <PanelLink href={portalUrl}>Top up</PanelLink>
+              </PanelCard>
+            )}
+            <PanelCard className="flex items-center justify-between gap-4">
+              <Label htmlFor="bonzah-selling" className="text-sm">Offer cover at checkout</Label>
+              <Switch
+                id="bonzah-selling"
+                checked={on}
+                disabled={busy === "selling"}
+                onCheckedChange={(next) => {
+                  // Turning it off takes insurance out of a live checkout, so
+                  // it gets a confirmation. Turning it on is reversible with
+                  // the same switch, so it does not.
+                  if (!next) setConfirmPause(true);
+                  else void setSelling(true);
+                }}
+              />
+            </PanelCard>
+            {on && !sellable && (
+              <PanelNote tone="warn">
+                {leanUi
+                  ? "Bonzah hasn't activated this account for live policies yet, so I can't offer or issue cover."
+                  : "This account is in test mode, so any policy I issue would be sandbox cover, not real cover."}
+              </PanelNote>
+            )}
+            {/* Policies a customer already paid for that Bonzah would not issue
+                because the balance was empty. Retrying after a top-up is what
+                turns them into real cover. */}
+            {stuck.length > 0 && (
+              <PanelNote tone="danger">
+                <span className="flex items-center gap-2">
+                  <ShieldAlert className="size-3.5 shrink-0" />
+                  <span className="min-w-0 flex-1">
+                    {retryProgress.isRetrying
+                      ? `Retrying ${retryProgress.completed + retryProgress.failed} of ${retryProgress.total}…`
+                      : `${stuck.length} ${stuck.length === 1 ? "policy is" : "policies are"} waiting on funds — ${usd(stuckTotal)}.`}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 shrink-0 px-2 text-xs"
+                    disabled={retryProgress.isRetrying}
+                    onClick={async () => {
+                      await retryAll(stuck);
+                      await Promise.all([stuckQuery.refetch(), balanceQuery.refetch()]);
+                    }}
+                  >
+                    Retry
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 shrink-0 px-2 text-xs"
+                    onClick={() => {
+                      onClose();
+                      router.push("/rentals?bonzahStatus=ins_pending");
+                    }}
+                  >
+                    Rentals
+                  </Button>
+                </span>
+              </PanelNote>
+            )}
+          </div>
+        }
+        footer={
+          <QuietNav
+            items={[
+              { label: "Connection", onClick: () => setView("connection") },
+              ...(canReadOwnBalance ? [{ label: "Low-balance alert", onClick: () => setView("alert") }] : []),
+              { label: "Coverage brochure", onClick: () => setView("brochure") },
+            ]}
+          />
+        }
+      >
+        {on
+          ? "Customers can add Bonzah cover while they book, and I issue each policy against their booking. Every policy is paid from your Bonzah balance, so keep an eye on it below."
+          : "Customers aren't offered cover while they book right now. Policies already issued keep running, and you can switch it back on below at any time."}
+      </Hero>
+    );
+  }
+
+  return (
+    <div className="panel-text">
+      {/* Each screen fades and lifts in — the Trax motion (V2_PLAN §12). */}
+      <div
+        key={screenKey}
+        className="duration-200 ease-out animate-in fade-in-0 slide-in-from-bottom-3 motion-reduce:animate-none"
+      >
+        {screen}
+      </div>
+
+      {/* Bonzah's full message, one tap away from the clamped quote. */}
+      <AlertDialog open={showFullDecision} onOpenChange={setShowFullDecision}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{decisionTitle}</AlertDialogTitle>
+            <AlertDialogDescription className="whitespace-pre-wrap">{decisionNote}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Close</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
 
       {/* ── confirmations ─────────────────────────────────────────────────── */}
       <AlertDialog open={confirmPause} onOpenChange={setConfirmPause}>
@@ -1344,54 +1380,48 @@ export default function BonzahPanel({ tenant, onClose }: IntegrationPanelProps) 
 
 /* ────────────────────────── local presentation ──────────────────────────── */
 
+type View = "home" | "login" | "application" | "connection" | "alert" | "brochure";
+
 /**
- * The six-step explainer, carried over from v1's Settings → Insurance card.
+ * The introduction an operator sees before applying — four screens, one idea
+ * each, in Trax's voice: what Bonzah is, the application, the review, the money.
  *
- * That card is going away for the canary along with the tab, and an operator
- * looking at "apply to Bonzah" for the first time has a fair question — what am
- * I signing up to? — that the stage sentence alone does not answer. Shown only
- * while there are no credentials, because after that the panel's own sections
- * describe the live account better than a numbered list can.
- *
- * ⚠️ v1's step 6 read "At the end of each month, Bonzah sends you an invoice
- * for the insurance premiums, which you pay directly to Bonzah." It is NOT
- * reproduced. Nothing in this repo issues, reads or reconciles such an invoice,
- * and `bonzah-get-balance` documents an agency-level wallet that policies are
- * drawn down against instead. Those two descriptions of the same money have not
- * been reconciled with Bonzah, and a confident wrong answer about how an
- * operator gets billed is worse than no answer. If someone confirms the
- * settlement terms, add the sentence here — with the source in the commit.
+ * ⚠️ No settlement claim. v1's explainer said Bonzah sends a monthly invoice;
+ * nothing in this repo issues, reads or reconciles one, and `bonzah-get-balance`
+ * documents a balance that policies are drawn down against instead. Say only
+ * what the code proves. If someone confirms the settlement terms, add them —
+ * with the source in the commit.
  */
-function HowItWorks() {
-  const STEPS: readonly string[] = [
-    "Apply here. Bonzah reviews your business — you do not need to find credentials yourself.",
-    "If they approve you, Bonzah sets up your account and sends you a login by email.",
-    "The login is saved here, and Bonzah switches the account on for live policies.",
-    "Customers are then offered cover while they book, and the premium is added to the total they pay you at checkout.",
-    "Bonzah issues each policy against your Bonzah balance. If that runs out, cover stops being issued until it is topped up.",
-  ];
-  return (
-    <PanelSection
-      title="How Bonzah works"
-      description="What happens between applying and selling your first policy."
-    >
-      <PanelCard>
-        <ol className="space-y-2">
-          {STEPS.map((text, i) => (
-            <li key={i} className="flex gap-2.5">
-              <span className="mt-px text-xs font-medium tabular-nums text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">{i + 1}.</span>
-              <span className="min-w-0 text-xs leading-relaxed text-muted-foreground">{text}</span>
-            </li>
-          ))}
-        </ol>
-      </PanelCard>
-    </PanelSection>
-  );
-}
+const INTRO: readonly { Art: ComponentType<{ className?: string }>; title: string; body: string }[] = [
+  {
+    // What Bonzah is.
+    Art: InsurancesEmptyArt,
+    title: "Meet Bonzah — rental cover at checkout.",
+    body: "Bonzah is per-rental insurance. Once you're set up, I offer it on your booking checkout, so every customer can protect their rental in one tap. The premium is added to the total they pay you, and Bonzah issues the policy against that booking.",
+  },
+  {
+    // The application itself — mirrors the wizard's ten steps (schema.ts STEPS).
+    Art: BonzahApplyArt,
+    title: "One application, ten short steps.",
+    body: "You tell Bonzah about your business, operations, contacts, banking, current insurance, renter policies and a few risk questions. Then a short training, a quick quiz, and you sign and send. Your answers save as you go, so you can stop and come back any time.",
+  },
+  {
+    // Review → login → activation.
+    Art: BonzahLoginArt,
+    title: "Bonzah reviews it and sets you up.",
+    body: "Bonzah's team reviews your application — you can follow its status right here. When they approve it, they create your account and email you a login. You add it here, Bonzah switches the account on for live policies, and I start offering cover.",
+  },
+  {
+    // Money. No settlement claim — see the note above.
+    Art: BonzahWalletArt,
+    title: "Policies come out of your balance.",
+    body: "Each policy is paid from your Bonzah balance, which you top up in the Bonzah portal. Keep it funded and I keep issuing cover. If it runs low, I can warn you before it ever stops a booking.",
+  },
+];
 
 const RAIL = ["Apply", "Review", "Activate", "Sell"] as const;
 
-/** Which rail step a stage sits on. `changes_requested` goes back to step one. */
+/** Which of the four steps a stage sits on. `changes_requested` goes back to one. */
 const RAIL_INDEX: Record<Stage, number> = {
   not_started: 0,
   changes_requested: 0,
@@ -1403,120 +1433,140 @@ const RAIL_INDEX: Record<Stage, number> = {
 };
 
 /**
- * Where the operator is, in four stages.
- *
- * This replaced four loose `h-1` bars with labels under them. That form read as
- * a progress bar that had been cut into pieces — nothing said the pieces were
- * *stages*, an operator on step two saw one bar filled and three empty and had
- * no way to tell a completed step from a skipped one, and it sat flush against
- * the dialog's top edge with nothing holding it.
- *
- * The shape here is deliberate on three counts:
- *
- *   • Numbered nodes joined by a rail, not detached bars. A tick means done, a
- *     ringed number means "you are here", a plain number means not yet — three
- *     states the eye separates without reading the labels.
- *   • It stays horizontal. Four short words fit across a dialog easily, and a
- *     vertical list would have pushed the sentence that actually tells the
- *     operator what to do below the fold. (The ten-step application wizard is
- *     the case where a horizontal rail genuinely does not fit — which is why
- *     `bonzah-onboarding-v2.tsx` uses a segmented meter instead.)
- *   • The current node turns amber when the stage is one the operator has to
- *     act on. Bonzah's flow spends most of its life waiting on somebody else,
- *     so "you are here" and "this is on you" are different facts and the rail
- *     is the one place that can carry both at a glance. It matches the chip
- *     in the dialog header rather than inventing a second vocabulary.
+ * Picture on top, a few words and one action under it — stacked and centred.
+ * Never a left/right split inside a dialog (Ghulam, Oct 2 2026): two columns
+ * in a modal read as a page squeezed into a box. The art is capped small so
+ * the whole stack stays inside the dialog without a scroll (360px wide ≈ 180px tall).
  */
-function StageRail({ stage }: { stage: Stage }) {
-  const current = RAIL_INDEX[stage];
-  const finished = stage === "live";
-  const needsOperator = STAGE_CHIP[stage].state === "attention";
-
+function Hero({
+  art: Art,
+  eyebrow,
+  title,
+  children,
+  actions,
+  footer,
+}: {
+  art: ComponentType<{ className?: string }>;
+  eyebrow?: string;
+  title: string;
+  children?: ReactNode;
+  actions?: ReactNode;
+  footer?: ReactNode;
+}) {
+  useNarrowDialog();
   return (
-    <ol
-      className="flex items-start rounded-2xl bg-muted/25 px-4 pb-3 pt-3.5 ring-1 ring-border/70"
-      aria-label="Bonzah setup"
-    >
-      {RAIL.map((label, i) => {
-        const done = i < current || (finished && i === current);
-        const active = i === current && !done;
-        return (
-          <li
-            key={label}
-            className="relative flex min-w-0 flex-1 flex-col items-center gap-1.5 text-center"
-            aria-current={active ? "step" : undefined}
-          >
-            {/* The rail between this node and the previous one. Percentages
-                resolve against this item's own width and every item is the
-                same width, so `-50%` lands exactly on the previous node's
-                centre — no absolute track behind the row, and nothing to keep
-                in sync when the label lengths change. */}
-            {i > 0 && (
-              <span
-                aria-hidden
-                className={cn(
-                  "absolute left-[calc(-50%_+_18px)] right-[calc(50%_+_18px)] top-[14px] h-px",
-                  i <= current ? "bg-primary/50" : "bg-border",
-                )}
-              />
-            )}
+    <div className="mx-auto flex w-full max-w-lg flex-col items-center gap-5 py-1 text-center">
+      <Art className="max-w-[360px]" />
+      <div className="space-y-2">
+        {eyebrow && (
+          <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{eyebrow}</p>
+        )}
+        <h3 className="text-xl font-medium leading-snug text-foreground [text-wrap:balance]">{title}</h3>
+        {/* Balanced lines, a little narrower than the column: no stray last
+            word on a line of its own (Ghulam, Oct 2). */}
+        {children && (
+          <div className="mx-auto max-w-[34rem] text-sm leading-relaxed text-muted-foreground [text-wrap:balance]">
+            {children}
+          </div>
+        )}
+      </div>
+      {actions && <div className="w-full text-left">{actions}</div>}
+      {footer && <div className="flex w-full flex-col items-center">{footer}</div>}
+    </div>
+  );
+}
 
-            <span
-              className={cn(
-                "relative z-10 flex size-7 shrink-0 items-center justify-center rounded-full text-[11px] font-medium tabular-nums transition-colors",
-                done && "bg-primary text-primary-foreground",
-                active && !needsOperator && "bg-primary/10 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] ring-2 ring-primary/25",
-                active && needsOperator && "panel-ink-warn bg-warning/10 ring-2 ring-warning/30",
-                !done && !active && "bg-background text-muted-foreground ring-1 ring-border",
-              )}
-            >
-              {done ? <Check className="size-3.5" strokeWidth={3} /> : i + 1}
-            </span>
+/** A small focused screen behind a quiet link, with its way back. */
+function SubScreen({
+  title,
+  description,
+  onBack,
+  children,
+}: {
+  title: string;
+  description?: string;
+  onBack: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div>
+      <div className="mx-auto w-full max-w-md space-y-4 py-2">
+        <div className="space-y-1">
+          <h3 className="text-lg font-medium leading-snug text-foreground">{title}</h3>
+          {description && <p className="text-sm leading-relaxed text-muted-foreground">{description}</p>}
+        </div>
+        {children}
+      </div>
+      {/* The same Back as the intro and the wizard: outline, bottom-left. */}
+      <div className="mt-8 flex items-center justify-between">
+        <Button variant="outline" onClick={onBack}>
+          <ArrowLeft className="mr-1.5 size-4" />
+          Back
+        </Button>
+        <span />
+      </div>
+    </div>
+  );
+}
 
-            <span
-              className={cn(
-                "min-w-0 truncate text-[11px] leading-none",
-                done || active ? "font-medium text-foreground" : "text-muted-foreground",
-              )}
-            >
-              {label}
-            </span>
-          </li>
-        );
-      })}
-    </ol>
+/** Secondary destinations, as quiet text — never a second button. */
+function QuietNav({ items }: { items: { label: string; onClick: () => void }[] }) {
+  if (items.length === 0) return null;
+  return (
+    <div className="flex flex-wrap justify-center gap-x-4 gap-y-1">
+      {items.map((it) => (
+        <button
+          key={it.label}
+          type="button"
+          onClick={it.onClick}
+          className="text-xs text-muted-foreground underline-offset-4 transition-colors duration-200 hover:text-foreground hover:underline motion-reduce:transition-none"
+        >
+          {it.label}
+        </button>
+      ))}
+    </div>
   );
 }
 
 /**
- * One sentence of truth per stage, plus the next thing to do.
- *
- * `leanUi` swaps the wording only, never the meaning: a lean tenant is not
- * shown "test mode" as a concept it can act on, but it is still told plainly
- * that the account is not activated and that nothing can be sold until it is.
+ * The operator is Bonzah's business partner, so these are their contract — not
+ * the consumer terms a renter accepts at checkout. They are the pair v1's
+ * Settings screen made the operator agree to when connecting.
  */
-function stageCopy(
-  stage: Stage,
-  { leanUi, submittedOn }: { leanUi: boolean; submittedOn: string | null },
-): string {
-  switch (stage) {
-    case "not_started":
-      return "You are not set up with Bonzah yet. Apply once, and Bonzah reviews your business and sets up your account — you do not need to find credentials yourself.";
-    case "in_review":
-      return submittedOn
-        ? `Your application went to Bonzah on ${submittedOn} and is with their team. They will set your account up from their side when they approve it — there is nothing to do here in the meantime.`
-        : "Your application is with Bonzah's team. They will set your account up from their side when they approve it.";
-    case "changes_requested":
-      return "Bonzah sent your application back for changes. Update the details they asked about and submit it again.";
-    case "approved_not_activated":
-      return "Your application was approved, but this account has not been set up with a Bonzah login yet, so no cover can be sold. If Bonzah sent you a login by email, add it below — otherwise contact them.";
-    case "connected_not_activated":
-      return leanUi
-        ? "A Bonzah login is saved, but Bonzah has not activated this account for live policies yet. No cover is offered at checkout until they do."
-        : "A Bonzah login is saved, but this account is still in test mode, so nothing sold would be real cover. Bonzah switches it to live once onboarding is complete.";
-    case "selling_off":
-      return "Your Bonzah account is working, but insurance is switched off, so customers are not offered cover while they book.";
-    case "live":
-      return "Bonzah is live. Customers are offered cover at checkout, and policies are paid out of your prepaid balance.";
-  }
+function PartnerFinePrint({ verb }: { verb: string }) {
+  // Quiet on purpose: a small, soft line that is easy to read and easy to
+  // skip. Links carry no underline until hovered, so the line does not shout.
+  const link =
+    "font-medium text-foreground/70 underline-offset-2 transition-colors duration-200 hover:text-foreground hover:underline motion-reduce:transition-none";
+  return (
+    <p className="text-[11px] leading-relaxed text-muted-foreground/80">
+      By {verb}, you agree to Bonzah&rsquo;s{" "}
+      <a href={BONZAH_LINKS.businessPartnerTerms} target="_blank" rel="noopener noreferrer" className={link}>
+        Partner Terms
+      </a>{" "}
+      and{" "}
+      <a href={BONZAH_LINKS.privacyPolicy} target="_blank" rel="noopener noreferrer" className={link}>
+        Privacy Policy
+      </a>
+      .
+    </p>
+  );
+}
+
+/** Bonzah's own words, clamped so a long message can't push the screen into a scroll. */
+function DecisionQuote({ text, onReadAll }: { text: string; onReadAll: () => void }) {
+  return (
+    <div className="space-y-1.5">
+      <p className="line-clamp-3 whitespace-pre-wrap rounded-xl bg-muted/40 px-3 py-2 text-foreground">{text}</p>
+      {text.length > 160 && (
+        <button
+          type="button"
+          onClick={onReadAll}
+          className="text-xs text-muted-foreground underline underline-offset-2 transition-colors duration-200 hover:text-foreground motion-reduce:transition-none"
+        >
+          Read the full message
+        </button>
+      )}
+    </div>
+  );
 }

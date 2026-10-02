@@ -88,6 +88,7 @@ import { VehicleMappingScreen } from "@/components/turo-bridge/vehicle-mapping-q
 import { PromotionReviewScreen } from "@/components/turo-bridge/promotion-review";
 import { CancellationScreen } from "@/components/turo-bridge/cancellation-candidates";
 import { SyncHistoryScreen } from "@/components/turo-bridge/sync-history";
+import { TuroSyncV2 } from "@/components/turo-bridge-v2/turo-sync-v2";
 
 type TabKey = "reservations" | "vehicles" | "review" | "cancellations" | "history";
 
@@ -149,9 +150,12 @@ export default function TuroBridgePage() {
   // would burn a support ticket proving us wrong, so they get their own screen.
   if (!onCanary) return <TuroSyncUnavailable />;
   // While the tenant row is in flight the screen draws its own skeleton.
-  if (loading) return <TuroSyncScreen resolving />;
+  // The minimal v2 screen (Ghulam, Oct 2 2026). This route is canary-only,
+  // so it reaches northwind alone; the five-tab screen below stays as it was
+  // and its parts open as dialogs from the new one.
+  if (loading) return <TuroSyncV2 resolving />;
   if (!enabled) return <TuroSyncOff />;
-  return <TuroSyncScreen />;
+  return <TuroSyncV2 />;
 }
 
 /**

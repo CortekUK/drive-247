@@ -48,3 +48,12 @@
 .rp-loading-boxes { display: grid; grid-template-columns: repeat(auto-fill, minmax(48px, 1fr)); gap: 2px; width: 100%; }
 .rp-loading-boxes span { height: 42px; border-radius: 3px; background: hsl(var(--muted)); }
 @media (prefers-reduced-motion: reduce) { .rp-calendar *, .rp-date-tooltip { transition: none !important; animation: none !important; } }
+
+/* v2 (northwind, `.v2-theme` on <body>): no cell borders. The calendar is also
+   drawn on v1's rental page for every other tenant, so this is scoped rather
+   than changing the rules above. Empty days get a soft fill instead of an
+   outline, so the grid still reads; rented days keep their period tint. */
+.v2-theme .rp-date-box { border-color: transparent; background: hsl(var(--muted) / .55); transition: background-color 200ms ease-in; }
+.v2-theme .rp-date-box:hover { border-color: transparent; background: hsl(var(--muted)); transition-timing-function: ease-out; }
+.v2-theme .rp-occupied { border-color: transparent; }
+@media (prefers-reduced-motion: reduce) { .v2-theme .rp-date-box { transition: none; } }

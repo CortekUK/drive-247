@@ -384,13 +384,9 @@ const STEPS: readonly TourStep[] = [
     notes: [
       { text: 'Nothing here is a form you submit. The rental already exists; an edit lands as you make it.' },
       {
-        text: 'All rentals, at the top, is the way back out.',
-        anchors: ['[data-sidebar="sidebar"] a[href="/rentals"]'],
-      },
-      {
         // The aside is `hidden … xl:flex`, so this line is dropped rather than
         // shown on a narrow laptop where the rail is not on screen.
-        text: 'Messages beside the rental is your thread with the customer. Activity is everything it has done.',
+        text: 'Beside the rental: Management (the booking and its plans), your thread with the customer, Trax for questions about this rental, its notifications, and everything it has done.',
         anchors: ['[data-tour="rental-right-rail"]'],
       },
     ],

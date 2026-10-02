@@ -30,6 +30,8 @@ import { Skeleton } from "@/components/ui-v2/skeleton";
 import { useCMSPages } from "@/hooks/use-cms-pages";
 import { useTenant } from "@/contexts/TenantContext";
 import { getSiteV2BaseUrl } from "@/lib/site-v2-url";
+import { HOME_PALETTE } from "@/components/dashboard-v2/home/ui";
+import { WebsiteAnalytics } from "./website-analytics";
 
 /** Without these on the website, the booking flow has no policy to point at. */
 const REQUIRED = ["privacy", "terms"];
@@ -67,7 +69,7 @@ export function CmsOverview() {
     return (
       /* Starts where the loaded header starts (24.5px at md+, below), so
          nothing jumps when the pages land. */
-      <div className="mx-auto max-w-2xl px-6 py-10 md:px-12 md:pt-[24.5px]">
+      <div className="mx-auto max-w-6xl px-6 py-10 md:px-12 md:pt-[24.5px]">
         <Skeleton className="h-9 w-48" />
         <Skeleton className="mt-8 h-32 w-full rounded-4xl" />
       </div>
@@ -81,7 +83,8 @@ export function CmsOverview() {
        line box) is centred on the sidebar's Portal / Website switch at y=92.
        main's content box starts at 50px there: 50 + 24.5 + 17.5 = 92. pt-10
        put it at 107.5. Below md it keeps pt-10. */
-    <div className="mx-auto max-w-2xl px-6 pb-24 pt-10 md:px-12 md:pt-[24.5px]">
+    <div className="pv mx-auto max-w-6xl px-6 pb-8 pt-10 md:px-12 md:pt-[24.5px]">
+      <style>{HOME_PALETTE}</style>
       <h1 className="font-heading text-[28px] font-medium leading-tight tracking-tight">
         Your website
       </h1>
@@ -97,7 +100,13 @@ export function CmsOverview() {
         </a>
       )}
 
-      <div className="mt-9 space-y-3">
+      {/* Analytics first (demo data — see website-analytics.tsx), then the
+          page-status checks this screen was built around. */}
+      <div className="mt-7">
+        <WebsiteAnalytics />
+      </div>
+
+      <div className="mt-10 space-y-3">
         {required.length > 0 && (
           <Notice
             tone="warning"
@@ -134,14 +143,6 @@ export function CmsOverview() {
         )}
       </div>
 
-      <div className="mt-8 flex items-center justify-between gap-4">
-        <p className="text-[12px] text-muted-foreground">
-          Pick a page from the sidebar to edit it.
-        </p>
-        <Button variant="outline" size="sm" onClick={() => router.push("/cms/blog")}>
-          Blog posts
-        </Button>
-      </div>
     </div>
   );
 }

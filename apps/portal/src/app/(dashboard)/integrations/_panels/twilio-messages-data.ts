@@ -350,6 +350,8 @@ export type TwilioProbe = {
   confirmed: boolean;
   phoneNumber: string | null;
   capabilities: { sms: boolean; voice: boolean; mms: boolean } | null;
+  /** Replies are pointed at Drive247 right now. null = Twilio could not be read. */
+  smsWebhookMatches: boolean | null;
   checkedAt: number;
 };
 
@@ -373,11 +375,13 @@ export function useTwilioProbe(tenantId: string) {
       const data = (await invokeTwilio("get-status", withTenant(tenantId))) as {
         phoneNumber: string | null;
         capabilities: TwilioProbe["capabilities"];
+        smsWebhookMatches?: boolean | null;
       };
       return {
         confirmed: !!data?.capabilities,
         phoneNumber: data?.phoneNumber ?? null,
         capabilities: data?.capabilities ?? null,
+        smsWebhookMatches: data?.smsWebhookMatches ?? null,
         checkedAt: Date.now(),
       };
     },

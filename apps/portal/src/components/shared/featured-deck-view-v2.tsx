@@ -11,7 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import Link from "next/link";
-import { ArrowUpRight, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
 import { useReducedMotion } from "motion/react";
 import { cn } from "@/lib/utils";
 import {
@@ -23,7 +23,6 @@ import {
   type FeaturedHandlers,
   type FeaturedArtKey,
 } from "@/lib/featured-cards";
-import { FeaturedCardArt } from "@/components/illustrations-v2/scenes/featured-cards";
 
 /**
  * The featured deck, presentation only: one card at a time in one fixed slot.
@@ -91,7 +90,14 @@ export const MAX_DOTS = 8;
  * purple on hover. No glows, no lift, no shadow (team lead, Sep 16 2026).
  */
 export const FEATURED_SHELL_CLASS =
-  "group/deck relative isolate flex min-h-[15rem] flex-col overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent text-foreground transition-colors duration-200 hover:border-primary/40 motion-reduce:transition-none";
+  // The dashboard feature card's ACCENT look (feature-announcement-deck.tsx),
+  // so every featured card in the app is one family (Ghulam, Oct 2 2026): a
+  // translucent white wash with the faintest accent tint, a near-invisible
+  // hairline that deepens on hover, no shadow.
+  "group/deck relative isolate flex min-h-[15rem] flex-col overflow-hidden rounded-2xl border border-white/80 " +
+  "bg-[linear-gradient(145deg,rgba(255,255,255,0.72)_0%,rgba(238,238,252,0.55)_100%)] text-foreground " +
+  "transition-colors duration-200 hover:border-primary/30 motion-reduce:transition-none " +
+  "dark:border-white/10 dark:bg-[linear-gradient(145deg,rgba(255,255,255,0.06)_0%,rgba(91,91,214,0.10)_100%)]";
 
 export function FeaturedCardShell({
   className,
@@ -106,35 +112,50 @@ export function FeaturedCardShell({
   );
 }
 
-/** The inside of the card: the "opens" arrow, then the title and description. */
-export function FeaturedCardFace({ title, subtitle, art }: { title: string; subtitle: string; art?: FeaturedArtKey }) {
+/**
+ * The face, laid out like the dashboard's feature card: a big heavy title that
+ * stacks after its first word, top-left, and along the bottom the one-line
+ * description and an accent "Open" cue. No illustration (Ghulam, Oct 2 2026:
+ * "just the heading and descriptions") — `art` is accepted and ignored.
+ */
+const STACK_AFTER_CHARS = 10;
+function stackTitle(title: string) {
+  const trimmed = title.trim();
+  const space = trimmed.indexOf(" ");
+  if (trimmed.length <= STACK_AFTER_CHARS || space === -1) return trimmed;
   return (
     <>
-      <div className="relative flex shrink-0 justify-end">
-        {/* Diagonal on purpose: it says "this opens", which a plain right
-            arrow (read as "next") did not. */}
-        <ArrowUpRight aria-hidden className="size-5 shrink-0 text-primary dark:text-[hsl(var(--chart-2))]" />
-      </div>
-      {/* The picture fills only the room between the arrow and the text:
-          absolutely placed, so it adds no height and every card in the hero
-          row stays the size it was. */}
-      {art && (
-        <div className="relative min-h-0 flex-1">
-          <FeaturedCardArt art={art} className="absolute inset-x-0 -top-2 bottom-1 mx-auto max-w-[240px]" />
-        </div>
-      )}
-      <div className="relative shrink-0">
-        <div className="truncate text-lg font-bold leading-6 tracking-tight" title={title}>
-          {title}
-        </div>
-        <div className="mt-0.5 line-clamp-2 min-h-[2.5rem] text-sm leading-5 text-muted-foreground">{subtitle}</div>
+      {trimmed.slice(0, space)}
+      <br />
+      {trimmed.slice(space + 1)}
+    </>
+  );
+}
+
+export function FeaturedCardFace({ title, subtitle }: { title: string; subtitle: string; art?: FeaturedArtKey }) {
+  return (
+    <>
+      <h3
+        className="relative line-clamp-2 max-w-[10.5ch] pb-[0.1em] text-[26px] font-black leading-[1] tracking-[-0.04em] text-neutral-950 dark:text-white"
+        title={title}
+      >
+        {stackTitle(title)}
+      </h3>
+      <div className="relative min-w-0">
+        <p className="truncate text-[13px] leading-5 text-neutral-600 dark:text-neutral-300" title={subtitle}>
+          {subtitle}
+        </p>
+        <span className="mt-1.5 inline-flex items-center gap-1 text-[12px] font-semibold text-[#5b5bd6] dark:text-[hsl(var(--v2-link,var(--primary)))]">
+          Open
+          <ArrowRight aria-hidden className="size-3.5 transition-transform duration-200 group-hover/deck:translate-x-0.5 motion-reduce:transition-none" />
+        </span>
       </div>
     </>
   );
 }
 
 const ACTION_CLASS =
-  "relative flex min-h-0 flex-1 flex-col justify-between rounded-2xl px-4 pt-4 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring";
+  "relative flex min-h-0 flex-1 flex-col justify-between rounded-2xl px-5 pt-5 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring";
 
 function CardAction({
   card,

@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useAuth } from "@/stores/auth-store";
 import { Button } from "@/components/ui/button";
 import { useTenant } from "@/contexts/TenantContext";
@@ -204,6 +204,26 @@ export default function DashboardLayout({
      ticket row has room; unlike Trax it keeps the top bar — hence a third flag
      rather than widening either. */
   const isSupportWorkspace = pathname === "/support" || !!pathname?.startsWith("/support/");
+
+  /* The v2 rental control centre (`/rentals/<uuid>`, northwind). On desktop it
+     drops the top bar: the stage rail and the right rail frame the record on
+     their own (asked for Oct 2 2026). Phones keep the bar — it carries the
+     burger, the only way from a rental to the rest of the portal there.
+     Gated on the same area flag the page reads, so v1 rentals never lose it. */
+  const rentalsV2 = useV2("rentals");
+  /* The v2 Rentals CALENDAR (`/rentals?view=calendar`) is full screen, like
+     the Messages workspace: no app sidebar, no top bar — the booking calendar
+     takes the whole window (Oct 2 2026). The page's own header keeps the
+     list/calendar switch, which is the way back to the list and the nav. */
+  const layoutSearchParams = useSearchParams();
+  const isRentalsCalendarV2 =
+    rentalsV2 && v2Chrome && pathname === "/rentals" && layoutSearchParams?.get("view") === "calendar";
+  const isRentalDetailV2 =
+    rentalsV2 &&
+    /^\/rentals\/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(pathname ?? "");
+  /* A rental's Overview (`/rentals/<id>?overview=1`): the stage rail steps
+     aside so the rail's space and the pane read as one area (Oct 2 2026). */
+  const isRentalOverviewV2 = isRentalDetailV2 && layoutSearchParams?.get("overview") === "1";
 
   /* Routes that bound their own height instead of letting the document scroll. */
   const isBoundedHeight = isMessagesWorkspace || isTraxWorkspace || isSupportWorkspace;
@@ -644,7 +664,7 @@ export default function DashboardLayout({
         <TraxWrap>
         <SearchSlotWrap>
         <SupportRailWrap>
-        {isMessagesWorkspace ? null : v2Chrome ? <AppSidebarV2 /> : <AppSidebar />}
+        {isMessagesWorkspace || isRentalsCalendarV2 || isRentalOverviewV2 ? null : v2Chrome ? <AppSidebarV2 /> : <AppSidebar />}
 
         {/* The floating left-edge SidebarTrigger that used to live here is gone:
             it existed only because "v2 has no top bar — and the SidebarTrigger
@@ -731,8 +751,18 @@ export default function DashboardLayout({
           {/* Not on /trax: the full page is laid out like Claude's — the rail
               carries Back and the conversations, the page is one conversation
               column — and the bar's Trax button would only toggle a panel that
-              route never shows. */}
-          {v2Chrome && !isTraxWorkspace && <TopBarV2 showNavTrigger={!isMessagesWorkspace} />}
+              route never shows.
+              Not on /messages either: the workspace takes the whole window,
+              and its rail header already carries the way back to the portal. */}
+          {v2Chrome && !isTraxWorkspace && !isMessagesWorkspace && !isRentalsCalendarV2 && (
+            isRentalDetailV2 ? (
+              <div className="contents md:hidden">
+                <TopBarV2 showNavTrigger />
+              </div>
+            ) : (
+              <TopBarV2 showNavTrigger />
+            )
+          )}
           {/* v1 only. v2 renders TopBarV2 above instead, so the two never
               coexist. Where each of this row's controls went for v2: SEARCH and
               NOTIFICATIONS are in the top bar (they were briefly in the sidebar

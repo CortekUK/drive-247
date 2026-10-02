@@ -77,6 +77,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui-v2/badge";
+import { Button } from "@/components/ui-v2/button";
 import { useRentalAgreements, type RentalAgreement } from "@/hooks/use-rental-agreements";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useV2 } from "@/lib/v2-context";
@@ -88,20 +89,18 @@ import { resolveAgreementMileage } from "@/lib/agreement-mileage";
 import type { StageProps } from "./stages";
 import { SHOW_MULTI_PERIOD } from "./multi-period";
 import { AgreementTemplateRowV2, useRentalTemplateChoiceV2 } from "./agreement-template-row-v2";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui-v2/dialog";
 import {
   fmtDate,
   fmtDateTime,
   insetCls,
   listCls,
-  ActionButton,
   EmptyHint,
   OutOfDateBanner,
   Panel,
   Pill,
-  Section,
-  StatBlock,
+  StageAction,
   Surface,
-  Timeline,
   type Drift,
 } from "./_kit";
 
@@ -340,6 +339,7 @@ export function StageAgreement({ detail, onStage, refetch }: StageProps) {
   const [sending, setSending] = useState(false);
   const [checking, setChecking] = useState(false);
   const [viewing, setViewing] = useState<string | null>(null);
+  const [versionsOpen, setVersionsOpen] = useState(false);
 
   /**
    * The document in force.
@@ -658,21 +658,17 @@ export function StageAgreement({ detail, onStage, refetch }: StageProps) {
 
   if (isLoading) {
     return (
-      <Panel title="Agreement" description="Produced from the terms. Re-issue it whenever the terms move.">
+      <Panel fill title="Agreement" description="Produced from the terms. Re-issue it whenever they move.">
         <EmptyHint>Reading the paperwork on this rental…</EmptyHint>
       </Panel>
     );
   }
 
-  const timeline = [
+  const steps = [
+    { label: "Sent", at: current?.envelope_sent_at ? fmtDateTime(current.envelope_sent_at) : undefined, done: rank >= 1 },
+    { label: "Opened", done: rank >= 2 },
     {
-      label: "Sent for signature",
-      at: current?.envelope_sent_at ? fmtDateTime(current.envelope_sent_at) : undefined,
-      done: rank >= 1,
-    },
-    { label: "Opened by the customer", done: rank >= 2 },
-    {
-      label: state === "voided" ? "Voided before signing" : "Signed",
+      label: state === "voided" ? "Voided" : "Signed",
       at: current?.envelope_completed_at ? fmtDateTime(current.envelope_completed_at) : undefined,
       done: rank >= 3,
     },
@@ -680,190 +676,147 @@ export function StageAgreement({ detail, onStage, refetch }: StageProps) {
 
   return (
     <Panel
+      fill
       title="Agreement"
-      description="Produced from the terms below. Re-issue it whenever they move — that is the whole point of it living here."
-      footer={
-        canSend ? (
-          <ActionButton onClick={send} disabled={sending}>
-            {sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-            {rank === 0 ? "Send the agreement" : "Send an updated agreement"}
-          </ActionButton>
-        ) : (
-          <ActionButton
-            disabled
-            title="BoldSign needs a name and an email address to address the document to. Add them on the customer's profile."
-          >
-            <Send className="size-4" />
-            Send the agreement
-          </ActionButton>
-        )
+      description="Produced from the terms. Re-issue it whenever they move."
+      action={
+        <StageAction
+          icon={sending ? Loader2 : Send}
+          label={rank === 0 ? "Send the agreement" : "Send an updated agreement"}
+          onClick={send}
+          disabledReason={
+            sending
+              ? "Sending…"
+              : canSend
+                ? null
+                : "BoldSign needs a name and an email address to address the document to. Add them on the customer's profile."
+          }
+        />
       }
     >
-      {/* ── out of date ─────────────────────────────────────────────────── */}
-      {showBanner && (
-        <div>
-          <OutOfDateBanner
-            title="This agreement no longer matches the rental"
-            meta={
-              state === "signed"
-                ? `Signed${current?.envelope_completed_at ? ` ${fmtDateTime(current.envelope_completed_at)}` : ""} by ${detail.customerName ?? "the customer"}`
-                : issuedAt
-                  ? `Sent ${fmtDateTime(issuedAt)}, not yet signed`
-                  : undefined
-            }
-            drift={drift}
-            primaryLabel={state === "signed" ? "Send an updated agreement" : "Resend with the new terms"}
-            onPrimary={send}
-            secondaryLabel={state === "signed" ? "Keep the signed one" : "Keep as sent"}
-            onSecondary={acknowledge}
-          />
-          <p className="mt-2 px-6 text-[11px] text-muted-foreground">
-            Keeping it only hides this notice on this browser — there is nowhere on the rental to record the
-            decision yet, so a colleague will still see it. If the terms move again, it comes back.
-          </p>
-        </div>
-      )}
+      {/* Island layout, the Customer stage's grammar: full-width cards stacked
+          down the pane — the document, the template, then the terms filling
+          what is left. Earlier versions open in a dialog. */}
+      <div className="flex h-full min-h-0 flex-col gap-4">
+        {/* ── out of date ─────────────────────────────────────────────────── */}
+        {showBanner && (
+          <div className="shrink-0">
+            <OutOfDateBanner
+              title="This agreement no longer matches the rental"
+              meta={
+                state === "signed"
+                  ? `Signed${current?.envelope_completed_at ? ` ${fmtDateTime(current.envelope_completed_at)}` : ""} by ${detail.customerName ?? "the customer"}`
+                  : issuedAt
+                    ? `Sent ${fmtDateTime(issuedAt)}, not yet signed`
+                    : undefined
+              }
+              drift={drift}
+              primaryLabel={state === "signed" ? "Send an updated agreement" : "Resend with the new terms"}
+              onPrimary={send}
+              secondaryLabel={state === "signed" ? "Keep the signed one" : "Keep as sent"}
+              onSecondary={acknowledge}
+            />
+          </div>
+        )}
 
-      {/* ── the document ────────────────────────────────────────────────── */}
-      {state === "not_sent" ? (
-        <Section
-          title="Nothing has been sent"
-          description="A rental created in the portal sends its agreement automatically. This one has none yet, so send it from here."
-        >
-          <EmptyHint>
-            {firstName} has not been asked to sign anything for this rental. Send it and they get an email with a
-            link; the terms below are what the document will state.
-          </EmptyHint>
-        </Section>
-      ) : (
-        <Surface>
-          <div className="flex flex-wrap items-start gap-4">
-            <span className="flex size-11 shrink-0 items-center justify-center rounded-3xl bg-primary-light text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
-              <PenLine className="size-5" />
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="font-heading text-sm font-semibold">Rental agreement</h3>
-                <StateChip state={state} />
-                {/* Test-mode documents are watermarked and BoldSign deletes them
-                    after 14 days. An operator who cannot tell a sandbox contract
-                    from a real one at a glance will eventually file one. */}
-                {current?.boldsign_mode === "test" && (
-                  <Badge variant="outline" className="gap-1.5">
-                    <FlaskConical />
-                    Test
-                  </Badge>
-                )}
-              </div>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {issuedAt ? `Issued ${fmtDateTime(issuedAt)}` : "Not yet issued"}
-                {originals.length > 1 && ` · version ${originals.length}`}
-                {current?.period_start_date &&
-                  ` · covers ${fmtDate(current.period_start_date)} → ${
-                    current.period_end_date ? fmtDate(current.period_end_date) : "open"
-                  }`}
-              </p>
-            </div>
+        {/* ── the document ────────────────────────────────────────────────── */}
+        <Surface className="shrink-0 px-5 py-4">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <h3 className="font-heading text-sm font-semibold">Rental agreement</h3>
+            <StateChip state={state} />
+            {/* Test-mode documents are watermarked and BoldSign deletes them
+                after 14 days — an operator must tell them apart at a glance. */}
+            {current?.boldsign_mode === "test" && (
+              <Badge variant="outline" className="gap-1.5">
+                <FlaskConical />
+                Test
+              </Badge>
+            )}
+            {state === "not_sent" ? (
+              <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                {firstName} has not been asked to sign anything yet
+              </span>
+            ) : (
+              <span className="flex-1" />
+            )}
+            {originals.length > 1 && (
+              <button
+                type="button"
+                onClick={() => setVersionsOpen(true)}
+                className="text-xs font-medium text-primary underline-offset-2 hover:underline dark:text-[hsl(var(--v2-link,var(--primary)))]"
+              >
+                {originals.length - 1} earlier version{originals.length - 1 === 1 ? "" : "s"}
+              </button>
+            )}
+            {current && (
+              <Button size="sm" variant="outline" onClick={() => view(current)} disabled={viewing === current.id}>
+                {viewing === current.id ? <Loader2 className="animate-spin" /> : <ExternalLink />}
+                {state === "signed" ? "Signed copy" : "Open"}
+              </Button>
+            )}
+            {current?.document_id && state !== "signed" && (
+              <Button size="sm" variant="ghost" onClick={checkStatus} disabled={checking}>
+                {checking ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+                Check
+              </Button>
+            )}
           </div>
 
-          {/* Delivery is tracked separately from signature: `email_delivery_status`
-              NULL predates the tracking and means UNKNOWN. Rendering that as a
-              failure would accuse the platform of losing mail it may well have
-              sent, so only an explicit failure is reported. */}
+          {state !== "not_sent" && (
+            <ol className="mt-4 grid grid-cols-3 gap-2">
+              {steps.map((s) => (
+                <li key={s.label} className="min-w-0">
+                  <span className={cn("block h-1 rounded-full", s.done ? "bg-success" : "bg-foreground/10")} />
+                  <p className={cn("mt-1.5 truncate text-xs", s.done ? "font-medium" : "text-muted-foreground")}>
+                    {s.label}
+                    {s.at && <span className="ml-1.5 font-normal text-muted-foreground">{s.at}</span>}
+                  </p>
+                </li>
+              ))}
+            </ol>
+          )}
+
+          {/* Delivery is tracked separately from signature; only an explicit
+              failure is reported — NULL predates the tracking. */}
           {current?.email_delivery_status &&
             current.email_delivery_status !== "sent" &&
             current.email_delivery_status !== "simulated" && (
-              <div className={cn(insetCls, "mt-5 flex items-start gap-3 px-5 py-4")}>
-                <Mail className="mt-0.5 size-4 shrink-0 text-destructive" />
-                <div className="min-w-0">
-                  <p className="text-xs font-medium text-destructive">
-                    {current.email_delivery_status === "skipped_no_email"
-                      ? "No email address, so nothing was sent"
-                      : current.email_delivery_status === "not_attempted_no_credits"
-                        ? "E-sign credits had run out, so no agreement was created and no email was sent"
-                        : "The signing email did not get through"}
-                  </p>
-                  {current.email_delivery_error && (
-                    <p className="mt-0.5 text-[11px] text-muted-foreground">{current.email_delivery_error}</p>
-                  )}
-                </div>
-              </div>
+              <p className="mt-3 flex items-center gap-2 text-xs text-destructive">
+                <Mail className="size-3.5 shrink-0" />
+                {current.email_delivery_status === "skipped_no_email"
+                  ? "No email address, so nothing was sent."
+                  : current.email_delivery_status === "not_attempted_no_credits"
+                    ? "E-sign credits had run out — no agreement was created."
+                    : "The signing email did not get through."}
+                {current.email_delivery_error && <span className="text-muted-foreground">{current.email_delivery_error}</span>}
+              </p>
             )}
-
-          <div className="mt-6">
-            <Timeline steps={timeline} />
-          </div>
-
-          <div className="mt-6 flex flex-wrap gap-2">
-            {current && (
-              <ActionButton variant="outline" onClick={() => view(current)} disabled={viewing === current.id}>
-                {viewing === current.id ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <ExternalLink className="size-4" />
-                )}
-                {state === "signed" ? "Open the signed copy" : "Open the document"}
-              </ActionButton>
-            )}
-            {current?.document_id && state !== "signed" && (
-              <ActionButton variant="outline" onClick={checkStatus} disabled={checking}>
-                {checking ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
-                Check for a signature
-              </ActionButton>
-            )}
-          </div>
         </Surface>
-      )}
 
-      {/* ── the terms ───────────────────────────────────────────────────── */}
-      <Section
-        title="The terms as they stand now"
-        description="What the next document will state. Not a copy of what was signed — the agreement does not record the terms it carried."
-        right={
-          <StatBlock
-            label="Billed as"
-            value={mileage.tier === "daily" ? "Daily" : mileage.tier === "weekly" ? "Weekly" : "Monthly"}
-            hint={detail.days ? `${detail.days} days` : "Open-ended"}
-          />
-        }
-      >
-        <div className={listCls}>
-          {terms.map((t) => (
-            <div key={t.label} className="flex items-baseline justify-between gap-4 px-5 py-3">
-              <span className="shrink-0 text-xs text-muted-foreground">{t.label}</span>
-              <span className="min-w-0 text-right text-sm font-medium">{t.value}</span>
-            </div>
-          ))}
-        </div>
-
-        {/* The one term the operator asked about by name, and the one place a
-            missing value is dangerous rather than merely unhelpful: the resolver
-            renders "Not specified" and never "Unlimited" for an unconfigured
-            vehicle, because printing the latter would grant unlimited mileage to
-            every renter of every tenant who left the field blank. */}
-        {mileage.isUnspecified && (
-          <p className="mt-4 text-xs text-muted-foreground">
-            No mileage allowance is set on this rental or on the car, so the agreement will state &ldquo;Not
-            specified&rdquo; rather than imply unlimited. Set one on the vehicle, or mark the rental unlimited, and
-            re-issue.
-          </p>
+        {/* ── the template the next send uses (Agreements v2) ─────────────── */}
+        {agreementsV2 && (
+          /* Fills the rest of the pane — no dead space under it. */
+          <div className="flex min-h-0 flex-1 flex-col [&>*]:flex-1">
+            <AgreementTemplateRowV2
+              rental={rental}
+              choice={templateChoice}
+              mileage={mileage}
+              canEdit={canEditSettings("templates")}
+              busy={sending}
+              inlinePreview
+            />
+          </div>
         )}
 
-        {editedSince && rank > 0 && (
-          <p className="mt-4 text-xs text-muted-foreground">
-            This rental was edited {fmtDateTime(rental.updated_at)}, after the agreement went out. The document
-            does not record the mileage, rates or fees it stated, so those cannot be compared here — if you changed
-            any of them, send an updated agreement.
-          </p>
-        )}
-      </Section>
+      </div>
 
-      {/* ── earlier versions ────────────────────────────────────────────── */}
-      {originals.length > 1 && (
-        <Section
-          title="Earlier versions"
-          description="Superseded by the one above. Kept because a customer may have signed one of them."
-        >
+      {/* ── earlier versions — a dialog, not a growing list ──────────────── */}
+      <Dialog open={versionsOpen} onOpenChange={setVersionsOpen}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto no-scrollbar sm:max-w-xl" aria-describedby={undefined}>
+          <DialogHeader>
+            <DialogTitle>Earlier versions</DialogTitle>
+          </DialogHeader>
+          <p className="-mt-3 text-xs text-muted-foreground">Superseded by the current one. Kept because a customer may have signed one of them.</p>
           <div className={listCls}>
             {originals
               .slice(0, -1)
@@ -871,56 +824,23 @@ export function StageAgreement({ detail, onStage, refetch }: StageProps) {
               .map((a) => (
                 <div key={a.id} className="flex items-center gap-4 px-5 py-3">
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm">
-                      {a.envelope_sent_at ? fmtDateTime(a.envelope_sent_at) : fmtDateTime(a.created_at)}
-                    </p>
+                    <p className="truncate text-sm">{a.envelope_sent_at ? fmtDateTime(a.envelope_sent_at) : fmtDateTime(a.created_at)}</p>
                     <p className="text-xs text-muted-foreground">
                       {a.period_start_date
-                        ? `Covered ${fmtDate(a.period_start_date)} → ${
-                            a.period_end_date ? fmtDate(a.period_end_date) : "open"
-                          }`
+                        ? `Covered ${fmtDate(a.period_start_date)} → ${a.period_end_date ? fmtDate(a.period_end_date) : "open"}`
                         : "No period recorded"}
                     </p>
                   </div>
                   <StateChip state={deriveState(a)} />
-                  <ActionButton variant="outline" onClick={() => view(a)} disabled={viewing === a.id}>
-                    {viewing === a.id ? (
-                      <Loader2 className="size-4 animate-spin" />
-                    ) : (
-                      <ExternalLink className="size-4" />
-                    )}
+                  <Button size="sm" variant="outline" onClick={() => view(a)} disabled={viewing === a.id}>
+                    {viewing === a.id ? <Loader2 className="animate-spin" /> : <ExternalLink />}
                     Open
-                  </ActionButton>
+                  </Button>
                 </div>
               ))}
           </div>
-        </Section>
-      )}
-
-      {/* ── the template the next send uses (Agreements v2) ─────────────── */}
-      {agreementsV2 && (
-        <AgreementTemplateRowV2
-          rental={rental}
-          choice={templateChoice}
-          mileage={mileage}
-          canEdit={canEditSettings("templates")}
-          busy={sending}
-        />
-      )}
-
-      {/* One line, because a signed contract is worth nothing if it went to
-          somebody who is not the person collecting the car. */}
-      <p className="text-xs text-muted-foreground">
-        The document is emailed to {customer?.email ?? "no address on file"} and signed there.{" "}
-        <button
-          type="button"
-          onClick={() => onStage("customer")}
-          className="cursor-pointer font-medium text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] underline-offset-2 hover:underline"
-        >
-          Check who that is
-        </button>{" "}
-        before sending.
-      </p>
+        </DialogContent>
+      </Dialog>
     </Panel>
   );
 }

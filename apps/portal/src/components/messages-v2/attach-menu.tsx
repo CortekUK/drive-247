@@ -71,11 +71,14 @@ export function AttachMenu({
   onFiles,
   onBooking,
   disabled,
+  compact,
 }: {
   customerId: string;
   onFiles: (files: File[]) => void;
   onBooking: (booking: BookingReference) => void;
   disabled?: boolean;
+  /** 36px trigger, for the composer's inner toolbar row. */
+  compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<"menu" | "booking">("menu");
@@ -134,7 +137,7 @@ export function AttachMenu({
             disabled={disabled}
             aria-label="Attach"
             title="Attach a file or a booking"
-            className="h-11 w-11 shrink-0 rounded-full text-muted-foreground hover:text-foreground"
+            className={`${compact ? "h-9 w-9" : "h-11 w-11"} shrink-0 rounded-full text-muted-foreground hover:text-foreground`}
           >
             <Paperclip className="h-[18px] w-[18px]" />
           </Button>

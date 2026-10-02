@@ -36,6 +36,7 @@
 import Link from "next/link";
 import { Check, AlertTriangle, ChevronRight, ArrowLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui-v2/tooltip";
 import { Button } from "@/components/ui-v2/button";
 import { Badge } from "@/components/ui-v2/badge";
 
@@ -256,6 +257,7 @@ export function StageItem({
   index,
   label,
   value,
+  note,
   prompt,
   active,
   href,
@@ -264,6 +266,8 @@ export function StageItem({
   /** Position in the rail, which decides its share of the accent. */
   index: number;
   label: string;
+  /** Quieter lines under the answer — text, or tagged lines (When & where: P and R). */
+  note?: string | { tag?: string; text: string }[] | null;
   /** The decision, once made. Null while the stage is still asking. */
   value: string | null;
   /** What the stage wants, shown until it has an answer. */
@@ -301,6 +305,27 @@ export function StageItem({
       </span>
     </span>
   );
+  const lines = typeof note === "string" ? [{ text: note }] : (note ?? []);
+  const tone = filled ? "text-primary/70 dark:text-[hsl(var(--v2-link,var(--primary))/0.7)]" : "text-muted-foreground";
+  const withNote = lines.length ? (
+    <>
+      {body}
+      <span className="mt-1 block space-y-0.5">
+        {lines.map((l, i) => (
+          <span key={i} className={cn("flex items-center justify-end gap-1.5 text-[11.5px] leading-snug", tone)} title={l.text}>
+            {l.tag && (
+              <span className="flex size-3.5 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[8.5px] font-bold">
+                {l.tag}
+              </span>
+            )}
+            <span className="min-w-0 truncate">{l.text}</span>
+          </span>
+        ))}
+      </span>
+    </>
+  ) : (
+    body
+  );
 
   if (href) {
     return (
@@ -309,14 +334,14 @@ export function StageItem({
       // the frame does not scroll, so there is no scroll position to restore.
       // This is exactly how the Settings rail moves between its tabs.
       <Link href={href} replace scroll={false} prefetch={false} style={style} className={className} onClick={onClick}>
-        {body}
+        {withNote}
       </Link>
     );
   }
 
   return (
     <button type="button" onClick={onClick} style={style} className={className}>
-      {body}
+      {withNote}
     </button>
   );
 }
@@ -337,9 +362,20 @@ export function Panel({
   description,
   toolbar,
   footer,
+  fill,
+  action,
   children,
 }: {
   title: string;
+  /**
+   * The stage's one "change this" action (Change customer, Swap vehicle…).
+   * Always the same place on every stage — at the end of the description
+   * line, as a quiet text action (see `StageAction`) — so an operator learns
+   * it once and it never competes with the title.
+   */
+  action?: React.ReactNode;
+  /** Island UI: take the pane's full width instead of capping at 3xl. */
+  fill?: boolean;
   description?: string;
   /** Pinned under the head — a search box, filters. Never scrolls away. */
   toolbar?: React.ReactNode;
@@ -348,16 +384,35 @@ export function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex h-full min-h-0 w-full max-w-3xl flex-col">
+    <div className={cn("flex h-full min-h-0 w-full flex-col", !fill && "max-w-3xl")}>
       <div className="shrink-0">
         <h2 className="font-heading text-2xl font-medium tracking-tight">{title}</h2>
-        {description && <p className="mt-1.5 text-sm text-muted-foreground">{description}</p>}
+        {(description || action) && (
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+            {description && <p className="text-sm text-muted-foreground">{description}</p>}
+            {action}
+          </div>
+        )}
         {toolbar && <div className="mt-6">{toolbar}</div>}
       </div>
 
       {/* `min-h-0` is load-bearing: without it a flex child refuses to shrink
           below its content and the column grows the page instead of scrolling. */}
-      <div className="mt-7 min-h-0 flex-1 space-y-6 overflow-y-auto no-scrollbar pb-2 pr-1">{children}</div>
+      {/* A scroll container clips everything at its edge — including the
+          cards' shadows and rings. With `fill` the cards reach the edge, so the
+          body gets a few px of room for the shadow to render instead of being
+          cut. NOT pulled back out on the LEFT: the stage column around this
+          is itself `overflow-hidden` at exactly that edge, so a negative left
+          margin is clipped again one level up. The right has the column's
+          `pr-6` gutter to spend, so it can be pulled out there. */}
+      <div
+        className={cn(
+          "mt-7 min-h-0 flex-1 space-y-6 overflow-y-auto no-scrollbar",
+          fill ? "mt-5 -mr-3 pt-1.5 pb-3 pl-1.5 pr-3" : "pb-2 pr-1"
+        )}
+      >
+        {children}
+      </div>
 
       {footer && <div className="shrink-0 pt-4">{footer}</div>}
     </div>
@@ -672,3 +727,48 @@ export const initials = (name: string) =>
     .map((w) => w[0])
     .join("")
     .toUpperCase() || "—";
+
+/**
+ * The stage's change action, as it sits on the description line: a quiet
+ * primary-tinted text action with an icon. Disabled shows the reason on hover —
+ * a disabled button fires no pointer events, so the span carries the tooltip.
+ */
+export function StageAction({
+  icon: Icon,
+  label,
+  onClick,
+  disabledReason,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  onClick: () => void;
+  /** Set when the action is not available; shown on hover. */
+  disabledReason?: string | null;
+}) {
+  const disabled = !!disabledReason;
+  const button = (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-md text-sm font-medium outline-none transition-colors duration-200 ease-out focus-visible:ring-2 focus-visible:ring-ring/40 motion-reduce:transition-none",
+        disabled
+          ? "cursor-not-allowed text-muted-foreground/50"
+          : "text-primary hover:text-primary/80 dark:text-[hsl(var(--v2-link,var(--primary)))]"
+      )}
+    >
+      <Icon className="size-3.5" />
+      {label}
+    </button>
+  );
+  if (!disabled) return button;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="inline-flex">{button}</span>
+      </TooltipTrigger>
+      <TooltipContent className="max-w-64">{disabledReason}</TooltipContent>
+    </Tooltip>
+  );
+}

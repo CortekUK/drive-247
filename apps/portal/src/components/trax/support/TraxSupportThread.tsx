@@ -5,7 +5,7 @@ import { CalendarClock, CreditCard, HelpCircle, KeyRound, type LucideIcon } from
 import { cn } from "@/lib/utils";
 import { SIDEBAR_HIGHLIGHT_FOCUS, SIDEBAR_HIGHLIGHT_HOVER } from "@/components/ui-v2/sidebar";
 import { TraxComposer } from "@/components/trax/trax-composer";
-import { TraxGreeting } from "@/components/trax/trax-greeting";
+import { TraxGreeting, TraxMark } from "@/components/trax/trax-greeting";
 import { ChatMessage } from "./ChatMessage";
 import { SupportWorkspace } from "./SupportWorkspace";
 import { useTraxSupportChat, useTraxSupportWorkspace } from "./trax-support-context";
@@ -44,9 +44,19 @@ export interface TraxSupportThreadProps {
   /** Open the portal's Support section (and leave TRAX). */
   onOpenSupport?: (target: { ticketId?: string; issueId?: string }) => void;
   className?: string;
+  /** Replaces the default starter prompts (a record's own surface asks about that record). */
+  suggestions?: Array<{ icon: LucideIcon; label: string; prompt: string }>;
+  /** Replaces the line under the greeting. */
+  intro?: string;
+  /**
+   * A record's side tab (the rental rail, Oct 2 2026): no centred greeting —
+   * a one-line Trax heading, the intro, starter prompts as small chips at the
+   * top, and the composer pinned to the bottom like a chat, flat (no glow).
+   */
+  compact?: boolean;
 }
 
-export function TraxSupportThread({ density = "page", autoFocus = false, onOpenSupport, className }: TraxSupportThreadProps) {
+export function TraxSupportThread({ density = "page", autoFocus = false, onOpenSupport, className, suggestions: ownSuggestions, intro, compact = false }: TraxSupportThreadProps) {
   const {
     messages, isLoading, error, sendMessage, confirmAction, rejectAction, navigate, capabilities,
     checkAgain, supportRequest, requestTicket, recentConversations, contextKey,
@@ -56,7 +66,7 @@ export function TraxSupportThread({ density = "page", autoFocus = false, onOpenS
 
   const page = density === "page";
   const empty = messages.length === 0;
-  const suggestions = capabilities?.finance ? [...SUGGESTIONS, PAYMENT_SUGGESTION] : SUGGESTIONS;
+  const suggestions = ownSuggestions ?? (capabilities?.finance ? [...SUGGESTIONS, PAYMENT_SUGGESTION] : SUGGESTIONS);
   const lastQuestion = messages.filter((m) => m.role === "user").at(-1)?.content ?? "";
   const status = capabilities?.finance && PAYMENT_QUESTION.test(lastQuestion)
     ? "Checking rental payments… Verifying with Stripe…"
@@ -86,12 +96,39 @@ export function TraxSupportThread({ density = "page", autoFocus = false, onOpenS
       >
         <div className={cn("flex min-h-0 flex-1 flex-col", empty && "no-scrollbar overflow-y-auto")}>
           {/* 1 — the greeting, or the conversation. */}
-          {empty ? (
+          {empty && compact ? (
+            <div className="min-h-0 flex-1 px-3.5 pt-4">
+              <div className="flex items-center gap-2">
+                <TraxMark size="xs" />
+                <p className="text-[13px] font-semibold tracking-tight">Trax</p>
+              </div>
+              <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted-foreground">
+                {capabilities?.modelReady
+                  ? intro ?? "Ask about your fleet, rentals and bookings."
+                  : "Prepared application guidance. TRAX is not connected to an AI model in this environment."}
+              </p>
+              <div className="mt-4 flex flex-wrap gap-1.5">
+                {suggestions.map(({ label, prompt }) => (
+                  <button
+                    key={label}
+                    type="button"
+                    disabled={isLoading}
+                    onClick={() => send(prompt)}
+                    className="rounded-full bg-primary/[0.07] px-2.5 py-1 text-[12px] text-primary transition-colors duration-200 hover:bg-primary/[0.12] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 dark:text-[hsl(var(--v2-link,var(--primary)))]"
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : empty ? (
             <div className={cn("flex flex-[1_0_auto] flex-col items-center justify-end px-4", page ? "pt-12" : "pt-10")}>
               <div className={cn("w-full", page && "max-w-[720px]")}>
                 <TraxGreeting density={density} />
                 <p className={cn("mt-2 text-center text-[12px] leading-relaxed text-muted-foreground", page && "text-[13px]")}>
-                  {capabilities?.modelReady
+                  {intro && capabilities?.modelReady
+                    ? intro
+                    : capabilities?.modelReady
                     ? "Ask about your fleet, rentals and bookings. TRAX checks your own records before it answers."
                     : "Prepared application guidance. TRAX is not connected to an AI model in this environment."}
                 </p>
@@ -120,7 +157,12 @@ export function TraxSupportThread({ density = "page", autoFocus = false, onOpenS
           )}
 
           {/* 2 — the composer, the same element in both states. */}
-          <div className={cn("relative shrink-0", page ? "px-4" : "px-3.5", empty ? (page ? "pt-7" : "pt-6") : page ? "pb-6 pt-1" : "pb-4 pt-1")}>
+          <div className={cn(
+            "relative shrink-0", page ? "px-4" : "px-3.5",
+            compact ? "pb-4 pt-1" : empty ? (page ? "pt-7" : "pt-6") : page ? "pb-6 pt-1" : "pb-4 pt-1",
+            /* Flat in compact: no halo, no lift — a thin accent rim instead. */
+            compact && "[&_[data-slot=trax-composer]_.blur-xl]:hidden [&_.rounded-3xl.bg-card]:!shadow-none [&_.rounded-3xl.bg-card]:ring-1 [&_.rounded-3xl.bg-card]:ring-primary/20",
+          )}>
             <div className={cn("mx-auto w-full", page && "max-w-[768px]")}>
               <TraxComposer
                 density={density}
@@ -134,7 +176,7 @@ export function TraxSupportThread({ density = "page", autoFocus = false, onOpenS
           </div>
 
           {/* 3 — suggestions, empty state only. */}
-          {empty && (
+          {empty && !compact && (
             <div className={cn("flex flex-[1_0_auto] justify-center", page ? "px-4 pb-12 pt-5" : "px-3.5 pb-8 pt-4")}>
               <div className={cn("flex h-fit w-full", page ? "max-w-[720px] flex-wrap content-start justify-center gap-2" : "flex-col items-stretch gap-1")}>
                 {suggestions.map(({ icon: Icon, label, prompt }) => (

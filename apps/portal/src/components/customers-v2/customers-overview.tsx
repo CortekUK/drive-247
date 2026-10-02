@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { parseLocalDate } from "@/lib/date-utils";
 import { HeroChart, HeroRow, type HeroMetric } from "@/components/shared/hero-chart-v2";
 import { FeaturedDeck } from "@/components/shared/featured-deck-v2";
+import { BlockedCustomersDialog } from "@/components/customers-v2/blocked-customers-dialog";
 
 /**
  * The Customers hero row: one simple graph, and the featured deck beside it.
@@ -92,6 +93,9 @@ function createdAt(value: string): Date {
 const DECK_ROUTES = ["/customers", "/blocked-customers"] as const;
 
 export function CustomersOverview({ customers, filtered, onInvite, onImport, today }: Props) {
+  // The featured card opens the blocked-customers dialog, owned here so the
+  // shared Customers page file is untouched (Ghulam, Oct 2 2026).
+  const [blockedOpen, setBlockedOpen] = useState(false);
   const metrics = useMemo<HeroMetric[]>(() => {
     const dated = customers.filter((c): c is OverviewCustomer & { created_at: string } => !!c.created_at);
     return [
@@ -117,6 +121,7 @@ export function CustomersOverview({ customers, filtered, onInvite, onImport, tod
     const out: Record<string, () => void> = {};
     if (onInvite) out.openInvite = onInvite;
     if (onImport) out.openImport = onImport;
+    out.openBlocked = () => setBlockedOpen(true);
     return out;
   }, [onInvite, onImport]);
 
@@ -141,6 +146,7 @@ export function CustomersOverview({ customers, filtered, onInvite, onImport, tod
           />
         }
       />
+      <BlockedCustomersDialog open={blockedOpen} onOpenChange={setBlockedOpen} />
     </div>
   );
 }

@@ -53,7 +53,7 @@ function ctx(overrides: Partial<FeaturedContext> = {}): FeaturedContext {
     canAccessRoute: () => true,
     turoBridgeEnabled: true,
     hasTrax: true,
-    handlers: ['openCalendar', 'openTrax', 'openInvite', 'openImport'],
+    handlers: ['openCalendar', 'openTrax', 'openInvite', 'openImport', 'openBlocked'],
     adopted: {},
     ...overrides,
   };

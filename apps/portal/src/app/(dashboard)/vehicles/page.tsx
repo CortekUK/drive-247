@@ -18,6 +18,7 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui-v
 import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/shared/data-display/empty-state";
 import { AddVehicleDialog } from "@/components/vehicles/add-vehicle-dialog";
+import { AddVehicleDialogV2 } from "@/components/vehicles-v2/add-vehicle-dialog-v2";
 import { FleetSummaryCards } from "@/components/vehicles/fleet-summary-cards";
 import { VehicleStatusBadge, resolveVehicleStatus } from "@/components/vehicles/vehicle-status-badge";
 import { VehiclePhotoThumbnail } from "@/components/vehicles/vehicle-photo-thumbnail";
@@ -854,7 +855,9 @@ export default function VehiclesListEnhanced() {
                   : ""
               }`}
             >
-              <AddVehicleDialog />
+              {/* v2 (northwind): the redesigned four-screen dialog. Same
+                  save path; everyone else keeps v1's. */}
+              {v2Chrome ? <AddVehicleDialogV2 /> : <AddVehicleDialog />}
             </div>
           )}
         </div>

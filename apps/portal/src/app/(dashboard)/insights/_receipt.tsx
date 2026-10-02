@@ -31,20 +31,17 @@
  *    clickable, because a dialog onto an empty list is a small betrayal.
  */
 
-import { useState } from 'react';
-import { ChevronRight, SlidersHorizontal } from 'lucide-react';
-import { Skeleton } from '@/components/ui-v2/skeleton';
+import { useState, type ReactNode } from 'react';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui-v2/select';
+  ChevronRight,
+  Clock,
+  SlidersHorizontal,
+} from 'lucide-react';
+import { Skeleton } from '@/components/ui-v2/skeleton';
 import { formatCurrency } from '@/lib/format-utils';
 import { cn } from '@/lib/utils';
 import { keptShare } from './_money-model';
-import { PERIOD_OPTIONS, type InsightsData, type PeriodMonths } from './_data';
+import type { InsightsData } from './_data';
 import {
   CarPurchasesDialog,
   GaveBackDialog,
@@ -72,127 +69,106 @@ const MINUS = '−';
  * ──────────────────────────────────────────────────────────────────────────── */
 
 /**
- * One line of the receipt.
- *
- * Rendered as a `<button>` when there is something behind it and a plain `<div>`
- * when there is not, rather than a disabled button — a disabled control implies
- * "not right now", and this is "there is nothing here, permanently". The
- * chevron column keeps its width either way so the amounts stay in one line
- * down the page.
+ * One line of the equation: its operator in a soft circle, the line's name
+ * with a quiet sub-line, the amount on the right. The whole row opens the
+ * rows behind it; a line worth nothing says "none" and does not.
  */
-function ReceiptRow({
+function EquationRow({
+  op,
+  tone,
   label,
   sub,
   amount,
   money,
-  negative,
   loading,
-  zeroLabel = 'none this period',
   onOpen,
 }: {
+  /** An operator, or an icon for a line that sits beside the sum, not in it. */
+  op: '+' | '−' | ReactNode;
+  tone?: 'owed';
   label: string;
   sub: string;
   amount: number;
-  money: (amount: number) => string;
-  negative?: boolean;
+  money: (n: number) => string;
   loading: boolean;
-  zeroLabel?: string;
   onOpen: () => void;
 }) {
-  /*
-   * Below half a penny, not exactly zero.
-   *
-   * These are sums of `numeric` columns crossing a JS float, so a row that is
-   * genuinely empty can land on 1e-13 — and `=== 0` would then call that a real
-   * amount, print "$0" and open a dialog onto nothing.
-   *
-   * Half a penny and not, say, half a dollar: the dialogs report to the penny,
-   * so anything they could show is treated as real here. A 40¢ refund does
-   * round to "$0" on this line, which looks odd — but it is odd because it
-   * happened, and the row stays clickable so the reader can find out why. The
-   * alternative is a screen that says "none this period" about money that
-   * genuinely moved.
-   */
   const isZero = Math.abs(amount) < 0.005;
   const clickable = !loading && !isZero;
-
-  const body = (
+  const plus = op === '+';
+  const inner = (
     <>
-      <span className="min-w-0">
-        <span className="block text-[15px] font-medium text-foreground">{label}</span>
-        <span className="mt-0.5 block text-[13px] leading-snug text-muted-foreground">{sub}</span>
+      <span
+        aria-hidden
+        className={cn(
+          'flex size-7 items-center justify-center rounded-full text-[15px] font-semibold',
+          tone === 'owed'
+            ? 'bg-destructive/10 text-destructive'
+            : plus
+              ? 'bg-primary/10 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]'
+              : 'bg-foreground/[0.05] text-muted-foreground',
+        )}
+      >
+        {op}
       </span>
-
+      <span className="min-w-0">
+        <span className="block truncate text-[15px] font-medium">{label}</span>
+        <span className="mt-0.5 block truncate text-[12.5px] text-muted-foreground">{sub}</span>
+      </span>
       {loading ? (
-        <Skeleton className="h-6 w-24 justify-self-end" />
-      ) : isZero ? (
-        <span className="justify-self-end text-[15px] text-muted-foreground">{zeroLabel}</span>
+        <Skeleton className="h-6 w-24" />
       ) : (
-        <span className="justify-self-end font-heading text-xl leading-none font-medium tabular-nums">
-          {negative ? `${MINUS} ` : ''}
-          {money(amount)}
+        <span
+          className={cn(
+            'text-right font-heading text-xl leading-none font-medium tabular-nums',
+            isZero && 'text-[15px] font-normal text-muted-foreground',
+            !plus && !isZero && tone !== 'owed' && 'text-foreground/80',
+
+          )}
+        >
+          {isZero ? 'none' : money(amount)}
         </span>
       )}
-
       <span className="flex size-4 items-center justify-center">
         {clickable ? (
           <ChevronRight
-            className="size-4 text-muted-foreground/60 transition-transform group-hover:translate-x-0.5 group-hover:text-foreground"
+            className="size-4 text-muted-foreground/50 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-foreground motion-reduce:transition-none"
             aria-hidden
           />
         ) : null}
       </span>
     </>
   );
-
-  /*
-   * The same box either way.
-   *
-   * Both variants carry the identical padding, so a clickable row and a zeroed
-   * one line their labels and their amounts up to the pixel. Pulling the button
-   * out with a negative margin to widen its hover target would shift its text
-   * 12px left of every row that is not clickable, and a column of numbers that
-   * steps in and out depending on whether a row happens to be zero this month is
-   * exactly the sort of thing that makes a money screen feel untrustworthy
-   * without anyone being able to say why.
-   */
-  const shell = 'grid w-full grid-cols-[minmax(0,1fr)_auto_1rem] items-center gap-x-4 px-3 py-3 [@media(max-height:860px)]:py-2';
-
-  if (!clickable) {
-    return <div className={cn(shell, 'text-left')}>{body}</div>;
-  }
-
-  return (
+  const shell = cn(
+    'grid w-full grid-cols-[28px_minmax(0,1fr)_auto_16px] items-center gap-x-4 rounded-2xl px-4 py-3.5 text-left [@media(max-height:860px)]:py-2.5',
+    // Owed sits on a light red wash; its text stays ink, like every line.
+    tone === 'owed' && 'mt-2 bg-destructive/[0.06]',
+  );
+  return clickable ? (
     <button
       type="button"
       onClick={onOpen}
       className={cn(
         shell,
-        'group cursor-pointer rounded-3xl text-left transition-colors',
-        'hover:bg-primary/5 dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+        'group cursor-pointer transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none motion-reduce:transition-none',
+        tone === 'owed' ? 'hover:bg-destructive/[0.1]' : 'hover:bg-primary/[0.05]',
       )}
     >
-      {body}
+      {inner}
     </button>
+  ) : (
+    <div className={shell}>{inner}</div>
   );
 }
-
-/* ────────────────────────────────────────────────────────────────────────────
- * The receipt
- * ──────────────────────────────────────────────────────────────────────────── */
 
 export function MoneyReceipt({
   data,
   loading,
   currency,
-  months,
-  onMonthsChange,
 }: {
   data: InsightsData | undefined;
   loading: boolean;
   currency: string;
-  months: PeriodMonths;
-  onMonthsChange: (months: PeriodMonths) => void;
 }) {
   const [openRow, setOpenRow] = useState<Row | null>(null);
 
@@ -213,31 +189,11 @@ export function MoneyReceipt({
 
   const receipt = data?.receipt;
   const kept = receipt?.kept ?? 0;
+
   const shareKept = receipt ? keptShare(receipt) : null;
 
   const owed = data?.aging.total ?? 0;
   const owedCount = data?.receivables.length ?? 0;
-  const owedOver90 = data?.aging.bucket_90_plus ?? 0;
-
-  /*
-   * The grey line under "Still owed to you", built from the data rather than
-   * written down. It also carries "as of today", because this row alone ignores
-   * the period selector — the same qualifier the ageing chart already uses.
-   */
-  const owedSub = loading
-    ? // Not "everyone has paid" — while the read is in flight `owed` is 0, and
-      // a placeholder that states a fact about the business is worse than one
-      // that states nothing.
-      'as of today, across every invoice'
-    : owed <= 0
-      ? 'as of today, everyone has paid'
-      : [
-          `${owedCount.toLocaleString()} ${owedCount === 1 ? 'customer' : 'customers'}`,
-          owedOver90 > 0 ? `${money(owedOver90)} of it over 90 days` : null,
-          'as of today',
-        ]
-          .filter(Boolean)
-          .join(' · ');
 
   const dialogProps = { data, loading, currency };
   const close = () => setOpenRow(null);
@@ -256,16 +212,11 @@ export function MoneyReceipt({
             Where your money went
           </h2>
 
-          {/*
-            The period control lives on the receipt, not in the page header,
-            because the receipt is what an operator is reading when they think
-            "and what about the last three months?". It still governs the whole
-            page — the charts below read the same query.
-          */}
           <div className="flex items-center gap-1">
             {/*
-              Which ledger categories land on which line. Beside the period
-              because both change what the receipt adds up.
+              Which ledger categories land on which line. The period picker
+              that used to sit here moved to the page header: it governs every
+              view now, not just this one.
             */}
             <button
               type="button"
@@ -275,161 +226,116 @@ export function MoneyReceipt({
               <SlidersHorizontal className="size-3.5" aria-hidden />
               What counts where
             </button>
-            <Select
-              value={String(months)}
-              onValueChange={(value) => onMonthsChange(Number(value) as PeriodMonths)}
-            >
-              <SelectTrigger className="w-[170px]" aria-label="Reporting period">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {PERIOD_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={String(option.value)}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
         </header>
 
-        {/* xl: these four share whatever height the screen has spare, so the
-            receipt always ends exactly at the bottom of the frame. */}
-        <div className="flex flex-col xl:flex-1 [&>*]:xl:flex-1">
-          <ReceiptRow
-            label="Money you took in"
-            sub="rentals, extras, delivery, insurance"
-            amount={receipt?.tookIn ?? 0}
-            money={money}
-            loading={loading}
-            onOpen={() => setOpenRow('tookIn')}
-          />
-
-          <ReceiptRow
-            label="Money you gave back"
-            sub="refunds to customers"
-            amount={receipt?.gaveBack ?? 0}
-            money={money}
-            negative
-            loading={loading}
-            onOpen={() => setOpenRow('gaveBack')}
-          />
-
-          <ReceiptRow
-            label="Money that was never yours"
-            sub="sales tax and refundable deposits"
-            amount={receipt?.neverYours ?? 0}
-            money={money}
-            negative
-            loading={loading}
-            onOpen={() => setOpenRow('neverYours')}
-          />
-
-          <ReceiptRow
-            label="Money you spent"
-            sub="servicing, repairs, running the cars"
-            amount={receipt?.spent ?? 0}
-            money={money}
-            negative
-            loading={loading}
-            onOpen={() => setOpenRow('spent')}
-          />
-        </div>
-
         {/*
-          A double rule, as a paper receipt uses before its total. It is doing
-          real work: it marks where the list of deductions stops and the answer
-          starts, which is the one boundary in this component that must not be
-          missed at a glance.
+          Calm by design (Ghulam, 2026-10-02: "I want the user to not be
+          overwhelmed"): the receipt is one card, written as the sum it is.
         */}
-        <div className="mx-3 mt-3 border-t-4 border-double border-foreground/20" />
+        <div className="space-y-3 px-3 xl:flex xl:min-h-0 xl:flex-1 xl:flex-col">
+          {/*
+            The sum, written as a sum — one card, top to bottom: what came in,
+            each thing taken off it, a double rule, and what is left. The
+            operators sit in small circles in their own column so the eye
+            reads "+ − − − =" down the left and the amounts down the right.
+          */}
+          <section className="flex flex-col rounded-3xl bg-card p-2 ring-1 ring-foreground/[0.07] xl:min-h-0 xl:flex-1">
+            <div className="flex flex-col xl:flex-1 xl:justify-evenly">
+              <EquationRow
+                op="+"
+                label="Money you took in"
+                sub="rentals, extras, delivery, insurance"
+                amount={receipt?.tookIn ?? 0}
+                money={money}
+                loading={loading}
+                onOpen={() => setOpenRow('tookIn')}
+              />
+              <EquationRow
+                op="−"
+                label="Money you gave back"
+                sub="refunds to customers"
+                amount={receipt?.gaveBack ?? 0}
+                money={money}
+                loading={loading}
+                onOpen={() => setOpenRow('gaveBack')}
+              />
+              <EquationRow
+                op="−"
+                label="Money that was never yours"
+                sub="sales tax and refundable deposits"
+                amount={receipt?.neverYours ?? 0}
+                money={money}
+                loading={loading}
+                onOpen={() => setOpenRow('neverYours')}
+              />
+              <EquationRow
+                op="−"
+                label="Money you spent"
+                sub="servicing, repairs, running the cars"
+                amount={receipt?.spent ?? 0}
+                money={money}
+                loading={loading}
+                onOpen={() => setOpenRow('spent')}
+              />
+            </div>
 
-        <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2 px-3 pt-4 pb-5 [@media(max-height:860px)]:pt-3 [@media(max-height:860px)]:pb-3">
-          <div>
-            <p className="text-xs font-medium tracking-[0.14em] text-muted-foreground uppercase">
-              Money you kept
-            </p>
-            {/*
-              The share is the second half of this number's meaning: keeping
-              $18,545 on $26,115 taken in and on $2M taken in are different
-              businesses, and only one of them is worth celebrating.
-            */}
-            <p className="mt-1.5 min-h-[1.25rem] text-[13px] text-muted-foreground">
-              {loading
-                ? ''
-                : shareKept == null
-                  ? 'Nothing came in this period'
-                  : `${shareKept.toFixed(0)}% of the money you took in`}
-            </p>
-          </div>
+            {/* the rule a paper receipt draws before its total */}
+            <div className="mx-4 my-1 border-t-[3px] border-double border-foreground/15" />
 
-          {loading ? (
-            <Skeleton className="h-12 w-52" />
-          ) : (
-            <p
+            {/* The answer: the same row as every other line, on a light green
+                wash (light red for a loss) — the tint marks it, not the type. */}
+            <div
               className={cn(
-                'font-heading text-4xl leading-none font-semibold tracking-tight tabular-nums sm:text-5xl',
-                // Plain ink when there is a profit — a green number would be
-                // the page congratulating the operator, which is not its job.
-                // Red only when the answer is genuinely a loss, which IS its
-                // job to say clearly.
-                kept < 0 && 'text-destructive',
+                'mt-1 grid grid-cols-[28px_minmax(0,1fr)_auto_16px] items-center gap-x-4 rounded-2xl px-4 py-3.5 [@media(max-height:860px)]:py-2.5',
+                kept < 0 ? 'bg-destructive/[0.07]' : 'bg-success/[0.09]',
               )}
             >
-              {kept < 0 ? `${MINUS} ${money(Math.abs(kept))}` : money(kept)}
-            </p>
-          )}
+              <span
+                aria-hidden
+                className={cn(
+                  'flex size-7 items-center justify-center rounded-full text-[15px] font-semibold',
+                  kept < 0 ? 'bg-destructive/15 text-destructive' : 'bg-success/15 text-success',
+                )}
+              >
+                =
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate text-[15px] font-medium">Money you kept</span>
+                <span className="mt-0.5 block truncate text-[12.5px] text-muted-foreground">
+                  {loading ? '' : shareKept == null ? 'Nothing came in this period' : `${shareKept.toFixed(0)}% of what you took in`}
+                </span>
+              </span>
+              {loading ? (
+                <Skeleton className="h-6 w-24" />
+              ) : (
+                <span className="text-right font-heading text-xl leading-none font-medium tabular-nums">
+                  {kept < 0 ? `${MINUS} ${money(Math.abs(kept))}` : money(kept)}
+                </span>
+              )}
+              <span />
+            </div>
+
+            {/* Beside the sum, not in it: what is still owed, as of today. */}
+            <EquationRow
+              op={<Clock className="size-3.5" />}
+              tone="owed"
+              label="Still owed to you"
+              sub={owed > 0 ? `${owedCount} ${owedCount === 1 ? 'customer' : 'customers'} · as of today · not in the sum` : 'as of today'}
+              amount={owed}
+              money={money}
+              loading={loading}
+              onOpen={() => setOpenRow('owed')}
+            />
+          </section>
+
+          {/*
+            Fleet investment, stated plainly and OUTSIDE the sum — the most
+            common way to misread "kept" would be to assume it already allows
+            for the cars bought. See `_money-model.ts`.
+          */}
+          <CapitalFootnote data={data} loading={loading} money={money} onOpen={() => setOpenRow('carPurchases')} />
         </div>
-
-        <div className="mx-3 border-t border-foreground/10" />
-
-        <div className="pt-1">
-          <ReceiptRow
-            label="Still owed to you"
-            sub={owedSub}
-            amount={owed}
-            money={money}
-            loading={loading}
-            zeroLabel="nothing outstanding"
-            onOpen={() => setOpenRow('owed')}
-          />
-        </div>
-
-        {/*
-          Fleet investment, stated plainly and OUTSIDE the sum.
-
-          The single most common way to misread this page would be to assume
-          "money you kept" already accounts for the cars bought — so the line
-          says, in the same breath as the number, that it does not. It is
-          never hidden and it is never inside the total. See `_money-model.ts`.
-        */}
-        <CapitalFootnote
-          data={data}
-          loading={loading}
-          money={money}
-          onOpen={() => setOpenRow('carPurchases')}
-        />
-
-        {/*
-          Fleet utilisation, demoted from a KPI tile to a sentence.
-
-          It is not money, so it does not belong in the sum above — but it is
-          the first thing an operator asks after "what did I keep", so it sits
-          here rather than three charts down. `null` renders as an em dash and
-          never as 0%: see `computeUtilisation`.
-        */}
-        {!loading && data ? (
-          <p className="px-3 pt-3 text-[13px] text-muted-foreground [@media(max-height:860px)]:pt-2">
-            Your cars were earning{' '}
-            <span className="font-medium tabular-nums text-foreground">
-              {data.utilisation == null ? '—' : `${data.utilisation.toFixed(0)}%`}
-            </span>{' '}
-            of the time
-            {data.fleetSize > 0
-              ? ` across ${data.fleetSize.toLocaleString()} ${data.fleetSize === 1 ? 'car' : 'cars'}.`
-              : ', once there are cars on the fleet to measure.'}
-          </p>
-        ) : null}
 
         {/*
           Said on the receipt itself: these figures include the operator's own

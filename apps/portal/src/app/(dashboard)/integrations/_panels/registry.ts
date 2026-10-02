@@ -31,22 +31,21 @@ import CustomDomainPanel, { CustomDomainStatus } from "./custom-domain";
 
 /** Keyed by the exact `name` on the board's `integrations` list. */
 export const INTEGRATION_PANELS: Record<string, IntegrationPanelEntry> = {
-  // Preview only — describes the integration and connects nothing. See the
-  // header of `turo-sync.tsx` for why that is what makes the card safe to ship
-  // while the feature itself is still on a branch.
-  "Turo Sync": { Panel: TuroSyncPanel, StatusChip: TuroSyncStatus },
-  "Stripe Connect": { Panel: StripeConnectPanel, StatusChip: StripeConnectStatus },
-  Square: { Panel: SquarePanel, StatusChip: SquareStatus },
+  // Live — its panel walks the operator through getting started and hands off
+  // to the Turo Sync page. It draws its own screens (see `turo-sync.tsx`).
+  "Turo Sync": { Panel: TuroSyncPanel, StatusChip: TuroSyncStatus, ownsScreens: true },
+  "Stripe Connect": { Panel: StripeConnectPanel, StatusChip: StripeConnectStatus, ownsScreens: true },
+  Square: { Panel: SquarePanel, StatusChip: SquareStatus, ownsScreens: true },
   Bonzah: { Panel: BonzahPanel, StatusChip: BonzahStatus },
   Inshur: { Panel: InshurPanel, StatusChip: InshurStatus },
   CheckMyDriver: { Panel: CheckMyDriverPanel, StatusChip: CheckMyDriverStatus },
-  BoldSign: { Panel: BoldSignPanel, StatusChip: BoldSignStatus },
-  "Twilio Messages": { Panel: TwilioMessagesPanel, StatusChip: TwilioMessagesStatus },
-  "Twilio Calling": { Panel: TwilioCallingPanel, StatusChip: TwilioCallingStatus },
-  Xero: { Panel: XeroPanel, StatusChip: XeroStatus },
-  Zoho: { Panel: ZohoPanel, StatusChip: ZohoStatus },
-  Tesla: { Panel: TeslaPanel, StatusChip: TeslaStatus },
-  "Custom Domain": { Panel: CustomDomainPanel, StatusChip: CustomDomainStatus },
+  BoldSign: { Panel: BoldSignPanel, StatusChip: BoldSignStatus, ownsScreens: true },
+  "Twilio Messages": { Panel: TwilioMessagesPanel, StatusChip: TwilioMessagesStatus, ownsScreens: true },
+  "Twilio Calling": { Panel: TwilioCallingPanel, StatusChip: TwilioCallingStatus, ownsScreens: true },
+  Xero: { Panel: XeroPanel, StatusChip: XeroStatus, ownsScreens: true },
+  Zoho: { Panel: ZohoPanel, StatusChip: ZohoStatus, ownsScreens: true },
+  Tesla: { Panel: TeslaPanel, StatusChip: TeslaStatus, ownsScreens: true },
+  "Custom Domain": { Panel: CustomDomainPanel, StatusChip: CustomDomainStatus, ownsScreens: true },
 };
 
 export function panelFor(name: string): IntegrationPanelEntry | undefined {

@@ -10,7 +10,7 @@ import { Separator } from "@/components/ui-v2/separator";
 import { SidebarTrigger } from "@/components/ui-v2/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui-v2/tooltip";
 import { GlobalSearchV2 } from "@/components/shared/layout/global-search-v2";
-import { MessagesSheet } from "@/components/shared/layout/dock-sheets";
+import { MessagesSheetV2 } from "@/components/messages-v2/messages-sheet-v2";
 import { NotificationBellV2 } from "@/components/notifications-v2/notification-bell-v2";
 import { useUnreadCount } from "@/hooks/use-unread-count";
 import { useCreditWallet } from "@/hooks/use-credit-wallet";
@@ -574,32 +574,30 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
           </Tooltip>
         )}
 
-        <MessagesSheet
+        {/* The sheet owns the tooltip: SheetTrigger has to sit INSIDE
+            TooltipTrigger so both land on the button. Wrapped the other way
+            round the click went to the Tooltip root and the sheet never opened. */}
+        <MessagesSheetV2
+          tooltip="Crossroads"
+          tooltipClassName={TIP}
           trigger={
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="Messages"
-                  className="relative text-muted-foreground hover:bg-primary/10 hover:text-foreground aria-expanded:bg-primary/10 aria-expanded:text-foreground dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:aria-expanded:bg-[hsl(var(--v2-hover,var(--muted)))]"
-                >
-                  <MessageCircle />
-                  {chatUnread > 0 && (
-                    /* `ring-2 ring-background` is the one addition to the shared
-                       badge: a 16px red dot needs a ring to seat it against the
-                       app gradient this bar sits on. The dock's tucked handle
-                       solved the same problem the same way. */
-                    <span className="absolute -right-0.5 -top-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold leading-none text-destructive-foreground ring-2 ring-background">
-                      {chatUnread > 9 ? "9+" : chatUnread}
-                    </span>
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={8} className={TIP}>
-                Messages
-              </TooltipContent>
-            </Tooltip>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Crossroads — messages, texts, emails and calls"
+              className="relative text-muted-foreground hover:bg-primary/10 hover:text-foreground aria-expanded:bg-primary/10 aria-expanded:text-foreground dark:hover:bg-[hsl(var(--v2-hover,var(--muted)))] dark:aria-expanded:bg-[hsl(var(--v2-hover,var(--muted)))]"
+            >
+              <MessageCircle />
+              {chatUnread > 0 && (
+                /* The bell's badge, exactly — solid red, white figure, no ring.
+                   It used to carry `ring-2 ring-background` to seat it on the
+                   bar's gradient, which read as a white circle around the
+                   count and made it look unlike the bell's badge beside it. */
+                <span className="absolute -right-0.5 -top-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold leading-none text-white">
+                  {chatUnread > 9 ? "9+" : chatUnread}
+                </span>
+              )}
+            </Button>
           }
         />
 

@@ -93,7 +93,7 @@ import {
   type AdditionalDriverInput,
 } from "@/components/rentals/additional-drivers-form";
 import { useV2 } from "@/lib/v2-context";
-import { RentalCreateV2 } from "@/components/rentals-v2/rental-create-v2";
+import { StartDraftRental } from "@/components/rentals-v2/rental-drafts";
 
 /**
  * Plain-English phrasing for a single vehicle-health reason.
@@ -2970,7 +2970,7 @@ const CreateRental = () => {
   // none of them becomes conditional. Deleting this area later is deleting
   // these two lines, the two imports, and the entry in V2_AREAS.
   const v2 = useV2('rentals');
-  if (v2) return <RentalCreateV2 />;
+  if (v2) return <StartDraftRental />;
 
   // ROUTE-LEVEL gate (lean tenants only). Every New Rental button also raises
   // this dialog before navigating, but the check has to exist HERE too or the

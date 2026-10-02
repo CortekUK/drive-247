@@ -22,6 +22,12 @@ vi.mock('next/link', () => ({
 // own tests (featured-deck-v2.test.tsx). Here it is a stub that records what
 // this row hands it.
 const deck = vi.hoisted(() => ({ props: null as null | Record<string, any> }));
+// The blocked-customers dialog reads the tenant and Supabase; it is the card's
+// destination, not what these tests cover.
+vi.mock('@/components/customers-v2/blocked-customers-dialog', () => ({
+  BlockedCustomersDialog: () => null,
+}));
+
 vi.mock('@/components/shared/featured-deck-v2', () => ({
   FeaturedDeck: (props: Record<string, any>) => {
     deck.props = props;
@@ -133,7 +139,7 @@ describe('CustomersOverview — the featured deck', () => {
     const onInvite = vi.fn();
     const onImport = vi.fn();
     render(<CustomersOverview customers={CUSTOMERS} filtered={false} onInvite={onInvite} onImport={onImport} today={TODAY} />);
-    expect(Object.keys(deck.props?.handlers ?? {}).sort()).toEqual(['openImport', 'openInvite']);
+    expect(Object.keys(deck.props?.handlers ?? {}).sort()).toEqual(['openBlocked', 'openImport', 'openInvite']);
     deck.props!.handlers.openInvite();
     deck.props!.handlers.openImport();
     expect(onInvite).toHaveBeenCalledTimes(1);

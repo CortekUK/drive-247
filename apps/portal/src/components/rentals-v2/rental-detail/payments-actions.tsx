@@ -60,7 +60,7 @@ import { RefundDialog } from "@/components/shared/dialogs/refund-dialog";
 import { TakeDepositDialog } from "@/components/shared/dialogs/take-deposit-dialog";
 import { AddHoldDialog } from "@/components/shared/dialogs/add-hold-dialog";
 import { ChargeDepositDialog } from "@/components/shared/dialogs/charge-deposit-dialog";
-import AddFineDialog from "@/components/fines/add-fine-dialog";
+import { AddChargeDialogV2 } from "./add-charge-dialog-v2";
 import { ActionButton, Field, inputCls } from "./_kit";
 import {
   FIFO_CATEGORIES,
@@ -352,6 +352,7 @@ export function PaymentActions({
   request,
   onClose,
   refetch,
+  headless,
 }: {
   ledger: Ledger;
   rental: Record<string, any>;
@@ -359,6 +360,8 @@ export function PaymentActions({
   request: ActionRequest | null;
   onClose: () => void;
   refetch: () => void;
+  /** Dialogs only — the surface draws its own buttons and sends `request`. */
+  headless?: boolean;
 }) {
   const { tenant } = useTenant();
   const [own, setOwn] = useState<ActionRequest | null>(null);
@@ -407,7 +410,7 @@ export function PaymentActions({
 
   return (
     <>
-      <div className="flex flex-wrap items-center gap-2">
+      {!headless && (<div className="flex flex-wrap items-center gap-2">
         <ActionButton onClick={() => setOwn({ kind: "take" })} disabled={t.outstanding === 0}>
           <CreditCard className="size-4" />
           {t.outstanding > 0 ? `Take a payment · ${usd(t.outstanding)} owed` : "Nothing owed"}
@@ -428,7 +431,7 @@ export function PaymentActions({
             Take a deposit
           </ActionButton>
         )}
-      </div>
+      </div>)}
 
       {/* ── the aiming step ────────────────────────────────────────────── */}
       <Dialog
@@ -483,14 +486,14 @@ export function PaymentActions({
 
       {/* ── a charge that belongs to no period ─────────────────────────── */}
       {active?.kind === "fine" && (
-        <AddFineDialog
+        <AddChargeDialogV2
           open
           onOpenChange={(o) => {
-            if (!o) done();
+            if (!o) close();
           }}
-          preselectedCustomerId={rental.customer_id ?? undefined}
-          preselectedRentalId={rentalId}
-          preselectedVehicleId={rental.vehicle_id ?? undefined}
+          rental={rental}
+          rentalRef={rental.rental_number ?? "this rental"}
+          onAdded={refetch}
         />
       )}
 

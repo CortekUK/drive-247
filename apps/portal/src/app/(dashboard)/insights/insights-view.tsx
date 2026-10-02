@@ -21,9 +21,18 @@
  */
 
 import { useState } from 'react';
+import { cn } from '@/lib/utils';
 import { AlertTriangle } from 'lucide-react';
 import { useTenant } from '@/contexts/TenantContext';
 import { useInsights, type InsightsData, type PeriodMonths } from './_data';
+import { usePageSearch } from '@/components/shared/layout/page-search-slot';
+import { OverviewFlip } from '@/components/shared/layout/overview-flip';
+import { DEFAULT_MONTHS, InsightsFilterPanel, SearchResults, useInsightsSearch } from './_search';
+import { ViewSwitch, useInsightsView } from './_view-switch';
+import { AnalyticsGallery } from './_analytics-gallery';
+import { PnlTable } from './_pnl-table';
+import { ReportsView } from './_reports';
+import { TraxSummaryView } from './_trax-summary';
 import { AutoSkeleton } from '@/components/skeleton-v2/auto-skeleton';
 import { skeletonRows } from '@/lib/skeleton-data';
 import { useSkeletonLoading } from '@/hooks/use-skeleton-loading';
@@ -46,6 +55,7 @@ const SKELETON_INSIGHTS: InsightsData = {
     const cost = f.money(800, 2000);
     return { key: `m${i}`, label: 'Xxx', revenue, cost, profit: revenue - cost };
   }),
+  vehicleProfits: [],
   bestVehicles: skeletonRows(5, (f) => ({ vehicleId: f.id, label: f.text(2, 3), profit: f.money(500, 5000) })),
   worstVehicles: skeletonRows(5, (f) => ({ vehicleId: f.id, label: f.text(2, 3), profit: f.money(-800, 400) })),
   mix: skeletonRows(4, (f) => ({ category: f.text(1, 2), amount: f.money(2000, 20000), share: 0.25 })),
@@ -53,6 +63,9 @@ const SKELETON_INSIGHTS: InsightsData = {
   ledger: [],
   refunds: [],
   receivables: [],
+  rentals: [],
+  paymentsIn: [],
+  customerNames: new Map(),
   vehicleLabels: new Map(),
   adjustedCount: 0,
   rules: new Map(),
@@ -64,7 +77,10 @@ const SKELETON_INSIGHTS: InsightsData = {
 export function InsightsView() {
   // 12 months by default: a rental business is seasonal, and three months of a
   // seasonal business is a mood rather than a trend.
-  const [months, setMonths] = useState<PeriodMonths>(12);
+  const [months, setMonths] = useState<PeriodMonths>(DEFAULT_MONTHS);
+  const [view, setView] = useInsightsView();
+  const [search, setSearch] = useState('');
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const { tenant } = useTenant();
   // Never a hardcoded '$'. Three components under /reports do exactly that, and
@@ -78,6 +94,22 @@ export function InsightsView() {
   const isLoading = useSkeletonLoading(insightsLoading);
   const data = isLoading ? SKELETON_INSIGHTS : loadedData;
 
+  // The top bar's field and filter button, lent by this page while it is open.
+  const hits = useInsightsSearch(loadedData, search);
+  const searching = search.trim() !== '';
+  usePageSearch({
+    placeholder: 'Search entries, cars, customers, amounts…',
+    scopeLabel: 'Insights',
+    value: search,
+    onChange: setSearch,
+    resultCount: loadedData ? hits.length : undefined,
+    filters: {
+      open: filtersOpen,
+      onOpenChange: setFiltersOpen,
+      activeCount: months === DEFAULT_MONTHS ? 0 : 1,
+    },
+  });
+
   return (
     /* Switch row alignment: at md+ the h1 (text-3xl leading-tight, a 37.5px
        line box) is centred on the sidebar's Portal / Website switch at y=92.
@@ -86,13 +118,43 @@ export function InsightsView() {
     /* md+: exactly one screen tall, no page scroll. 100svh − 66px is the
        portal's full-height page (main's bounds; see (dashboard)/layout.tsx).
        Below md the page scrolls as usual — a phone cannot hold it all. */
-    <div className="mx-auto flex w-full max-w-[1560px] flex-col gap-6 px-2 pb-8 md:h-[calc(100svh-66px)] md:overflow-hidden md:pt-[23.25px] md:pb-0 [@media(max-height:860px)]:gap-4">
-      <header className="shrink-0">
-        <h1 className="text-3xl font-semibold leading-tight tracking-tight">Insights</h1>
-        <p className="mt-1.5 text-sm text-muted-foreground">
-          What the business earned, what it cost to run, and what is still owed.
-        </p>
+    <div className="mx-auto flex w-full max-w-[1560px] flex-col gap-6 px-2 pb-8 md:h-[calc(100svh-66px)] md:overflow-hidden md:pt-[23.25px] md:pb-4 [@media(max-height:860px)]:gap-4">
+      {/*
+        One row: the title on the left, the four views on the same line to its
+        right (lg+). The title block gives way — its line wraps — so the views
+        never drop below it. The period is not here: it is a filter, and like
+        every v2 page's filters it lives behind the top bar's search field
+        (see `_search.tsx`).
+      */}
+      <div className="shrink-0">
+      <header className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between lg:gap-6">
+        <div className="min-w-0 lg:flex-1">
+          <h1 className="text-3xl font-semibold leading-tight tracking-tight">Insights</h1>
+          <p className="mt-1.5 text-sm text-muted-foreground">
+            What the business earned, what it cost to run, and what is still owed.
+          </p>
+        </div>
+        <div className="shrink-0">
+          <ViewSwitch value={view} onChange={setView} />
+        </div>
       </header>
+
+      {/*
+        Filters come in with the app's own card flip — the same component,
+        timing and Escape-to-close as Vehicles, Rentals and Customers. The
+        flip's front is empty (Insights has no overview card to turn over),
+        so the panel turns into place under the header and turns away again,
+        taking no space while it is shut.
+      */}
+      <div className={cn('transition-[margin] duration-200 ease-out motion-reduce:transition-none', filtersOpen ? 'mt-6' : 'mt-0')}>
+        <OverviewFlip
+          flipped={filtersOpen}
+          onFlipBack={() => setFiltersOpen(false)}
+          front={<div aria-hidden className="h-px" />}
+          back={<InsightsFilterPanel months={months} onMonthsChange={setMonths} onClose={() => setFiltersOpen(false)} />}
+        />
+      </div>
+      </div>
 
       {/*
         A failed read is stated, not swallowed. A page of zeroes is
@@ -122,31 +184,50 @@ export function InsightsView() {
         </div>
       ) : null}
 
+
       <AutoSkeleton loading={isLoading} outerClassName="md:min-h-0 md:flex-1" className="md:h-full">
-      {/*
-        The receipt says what happened; the calculator beside it lets the
-        operator push the same numbers around. Keyed on the period and the
-        loading flag so it re-seeds from real figures once they land, and never
-        keeps the skeleton's placeholders in its state.
-      */}
-      {/* The page itself never scrolls at md+. Side by side (xl), each column
-          may scroll on its own only as a last resort on a very short window;
-          stacked (md–xl), the pair scrolls inside the frame instead. */}
-      <div className="grid items-start gap-8 md:h-full md:overflow-y-auto xl:grid-cols-[minmax(0,1fr)_420px] xl:items-stretch xl:gap-12 xl:overflow-visible [&>*]:xl:h-full [&>*]:xl:overflow-y-auto">
-        <MoneyReceipt
-          data={data}
-          loading={false}
-          currency={currency}
-          months={months}
-          onMonthsChange={setMonths}
-        />
-        <ProfitCalculator
-          key={`${months}-${isLoading ? 'skeleton' : 'loaded'}`}
-          data={data}
-          months={months}
-          currency={currency}
-        />
-      </div>
+        {searching ? (
+          <div className="md:h-full md:overflow-y-auto">
+            <SearchResults hits={hits} term={search} currency={currency} />
+          </div>
+        ) : view === 'numbers' ? (
+          /* The receipt says what happened; the calculator beside it lets the
+             operator push the same numbers around. The calculator is keyed on
+             the period and the loading flag so it re-seeds from real figures
+             once they land and never keeps the skeleton's placeholders.
+
+             The page itself never scrolls at md+. Side by side (xl), each
+             column may scroll on its own only as a last resort on a very short
+             window; stacked (md–xl), the pair scrolls inside the frame. */
+          <div className="grid items-start gap-8 md:h-full md:overflow-y-auto xl:grid-cols-[minmax(0,1fr)_420px] xl:items-stretch xl:gap-12 xl:overflow-visible [&>*]:xl:h-full [&>*]:xl:overflow-y-auto">
+            <MoneyReceipt data={data} loading={false} currency={currency} />
+            <ProfitCalculator
+              key={`${months}-${isLoading ? 'skeleton' : 'loaded'}`}
+              data={data}
+              months={months}
+              currency={currency}
+            />
+          </div>
+        ) : view === 'pnl' ? (
+          /* One table, one row per car — scrolls inside its own frame. */
+          <div className="md:h-full">
+            <PnlTable data={loadedData} months={months} currency={currency} />
+          </div>
+        ) : view === 'analytics' ? (
+          <div className="md:h-full md:overflow-y-auto xl:overflow-visible">
+            <AnalyticsGallery data={data} months={months} currency={currency} />
+          </div>
+        ) : view === 'reports' ? (
+          <div className="md:h-full md:overflow-y-auto">
+            <ReportsView data={loadedData} months={months} currency={currency} />
+          </div>
+        ) : (
+          /* The real figures only — never the skeleton's placeholders, which
+             would otherwise be sent to Trax as if they were the business. */
+          <div className="md:h-full md:overflow-y-auto xl:overflow-visible">
+            <TraxSummaryView data={loadedData} months={months} currency={currency} />
+          </div>
+        )}
       </AutoSkeleton>
     </div>
   );

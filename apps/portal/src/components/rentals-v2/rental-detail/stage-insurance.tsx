@@ -41,16 +41,16 @@
  * gates it rather than being reproduced here.
  */
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Loader2 } from "lucide-react";
+import { Button } from "@/components/ui-v2/button";
+import { TraxMark } from "@/components/trax/trax-greeting";
 import {
   AlertTriangle,
   Check,
-  ExternalLink,
-  FileCheck2,
   FlaskConical,
   ShieldCheck,
-  ShieldOff,
-  Sparkles,
   Upload,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -71,7 +71,11 @@ import {
 } from "@/hooks/use-rental-insurance-policies";
 import { useBonzahBalance } from "@/hooks/use-bonzah-balance";
 import { useBonzahVehicleEligibility } from "@/hooks/use-bonzah-vehicle-eligibility";
-import { useRentalInsuranceVerifications } from "@/hooks/use-insurance-verifications";
+import {
+  useAttachInsuranceVerification,
+  useRentalInsuranceVerifications,
+  useUploadAndVerifyInsurance,
+} from "@/hooks/use-insurance-verifications";
 // Reused as it stands, exactly as the Customer stage reuses the verification
 // dialogs. It is the ONLY working route to a Bonzah quote, a payment and the
 // ledger entry that follows, and a v2 copy would be a second call-site for
@@ -80,19 +84,18 @@ import { useRentalInsuranceVerifications } from "@/hooks/use-insurance-verificat
 import { BuyInsuranceDialog } from "@/components/rentals/buy-insurance-dialog";
 import type { StageProps } from "./stages";
 import { SHOW_MULTI_PERIOD } from "./multi-period";
+import { BonzahCoverCard } from "./bonzah-cover-card";
 import {
   fmtDate,
   fmtDateTime,
   insetCls,
   listCls,
   money,
-  ActionButton,
   EmptyHint,
   OutOfDateBanner,
   Panel,
   Pill,
-  Section,
-  StatBlock,
+  StageAction,
   Surface,
   type Drift,
 } from "./_kit";
@@ -315,363 +318,203 @@ export function StageInsurance({ detail, onStage, refetch }: StageProps) {
     bonzah: "Marked as covered by Bonzah — but no policy is attached to this rental.",
   }[String(rental.insurance_status ?? "").toLowerCase()];
 
+  /* ── the customer's own policy: upload, then Trax reads it ──────────── */
+  const queryClient = useQueryClient();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const uploadDoc = useUploadAndVerifyInsurance();
+  const attachDoc = useAttachInsuranceVerification();
+  const [uploading, setUploading] = useState(false);
+  const onFile = async (file: File | undefined) => {
+    if (!file) return;
+    setUploading(true);
+    try {
+      // v1's own two steps, as the Insurances page runs them: store the file
+      // and start Trax's check, then attach the result to this rental.
+      const verificationId = await uploadDoc.mutateAsync({ file });
+      await attachDoc.mutateAsync({ verificationId, rentalId: rental.id });
+      toast({ title: "Uploaded — I'm reading it now.", description: "The result lands here in a moment." });
+    } catch (e: any) {
+      toast({ title: "Not uploaded", description: e?.message ?? "Something went wrong.", variant: "destructive" });
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+  // While Trax is still reading a document, look again every few seconds.
+  const reading = uploaded.some((v) => v.status === "pending" || v.status === "processing");
+  useEffect(() => {
+    if (!reading) return;
+    const t = setInterval(
+      () => void queryClient.invalidateQueries({ queryKey: ["insurance-verifications", "by-rental", rental.id] }),
+      3000
+    );
+    return () => clearInterval(t);
+  }, [reading, queryClient, rental.id]);
+
   /* ── the panel ──────────────────────────────────────────────────────── */
 
   if (isLoading) {
     return (
-      <Panel title="Insurance" description="Cover for the hire period, priced from the car and the dates.">
+      <Panel fill title="Insurance" description="Cover for the hire — Bonzah, or the customer's own policy.">
         <EmptyHint>Reading the cover on this rental…</EmptyHint>
       </Panel>
     );
   }
 
-  const buyLabel = covered ? "Re-quote and replace" : "Add cover";
+  const buyLabel = covered ? "Re-quote Bonzah cover" : "Add Bonzah cover";
 
   return (
     <Panel
+      fill
       title="Insurance"
-      description="Optional cover for the hire period. Written against the car and the dates — and nothing else, so only those can put it out of date."
-      footer={
-        canBuy ? (
-          <ActionButton onClick={() => setBuyOpen(true)} disabled={eligibilityLoading}>
-            <ShieldCheck className="size-4" />
-            {buyLabel}
-          </ActionButton>
-        ) : (
-          <ActionButton disabled title={blockedReason ?? undefined}>
-            <ShieldCheck className="size-4" />
-            {buyLabel}
-          </ActionButton>
-        )
+      description="Cover for the hire — Bonzah, or the customer's own policy checked by Trax."
+      action={
+        <StageAction
+          icon={ShieldCheck}
+          label={buyLabel}
+          onClick={() => setBuyOpen(true)}
+          disabledReason={canBuy && !eligibilityLoading ? null : (blockedReason ?? "Checking whether Bonzah can cover this car…")}
+        />
       }
     >
-      {/* ── out of date ─────────────────────────────────────────────────── */}
-      {showBanner && (
-        <div>
-          <OutOfDateBanner
-            title={
-              gapDays
-                ? `The car is uninsured for the last ${gapDays} day${gapDays === 1 ? "" : "s"}`
-                : "This policy no longer matches the rental"
-            }
-            meta={
-              gapDays
-                ? `Cover bought for ${money(Number(current?.premium_amount ?? 0))} and ends ${fmtDate(
-                    current?.trip_end_date
-                  )}. The rental now runs to ${fmtDate(rental.end_date)}.`
-                : `Cover bought for ${money(Number(current?.premium_amount ?? 0))}${
-                    current?.policy_no ? ` · policy ${current.policy_no}` : ""
-                  }`
-            }
-            drift={drift}
-            primaryLabel="Re-quote and replace"
-            onPrimary={() => setBuyOpen(true)}
-            secondaryLabel="Keep the current policy"
-            onSecondary={acknowledge}
-          />
-          <p className="mt-2 px-6 text-[11px] text-muted-foreground">
-            Keeping it only hides this notice on this browser — there is nowhere on the policy to record the
-            decision yet, so a colleague will still see it. If the dates move again, it comes back.
-          </p>
-        </div>
-      )}
-
-      {/* ── the policy ──────────────────────────────────────────────────── */}
-      {!current ? (
-        <Section
-          title="No cover on this rental"
-          description="Bonzah is optional. Without it the customer is on their own policy, which is a legitimate way to run a hire."
-        >
-          <EmptyHint>
-            Nothing has been bought for {detail.customerName ?? "this customer"}. If they are bringing their own
-            insurance, upload the certificate below so it is on the rental when somebody needs it.
-          </EmptyHint>
-
-          {/* The decision the rental itself records, which is what the stage rail
-              reads. Shown here because without it the two disagree in a way that
-              looks like a bug: the rail can say "Customer's own" while the
-              section below says nothing is uploaded — both true, and together
-              they are the actual finding (a decision was made, no certificate
-              backs it). Separately is where it reads as a contradiction. */}
-          {recordedDecision && (
-            <div className={cn(insetCls, "mt-5 px-5 py-4")}>
-              <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                Recorded on the rental
-              </p>
-              <p className="mt-1 text-sm">{recordedDecision}</p>
-            </div>
-          )}
-
-          {blockedReason && (
-            <p className="mt-4 text-xs text-muted-foreground">{blockedReason}</p>
-          )}
-        </Section>
-      ) : (
-        <Surface>
-          <div className="flex flex-wrap items-start gap-4">
-            <span
-              className={cn(
-                "flex size-11 shrink-0 items-center justify-center rounded-3xl",
-                covered ? "bg-success-light text-success" : "bg-muted text-muted-foreground"
-              )}
-            >
-              {covered ? <ShieldCheck className="size-5" /> : <ShieldOff className="size-5" />}
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="font-heading text-sm font-semibold">
-                  {coverageLabels.length
-                    ? coverageLabels.map((c) => c.label).join(" + ")
-                    : "Bonzah cover"}
-                </h3>
-                <StatusChip status={current.status} />
-                {/* Sandbox policies are NOT real cover, while the customer can
-                    still be charged real money for them — which is why selling
-                    is normally blocked in test mode at all. One that exists must
-                    be unmistakable. */}
-                {bonzahMode === "test" && (
-                  <Badge variant="outline" className="gap-1.5">
-                    <FlaskConical />
-                    Sandbox
-                  </Badge>
-                )}
-              </div>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {current.policy_no ? `Policy ${current.policy_no}` : `Quote ${current.quote_no ?? current.quote_id}`}
-                {current.policy_issued_at && ` · issued ${fmtDateTime(current.policy_issued_at)}`}
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-5 grid gap-2 sm:grid-cols-3">
-            <StatBlock
-              label="Cover from"
-              value={fmtDate(current.trip_start_date)}
-              hint={current.pickup_state ? `Garaged ${current.pickup_state}` : undefined}
-            />
-            <StatBlock
-              label="Cover to"
-              value={fmtDate(current.trip_end_date)}
-              hint={
+      {/* Island layout, the Customer stage's grammar: the two ways a hire is
+          covered, as two full-width cards sharing the pane's height. */}
+      <div className="flex h-full min-h-0 flex-col gap-4">
+        {/* ── out of date ─────────────────────────────────────────────────── */}
+        {showBanner && (
+          <div className="shrink-0">
+            <OutOfDateBanner
+              title={
                 gapDays
-                  ? `${gapDays} day${gapDays === 1 ? "" : "s"} short of the rental`
-                  : "Matches the rental"
+                  ? `The car is uninsured for the last ${gapDays} day${gapDays === 1 ? "" : "s"}`
+                  : "This policy no longer matches the rental"
               }
-              tone={gapDays ? "text-warning" : undefined}
+              meta={
+                gapDays
+                  ? `Cover ends ${fmtDate(current?.trip_end_date)}. The rental now runs to ${fmtDate(rental.end_date)}.`
+                  : `Cover bought for ${money(Number(current?.premium_amount ?? 0))}${current?.policy_no ? ` · policy ${current.policy_no}` : ""}`
+              }
+              drift={drift}
+              primaryLabel="Re-quote and replace"
+              onPrimary={() => setBuyOpen(true)}
+              secondaryLabel="Keep the current policy"
+              onSecondary={acknowledge}
             />
-            <StatBlock label="Premium" value={money(Number(current.premium_amount ?? 0))} hint="Charged to the rental" />
-          </div>
-
-          {coverageLabels.length > 0 && (
-            <div className="mt-5 flex flex-wrap gap-1.5">
-              {coverageLabels.map((c) => (
-                <Pill key={c.key} tone="neutral">
-                  {c.label}
-                </Pill>
-              ))}
-            </div>
-          )}
-
-          {/* A quote that was never paid, or a policy blocked on an empty
-              wallet, is money already taken with nothing behind it. It is the
-              one thing on this stage that warrants the destructive tone. */}
-          {current.status === "insufficient_balance" && (
-            <div className="mt-5 rounded-3xl bg-destructive-light px-5 py-4 ring-1 ring-destructive/20">
-              <p className="text-sm font-medium text-destructive">
-                The policy did not issue — your Bonzah wallet was empty.
-              </p>
-              <p className="mt-1 text-xs text-destructive/80">
-                {balanceNumber !== null
-                  ? `The wallet currently holds ${money(balanceNumber)}. `
-                  : ""}
-                Top it up and buy again; the customer has no cover until you do.
-              </p>
-              <a
-                href={portalUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-destructive underline-offset-2 hover:underline"
-              >
-                <ExternalLink className="size-3.5" />
-                Open the Bonzah portal
-              </a>
-            </div>
-          )}
-
-          {/* NOT WIRED here, and shown rather than hidden. Retrying a stalled
-              policy, refreshing it against Bonzah and downloading the
-              certificate PDFs are three separate edge-function calls that live
-              on v1's insurance timeline; each has its own failure handling and
-              re-implementing them from a description would be guesswork. */}
-          {(current.status === "quoted" ||
-            current.status === "failed" ||
-            current.status === "insufficient_balance") && (
-            <div className="mt-5">
-              <ActionButton
-                variant="outline"
-                disabled
-                title="Retrying a stalled policy calls bonzah-confirm-payment with the original quote — that path is on v1's insurance timeline and is not on this stage yet. Buying fresh cover above works."
-              >
-                <ShieldCheck className="size-4" />
-                Retry this policy
-              </ActionButton>
-            </div>
-          )}
-
-          {covered && (
-            <div className="mt-5">
-              <ActionButton
-                variant="outline"
-                disabled
-                title="The certificate PDFs are fetched per coverage through bonzah-download-pdf, which is not on this stage yet."
-              >
-                <FileCheck2 className="size-4" />
-                Download the certificate
-              </ActionButton>
-            </div>
-          )}
-        </Surface>
-      )}
-
-      {/* ── the customer's own policy ───────────────────────────────────── */}
-      <Section
-        title="The customer's own policy"
-        description="Certificates uploaded against this rental, read by the document checker."
-      >
-        {uploaded.length === 0 ? (
-          <EmptyHint>
-            Nothing uploaded. If {detail.customerName?.split(" ")[0] ?? "the customer"} is covering the car on their
-            own insurance, the certificate belongs here — it is the only proof on the rental if there is a claim.
-          </EmptyHint>
-        ) : (
-          <div className={listCls}>
-            {uploaded.map((v) => {
-              const flags = v.ai_findings?.flags ?? [];
-              return (
-                <div key={v.id} className="flex gap-4 px-5 py-4">
-                  <span
-                    className={cn(
-                      "flex size-10 shrink-0 items-center justify-center rounded-2xl",
-                      v.status === "verified"
-                        ? "bg-success-light text-success"
-                        : v.status === "flagged" || v.status === "rejected"
-                          ? "bg-destructive-light text-destructive"
-                          : "bg-muted text-muted-foreground"
-                    )}
-                  >
-                    <FileCheck2 className="size-4" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="truncate text-sm font-medium">{v.file_name}</p>
-                      <Pill
-                        tone={
-                          v.status === "verified"
-                            ? "success"
-                            : v.status === "flagged" || v.status === "rejected"
-                              ? "warning"
-                              : "neutral"
-                        }
-                      >
-                        {v.status}
-                      </Pill>
-                      {v.ai_score != null && <Pill tone="neutral">{v.ai_score}/100</Pill>}
-                    </div>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {[
-                        v.extracted_fields?.insurer,
-                        v.extracted_fields?.policy_number,
-                        v.extracted_fields?.end_date ? `to ${v.extracted_fields.end_date}` : null,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ") || "Nothing was read off the document."}
-                    </p>
-                    {flags.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        {flags.map((f) => (
-                          <Pill key={f} tone="warning">
-                            {f}
-                          </Pill>
-                        ))}
-                      </div>
-                    )}
-                    {v.ai_findings?.reasoning && (
-                      <div className={cn(insetCls, "mt-3 px-4 py-3")}>
-                        <div className="mb-1.5 flex items-center gap-1.5">
-                          <Sparkles className="size-3 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" />
-                          <span className="text-[11px] font-medium">What the checker saw</span>
-                        </div>
-                        <p className="text-xs leading-relaxed text-muted-foreground">
-                          {v.ai_findings.reasoning}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
           </div>
         )}
 
-        {/* NOT WIRED. Uploading is a file input, a storage write to the
-            `insurance-verifications` bucket and an edge-function call to read
-            the document — v1 builds that inline on its rental page rather than
-            exposing it as a component, so there is nothing here to call. */}
-        <div className="mt-5">
-          <ActionButton
-            variant="outline"
-            disabled
-            title="The upload-and-verify flow is built inline on v1's rental page rather than exposed as a component, so it cannot be called from here yet. Uploading from the Insurances page attaches to the rental the same way."
-          >
-            <Upload className="size-4" />
-            Upload a certificate
-          </ActionButton>
-        </div>
-      </Section>
+        {/* ── Bonzah — pick the cover, see the price, open the documents ──── */}
+        <BonzahCoverCard
+          policy={current}
+          covered={covered}
+          live={sellable}
+          sandbox={bonzahMode === "test"}
+          days={Math.max(1, detail.days ?? 1)}
+          rentalStart={rental.start_date ?? null}
+          rentalEnd={rental.end_date ?? null}
+          customerName={detail.customerName ?? "The renter"}
+          tenantId={tenant?.id}
+          emptyNote={current ? null : (recordedDecision ?? null)}
+          statusChip={current ? <StatusChip status={current.status} /> : <StatusChip status="active" />}
+          gapDays={gapDays}
+          onRequote={() => setBuyOpen(true)}
+        />
 
-      {/* Bonzah covers the trip and only the trip. INSHUR is the off-trip half
-          and a separate integration; it is hidden from the lean product, and its
-          own block explains its absence when the integration is off — so without
-          this gate the canary would be told to go and configure a product it has
-          not been sold. Gated exactly as v1 gates it. */}
-      {!inshurHidden && tenant?.integration_inshur && (
-        <Section
-          title="Off-trip cover"
-          description="INSHUR writes the general fleet policy, which Bonzah does not cover."
-        >
-          <EmptyHint>
-            INSHUR is on for this account, but its panel is not on this stage yet. It is unchanged on the rental&rsquo;s
-            v1 page and on the Insurances page.
-          </EmptyHint>
-        </Section>
-      )}
+        {/* ── the customer's own policy, checked by Trax ──────────────────── */}
+        <Surface className="flex min-h-0 flex-1 flex-col p-5">
+          <div className="flex items-center gap-2.5">
+            <h3 className="font-heading text-sm font-semibold">Customer&rsquo;s own policy</h3>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-light px-2 py-0.5 text-[11px] font-medium text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
+              <TraxMark size="xs" className="-ml-1 size-4" />
+              Checked by Trax
+            </span>
+            <span className="flex-1" />
+            <input
+              ref={fileRef}
+              type="file"
+              accept="application/pdf,image/*"
+              className="hidden"
+              onChange={(e) => void onFile(e.target.files?.[0])}
+            />
+            <Button size="sm" variant="outline" disabled={uploading} onClick={() => fileRef.current?.click()}>
+              {uploading ? <Loader2 className="animate-spin" /> : <Upload />}
+              Upload certificate
+            </Button>
+          </div>
 
-      <p className="text-xs text-muted-foreground">
-        Cover is priced from the car and the dates.{" "}
-        <button
-          type="button"
-          onClick={() => onStage("when")}
-          className="cursor-pointer font-medium text-primary dark:text-[hsl(var(--v2-link,var(--primary)))] underline-offset-2 hover:underline"
-        >
-          Change the dates
-        </button>{" "}
-        and the policy above will say so.
-      </p>
+          {uploaded.length === 0 ? (
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              className={cn(
+                insetCls,
+                "mt-4 flex min-h-16 flex-1 flex-col items-center justify-center gap-2 border border-dashed border-foreground/10 px-6 text-center transition-colors duration-200 ease-out hover:bg-primary/[0.04] motion-reduce:transition-none"
+              )}
+            >
+              <Upload className="size-5 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">
+                Drop in {detail.customerName?.split(" ")[0] ?? "the customer"}&rsquo;s insurance certificate — I&rsquo;ll read it and check it.
+              </p>
+              <p className="text-xs text-muted-foreground/70">PDF or a photo</p>
+            </button>
+          ) : (
+            <div className="mt-4 min-h-0 flex-1 overflow-y-auto no-scrollbar">
+              <div className={listCls}>
+                {uploaded.map((v) => {
+                  const flags = v.ai_findings?.flags ?? [];
+                  const busy = v.status === "pending" || v.status === "processing";
+                  const ok = v.status === "verified";
+                  return (
+                    <div key={v.id} className="flex items-center gap-4 px-5 py-3">
+                      <div className="min-w-0 flex-1">
+                        <a
+                          href={v.file_url || undefined}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="block truncate text-sm font-medium underline-offset-2 hover:underline"
+                        >
+                          {v.extracted_fields?.insurer || v.file_name}
+                        </a>
+                        <p
+                          className="truncate text-xs text-muted-foreground"
+                          title={v.ai_findings?.reasoning ?? undefined}
+                        >
+                          {busy
+                            ? "Reading the document…"
+                            : ok
+                              ? [
+                                  v.extracted_fields?.policy_number,
+                                  v.extracted_fields?.end_date ? `to ${v.extracted_fields.end_date}` : null,
+                                ]
+                                  .filter(Boolean)
+                                  .join(" · ") || "Nothing was read off the document."
+                              : flags.join(" · ") || "Needs a look"}
+                        </p>
+                      </div>
+                      <span
+                        className={cn(
+                          "flex shrink-0 items-center gap-1.5 text-xs font-medium",
+                          busy ? "text-muted-foreground" : ok ? "text-success" : "text-warning"
+                        )}
+                      >
+                        {busy ? <Loader2 className="size-3.5 animate-spin" /> : ok ? <Check className="size-3.5" /> : null}
+                        {busy ? "Reading" : ok ? "Valid" : "Needs a look"}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </Surface>
+      </div>
 
-      {/* ── the reused v1 dialog ────────────────────────────────────────── */}
+      {/* ── the reused v1 dialog — the one route to a Bonzah quote ───────── */}
       {detail.customer && vehicle && (
         <BuyInsuranceDialog
           open={buyOpen}
           onOpenChange={setBuyOpen}
           rental={rental as any}
-          /**
-           * The dialog writes the ledger entry itself — the premium becomes a
-           * charge on the rental the moment the policy issues. What it does NOT
-           * do is collect the money, which is why v1 chains a payment dialog off
-           * this callback. That dialog belongs to the Payments stage, so this
-           * hands the operator there rather than opening a second modal that
-           * would duplicate it.
-           */
           onPurchaseComplete={(premium) => {
             toast({
               title: "Cover bought",

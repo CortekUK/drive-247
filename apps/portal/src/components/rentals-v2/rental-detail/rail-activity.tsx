@@ -73,6 +73,13 @@ import { useTenant } from "@/contexts/TenantContext";
 import type { RentalDetailV2 } from "./use-rental-detail-v2";
 import { SHOW_MULTI_PERIOD } from "./multi-period";
 import { money } from "./_kit";
+import { useV2 } from "@/lib/v2-context";
+import { MIN_REAL, previewActivity, type PreviewActivity } from "./rail-preview";
+
+const PREVIEW_ICON: Record<PreviewActivity["icon"], React.ComponentType<{ className?: string }>> = {
+  plus: Plus, check: Check, card: CreditCard, lock: Lock, key: KeyRound,
+  shield: ShieldCheck, sign: FileSignature, mail: Mail, car: Car, bell: Bell,
+};
 
 /* ══════════════════════════════════════════════════════════════════════════
    Shape
@@ -423,7 +430,15 @@ export function RailActivity({ detail }: { detail: RentalDetailV2 }) {
   const { tenant } = useTenant();
   const [filter, setFilter] = useState<Kind | "all">("all");
 
-  const { data: all = [], isLoading } = useRentalActivity(detail.rental, tenant?.id);
+  const { data: real = [], isLoading } = useRentalActivity(detail.rental, tenant?.id);
+
+  /* northwind preview — see rail-preview.ts. Real rows always win. */
+  const preview = useV2("chrome");
+  const all = useMemo<Event[]>(() => {
+    if (!preview || isLoading || real.length >= MIN_REAL) return real;
+    const borrowed = previewActivity(detail).map((p) => ({ ...p, icon: PREVIEW_ICON[p.icon] }));
+    return [...real, ...borrowed].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+  }, [preview, isLoading, real, detail]);
 
   const events = useMemo(
     () => all.filter((e) => filter === "all" || e.kind === filter),

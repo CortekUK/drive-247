@@ -27,27 +27,56 @@ const bar = (x: number, y: number, w: number, fill: string, h = 5) =>
   `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${h / 2}" fill="${fill}"/>`;
 
 /* ── Rentals: Calendar View — the fleet on a timeline ─────────────────── */
+/* The board itself, small: a header with its Rental / Vehicle / Customer
+   switch, seven day columns with the weekend shaded and TODAY ringed, a solid
+   today line, and three cars as lanes — one booking in the soft accent, one
+   selected in the solid accent (pickup knob, return dot), one blocked stretch
+   drawn dashed. One idea: every car, every day, at a glance. */
 function calendarArt(dark: boolean) {
   const p = pal(dark);
-  const days = [0, 1, 2, 3, 4, 5].map((i) => bar(62 + i * 16, 34, 8, p.lite, 4)).join('');
-  const lanes = [0, 1, 2, 3].map((r) => bar(14, 53 + r * 18, 28, p.lite, 6)).join('');
-  const y = (r: number) => 50 + r * 18;
+  const X0 = 52;
+  const W = 16.3;
+  const col = (c: number) => X0 + c * W;
+  const lane = (r: number) => 56 + r * 22;
+  let grid = '';
+  for (let c = 5; c < 7; c++) grid += `<rect x="${col(c)}" y="33" width="${W}" height="89" fill="${p.soft}" opacity=".7"/>`;
+  for (let c = 1; c < 7; c++) grid += `<path d="M${col(c)} 33 V122" stroke="${p.lite}" stroke-width="1"/>`;
+  let days = '';
+  for (let c = 0; c < 7; c++) {
+    const cx = col(c) + W / 2;
+    days += c === 3
+      ? `<circle cx="${cx}" cy="43" r="5.5" fill="${p.acc}"/>`
+      : `<rect x="${cx - 3.5}" y="41.5" width="7" height="3" rx="1.5" fill="${p.mut}" opacity=".7"/>`;
+  }
+  const who = [0, 1, 2]
+    .map((r) => `<circle cx="22" cy="${lane(r) + 5}" r="5" fill="${p.soft}"/>${bar(31, lane(r) + 3, 14, p.lite, 4)}`)
+    .join('');
+  const today = col(3) + W / 2;
   return `
- <g transform="translate(66 22)">
-  <rect width="168" height="130" rx="12" fill="${p.card}" ${stroke(p)}/>
-  ${bar(14, 14, 50, p.ink, 8)}
+ <!-- 1.18× the base board, so it fills the card's picture room (Oct 2 2026). -->
+ <g transform="translate(46 7) scale(1.18)">
+  <rect width="176" height="128" rx="12" fill="${p.card}" ${stroke(p)}/>
+  ${bar(14, 14, 44, p.ink, 7)}
+  <rect x="114" y="11" width="50" height="13" rx="6.5" fill="${p.lite}"/>
+  <rect x="116" y="13" width="17" height="9" rx="4.5" fill="${p.acc}"/>
+  <path d="M10 33 H166" stroke="${p.lite}" stroke-width="1.2"/>
+  ${grid}
   ${days}
-  ${lanes}
-  <rect x="58" y="${y(0)}" width="46" height="12" rx="6" fill="${p.lite}"/>
-  <rect x="88" y="${y(1)}" width="62" height="12" rx="6" fill="${p.acc}"/>
-  <circle cx="95" cy="${y(1) + 6}" r="3.5" fill="${p.onAcc}"/>
-  <rect x="66" y="${y(2)}" width="30" height="12" rx="6" fill="${p.lite}"/>
-  <rect x="112" y="${y(2)}" width="40" height="12" rx="6" fill="${p.lite}"/>
-  <rect x="74" y="${y(3)}" width="58" height="12" rx="6" fill="${p.lite}"/>
-  <path d="M112 42 V120" stroke="${p.acc}" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="3 4"/>
-  <circle cx="112" cy="42" r="3" fill="${p.acc}"/>
+  <path d="M10 50 H166" stroke="${p.lite}" stroke-width="1"/>
+  ${who}
+  <!-- lane 1: a booking -->
+  <rect x="${col(0) + 3}" y="${lane(0)}" width="${W * 4 - 6}" height="10" rx="5" fill="${p.soft}" stroke="${p.acc}" stroke-opacity=".35" stroke-width="1"/>
+  <!-- lane 2: the selected one -->
+  <rect x="${col(2) + 3}" y="${lane(1)}" width="${W * 5 - 4}" height="10" rx="5" fill="${p.acc}"/>
+  <circle cx="${col(2) + 9}" cy="${lane(1) + 5}" r="2.6" fill="${p.onAcc}"/>
+  <!-- lane 3: a short booking, then a blocked stretch -->
+  <rect x="${col(0) + 3}" y="${lane(2)}" width="${W * 2 - 6}" height="10" rx="5" fill="${p.lite}"/>
+  <rect x="${col(4) + 3}" y="${lane(2)}" width="${W * 3 - 6}" height="10" rx="5" fill="none" stroke="${p.mut}" stroke-width="1.3" stroke-dasharray="3 2.5"/>
+  <!-- today -->
+  <path d="M${today} 49 V122" stroke="${p.acc}" stroke-width="1.8" stroke-linecap="round"/>
+  <path d="M${today - 3} 49 H${today + 3}" stroke="${p.acc}" stroke-width="1.8" stroke-linecap="round"/>
  </g>
- ${ground(150, 164, 100, dark)}`;
+ ${ground(150, 166, 116, dark)}`;
 }
 
 /* ── Vehicles: Availability — your hours and blocked dates ────────────── */

@@ -72,6 +72,8 @@ import {
 } from "@/components/ui-v2/collapsible";
 
 import type { IntegrationPanelProps, PanelTenant } from "./_kit";
+import { ScreenPager } from "./_screens";
+import { CustomDomainDemo, useCustomDomainDemoStage } from "./custom-domain-demo";
 import {
   CopyValue,
   PanelCard,
@@ -117,7 +119,7 @@ const WIX_DASHBOARD_URL = "https://manage.wix.com/";
  * because the proxy strips it from the incoming host too; storing it would
  * make `www.example.com` route and `example.com` not.
  */
-function normalizeDomain(raw: string): string {
+export function normalizeDomain(raw: string): string {
   let s = raw.trim().toLowerCase();
   s = s.replace(/^[a-z][a-z0-9+.-]*:\/\//, ""); // https://
   s = s.split(/[/?#]/)[0]; // /path ?query #hash
@@ -131,7 +133,7 @@ function normalizeDomain(raw: string): string {
 const LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 
 /** A plain-English reason the domain cannot be used, or null when it can. */
-function validateDomain(domain: string): string | null {
+export function validateDomain(domain: string): string | null {
   if (!domain) return null;
   if (domain.length > 253) return "That is too long to be a domain name.";
   const labels = domain.split(".");
@@ -316,6 +318,18 @@ function useReachability() {
  */
 export function CustomDomainStatus({ tenant }: { tenant: PanelTenant }) {
   const { data, isLoading, isError } = useCustomDomains(tenant);
+  const demoStage = useCustomDomainDemoStage();
+
+  // The demo's own state — see custom-domain-demo.tsx. Nothing real changed.
+  if (CUSTOM_DOMAIN_DEMO_SLUGS.includes(tenant.slug)) {
+    return demoStage === "live" ? (
+      <StatusChip state="connected" label="Live" />
+    ) : demoStage === "pending" ? (
+      <StatusChip state="disconnected" label="Pending" />
+    ) : (
+      <StatusChip state="disconnected" label="Not set up" />
+    );
+  }
 
   // A failed read is not "not requested" — that would offer the request form
   // over a row that may already carry a live domain (_kit's rule).
@@ -330,7 +344,34 @@ export function CustomDomainStatus({ tenant }: { tenant: PanelTenant }) {
 
 /* ─────────────────────────────── panel ──────────────────────────────────── */
 
-export default function CustomDomainPanel({ tenant }: IntegrationPanelProps) {
+/**
+ * DEMO GATE — the self-serve flow (custom-domain-demo.tsx) is a mock, shown to
+ * the canary only so it can be demoed. Every other tenant gets the real panel
+ * below, paged into screens. Keyed on SLUG (V2_PLAN §2). To retire the demo:
+ * delete this list, the branch below, the chip branch above and the file.
+ */
+const CUSTOM_DOMAIN_DEMO_SLUGS: readonly string[] = ["northwind"];
+
+export default function CustomDomainPanel(props: IntegrationPanelProps) {
+  if (CUSTOM_DOMAIN_DEMO_SLUGS.includes(props.tenant.slug)) {
+    return (
+      <CustomDomainDemo
+        slug={props.tenant.slug}
+        onBack={props.onBack}
+        onClose={props.onClose}
+        normalize={normalizeDomain}
+        validate={validateDomain}
+      />
+    );
+  }
+  return (
+    <ScreenPager onBackFromStart={props.onBack}>
+      <CustomDomainRealPanel {...props} />
+    </ScreenPager>
+  );
+}
+
+function CustomDomainRealPanel({ tenant }: IntegrationPanelProps) {
   // Requesting, changing and removing all rewrite what host this tenant
   // answers on — removal takes a live domain out of routing at once — so the
   // writes are held to the same admin/head-admin bar the other panels use for

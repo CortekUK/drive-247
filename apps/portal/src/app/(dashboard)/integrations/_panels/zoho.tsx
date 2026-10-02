@@ -63,23 +63,17 @@
 // subscriptions on one topic. It also has nothing to listen for — the cron that
 // used to flip `status` under the operator is not scheduled.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  AlertTriangle,
-  Check,
-  Link2Off,
-  Loader2,
-  Plug,
-  RefreshCw,
-  Search,
-} from "lucide-react";
+import { ArrowUpRight, Globe, Loader2, Plug, RefreshCw } from "lucide-react";
 import { supabase, supabaseUntyped } from "@/integrations/supabase/client";
-import { useTenant } from "@/contexts/TenantContext";
 import { useToast } from "@/hooks/use-toast";
 import { extractFunctionError } from "@/lib/edge-error";
 import { useAuth } from "@/stores/auth-store";
 import { Button } from "@/components/ui-v2/button";
+import { cn } from "@/lib/utils";
+import { ConnectionTest, DisconnectScreen, Hero, QuietNav, ScreenNav, SubScreen, demoCheck, useNarrowDialog } from "./_screens";
+import { ExpensesEmptyArt } from "@/components/illustrations-v2/scenes/expenses";
 import {
   Select,
   SelectContent,
@@ -100,7 +94,6 @@ import {
   PanelLoading,
   PanelNote,
   PanelRow,
-  PanelSection,
   StatusChip,
 } from "./_kit";
 
@@ -111,12 +104,12 @@ import {
  * Sending anything else is a 400 before the operator ever reaches Zoho.
  */
 const CONNECTABLE_REGIONS = [
-  { region: "com", label: "Global (.com)", where: "United States and everywhere unlisted" },
-  { region: "eu", label: "Europe (.eu)", where: "UK and EU" },
-  { region: "in", label: "India (.in)", where: "India" },
-  { region: "com.au", label: "Australia (.com.au)", where: "Australia" },
-  { region: "jp", label: "Japan (.jp)", where: "Japan" },
-  { region: "sa", label: "Saudi Arabia (.sa)", where: "Middle East" },
+  { region: "com", label: "Global (.com)", where: "United States and everywhere unlisted", flag: null },
+  { region: "eu", label: "Europe (.eu)", where: "UK and EU", flag: "eu" },
+  { region: "in", label: "India (.in)", where: "India", flag: "in" },
+  { region: "com.au", label: "Australia (.com.au)", where: "Australia", flag: "au" },
+  { region: "jp", label: "Japan (.jp)", where: "Japan", flag: "jp" },
+  { region: "sa", label: "Saudi Arabia (.sa)", where: "Middle East", flag: "sa" },
 ] as const;
 
 type ConnectableRegion = (typeof CONNECTABLE_REGIONS)[number]["region"];
@@ -293,6 +286,10 @@ function fmtRelative(iso: string | null | undefined): string {
 
 export function ZohoStatus({ tenant }: { tenant: PanelTenant }) {
   const { data, isError, isLoading } = useZohoConnection(tenant.id);
+  const demoStage = useZohoDemoStage();
+  if (ZOHO_FIRST_RUN_DEMO_SLUGS.includes(tenant.slug)) {
+    return demoStage === "live" ? <StatusChip state="connected" /> : <StatusChip state="disconnected" />;
+  }
   const view = describeZoho(isLoading ? undefined : data, isError);
   return <StatusChip state={view.state} label={view.chipLabel} />;
 }
@@ -355,13 +352,21 @@ function clearAttempt() {
 
 /* ───────────────────────────── panel ────────────────────────────────────── */
 
-export default function ZohoPanel({ tenant, onClose }: IntegrationPanelProps) {
+export default function ZohoPanel({ tenant, onBack }: IntegrationPanelProps) {
+  const demo = ZOHO_FIRST_RUN_DEMO_SLUGS.includes(tenant.slug);
+  const demoStage = useZohoDemoStage();
+  const [screen, setScreen] = useState<"home" | "account" | "mappings" | "sync" | "disconnect">("home");
+  const [leaving, setLeaving] = useState(false);
+  /** The data centre picked in the demo, so its account screen echoes it. */
+  const demoRegion = useRef<string>("com");
+  // The demo starts fresh every time the dialog opens.
+  useEffect(() => {
+    if (!demo) return;
+    return () => zohoDemo.set("fresh");
+  }, [demo]);
   const { toast } = useToast();
   const qc = useQueryClient();
   const { appUser } = useAuth();
-  // The prop carries the tenant ROW; `refetchTenant` lives on the context, and
-  // `integration_zoho_books` is read from that row by other screens.
-  const { refetchTenant } = useTenant();
 
   const connection = useZohoConnection(tenant.id);
   const view = describeZoho(connection.isLoading ? undefined : connection.data, connection.isError);
@@ -371,7 +376,6 @@ export default function ZohoPanel({ tenant, onClose }: IntegrationPanelProps) {
   const failures = useAccountingSyncLog({ provider: "zoho", state: "failed", pageSize: 3 });
 
   const [region, setRegion] = useState<ConnectableRegion | "">("");
-  const [confirmingDisconnect, setConfirmingDisconnect] = useState(false);
   const [accounts, setAccounts] = useState<Array<{ code: string; name: string }> | null>(null);
   const [probeError, setProbeError] = useState<string | null>(null);
   const [paymentAccount, setPaymentAccount] = useState<string>("");
@@ -495,6 +499,8 @@ export default function ZohoPanel({ tenant, onClose }: IntegrationPanelProps) {
       toast({ variant: "destructive", title: "Couldn't connect Zoho Books", description: err.message }),
   });
 
+  // Unlinking. The tenant flag and v1's accounting screens key off the same
+  // rows, so both caches are refreshed.
   const disconnect = useMutation({
     mutationFn: async () => {
       const { error } = await supabase.functions.invoke("disconnect-accounting", {
@@ -504,16 +510,10 @@ export default function ZohoPanel({ tenant, onClose }: IntegrationPanelProps) {
     },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: zohoConnectionKey(tenant.id) });
-      // v1's own accounting screens key off this; keeping it fresh stops the
-      // Settings tab (still live for the other 56 tenants) reading a stale row.
       await qc.invalidateQueries({ queryKey: ["accounting-connections", tenant.id] });
-      void refetchTenant?.();
       toast({ title: "Zoho Books disconnected" });
-      setConfirmingDisconnect(false);
-      onClose();
     },
-    onError: (err: Error) =>
-      toast({ variant: "destructive", title: "Couldn't disconnect", description: err.message }),
+    onError: (err: Error) => toast({ variant: "destructive", title: "Couldn't disconnect", description: err.message }),
   });
 
   /**
@@ -575,6 +575,21 @@ export default function ZohoPanel({ tenant, onClose }: IntegrationPanelProps) {
       toast({ variant: "destructive", title: "Couldn't save", description: err.message }),
   });
 
+  /** Connect at a region: real OAuth round trip, or the demo's hand-off. */
+  const startConnect = (picked: ConnectableRegion) => {
+    setLeaving(true);
+    if (demo) {
+      window.open("https://accounts.zoho.com/signin", "_blank", "noopener,noreferrer");
+      demoRegion.current = picked;
+      window.setTimeout(() => {
+        zohoDemo.set("live");
+        setLeaving(false);
+      }, 2600);
+      return;
+    }
+    connect.mutate(picked, { onError: () => setLeaving(false) });
+  };
+
   /* ── mapping summary ───────────────────────────────────────────────────── */
 
   const mappingSummary = useMemo(() => {
@@ -593,8 +608,16 @@ export default function ZohoPanel({ tenant, onClose }: IntegrationPanelProps) {
   }, [mappings.data]);
 
   /* ── render ────────────────────────────────────────────────────────────── */
+  //
+  // THE SCREEN STANDARD (Ghulam, Oct 2 2026 — see `_screens.tsx`), the same
+  // shape as Xero: a main screen per state with ONE button, and account
+  // details, where things land, sync and disconnecting behind quiet links.
+  // Zoho alone asks for its data centre before connecting, so its first
+  // working screen is a region picker. Every rule above — the CSRF round
+  // trip, the region resolution, the probe, the payment-account save — is
+  // exactly as it was; only where it is drawn moved.
 
-  if (connection.isError) {
+  if (!demo && connection.isError) {
     return (
       <PanelError
         message={(connection.error as Error)?.message ?? "Unknown error"}
@@ -602,425 +625,404 @@ export default function ZohoPanel({ tenant, onClose }: IntegrationPanelProps) {
       />
     );
   }
-  if (connection.isLoading) return <PanelLoading rows={4} />;
+  if (!demo && connection.isLoading) return <PanelLoading rows={4} />;
 
-  const current = view.current;
-  const live = current && current.status !== "revoked";
+  const current = demo ? (demoStage === "live" ? demoRow(tenant.id, demoRegion.current) : null) : view.current;
+  const state: IntegrationState = demo ? (demoStage === "live" ? "connected" : "disconnected") : view.state;
+  const tokenExpired = demo ? false : view.tokenExpired;
+  const live = !!current && current.status !== "revoked";
+  const summary = demo ? { mapped: 9, unconfirmed: 0, paymentAccount: "Business Checking" } : mappingSummary;
+  const statNums = demo
+    ? { synced: 0, pending: 0, failed: 0, skipped: 0 }
+    : { synced: stats.data?.synced ?? 0, pending: stats.data?.pending ?? 0, failed: stats.data?.failed ?? 0, skipped: stats.data?.skipped ?? 0 };
+  const home = () => setScreen("home");
 
-  return (
-    <div className="space-y-5 pt-1">
-      {!live ? (
-        /* ── not connected ──────────────────────────────────────────────── */
-        <>
-          <PanelNote>
-            Connecting sends every rental charge, extension, damage, payment and refund to Zoho
-            Books as invoices, customer payments and credit notes. Nothing already in Zoho Books is
-            changed.
-          </PanelNote>
+  /* ── small screens (connected) ─────────────────────────────────────────── */
 
-          {staleAttempt && (
-            <PanelNote tone="warn">
-              A connection you started {fmtRelative(new Date(staleAttempt.startedAt).toISOString())}{" "}
-              (data centre {REGION_LABELS[staleAttempt.region] ?? staleAttempt.region}) never
-              completed. Zoho reports connection failures to the old Settings → Accounting page,
-              which this product does not show — so start again here and, if it fails a second
-              time, the reason will be in the server logs.
-              <button
-                type="button"
-                onClick={() => {
-                  clearAttempt();
-                  setStaleAttempt(null);
-                }}
-                className="mt-1 block underline underline-offset-2"
-              >
-                Dismiss
-              </button>
-            </PanelNote>
-          )}
-
-          {current?.status === "revoked" && (
-            <PanelCard>
-              <PanelRow label="Last connected" hint={current.external_org_name ?? undefined}>
-                {fmtDate(current.connected_at)}
-              </PanelRow>
-              <PanelRow label="Disconnected">
-                {fmtDate(current.disconnected_at ?? current.connected_at)}
-              </PanelRow>
-            </PanelCard>
-          )}
-
-          <PanelSection
-            title="Data centre"
-            description="Zoho keeps each account in one regional data centre and every API host differs per region. Picking the wrong one fails in a way that reads like bad credentials, so we ask rather than guess."
-          >
-            {/* `undefined`, not "": Radix treats the empty string as "no item
-                matched" only when the value is absent, and shows the
-                placeholder for it. */}
-            <Select value={region || undefined} onValueChange={(v) => setRegion(v as ConnectableRegion)}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Choose your Zoho data centre" />
-              </SelectTrigger>
-              <SelectContent tone="surface">
-                {CONNECTABLE_REGIONS.map((r) => (
-                  <SelectItem key={r.region} value={r.region}>
-                    {r.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs leading-relaxed text-muted-foreground">
-              It is in your Zoho URL — <span className="font-mono">books.zoho.eu</span> is Europe,{" "}
-              <span className="font-mono">books.zoho.com</span> is Global.
-              {region && (
-                <>
-                  {" "}
-                  {CONNECTABLE_REGIONS.find((r) => r.region === region)?.where}.
-                </>
-              )}{" "}
-              If Zoho sends you to a different data centre while you authorise, we record the one
-              Zoho names — it is the only one that can redeem the code.
-            </p>
-          </PanelSection>
-
-          {!canManage && (
-            <PanelNote tone="warn">
-              Only an admin or head admin can connect an accounting system.
-            </PanelNote>
-          )}
-
-          <Button
-            onClick={() => region && connect.mutate(region)}
-            disabled={!region || !canManage || connect.isPending}
-            className="w-full"
-          >
-            {connect.isPending ? (
-              <Loader2 className="size-4 animate-spin" />
+  if (screen === "account" && live && current) {
+    return (
+      <SubScreen title="Account details" description="The Zoho Books organisation your bookings are recorded in." onBack={home}>
+        <PanelCard className="divide-y divide-border/60">
+          <PanelRow label="Organisation">{current.external_org_name ?? "Unnamed"}</PanelRow>
+          <PanelRow label="Organisation ID">
+            <CopyValue value={current.external_org_id} />
+          </PanelRow>
+          <PanelRow label="Data centre" hint="Set by Zoho when you connected.">
+            {current.external_region ? (REGION_LABELS[current.external_region] ?? `.${current.external_region}`) : "Unknown"}
+          </PanelRow>
+          <PanelRow label="Connected">{fmtDate(current.connected_at)}</PanelRow>
+          <PanelRow label="Access" hint={tokenExpired ? "Renewal isn't running, so this won't recover on its own." : undefined}>
+            {tokenExpired ? (
+              <span className="text-warning">Expired {fmtRelative(current.token_expires_at)}</span>
             ) : (
-              <Plug className="size-4" />
+              <>Valid {fmtRelative(current.token_expires_at)}</>
             )}
-            {connect.isPending ? "Opening Zoho…" : "Connect Zoho Books"}
-          </Button>
-        </>
-      ) : (
-        /* ── connected (or connected-but-broken) ────────────────────────── */
-        <>
-          {view.state === "attention" && (
-            <PanelNote tone="warn">
-              {current.status === "expired" ? (
-                <>
-                  Zoho revoked or exhausted this grant, so nothing can sync. Reconnecting runs the
-                  authorisation again; your organisation, data centre and account mappings are kept.
-                </>
-              ) : view.tokenExpired ? (
-                <>
-                  The access token expired {fmtRelative(current.token_expires_at)} and has not been
-                  renewed. Test the connection below — if it still fails, reconnect.
-                </>
-              ) : (
-                <>
-                  The last sync attempt reported an error.
-                  {current.last_error ? (
-                    <span className="mt-1 block font-mono text-[11px] opacity-80">
-                      {current.last_error}
-                    </span>
-                  ) : null}
-                </>
-              )}
-            </PanelNote>
-          )}
+          </PanelRow>
+        </PanelCard>
+        {/* The verify control: one call that proves the token, the data
+            centre, the permissions and the organisation all still line up —
+            and loads the accounts the payment-account choice needs. */}
+        <ConnectionTest
+          idle="Check Drive247 can still reach your Zoho Books."
+          disabled={!canManage}
+          run={
+            demo
+              ? () => demoCheck("Working · reached Zoho Books, 42 accounts")
+              : async () => {
+                  const list = await probe.mutateAsync();
+                  return `Working · reached Zoho Books, ${list.length} account${list.length === 1 ? "" : "s"}`;
+                }
+          }
+        />
+      </SubScreen>
+    );
+  }
 
-          <PanelCard>
-            <PanelRow label="Organisation">{current.external_org_name ?? "Unnamed"}</PanelRow>
-            <PanelRow label="Organisation ID">
-              <CopyValue value={current.external_org_id} />
-            </PanelRow>
-            <PanelRow
-              label="Data centre"
-              hint="Where this organisation's books actually live — set by Zoho at connect time."
-            >
-              {current.external_region
-                ? (REGION_LABELS[current.external_region] ?? `.${current.external_region}`)
-                : "Unknown"}
-            </PanelRow>
-            <PanelRow label="Connected">{fmtDate(current.connected_at)}</PanelRow>
-            <PanelRow
-              label="Access token"
-              hint={
-                view.tokenExpired
-                  ? "Renewal is not running, so this does not recover on its own."
-                  : undefined
-              }
-            >
-              {view.tokenExpired ? (
-                <span className="text-warning">Expired {fmtRelative(current.token_expires_at)}</span>
-              ) : (
-                <>Valid {fmtRelative(current.token_expires_at)}</>
-              )}
-            </PanelRow>
-            <PanelRow label="Last sync">
-              {current.last_synced_at ? fmtDateTime(current.last_synced_at) : "Never"}
-            </PanelRow>
-          </PanelCard>
-
-          {/* The tenant flag is what v1's rental-detail sync stripe reads. It is
-              written by the callback and by disconnect-accounting, so the two can
-              only diverge if one of those half-failed — worth one line, not a
-              state of its own.
-
-              `=== false`, not `!flag`: the column is `boolean | null` on the
-              context and the optional-columns fetch can leave it undefined, and
-              "we did not load it" is not the same claim as "it is off". Warn
-              only when we positively know. */}
-          {tenant.integration_zoho_books === false && (
-            <PanelNote tone="warn">
-              This connection is live but the tenant&rsquo;s Zoho Books flag is off, so other
-              screens will report it as unconnected. Reconnecting sets the flag.
-            </PanelNote>
-          )}
-
-          <PanelSection
-            title="Check the connection"
-            description="Asks Zoho for this organisation's chart of accounts using the stored token — the one test that proves the token, the data centre, the permissions and the organisation id all still line up."
-          >
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => probe.mutate()}
-                disabled={probe.isPending || !canManage}
-              >
-                {probe.isPending ? (
-                  <Loader2 className="size-3.5 animate-spin" />
-                ) : (
-                  <Search className="size-3.5" />
-                )}
-                Test connection
-              </Button>
-              {accounts && (
-                <span className="inline-flex items-center gap-1.5 text-xs text-success">
-                  <Check className="size-3.5" />
-                  Reached Zoho Books · {accounts.length} account
-                  {accounts.length === 1 ? "" : "s"}
-                </span>
-              )}
-            </div>
-            {probeError && <PanelNote tone="warn">{probeError}</PanelNote>}
-            {!canManage && (
-              <p className="text-xs text-muted-foreground">
-                Only an admin or head admin can run this.
+  if (screen === "mappings" && live) {
+    return (
+      <SubScreen title="Where things land" description="The Zoho accounts your charges and payments are recorded in." onBack={home}>
+        <PanelCard className="divide-y divide-border/60">
+          <PanelRow label="Charge types mapped">{!demo && mappings.isLoading ? "…" : `${summary.mapped} of 9`}</PanelRow>
+          <PanelRow label="Payment account" hint="Where customer payments are recorded.">
+            {summary.paymentAccount ? (
+              <span className="truncate">{summary.paymentAccount}</span>
+            ) : (
+              <span className="text-warning">Not set</span>
+            )}
+          </PanelRow>
+        </PanelCard>
+        {!demo && summary.unconfirmed > 0 && (
+          <PanelNote tone="warn">
+            {summary.unconfirmed} mapping{summary.unconfirmed === 1 ? " is" : "s are"} still the value seeded at connect
+            time, which Zoho will reject. Ask support to set them until choosing them here is built.
+          </PanelNote>
+        )}
+        {/* The payment account is the one mapping this panel sets: never
+            seeded, and it blocks every payment on its own. */}
+        {!demo && !summary.paymentAccount && canManage && (
+          <div className="space-y-2">
+            {accounts ? (
+              <>
+                <Select value={paymentAccount || undefined} onValueChange={setPaymentAccount}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Choose the bank or clearing account" />
+                  </SelectTrigger>
+                  <SelectContent tone="surface">
+                    {accounts.map((a) => (
+                      <SelectItem key={a.code} value={a.code}>
+                        {a.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <div className="flex justify-center">
+                  <Button
+                    className="rounded-2xl"
+                    onClick={() => savePaymentAccount.mutate(paymentAccount)}
+                    disabled={!paymentAccount || savePaymentAccount.isPending}
+                  >
+                    {savePaymentAccount.isPending && <Loader2 className="size-3.5 animate-spin" />}
+                    Save payment account
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <p className="text-center text-xs text-muted-foreground">
+                Run Test connection under Account details to load your accounts, then pick one here.
               </p>
             )}
-          </PanelSection>
+          </div>
+        )}
+      </SubScreen>
+    );
+  }
 
-          <PanelSection
-            title="Account mappings"
-            description="Which Zoho account each kind of charge lands in. An event whose type has no mapping does not fall back to a default — it fails permanently."
-          >
-            <PanelCard>
-              <PanelRow label="Charge types mapped">
-                {mappings.isLoading ? "…" : `${mappingSummary.mapped} of 9`}
-              </PanelRow>
-              <PanelRow
-                label="Payment account"
-                hint="Where customer payments are recorded. Without it, every payment fails."
-              >
-                {mappingSummary.paymentAccount ? (
-                  <span className="truncate">{mappingSummary.paymentAccount}</span>
-                ) : (
-                  <span className="text-warning">Not set</span>
-                )}
-              </PanelRow>
-            </PanelCard>
-
-            {mappingSummary.unconfirmed > 0 && (
-              <PanelNote tone="warn">
-                {mappingSummary.unconfirmed} mapping
-                {mappingSummary.unconfirmed === 1 ? " is" : "s are"} still the value seeded at
-                connect time. Those seeds hold Zoho account <em>names</em> where Zoho&rsquo;s API
-                expects an account id, so they will be rejected until an account is chosen for each.
-                Choosing an account per charge type is not built here yet — ask support to set
-                them until it is.
-              </PanelNote>
-            )}
-
-            {/* The payment account is the one mapping this panel does set: it is
-                never seeded, it blocks every payment_receipt on its own, and it
-                is a single choice rather than a nine-row editor. */}
-            {!mappingSummary.paymentAccount && canManage && (
-              <div className="space-y-2">
-                {accounts ? (
-                  <>
-                    <Select value={paymentAccount || undefined} onValueChange={setPaymentAccount}>
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Choose the bank or clearing account" />
-                      </SelectTrigger>
-                      <SelectContent tone="surface">
-                        {accounts.map((a) => (
-                          <SelectItem key={a.code} value={a.code}>
-                            {a.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      size="sm"
-                      onClick={() => savePaymentAccount.mutate(paymentAccount)}
-                      disabled={!paymentAccount || savePaymentAccount.isPending}
-                    >
-                      {savePaymentAccount.isPending && <Loader2 className="size-3.5 animate-spin" />}
-                      Save payment account
-                    </Button>
-                  </>
-                ) : (
-                  <p className="text-xs text-muted-foreground">
-                    Run <span className="font-medium">Test connection</span> above to load your
-                    chart of accounts, then pick one here.
+  if (screen === "sync" && live) {
+    return (
+      <SubScreen title="Sync" description="What has gone to Zoho Books, and anything waiting." onBack={home}>
+        <div className="grid grid-cols-3 gap-2">
+          {[
+            ["Synced", statNums.synced],
+            ["Queued", statNums.pending],
+            ["Failed", statNums.failed],
+          ].map(([label, value]) => (
+            <div key={label as string} className="rounded-xl border bg-muted/20 px-2.5 py-3 text-center">
+              <div className={`text-lg font-medium leading-tight ${label === "Failed" && (value as number) > 0 ? "text-warning" : ""}`}>
+                {!demo && stats.isLoading ? "…" : (value as number)}
+              </div>
+              <div className="text-[11px] text-muted-foreground">{label}</div>
+            </div>
+          ))}
+        </div>
+        <p className="text-center text-xs leading-relaxed text-muted-foreground">
+          {statNums.pending > 0 && !current?.last_synced_at
+            ? `${statNums.pending} event${statNums.pending === 1 ? " is" : "s are"} queued and nothing has reached Zoho Books yet.`
+            : "Every new charge, payment and refund goes to Zoho Books as it happens."}
+        </p>
+        {!demo && (failures.data?.rows?.length ?? 0) > 0 && (
+          <div className="space-y-1.5">
+            {failures.data!.rows.slice(0, 2).map((row) => (
+              <div key={row.id} className="rounded-xl border px-3 py-2">
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="text-xs font-medium">{row.event?.event_type?.replace(/_/g, " ") ?? "Event"}</span>
+                  <span className="shrink-0 text-[11px] text-muted-foreground">{fmtDate(row.last_attempt_at ?? row.created_at)}</span>
+                </div>
+                {row.last_error && (
+                  <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground" title={row.last_error}>
+                    {row.last_error}
                   </p>
                 )}
               </div>
-            )}
-          </PanelSection>
+            ))}
+          </div>
+        )}
+      </SubScreen>
+    );
+  }
 
-          <PanelSection
-            title="Sync activity"
-            description="Every rental charge and payment is queued server-side the moment it is recorded, whether or not this panel is open."
-          >
-            <PanelCard>
-              <PanelRow label="Synced">{stats.isLoading ? "…" : stats.data?.synced ?? 0}</PanelRow>
-              <PanelRow label="Queued">{stats.isLoading ? "…" : stats.data?.pending ?? 0}</PanelRow>
-              <PanelRow label="Failed">
-                {stats.isLoading ? (
-                  "…"
-                ) : (stats.data?.failed ?? 0) > 0 ? (
-                  <span className="text-warning">{stats.data?.failed}</span>
-                ) : (
-                  0
-                )}
-              </PanelRow>
-              <PanelRow label="Skipped" hint="Event types that are never sent to an accounting system.">
-                {stats.isLoading ? "…" : stats.data?.skipped ?? 0}
-              </PanelRow>
-            </PanelCard>
+  if (screen === "disconnect" && live) {
+    // Unlinking is allowed from here (Ghulam, Oct 2) — `disconnect-accounting`,
+    // behind a confirmation. The demo just puts itself back to the start.
+    return (
+      <DisconnectScreen
+        name="Zoho Books"
+        canManage={canManage}
+        pending={disconnect.isPending}
+        onBack={home}
+        onConfirm={() => {
+          if (demo) {
+            zohoDemo.set("fresh");
+            home();
+            return;
+          }
+          disconnect.mutate(undefined, { onSuccess: home });
+        }}
+        consequence={
+          <>
+            New charges and payments stop reaching Zoho Books, and your Zoho sign-in is removed — reconnecting
+            means signing in again. Invoices already in Zoho Books stay exactly as they are.
+          </>
+        }
+      />
+    );
+  }
 
-            {/* Not a claim that the queue is stuck — just what the two numbers
-                say. The queue drainer is a cron target and is not scheduled in
-                production (see the header), so this is the state northwind and
-                every other tenant will actually see. */}
-            {!stats.isLoading && (stats.data?.pending ?? 0) > 0 && !current.last_synced_at && (
-              <PanelNote tone="warn">
-                {stats.data?.pending} event{(stats.data?.pending ?? 0) === 1 ? " is" : "s are"}{" "}
-                queued and nothing has synced to Zoho Books yet.
-              </PanelNote>
-            )}
+  /* ── not connected: pick the data centre, then connect ─────────────────── */
 
-            {(failures.data?.rows?.length ?? 0) > 0 && (
-              <div className="space-y-1.5">
-                <p className="text-xs font-medium text-foreground">Most recent failures</p>
-                {failures.data!.rows.map((row) => (
-                  <div key={row.id} className="rounded-xl border px-3 py-2">
-                    <div className="flex items-baseline justify-between gap-3">
-                      <span className="text-xs font-medium">
-                        {row.event?.event_type?.replace(/_/g, " ") ?? "Event"}
-                      </span>
-                      <span className="shrink-0 text-[11px] text-muted-foreground">
-                        {fmtDate(row.last_attempt_at ?? row.created_at)}
-                      </span>
-                    </div>
-                    {row.last_error && (
-                      <p className="mt-1 break-words font-mono text-[11px] leading-snug text-muted-foreground">
-                        {row.last_error}
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </PanelSection>
-
-          <PanelSection title="Disconnect">
-            {!confirmingDisconnect ? (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setConfirmingDisconnect(true)}
-                disabled={!canManage}
-              >
-                <Link2Off className="size-3.5" />
-                Disconnect Zoho Books
+  if (leaving && !live) {
+    return (
+      <>
+        <Hero
+          art={ExpensesEmptyArt}
+          title="Connect Zoho Books."
+          actions={
+            <div className="flex justify-center">
+              <Button className="h-10 rounded-2xl px-6" disabled>
+                <Loader2 className="animate-spin" />
+                Opening Zoho…
               </Button>
-            ) : (
-              /* An inline confirm rather than an AlertDialog: this panel already
-                 renders inside the board's Dialog, and a second portal-backed
-                 modal over it fights the same focus trap. */
-              <div className="space-y-3">
-                <PanelNote tone="danger">
-                  <span className="flex items-start gap-2">
-                    <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-                    <span>
-                      <strong>Stops:</strong> new charges and payments no longer reach Zoho Books,
-                      and this tenant&rsquo;s Zoho tokens are deleted — reconnecting means running
-                      the whole authorisation again.
-                      <br />
-                      <strong>Does not stop:</strong> Drive247 keeps recording every financial event
-                      server-side exactly as it does today, invoices already in Zoho Books are left
-                      untouched, and anything already queued stays queued.
-                    </span>
-                  </span>
-                </PanelNote>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => disconnect.mutate()}
-                    disabled={disconnect.isPending}
-                  >
-                    {disconnect.isPending ? (
-                      <Loader2 className="size-3.5 animate-spin" />
-                    ) : (
-                      <Link2Off className="size-3.5" />
-                    )}
-                    Yes, disconnect
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setConfirmingDisconnect(false)}
-                    disabled={disconnect.isPending}
-                  >
-                    Keep connected
-                  </Button>
-                </div>
-              </div>
-            )}
-            {!canManage && (
-              <p className="text-xs text-muted-foreground">
-                Only an admin or head admin can disconnect.
-              </p>
-            )}
-          </PanelSection>
+            </div>
+          }
+        >
+          Finish in the Zoho tab — sign in and choose your organisation. I&rsquo;ll pick it up here the moment
+          Zoho hands it back.
+        </Hero>
+        <ScreenNav className="mt-8" onBack={onBack} />
+      </>
+    );
+  }
 
-          {/* Reconnect is offered for a broken connection only — for a healthy
-              one it is a destructive-looking control with nothing to fix. */}
-          {view.state === "attention" && canManage && (
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={() => connect.mutate(asConnectableRegion(current.external_region))}
-              disabled={connect.isPending}
-            >
-              {connect.isPending ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <RefreshCw className="size-4" />
-              )}
-              {/* Named after the region we will ACTUALLY start at, which is not
-                  always the stored one — see asConnectableRegion. Zoho still
-                  gets the last word at the callback either way. */}
-              Reconnect via {REGION_LABELS[asConnectableRegion(current.external_region)]}
-            </Button>
+  if (!live) {
+    const picked = CONNECTABLE_REGIONS.find((r) => r.region === region);
+    return (
+      <div className="duration-200 ease-out animate-in fade-in-0 slide-in-from-bottom-3 motion-reduce:animate-none">
+        <RegionPicker>
+          <div className="space-y-2 text-center">
+            <h3 className="text-xl font-medium leading-snug text-foreground">Where&rsquo;s your Zoho account?</h3>
+            <p className="mx-auto max-w-[32rem] text-sm leading-relaxed text-muted-foreground [text-wrap:balance]">
+              Zoho keeps each account in one region — it&rsquo;s in your Zoho web address:{" "}
+              <span className="font-mono text-[13px] text-foreground/80">books.zoho.eu</span> is Europe,{" "}
+              <span className="font-mono text-[13px] text-foreground/80">books.zoho.com</span> is Global.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Zoho data centre">
+            {CONNECTABLE_REGIONS.map((r) => (
+              <button
+                key={r.region}
+                type="button"
+                role="radio"
+                aria-checked={region === r.region}
+                onClick={() => setRegion(r.region)}
+                className={cn(
+                  "rounded-2xl border px-3 py-2.5 text-left transition-colors duration-200 motion-reduce:transition-none",
+                  region === r.region
+                    ? "border-primary/50 bg-primary/10"
+                    : "border-border bg-background/70 hover:border-primary/30",
+                )}
+              >
+                <span className="flex items-center gap-2">
+                  {/* A flag per data centre (flagcdn, like the board's logo.dev
+                      logos); Global gets a globe — it is no one country. */}
+                  {r.flag ? (
+                    <img
+                      src={`https://flagcdn.com/${r.flag}.svg`}
+                      alt=""
+                      aria-hidden
+                      className="h-3.5 w-5 shrink-0 rounded-[3px] object-cover ring-1 ring-black/10"
+                    />
+                  ) : (
+                    <Globe className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                  )}
+                  <span className="truncate text-sm font-medium text-foreground">{r.label}</span>
+                </span>
+                <span className="mt-0.5 block truncate pl-7 text-[11px] text-muted-foreground">{r.where}</span>
+              </button>
+            ))}
+          </div>
+          {!demo && staleAttempt && (
+            <p className="text-center text-xs text-warning">
+              A connection you started {fmtRelative(new Date(staleAttempt.startedAt).toISOString())} never completed — start
+              again here.{" "}
+              <button type="button" className="underline underline-offset-2" onClick={() => { clearAttempt(); setStaleAttempt(null); }}>
+                Dismiss
+              </button>
+            </p>
           )}
-        </>
-      )}
-    </div>
+          {!canManage && (
+            <p className="text-center text-xs text-warning">Only an admin or head admin can connect an accounting system.</p>
+          )}
+          <div className="flex justify-center">
+            <Button className="h-10 rounded-2xl px-6" onClick={() => picked && startConnect(picked.region)} disabled={!picked || !canManage}>
+              <Plug className="size-4" />
+              Connect Zoho Books
+            </Button>
+          </div>
+        </RegionPicker>
+        <ScreenNav className="mt-5" onBack={onBack} />
+      </div>
+    );
+  }
+
+  /* ── connected: the main screen ────────────────────────────────────────── */
+
+  const expired = !demo && current!.status === "expired";
+  const title =
+    state === "connected"
+      ? "Your books are syncing to Zoho."
+      : expired || tokenExpired
+        ? "Reconnect Zoho Books."
+        : "Zoho reported a problem.";
+  const body =
+    state === "connected"
+      ? `Every rental charge, payment and refund goes to ${current!.external_org_name ?? "your Zoho Books organisation"} as it happens.${summary.paymentAccount ? "" : " Choose where payments land to finish setting up."}`
+      : expired
+        ? "Zoho revoked or exhausted this grant, so nothing can sync. Reconnecting runs the authorisation again — your organisation and mappings are kept."
+        : tokenExpired
+          ? `The access token expired ${fmtRelative(current!.token_expires_at)} and hasn't been renewed. Reconnect to issue a fresh one.`
+          : current!.last_error ?? "The last sync attempt reported an error.";
+  const action =
+    state === "attention" && canManage ? (
+      <Button className="h-10 rounded-2xl px-6" onClick={() => startConnect(asConnectableRegion(current!.external_region))} disabled={leaving}>
+        <RefreshCw />
+        Reconnect Zoho Books
+      </Button>
+    ) : (
+      <Button className="h-10 rounded-2xl px-6" asChild>
+        <a href="https://books.zoho.com" target="_blank" rel="noopener noreferrer">
+          Open Zoho Books
+          <ArrowUpRight />
+        </a>
+      </Button>
+    );
+
+  return (
+    <>
+      <Hero
+        art={ExpensesEmptyArt}
+        eyebrow={state === "connected" ? "Live" : view.chipLabel ?? "Needs attention"}
+        title={title}
+        actions={<div className="flex justify-center">{action}</div>}
+        footer={
+          <QuietNav
+            items={[
+              { label: "Account details", onClick: () => setScreen("account") },
+              { label: "Where things land", onClick: () => setScreen("mappings") },
+              { label: "Sync", onClick: () => setScreen("sync") },
+              ...(canManage ? [{ label: "Disconnecting", onClick: () => setScreen("disconnect") }] : []),
+            ]}
+          />
+        }
+      >
+        {body}
+        {!demo && tenant.integration_zoho_books === false && (
+          // The tenant flag other screens read; the two only diverge if a
+          // callback or disconnect half-failed.
+          <span className="mt-2 block text-warning">
+            The tenant&rsquo;s Zoho Books flag is off, so other screens show it as unconnected. Reconnecting sets it.
+          </span>
+        )}
+      </Hero>
+      <ScreenNav className="mt-5" onBack={onBack} />
+    </>
   );
+}
+
+/** The region picker's column — narrow, like every other step screen. */
+function RegionPicker({ children }: { children: ReactNode }) {
+  useNarrowDialog();
+  return <div className="mx-auto flex w-full max-w-xl flex-col gap-4 py-1">{children}</div>;
+}
+
+/* ─────────────────────────── first-run demo ─────────────────────────────── */
+
+/**
+ * FIRST-RUN DEMO — northwind only, on screen only (Ghulam, Oct 2 2026), like
+ * Stripe, Square and Xero. The panel shows the region picker as if nothing
+ * were connected; "Connect Zoho Books" opens Zoho's sign-in in a new tab,
+ * spins, then lands on a healthy stand-in connection. Nothing calls
+ * `zoho-oauth-start`, the probe, the mapping save or disconnect; the stand-in
+ * is drawn from constants. To remove: delete this block and every `demo`
+ * branch above.
+ */
+const ZOHO_FIRST_RUN_DEMO_SLUGS: readonly string[] = ["northwind"];
+
+type DemoStage = "fresh" | "live";
+
+const zohoDemo = (() => {
+  let stage: DemoStage = "fresh";
+  const listeners = new Set<() => void>();
+  return {
+    get: () => stage,
+    set: (next: DemoStage) => {
+      if (next === stage) return;
+      stage = next;
+      listeners.forEach((l) => l());
+    },
+    subscribe: (l: () => void) => {
+      listeners.add(l);
+      return () => listeners.delete(l);
+    },
+  };
+})();
+
+function useZohoDemoStage(): DemoStage {
+  return useSyncExternalStore(zohoDemo.subscribe, zohoDemo.get, zohoDemo.get);
+}
+
+function demoRow(tenantId: string, region: string): ZohoConnectionRow {
+  const now = new Date().toISOString();
+  return {
+    id: "demo",
+    tenant_id: tenantId,
+    provider: "zoho",
+    status: "active",
+    token_expires_at: new Date(Date.now() + 55 * 60_000).toISOString(),
+    external_org_id: "60031234567",
+    external_org_name: "Northwind Rentals",
+    external_region: region,
+    last_synced_at: null,
+    last_error: null,
+    connected_at: now,
+    disconnected_at: null,
+  };
 }

@@ -21,6 +21,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { CustomerFormModal } from "@/components/customers/customer-form-modal";
+import { CustomerFormDialogV2 } from "@/components/customers-v2/customer-form-dialog-v2";
 import { CustomerCsvImportDialog } from "@/components/customers/customer-csv-import-dialog";
 import { GenerateInviteDialog } from "@/components/customers/generate-invite-dialog";
 import { CustomerBalanceChip } from "@/components/customers/customer-balance-chip";
@@ -1422,11 +1423,20 @@ const CustomersList = () => {
 
       <CustomerCsvImportDialog open={csvImportOpen} onOpenChange={setCsvImportOpen} />
 
-      <CustomerFormModal
-        open={isModalOpen}
-        onOpenChange={setIsModalOpen}
-        customer={editingCustomer}
-      />
+      {/* v2 (northwind): the redesigned two-screen dialog, same save path. */}
+      {v2Chrome ? (
+        <CustomerFormDialogV2
+          open={isModalOpen}
+          onOpenChange={setIsModalOpen}
+          customer={editingCustomer as never}
+        />
+      ) : (
+        <CustomerFormModal
+          open={isModalOpen}
+          onOpenChange={setIsModalOpen}
+          customer={editingCustomer}
+        />
+      )}
 
       {/* Block Customer Dialog */}
       <Dialog open={blockDialogOpen} onOpenChange={setBlockDialogOpen}>

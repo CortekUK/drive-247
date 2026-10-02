@@ -56,6 +56,7 @@ import { RentalsOverview } from "@/components/rentals-v2/rentals-overview";
 import { RentalsOverviewFlip } from "@/components/rentals-v2/rentals-overview-flip";
 import { ConnectedTimeline } from "@/components/timeline-v2/connected-timeline";
 import { useTenant } from "@/contexts/TenantContext";
+import { RentalDrafts, useCreateDraftRental } from "./rental-drafts";
 import { useRentalCreationGate } from "@/hooks/use-rental-creation-gate";
 import { ConnectStripeRequiredDialog } from "@/components/rentals/connect-stripe-required-dialog";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
@@ -225,6 +226,7 @@ export function RentalsListV2() {
   const searchParams = useSearchParams();
   const { tenant } = useTenant();
   const { canEdit } = useManagerPermissions();
+  const createDraft = useCreateDraftRental();
   // The /dev preview switch for the teaching state (lib/dev-overrides.ts).
   // Inert outside development, and — although only northwind reaches this
   // list — kept INSIDE the slug gate like every other consumer.
@@ -522,8 +524,9 @@ export function RentalsListV2() {
 
   return (
     <div className={currentView === "calendar" ? "p-4 md:p-6 space-y-6" : "container mx-auto p-4 md:p-6 space-y-6"}>
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
+      {/* Header. Not in the full-screen calendar from md up — the board carries
+          its own way back to the list (ConnectedTimeline `onExit`). */}
+      <div className={`flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3${currentView === "calendar" ? " md:hidden" : ""}`}>
         <div className="min-w-0 shrink-0 flex items-start justify-between gap-3 sm:block">
           <div className="min-w-0" data-tour="rentals-header">
             <h1 className="text-2xl sm:text-3xl font-bold">Rentals</h1>
@@ -591,11 +594,14 @@ export function RentalsListV2() {
               // Lean tenants without a usable Stripe Connect account get told
               // why instead of a form that cannot take a payment. Non-lean
               // tenants are never blocked, so this navigates as it always did.
+              // v2: no create form — the rental is created empty and opened
+              // on its Customer stage (rental-drafts.tsx).
               onClick={() =>
                 rentalCreationBlocked
                   ? setShowConnectStripeDialog(true)
-                  : router.push("/rentals/new")
+                  : createDraft.mutate()
               }
+              disabled={createDraft.isPending}
               data-tour="new-rental"
               className={`bg-gradient-primary text-white hover:opacity-90 transition-all duration-200 shadow-md hover:shadow-lg flex-1 sm:flex-none ${HEADER_PRIMARY_V2}`}
             >
@@ -635,9 +641,12 @@ export function RentalsListV2() {
         />
       )}
 
+      {/* Rentals started with New Rental and not yet given a customer. */}
+      {currentView !== "calendar" && <RentalDrafts />}
+
       {/* Calendar View */}
       {currentView === "calendar" ? (
-            <ConnectedTimeline scope={{ kind: "all" }} />
+            <ConnectedTimeline scope={{ kind: "all" }} fill onExit={() => handleViewChange("list")} />
       ) : /* Rentals Table */
       allRentals.length > 0 && !devForceEmptyRentals ? (
         <>
@@ -881,7 +890,7 @@ export function RentalsListV2() {
           onCreateRental={() =>
             rentalCreationBlocked
               ? setShowConnectStripeDialog(true)
-              : router.push("/rentals/new")
+              : createDraft.mutate()
           }
         />
       ) : (

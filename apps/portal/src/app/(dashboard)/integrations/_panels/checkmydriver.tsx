@@ -31,7 +31,7 @@ import { BadgeCheck, IdCard, Send, Timer } from "lucide-react";
  * cards where it does mean something.
  */
 export function CheckMyDriverStatus(_props: { tenant: PanelTenant }) {
-  return <StatusChip state="disconnected" label="Coming soon" />;
+  return <StatusChip state="disconnected" label="Soon" />;
 }
 
 /** Drawn from the real implementation — the six `cmd-*` functions and the hook. */

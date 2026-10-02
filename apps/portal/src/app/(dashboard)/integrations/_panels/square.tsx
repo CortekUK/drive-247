@@ -37,17 +37,16 @@
 // ⚠️ Every query lives in `square-data.ts` and every one carries the tenant
 // filter. See the isolation note at the top of that file.
 
-import { useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { format, formatDistanceToNow } from "date-fns";
 import {
   AlertTriangle,
+  ArrowRight,
   ArrowUpRight,
-  CheckCircle2,
   Link2,
   Loader2,
   Lock,
   RefreshCw,
-  Unplug,
 } from "lucide-react";
 
 import { useAuth } from "@/stores/auth-store";
@@ -93,7 +92,6 @@ import {
   useConnectSquare,
   useDisconnectSquare,
   useSquareOAuthReturn,
-  useSquarePaymentHealth,
   useSquarePaymentsCount,
   useSquareStatus,
   type SquareConnectionRow,
@@ -101,6 +99,10 @@ import {
   type SquareSnapshot,
   type SquareVerdict,
 } from "./square-data";
+import { ConnectionTest, DisconnectScreen, Hero, QuietNav, ScreenNav, ScreenPager, SubScreen, demoCheck } from "./_screens";
+import { PaymentsEmptyArt } from "@/components/illustrations-v2/scenes/payments";
+import { OwnerPayoutsEmptyArt } from "@/components/illustrations-v2/scenes/owner-payouts";
+import { QuotesEmptyArt } from "@/components/illustrations-v2/scenes/quotes";
 
 /* ─────────────────────────────── helpers ────────────────────────────────── */
 
@@ -132,17 +134,113 @@ const dashboardHref = (mode: SquareMode) =>
 
 /* ──────────────────────────────── chip ──────────────────────────────────── */
 
+/* ─────────────────────────── first-run demo ─────────────────────────────── */
+
 /**
- * The board card's status pill.
+ * FIRST-RUN DEMO — northwind only, on screen only (Ghulam, Oct 2 2026), the
+ * same as Stripe's (see `stripe-connect.tsx`).
  *
- * Also the host for the OAuth return handler: the operator comes back to the
- * board with the dialog CLOSED, so the panel is not mounted to notice it. The
- * chip is (it paints on every card), and the board file belongs to someone
- * else. See `useSquareOAuthReturn`.
+ * northwind runs on Stripe, so its Square dialog can never show the flow a
+ * brand-new Square operator meets. For demoing that, this pretends — in the
+ * browser, nowhere else — that the account is on the Square rail with nothing
+ * connected: the chip and the panel read a STAND-IN snapshot, so the education
+ * screens and the connect step appear. "Set up Square" then opens Square's
+ * public sign-up page in a new tab, spins, and lands on a connected account,
+ * instead of calling `square-oauth-start` — and the one-time processor choice
+ * (`useChooseSquare`, a permanent DB write) is never offered or made.
+ *
+ * NOTHING IS WRITTEN. No query changes, no edge function, no column. Closing
+ * the dialog resets the demo. To remove: delete this block, the two
+ * `useDemoSnapshot` calls and the demo branch in `startConnect`.
  */
+const SQUARE_FIRST_RUN_DEMO_SLUGS: readonly string[] = ["northwind"];
+
+type DemoStage = "fresh" | "live";
+
+const demoStore = (() => {
+  let stage: DemoStage = "fresh";
+  const listeners = new Set<() => void>();
+  return {
+    get: () => stage,
+    set: (next: DemoStage) => {
+      stage = next;
+      listeners.forEach((l) => l());
+    },
+    subscribe: (l: () => void) => {
+      listeners.add(l);
+      return () => listeners.delete(l);
+    },
+  };
+})();
+
+/** A stand-in snapshot for the demo stage, built from the real one. Never sent anywhere. */
+function demoSnapshot(real: SquareSnapshot, stage: DemoStage): SquareSnapshot {
+  const now = Date.now();
+  const connection: SquareConnectionRow = {
+    id: "demo",
+    tenant_id: real.tenant.id,
+    square_mode: "live",
+    status: "active",
+    token_expires_at: new Date(now + SQUARE_TOKEN_LIFETIME_DAYS * 86_400_000).toISOString(),
+    merchant_id: "ML0DEMO7Q2X4K",
+    location_id: "L8DEMO3N5PZ1",
+    location_currency: (real.tenant.currency_code ?? "usd").toLowerCase(),
+    business_name: "Northwind Rentals",
+    scopes: ["PAYMENTS_WRITE", "PAYMENTS_READ", "ORDERS_WRITE", "MERCHANT_PROFILE_READ"],
+    refresh_failure_count: 0,
+    last_error: null,
+    connected_at: new Date(now).toISOString(),
+    disconnected_at: null,
+  };
+  return {
+    ...real,
+    tenant: { ...real.tenant, payment_provider: "square", square_mode: "live" },
+    provider: "square",
+    locked: true,
+    squareMode: "live",
+    connections: stage === "live" ? [connection] : [],
+  };
+}
+
+function useDemoSnapshot(tenant: PanelTenant, real: SquareSnapshot | undefined) {
+  const enabled = SQUARE_FIRST_RUN_DEMO_SLUGS.includes(tenant.slug);
+  const stage = useSyncExternalStore(demoStore.subscribe, demoStore.get, demoStore.get);
+  const data = useMemo(
+    () => (real && enabled ? demoSnapshot(real, stage) : real),
+    [real, enabled, stage],
+  );
+  return { demo: enabled, data };
+}
+
+/**
+ * The main screen's headline for each state the verdict can produce, keyed by
+ * its chip label. The body under it is the verdict's own headline, unchanged.
+ */
+function titleFor(label: string): string {
+  if (label.startsWith("Expires")) return "Your Square access is running out.";
+  const map: Record<string, string> = {
+    "Not in use": "Stripe takes your payments.",
+    Available: "Prefer Square?",
+    "Not connected": "Connect your Square account.",
+    "Setup unfinished": "Finish setting up in Square.",
+    "Access expired": "Your Square access has expired.",
+    "Token expired": "Your Square access has expired.",
+    "Connection error": "Square stopped answering.",
+    "Renewal failing": "Your Square access isn't renewing.",
+    "Renewal problem": "Your Square access isn't renewing.",
+    "No card location": "Square needs a card location.",
+    "Currency mismatch": "Square is set to a different currency.",
+    Connected: "You're taking payments with Square.",
+  };
+  return map[label] ?? "Square";
+}
+
+/* ──────────────────────────────── panel ─────────────────────────────────── */
+
 export function SquareStatus({ tenant }: { tenant: PanelTenant }) {
   useSquareOAuthReturn(tenant);
-  const { data, isLoading, isError } = useSquareStatus(tenant);
+  const { data: real, isLoading, isError } = useSquareStatus(tenant);
+  const { data } = useDemoSnapshot(tenant, real);
 
   if (isLoading) return <StatusChip state="loading" />;
   // A failed READ is not a disconnected integration. Saying "Not connected"
@@ -154,10 +252,23 @@ export function SquareStatus({ tenant }: { tenant: PanelTenant }) {
   return <StatusChip state={verdict.state} label={verdict.label} />;
 }
 
-/* ──────────────────────────────── panel ─────────────────────────────────── */
+/*
+ * THE SCREEN STANDARD (Ghulam, Oct 2 2026 — see `_screens.tsx`). One main
+ * screen per state: a picture, a headline, the verdict's own sentence and ONE
+ * button. The account details, the one-time processor choice and
+ * disconnecting are screens behind quiet links, with Back — the same set as
+ * Stripe's (a payments screen was dropped to match it). No rule
+ * changed: every gate (who may manage, the country check, the permanent rail
+ * write and its confirmation, the disconnect confirmation) is the component it
+ * always was — only where it is drawn moved.
+ */
+// Exactly Stripe's set — account details and disconnecting — plus the two
+// Square alone has (the one-time processor choice, how connecting works).
+type Screen = "home" | "choose" | "account" | "disconnect" | "how";
 
-export default function SquarePanel({ tenant, onClose }: IntegrationPanelProps) {
+export default function SquarePanel({ tenant, onBack, fromIntro }: IntegrationPanelProps) {
   const status = useSquareStatus(tenant);
+  const { demo, data: snapshot } = useDemoSnapshot(tenant, status.data);
   const { appUser } = useAuth();
 
   // `square-oauth-start`, `square-disconnect` and the rail write all reject
@@ -167,17 +278,63 @@ export default function SquarePanel({ tenant, onClose }: IntegrationPanelProps) 
   // only 403 is worse than showing it disabled with the reason.
   const canManage = appUser?.role === "head_admin" || appUser?.role === "admin";
 
-  // Lean tenants have no test/live concept, so no mode row. Presentation only —
-  // nothing in this file reads `square_mode` for anything but the two calls
-  // that must carry it.
+  // Lean tenants have no test/live concept, so no mode row. Presentation only.
   const hideModeUi = useIsTestModeUiHidden();
 
-  const verdict = useMemo(() => deriveSquareVerdict(status.data), [status.data]);
+  const verdict = useMemo(() => deriveSquareVerdict(snapshot), [snapshot]);
   const live = verdict.rail === "square" && !!verdict.connection;
-  const health = useSquarePaymentHealth(tenant, live);
+  const mode: SquareMode = snapshot?.squareMode ?? "test";
+  const connect = useConnectSquare(tenant, mode);
+  const disconnect = useDisconnectSquare(tenant, mode);
+
+  const [screen, setScreen] = useState<Screen>("home");
+  // The connect ends in a full-page redirect, so the pending flag is latched
+  // rather than cleared on success — the button keeps spinning until the
+  // browser actually leaves. Reset only when the start call fails.
+  const [leaving, setLeaving] = useState(false);
+
+  // The demo starts fresh every time the dialog opens, and is put back when it
+  // closes, so it can be shown again from the top.
+  useEffect(() => {
+    if (!demo) return;
+    return () => demoStore.set("fresh");
+  }, [demo]);
+
+  const startConnect = useCallback(() => {
+    setLeaving(true);
+    if (demo) {
+      // Plays the hand-off: Square opens in a new tab (its public sign-up page
+      // — nothing is created or linked), the button spins, then the dialog
+      // lands on connected. A real connect leaves for Square's OAuth instead.
+      window.open("https://squareup.com/signup", "_blank", "noopener,noreferrer");
+      window.setTimeout(() => {
+        demoStore.set("live");
+        setLeaving(false);
+      }, 2600);
+      return;
+    }
+    connect.mutate(undefined, { onError: () => setLeaving(false) });
+  }, [demo, connect]);
+
+  // The DB CHECK guarantees a Square tenant has a supported country, so this
+  // is belt and braces: `square-oauth-start` refuses the same case with its
+  // own sentence, and offering a button it will 409 is not a control.
+  const countryOk = isSquareCountrySupported(snapshot?.tenant.country) || demo;
+
+  // "Set up Square" on the last education screen IS the connect button: on
+  // the Square rail with nothing connected, connect at once rather than show a
+  // second screen asking for the same click. Never on the Stripe rail — the
+  // one-time processor choice is a permanent write that must be read first.
+  const [autoStarted, setAutoStarted] = useState(false);
+  useEffect(() => {
+    if (!fromIntro || autoStarted || !snapshot) return;
+    if (verdict.rail !== "square" || live || !canManage || !countryOk) return;
+    setAutoStarted(true);
+    startConnect();
+  }, [fromIntro, autoStarted, snapshot, verdict.rail, live, canManage, countryOk, startConnect]);
 
   if (status.isLoading) return <PanelLoading rows={4} />;
-  if (status.isError || !status.data) {
+  if (status.isError || !snapshot) {
     return (
       <PanelError
         message={status.error instanceof Error ? status.error.message : "Unknown error"}
@@ -186,42 +343,260 @@ export default function SquarePanel({ tenant, onClose }: IntegrationPanelProps) 
     );
   }
 
-  if (verdict.rail === "stripe-locked") return <StripeLocked verdict={verdict} />;
-  if (verdict.rail === "stripe-unlocked") {
-    return <ChooseSquare tenant={tenant} snapshot={status.data} verdict={verdict} canManage={canManage} />;
+  const home = () => setScreen("home");
+
+  /* ── screens behind quiet links ────────────────────────────────────────── */
+
+  if (screen === "choose" && verdict.rail === "stripe-unlocked") {
+    return (
+      <ScreenPager onBackFromStart={home}>
+        <ChooseSquare tenant={tenant} snapshot={snapshot} verdict={verdict} canManage={canManage} />
+      </ScreenPager>
+    );
   }
 
-  const mode = status.data.squareMode;
+  if (screen === "account" && live) {
+    // Same shape as Stripe's "Account details": a narrow screen, one card of
+    // rows with short hints, an action only when there is something to fix,
+    // and one quiet line. The facts are the old Connection section's, unchanged.
+    const c = verdict.connection as SquareConnectionRow;
+    const reconnect = verdict.state === "attention" && canManage;
+    return (
+      <SubScreen
+        title="Account details"
+        description="What Square has told us about the account your bookings are paid into."
+        onBack={home}
+      >
+        <PanelCard className="divide-y divide-border/60">
+          <PanelRow label="Business">{c.business_name ?? <span className="text-muted-foreground">Unnamed</span>}</PanelRow>
+          <PanelRow label="Merchant ID">
+            {c.merchant_id ? <CopyValue value={c.merchant_id} /> : <span className="text-muted-foreground">—</span>}
+          </PanelRow>
+          {/* Square binds the currency to the LOCATION and never converts, and
+              a location is mandatory on every payment link — so "none" here is
+              "cannot take money", full stop. */}
+          <PanelRow label="Location">
+            {c.location_id ? (
+              <span className="inline-flex items-center gap-1.5">
+                <span className="font-mono text-[12px]">{c.location_id}</span>
+                {c.location_currency && (
+                  <span className={verdict.currencyMismatch ? "text-warning" : "text-muted-foreground"}>
+                    {c.location_currency.toUpperCase()}
+                  </span>
+                )}
+              </span>
+            ) : (
+              <span className="text-warning">None cleared for cards</span>
+            )}
+          </PanelRow>
+          <PanelRow label="Connected">{fmtDate(c.connected_at)}</PanelRow>
+          {!hideModeUi && <PanelRow label="Square mode">{mode === "live" ? "Live" : "Test"}</PanelRow>}
+          {/* Deliberately no promise of renewal: the job that renews runs on
+              Drive247's side, this screen cannot see it, and it is not running
+              today. The date is a deadline that only moves if something moves it. */}
+          <PanelRow label="Access">
+            <span className={verdict.tokenExpired ? "text-destructive" : verdict.expiringSoon ? "text-warning" : undefined}>
+              {tokenPhrase(c.token_expires_at, verdict.daysUntilExpiry)}
+            </span>
+          </PanelRow>
+          <PanelRow label="Permissions">
+            {c.scopes && c.scopes.length > 0 ? (
+              <span title={c.scopes.join(", ")}>{c.scopes.length} approved</span>
+            ) : (
+              <span className="text-muted-foreground">Not recorded yet</span>
+            )}
+          </PanelRow>
+        </PanelCard>
+        {/* Verbatim: support needs this string to tell a revoke from a
+            deactivated merchant from missing platform credentials. */}
+        {c.last_error && (
+          <PanelNote tone="warn">
+            Last message on this connection:
+            <span className="mt-1 block break-words font-mono text-[11px] opacity-80">{c.last_error}</span>
+          </PanelNote>
+        )}
+        {reconnect ? (
+          <div className="flex justify-center">
+            <Button variant="outline" className="rounded-2xl" onClick={startConnect} disabled={leaving}>
+              {leaving ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+              {leaving ? "Opening Square…" : verdict.setupIncomplete ? "Reconnect and re-check" : "Reconnect Square"}
+            </Button>
+          </div>
+        ) : (
+          // Square has no on-demand check this screen may run (the token job is
+          // a cron), so the test re-reads the STORED connection and says so —
+          // it never claims to have asked Square.
+          <ConnectionTest
+            idle="Re-check the connection Drive247 has on file."
+            run={
+              demo
+                ? () => demoCheck("Working · access valid for 30 days")
+                : async () => {
+                    const r = await status.refetch();
+                    if (r.error) throw r.error instanceof Error ? r.error : new Error("Could not read the connection");
+                    const v = deriveSquareVerdict(r.data);
+                    if (v.state !== "connected") throw new Error(v.label);
+                    return `Working · ${tokenPhrase(v.connection?.token_expires_at ?? null, v.daysUntilExpiry)}`;
+                  }
+            }
+          />
+        )}
+      </SubScreen>
+    );
+  }
+
+  if (screen === "disconnect" && live) {
+    // Unlinking is allowed from here (Ghulam, Oct 2) — `square-disconnect`
+    // via useDisconnectSquare, behind a confirmation. The demo's account is a
+    // stand-in, so there it just puts the demo back to the start.
+    return (
+      <DisconnectScreen
+        name="Square"
+        canManage={canManage}
+        pending={disconnect.isPending}
+        onBack={home}
+        onConfirm={() => {
+          if (demo) {
+            demoStore.set("fresh");
+            home();
+            return;
+          }
+          disconnect.mutate(undefined, { onSuccess: home });
+        }}
+        consequence={
+          <>
+            New bookings can&rsquo;t take card payments, and no Square refund can be issued from here, until you
+            connect again. Payments already taken stay in your Square account, untouched.
+          </>
+        }
+      />
+    );
+  }
+
+  if (screen === "how") {
+    return (
+      <SubScreen title="How connecting works" onBack={home}>
+        <ol className="space-y-2 text-sm leading-relaxed text-muted-foreground">
+          {[
+            "Sign in to Square and approve access — Drive247 never sees your Square password.",
+            "Square hands back a credential for your merchant; it is held encrypted, never shown, and can be revoked from Square at any time.",
+            "Drive247 checks that the account has a location cleared for card payments in your currency, and records it.",
+            "Square brings you back here when it's done.",
+          ].map((step, i) => (
+            <li key={step} className="flex gap-2">
+              <span className="shrink-0 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">{i + 1}.</span>
+              <span>{step}</span>
+            </li>
+          ))}
+        </ol>
+      </SubScreen>
+    );
+  }
+
+  /* ── the main screen ───────────────────────────────────────────────────── */
+
+  // Straight from "Set up Square": keep the education's last screen up, its
+  // button spinning, while Square opens — one continuous step.
+  if (fromIntro && leaving && !live) {
+    return (
+      <>
+        <Hero
+          art={OwnerPayoutsEmptyArt}
+          title="Connect your Square account."
+          actions={
+            <div className="flex justify-center">
+              <Button className="h-10 rounded-2xl px-6" disabled>
+                <Loader2 className="animate-spin" />
+                Opening Square…
+              </Button>
+            </div>
+          }
+        >
+          Finish in the Square tab — sign in and approve Drive247. I&rsquo;ll pick it up here the moment
+          Square hands the account back.
+        </Hero>
+        <ScreenNav className="mt-8" onBack={onBack} />
+      </>
+    );
+  }
+
+  const offerReconnect = live && verdict.state === "attention" && canManage;
+  const conn = verdict.connection;
+
+  let action: ReactNode = null;
+  if (verdict.rail === "stripe-unlocked") {
+    action = (
+      <Button className="h-10 rounded-2xl px-6" onClick={() => setScreen("choose")}>
+        See what changes
+        <ArrowRight />
+      </Button>
+    );
+  } else if (verdict.rail === "square" && !live) {
+    action =
+      !countryOk || !canManage ? null : (
+        <Button className="h-10 rounded-2xl px-6" onClick={startConnect} disabled={leaving}>
+          {leaving ? <Loader2 className="animate-spin" /> : <Link2 />}
+          {leaving ? "Opening Square…" : "Connect Square"}
+        </Button>
+      );
+  } else if (offerReconnect) {
+    action = (
+      <Button className="h-10 rounded-2xl px-6" onClick={startConnect} disabled={leaving}>
+        {leaving ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+        {leaving ? "Opening Square…" : verdict.setupIncomplete ? "Reconnect and re-check" : "Reconnect Square"}
+      </Button>
+    );
+  } else if (live && conn) {
+    action = (
+      <Button className="h-10 rounded-2xl px-6" asChild>
+        <a href={dashboardHref(conn.square_mode)} target="_blank" rel="noopener noreferrer">
+          Open Square
+          <ArrowUpRight />
+        </a>
+      </Button>
+    );
+  }
+
+  // Why a manager-shaped action is missing, said instead of hidden.
+  const blocker =
+    verdict.rail === "square" && !live && !countryOk
+      ? `Square can't process payments for a business registered in ${snapshot.tenant.country ?? "an unknown country"}. Ask Drive247 support to correct the country first.`
+      : (verdict.rail === "square" && !live) || (live && verdict.state === "attention")
+        ? !canManage
+          ? "Only an admin or head admin can connect Square — ask one of them to open this card."
+          : null
+        : null;
+
+  const links = live
+    ? [
+        { label: "Account details", onClick: () => setScreen("account") },
+        ...(canManage ? [{ label: "Disconnecting", onClick: () => setScreen("disconnect") }] : []),
+      ]
+    : verdict.rail === "square"
+      ? [{ label: "How connecting works", onClick: () => setScreen("how") }]
+      : [];
 
   return (
-    <div className="space-y-5 pt-1">
-      {/* The headline. Tone tracks how much money is on the line: `danger`
-          only where every payment is failing right now. */}
-      <PanelNote tone={verdict.tone}>{verdict.headline}</PanelNote>
-
-      {!live ? (
-        <NotConnected
-          tenant={tenant}
-          snapshot={status.data}
-          verdict={verdict}
-          mode={mode}
-          canManage={canManage}
-        />
-      ) : (
-        <>
-          <Connection
-            tenant={tenant}
-            verdict={verdict}
-            connection={verdict.connection as SquareConnectionRow}
-            mode={mode}
-            hideModeUi={hideModeUi}
-            canManage={canManage}
-          />
-          <PaymentSync health={health} />
-          <Disconnect tenant={tenant} mode={mode} canManage={canManage} onClose={onClose} />
-        </>
-      )}
-    </div>
+    <>
+      <Hero
+        art={live ? PaymentsEmptyArt : verdict.rail === "square" ? OwnerPayoutsEmptyArt : QuotesEmptyArt}
+        eyebrow={verdict.state === "connected" ? "Live" : verdict.label}
+        title={titleFor(verdict.label)}
+        actions={action && <div className="flex justify-center">{action}</div>}
+        footer={links.length > 0 && <QuietNav items={links} />}
+      >
+        {verdict.headline}
+        {verdict.revokedAt && !live && (
+          <> You disconnected Square on {fmtDate(verdict.revokedAt)}; payments already taken were left as they were.</>
+        )}
+        {verdict.rail === "stripe-locked" && (
+          <> Your payment processor is fixed once chosen, because a refund has to go back through whoever took the charge.</>
+        )}
+        {blocker && <span className="mt-2 block text-warning">{blocker}</span>}
+      </Hero>
+      {/* mt-5: this screen can carry a button AND links under its text. */}
+      <ScreenNav className="mt-5" onBack={onBack} />
+    </>
   );
 }
 
@@ -530,336 +905,3 @@ function NotConnected({
   );
 }
 
-/* ─────────────────────────────── connection ─────────────────────────────── */
-
-function Connection({
-  tenant,
-  verdict,
-  connection,
-  mode,
-  hideModeUi,
-  canManage,
-}: {
-  tenant: PanelTenant;
-  verdict: SquareVerdict;
-  connection: SquareConnectionRow;
-  mode: SquareMode;
-  hideModeUi: boolean;
-  canManage: boolean;
-}) {
-  const connect = useConnectSquare(tenant, mode);
-  const [leaving, setLeaving] = useState(false);
-
-  // Reconnecting is a real remedy for EVERY attention state on a live row, and
-  // for a different reason each time: it re-runs the callback's location probe
-  // (setup unfinished, no card location, currency mismatch), it replaces a
-  // dead grant (expired, error), and — with the renewal job not running — it is
-  // the only way a fresh 30-day token gets minted at all (expiring soon,
-  // renewal failing). So one button, labelled for what it does.
-  const offerReconnect = verdict.state === "attention";
-  const reconnectLabel = verdict.setupIncomplete ? "Reconnect and re-check" : "Reconnect Square";
-
-  return (
-    <PanelSection title="Account">
-      <PanelCard className="divide-y divide-border/60">
-        <PanelRow label="Business">
-          {connection.business_name ?? <span className="text-muted-foreground">Unnamed</span>}
-        </PanelRow>
-
-        <PanelRow label="Merchant ID" mono>
-          {connection.merchant_id ? (
-            <CopyValue value={connection.merchant_id} />
-          ) : (
-            <span className="text-muted-foreground">—</span>
-          )}
-        </PanelRow>
-
-        {/* Square binds the currency to the LOCATION and never converts. A
-            location is also mandatory on every payment link, so "none" here is
-            "cannot take money", full stop. */}
-        <PanelRow
-          label="Location"
-          hint="Square needs a location on every payment link, and bills in that location's currency."
-        >
-          {connection.location_id ? (
-            <span className="inline-flex items-center gap-1.5">
-              <span className="font-mono text-[12px]">{connection.location_id}</span>
-              {connection.location_currency && (
-                <span
-                  className={
-                    verdict.currencyMismatch
-                      ? "text-warning"
-                      : "text-muted-foreground"
-                  }
-                >
-                  {connection.location_currency.toUpperCase()}
-                </span>
-              )}
-            </span>
-          ) : (
-            <span className="text-warning">None cleared for cards</span>
-          )}
-        </PanelRow>
-
-        <PanelRow label="Connected">{fmtDate(connection.connected_at)}</PanelRow>
-
-        {!hideModeUi && (
-          <PanelRow label="Square mode">{mode === "live" ? "Live" : "Test"}</PanelRow>
-        )}
-
-        {/* The hint deliberately does NOT promise a renewal. The job that
-            renews is server-side, this screen cannot see it, and today it is
-            not running — so the date is presented as what it is: a deadline
-            that only moves if something moves it. */}
-        <PanelRow
-          label="Access"
-          hint={`Square access lasts ${SQUARE_TOKEN_LIFETIME_DAYS} days. Renewing it is a background job on Drive247's side, not something this screen can run — if this date is within a week, or already past, that renewal has not happened, and reconnecting is the fix you have from here.`}
-        >
-          <span
-            className={
-              verdict.tokenExpired
-                ? "text-destructive"
-                : verdict.expiringSoon
-                  ? "text-warning"
-                  : undefined
-            }
-          >
-            {tokenPhrase(connection.token_expires_at, verdict.daysUntilExpiry)}
-          </span>
-        </PanelRow>
-      </PanelCard>
-
-      {/* Verbatim, not paraphrased: this string is what support needs to tell
-          "revoked in the Square dashboard" from "merchant deactivated" from
-          "platform credentials missing". */}
-      {connection.last_error && (
-        <PanelNote tone="warn">
-          Last message on this connection:
-          <span className="mt-1 block break-words font-mono text-[11px] opacity-80">
-            {connection.last_error}
-          </span>
-        </PanelNote>
-      )}
-
-      <PanelSection
-        title="Permissions"
-        description="What you approved this portal to do inside your Square account."
-      >
-        {connection.scopes && connection.scopes.length > 0 ? (
-          <div className="flex flex-wrap gap-1.5">
-            {connection.scopes.map((scope) => (
-              <span
-                key={scope}
-                className="rounded-md border border-primary/20 bg-primary/5 px-2 py-0.5 font-mono text-[11px] text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]"
-              >
-                {scope}
-              </span>
-            ))}
-          </div>
-        ) : (
-          <p className="text-xs text-muted-foreground">
-            Not recorded yet — Square reports the granted scopes when the connection is (re)established.
-          </p>
-        )}
-      </PanelSection>
-
-      <div className="flex flex-wrap items-center gap-2">
-        {offerReconnect &&
-          (canManage ? (
-            <Button
-              onClick={() => {
-                setLeaving(true);
-                connect.mutate(undefined, { onError: () => setLeaving(false) });
-              }}
-              disabled={leaving}
-            >
-              {leaving ? <Loader2 className="animate-spin" /> : <RefreshCw />}
-              {leaving ? "Opening Square…" : reconnectLabel}
-            </Button>
-          ) : null)}
-
-        <Button variant="ghost" asChild>
-          <a href={dashboardHref(connection.square_mode)} target="_blank" rel="noopener noreferrer">
-            Open Square
-            <ArrowUpRight />
-          </a>
-        </Button>
-      </div>
-
-      {offerReconnect && !canManage && (
-        <PanelNote tone="warn">
-          Only an admin or head admin can reconnect Square — ask one of them to restore payments.
-        </PanelNote>
-      )}
-
-      {/* Said out loud rather than hidden, because "where is the refresh
-          button?" is otherwise the obvious next question. Refreshing what is
-          stored is what reopening the card does; only reconnecting asks Square
-          anything. */}
-      {!offerReconnect && (
-        <p className="flex items-start gap-2 text-xs leading-relaxed text-muted-foreground">
-          <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-success" />
-          <span>
-            Nothing to do right now. This card re-reads the stored connection each time it opens; only
-            reconnecting asks Square anything new.
-          </span>
-        </p>
-      )}
-    </PanelSection>
-  );
-}
-
-/* ───────────────────────────── payment sync ─────────────────────────────── */
-
-function PaymentSync({ health }: { health: ReturnType<typeof useSquarePaymentHealth> }) {
-  if (health.isLoading) return <PanelLoading rows={2} />;
-  if (health.isError) {
-    return (
-      <PanelSection title="Payments">
-        <PanelError
-          message={health.error instanceof Error ? health.error.message : "Unknown error"}
-          onRetry={() => void health.refetch()}
-        />
-      </PanelSection>
-    );
-  }
-
-  const h = health.data;
-  if (!h) return null;
-
-  return (
-    <PanelSection title="Payments" description="How Square payments reach your records here.">
-      {h.total === 0 ? (
-        <PanelNote>
-          No Square payments yet. Rows appear here as customers pay their links — this fills up on its
-          own once the fleet is trading.
-        </PanelNote>
-      ) : (
-        <>
-          <div className="grid grid-cols-3 gap-2">
-            <Tile label="Paid" value={h.completed} />
-            <Tile label="Awaiting" value={h.pending} tone={h.pendingStale ? "warn" : undefined} />
-            <Tile label="All Square" value={h.total} />
-          </div>
-
-          <PanelCard>
-            <PanelRow label="Last payment">{fmtAgo(h.lastPaidAt)}</PanelRow>
-            {h.pending > 0 && (
-              <PanelRow label="Oldest unpaid link">{fmtAgo(h.oldestPendingAt)}</PanelRow>
-            )}
-          </PanelCard>
-        </>
-      )}
-
-      {/* Nothing on this screen settles a payment. Square tells Drive247 when a
-          link is paid; a missed message leaves the row "awaiting" while the
-          customer's money has moved, and the server-side sweep that would
-          catch it takes no tenant argument (it settles EVERY operator's rows),
-          so it is not something a tenant button may fire. Say what is true. */}
-      <p className="text-xs leading-relaxed text-muted-foreground">
-        Square tells Drive247 the moment a link is paid. If that message is ever missed, the payment
-        stays &ldquo;awaiting&rdquo; here even though the customer paid — Drive247 re-checks those on the
-        platform side, not from this screen.
-      </p>
-
-      {h.pendingStale && (
-        <PanelNote tone="warn">
-          A link has been unpaid for over an hour. That is usually just a customer who has not paid
-          yet — but if they say they have, the payment needs looking at on the platform side.
-        </PanelNote>
-      )}
-    </PanelSection>
-  );
-}
-
-function Tile({ label, value, tone }: { label: string; value: number; tone?: "warn" }) {
-  return (
-    <div className="rounded-xl border bg-muted/20 px-2.5 py-2 text-center">
-      <div className={`text-lg font-medium leading-tight ${tone === "warn" ? "text-warning" : ""}`}>
-        {value}
-      </div>
-      <div className="text-[11px] leading-tight text-muted-foreground">{label}</div>
-    </div>
-  );
-}
-
-/* ─────────────────────────────── disconnect ─────────────────────────────── */
-
-function Disconnect({
-  tenant,
-  mode,
-  canManage,
-  onClose,
-}: {
-  tenant: PanelTenant;
-  mode: SquareMode;
-  canManage: boolean;
-  onClose: () => void;
-}) {
-  const disconnect = useDisconnectSquare(tenant, mode);
-  const [open, setOpen] = useState(false);
-
-  if (!canManage) return null;
-
-  return (
-    <>
-      <div className="border-t pt-4">
-        <Button
-          variant="destructive"
-          size="sm"
-          onClick={() => setOpen(true)}
-          disabled={disconnect.isPending}
-        >
-          {disconnect.isPending ? <Loader2 className="animate-spin" /> : <Unplug />}
-          Disconnect Square
-        </Button>
-      </div>
-
-      <AlertDialog open={open} onOpenChange={setOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="size-4 text-destructive" />
-              Disconnect Square?
-            </AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="space-y-2 text-sm">
-                <p>
-                  New bookings will not be able to take card payments, and no Square refund can be
-                  issued from this portal, until Square is connected again. The stored credentials are
-                  deleted — reconnecting means signing in to Square and approving access again.
-                </p>
-                {/* The distinction operators get wrong: disconnecting is not a
-                    refund and not a rollback. Money already in Square stays in
-                    Square, and the rows here are untouched — square-disconnect
-                    never deletes the connection row either, so a refund that
-                    settles later can still find this tenant. */}
-                <p>
-                  Payments already taken are not touched — they stay in your Square account, and your
-                  Drive247 records of them are unchanged.
-                </p>
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Keep connected</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                // Closing the PANEL is deferred to success on purpose. Closing
-                // it unconditionally would drop an operator whose disconnect
-                // just failed back onto a card that still reads "Connected",
-                // with the error toast the only trace — on success that same
-                // card flipping to "Not connected" in front of them is the
-                // confirmation.
-                disconnect.mutate(undefined, { onSuccess: () => onClose() });
-                setOpen(false);
-              }}
-            >
-              Disconnect
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
-  );
-}

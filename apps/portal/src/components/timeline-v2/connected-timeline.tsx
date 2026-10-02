@@ -7,6 +7,7 @@ import { useTenant } from "@/contexts/TenantContext";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useCalendarBlocks } from "@/hooks/use-calendar-blocks";
 import { Button } from "@/components/ui-v2/button";
+import { List } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui-v2/dialog";
 import { CalendarView } from "@/components/rentals/calendar/calendar-view";
 import type { RentalFilters } from "@/hooks/use-enhanced-rentals";
@@ -15,9 +16,10 @@ import { EMPTY_TIMELINE, shiftDay, tenantToday, type TimelineScope } from "./mod
 import { TimelineBoard, initialTimelineView, type TimelineRange } from "./timeline-board";
 import { BlockDatesDialog } from "./timeline-dialogs";
 import { useTimelineData } from "./use-timeline-data";
+import { useViewportFillCap } from "@/components/shared/list-table-v2";
 
 /** The live adapter. The board itself never imports Supabase or manufactures records. */
-export function ConnectedTimeline({ scope, compact = false, heading, initialFilters }: { scope: TimelineScope; compact?: boolean; heading?: string; initialFilters?: RentalFilters }) {
+export function ConnectedTimeline({ scope, compact = false, heading, initialFilters, fill = false, onExit }: { scope: TimelineScope; compact?: boolean; heading?: string; initialFilters?: RentalFilters; fill?: boolean; onExit?: () => void }) {
   const { tenant, loading: tenantLoading, error: tenantError } = useTenant();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -35,6 +37,15 @@ export function ConnectedTimeline({ scope, compact = false, heading, initialFilt
   const expand = () => { expandOpener.current = document.activeElement as HTMLElement; setExpanded(true); };
   const [expanded, setExpanded] = useState(false);
   const [legacyTools, setLegacyTools] = useState(false);
+  /* `fill`: the board runs to the bottom of the window (the Rentals page,
+     Oct 2 2026) — the same measured fill the rentals list uses — and edge to
+     edge: `-mx-10` / `-mb-10` cancel the page's 24px and main's 16px padding at
+     the sides and the bottom (the measured height gets those 40px back), and
+     `-mt-16` also the page's 24px header gap above it (the header is hidden),
+     the board drops its card frame (`.tl-fill` in timeline.css). Armed only
+     while the board is the one showing, so it re-measures on return. */
+  const fillRef = useRef<HTMLDivElement | null>(null);
+  const fillHeight = useViewportFillCap(fillRef, fill && !legacyTools);
   const source = allowed ? query.data ?? EMPTY_TIMELINE : EMPTY_TIMELINE;
   const data = paymentMode === "all" ? source : { ...source, bookings: source.bookings.filter(b => b.paymentMode === paymentMode) };
   const currency = tenant?.currency_code || "USD";
@@ -51,10 +62,19 @@ export function ConnectedTimeline({ scope, compact = false, heading, initialFilt
   };
   const rates = scope.kind === "vehicle" ? data.vehicles[0] : null;
   return <div className="min-w-0">
-    {scope.kind === "all" && allowed && <div className="mb-3 flex items-center justify-between gap-3"><span className="text-xs text-muted-foreground">{legacyTools ? "Existing calendar tools" : "Rental calendar"}</span><Button variant="ghost" size="sm" onClick={() => setLegacyTools(v => !v)}>{legacyTools ? "Back to timeline" : "Pricing & existing tools"}</Button></div>}
+    {scope.kind === "all" && allowed && !(fillHeight !== undefined && !legacyTools) && <div className="mb-3 flex items-center justify-between gap-3"><span className="text-xs text-muted-foreground">{legacyTools ? "Existing calendar tools" : "Rental calendar"}</span><Button variant="ghost" size="sm" onClick={() => setLegacyTools(v => !v)}>{legacyTools ? "Back to timeline" : "Pricing & existing tools"}</Button></div>}
     {rates && <VehicleTimelinePricing vehicle={rates} currency={currency} />}
     {paymentMode !== "all" && <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">Payment mode: {paymentMode}<Button size="sm" variant="ghost" onClick={() => setPaymentMode("all")}>Clear payment filter</Button></div>}
-    {legacyTools && allowed ? <CalendarView filters={{}} /> : <TimelineBoard {...boardProps} compact={compact} onExpand={compact ? expand : undefined} />}
+    {legacyTools && allowed ? <CalendarView filters={{}} /> : fill
+      ? <div ref={fillRef} className={fillHeight !== undefined ? "-mx-10 -mb-10 -mt-16" : undefined} style={fillHeight !== undefined ? { height: fillHeight + 40 } : undefined}>
+          <TimelineBoard {...boardProps} fill={fillHeight !== undefined} compact={compact} actions={fillHeight !== undefined ? <>
+            {/* Full screen has no page header, so the board carries the two
+                things that lived there: the tools toggle and the way back. */}
+            <Button variant="ghost" size="sm" onClick={() => setLegacyTools(true)}>Pricing & tools</Button>
+            {onExit && <Button variant="outline" size="sm" onClick={onExit}><List size={14} />List view</Button>}
+          </> : undefined} />
+        </div>
+      : <TimelineBoard {...boardProps} compact={compact} onExpand={compact ? expand : undefined} />}
     <Dialog open={expanded} onOpenChange={setExpanded}><DialogContent onCloseAutoFocus={e => { e.preventDefault(); expandOpener.current?.focus(); }} className="tl-dialog w-[calc(100vw-2rem)] max-h-[90svh] overflow-auto sm:max-w-[1180px] rounded-2xl"><DialogHeader><DialogTitle>{heading || "Booking timeline"}</DialogTitle><DialogDescription>The same bookings, with more room to explore.</DialogDescription></DialogHeader><TimelineBoard {...boardProps} /></DialogContent></Dialog>
     {blockOpen && <BlockDatesDialog vehicles={data.vehicles} vehicleId={scope.kind === "vehicle" ? scope.id : undefined} start={blockStart} onClose={() => setBlockOpen(false)} onConfirm={async input => {
       if (!allowed || !writableAvailability) throw new Error("Your access has changed. You can no longer block dates from this view.");

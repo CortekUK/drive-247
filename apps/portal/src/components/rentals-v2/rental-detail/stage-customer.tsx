@@ -21,6 +21,12 @@
  * Three things answer that, in this order — identity (verification), history
  * (rentals), and what your own staff said afterwards (reviews).
  *
+ * LAYOUT (Oct 2026, island UI): the main pane never scrolls and never leaves
+ * dead space. A slim identity strip on top (the full file is "Open profile"),
+ * then Verification and Reviews as two full-width rows sharing the height 3:2.
+ * Each row lays out left-to-right (state | documents, score | latest reviews);
+ * the full review list opens in a dialog instead of growing the pane.
+ *
  * The question the stage has to answer, in one screenful, is:
  *
  *     who is this person, and are they safe to hand a car to?
@@ -28,75 +34,55 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ShieldCheck,
   ShieldAlert,
-  IdCard,
   Sparkles,
-  Send,
   Ban,
   ExternalLink,
   Image as ImageIcon,
+  MessageSquareText,
+  RotateCw,
+  Undo2,
+  X,
   Link2,
+  Star,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
-import { useIsAreaHidden } from "@/lib/lean-context";
-import { formatVerificationProvider } from "@/lib/verification-provider";
 import { BlurredImage } from "@/components/ui/blurred-image";
+import { TraxMark } from "@/components/trax/trax-greeting";
+import { useToast } from "@/hooks/use-toast";
+// v1's dialog, reused as it stands: it is the one working route to a new
+// `create-ai-verification-session` (QR + copyable link for the customer).
+import { StartVerificationDialog } from "@/components/customers/start-verification-dialog";
 import { Button } from "@/components/ui-v2/button";
 import { Badge } from "@/components/ui-v2/badge";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui-v2/dialog";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui-v2/hover-card";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui-v2/tooltip";
 import { useCustomerReviews } from "@/hooks/use-customer-reviews";
 import { useCustomerReviewSummary } from "@/hooks/use-customer-review-summary";
-// The two verification dialogs are v1 components, and they are reused as they
-// stand rather than re-skinned. They are the ONLY working route to a Sumsub/AI
-// session and to a CheckMyDriver link; a v2 copy would be a second call-site
-// for `create-ai-verification-session` that has to be kept in step with the
-// first. A modal in the v1 grammar over a v2 screen is the cheaper mismatch.
-import { StartVerificationDialog } from "@/components/customers/start-verification-dialog";
-import { StartCmdVerificationDialog } from "@/components/customers/start-cmd-verification-dialog";
-import { useCmdVerification } from "@/hooks/use-cmd-verification";
 import type { StageProps } from "./stages";
+import { CustomerPicker, useCustomerSwitchable } from "./customer-picker";
 import {
+  StageAction,
+  cardCls,
   fmtDate,
-  fmtDateTime,
   initials,
   insetCls,
   listCls,
-  ActionButton,
   EmptyHint,
   Panel,
   Pill,
-  Section,
-  StatBlock,
   Surface,
-  Timeline,
 } from "./_kit";
 
 /* ══════════════════════════════════════════════════════════════════════════
    Verification — reading the real rows
    ══════════════════════════════════════════════════════════════════════════ */
-
-/**
- * The six states an identity check can be in.
- *
- * `manual` is not a shortcut — it is `customers.identity_verification_status =
- * 'manually_verified'`, which is what an operator who has held the licence in
- * their hand actually records, and which nothing else may overwrite.
- */
-type VerificationState = "not_started" | "link_sent" | "in_review" | "verified" | "manual" | "failed";
-
-/** How far down the verification timeline a state sits. */
-const VERIFY_RANK: Record<VerificationState, number> = {
-  not_started: 0,
-  link_sent: 1,
-  in_review: 2,
-  verified: 3,
-  manual: 3,
-  failed: 3,
-};
 
 /**
  * The latest identity check for this customer.
@@ -119,20 +105,36 @@ function useCustomerVerification(customerId: string | null, customerEmail: strin
   const { tenant } = useTenant();
 
   return useQuery({
-    queryKey: ["customer-identity-verification", customerId, customerEmail, tenant?.id],
+    // Its own key: v1 reads the latest row of ANY provider under
+    // "customer-identity-verification"; this one skips CheckMyDriver rows,
+    // which are a separate check with their own chip (see useCmdCheck).
+    queryKey: ["customer-trax-id-v2", customerId, customerEmail, tenant?.id],
     queryFn: async () => {
       if (!customerId) return null;
 
-      const { data, error } = await supabase
+      // The last few rows, not just the newest: sending a new link creates an
+      // EMPTY row, and reading only the newest would hide a passed check behind
+      // a link the customer has not opened yet. The card shows the latest row
+      // that has a result or documents; a newer empty one is carried alongside
+      // as `pendingLink` so the card can say a link is out.
+      const { data: rows, error } = await supabase
         .from("identity_verifications")
         .select("*")
         .eq("customer_id", customerId)
+        .neq("provider", "cmd")
         .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .limit(10);
 
       if (error) console.error("Error fetching identity verification:", error);
-      if (data) return data as Record<string, any>;
+      if (rows?.length) {
+        const hasOutcome = (r: any) =>
+          !!(r.review_result || r.document_front_url || r.selfie_image_url || r.face_image_url);
+        const current = rows.find(hasOutcome);
+        if (!current) return rows[0] as Record<string, any>;
+        const newest = rows[0] as any;
+        const pendingLink = newest.id !== current.id && !hasOutcome(newest) ? newest : null;
+        return { ...(current as any), pendingLink } as Record<string, any>;
+      }
 
       if (customerEmail) {
         const email = customerEmail.toLowerCase().trim();
@@ -183,89 +185,176 @@ function useCustomerVerification(customerId: string | null, customerEmail: strin
 }
 
 /**
- * The row(s) → one state.
+ * The latest CheckMyDriver check for this customer.
  *
- * `manually_verified` on the customer wins outright: it is an operator's
- * explicit word, and it outranks a machine that has not finished or did not
- * agree. After that the verification row decides, and the order matters —
- * a RED result is a decision, a missing result is not.
+ * Read directly rather than through `useCmdVerification`, which is switched off
+ * for lean tenants (they are not OFFERED CMD). Showing a check that already
+ * exists is not offering it, and a chip for it costs one read.
  */
-function deriveVerificationState(
-  verification: Record<string, any> | null | undefined,
-  customerStatus: string | null | undefined
-): VerificationState {
-  if (customerStatus === "manually_verified") return "manual";
-
-  if (verification) {
-    const result = String(verification.review_result ?? "").toUpperCase();
-    if (result === "GREEN") return "verified";
-    if (result === "RED") return "failed";
-
-    // Documents are in but no verdict yet.
-    if (verification.document_front_url || verification.selfie_image_url || verification.face_image_url) {
-      return "in_review";
-    }
-    // A session exists and the customer has not opened it, or is mid-way.
-    return "link_sent";
-  }
-
-  if (customerStatus === "verified") return "verified";
-  if (customerStatus === "rejected") return "failed";
-  if (customerStatus === "pending") return "in_review";
-  return "not_started";
-}
-
-function VerifyChip({ state }: { state: VerificationState }) {
-  if (state === "failed") {
-    return (
-      <Badge variant="destructive" className="gap-1.5">
-        <ShieldAlert />
-        ID check failed
-      </Badge>
-    );
-  }
-  const map = {
-    not_started: { tone: "neutral" as const, label: "ID not verified", icon: false },
-    link_sent: { tone: "primary" as const, label: "ID link sent", icon: false },
-    in_review: { tone: "primary" as const, label: "ID in review", icon: false },
-    verified: { tone: "success" as const, label: "ID verified", icon: true },
-    manual: { tone: "success" as const, label: "Verified in person", icon: true },
-  }[state];
-  return (
-    <Pill tone={map.tone}>
-      {map.icon && <ShieldCheck />}
-      {map.label}
-    </Pill>
-  );
-}
-
-/* ══════════════════════════════════════════════════════════════════════════
-   History
-   ══════════════════════════════════════════════════════════════════════════ */
-
-/**
- * How many rentals this customer has had with this tenant.
- *
- * `head: true` — the number is the whole answer, so no row is transferred. The
- * count is deliberately of ALL their rentals including this one; "3 rentals"
- * next to a name means what an operator means by it.
- */
-function useCustomerRentalCount(customerId: string | null) {
+function useCmdCheck(customerId: string | null) {
   const { tenant } = useTenant();
-
   return useQuery({
-    queryKey: ["customer-rental-count-v2", tenant?.id, customerId],
+    queryKey: ["customer-cmd-check-v2", customerId, tenant?.id],
     queryFn: async () => {
-      const { count, error } = await supabase
-        .from("rentals")
-        .select("id", { count: "exact", head: true })
+      const { data, error } = await supabase
+        .from("identity_verifications")
+        .select("id, status, cmd_status, cmd_license_status, created_at, verification_completed_at")
         .eq("customer_id", customerId!)
-        .eq("tenant_id", tenant!.id);
+        .eq("provider", "cmd")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
       if (error) throw error;
-      return count ?? 0;
+      return (data as Record<string, any> | null) ?? null;
     },
     enabled: !!customerId && !!tenant?.id,
   });
+}
+
+type Chip = {
+  key: string;
+  label: string;
+  tone: "success" | "primary" | "neutral" | "destructive";
+  /** Trax ran this check — the pill wears Trax's mark instead of a shield. */
+  trax?: boolean;
+  /** This customer's own figures, shown in the hover card ("Face match 100%"). */
+  facts?: string[];
+};
+
+/**
+ * One chip per kind of verification the customer has — Trax ID, CheckMyDriver,
+ * In person. They are independent: a customer can carry all three, or one.
+ *
+ *  - Trax ID   the AI check Trax runs (licence scan + face match). A legacy
+ *              Veriff row is shown under its own name, not as Trax's work.
+ *  - CMD       CheckMyDriver's licence status.
+ *  - In person `customers.identity_verification_status = 'manually_verified'`.
+ */
+function verificationChips(
+  trax: Record<string, any> | null | undefined,
+  cmd: Record<string, any> | null | undefined,
+  customerStatus: string | null | undefined
+): Chip[] {
+  const chips: Chip[] = [];
+
+  if (trax) {
+    const byTrax = trax.verification_provider !== "veriff";
+    const pct = (v: any) => (v == null || !Number.isFinite(Number(v)) ? null : Math.round(Number(v) * (Number(v) <= 1 ? 100 : 1)));
+    const face = pct(trax.ai_face_match_score);
+    const read = pct(trax.ai_ocr_data?.confidence);
+    const facts = [
+      trax.verification_completed_at ? `Checked ${fmtDate(trax.verification_completed_at)}` : null,
+      face != null ? `Face match ${face}%` : null,
+      read != null ? `Licence read ${read}%` : null,
+    ].filter(Boolean) as string[];
+    const name = byTrax ? "Trax ID" : "Veriff";
+    const result = String(trax.review_result ?? "").toUpperCase();
+    if (result === "GREEN") chips.push({ key: "trax", label: name, tone: "success", trax: byTrax, facts });
+    else if (result === "RED") chips.push({ key: "trax", label: `${name} failed`, tone: "destructive", trax: byTrax, facts });
+    else if (trax.document_front_url || trax.selfie_image_url || trax.face_image_url)
+      chips.push({ key: "trax", label: `${name} in review`, tone: "primary", trax: byTrax, facts });
+    else chips.push({ key: "trax", label: `${name} link sent`, tone: "neutral", trax: byTrax, facts });
+  } else if (customerStatus === "verified") {
+    // Verified with no check row on file (an older sync) — still a pass.
+    chips.push({ key: "trax", label: "ID verified", tone: "success" });
+  }
+
+  if (cmd) {
+    const lic = cmd.cmd_license_status;
+    if (lic === "Valid") chips.push({ key: "cmd", label: "CMD", tone: "success" });
+    else if (lic === "Invalid") chips.push({ key: "cmd", label: "CMD invalid", tone: "destructive" });
+    else if (lic === "Expired") chips.push({ key: "cmd", label: "CMD expired", tone: "destructive" });
+    else chips.push({ key: "cmd", label: "CMD pending", tone: "primary" });
+  }
+
+  // In person — hidden for now (Ghulam, 2026-10-02). The data is still read;
+  // restoring the chip is uncommenting this line.
+  // if (customerStatus === "manually_verified") chips.push({ key: "manual", label: "In person", tone: "success" });
+
+  return chips;
+}
+
+type TraxActions = {
+  /** Re-scan the documents already on file. Absent when there are none. */
+  onRescan?: () => void;
+  rescanning?: boolean;
+  /** Send the customer a link to upload new photos (ends in a scan too). */
+  onNewLink: () => void;
+};
+
+/**
+ * What Trax ID is, on hover — the app's white explainer card (the same
+ * HoverCard the empty states use), in Trax's own voice. Below the explanation,
+ * this customer's own figures.
+ */
+function TraxIdHover({ facts, children }: { facts?: string[]; children: React.ReactNode }) {
+  return (
+    <HoverCard openDelay={120} closeDelay={60}>
+      <HoverCardTrigger asChild>
+        <span className="inline-flex cursor-default">{children}</span>
+      </HoverCardTrigger>
+      {/* To the RIGHT of the pill, top edges aligned: the pill is the
+          Verification card's heading, top-left, and the card sits at the
+          bottom of the pane — "below" has no room (Radix flipped it up over
+          the Reviews card) and "left" runs off the pane. Right of it is the
+          card's own image row: the explainer covers only what it explains. */}
+      <HoverCardContent
+        side="right"
+        align="start"
+        sideOffset={10}
+        collisionPadding={16}
+        className="w-72 rounded-2xl p-4 text-left"
+      >
+        <div className="flex items-center gap-2">
+          <TraxMark size="xs" />
+          <p className="text-[13px] font-semibold text-foreground">Trax ID</p>
+        </div>
+        <p className="mt-2 text-[12.5px] leading-snug text-muted-foreground">
+          I read the licence, make sure it is real and in date, then match the face on it to a live selfie. If
+          anything does not line up, you will see it here before the keys change hands.
+        </p>
+        {!!facts?.length && (
+          <div className="mt-3 space-y-1 border-t border-foreground/5 pt-3">
+            {facts.map((f) => (
+              <p key={f} className="text-[12px] font-medium text-foreground/80">
+                {f}
+              </p>
+            ))}
+          </div>
+        )}
+      </HoverCardContent>
+    </HoverCard>
+  );
+}
+
+function VerificationChips({ chips }: { chips: Chip[] }) {
+  if (!chips.length) return <Pill tone="neutral">Not verified</Pill>;
+  return (
+    <span className="flex flex-wrap items-center gap-1.5">
+      {chips.map((c) =>
+        c.trax ? (
+          // Trax's own pill: its mark, on the primary tint, whatever the
+          // outcome — the label carries the result ("Trax ID failed").
+          <TraxIdHover key={c.key} facts={c.facts}>
+            <Pill tone={c.tone === "destructive" ? "neutral" : "primary"}>
+              <TraxMark size="xs" className="-ml-1 size-4" />
+              <span className={c.tone === "destructive" ? "text-destructive" : undefined}>{c.label}</span>
+            </Pill>
+          </TraxIdHover>
+        ) : c.tone === "destructive" ? (
+          <Badge key={c.key} variant="destructive" className="gap-1.5">
+            <ShieldAlert />
+            {c.label}
+          </Badge>
+        ) : (
+          <Pill key={c.key} tone={c.tone}>
+            {c.tone === "success" && <ShieldCheck />}
+            {c.label}
+          </Pill>
+        )
+      )}
+    </span>
+  );
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -285,41 +374,62 @@ const RATING_TONE = {
 
 const ratingTone = (n: number) => (n >= 8 ? RATING_TONE.good : n >= 5 ? RATING_TONE.fair : RATING_TONE.poor);
 
-/** Give a vendor's message a full stop so the sentence after it reads as one. */
-const endStop = (s: string | null | undefined) => {
-  const t = s?.trim();
-  if (!t) return null;
-  return /[.!?]$/.test(t) ? t : `${t}.`;
-};
-
 /* ══════════════════════════════════════════════════════════════════════════
    The stage
    ══════════════════════════════════════════════════════════════════════════ */
 
-export function StageCustomer({ detail }: StageProps) {
+export function StageCustomer({ detail, refetch }: StageProps) {
   const { tenantSlug } = useTenant();
   const customer = detail.customer;
   const customerId = customer?.id ?? null;
 
+  const [reviewsOpen, setReviewsOpen] = useState(false);
+  const [checkOpen, setCheckOpen] = useState(false);
   const [verifyOpen, setVerifyOpen] = useState(false);
-  const [cmdOpen, setCmdOpen] = useState(false);
+  /** Cleared: the stage shows the picker instead of the customer. Nothing is written until a pick. */
+  const [picking, setPicking] = useState(false);
+  const switchable = useCustomerSwitchable(detail.rental.id);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
 
-  const { data: verification, isLoading: verificationLoading } = useCustomerVerification(
+  /* Run Trax ID again — on the documents already on file, via
+     trax-id-rescan-v2. The customer does nothing; the same row is updated. */
+  const rescan = useMutation({
+    mutationFn: async (verificationId: string) => {
+      const { data, error } = await supabase.functions.invoke("trax-id-rescan-v2", { body: { verificationId } });
+      if (error) throw error;
+      if (!data?.ok) throw new Error(data?.error ?? "The scan did not run");
+      return data.result as "verified" | "rejected" | "review_required";
+    },
+    onSuccess: (result) => {
+      toast({
+        title:
+          result === "verified"
+            ? "I scanned it again. It still checks out."
+            : result === "review_required"
+              ? "I scanned it again. The face match needs a human look."
+              : "I scanned it again. It did not pass this time.",
+      });
+    },
+    onError: (e: Error) => toast({ title: "I could not scan it again", description: e.message, variant: "destructive" }),
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ["customer-trax-id-v2", customerId] }),
+  });
+
+  const { data: verification } = useCustomerVerification(
     customerId,
     customer?.email ?? null
   );
-  const { data: rentalCount } = useCustomerRentalCount(customerId);
   const { data: reviews } = useCustomerReviews(customerId ?? undefined);
   const { data: reviewSummary } = useCustomerReviewSummary(customerId ?? undefined);
 
-  // CheckMyDriver is hidden from lean tenants, and the hook gates its own query
-  // on that — so an undefined row here means either "not offered" or "not
-  // started", and only `cmdHidden` tells the two apart.
-  const cmdHidden = useIsAreaHidden("cmd");
-  const { data: cmd } = useCmdVerification(customerId ?? undefined);
-
-  const state = deriveVerificationState(verification, customer?.identity_verification_status);
-  const rank = VERIFY_RANK[state];
+  const { data: cmdCheck } = useCmdCheck(customerId);
+  const hasDocs = !!(verification?.document_front_url && (verification?.selfie_image_url || verification?.face_image_url));
+  const traxActions: TraxActions = {
+    onRescan: verification && hasDocs ? () => rescan.mutate(verification.id) : undefined,
+    rescanning: rescan.isPending,
+    onNewLink: () => setVerifyOpen(true),
+  };
+  const chips = verificationChips(verification, cmdCheck, customer?.identity_verification_status);
 
   const average = useMemo(() => {
     if (reviewSummary?.average_rating != null) return Number(reviewSummary.average_rating);
@@ -331,398 +441,503 @@ export function StageCustomer({ detail }: StageProps) {
 
   const tone = average === null ? null : ratingTone(average);
 
-  const tagCounts = useMemo(() => {
-    const counted = new Map<string, number>();
-    (reviews ?? []).forEach((r) => r.tags.forEach((t) => counted.set(t, (counted.get(t) ?? 0) + 1)));
-    return [...counted.entries()].sort((a, b) => b[1] - a[1]);
-  }, [reviews]);
-
-  /* A rental with no customer row is a broken record, not an empty state — it
-     should not happen (the FK is set on creation) but it is cheap to say so
-     plainly rather than render a screen full of dashes. */
+  /* No customer yet: a rental started from "New Rental" (a draft — Pending,
+     no customer or car) is created empty and filled in here. The stage IS the
+     picker until someone is chosen. */
   if (!customer) {
     return (
-      <Panel title="Customer" description="Who is renting.">
-        <EmptyHint>
-          This rental has no customer attached to it. Nothing on this screen can be addressed to anybody until one
-          is — open it in the rentals list and set a customer.
-        </EmptyHint>
+      <Panel fill title="Customer" description="Who is renting? Find them, or pick them from the list.">
+        <CustomerPicker
+          rentalId={detail.rental.id}
+          currentCustomerId={null}
+          onDone={(changed) => {
+            if (changed) refetch();
+          }}
+        />
       </Panel>
     );
   }
 
   const firstName = customer.name.split(" ")[0] || "the customer";
 
-  const verifyTile =
-    state === "failed"
-      ? "bg-destructive-light text-destructive"
-      : state === "verified" || state === "manual"
-        ? "bg-success-light text-success"
-        : state === "not_started"
-          ? "bg-muted text-muted-foreground"
-          : "bg-primary-light text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]";
+  const faceScore = verification?.ai_face_match_score;
 
-  const verifyHeadline = {
-    not_started: "Not verified",
-    link_sent: "Link sent, waiting on them",
-    in_review: "Documents in, check running",
-    verified: "Identity confirmed",
-    manual: "Verified in person",
-    failed: "The check did not pass",
-  }[state];
+  /* The fields the check extracted. Columns first, `ai_ocr_data` as the
+     fallback (the AI provider fills both; others fill only the columns). */
+  const ocr = (verification?.ai_ocr_data ?? {}) as Record<string, any>;
+  const docName = [verification?.first_name ?? ocr.firstName, verification?.last_name ?? ocr.lastName]
+    .filter(Boolean)
+    .join(" ");
+  const dob = verification?.date_of_birth ?? ocr.dateOfBirth ?? null;
+  const docType = verification?.document_type ?? ocr.documentType ?? null;
+  const docCountry = verification?.document_country ?? ocr.documentCountry ?? null;
+  const docNumber = verification?.document_number ?? ocr.documentNumber ?? null;
+  const expiry = verification?.document_expiry_date ?? ocr.documentExpiry ?? null;
+  const expired = expiry ? new Date(`${String(expiry).slice(0, 10)}T23:59:59`) < new Date() : false;
+  const confidence = ocr.confidence != null ? Number(ocr.confidence) : null;
+  const DOC_TYPES: Record<string, string> = {
+    id_card: "ID card",
+    driving_license: "Driving licence",
+    drivers_license: "Driving licence",
+    passport: "Passport",
+    residence_permit: "Residence permit",
+  };
+  const extracted = [
+    docName && { label: "Name on document", value: docName },
+    dob && { label: "Date of birth", value: fmtDate(dob) },
+    (docType || docCountry) && {
+      label: "Document",
+      value: [docType ? (DOC_TYPES[docType] ?? docType.replace(/_/g, " ")) : null, docCountry].filter(Boolean).join(" · "),
+    },
+    docNumber && { label: "Number", value: String(docNumber), secret: true },
+    expiry && {
+      label: expired ? "Expired" : "Expires",
+      value: fmtDate(expiry),
+      tone: expired ? "text-destructive" : undefined,
+    },
+    confidence != null &&
+      Number.isFinite(confidence) && {
+        label: "Read confidence",
+        value: `${Math.round(confidence * (confidence <= 1 ? 100 : 1))}%`,
+      },
+  ].filter(Boolean) as { label: string; value: string; secret?: boolean; tone?: string }[];
 
-  const completedAt = verification?.verification_completed_at
-    ? fmtDateTime(verification.verification_completed_at)
-    : null;
-  const startedAt = verification?.created_at ? fmtDateTime(verification.created_at) : null;
-  const provider = verification?.verification_provider ?? verification?.provider ?? null;
 
-  const verifyBlurb = {
-    not_started: `Nothing has been checked. Send ${firstName} a link and they photograph their licence and their own face.`,
-    link_sent: `A check was started${startedAt ? ` ${startedAt}` : ""}${
-      provider ? ` via ${formatVerificationProvider(provider)}` : ""
-    }. Nothing to do until they submit their documents.`,
-    in_review: `${firstName} submitted their documents. The result usually lands within a minute.`,
-    verified: `Passed${completedAt ? ` ${completedAt}` : ""}${
-      provider ? ` via ${formatVerificationProvider(provider)}` : ""
-    }.`,
-    manual: "An operator confirmed the licence face to face. No document is on file, so this one rests on your word.",
-    // The reason is a provider's own string and arrives with or without a full
-    // stop — "OCR extraction failed" as often as "The selfie did not match."
-    // Without this the two sentences run into each other mid-line.
-    failed: `${endStop(verification?.rejection_reason) ?? "The document did not match."} Nothing here blocks the rental — but it goes out with no verified identity behind it.`,
-  }[state];
-
-  const verifySteps =
-    state === "manual"
-      ? [{ label: "Confirmed in person by an operator", done: true }]
-      : [
-          { label: "Verification started", at: startedAt ?? undefined, done: rank >= 1 },
-          { label: "Licence and selfie submitted", done: rank >= 2 },
-          {
-            label: state === "failed" ? "Check failed" : "Identity confirmed",
-            at: completedAt ?? undefined,
-            done: rank >= 3,
-          },
-        ];
-
-  const images = [
+  /* The three document slots are always drawn — each says plainly whether it is
+     on file — so the verification card has a stable shape on every rental. */
+  const docSlots = [
     { url: verification?.document_front_url, label: "Licence front" },
     { url: verification?.document_back_url, label: "Licence back" },
     { url: verification?.selfie_image_url ?? verification?.face_image_url, label: "Selfie" },
-  ].filter((i) => !!i.url) as { url: string; label: string }[];
-
-  const faceScore = verification?.ai_face_match_score;
-
-  const licenceValue = cmd?.cmd_license_status ?? (customer.license_number ? "On file" : "—");
-  const licenceHint = customer.license_number
-    ? [customer.license_number, customer.license_state].filter(Boolean).join(" · ")
-    : verification?.document_expiry_date
-      ? `Expires ${fmtDate(verification.document_expiry_date)}`
-      : "No licence recorded";
+  ] as { url: string | null | undefined; label: string }[];
 
   return (
     <Panel
+      fill
       title="Customer"
+      action={
+        picking ? (
+          /* Back out: the rental still has its customer — clearing wrote nothing. */
+          <StageAction icon={Undo2} label={`Keep ${customer.name.split(" ")[0]}`} onClick={() => setPicking(false)} />
+        ) : (
+          /* Clear who is renting — only while the rental is still in its first
+             four stages; the database says when it is not, and why. */
+          <StageAction
+            icon={X}
+            label="Clear customer"
+            onClick={() => setPicking(true)}
+            disabledReason={
+              switchable.data?.ok ? null : (switchable.data?.reason ?? "Checking whether the customer can still change…")
+            }
+          />
+        )
+      }
       description="Who is renting. Everything else on this rental is addressed to them."
     >
-      {/* ── who ─────────────────────────────────────────────────────────── */}
-      <Surface>
-        <div className="flex items-start gap-4">
-          <span className="flex size-12 shrink-0 items-center justify-center rounded-3xl bg-primary-light font-heading text-sm font-semibold text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
-            {initials(customer.name)}
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="font-heading text-lg font-semibold tracking-tight">{customer.name}</h3>
-              <VerifyChip state={state} />
-              {customer.is_blocked && (
-                <Badge variant="destructive" className="gap-1.5">
-                  <Ban />
-                  Blocked
-                </Badge>
-              )}
-            </div>
-            <p className="mt-1 truncate text-sm text-muted-foreground">
-              {[customer.email, customer.phone].filter(Boolean).join(" · ") || "No contact details on file"}
-            </p>
-            {customer.created_at && (
-              <p className="mt-0.5 text-xs text-muted-foreground">Customer since {fmtDate(customer.created_at)}</p>
-            )}
-          </div>
-          {/* The one navigation off this stage. The customer's own page is where
-              you edit them, block them, or read their whole file; this stage
-              answers a question about THIS rental and hands off for the rest. */}
-          <Button variant="outline" size="sm" asChild>
-            <Link href={`/customers/${customer.id}`}>
-              <ExternalLink />
-              Open profile
-            </Link>
-          </Button>
-        </div>
-
-        {customer.is_blocked && (
-          <div className="mt-5 rounded-3xl bg-destructive-light px-5 py-4 ring-1 ring-destructive/20">
-            <p className="text-sm font-medium text-destructive">This customer is blocked.</p>
-            <p className="mt-1 text-xs text-destructive/80">
-              {customer.blocked_reason || "No reason was recorded."} Unblocking is done from their profile.
-            </p>
-          </div>
-        )}
-
-        <div className="mt-5 grid gap-2 sm:grid-cols-3">
-          <StatBlock
-            label="Rentals"
-            value={rentalCount === undefined ? "—" : String(rentalCount)}
-            hint={rentalCount === 1 ? "This one is their first" : "With you, including this one"}
-          />
-          <StatBlock
-            label="Staff rating"
-            value={average === null ? "—" : `${average.toFixed(1)} / 10`}
-            hint={
-              !reviews?.length
-                ? "No reviews yet"
-                : `${reviews.length} review${reviews.length === 1 ? "" : "s"}`
-            }
-            tone={tone?.text}
-          />
-          <StatBlock label="Licence" value={licenceValue} hint={licenceHint} />
-        </div>
-      </Surface>
-
-      {/* ── verification ────────────────────────────────────────────────── */}
-      <Section
-        title="Verification"
-        description="Whether the person collecting the car is who they say they are."
-        right={<VerifyChip state={state} />}
-      >
-        <div className="flex items-start gap-4">
-          <span className={cn("flex size-11 shrink-0 items-center justify-center rounded-3xl", verifyTile)}>
-            {state === "failed" ? <ShieldAlert className="size-5" /> : <ShieldCheck className="size-5" />}
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="font-heading text-sm font-semibold">{verifyHeadline}</p>
-            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-              {verificationLoading ? "Reading the latest check…" : verifyBlurb}
-            </p>
-          </div>
-        </div>
-
-        {images.length > 0 && (
-          <>
-            <div className="mt-5 grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {images.map((img) => (
-                <div key={img.label} className={cn(insetCls, "p-3")}>
-                  {/* Blurred by default and revealed on click — the same
-                      component v1 uses. These are somebody's licence and face;
-                      they should not be readable over a shoulder by default. */}
-                  <BlurredImage
-                    src={img.url}
-                    alt={img.label}
-                    containerClassName="h-16 overflow-hidden rounded-2xl bg-muted"
-                  />
-                  <p className="mt-2 text-[11px] text-muted-foreground">{img.label}</p>
-                </div>
-              ))}
-            </div>
-            {faceScore != null && (
-              <p
-                className={cn(
-                  "mt-3 flex items-center gap-1.5 text-xs",
-                  state === "verified" ? "text-success" : state === "failed" ? "text-destructive" : "text-muted-foreground"
-                )}
-              >
-                <IdCard className="size-3.5" />
-                Face match {Math.round(Number(faceScore) * (Number(faceScore) <= 1 ? 100 : 1))}% against the licence
-                photo.
-              </p>
-            )}
-          </>
-        )}
-
-        {/* An empty state that is honest about being empty, rather than three
-            grey rectangles pretending documents exist. */}
-        {images.length === 0 && rank >= 2 && (
-          <div className={cn(insetCls, "mt-5 flex items-center gap-3 px-5 py-4")}>
-            <ImageIcon className="size-4 shrink-0 text-muted-foreground/60" />
-            <p className="text-xs text-muted-foreground">
-              No document images have been fetched for this check yet.
-            </p>
-          </div>
-        )}
-
-        <div className="mt-6">
-          <Timeline steps={verifySteps} />
-        </div>
-
-        <div className="mt-6 flex flex-wrap gap-2">
-          {/* LIVE. Creates a `create-ai-verification-session` and shows the QR
-              plus a copyable link — the same dialog the customers page uses. */}
-          <ActionButton onClick={() => setVerifyOpen(true)}>
-            <Send className="size-4" />
-            {rank === 0 ? "Send verification link" : "Start a new check"}
-          </ActionButton>
-
-          {/* LIVE, and only where CheckMyDriver is offered. The dialog collects
-              the US address CMD requires and sends the magic link by the
-              channels chosen. */}
-          {!cmdHidden && (
-            <ActionButton variant="outline" onClick={() => setCmdOpen(true)}>
-              <IdCard className="size-4" />
-              {cmd ? "Resend licence check" : "Check their licence"}
-            </ActionButton>
-          )}
-
-          {/* NOT WIRED, and deliberately shown as such rather than hidden.
-              `GenerateInviteDialog` exists and works, but the edge function
-              behind it (`create-customer-invite`) takes only `{ tenantId,
-              tenantSlug }` — there is no customer parameter, so the link it
-              mints is a blank registration link for anybody, not one addressed
-              to this rental's customer. Offering it here would produce a link
-              that creates a SECOND customer record. Enabling it is an edge
-              function change, not a UI one. */}
-          <ActionButton
-            variant="outline"
-            disabled
-            title="The registration link is tenant-wide — create-customer-invite takes no customer, so it cannot be addressed to this rental's customer yet."
-          >
-            <Link2 className="size-4" />
-            Send a details link
-          </ActionButton>
-        </div>
-
-        <p className="mt-3 text-xs text-muted-foreground">
-          &ldquo;Verified in person&rdquo; is recorded on the customer&rsquo;s own profile, so that it carries the
-          name of whoever vouched.
-        </p>
-      </Section>
-
-      {/* ── reviews ─────────────────────────────────────────────────────── */}
-      {!reviews?.length ? (
-        <Section title="Reviews" description="What your own staff said after each rental. Never shown to the customer.">
-          <EmptyHint>
-            Nobody has rated {firstName} yet. This rental would be the first — and the one that starts the average.
-          </EmptyHint>
-        </Section>
+      {/* Island layout: the pane never scrolls and never leaves dead space.
+          A slim identity strip on top, then Verification and Reviews as two
+          full-width rows (Reviews first) sharing the remaining height. */}
+      {picking ? (
+        <CustomerPicker
+          rentalId={detail.rental.id}
+          currentCustomerId={customer.id}
+          onDone={(changed) => {
+            setPicking(false);
+            if (changed) refetch();
+          }}
+        />
       ) : (
-        <>
-          <Section
-            title="Reviews"
-            description="What your own staff said after each rental. Never shown to the customer, never on the booking site."
-            right={
-              <Pill tone="neutral">
-                {reviews.length} review{reviews.length === 1 ? "" : "s"}
-              </Pill>
-            }
-          >
-            <div className="flex items-end gap-4">
-              <p className={cn("font-heading text-4xl font-semibold leading-none tracking-tight", tone?.text)}>
-                {average?.toFixed(1) ?? "—"}
+      <div className="flex h-full min-h-0 flex-col gap-4">
+        {/* ── who — brief; the full file is one click away ───────────────── */}
+        <Surface className="shrink-0 px-5 py-4">
+          <div className="flex items-center gap-3.5">
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-3xl bg-primary-light font-heading text-sm font-semibold text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
+              {initials(customer.name)}
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="font-heading text-base font-semibold tracking-tight">{customer.name}</h3>
+                {customer.is_blocked && (
+                  <Badge variant="destructive" className="gap-1.5" title={customer.blocked_reason || "No reason was recorded."}>
+                    <Ban />
+                    Blocked
+                  </Badge>
+                )}
+              </div>
+              <p className="mt-0.5 truncate text-[13px] text-muted-foreground">
+                {customer.email || "No email on file"}
               </p>
-              <div className="min-w-0 flex-1 pb-1">
-                <p className="text-xs text-muted-foreground">
-                  out of 10, across {reviews.length} rental{reviews.length === 1 ? "" : "s"}
-                </p>
-                <span className="mt-2 flex gap-1">
-                  {Array.from({ length: 10 }, (_, i) => (
-                    <span
-                      key={i}
-                      className={cn(
-                        "h-1.5 flex-1 rounded-full",
-                        average !== null && i < Math.round(average) ? tone?.bar : "bg-foreground/10"
-                      )}
-                    />
-                  ))}
+            </div>
+            <Button variant="outline" size="sm" asChild>
+              <Link href={`/customers/${customer.id}`}>
+                <ExternalLink />
+                Open profile
+              </Link>
+            </Button>
+          </div>
+          {customer.is_blocked && (
+            <p className="mt-3 truncate rounded-2xl bg-destructive-light px-4 py-2 text-xs text-destructive ring-1 ring-destructive/20">
+              Blocked — {customer.blocked_reason || "no reason was recorded."} Unblock from their profile.
+            </p>
+          )}
+        </Surface>
+
+        {/* ── Trax summary — a full-width row ──────────────────────────────
+            The whole section is Trax's read of every staff review. The average
+            and the count ride in the header for now (to be reworked); the full
+            list opens from the count. */}
+        <Surface className="flex flex-none flex-col p-5">
+          <div className="flex items-center gap-2.5">
+            <h3 className="flex-1 font-heading text-sm font-semibold">Reviews summary</h3>
+            {!!reviews?.length && (
+              <button
+                type="button"
+                onClick={() => setReviewsOpen(true)}
+                className="flex items-center gap-1 rounded-full bg-amber-400/10 px-2 py-0.5 ring-1 ring-amber-400/25 transition-colors duration-200 ease-out hover:bg-amber-400/20 motion-reduce:transition-none"
+              >
+                <Star className="size-3.5 fill-amber-400 text-amber-400" />
+                <span className={cn("font-heading text-sm font-semibold leading-none", tone?.text)}>
+                  {average !== null ? (average / 2).toFixed(1) : "—"}
                 </span>
-              </div>
-            </div>
-
-            {tagCounts.length > 0 && (
-              <div className="mt-5 flex flex-wrap gap-1.5">
-                {tagCounts.map(([tag, n]) => (
-                  <Pill key={tag} tone="neutral">
-                    {tag}
-                    {n > 1 ? ` ×${n}` : ""}
-                  </Pill>
-                ))}
-              </div>
+              </button>
             )}
+          </div>
 
-            {reviewSummary?.summary ? (
-              <div className={cn(insetCls, "mt-5 px-5 py-4")}>
-                <div className="mb-2 flex items-center gap-2">
-                  <Sparkles className="size-3.5 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" />
-                  <span className="text-xs font-medium">Summary</span>
-                  <Pill tone="primary">Written for you</Pill>
-                </div>
-                <p className="text-sm leading-relaxed text-muted-foreground">{reviewSummary.summary}</p>
-                <p className="mt-3 text-[11px] text-muted-foreground">
-                  From all {reviewSummary.total_reviews} reviews · {fmtDate(reviewSummary.generated_at)}
-                </p>
-              </div>
-            ) : (
-              <p className="mt-5 text-xs text-muted-foreground">
-                Too few reviews to summarise yet — read them below.
+          <div className={cn(insetCls, "mt-4 flex min-h-0 flex-1 flex-col justify-center px-6 py-5")}>
+            {!reviews?.length ? (
+              <p className="text-sm leading-relaxed text-muted-foreground">
+                Nobody has rated {firstName} yet. When this rental closes and your team rates it, I will start keeping
+                track here.
               </p>
+            ) : (
+              <>
+                <p className="line-clamp-4 text-[15px] leading-relaxed text-foreground/80">
+                  {reviewSummary?.summary ??
+                    `I need a couple more reviews of ${firstName} before I can say anything worth reading.`}
+                </p>
+              </>
             )}
-          </Section>
+          </div>
+        </Surface>
 
-          <Section title="Every review">
-            <div className={listCls}>
-              {reviews.map((r) => (
-                <div key={r.id} className="flex gap-4 px-5 py-4">
-                  <span
-                    className={cn(
-                      "flex size-10 shrink-0 items-center justify-center rounded-2xl font-heading text-sm font-semibold",
-                      ratingTone(r.rating ?? 0).tile
-                    )}
-                  >
-                    {r.rating ?? "—"}
+        {/* ── verification — a full-width row ──────────────────────────────
+            Left: the state and its history. Right: the documents at their
+            real proportions. Actions along the bottom. */}
+        {/* The whole card opens the full check — except the images (a click
+            there reveals them) and the chips (their hover card has its own
+            button). Both stop the click; React bubbles portal events through
+            the component tree, so the chips' wrapper also catches clicks from
+            inside the hover card. */}
+        <div
+          role={verification ? "button" : undefined}
+          tabIndex={verification ? 0 : undefined}
+          aria-label={verification ? "Open the full identity check" : undefined}
+          onClick={verification ? () => setCheckOpen(true) : undefined}
+          onKeyDown={
+            verification
+              ? (e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setCheckOpen(true);
+                  }
+                }
+              : undefined
+          }
+          className={cn(
+            cardCls,
+            "group flex min-h-0 flex-1 flex-col p-5 outline-none",
+            verification &&
+              "cursor-pointer transition-shadow duration-200 ease-out hover:ring-primary/25 focus-visible:ring-2 focus-visible:ring-ring/40 motion-reduce:transition-none"
+          )}
+        >
+          <div className="flex items-center gap-3">
+            {/* The heading, with the chips beside it — Trax ID first. */}
+            <h3 className="font-heading text-sm font-semibold">Verification</h3>
+            <span onClick={(e) => e.stopPropagation()} className="flex items-center gap-2">
+              <VerificationChips chips={chips} />
+              {verification?.pendingLink && (
+                <span className="text-[11px] text-muted-foreground">
+                  New link sent {fmtDate(verification.pendingLink.created_at)}
+                </span>
+              )}
+            </span>
+            <span className="flex-1" />
+            {/* Quick actions, quiet until hovered. They stop the click so the
+                card's own "open the check" does not fire underneath them. */}
+            <span onClick={(e) => e.stopPropagation()} className="flex items-center gap-0.5">
+              {traxActions.onRescan && (
+                <IconAction
+                  label={traxActions.rescanning ? "Scanning again…" : "Run Trax ID again"}
+                  onClick={traxActions.onRescan}
+                  disabled={traxActions.rescanning}
+                >
+                  <RotateCw className={cn(traxActions.rescanning && "animate-spin motion-reduce:animate-none")} />
+                </IconAction>
+              )}
+              <IconAction label="Send a new verification link" onClick={traxActions.onNewLink}>
+                <Link2 />
+              </IconAction>
+            </span>
+            {verification && (
+              <ExternalLink
+                aria-hidden
+                className="size-4 shrink-0 text-muted-foreground transition-colors duration-200 ease-out group-hover:text-foreground motion-reduce:transition-none"
+              />
+            )}
+          </div>
+
+          {/* The documents ARE the card. Real proportions: a licence is an
+              ID-1 card (85.6 × 54mm, so 1.586:1) and a selfie is square; the
+              column fractions follow that ratio. The row takes exactly the
+              height left in the card (the pane never scrolls), so the tiles
+              track the ratio closely rather than exactly and the photos are
+              cropped to cover. Blurred until clicked — these are somebody's
+              licence and face. */}
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="mt-4 grid min-h-28 flex-1 cursor-default grid-cols-[1.586fr_1.586fr_1fr] gap-3"
+          >
+            {docSlots.map((d) => (
+              <div key={d.label} className="flex min-h-0 min-w-0 flex-col">
+                <div className={cn(insetCls, "relative min-h-0 flex-1 overflow-hidden")}>
+                  {d.url ? (
+                    <BlurredImage
+                      src={d.url}
+                      alt={d.label}
+                      containerClassName="absolute inset-0"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 text-muted-foreground/50">
+                      <ImageIcon className="size-4" />
+                      <span className="text-[10px]">Not on file</span>
+                    </div>
+                  )}
+                  <span className="pointer-events-none absolute left-2.5 top-2.5 z-10 rounded-full bg-background/85 px-2 py-0.5 text-[11px] font-medium text-foreground/80 backdrop-blur-sm">
+                    {d.label}
                   </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm">{r.comment || "No comment was left."}</p>
-                    {r.tags.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        {r.tags.map((t) => (
-                          <Pill key={t} tone="neutral">
-                            {t}
-                          </Pill>
-                        ))}
-                      </div>
-                    )}
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      {[r.reviewer?.name, fmtDate(r.created_at), r.rental?.rental_number]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </p>
-                  </div>
                 </div>
-              ))}
-            </div>
-          </Section>
-        </>
+              </div>
+            ))}
+          </div>
+
+        </div>
+      </div>
       )}
 
-      {/* ── the reused v1 dialogs ───────────────────────────────────────── */}
+      {/* ── the check, in full ─────────────────────────────────────────────
+          The card shows the documents at a glance; this is where they are read
+          properly — larger, beside everything the check extracted. */}
+      <Dialog open={checkOpen} onOpenChange={setCheckOpen}>
+        <DialogContent
+          className="max-h-[90vh] overflow-y-auto no-scrollbar sm:max-w-3xl"
+          // Radix focuses the first focusable thing on open — here the masked
+          // number, which drew a focus box round it as if it had been clicked.
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          // No ×: the two actions sit where it was; Esc and the backdrop close.
+          showCloseButton={false}
+        >
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <DialogTitle className="flex flex-1 items-center gap-2.5">
+                Trax ID check
+                <VerificationChips chips={chips} />
+              </DialogTitle>
+              <span className="-mt-1 flex items-center gap-1.5">
+                {traxActions.onRescan && (
+                  <Button size="sm" variant="outline" onClick={traxActions.onRescan} disabled={traxActions.rescanning}>
+                    <RotateCw className={cn(traxActions.rescanning && "animate-spin motion-reduce:animate-none")} />
+                    {traxActions.rescanning ? "Scanning…" : "Run again"}
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setCheckOpen(false);
+                    setVerifyOpen(true);
+                  }}
+                >
+                  <Link2 />
+                  New link
+                </Button>
+              </span>
+            </div>
+            <DialogDescription>
+              {[
+                verification?.verification_completed_at
+                  ? `Completed ${fmtDate(verification.verification_completed_at)}`
+                  : null,
+                faceScore != null
+                  ? `Face match ${Math.round(Number(faceScore) * (Number(faceScore) <= 1 ? 100 : 1))}%`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(" · ") || "What the customer submitted, and what was read from it."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-[1.586fr_1.586fr_1fr] gap-3">
+            {docSlots.map((d) => (
+              <div key={d.label} className="min-w-0">
+                <div
+                  className={cn(
+                    insetCls,
+                    "relative overflow-hidden",
+                    d.label === "Selfie" ? "aspect-square" : "aspect-[1.586/1]"
+                  )}
+                >
+                  {d.url ? (
+                    <BlurredImage
+                      src={d.url}
+                      alt={d.label}
+                      containerClassName="absolute inset-0"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 text-muted-foreground/50">
+                      <ImageIcon className="size-4" />
+                      <span className="text-[10px]">Not on file</span>
+                    </div>
+                  )}
+                  <span className="pointer-events-none absolute left-2.5 top-2.5 z-10 rounded-full bg-background/85 px-2 py-0.5 text-[11px] font-medium text-foreground/80 backdrop-blur-sm">
+                    {d.label}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div>
+            <p className="mb-2 text-xs font-medium">Read from the document</p>
+            {extracted.length ? (
+              <dl className={cn(listCls)}>
+                {extracted.map((f) => (
+                  <div key={f.label} className="flex items-center gap-4 px-5 py-3">
+                    <dt className="w-40 shrink-0 text-xs text-muted-foreground">{f.label}</dt>
+                    <dd className={cn("min-w-0 flex-1 truncate text-sm font-medium", f.tone)}>
+                      {f.secret ? <MaskedValue value={f.value} /> : f.value}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            ) : (
+              <p className="text-xs text-muted-foreground">Nothing was extracted from this document.</p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+
+      {/* A new verification link for the customer. The dialog refreshes v1's
+          own query key when the check lands, not this screen's — so the card
+          re-reads on close. */}
       <StartVerificationDialog
         open={verifyOpen}
-        onOpenChange={setVerifyOpen}
+        onOpenChange={(open) => {
+          setVerifyOpen(open);
+          if (!open) void queryClient.invalidateQueries({ queryKey: ["customer-trax-id-v2", customerId] });
+        }}
         customerId={customer.id}
         customerName={customer.name}
       />
-      {!cmdHidden && (
-        <StartCmdVerificationDialog
-          open={cmdOpen}
-          onOpenChange={setCmdOpen}
-          customerId={customer.id}
-          customer={{
-            name: customer.name,
-            email: customer.email,
-            phone: customer.phone,
-            date_of_birth: customer.date_of_birth,
-          }}
-        />
-      )}
+
+      {/* ── reviews dialog ──────────────────────────────────────────────── */}
+      <Dialog open={reviewsOpen} onOpenChange={setReviewsOpen}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto no-scrollbar sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Reviews of {customer.name}</DialogTitle>
+            <DialogDescription>
+              What your own staff said after each rental. Never shown to the customer, never on the booking site.
+            </DialogDescription>
+          </DialogHeader>
+          {reviewSummary?.summary && (
+            <div className={cn(insetCls, "px-5 py-4")}>
+              <div className="mb-2 flex items-center gap-2">
+                <Sparkles className="size-3.5 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" />
+                <span className="text-xs font-medium">Summary</span>
+              </div>
+              <p className="text-sm leading-relaxed text-muted-foreground">{reviewSummary.summary}</p>
+              <p className="mt-3 text-[11px] text-muted-foreground">
+                From all {reviewSummary.total_reviews} reviews · {fmtDate(reviewSummary.generated_at)}
+              </p>
+            </div>
+          )}
+          <div className={listCls}>
+            {(reviews ?? []).map((r) => (
+              <div key={r.id} className="flex gap-4 px-5 py-4">
+                <span
+                  className={cn(
+                    "flex size-10 shrink-0 items-center justify-center rounded-2xl font-heading text-sm font-semibold",
+                    ratingTone(r.rating ?? 0).tile
+                  )}
+                >
+                  {r.rating ?? "—"}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm">{r.comment || "No comment was left."}</p>
+                  {r.tags.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {r.tags.map((t) => (
+                        <Pill key={t} tone="neutral">
+                          {t}
+                        </Pill>
+                      ))}
+                    </div>
+                  )}
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {[r.reviewer?.name, fmtDate(r.created_at), r.rental?.rental_number].filter(Boolean).join(" · ")}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
     </Panel>
+  );
+}
+
+/** A sensitive value, masked to its last four characters until clicked. */
+function MaskedValue({ value }: { value: string }) {
+  const [shown, setShown] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={() => setShown((v) => !v)}
+      title={shown ? "Hide" : "Click to reveal"}
+      className="block max-w-full truncate rounded-md text-left text-sm font-medium tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+    >
+      {shown ? value : `•••• ${value.slice(-4)}`}
+    </button>
+  );
+}
+
+/** A small icon button with its name in a tooltip. */
+function IconAction({
+  label,
+  onClick,
+  disabled,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        {/* A disabled button fires no pointer events, so its tooltip — often
+            the reason it is disabled — would never show. The span carries it. */}
+        <span className="inline-flex">
+          <Button variant="ghost" size="icon-sm" aria-label={label} onClick={onClick} disabled={disabled} className="text-muted-foreground hover:text-foreground">
+            {children}
+          </Button>
+        </span>
+      </TooltipTrigger>
+      <TooltipContent className="max-w-64">{label}</TooltipContent>
+    </Tooltip>
   );
 }

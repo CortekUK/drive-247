@@ -271,6 +271,10 @@ export type Payment = {
   refundReason: string | null;
   refundIntentId: string | null;
   refundedAt: string | null;
+  /** `payments.booking_source` — 'website' means taken at checkout on the booking site. */
+  bookingSource: string | null;
+  /** `payments.refund_status` — 'processing' / 'scheduled' while a refund is in flight. */
+  refundStatus: string | null;
   /**
    * `payments.remaining_amount` — the allocator's own view of what is still
    * unapplied. Kept so the surface can spot money applied to charges that are
@@ -754,6 +758,8 @@ export function buildLedger(input: LedgerInput): Ledger {
         refundedCents: cents(r.refund_amount),
         refundReason: (r.refund_reason ?? null) as string | null,
         refundIntentId: (r.stripe_refund_id ?? r.square_refund_id ?? null) as string | null,
+        bookingSource: (r.booking_source ?? null) as string | null,
+        refundStatus: (r.refund_status ?? null) as string | null,
         refundedAt: (r.refund_processed_at ?? null) as string | null,
         remainingOnRow: cents(r.remaining_amount),
         depositAppliedCents: depositAppliedByPayment.get(id) ?? 0,

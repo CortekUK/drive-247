@@ -38,6 +38,12 @@
 // production endpoint"), there is no `tesla_mode` column, and `isTestModeUiHidden`
 // has nothing to hide. Every action below runs against the live Fleet API.
 //
+// THE SCREEN STANDARD (Ghulam, Oct 2 2026 — see `_screens.tsx`). One main
+// screen per state — a picture, a headline, one sentence, one button — and the
+// rest behind quiet links: Account details (with the connection test),
+// Vehicles, Sessions, Disconnecting. Every rule below is unchanged; only where
+// it is drawn moved.
+//
 // ⚠️ ISOLATION (V2_PLAN §5). `vehicles` has RLS OFF — `.eq('tenant_id',
 // tenant.id)` is the only thing scoping the reads and the one direct write
 // below. `tesla_supercharger_charges` has RLS ON with a tenant policy, and is
@@ -46,20 +52,11 @@
 // Every edge-function call passes `tenantId` explicitly; the functions refuse a
 // cross-tenant id unless the caller is a super admin.
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  AlertTriangle,
-  Car,
-  CheckCircle2,
-  Link2,
-  Loader2,
-  RefreshCw,
-  Unplug,
-  Zap,
-} from "lucide-react";
+import { AlertTriangle, ArrowRight, Car, Link2, Loader2, RefreshCw, Zap } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -80,15 +77,11 @@ import {
 } from "@/components/ui-v2/alert-dialog";
 
 import type { IntegrationPanelProps, IntegrationState, PanelTenant } from "./_kit";
-import {
-  PanelCard,
-  PanelError,
-  PanelLoading,
-  PanelNote,
-  PanelRow,
-  PanelSection,
-  StatusChip,
-} from "./_kit";
+import { PanelCard, PanelError, PanelLoading, PanelNote, PanelRow, StatusChip } from "./_kit";
+import { ConnectionTest, DisconnectScreen, Hero, QuietNav, ScreenNav, SubScreen } from "./_screens";
+import { VehiclesEmptyArt } from "@/components/illustrations-v2/empty-scenes";
+import { ExpensesEmptyArt } from "@/components/illustrations-v2/scenes/expenses";
+import { InvoicesEmptyArt } from "@/components/illustrations-v2/scenes/invoices";
 
 /* ─────────────────────────────── data ───────────────────────────────────── */
 
@@ -509,30 +502,130 @@ function ConfirmAction({
   );
 }
 
+
+/* ───────────────────────────── the demo ─────────────────────────────────── */
+
+/*
+ * FIRST-RUN DEMO — northwind only, on screen only (Ghulam, Oct 2 2026), like
+ * Stripe / Square / Twilio. northwind has no Teslas and no Tesla account, so
+ * on the canary the panel reads STAND-INS: "Connect Tesla" opens Tesla's site
+ * in a new tab, spins, and lands connected; three Teslas wait to be linked;
+ * linking, the test, a sync and disconnecting all resolve in the browser.
+ *
+ * NOTHING IS CALLED OR WRITTEN — no edge function, no ledger line, no vehicle
+ * row. Lasts until the page reloads; Disconnecting puts it back to the start.
+ * To remove: delete this block and every `demo` branch in the panel.
+ */
+const TESLA_DEMO_SLUGS: readonly string[] = ["northwind"];
+
+type TeslaDemo = { live: boolean; linked: string[]; synced: boolean };
+const DEMO_START: TeslaDemo = { live: false, linked: [], synced: false };
+
+const teslaDemo = (() => {
+  let state = DEMO_START;
+  const ls = new Set<() => void>();
+  return {
+    get: () => state,
+    patch: (p: Partial<TeslaDemo>) => {
+      state = { ...state, ...p };
+      ls.forEach((l) => l());
+    },
+    reset: () => {
+      state = DEMO_START;
+      ls.forEach((l) => l());
+    },
+    subscribe: (l: () => void) => {
+      ls.add(l);
+      return () => ls.delete(l);
+    },
+  };
+})();
+
+/** The same official mark the board's Tesla card uses (logo.dev, publishable key). */
+const TESLA_LOGO = "https://img.logo.dev/tesla.com?token=pk_EmodMTbiSPiHDa2fIPUo3w&size=128&format=png";
+
+const pause = <T,>(v: T, ms: number) => new Promise<T>((r) => window.setTimeout(() => r(v), ms));
+
+const DEMO_CARS: VehicleRow[] = [
+  { id: "demo-y", reg: "NW-Y01", make: "Tesla", model: "Model Y", vin: "7SAYGDEE5PA000101", tesla_fleet_enabled: false, tesla_fleet_vehicle_id: null },
+  { id: "demo-3", reg: "NW-302", make: "Tesla", model: "Model 3", vin: "5YJ3E1EA1PF000302", tesla_fleet_enabled: false, tesla_fleet_vehicle_id: null },
+  { id: "demo-s", reg: "NW-S03", make: "Tesla", model: "Model S", vin: "5YJSA1E26PF000303", tesla_fleet_enabled: false, tesla_fleet_vehicle_id: null },
+];
+
+function demoSessions(d: TeslaDemo): SessionRow[] {
+  if (!d.synced) return [];
+  const day = 86_400_000;
+  const at = (n: number) => new Date(Date.now() - n * day).toISOString();
+  const rows: SessionRow[] = [
+    { id: "s1", charge_date: at(1), location: "Fremont, CA", amount: 18.42, currency: "USD", status: "pending", rental_id: "demo", vehicle_id: "demo-y", kwh_used: 46 },
+    { id: "s2", charge_date: at(3), location: "Gilroy, CA", amount: 24.1, currency: "USD", status: "charged", rental_id: "demo", vehicle_id: "demo-3", kwh_used: 61 },
+    { id: "s3", charge_date: at(6), location: "San Mateo, CA", amount: 12.75, currency: "USD", status: "waived", rental_id: "demo", vehicle_id: "demo-y", kwh_used: 31 },
+    { id: "s4", charge_date: at(9), location: "Burlingame, CA", amount: 9.6, currency: "USD", status: null, rental_id: null, vehicle_id: "demo-s", kwh_used: 22 },
+  ];
+  return rows.filter((r) => d.linked.includes(r.vehicle_id));
+}
+
+/** The real reads, or the demo's stand-ins on the canary. */
+function useTeslaData(tenant: PanelTenant) {
+  const demo = TESLA_DEMO_SLUGS.includes(tenant.slug);
+  const d = useSyncExternalStore(teslaDemo.subscribe, teslaDemo.get, teslaDemo.get);
+  const status = useTeslaStatus(tenant);
+  const realVehicles = useTeslaVehicles(tenant);
+
+  const statusData = useMemo<TeslaStatusData | undefined>(() => {
+    if (!demo) return status.data;
+    if (!status.data) return undefined;
+    return {
+      row: {
+        id: tenant.id,
+        integration_tesla_fleet: d.live,
+        tesla_fleet_api_token_secret_id: d.live ? "demo" : null,
+        tesla_fleet_refresh_token_secret_id: d.live ? "demo" : null,
+        tesla_fleet_token_expires_at: d.live ? new Date(Date.now() + 6 * 3_600_000).toISOString() : null,
+      },
+      linkedCount: d.linked.length,
+    };
+  }, [demo, status.data, d, tenant.id]);
+
+  const fleet = useMemo<VehicleRow[] | undefined>(
+    () =>
+      demo
+        ? DEMO_CARS.map((c) => (d.linked.includes(c.id) ? { ...c, tesla_fleet_enabled: true, tesla_fleet_vehicle_id: `TV-${c.id}` } : c))
+        : realVehicles.data,
+    [demo, d, realVehicles.data],
+  );
+
+  return { demo, d, status, statusData, vehicles: realVehicles, fleet };
+}
+
 /* ─────────────────────────────── chip ───────────────────────────────────── */
 
 export function TeslaStatus({ tenant }: { tenant: PanelTenant }) {
-  const { data, isLoading, isError } = useTeslaStatus(tenant);
+  const { status, statusData } = useTeslaData(tenant);
 
-  if (isLoading) return <StatusChip state="loading" />;
+  if (status.isLoading) return <StatusChip state="loading" />;
   // A failed READ is not a disconnected integration. "Not connected" here
   // invites an operator to reconnect — and reconnecting re-authorises with
   // Tesla and can hand back a token without renewal rights.
-  if (isError || !data) return <StatusChip state="attention" label="Status unavailable" />;
+  if (status.isError || !statusData) return <StatusChip state="attention" label="Status unavailable" />;
 
-  const view = derive(data);
+  const view = derive(statusData);
   return <StatusChip state={view.state} label={view.label} />;
 }
 
 /* ────────────────────────────── panel ───────────────────────────────────── */
 
-export default function TeslaPanel({ tenant, onClose }: IntegrationPanelProps) {
-  const queryClient = useQueryClient();
-  const status = useTeslaStatus(tenant);
-  const vehicles = useTeslaVehicles(tenant);
+type Screen = "home" | "account" | "vehicles" | "sessions" | "disconnect" | "how";
 
-  const view = useMemo(() => (status.data ? derive(status.data) : null), [status.data]);
-  const sessions = useTeslaSessions(tenant, !!view?.connected);
+export default function TeslaPanel({ tenant, onClose, onBack, fromIntro }: IntegrationPanelProps) {
+  const queryClient = useQueryClient();
+  const { demo, d, status, statusData, vehicles, fleet: fleetData } = useTeslaData(tenant);
+
+  const view = useMemo(() => (statusData ? derive(statusData) : null), [statusData]);
+  const realSessions = useTeslaSessions(tenant, !demo && !!view?.connected);
+  const sessionsData: SessionsData | undefined = demo
+    ? { recent: demoSessions(d), lastRecordedAt: d.synced ? new Date(Date.now() - 86_400_000).toISOString() : null }
+    : realSessions.data;
 
   // The TenantContext carries `integration_tesla_fleet`, and the rental and
   // vehicle pages read it from there — so after a disconnect it is refetched,
@@ -540,22 +633,19 @@ export default function TeslaPanel({ tenant, onClose }: IntegrationPanelProps) {
   const { refetchTenant } = useTenant();
 
   // `tesla-fleet-api` itself has NO role gate — any app user in the tenant may
-  // call it. Restricting the controls here to admins is therefore a UI choice,
-  // made because every one of them either moves money (a sync writes ledger
-  // charges onto customers' rentals) or stops it (disconnect). Read-only roles
-  // still see the whole truth; they just cannot act on it.
+  // call it. Restricting the controls here to admins is a UI choice, made
+  // because every one of them either moves money (a sync writes ledger charges
+  // onto customers' rentals) or stops it (disconnect). Read-only roles still
+  // see the whole truth; they just cannot act on it.
   const { appUser } = useAuth();
-  const canManage =
-    !!appUser?.is_super_admin || ["admin", "head_admin"].includes(appUser?.role ?? "");
+  const canManage = !!appUser?.is_super_admin || ["admin", "head_admin"].includes(appUser?.role ?? "");
 
-  // The OAuth callback lands on `/integrations?tesla_connected=true` (see
-  // `connect` below). The dialog is closed by then and the board is not this
-  // file's to change, so the chip flipping state is the operator's first
-  // confirmation; this note is the second, when they open the card. Rendering,
-  // not an effect — the chip stays side-effect free.
+  // The OAuth callback lands on `/integrations?tesla_connected=true`.
   const searchParams = useSearchParams();
   const justReturned = searchParams?.get("tesla_connected") === "true";
 
+  const [screen, setScreen] = useState<Screen>("home");
+  const home = () => setScreen("home");
   const [connecting, setConnecting] = useState(false);
   const [lastSync, setLastSync] = useState<SyncResult | null>(null);
 
@@ -563,8 +653,7 @@ export default function TeslaPanel({ tenant, onClose }: IntegrationPanelProps) {
     queryClient.invalidateQueries({ queryKey: statusKey(tenant.id) });
     queryClient.invalidateQueries({ queryKey: vehiclesKey(tenant.id) });
     queryClient.invalidateQueries({ queryKey: sessionsKey(tenant.id) });
-    // v1's own keys, in case its Settings tab is mounted somewhere for this
-    // tenant. Harmless when it is not.
+    // v1's own keys, in case its Settings tab is mounted somewhere for this tenant.
     queryClient.invalidateQueries({ queryKey: ["tesla-fleet-status"] });
     queryClient.invalidateQueries({ queryKey: ["tesla-fleet-vehicles-count"] });
   }, [queryClient, tenant.id]);
@@ -576,48 +665,64 @@ export default function TeslaPanel({ tenant, onClose }: IntegrationPanelProps) {
 
   const connect = useCallback(async () => {
     setConnecting(true);
+    if (demo) {
+      // Plays the hand-off: Tesla's sign-in opens in a new tab (nothing is
+      // authorised), the button spins, then the dialog lands connected.
+      window.open("https://auth.tesla.com", "_blank", "noopener,noreferrer");
+      window.setTimeout(() => {
+        teslaDemo.patch({ live: true });
+        setConnecting(false);
+      }, 2600);
+      return;
+    }
     try {
-      // Same-tab, unlike v1's `window.open`: a popup here is blocked by default
-      // and the operator sees a button that does nothing. The edge function
-      // signs `tenantId` + `returnUrl` into an HMAC state with a 10-minute TTL
-      // and, after Tesla calls back, redirects to `returnUrl?tesla_connected=true`.
-      // v1 returned to `/settings?tab=tesla`, a tab the lean gate hides from the
-      // canary — so this returns to the board instead.
+      // Same tab: the edge function signs `tenantId` + `returnUrl` into an HMAC
+      // state (10-minute TTL) and, after Tesla calls back, redirects to
+      // `returnUrl?tesla_connected=true` — the board, not v1's hidden Settings tab.
       const res = await invokeFn<{ authUrl?: string }>("tesla-fleet-api", {
         action: "get_auth_url",
         tenantId: tenant.id,
         returnUrl: `${window.location.origin}/integrations`,
       });
       if (!res?.authUrl) throw new Error("Tesla did not return an authorisation link");
-      // Latched: the button must keep spinning until the browser actually leaves.
+      // Latched: the button keeps spinning until the browser actually leaves.
       window.location.href = res.authUrl;
     } catch (e) {
       fail("Could not open Tesla")(e instanceof Error ? e : new Error("Please try again."));
       setConnecting(false);
     }
-  }, [tenant.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [demo, tenant.id]);
+
+  // "Connect Tesla" on the last education screen IS the connect button.
+  const [autoStarted, setAutoStarted] = useState(false);
+  useEffect(() => {
+    if (!fromIntro || autoStarted || !view || view.connected || !canManage) return;
+    setAutoStarted(true);
+    void connect();
+  }, [fromIntro, autoStarted, view, canManage, connect]);
 
   /* ── sync now ─────────────────────────────────────────────────────────── */
 
   /**
-   * The same engine the hourly cron runs, scoped to this tenant. This is a real
-   * money action: a new session inside a rental becomes a ledger charge on that
-   * rental the moment it is found. It is offered because it is exactly what the
-   * cron will do at :17 anyway — it brings that forward, it does not add to it.
+   * The same engine the hourly cron runs, scoped to this tenant. A real money
+   * action: a new session inside a rental becomes a ledger charge on that
+   * rental the moment it is found — it brings the :17 pass forward, it does
+   * not add to it.
    */
   const syncNow = useMutation({
-    mutationFn: () => invokeFn<SyncResult>("sync-tesla-charges", { tenantId: tenant.id }),
+    mutationFn: async (): Promise<SyncResult> => {
+      if (demo) {
+        await pause(null, 1600);
+        teslaDemo.patch({ synced: true });
+        const n = demoSessions({ ...teslaDemo.get(), synced: true }).length;
+        return { synced: n, vehiclesChecked: teslaDemo.get().linked.length, results: [] };
+      }
+      return invokeFn<SyncResult>("sync-tesla-charges", { tenantId: tenant.id });
+    },
     onSuccess: (result) => {
       setLastSync(result);
-      invalidateAll();
-      const failed = result.results?.filter((r) => r.error).length ?? 0;
-      toast({
-        title: failed ? "Sync finished with problems" : "Checked with Tesla",
-        description: result.message
-          ? result.message
-          : `${result.vehiclesChecked} vehicle${result.vehiclesChecked === 1 ? "" : "s"} checked · ${result.synced} new session${result.synced === 1 ? "" : "s"}${failed ? ` · ${failed} could not be read` : ""}`,
-        variant: failed ? "destructive" : undefined,
-      });
+      if (!demo) invalidateAll();
     },
     onError: fail("Could not sync with Tesla"),
   });
@@ -625,32 +730,30 @@ export default function TeslaPanel({ tenant, onClose }: IntegrationPanelProps) {
   /* ── link / unlink a vehicle ──────────────────────────────────────────── */
 
   /**
-   * `check_vehicle` is v1's "Check Tesla Fleet Compatibility" button: it looks
-   * the VIN up in the operator's Tesla account and, on a match, writes
-   * `tesla_fleet_enabled` + `tesla_fleet_vehicle_id` on the vehicle (tenant-
-   * filtered, in the function). Offered HERE because the vehicle page's copy of
-   * it is behind the lean gate — a connected canary would otherwise have no way
-   * to link anything, and a connection that syncs nothing is not connected.
+   * `check_vehicle` looks the VIN up in the operator's Tesla account and, on a
+   * match, writes `tesla_fleet_enabled` + `tesla_fleet_vehicle_id` on the
+   * vehicle (tenant-filtered, in the function).
    */
   const linkVehicle = useMutation({
-    mutationFn: (v: VehicleRow) =>
-      invokeFn<{ compatible: boolean; vehicleName?: string; message?: string }>("tesla-fleet-api", {
+    mutationFn: async (v: VehicleRow) => {
+      if (demo) {
+        await pause(null, 1100);
+        teslaDemo.patch({ linked: [...teslaDemo.get().linked, v.id] });
+        return { compatible: true, vehicleName: `${v.model}` };
+      }
+      return invokeFn<{ compatible: boolean; vehicleName?: string; message?: string }>("tesla-fleet-api", {
         action: "check_vehicle",
         tenantId: tenant.id,
         vehicleId: v.id,
         vin: v.vin,
-      }),
+      });
+    },
     onSuccess: (res, v) => {
-      invalidateAll();
-      if (res.compatible) {
+      if (!demo) invalidateAll();
+      if (!res.compatible) {
         toast({
-          title: `${v.reg} linked`,
-          description: `Tesla knows it as ${res.vehicleName || "this vehicle"}. Sessions are checked from the next hourly sync.`,
-        });
-      } else {
-        toast({
-          title: `${v.reg} is not in your Tesla account`,
-          description: res.message || "Add the vehicle to the Tesla account you authorised, then try again.",
+          title: `${v.reg} isn't in your Tesla account`,
+          description: res.message || "Add the car to the Tesla account you connected, then try again.",
           variant: "destructive",
         });
       }
@@ -659,13 +762,16 @@ export default function TeslaPanel({ tenant, onClose }: IntegrationPanelProps) {
   });
 
   /**
-   * The inverse, which v1 does not have — its only way off is a full
-   * disconnect. A direct update, because there is no edge-function action for
-   * it: mirrors exactly what `disconnect` writes per vehicle. Existing sessions
-   * and their ledger lines are untouched; only future polling stops.
+   * The inverse. A direct update — mirrors exactly what `disconnect` writes per
+   * vehicle. Recorded sessions and their ledger lines are untouched.
    */
   const stopTracking = useMutation({
     mutationFn: async (v: VehicleRow) => {
+      if (demo) {
+        await pause(null, 500);
+        teslaDemo.patch({ linked: teslaDemo.get().linked.filter((id) => id !== v.id) });
+        return;
+      }
       const { error } = await supabase
         .from("vehicles")
         .update({ tesla_fleet_enabled: false, tesla_fleet_vehicle_id: null })
@@ -675,9 +781,8 @@ export default function TeslaPanel({ tenant, onClose }: IntegrationPanelProps) {
         .eq("tenant_id", tenant.id);
       if (error) throw error;
     },
-    onSuccess: (_d, v) => {
-      invalidateAll();
-      toast({ title: `${v.reg} no longer tracked`, description: "Link it again any time — its recorded sessions are kept." });
+    onSuccess: () => {
+      if (!demo) invalidateAll();
     },
     onError: fail("Could not stop tracking"),
   });
@@ -685,20 +790,25 @@ export default function TeslaPanel({ tenant, onClose }: IntegrationPanelProps) {
   /* ── disconnect ───────────────────────────────────────────────────────── */
 
   const disconnect = useMutation({
-    mutationFn: () =>
-      invokeFn<{ success: boolean }>("tesla-fleet-api", { action: "disconnect", tenantId: tenant.id }),
+    mutationFn: async () => {
+      if (demo) {
+        await pause(null, 700);
+        teslaDemo.reset();
+        return { success: true };
+      }
+      return invokeFn<{ success: boolean }>("tesla-fleet-api", { action: "disconnect", tenantId: tenant.id });
+    },
     onSuccess: async () => {
-      invalidateAll();
       setLastSync(null);
+      home();
+      if (demo) return;
+      invalidateAll();
       try {
         await refetchTenant();
       } catch {
         /* the context refresh is a courtesy; the panel's own reads are already invalidated */
       }
-      toast({
-        title: "Tesla disconnected",
-        description: "Hourly Supercharger sync has stopped. Recorded sessions are kept.",
-      });
+      toast({ title: "Tesla disconnected", description: "Hourly Supercharger sync has stopped. Recorded sessions are kept." });
     },
     onError: fail("Could not disconnect"),
   });
@@ -706,7 +816,7 @@ export default function TeslaPanel({ tenant, onClose }: IntegrationPanelProps) {
   /* ── render ───────────────────────────────────────────────────────────── */
 
   if (status.isLoading) return <PanelLoading rows={4} />;
-  if (status.isError || !status.data || !view) {
+  if (status.isError || !statusData || !view) {
     return (
       <PanelError
         message={status.error instanceof Error ? status.error.message : "Unknown error"}
@@ -715,40 +825,17 @@ export default function TeslaPanel({ tenant, onClose }: IntegrationPanelProps) {
     );
   }
 
-  const fleet = vehicles.data ?? [];
-  const linked = fleet.filter((v) => v.tesla_fleet_enabled && v.tesla_fleet_vehicle_id);
-  const candidates = fleet.filter((v) => !(v.tesla_fleet_enabled && v.tesla_fleet_vehicle_id));
+  const fleet = fleetData ?? [];
   const hasAnyTesla = fleet.length > 0;
   const busy = syncNow.isPending || linkVehicle.isPending || stopTracking.isPending || disconnect.isPending;
 
   /* ── not connected ────────────────────────────────────────────────────── */
 
   if (!view.connected) {
-    return (
-      <div className="space-y-5 pt-1">
-        <PanelNote>{view.headline}</PanelNote>
-
-        {/* Said before the Connect button, not after: for the canary this is the
-            actual state, and an operator who connects first and discovers this
-            second has done a Tesla login for nothing. */}
-        {!vehicles.isLoading && !hasAnyTesla && (
-          <PanelNote tone="warn">
-            <span className="flex gap-2">
-              <Car className="mt-0.5 size-3.5 shrink-0" />
-              <span>
-                <strong className="font-medium">Your fleet has no Tesla vehicles yet</strong>, so
-                connecting on its own would sync nothing. Add the Tesla with its VIN on the{" "}
-                <Link href="/vehicles" onClick={onClose} className="underline">
-                  Vehicles page
-                </Link>{" "}
-                first — or connect now and link it here once it exists.
-              </span>
-            </span>
-          </PanelNote>
-        )}
-
-        <PanelSection title="What happens when you connect">
-          <ol className="space-y-1.5 text-xs leading-relaxed text-muted-foreground">
+    if (screen === "how") {
+      return (
+        <SubScreen title="How connecting works" onBack={home}>
+          <ol className="space-y-2 text-sm leading-relaxed text-muted-foreground">
             {[
               "Sign in to the Tesla account that owns your cars and allow Drive247 to read vehicle and charging data.",
               "Back here, link each Tesla by its VIN — Tesla confirms it is on that account.",
@@ -761,62 +848,56 @@ export default function TeslaPanel({ tenant, onClose }: IntegrationPanelProps) {
               </li>
             ))}
           </ol>
-        </PanelSection>
+        </SubScreen>
+      );
+    }
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Button onClick={() => void connect()} disabled={!canManage || connecting}>
-            {connecting ? <Loader2 className="animate-spin" /> : <Link2 />}
-            {connecting ? "Opening Tesla…" : "Connect Tesla"}
-          </Button>
-        </div>
-
-        {!canManage && (
-          <PanelNote>
-            You can see this integration but not change it. Connecting Tesla can only be done by an
-            admin or head admin.
-          </PanelNote>
-        )}
-      </div>
+    // Said before the button, not after: an operator who connects first and
+    // learns this second has done a Tesla login for nothing.
+    const noTeslas = !demo && !vehicles.isLoading && !hasAnyTesla;
+    return (
+      <>
+        <Hero
+          art={VehiclesEmptyArt}
+          title="Connect your Tesla account."
+          actions={
+            canManage && (
+              <div className="flex justify-center">
+                <Button className="h-10 rounded-2xl px-6" onClick={() => void connect()} disabled={connecting}>
+                  {connecting ? <Loader2 className="animate-spin" /> : <Link2 />}
+                  {connecting ? "Opening Tesla…" : "Connect Tesla"}
+                </Button>
+              </div>
+            )
+          }
+          footer={<QuietNav items={[{ label: "How connecting works", onClick: () => setScreen("how") }]} />}
+        >
+          {connecting
+            ? "Finish in the Tesla tab — sign in and allow charging data. I'll pick it up here the moment Tesla hands the account back."
+            : "Sign in to Tesla and allow charging data, then pick which cars I watch."}
+          {noTeslas && (
+            <span className="mt-2 block text-warning">
+              Your fleet has no Tesla yet — add one with its VIN on{" "}
+              <Link href="/vehicles" onClick={onClose} className="underline">
+                Vehicles
+              </Link>{" "}
+              first, or connect now and link it later.
+            </span>
+          )}
+          {!canManage && <span className="mt-2 block">Only an admin or head admin can connect Tesla.</span>}
+        </Hero>
+        <ScreenNav className="mt-5" onBack={onBack} />
+      </>
     );
   }
 
-  /* ── connected ────────────────────────────────────────────────────────── */
+  /* ── screens behind quiet links ───────────────────────────────────────── */
 
-  const recent = sessions.data?.recent ?? [];
-  const unmatched = recent.filter((s) => !s.rental_id).length;
-  const pending = recent.filter((s) => s.rental_id && (s.status ?? "pending") === "pending").length;
-  const total = recent.reduce((sum, s) => sum + Number(s.amount || 0), 0);
-  const totalCurrency = recent[0]?.currency ?? null;
-
-  return (
-    <div className="space-y-5 pt-1">
-      {justReturned && (
-        <PanelNote>
-          <span className="flex gap-2">
-            <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-success" />
-            <span>
-              Tesla authorised.{" "}
-              {view.linkedCount === 0
-                ? "Next: link your Tesla vehicles below so sessions can be matched to rentals."
-                : "Sessions will be checked from the next hourly sync."}
-            </span>
-          </span>
-        </PanelNote>
-      )}
-
-      <PanelNote tone={view.tone}>{view.headline}</PanelNote>
-
-      {/* ── Authorisation ─────────────────────────────────────────────── */}
-      <PanelSection title="Authorisation">
+  if (screen === "account") {
+    return (
+      <SubScreen title="Account details" description="The Tesla account your Supercharging is read from." onBack={home}>
         <PanelCard className="divide-y divide-border/60">
-          <PanelRow
-            label="Hourly sync"
-            hint={
-              view.renewalStalled
-                ? "Tesla's access lapsed and no sync has renewed it since — nothing is being checked."
-                : "Each pass renews Tesla's access as it nears expiry, so a live expiry below means the sync is reaching this account."
-            }
-          >
+          <PanelRow label="Hourly sync">
             {view.renewalStalled ? (
               <span className="text-destructive">Not running</span>
             ) : view.linkedCount === 0 ? (
@@ -828,8 +909,7 @@ export default function TeslaPanel({ tenant, onClose }: IntegrationPanelProps) {
               </span>
             )}
           </PanelRow>
-
-          <PanelRow label="Tesla access" hint={view.renewalStalled ? undefined : "Renews itself; you do not need to do anything."}>
+          <PanelRow label="Tesla access" hint={view.renewalStalled ? undefined : "Renews itself every hour"}>
             {view.accessValidUntil ? (
               <span title={formatDateTime(view.accessValidUntil)}>
                 {view.renewalStalled ? "Lapsed " : "Valid "}
@@ -839,199 +919,174 @@ export default function TeslaPanel({ tenant, onClose }: IntegrationPanelProps) {
               <span className="text-muted-foreground">Unknown</span>
             )}
           </PanelRow>
-
-          <PanelRow label="Can renew">
-            {view.canRenew ? "Yes" : <span className="text-warning">No renewal token</span>}
-          </PanelRow>
-
-          <PanelRow label="Vehicles linked">
-            {view.linkedCount === 0 ? <span className="text-warning">None</span> : view.linkedCount}
-          </PanelRow>
+          <PanelRow label="Can renew">{view.canRenew ? "Yes" : <span className="text-warning">No renewal token</span>}</PanelRow>
+          <PanelRow label="Cars linked">{view.linkedCount === 0 ? <span className="text-warning">None</span> : view.linkedCount}</PanelRow>
         </PanelCard>
-
-        {view.needsReconnect && (
-          <Button onClick={() => void connect()} disabled={!canManage || connecting}>
-            {connecting ? <Loader2 className="animate-spin" /> : <Link2 />}
-            {connecting ? "Opening Tesla…" : "Reconnect Tesla"}
-          </Button>
+        {/* `list_vehicles` — a READ: it renews the token if due and asks Tesla
+            for the cars on the account. Never `sync-tesla-charges`, which
+            writes ledger charges: a test must not move money. */}
+        {view.needsReconnect && canManage ? (
+          <div className="flex justify-center">
+            <Button variant="outline" className="rounded-2xl" onClick={() => void connect()} disabled={connecting}>
+              {connecting ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+              {connecting ? "Opening Tesla…" : "Reconnect Tesla"}
+            </Button>
+          </div>
+        ) : (
+          <ConnectionTest
+            idle="Ask Tesla for the cars on your account — reads only, never bills."
+            disabled={!canManage}
+            run={async (say) => {
+              say("Checking Tesla's sign-in…");
+              if (demo) {
+                await pause(null, 700);
+                say("Asking Tesla for your cars…");
+                await pause(null, 900);
+                return `Working · Tesla answered, ${DEMO_CARS.length} cars on the account, ${view.linkedCount} linked`;
+              }
+              say("Asking Tesla for your cars…");
+              const res = await invokeFn<{ vehicles: unknown[] }>("tesla-fleet-api", { action: "list_vehicles", tenantId: tenant.id });
+              const n = res?.vehicles?.length ?? 0;
+              return `Working · Tesla answered, ${n} car${n === 1 ? "" : "s"} on the account, ${view.linkedCount} linked`;
+            }}
+          />
         )}
-      </PanelSection>
+      </SubScreen>
+    );
+  }
 
-      {/* ── Vehicles ──────────────────────────────────────────────────── */}
-      <PanelSection
-        title="Vehicles"
-        description="Only linked vehicles are polled. Tesla confirms each one by VIN against the account you authorised."
+  if (screen === "vehicles") {
+    const shown = fleet.slice(0, 5);
+    return (
+      <SubScreen
+        title="Your Teslas"
+        description="Only linked cars are checked. Tesla confirms each one by its VIN."
+        onBack={home}
       >
-        {vehicles.isLoading ? (
+        {!demo && vehicles.isLoading ? (
           <PanelLoading rows={2} />
-        ) : vehicles.isError ? (
-          <p className="text-xs text-muted-foreground">Could not load your vehicles.</p>
         ) : !hasAnyTesla ? (
           <PanelNote tone="warn">
-            <span className="flex gap-2">
-              <Car className="mt-0.5 size-3.5 shrink-0" />
-              <span>
-                No Tesla in your fleet yet. Add one with its VIN on the{" "}
-                <Link href="/vehicles" onClick={onClose} className="underline">
-                  Vehicles page
-                </Link>{" "}
-                and it will appear here to link. Vehicles are recognised by a make of
-                &ldquo;Tesla&rdquo;.
-              </span>
-            </span>
+            No Tesla in your fleet yet. Add one with its VIN on{" "}
+            <Link href="/vehicles" onClick={onClose} className="underline">
+              Vehicles
+            </Link>{" "}
+            and it shows up here to link.
           </PanelNote>
         ) : (
           <PanelCard className="divide-y divide-border/60 px-0 py-0">
-            {linked.map((v) => (
-              <div key={v.id} className="flex items-center gap-2.5 px-3.5 py-2">
-                <Zap className="size-3.5 shrink-0 text-success" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm text-foreground">
-                    <span className="font-mono text-[13px]">{v.reg}</span>
-                    <span className="text-muted-foreground"> · {vehicleName(v)}</span>
-                  </p>
-                  <p className="text-[11px] text-muted-foreground">Tracking Supercharger sessions</p>
-                </div>
-                <ConfirmAction
-                  trigger={
-                    <Button size="xs" variant="ghost" disabled={!canManage || busy}>
-                      Stop tracking
-                    </Button>
-                  }
-                  title={`Stop tracking ${v.reg}?`}
-                  description={
-                    <>
-                      Supercharger sessions on this car will no longer be picked up or added to its
-                      rentals. Sessions already recorded, and any charges already on a rental, are
-                      kept. You can link it again at any time.
-                    </>
-                  }
-                  confirmLabel="Stop tracking"
-                  onConfirm={() => stopTracking.mutate(v)}
-                />
-              </div>
-            ))}
-            {candidates.map((v) => (
-              <div key={v.id} className="flex items-center gap-2.5 px-3.5 py-2">
-                <Car className="size-3.5 shrink-0 text-muted-foreground" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm text-foreground">
-                    <span className="font-mono text-[13px]">{v.reg}</span>
-                    <span className="text-muted-foreground"> · {vehicleName(v)}</span>
-                  </p>
-                  <p className="text-[11px] text-muted-foreground">
-                    {v.vin ? (
-                      "Not linked"
-                    ) : (
-                      <>
-                        Needs a VIN first —{" "}
-                        <Link href={`/vehicles/${v.id}`} onClick={onClose} className="underline">
-                          add it on the vehicle
-                        </Link>
-                      </>
+            {shown.map((v) => {
+              const isLinked = !!(v.tesla_fleet_enabled && v.tesla_fleet_vehicle_id);
+              const linking = linkVehicle.isPending && linkVehicle.variables?.id === v.id;
+              return (
+                <div key={v.id} className="flex items-center gap-3 px-4 py-2.5">
+                  {/* The Tesla mark (the board's own logo.dev source) — a green
+                      ring and a charging badge once the car is linked. */}
+                  <span className="relative shrink-0">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={TESLA_LOGO}
+                      alt=""
+                      aria-hidden
+                      className={cn(
+                        "size-8 rounded-full object-cover ring-2 transition-[box-shadow,opacity] duration-200",
+                        isLinked ? "ring-success/50" : "opacity-60 ring-transparent",
+                      )}
+                    />
+                    {isLinked && (
+                      <span className="absolute -bottom-0.5 -right-0.5 flex size-3.5 items-center justify-center rounded-full bg-success text-white ring-2 ring-background">
+                        <Zap className="size-2.5" />
+                      </span>
                     )}
-                  </p>
-                </div>
-                <Button
-                  size="xs"
-                  variant="outline"
-                  disabled={!canManage || !v.vin || busy}
-                  onClick={() => linkVehicle.mutate(v)}
-                >
-                  {linkVehicle.isPending && linkVehicle.variables?.id === v.id ? (
-                    <Loader2 className="animate-spin" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm text-foreground">
+                      {vehicleName(v)} <span className="font-mono text-[12px] text-muted-foreground">· {v.reg}</span>
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {isLinked ? "Watching Supercharging" : v.vin ? "Not linked" : "Needs a VIN first"}
+                    </p>
+                  </div>
+                  {isLinked ? (
+                    <ConfirmAction
+                      trigger={
+                        <Button size="sm" variant="ghost" className="rounded-full" disabled={!canManage || busy}>
+                          Stop
+                        </Button>
+                      }
+                      title={`Stop watching ${v.reg}?`}
+                      description="Supercharging on this car won't be picked up or added to its rentals. Sessions already recorded, and charges already on rentals, are kept."
+                      confirmLabel="Stop watching"
+                      onConfirm={() => stopTracking.mutate(v)}
+                    />
                   ) : (
-                    <Link2 />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="rounded-full"
+                      disabled={!canManage || !v.vin || busy}
+                      onClick={() => linkVehicle.mutate(v)}
+                    >
+                      {linking ? <Loader2 className="animate-spin" /> : <Link2 />}
+                      {linking ? "Checking…" : "Link"}
+                    </Button>
                   )}
-                  Link
-                </Button>
-              </div>
-            ))}
+                </div>
+              );
+            })}
           </PanelCard>
         )}
-      </PanelSection>
+        {fleet.length > shown.length && (
+          <p className="text-center text-xs text-muted-foreground">
+            {fleet.length - shown.length} more on{" "}
+            <Link href="/vehicles" onClick={onClose} className="underline">
+              Vehicles
+            </Link>
+            .
+          </p>
+        )}
+      </SubScreen>
+    );
+  }
 
-      {/* ── Supercharger sessions ─────────────────────────────────────── */}
-      <PanelSection
-        title="Supercharger sessions"
-        description="Last 30 days. A session inside a rental becomes a Supercharger line on that rental, to charge or waive; one outside any rental is recorded but billed to nobody."
-        action={
-          // Deliberately NOT disabled while renewal looks stalled: a manual
-          // pass is the operator's one way to retry the refresh, and if Tesla
-          // has revoked it the error that comes back says so in Tesla's words.
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={!canManage || busy}
-            onClick={() => syncNow.mutate()}
-          >
-            {syncNow.isPending ? <Loader2 className="animate-spin" /> : <RefreshCw />}
-            {syncNow.isPending ? "Checking…" : "Sync now"}
-          </Button>
-        }
-      >
-        {sessions.isLoading ? (
+  if (screen === "sessions") {
+    const recent = sessionsData?.recent ?? [];
+    const pending = recent.filter((s) => s.rental_id && (s.status ?? "pending") === "pending").length;
+    const total = recent.reduce((sum, s) => sum + Number(s.amount || 0), 0);
+    const currency = recent[0]?.currency ?? null;
+    return (
+      <SubScreen title="Supercharger sessions" description="The last 30 days. A session inside a rental lands on it to charge or waive." onBack={home}>
+        {!demo && realSessions.isLoading ? (
           <PanelLoading rows={2} />
-        ) : sessions.isError ? (
-          // A failed read of history says nothing about whether the sync works,
-          // so it stays a quiet line rather than the panel-wide PanelError.
-          <p className="text-xs text-muted-foreground">Could not load recent sessions.</p>
         ) : (
           <>
-            <PanelCard className="divide-y divide-border/60">
-              <PanelRow label="Sessions">{recent.length}</PanelRow>
-              <PanelRow label="Total" hint={pending ? `${pending} still to charge or waive` : undefined}>
-                {recent.length ? formatMoney(total, totalCurrency) : "—"}
-              </PanelRow>
-              <PanelRow
-                label="Outside any rental"
-                hint={unmatched ? "Nobody is billed for these. Matching happens once, when a session is first seen." : undefined}
-              >
-                {unmatched ? <span className="text-warning">{unmatched}</span> : 0}
-              </PanelRow>
-              <PanelRow
-                label="Last new session recorded"
-                // The engine writes nothing on a pass that finds nothing, so
-                // this is the last time it found something — not the last
-                // time it ran. The "Hourly sync" row above answers that.
-                hint="A quiet hour leaves no trace; the sync itself is tracked above."
-              >
-                {sessions.data?.lastRecordedAt ? (
-                  <span title={formatDateTime(sessions.data.lastRecordedAt)}>
-                    {relativeTime(sessions.data.lastRecordedAt)}
-                  </span>
-                ) : (
-                  <span className="text-muted-foreground">Never</span>
-                )}
-              </PanelRow>
-            </PanelCard>
-
-            {recent.length > 0 && (
+            <div className="grid grid-cols-3 gap-2.5">
+              {[
+                ["Sessions", String(recent.length)],
+                ["Total", recent.length ? formatMoney(total, currency) : "—"],
+                ["To charge or waive", String(pending)],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-2xl border bg-background/70 px-3.5 py-2.5">
+                  <p className="text-[11px] text-muted-foreground">{label}</p>
+                  <p className="mt-0.5 text-base font-medium text-foreground">{value}</p>
+                </div>
+              ))}
+            </div>
+            {recent.length > 0 ? (
               <PanelCard className="divide-y divide-border/60 px-0 py-0">
-                {recent.slice(0, 5).map((s) => {
+                {recent.slice(0, 2).map((s) => {
                   const car = fleet.find((v) => v.id === s.vehicle_id);
                   return (
-                    <div key={s.id} className="flex items-center gap-2.5 px-3.5 py-2">
+                    <div key={s.id} className="flex items-center gap-2.5 px-4 py-2">
                       <Zap className={cn("size-3.5 shrink-0", s.rental_id ? "text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" : "text-muted-foreground/50")} />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm text-foreground">
                           {formatMoney(Number(s.amount || 0), s.currency)}
-                          <span className="text-muted-foreground">
-                            {" "}· {s.location || "Supercharger"}
-                            {s.kwh_used != null ? ` · ${Number(s.kwh_used).toFixed(0)} kWh` : ""}
-                          </span>
+                          <span className="text-muted-foreground"> · {s.location || "Supercharger"}{s.kwh_used != null ? ` · ${Number(s.kwh_used).toFixed(0)} kWh` : ""}</span>
                         </p>
                         <p className="truncate text-[11px] text-muted-foreground">
-                          {formatDateTime(s.charge_date)}
+                          {new Date(s.charge_date).toLocaleDateString()}
                           {car ? ` · ${car.reg}` : ""}
-                          {s.rental_id && (
-                            <>
-                              {" "}·{" "}
-                              <Link href={`/rentals/${s.rental_id}`} onClick={onClose} className="underline">
-                                Open rental
-                              </Link>
-                            </>
-                          )}
                         </p>
                       </div>
                       <span className="shrink-0 text-xs">
@@ -1041,86 +1096,112 @@ export default function TeslaPanel({ tenant, onClose }: IntegrationPanelProps) {
                   );
                 })}
               </PanelCard>
+            ) : (
+              <PanelNote>No Supercharging in the last 30 days{view.linkedCount === 0 ? " — link a car first" : ""}.</PanelNote>
             )}
+            {lastSync?.results?.some((r) => r.error) && (
+              <p className="flex gap-2 text-xs text-destructive">
+                <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                {lastSync.results.filter((r) => r.error).map((r) => `${r.vehicleReg}: ${r.error}`).join(" · ")}
+              </p>
+            )}
+            {/* The same check the hourly pass runs at :17, brought forward —
+                anything it finds inside a rental is added to that rental. */}
+            <div className="flex flex-col items-center gap-1.5">
+              <Button
+                variant="outline"
+                className="rounded-2xl"
+                disabled={!canManage || busy || view.linkedCount === 0}
+                onClick={() => syncNow.mutate()}
+              >
+                {syncNow.isPending ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+                {syncNow.isPending ? "Checking with Tesla…" : "Check for new sessions"}
+              </Button>
+              <p className="text-[11px] text-muted-foreground">
+                {lastSync
+                  ? lastSync.message ?? `${lastSync.vehiclesChecked} car${lastSync.vehiclesChecked === 1 ? "" : "s"} checked · ${lastSync.synced} new session${lastSync.synced === 1 ? "" : "s"}`
+                  : "I check every hour anyway — this just does it now."}
+              </p>
+            </div>
           </>
         )}
+      </SubScreen>
+    );
+  }
 
-        {/* What the last manual pass actually did, per vehicle. Kept on screen
-            because a toast is gone before "1 could not be read" has been read. */}
-        {lastSync && (
-          <PanelCard className="space-y-1.5">
-            <p className="text-xs text-foreground">
-              {lastSync.message
-                ? lastSync.message
-                : `Checked ${lastSync.vehiclesChecked} vehicle${lastSync.vehiclesChecked === 1 ? "" : "s"} with a rental in the window · ${lastSync.synced} new session${lastSync.synced === 1 ? "" : "s"}.`}
-            </p>
-            {lastSync.results?.some((r) => r.error) && (
-              <ul className="space-y-1">
-                {lastSync.results
-                  .filter((r) => r.error)
-                  .map((r) => (
-                    <li key={r.vehicleId} className="flex gap-2 text-[11px] text-destructive">
-                      <AlertTriangle className="mt-0.5 size-3 shrink-0" />
-                      <span>
-                        <span className="font-mono">{r.vehicleReg}</span>: {r.error}
-                      </span>
-                    </li>
-                  ))}
-              </ul>
-            )}
-          </PanelCard>
-        )}
+  if (screen === "disconnect") {
+    return (
+      <DisconnectScreen
+        name="Tesla"
+        canManage={canManage}
+        pending={disconnect.isPending}
+        onBack={home}
+        onConfirm={() => disconnect.mutate()}
+        consequence={
+          <>
+            Supercharging stops being checked and added to rentals
+            {view.linkedCount > 0 ? `, and your ${view.linkedCount} linked car${view.linkedCount === 1 ? " is" : "s are"} unlinked` : ""}. Sessions
+            already recorded and charges already on rentals stay as they are.
+          </>
+        }
+      />
+    );
+  }
 
-        <p className="text-[11px] leading-relaxed text-muted-foreground">
-          Sync now runs the same check the hourly pass will run at :17 — any session it finds inside
-          a rental is added to that rental straight away. Only vehicles with a current rental, or one
-          closed in the last 30 days, are checked.
-        </p>
-      </PanelSection>
+  /* ── the main screen ──────────────────────────────────────────────────── */
 
-      {/* ── Disconnect ────────────────────────────────────────────────── */}
-      <PanelSection title="Disconnecting">
-        <div className="flex items-start justify-between gap-3">
-          <p className="text-xs leading-relaxed text-muted-foreground">
-            Stops the hourly sync and unlinks every vehicle. Sessions already recorded, and charges
-            already on rentals, are kept.
-          </p>
-          <ConfirmAction
-            destructive
-            trigger={
-              <Button size="sm" variant="destructive" disabled={!canManage || busy}>
-                <Unplug className="size-3.5" />
-                {disconnect.isPending ? "Disconnecting…" : "Disconnect"}
-              </Button>
-            }
-            title="Disconnect Tesla?"
-            description={
-              <>
-                From now on, Supercharger sessions on your Teslas will not be checked every hour and
-                will not be added to rentals as billable lines — a customer who Supercharges after
-                this is not charged for it unless you add it by hand.{" "}
-                {view.linkedCount > 0 && (
-                  <>
-                    All {view.linkedCount} linked vehicle{view.linkedCount === 1 ? "" : "s"} will be
-                    unlinked and must be linked again after reconnecting.{" "}
-                  </>
-                )}
-                Tesla&rsquo;s authorisation is revoked on our side; sessions already recorded and
-                charges already on rentals stay exactly as they are.
-              </>
-            }
-            confirmLabel="Disconnect Tesla"
-            onConfirm={() => disconnect.mutate()}
+  const recentCount = sessionsData?.recent.length ?? 0;
+  const healthy = view.state === "connected";
+  const title = view.needsReconnect
+    ? view.label === "Cannot renew"
+      ? "Tesla can't renew its access."
+      : "Tesla's access has lapsed."
+    : view.linkedCount === 0
+      ? "Pick the cars I should watch."
+      : "Supercharging bills itself.";
+  const body = view.linkedCount === 0 && !view.needsReconnect
+    ? justReturned || demo
+      ? "Tesla is connected. Link the cars you rent out, and I'll start matching their Supercharging to rentals."
+      : view.headline
+    : view.headline;
+
+  const action = !canManage ? null : view.needsReconnect ? (
+    <Button className="h-10 rounded-2xl px-6" onClick={() => void connect()} disabled={connecting}>
+      {connecting ? <Loader2 className="animate-spin" /> : <Link2 />}
+      {connecting ? "Opening Tesla…" : "Reconnect Tesla"}
+    </Button>
+  ) : view.linkedCount === 0 ? (
+    <Button className="h-10 rounded-2xl px-6" onClick={() => setScreen("vehicles")}>
+      <Car /> Link your Teslas
+    </Button>
+  ) : (
+    <Button className="h-10 rounded-2xl px-6" onClick={() => setScreen("sessions")}>
+      {recentCount ? `See ${recentCount} session${recentCount === 1 ? "" : "s"}` : "See sessions"}
+      <ArrowRight />
+    </Button>
+  );
+
+  return (
+    <>
+      <Hero
+        art={healthy ? ExpensesEmptyArt : view.linkedCount === 0 ? VehiclesEmptyArt : InvoicesEmptyArt}
+        eyebrow={healthy ? "Live" : view.label}
+        title={title}
+        actions={action && <div className="flex justify-center">{action}</div>}
+        footer={
+          <QuietNav
+            items={[
+              { label: "Account details", onClick: () => setScreen("account") },
+              { label: "Vehicles", onClick: () => setScreen("vehicles") },
+              { label: "Sessions", onClick: () => setScreen("sessions") },
+              ...(canManage ? [{ label: "Disconnecting", onClick: () => setScreen("disconnect") }] : []),
+            ]}
           />
-        </div>
-      </PanelSection>
-
-      {!canManage && (
-        <PanelNote>
-          You can see this integration but not change it. Linking vehicles, syncing and disconnecting
-          can only be done by an admin or head admin.
-        </PanelNote>
-      )}
-    </div>
+        }
+      >
+        {body}
+      </Hero>
+      <ScreenNav className="mt-5" onBack={onBack} />
+    </>
   );
 }

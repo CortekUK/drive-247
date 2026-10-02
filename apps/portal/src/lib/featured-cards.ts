@@ -58,7 +58,7 @@ export type FeaturedArtKey =
   | 'autocharge';
 
 /** Handlers the registry knows about. Tabs may supply more for recommendations. */
-export type FeaturedHandlerKey = 'openCalendar' | 'openTrax' | 'openInvite' | 'openImport';
+export type FeaturedHandlerKey = 'openCalendar' | 'openTrax' | 'openInvite' | 'openImport' | 'openBlocked';
 
 export type FeaturedAction =
   | { kind: 'href'; href: string }
@@ -268,12 +268,16 @@ export const FEATURE_CARDS: readonly FeatureCardDef[] = [
     gate: (ctx) => ctx.canEdit('customers'),
   },
   {
+    // Opens the blocked-customers dialog on the Customers page (blocked people
+    // + the blacklist of IDs, each with Unblock) — Ghulam, Oct 2 2026. The
+    // full /blocked-customers page is still there; this is the quick way in.
     id: 'blocked-customers',
     tabs: ['customers'],
-    title: 'Blocklist',
-    subtitle: "Customers you won't rent to",
+    title: 'Blocked customers',
+    subtitle: "Who you won't rent to",
     art: 'blocked',
-    action: { kind: 'href', href: '/blocked-customers' },
+    action: { kind: 'handler', handler: 'openBlocked' },
+    route: '/blocked-customers',
     priority: 15,
     gate: (ctx) => ctx.isLean && ctx.canView('blocked_customers'),
   },
@@ -318,7 +322,7 @@ export const FEATURE_CARDS: readonly FeatureCardDef[] = [
 export const HERO_CARD: Readonly<Record<FeaturedTab, FeatureCardId>> = {
   rentals: 'calendar-view',
   vehicles: 'availability',
-  customers: 'invite-customers',
+  customers: 'blocked-customers',
   finances: 'auto-charge',
 };
 

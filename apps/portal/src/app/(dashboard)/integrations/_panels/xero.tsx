@@ -24,13 +24,15 @@
 // `.eq("tenant_id", tenant.id)`. See the isolation note at the top of that file
 // for why RLS being ON here does not make that optional.
 
-import { useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import {
   AlertTriangle,
+  ArrowRight,
+  ArrowUpRight,
   CheckCircle2,
+  Link2,
   Loader2,
   RefreshCw,
-  Unplug,
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { Button } from "@/components/ui-v2/button";
@@ -41,23 +43,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui-v2/select";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui-v2/alert-dialog";
 import { useAuth } from "@/stores/auth-store";
 import type { IntegrationPanelProps, PanelTenant } from "./_kit";
 import {
   CopyValue,
   PanelCard,
   PanelError,
-  PanelLink,
   PanelLoading,
   PanelNote,
   PanelRow,
@@ -78,8 +69,12 @@ import {
   type XeroAccount,
   type XeroConnectionRow,
   type XeroSyncRow,
+  type XeroSnapshot,
   type XeroVerdict,
 } from "./xero-data";
+import { ConnectionTest, DisconnectScreen, Hero, QuietNav, ScreenNav, ScreenPager, SubScreen, demoCheck } from "./_screens";
+import { InvoicesEmptyArt } from "@/components/illustrations-v2/scenes/invoices";
+import { PaymentsEmptyArt } from "@/components/illustrations-v2/scenes/payments";
 
 /* ─────────────────────────────── helpers ────────────────────────────────── */
 
@@ -113,23 +108,116 @@ function orderAccounts(accounts: XeroAccount[]): XeroAccount[] {
 
 /* ──────────────────────────────── chip ──────────────────────────────────── */
 
+/* ─────────────────────────── first-run demo ─────────────────────────────── */
+
 /**
- * The board card's status pill.
+ * FIRST-RUN DEMO — northwind only, on screen only (Ghulam, Oct 2 2026), the
+ * same as Stripe's and Square's.
  *
- * Also the host for the OAuth return handler: the operator comes back from Xero
- * to the board with the dialog CLOSED, so the panel is not mounted to notice it.
- * The chip is (it paints on every card), and the board file belongs to someone
- * else. See `useXeroOAuthReturn`.
+ * The chip and the panel read a STAND-IN snapshot: no connection at first,
+ * then — after "Connect Xero" opens Xero's sign-in in a new tab and the button
+ * spins — a healthy connection with a payment account and every charge type
+ * mapped. Nothing calls `xero-oauth-start`, lists accounts, retries a sync or
+ * disconnects: the demo's small screens draw demo data and offer no live
+ * control. To remove: delete this block and every `demo` branch below.
  */
+const XERO_FIRST_RUN_DEMO_SLUGS: readonly string[] = ["northwind"];
+
+type DemoStage = "fresh" | "live";
+
+const demoStore = (() => {
+  let stage: DemoStage = "fresh";
+  const listeners = new Set<() => void>();
+  return {
+    get: () => stage,
+    set: (next: DemoStage) => {
+      if (next === stage) return;
+      stage = next;
+      listeners.forEach((l) => l());
+    },
+    subscribe: (l: () => void) => {
+      listeners.add(l);
+      return () => listeners.delete(l);
+    },
+  };
+})();
+
+const DEMO_ACCOUNTS: Record<string, string> = {
+  rental_charge: "200 · Rental income",
+  extension_charge: "200 · Rental income",
+  insurance_charge: "210 · Insurance income",
+  damage_charge: "220 · Damage recovery",
+  mileage_charge: "200 · Rental income",
+  late_fee: "230 · Late fees",
+  charging_cost: "240 · Charging recharges",
+  deposit_capture: "820 · Deposits held",
+  discount: "400 · Discounts given",
+};
+
+function demoSnapshot(tenantId: string, stage: DemoStage): XeroSnapshot {
+  if (stage === "fresh") return { connection: null, mappings: [] };
+  const now = new Date().toISOString();
+  return {
+    connection: {
+      id: "demo",
+      tenant_id: tenantId,
+      provider: "xero",
+      status: "active",
+      token_expires_at: new Date(Date.now() + 25 * 60_000).toISOString(),
+      external_org_id: "8f2c1d6e-demo-4b1a-9c3e-xero0rg",
+      external_org_name: "Northwind Rentals Ltd",
+      external_region: null,
+      last_synced_at: null,
+      last_error: null,
+      connected_by: null,
+      connected_at: now,
+      disconnected_at: null,
+      created_at: now,
+      updated_at: now,
+    },
+    mappings: [
+      { event_type: null, is_payment_account_sentinel: true, external_account_code: "090", external_account_name: "Business Bank Account" },
+      ...XERO_MAPPED_EVENT_TYPES.map((e) => ({
+        event_type: e.key,
+        is_payment_account_sentinel: false,
+        external_account_code: DEMO_ACCOUNTS[e.key].split(" · ")[0],
+        external_account_name: DEMO_ACCOUNTS[e.key].split(" · ")[1],
+      })),
+    ],
+  };
+}
+
+function useDemo(tenant: PanelTenant, real: XeroSnapshot | undefined) {
+  const enabled = XERO_FIRST_RUN_DEMO_SLUGS.includes(tenant.slug);
+  const stage = useSyncExternalStore(demoStore.subscribe, demoStore.get, demoStore.get);
+  const data = useMemo(() => (enabled ? demoSnapshot(tenant.id, stage) : real), [enabled, stage, real, tenant.id]);
+  return { demo: enabled, data };
+}
+
+/** The main screen's headline for each verdict. */
+function xeroTitle(v: XeroVerdict): string {
+  if (v.state === "disconnected") return "Connect your Xero account.";
+  if (v.state === "connected") return "Your books are syncing to Xero.";
+  const label = v.label ?? "";
+  if (label === "Reconnect needed" || label === "Token expired") return "Reconnect Xero.";
+  if (label === "Connection error") return "Xero reported a problem.";
+  if (label === "Payment account not set") return "Choose where payments land.";
+  if (label.includes("unmapped")) return "A few charges have nowhere to go.";
+  return "Xero";
+}
+
+/* ──────────────────────────────── chip ──────────────────────────────────── */
+
 export function XeroStatus({ tenant }: { tenant: PanelTenant }) {
   useXeroOAuthReturn(tenant);
-  const { data, isLoading, isError } = useXeroStatus(tenant);
+  const { data: real, isLoading, isError } = useXeroStatus(tenant);
+  const { demo, data } = useDemo(tenant, real);
 
-  if (isLoading) return <StatusChip state="loading" />;
+  if (!demo && isLoading) return <StatusChip state="loading" />;
   // A read that failed is NOT "not connected". Saying so would invite a
   // reconnect, and reconnecting rotates the credentials of a connection that
   // may be perfectly healthy.
-  if (isError) return <StatusChip state="attention" label="Status unavailable" />;
+  if (!demo && isError) return <StatusChip state="attention" label="Status unavailable" />;
 
   const verdict = deriveXeroVerdict(data);
   return <StatusChip state={verdict.state} label={verdict.label} />;
@@ -137,27 +225,69 @@ export function XeroStatus({ tenant }: { tenant: PanelTenant }) {
 
 /* ──────────────────────────────── panel ─────────────────────────────────── */
 
-export default function XeroPanel({ tenant, onClose }: IntegrationPanelProps) {
+/*
+ * THE SCREEN STANDARD (Ghulam, Oct 2 2026 — see `_screens.tsx`), as Stripe and
+ * Square have it: one main screen per state with ONE button, and the rest —
+ * account details, where things land, sync, disconnecting — behind quiet
+ * links, with Back. The Mappings and SyncHealth components are the same ones
+ * as before, each on its own (paged) screen; no rule in them changed.
+ */
+type Screen = "home" | "account" | "mappings" | "sync" | "disconnect";
+
+export default function XeroPanel({ tenant, onBack, fromIntro }: IntegrationPanelProps) {
   const status = useXeroStatus(tenant);
+  const { demo, data } = useDemo(tenant, status.data);
   const { appUser } = useAuth();
 
   // The four edge functions this panel calls all reject anything below admin.
-  // Showing a viewer a live Connect button that can only 403 is worse than
-  // showing it disabled with the reason. Super admins arrive here as
-  // `head_admin` — the auth store rewrites the role on load — so this one check
-  // covers them too.
+  // Super admins arrive here as `head_admin` — the auth store rewrites the role.
   const canManage = appUser?.role === "head_admin" || appUser?.role === "admin";
 
-  const verdict = deriveXeroVerdict(status.data);
-  const connection = status.data?.connection ?? null;
+  const verdict = deriveXeroVerdict(data);
+  const connection = data?.connection ?? null;
   const usable = connection?.status === "active" && !verdict.tokenExpired;
-
   const live = !!connection && connection.status !== "revoked";
-  const health = useXeroSyncHealth(tenant, live);
-  const accounts = useXeroAccounts(tenant, usable);
 
-  if (status.isLoading) return <PanelLoading rows={4} />;
-  if (status.isError) {
+  // Real reads only — the demo never asks Xero for anything.
+  const health = useXeroSyncHealth(tenant, live && !demo);
+  const accounts = useXeroAccounts(tenant, usable && !demo);
+  const connect = useConnectXero(tenant);
+  const disconnect = useDisconnectXero(tenant);
+
+  const [screen, setScreen] = useState<Screen>("home");
+  const [leaving, setLeaving] = useState(false);
+
+  useEffect(() => {
+    if (!demo) return;
+    return () => demoStore.set("fresh");
+  }, [demo]);
+
+  const startConnect = useCallback(() => {
+    setLeaving(true);
+    if (demo) {
+      // Xero's sign-in in a new tab (nothing is authorised), a spin, then a
+      // healthy connection. A real connect leaves for Xero's OAuth instead.
+      window.open("https://login.xero.com", "_blank", "noopener,noreferrer");
+      window.setTimeout(() => {
+        demoStore.set("live");
+        setLeaving(false);
+      }, 2600);
+      return;
+    }
+    connect.mutate(undefined, { onError: () => setLeaving(false) });
+  }, [demo, connect]);
+
+  // "Connect Xero" on the last education screen IS the connect button.
+  const [autoStarted, setAutoStarted] = useState(false);
+  useEffect(() => {
+    if (!fromIntro || autoStarted || live || !canManage) return;
+    if (!demo && (status.isLoading || status.isError)) return;
+    setAutoStarted(true);
+    startConnect();
+  }, [fromIntro, autoStarted, live, canManage, demo, status.isLoading, status.isError, startConnect]);
+
+  if (!demo && status.isLoading) return <PanelLoading rows={4} />;
+  if (!demo && status.isError) {
     return (
       <PanelError
         message={status.error instanceof Error ? status.error.message : "Unknown error"}
@@ -166,171 +296,239 @@ export default function XeroPanel({ tenant, onClose }: IntegrationPanelProps) {
     );
   }
 
-  return (
-    <div className="space-y-5 py-1">
-      {!live ? (
-        <NotConnected
+  const home = () => setScreen("home");
+
+  /* ── small screens ─────────────────────────────────────────────────────── */
+
+  if (screen === "account" && live && connection) {
+    return (
+      <SubScreen title="Account details" description="The Xero organisation your bookings are recorded in." onBack={home}>
+        <PanelCard className="divide-y divide-border/60">
+          <PanelRow label="Organisation">
+            {connection.external_org_name ?? <span className="text-muted-foreground">Unnamed</span>}
+          </PanelRow>
+          <PanelRow label="Organisation ID">
+            <CopyValue value={connection.external_org_id} />
+          </PanelRow>
+          <PanelRow label="Connected">{fmtDate(connection.connected_at)}</PanelRow>
+          {/* No promise of renewal: it is a server-side job this screen
+              cannot see, and an expiry in the past is the evidence it failed. */}
+          <PanelRow label="Access" hint="Short-lived, renewed behind the scenes.">
+            <span className={verdict.tokenExpired ? "text-warning" : undefined}>{tokenPhrase(connection.token_expires_at)}</span>
+          </PanelRow>
+        </PanelCard>
+        {connection.last_error && (
+          <PanelNote tone="warn">
+            Last error from Xero:
+            <span className="mt-1 block font-mono text-[11px] opacity-80">{connection.last_error}</span>
+          </PanelNote>
+        )}
+        {/* A real check: asks Xero for this organisation's chart of accounts
+            with the stored credentials — the same call the mappings use. */}
+        <ConnectionTest
+          idle="Check Drive247 can still reach your Xero organisation."
+          disabled={!canManage}
+          run={
+            demo
+              ? () => demoCheck("Working · reached Xero, 38 accounts")
+              : !usable
+                ? null
+                : async () => {
+                    const r = await accounts.refetch();
+                    if (r.error) throw r.error instanceof Error ? r.error : new Error("Xero did not answer");
+                    const n = r.data?.length ?? 0;
+                    return `Working · reached Xero, ${n} account${n === 1 ? "" : "s"}`;
+                  }
+          }
+          unavailable="The stored sign-in has expired — reconnect Xero, then test."
+        />
+      </SubScreen>
+    );
+  }
+
+  if (screen === "mappings" && live) {
+    if (demo) {
+      // Demo: read-only, from the stand-in snapshot — no account list is
+      // fetched from Xero and nothing is saved.
+      return (
+        <SubScreen title="Where things land" description="The Xero accounts your payments and charges are recorded against." onBack={home}>
+          <PanelCard className="divide-y divide-border/60">
+            <PanelRow label="Customer payments" hint="The bank account payments are recorded in.">
+              090 · Business Bank Account
+            </PanelRow>
+            {XERO_MAPPED_EVENT_TYPES.slice(0, 5).map((e) => (
+              <PanelRow key={e.key} label={e.label}>
+                {DEMO_ACCOUNTS[e.key]}
+              </PanelRow>
+            ))}
+          </PanelCard>
+          <p className="text-center text-xs text-muted-foreground">
+            And {XERO_MAPPED_EVENT_TYPES.length - 5} more charge types, all mapped.
+          </p>
+        </SubScreen>
+      );
+    }
+    return (
+      <ScreenPager onBackFromStart={home}>
+        <Mappings
           tenant={tenant}
           canManage={canManage}
-          disconnectedAt={connection?.disconnected_at ?? null}
+          usable={usable}
+          accounts={accounts}
+          paymentAccount={verdict.paymentAccount}
+          missingEventTypes={verdict.missingEventTypes}
         />
-      ) : (
-        <>
-          <Connection
-            tenant={tenant}
-            canManage={canManage}
-            connection={connection}
-            verdict={verdict}
-          />
+      </ScreenPager>
+    );
+  }
 
-          <Mappings
-            tenant={tenant}
-            canManage={canManage}
-            usable={usable}
-            accounts={accounts}
-            paymentAccount={verdict.paymentAccount}
-            missingEventTypes={verdict.missingEventTypes}
-          />
+  if (screen === "sync" && live) {
+    if (demo) {
+      return (
+        <SubScreen title="Sync" description="What has gone to Xero, and anything waiting." onBack={home}>
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              ["Sent", "0"],
+              ["Waiting", "0"],
+              ["Failed", "0"],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-xl border bg-muted/20 px-2.5 py-3 text-center">
+                <div className="text-lg font-medium leading-tight">{value}</div>
+                <div className="text-[11px] text-muted-foreground">{label}</div>
+              </div>
+            ))}
+          </div>
+          <p className="text-center text-xs leading-relaxed text-muted-foreground">
+            Nothing sent yet — every new charge, payment and refund goes to Xero as it happens.
+          </p>
+        </SubScreen>
+      );
+    }
+    return (
+      <ScreenPager onBackFromStart={home}>
+        <SyncHealth tenant={tenant} canManage={canManage} health={health} />
+      </ScreenPager>
+    );
+  }
 
-          <SyncHealth tenant={tenant} canManage={canManage} health={health} />
+  if (screen === "disconnect" && live) {
+    // Unlinking is allowed from here (Ghulam, Oct 2) — `useDisconnectXero`,
+    // behind a confirmation. The demo just puts itself back to the start.
+    return (
+      <DisconnectScreen
+        name="Xero"
+        canManage={canManage}
+        pending={disconnect.isPending}
+        onBack={home}
+        onConfirm={() => {
+          if (demo) {
+            demoStore.set("fresh");
+            home();
+            return;
+          }
+          disconnect.mutate(undefined, { onSuccess: home });
+        }}
+        consequence={
+          <>
+            New charges, payments and refunds stop going to Xero straight away. Invoices already in Xero stay
+            exactly as they are, and reconnecting picks up where it stopped.
+          </>
+        }
+      />
+    );
+  }
 
-          <Disconnect tenant={tenant} canManage={canManage} onClose={onClose} />
-        </>
-      )}
-    </div>
-  );
-}
+  /* ── the main screen ───────────────────────────────────────────────────── */
 
-/* ───────────────────────────── not connected ────────────────────────────── */
-
-function NotConnected({
-  tenant,
-  canManage,
-  disconnectedAt,
-}: {
-  tenant: PanelTenant;
-  canManage: boolean;
-  disconnectedAt: string | null;
-}) {
-  const connect = useConnectXero(tenant);
-
-  return (
-    <PanelSection
-      title="Connect Xero"
-      description="Send every rental charge, payment and refund to your Xero ledger as it happens."
-    >
-      {disconnectedAt && (
-        <PanelNote>
-          You disconnected Xero on {fmtDate(disconnectedAt)}. Invoices already in Xero were left
-          exactly as they were, and reconnecting picks up from where it stopped.
-        </PanelNote>
-      )}
-
-      <PanelCard className="space-y-2 text-xs leading-relaxed text-muted-foreground">
-        <p>
-          Connecting sends you to Xero to authorise Drive247 against one organisation, then brings
-          you back here. Drive247 never sees your Xero password — the credentials it receives are
-          held encrypted and can be revoked from Xero at any time.
-        </p>
-        <p>
-          Once connected, you also need to choose the Xero bank account customer payments are
-          recorded against — invoices sync without it, payments do not. You do that on this screen.
-        </p>
-      </PanelCard>
-
-      {!canManage ? (
-        <PanelNote tone="warn">
-          Only an admin or head admin can connect an accounting system. Ask one of them to open this
-          card.
-        </PanelNote>
-      ) : (
-        <Button onClick={() => connect.mutate()} disabled={connect.isPending}>
-          {connect.isPending ? <Loader2 className="animate-spin" /> : null}
-          Continue to Xero
-        </Button>
-      )}
-    </PanelSection>
-  );
-}
-
-/* ─────────────────────────────── connection ─────────────────────────────── */
-
-function Connection({
-  tenant,
-  canManage,
-  connection,
-  verdict,
-}: {
-  tenant: PanelTenant;
-  canManage: boolean;
-  connection: XeroConnectionRow;
-  verdict: XeroVerdict;
-}) {
-  const connect = useConnectXero(tenant);
-
-  // A fault in the CREDENTIALS, as opposed to a fault in the configuration.
-  // Only these two are answered by re-running OAuth; a missing mapping or a
-  // stalled queue is not, and offering a reconnect for those would rotate a
-  // working connection's credentials to fix something else entirely.
-  const needsReconnect = verdict.tokenExpired || connection.status === "error";
-
-  return (
-    <PanelSection
-      title="Connection"
-      action={
-        <PanelLink href="https://go.xero.com/">
-          Open Xero
-        </PanelLink>
-      }
-    >
-      {needsReconnect && (
-        <PanelNote tone="warn">
-          {verdict.detail ?? "This Xero connection is not currently usable."}
-        </PanelNote>
-      )}
-
-      <PanelCard>
-        <PanelRow label="Organisation">
-          {connection.external_org_name ?? <span className="text-muted-foreground">Unnamed</span>}
-        </PanelRow>
-        <PanelRow label="Xero organisation ID" mono>
-          <CopyValue value={connection.external_org_id} />
-        </PanelRow>
-        <PanelRow label="Connected">{fmtDate(connection.connected_at)}</PanelRow>
-        {/* The hint deliberately does NOT promise a renewal. Renewal is a
-            server-side job this screen cannot see, and an expiry sitting in the
-            past is the operator's evidence that it did not happen. */}
-        <PanelRow
-          label="Access token"
-          hint="Xero issues short-lived tokens and renews them behind the scenes. An expiry already in the past means the renewal did not happen."
+  // Straight from "Connect Xero": keep a connecting screen up while Xero opens.
+  if (leaving && !live) {
+    return (
+      <>
+        <Hero
+          art={InvoicesEmptyArt}
+          title="Connect your Xero account."
+          actions={
+            <div className="flex justify-center">
+              <Button className="h-10 rounded-2xl px-6" disabled>
+                <Loader2 className="animate-spin" />
+                Opening Xero…
+              </Button>
+            </div>
+          }
         >
-          <span className={verdict.tokenExpired ? "text-warning" : undefined}>
-            {tokenPhrase(connection.token_expires_at)}
-          </span>
-        </PanelRow>
-      </PanelCard>
+          Finish in the Xero tab — sign in and choose your organisation. I&rsquo;ll pick it up here the
+          moment Xero hands it back.
+        </Hero>
+        <ScreenNav className="mt-8" onBack={onBack} />
+      </>
+    );
+  }
 
-      {connection.last_error && (
-        <PanelNote tone="warn">
-          Last error from Xero:
-          <span className="mt-1 block font-mono text-[11px] opacity-80">{connection.last_error}</span>
-        </PanelNote>
-      )}
+  const needsReconnect = live && (verdict.tokenExpired || connection?.status === "error");
+  const needsMapping = live && !needsReconnect && verdict.state === "attention";
 
-      {needsReconnect &&
-        (canManage ? (
-          <Button onClick={() => connect.mutate()} disabled={connect.isPending}>
-            {connect.isPending ? <Loader2 className="animate-spin" /> : null}
-            Reconnect Xero
-          </Button>
-        ) : (
-          <PanelNote tone="warn">
-            Only an admin or head admin can reconnect an accounting system.
-          </PanelNote>
-        ))}
-    </PanelSection>
+  let action: ReactNode = null;
+  if (!live || needsReconnect) {
+    action = canManage ? (
+      <Button className="h-10 rounded-2xl px-6" onClick={startConnect} disabled={leaving}>
+        {leaving ? <Loader2 className="animate-spin" /> : needsReconnect ? <RefreshCw /> : <Link2 />}
+        {needsReconnect ? "Reconnect Xero" : "Connect Xero"}
+      </Button>
+    ) : null;
+  } else if (needsMapping) {
+    action = (
+      <Button className="h-10 rounded-2xl px-6" onClick={() => setScreen("mappings")}>
+        Set it up
+        <ArrowRight />
+      </Button>
+    );
+  } else {
+    action = (
+      <Button className="h-10 rounded-2xl px-6" asChild>
+        <a href="https://go.xero.com/" target="_blank" rel="noopener noreferrer">
+          Open Xero
+          <ArrowUpRight />
+        </a>
+      </Button>
+    );
+  }
+
+  const body = !live
+    ? connection?.disconnected_at
+      ? `You disconnected Xero on ${fmtDate(connection.disconnected_at)}. Invoices already in Xero were left as they were, and reconnecting picks up where it stopped.`
+      : "Sign in to Xero and pick your organisation. Every rental charge, payment and refund then goes to your Xero books as it happens — I never see your Xero password."
+    : verdict.state === "connected"
+      ? `Every rental charge, payment and refund goes to ${connection?.external_org_name ?? "your Xero organisation"} as it happens.`
+      : verdict.detail ?? "";
+
+  const blocker = (!live || needsReconnect) && !canManage ? "Only an admin or head admin can connect Xero — ask one of them to open this card." : null;
+
+  const links = live
+    ? [
+        { label: "Account details", onClick: () => setScreen("account") },
+        { label: "Where things land", onClick: () => setScreen("mappings") },
+        { label: "Sync", onClick: () => setScreen("sync") },
+        ...(canManage ? [{ label: "Disconnecting", onClick: () => setScreen("disconnect") }] : []),
+      ]
+    : [];
+
+  return (
+    <>
+      <Hero
+        art={live ? InvoicesEmptyArt : PaymentsEmptyArt}
+        eyebrow={verdict.state === "connected" ? "Live" : verdict.state === "disconnected" ? "Not connected" : verdict.label}
+        title={xeroTitle(verdict)}
+        actions={action && <div className="flex justify-center">{action}</div>}
+        footer={links.length > 0 && <QuietNav items={links} />}
+      >
+        {body}
+        {blocker && <span className="mt-2 block text-warning">{blocker}</span>}
+      </Hero>
+      <ScreenNav className="mt-5" onBack={onBack} />
+    </>
   );
 }
+
 
 /* ──────────────────────────────── mappings ──────────────────────────────── */
 
@@ -655,83 +853,3 @@ function Failure({ row }: { row: XeroSyncRow }) {
   );
 }
 
-/* ─────────────────────────────── disconnect ─────────────────────────────── */
-
-function Disconnect({
-  tenant,
-  canManage,
-  onClose,
-}: {
-  tenant: PanelTenant;
-  canManage: boolean;
-  onClose: () => void;
-}) {
-  const disconnect = useDisconnectXero(tenant);
-  const [open, setOpen] = useState(false);
-
-  if (!canManage) return null;
-
-  return (
-    <>
-      <div className="border-t pt-4">
-        <Button
-          variant="destructive"
-          size="sm"
-          onClick={() => setOpen(true)}
-          disabled={disconnect.isPending}
-        >
-          {disconnect.isPending ? <Loader2 className="animate-spin" /> : <Unplug />}
-          Disconnect Xero
-        </Button>
-      </div>
-
-      <AlertDialog open={open} onOpenChange={setOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Disconnect Xero?</AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="space-y-2 text-sm">
-                <p>
-                  Drive247 will stop sending anything to Xero. The invoices, payments and credit
-                  notes already in your Xero organisation are not touched, and the stored
-                  credentials are deleted — reconnecting means authorising again.
-                </p>
-                {/* The distinction operators get wrong. Disconnecting is not a
-                    pause on the ledger: `financial_events` is written by a
-                    trigger on `ledger_entries` and by nine server-side callers,
-                    none of which can see this switch. The backlog keeps growing
-                    while disconnected, and reconnecting re-enqueues it. */}
-                <p>
-                  Your Drive247 records keep accruing either way — charges, payments and refunds are
-                  still recorded here while Xero is disconnected, and they are queued up again if
-                  you reconnect later.
-                </p>
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Keep connected</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                // `mutate` with callbacks rather than `await mutateAsync`:
-                // AlertDialogAction dismisses the confirmation on click either
-                // way, so awaiting inside the handler only delays the result.
-                //
-                // Closing the PANEL is deferred to success on purpose. Closing
-                // it unconditionally would drop an operator whose disconnect
-                // just failed back onto a board card that still reads
-                // "Connected", with the error toast the only trace — on success
-                // that same card flipping to "Not connected" in front of them
-                // is the confirmation.
-                disconnect.mutate(undefined, { onSuccess: () => onClose() });
-                setOpen(false);
-              }}
-            >
-              Disconnect
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
-  );
-}
