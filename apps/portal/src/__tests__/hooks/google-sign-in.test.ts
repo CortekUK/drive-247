@@ -79,3 +79,48 @@ describe('both login screens carry it', () => {
     });
   }
 });
+
+/*
+ * The button was text alone, which read as an unfinished row next to the filled
+ * Sign In button above it. Google's guidelines are specific about the mark, and
+ * the easy ways to get it wrong are all permanent-looking: a recoloured or
+ * single-colour "G", or an <img> to a Google CDN that a content blocker drops,
+ * leaving a bare word where a logo should be.
+ */
+describe("the button carries Google's mark", () => {
+  const markPath = resolve(__dirname, '../../components/ui/google-mark.tsx');
+  const mark = readFileSync(markPath, 'utf8');
+
+  it('uses all four official brand colours, unaltered', () => {
+    for (const hex of ['#4285F4', '#34A853', '#FBBC05', '#EA4335']) {
+      expect(mark).toContain(hex);
+    }
+  });
+
+  it('is drawn inline, never fetched from a Google CDN', () => {
+    // A blocked or slow third-party request would leave the button unlabelled.
+    expect(strip(mark)).not.toMatch(/https?:\/\/|gstatic|googleusercontent|<img/);
+    expect(strip(mark)).toMatch(/<svg/);
+  });
+
+  it('is hidden from screen readers, which already read the button text', () => {
+    expect(mark).toMatch(/aria-hidden="true"/);
+  });
+
+  it('sets no size of its own, because the two Buttons resolve it differently', () => {
+    expect(strip(mark)).not.toMatch(/className="[^"]*size-/);
+  });
+
+  for (const rel of [
+    'apps/portal/src/app/(auth)/login/page.tsx',
+    'apps/portal/src/components/auth-v2/login-v2.tsx',
+  ]) {
+    it(`${rel.includes('auth-v2') ? 'v2' : 'v1'}: shows it beside the label`, () => {
+      const src = strip(readFileSync(resolve(__dirname, '../../../../../', rel), 'utf8'));
+      expect(src).toMatch(/<GoogleMark/);
+      expect(src).toMatch(/from ["']@\/components\/ui\/google-mark["']/);
+      // Beside the label, not instead of it.
+      expect(src).toMatch(/<GoogleMark[^>]*\/>\s*\n?\s*Continue with Google/);
+    });
+  }
+});

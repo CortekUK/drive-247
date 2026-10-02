@@ -1,0 +1,48 @@
+/**
+ * Google's four-colour mark, for "Continue with Google".
+ *
+ * Inline rather than a remote asset because Google's brand guidelines require
+ * the mark to be shown unaltered, and an <img> to ssl.gstatic would be a
+ * third-party request on the sign-in form — one that fails silently behind a
+ * content blocker and leaves the button looking unfinished.
+ *
+ * The same artwork is inlined in the signup flow (apps/web account-step.tsx).
+ * It lives in both because the two apps share no component package; if one is
+ * ever created, this is one of the first things that should move into it.
+ *
+ * ── SIZING ──────────────────────────────────────────────────────────────────
+ *
+ * No default size is set here, because the two Buttons disagree about who wins.
+ * ui/button pins every icon with `[&_svg]:size-4`, so a size passed here is
+ * overridden and the v1 login simply takes 16px. ui-v2/button writes the same
+ * rule as `[&_svg:not([class*='size-'])]:size-4`, which steps aside for an icon
+ * carrying its own `size-` — so the v2 login, whose row is h-12 with text-base,
+ * passes `size-5` and gets it.
+ *
+ * `aria-hidden` because the button's own text already says "Continue with
+ * Google"; announcing the logo as well would just repeat the word.
+ */
+export function GoogleMark({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 18 18" aria-hidden="true" className={className}>
+      <path
+        fill="#4285F4"
+        d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.91c1.7-1.57 2.69-3.88 2.69-6.62Z"
+      />
+      <path
+        fill="#34A853"
+        d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.91-2.26c-.81.54-1.84.86-3.05.86-2.35 0-4.34-1.58-5.05-3.71H.96v2.33A9 9 0 0 0 9 18Z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M3.95 10.71a5.41 5.41 0 0 1 0-3.42V4.96H.96a9 9 0 0 0 0 8.08l2.99-2.33Z"
+      />
+      <path
+        fill="#EA4335"
+        d="M9 3.58c1.32 0 2.51.45 3.44 1.35l2.58-2.59C13.46.89 11.43 0 9 0A9 9 0 0 0 .96 4.96l2.99 2.33C4.66 5.16 6.65 3.58 9 3.58Z"
+      />
+    </svg>
+  );
+}
+
+export default GoogleMark;

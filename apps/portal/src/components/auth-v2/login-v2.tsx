@@ -24,6 +24,7 @@ import * as z from "zod";
 import { useAuth, useAuthStore } from "@/stores/auth-store";
 import { useGoogleSignIn } from "@/hooks/use-google-sign-in";
 import { Button } from "@/components/ui-v2/button";
+import { GoogleMark } from "@/components/ui/google-mark";
 import { Input } from "@/components/ui-v2/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Checkbox } from "@/components/ui-v2/checkbox";
@@ -871,7 +872,9 @@ function LoginV2Content() {
                     <Button
                       type="button"
                       variant="outline"
-                      className="h-12 w-full rounded-2xl text-base"
+                      /* gap-3: the size variant's own gap-1.5 is tight once the
+                         mark sits beside text-base on an h-12 row. */
+                      className="h-12 w-full gap-3 rounded-2xl text-base"
                       disabled={google.busy || isSubmitting}
                       onClick={() => void google.start()}
                     >
@@ -881,7 +884,13 @@ function LoginV2Content() {
                           Connecting to Google...
                         </>
                       ) : (
-                        "Continue with Google"
+                        <>
+                          {/* size-5, not the button's default 4 — ui-v2 lets an
+                              icon's own size- class win, and 16px reads small
+                              next to text-base. */}
+                          <GoogleMark className="size-5" />
+                          Continue with Google
+                        </>
                       )}
                     </Button>
 

@@ -8,6 +8,7 @@ import * as z from "zod";
 import { useAuth, useAuthStore } from "@/stores/auth-store";
 import { useGoogleSignIn } from "@/hooks/use-google-sign-in";
 import { Button } from "@/components/ui/button";
+import { GoogleMark } from "@/components/ui/google-mark";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -533,7 +534,10 @@ function LoginPageContent() {
                           Connecting to Google...
                         </>
                       ) : (
-                        "Continue with Google"
+                        <>
+                          <GoogleMark />
+                          Continue with Google
+                        </>
                       )}
                     </Button>
 
