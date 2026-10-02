@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Search, Check, Gauge, Banknote, ShieldCheck } from "lucide-react";
-import { CarMark } from "@/components/ui/car-mark";
+import { SteeringWheel } from "@/components/ui/steering-wheel";
 import { motion, useReducedMotion } from "motion/react";
 import { motionRise } from "@/lib/motion";
 import { cn } from "@/lib/utils";
@@ -89,7 +89,7 @@ export function VehicleList({ selected, onSelect, vehicles, currency = "$" }: Ve
                       isActive ? "bg-primary text-primary-foreground" : "bg-muted text-foreground/60"
                     )}
                   >
-                    <CarMark className="h-4 w-4" />
+                    <SteeringWheel className="h-4 w-4" />
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-foreground truncate">
@@ -117,7 +117,7 @@ export function VehicleList({ selected, onSelect, vehicles, currency = "$" }: Ve
         {!current ? (
           <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
             <span className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
-              <CarMark className="h-7 w-7" />
+              <SteeringWheel className="h-7 w-7" />
             </span>
             <p className="text-sm text-muted-foreground">Select a vehicle to see its details</p>
           </div>
@@ -142,7 +142,7 @@ function VehicleInfo({ vehicle, currency }: { vehicle: VehicleLite; currency: st
     <div className="p-6">
       {/* Image placeholder */}
       <div className="relative h-40 rounded-xl bg-gradient-to-br from-primary/10 to-muted flex items-center justify-center">
-        <CarMark className="h-16 w-16 text-primary/40 dark:text-[hsl(var(--v2-link,var(--primary))/0.4)]" />
+        <SteeringWheel className="h-16 w-16 text-primary/40 dark:text-[hsl(var(--v2-link,var(--primary))/0.4)]" />
         {vehicle.reg && (
           <span className="absolute left-3 top-3 rounded-md bg-card/90 px-2 py-1 text-xs font-semibold text-foreground shadow-sm">
             {vehicle.reg}

@@ -40,9 +40,21 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { format, isSameDay } from "date-fns";
 import {
-  ArrowLeft, Car, Mail, MessageCircle, MessageSquare, Phone,
-  PhoneCall, Send, Loader2, Info, Paperclip, X, AlertTriangle, ChevronDown,
+  ArrowLeft,
+  Mail,
+  MessageCircle,
+  MessageSquare,
+  Phone,
+  PhoneCall,
+  Send,
+  Loader2,
+  Info,
+  Paperclip,
+  X,
+  AlertTriangle,
+  ChevronDown,
 } from "lucide-react";
+import { SteeringWheel } from "@/components/ui/steering-wheel";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui-v2/avatar";
 import { Button } from "@/components/ui-v2/button";
 import { Input } from "@/components/ui-v2/input";
@@ -136,7 +148,7 @@ function PendingRow({
     <div className="flex flex-wrap items-center gap-2">
       {booking && (
         <span className="inline-flex items-center gap-2 rounded-full bg-primary/10 py-1 pl-2.5 pr-1.5 text-[12px] font-medium text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
-          <Car className="h-3.5 w-3.5" />
+          <SteeringWheel className="h-3.5 w-3.5" />
           {booking.rentalNumber || "Rental"} · {booking.vehicle.make} {booking.vehicle.model}
           <button type="button" onClick={onRemoveBooking} aria-label="Remove booking"
             className="rounded-full p-0.5 hover:bg-primary/15">

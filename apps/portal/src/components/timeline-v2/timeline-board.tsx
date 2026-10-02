@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { addMonths, format, getDaysInMonth, startOfMonth } from "date-fns";
 import { ArrowRight, CalendarDays, Check, ChevronLeft, ChevronRight, CircleSlash, Filter, ListFilter, Maximize2, Plus, RotateCcw, Search, User, X } from "lucide-react";
-import { CarMark } from "@/components/ui/car-mark";
+import { SteeringWheel } from "@/components/ui/steering-wheel";
 import { Button } from "@/components/ui-v2/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui-v2/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui-v2/tooltip";
@@ -33,7 +33,7 @@ function BookingInfo({ booking: b, currency, onOpen }: { booking: TimelineBookin
   return <div className="tl-booking-info">
     <div className="tl-info-top"><strong>{b.number}</strong><Status status={b.status} /></div>
     {b.segment && <p className="tl-segment-name">{b.segment}{b.preview && <span className="tl-preview-tag">Unsaved preview</span>}</p>}
-    <dl><div><dt><CarMark size={14} /> Vehicle</dt><dd>{vehicleName(b.vehicle)}{b.vehicle.reg && <small>{b.vehicle.reg}</small>}</dd></div>
+    <dl><div><dt><SteeringWheel size={14} /> Vehicle</dt><dd>{vehicleName(b.vehicle)}{b.vehicle.reg && <small>{b.vehicle.reg}</small>}</dd></div>
       <div><dt><User size={14} /> Customer</dt><dd>{b.customer.name}</dd></div>
       <div><dt>From</dt><dd>{prettyDay(b.start)}{b.pickupTime && <small>{b.pickupTime.slice(0, 5)}</small>}</dd></div>
       <div><dt>Until</dt><dd>{b.end ? prettyDay(b.end) : "Open-ended"}{b.returnTime && <small>{b.returnTime.slice(0, 5)}</small>}</dd></div>
@@ -135,7 +135,7 @@ export function TimelineBoard({ data, range, onRange, today, currency, timezone,
     <div className="tl-toolbar">
       <div className="tl-toolbar-heading"><h3>{heading || "Booking calendar"}</h3>{onExpand && <Button size="icon-sm" variant="ghost" onClick={onExpand} aria-label="Expand timeline" className="ml-auto"><Maximize2 size={16} /></Button>}</div>
       <div className="tl-controls">
-        {!fixedPerspective && <div className="tl-perspectives" role="group" aria-label="Timeline perspective">{(["rental", "vehicle", "customer"] as Perspective[]).map(p => <button type="button" key={p} aria-pressed={perspective === p} onClick={() => { setPerspective(p); setRecords([]); setRecordSearch(""); }}>{p === "rental" ? <ListFilter size={14} /> : p === "vehicle" ? <CarMark size={14} /> : <User size={14} />}{p[0].toUpperCase() + p.slice(1)}</button>)}</div>}
+        {!fixedPerspective && <div className="tl-perspectives" role="group" aria-label="Timeline perspective">{(["rental", "vehicle", "customer"] as Perspective[]).map(p => <button type="button" key={p} aria-pressed={perspective === p} onClick={() => { setPerspective(p); setRecords([]); setRecordSearch(""); }}>{p === "rental" ? <ListFilter size={14} /> : p === "vehicle" ? <SteeringWheel size={14} /> : <User size={14} />}{p[0].toUpperCase() + p.slice(1)}</button>)}</div>}
         {!compact && <label className="tl-search"><Search size={15} /><input aria-label="Search timeline" value={search} onChange={e => setSearch(e.target.value)} placeholder={`Search ${perspective}s…`} />{search && <button type="button" onClick={() => setSearch("")} aria-label="Clear search"><X size={14} /></button>}</label>}
         <Popover><PopoverTrigger asChild><Button size="sm" variant="outline" aria-label="Filter timeline"><Filter size={14} />Filters{records.length + statuses.length > 0 && <span className="tl-count">{records.length + statuses.length}</span>}</Button></PopoverTrigger>
           <PopoverContent align="end" className="tl-filter-popover" collisionPadding={12}>

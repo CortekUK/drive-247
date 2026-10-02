@@ -27,7 +27,6 @@
 
 import {
   Banknote,
-  Car,
   ChevronRight,
   CircleCheck,
   FileText,
@@ -40,6 +39,7 @@ import {
   Waypoints,
   Wrench,
 } from "lucide-react";
+import { SteeringWheel } from "@/components/ui/steering-wheel";
 import { cn } from "@/lib/utils";
 import { HeroChip, fmtDateTime } from "./kit";
 import type { VehicleEvent } from "@/hooks/use-vehicle-events";
@@ -66,8 +66,8 @@ export type Vital = {
 const EVENT_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
   acquisition_created: Plus,
   acquisition_updated: Banknote,
-  rental_started: Car,
-  rental_ended: Car,
+  rental_started: SteeringWheel,
+  rental_ended: SteeringWheel,
   expense_added: Receipt,
   expense_removed: Receipt,
   fine_assigned: Receipt,

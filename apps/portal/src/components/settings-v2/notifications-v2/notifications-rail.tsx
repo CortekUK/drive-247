@@ -19,9 +19,23 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import {
-  Banknote, CalendarCheck, ChevronRight, Info, Car, FileSignature, KeyRound, Mail, MessageSquare,
-  Receipt, Search, Settings2, ShieldCheck, Smartphone, UserCheck, type LucideIcon,
+  Banknote,
+  CalendarCheck,
+  ChevronRight,
+  Info,
+  FileSignature,
+  KeyRound,
+  Mail,
+  MessageSquare,
+  Receipt,
+  Search,
+  Settings2,
+  ShieldCheck,
+  Smartphone,
+  UserCheck,
+  type LucideIcon,
 } from "lucide-react";
+import { SteeringWheel } from "@/components/ui/steering-wheel";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui-v2/hover-card";
 import { SIDEBAR_HIGHLIGHT_ACTIVE, SIDEBAR_HIGHLIGHT_FOCUS, SIDEBAR_HIGHLIGHT_HOVER } from "@/components/ui-v2/sidebar";
 import { NOTIFICATION_CATALOG, NOTIFICATION_CATEGORIES } from "@/lib/notifications-v2/catalog";
@@ -36,7 +50,7 @@ import {
 
 export const CATEGORY_ICONS: Record<NotificationCategoryId, LucideIcon> = {
   booking: CalendarCheck,
-  rental: Car,
+  rental: SteeringWheel,
   payments: Banknote,
   agreements: FileSignature,
   verification: UserCheck,

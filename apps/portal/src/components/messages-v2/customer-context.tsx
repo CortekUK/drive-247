@@ -28,7 +28,7 @@ import { useMemo } from "react";
 import Link from "next/link";
 import { format } from "date-fns";
 import { CalendarDays, ExternalLink, Mail, Phone, Sparkles } from "lucide-react";
-import { CarMark } from "@/components/ui/car-mark";
+import { SteeringWheel } from "@/components/ui/steering-wheel";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui-v2/avatar";
 import { Button } from "@/components/ui-v2/button";
 import { useCustomerRentals, type CustomerRental } from "@/hooks/use-customer-rentals";
@@ -200,7 +200,7 @@ export function CustomerContext({ channel }: { channel: ChatChannel }) {
             >
               <div className="flex items-start justify-between gap-2">
                 <span className="inline-flex items-center gap-1.5 text-[13px] font-medium">
-                  <CarMark className="h-3.5 w-3.5 text-muted-foreground" />
+                  <SteeringWheel className="h-3.5 w-3.5 text-muted-foreground" />
                   {current.vehicle?.make} {current.vehicle?.model}
                 </span>
                 <span
