@@ -873,8 +873,16 @@ function LoginV2Content() {
                       type="button"
                       variant="outline"
                       /* gap-3: the size variant's own gap-1.5 is tight once the
-                         mark sits beside text-base on an h-12 row. */
-                      className="h-12 w-full gap-3 rounded-2xl text-base"
+                         mark sits beside text-base on an h-12 row.
+
+                         The outline variant is bg-background on a card that is
+                         also near-white, so the button was a hairline border
+                         around nothing and read as disabled next to the solid
+                         Sign In above it. A 5% primary wash and a 20% primary
+                         border give it a surface of its own. Deliberately a
+                         tint and not a fill: password is the primary action on
+                         this screen and the hierarchy should still say so. */
+                      className="h-12 w-full gap-3 rounded-2xl border-primary/20 bg-primary/[0.06] text-base shadow-sm hover:border-primary/30 hover:bg-primary/[0.12] dark:bg-primary/10 dark:hover:bg-primary/20"
                       disabled={google.busy || isSubmitting}
                       onClick={() => void google.start()}
                     >
