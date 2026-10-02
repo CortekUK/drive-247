@@ -81,6 +81,7 @@ import { CustomerReviewSummaryCard } from "@/components/reviews/customer-review-
 import { useRentalAgreements } from "@/hooks/use-rental-agreements";
 import { useRentalSettings } from "@/hooks/use-rental-settings";
 import { AgreementTimeline } from "@/components/rentals/AgreementTimeline";
+import { AgreementVehicleDrift } from "@/components/rentals/agreement-vehicle-drift";
 import { PaygSection } from "@/components/rentals/payg-section";
 import { PaygSchedulePreview } from "@/components/rentals/payg-schedule-preview";
 import { PaygUpfrontCollectPopover, type PaygUpfrontLineItem } from "@/components/rentals/payg-upfront-collect-popover";
@@ -6029,6 +6030,15 @@ const RentalDetail = () => {
           endDate={rental.end_date}
         />
       )}
+
+      {/* A car swapped AFTER the agreement went out. The document is correct and
+          cannot change; this is the only thing on the v1 screen that says so. */}
+      <AgreementVehicleDrift
+        rentalId={id}
+        tenantId={tenant?.id}
+        agreements={rentalAgreements}
+        vehicle={rental.vehicles}
+      />
 
       {/* Rental Agreements Timeline */}
       <AgreementTimeline
