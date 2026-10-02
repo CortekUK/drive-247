@@ -25,6 +25,7 @@ import { Loader2, MailCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 
 /** Mirrors OTP_RESEND_COOLDOWN_MS in supabase/functions/_shared/signup-otp.ts. */
 const RESEND_COOLDOWN_SECONDS = 60;
@@ -53,6 +54,8 @@ export function VerifyStep({
   const [code, setCode] = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
   const [cooldown, setCooldown] = React.useState(RESEND_COOLDOWN_SECONDS);
+  /* Only so the active box can show a caret — the real one is invisible. */
+  const [focused, setFocused] = React.useState(true);
   const inputRef = React.useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
@@ -119,23 +122,70 @@ export function VerifyStep({
 
       <div className="space-y-2">
         <Label htmlFor="signup-otp">Verification code</Label>
-        <Input
-          ref={inputRef}
-          id="signup-otp"
-          /* `inputMode` and `autoComplete` together are what make a phone offer
-             the code from the notification instead of making them retype it. */
-          inputMode="numeric"
-          autoComplete="one-time-code"
-          pattern="[0-9]*"
-          maxLength={6}
-          placeholder="000000"
-          value={code}
-          disabled={busy || submitting}
-          onChange={(e) => onChange(e.target.value)}
-          className="text-center text-xl tracking-[0.5em]"
-          aria-describedby={error ? "signup-otp-error" : undefined}
-          aria-invalid={!!error}
-        />
+
+        {/*
+          SIX BOXES, ONE INPUT.
+
+          The boxes are drawn; the thing being typed into is a single field laid
+          transparently over them. Six real inputs is the usual way to build
+          this and it is the reason so many of them misbehave: each one needs
+          focus moved on entry and on backspace, a pasted code has to be split
+          across them by hand, and the browser no longer sees one field to
+          autofill — which costs exactly the `one-time-code` autofill that lets
+          a phone offer the code from the notification.
+
+          With one field all of that is free: paste, backspace, autofill and
+          selection are the browser's own, and the boxes are just a view of
+          `code`.
+        */}
+        <div className="relative">
+          <Input
+            ref={inputRef}
+            id="signup-otp"
+            /* `inputMode` and `autoComplete` together are what make a phone
+               offer the code from the notification instead of making them
+               retype it. */
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            pattern="[0-9]*"
+            maxLength={6}
+            value={code}
+            disabled={busy || submitting}
+            onChange={(e) => onChange(e.target.value)}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            aria-describedby={error ? "signup-otp-error" : undefined}
+            aria-invalid={!!error}
+            /* Invisible, but still the real input: it keeps its own caret and
+               selection, so it must sit exactly over the boxes and stay the
+               full height of them. `text-transparent` rather than `hidden`,
+               which would take it out of the tab order and off the a11y tree. */
+            className="absolute inset-0 h-14 w-full cursor-pointer bg-transparent text-transparent caret-transparent opacity-0"
+          />
+          <div className="pointer-events-none flex items-center justify-between gap-2" aria-hidden>
+            {Array.from({ length: 6 }, (_, i) => {
+              const char = code[i] ?? "";
+              // The caret sits on the next empty box, and stays on the last one
+              // once all six are in.
+              const active = focused && !busy && !submitting && (i === code.length || (code.length === 6 && i === 5));
+              return (
+                <div
+                  key={i}
+                  className={cn(
+                    "flex h-14 flex-1 items-center justify-center rounded-lg border text-xl font-medium tabular-nums transition-colors",
+                    "border-input bg-background text-foreground",
+                    error && "border-destructive",
+                    active && !error && "border-primary ring-2 ring-primary/30",
+                    (busy || submitting) && "opacity-60",
+                  )}
+                >
+                  {char || (active ? <span className="h-6 w-px animate-pulse bg-foreground" /> : null)}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
         {error ? (
           <p id="signup-otp-error" role="alert" className="text-sm text-destructive">
             {error}
