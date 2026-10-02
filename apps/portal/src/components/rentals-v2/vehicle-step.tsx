@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Search, Check, Gauge, Banknote, ShieldCheck } from "lucide-react";
 import { Wheel } from "@/components/ui/wheel";
+import { CarMark } from "@/components/ui/car-mark";
 import { motion, useReducedMotion } from "motion/react";
 import { motionRise } from "@/lib/motion";
 import { cn } from "@/lib/utils";
@@ -142,7 +143,7 @@ function VehicleInfo({ vehicle, currency }: { vehicle: VehicleLite; currency: st
     <div className="p-6">
       {/* Image placeholder */}
       <div className="relative h-40 rounded-xl bg-gradient-to-br from-primary/10 to-muted flex items-center justify-center">
-        <Wheel className="h-16 w-16 text-primary/40 dark:text-[hsl(var(--v2-link,var(--primary))/0.4)]" />
+        <CarMark className="h-16 w-auto text-primary/40 dark:text-[hsl(var(--v2-link,var(--primary))/0.4)]" />
         {vehicle.reg && (
           <span className="absolute left-3 top-3 rounded-md bg-card/90 px-2 py-1 text-xs font-semibold text-foreground shadow-sm">
             {vehicle.reg}
