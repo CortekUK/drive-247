@@ -20,8 +20,6 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/components/trax/support/PaymentEvidence', () => ({ PaymentEvidence: () => null }), { virtual: true } as never);
-
 const { ChatMessage } = await import('@/components/trax/support/ChatMessage');
 const { QueryClient, QueryClientProvider } = await import('@tanstack/react-query');
 const { createElement } = await import('react');
