@@ -63,9 +63,9 @@ import {
   ShieldCheck,
   FileSignature,
   Mail,
-  Car,
   Bell,
   Pencil,
+  Disc3,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -372,7 +372,7 @@ function useRentalActivity(rental: Record<string, any>, tenantId: string | null 
           id: `sw-${s.id}`,
           at: s.created_at,
           kind: "change",
-          icon: Car,
+          icon: Disc3,
           text: `Vehicle swapped${s.reason ? ` — ${s.reason}` : ""}`,
           by: s.swapped_by ?? null,
         });

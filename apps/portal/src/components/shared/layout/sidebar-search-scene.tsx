@@ -15,7 +15,6 @@ import {
   ArrowLeft,
   X,
   Users,
-  Car,
   FileText,
   AlertCircle,
   CreditCard,
@@ -23,6 +22,7 @@ import {
   ShieldCheck,
   Receipt,
   FileSignature,
+  Disc3,
 } from "lucide-react";
 import { useTenant } from "@/contexts/TenantContext";
 import { searchService, type SearchResults } from "@/lib/search-service";
@@ -121,7 +121,7 @@ const POPULAR = [
 const GROUPS: { key: keyof SearchResults; label: string; icon: any }[] = [
   { key: "customers", label: "Customers", icon: Users },
   { key: "rentals", label: "Rentals", icon: FileText },
-  { key: "vehicles", label: "Vehicles", icon: Car },
+  { key: "vehicles", label: "Vehicles", icon: Disc3 },
   { key: "invoices", label: "Invoices", icon: Receipt },
   { key: "payments", label: "Payments", icon: CreditCard },
   { key: "fines", label: "Fines", icon: AlertCircle },

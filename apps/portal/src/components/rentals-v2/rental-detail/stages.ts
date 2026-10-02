@@ -16,13 +16,13 @@
 import type { ComponentType } from "react";
 import {
   User,
-  Car,
   CalendarDays,
   Package,
   FileSignature,
   ShieldCheck,
   CreditCard,
   KeyRound,
+  Disc3,
 } from "lucide-react";
 import type { RentalDetailV2 } from "./use-rental-detail-v2";
 
@@ -77,7 +77,7 @@ export type StageProps = {
  */
 export const STAGES: readonly Stage[] = [
   { id: "customer", label: "Customer", icon: User, prompt: "Who is renting?" },
-  { id: "vehicle", label: "Vehicle", icon: Car, prompt: "Which car goes out?" },
+  { id: "vehicle", label: "Vehicle", icon: Disc3, prompt: "Which car goes out?" },
   { id: "when", label: "When & where", icon: CalendarDays, prompt: "When and where?" },
   { id: "extras", label: "Extras", icon: Package, prompt: "Anything on top?" },
   { id: "agreement", label: "Agreement", icon: FileSignature, prompt: "Send the contract?" },

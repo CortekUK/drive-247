@@ -1,7 +1,7 @@
 "use client";
 
 import { type ReactNode } from "react";
-import { Activity, CalendarDays, Car, HeartPulse, TrendingUp, Users } from "lucide-react";
+import { Activity, CalendarDays, HeartPulse, TrendingUp, Users, Disc3 } from "lucide-react";
 import { FilterChip, FilterSection, FilterShell } from "@/components/shared/filter-primitives";
 
 /**
@@ -160,7 +160,7 @@ export function VehiclesFilterPanel({
       </FilterSection>
 
       <FilterSection
-        icon={<Car className="size-3.5 text-blue-600 dark:text-blue-400" />}
+        icon={<Disc3 className="size-3.5 text-blue-600 dark:text-blue-400" />}
         tint="bg-blue-500/10"
         title="Make"
         className="lg:col-span-2"

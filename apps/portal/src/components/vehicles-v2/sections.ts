@@ -20,13 +20,13 @@ import type { ComponentType } from "react";
 import {
   Banknote,
   CalendarDays,
-  Car,
   Globe,
   KeyRound,
   MapPin,
   Package,
   ShieldCheck,
   TrendingUp,
+  Disc3,
 } from "lucide-react";
 
 export type SectionId =
@@ -63,7 +63,7 @@ export type VehicleSectionGroup = {
 export const SECTION_GROUPS: readonly VehicleSectionGroup[] = [
   {
     label: "The car",
-    items: [{ id: "vehicle", label: "Vehicle", icon: Car }],
+    items: [{ id: "vehicle", label: "Vehicle", icon: Disc3 }],
   },
   {
     label: "Pricing",

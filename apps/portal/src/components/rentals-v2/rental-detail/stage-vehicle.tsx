@@ -48,7 +48,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { Car, ExternalLink, Gauge, Repeat, Info } from "lucide-react";
+import { ExternalLink, Gauge, Repeat, Info, Disc3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
@@ -322,7 +322,7 @@ export function StageVehicle({ detail, refetch }: StageProps) {
         <div className="flex items-start gap-4 p-6">
           {!facts?.photo_url && (
             <span className="flex size-12 shrink-0 items-center justify-center rounded-3xl bg-primary-light text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
-              <Car className="size-5" />
+              <Disc3 className="size-5" />
             </span>
           )}
           <div className="min-w-0 flex-1">

@@ -19,7 +19,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { LucideIcon } from "lucide-react";
-import { Car, DollarSign, FileText, KeyRound, Loader2, RotateCcw, Settings2, Shield } from "lucide-react";
+import { DollarSign, FileText, KeyRound, Loader2, RotateCcw, Settings2, Shield, Disc3 } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import { Input } from "@/components/ui-v2/input";
 import { Switch } from "@/components/ui-v2/switch";
@@ -371,7 +371,7 @@ export function EmailNotificationSettingsV2({
 /* -------------------------------------------------------------------------- */
 
 const CATEGORY_ICONS: Record<string, LucideIcon> = {
-  Vehicle: Car,
+  Vehicle: Disc3,
   Insurance: Shield,
   Financial: DollarSign,
   Document: FileText,
