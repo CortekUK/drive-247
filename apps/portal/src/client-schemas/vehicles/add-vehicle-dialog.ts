@@ -72,13 +72,27 @@ export const addVehicleDialogSchema = z.object({
     });
   }
 
-  // Vehicle year cannot be greater than acquisition date year
+  /*
+   * A model year is allowed to run AHEAD of the year the car was bought.
+   *
+   * Manufacturers put the next model year on sale from around the middle of the
+   * preceding year, so a 2025 car acquired in 2024 is the ordinary case and not
+   * a typo. This used to reject it outright, and an operator could not add a
+   * 2025 Civic they had bought in 2024 — a real vehicle, refused by the form.
+   *
+   * One year of lead is the real-world limit: a 2026 model cannot be bought in
+   * 2024. So that is what this allows, and no more — the check still catches
+   * the typo it was written for (1025, 2205, a year transposed by a digit).
+   *
+   * The field rule on `year` above already permits `currentYear + 1`. Before
+   * this the two disagreed, and the cross-field rule silently won.
+   */
   if (data.year && data.acquisition_date) {
     const acquisitionYear = data.acquisition_date.getFullYear();
-    if (data.year > acquisitionYear) {
+    if (data.year > acquisitionYear + 1) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: `Vehicle year (${data.year}) cannot be greater than acquisition year (${acquisitionYear})`,
+        message: `Vehicle year (${data.year}) is more than one year ahead of the acquisition year (${acquisitionYear})`,
         path: ["year"],
       });
     }
