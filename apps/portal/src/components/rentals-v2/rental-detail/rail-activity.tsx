@@ -78,7 +78,7 @@ import { MIN_REAL, previewActivity, type PreviewActivity } from "./rail-preview"
 
 const PREVIEW_ICON: Record<PreviewActivity["icon"], React.ComponentType<{ className?: string }>> = {
   plus: Plus, check: Check, card: CreditCard, lock: Lock, key: KeyRound,
-  shield: ShieldCheck, sign: FileSignature, mail: Mail, car: Car, bell: Bell,
+  shield: ShieldCheck, sign: FileSignature, mail: Mail, car: SteeringWheel, bell: Bell,
 };
 
 /* ══════════════════════════════════════════════════════════════════════════
