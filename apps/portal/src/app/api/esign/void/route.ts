@@ -111,12 +111,28 @@ export async function POST(request: NextRequest) {
 
         const revokeMessage = (typeof reason === 'string' && reason.trim()) || 'Voided by tenant admin';
 
+        /*
+         * THE FIELD IS `message`. It was `revokeMessage`, and BoldSign answered
+         * every single call with
+         *
+         *   400 {"errors":{"Message":["The Message field is required"]}}
+         *
+         * so voiding has never once worked. The operator pressed Void, saw the
+         * failure, and tried again by sending a replacement — which runs the
+         * revoke loop in ../route.ts, which had the same bug, and which marks the
+         * row 'voided' whether or not BoldSign agreed. The result: documents our
+         * database calls voided are still InProgress at BoldSign and can still be
+         * signed. Confirmed against two of Moore Luxe's on 1 Oct 2026.
+         *
+         * That is how a renter ends up able to sign a superseded agreement — the
+         * wrong dates, the wrong amount — on a document the portal shows as dead.
+         */
         const revokeRes = await fetch(
             `${BOLDSIGN_BASE_URL}/v1/document/revoke?documentId=${encodeURIComponent(documentId)}`,
             {
                 method: 'POST',
                 headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ revokeMessage }),
+                body: JSON.stringify({ message: revokeMessage }),
             }
         );
 

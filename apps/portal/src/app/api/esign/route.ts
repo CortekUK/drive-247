@@ -2004,23 +2004,44 @@ export async function POST(request: NextRequest) {
                     try {
                         const priorMode: 'test' | 'live' = (prior.boldsign_mode as 'test' | 'live') || boldsignMode;
                         const priorApiKey = getBoldSignApiKey(priorMode);
+                        let revoked = false;
                         if (priorApiKey && prior.document_id) {
+                            // The field is `message`. It was `revokeMessage`, which
+                            // BoldSign rejects with "The Message field is required",
+                            // so no prior agreement has ever actually been revoked.
                             const revokeRes = await fetch(
                                 `${BOLDSIGN_BASE_URL}/v1/document/revoke?documentId=${encodeURIComponent(prior.document_id)}`,
                                 {
                                     method: 'POST',
                                     headers: { 'X-API-KEY': priorApiKey, 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ revokeMessage: 'Superseded by a newer agreement' }),
+                                    body: JSON.stringify({ message: 'Superseded by a newer agreement' }),
                                 }
                             );
+                            revoked = revokeRes.ok;
                             if (!revokeRes.ok) {
-                                console.warn(`BoldSign revoke failed for ${prior.document_id}: ${revokeRes.status} ${await revokeRes.text()}`);
+                                console.error(`BoldSign revoke failed for ${prior.document_id}: ${revokeRes.status} ${await revokeRes.text()}`);
                             }
                         }
-                        await supabase
-                            .from('rental_agreements')
-                            .update({ document_status: 'voided' })
-                            .eq('id', prior.id);
+                        /*
+                         * ONLY WRITE 'voided' IF BOLDSIGN AGREED.
+                         *
+                         * This used to run unconditionally, which is how the
+                         * database came to hold 16 Moore Luxe agreements marked
+                         * voided that BoldSign still reports as InProgress. A row
+                         * that says voided while the document is live is worse
+                         * than one that says live: the portal stops showing it,
+                         * nobody chases it, and the renter can still sign it.
+                         *
+                         * Left alone, the row stays truthful — still live — and
+                         * the signing redirect sends the renter to the newest one
+                         * anyway, so the duplicate is inert in practice.
+                         */
+                        if (revoked) {
+                            await supabase
+                                .from('rental_agreements')
+                                .update({ document_status: 'voided' })
+                                .eq('id', prior.id);
+                        }
                     } catch (e) {
                         console.warn('Error revoking prior agreement', prior.id, e);
                     }

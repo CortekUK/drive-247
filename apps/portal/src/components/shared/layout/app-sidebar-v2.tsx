@@ -26,7 +26,6 @@ import {
   Building2,
   MapPin,
   Palette,
-  Car,
   TrendingUp,
   Package,
   CreditCard,
@@ -67,6 +66,7 @@ import {
   Copy,
   Check,
 } from "lucide-react";
+import { CarMark } from "@/components/ui/car-mark";
 // CRITICAL: `ui/sidebar` and `ui-v2/sidebar` each define their OWN React
 // context. The dashboard layout pairs this component with ui-v2's
 // SidebarProvider, so `useSidebar` MUST come from ui-v2 or every render throws
@@ -97,6 +97,7 @@ import { useIsAreaHidden } from "@/lib/lean-context";
 import { usePendingBookingsCount } from "@/hooks/use-pending-bookings";
 import { useAuthStore } from "@/stores/auth-store";
 import { useTenantSubscription } from "@/hooks/use-tenant-subscription";
+import { useSoftSubscriptionBlock } from "@/hooks/use-soft-subscription-block";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useCMSPages } from "@/hooks/use-cms-pages";
 import { useCmsOutline } from "@/stores/cms-outline-store";
@@ -173,7 +174,7 @@ const CMS_PAGE_ORDER = [
 const CMS_PAGE_ICONS: Record<string, any> = {
   home: Home,
   about: Info,
-  fleet: Car,
+  fleet: CarMark,
   reviews: Star,
   promotions: Megaphone,
   contact: Mail,
@@ -358,7 +359,13 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   // moment the window closed the badge fell back to a green "Live" chip sitting
   // behind a modal telling the operator their access had been canceled — the two
   // surfaces flatly contradicting each other at the worst possible moment.
-  const paymentDue = isInGracePeriod || isGraceExpired;
+  // SOFT BLOCK also lights this chip. That tenant sits at `canceled`, not
+  // `past_due`, so neither grace flag is ever true for them — see the note in
+  // payment-due-bar.tsx. Restored after the Northwind v2 rewrite of this file
+  // dropped it; v1's sidebar kept it, and the two must agree or the same tenant
+  // is told different things by the two chromes.
+  const { active: softBlock } = useSoftSubscriptionBlock();
+  const paymentDue = isInGracePeriod || isGraceExpired || softBlock;
   const paymentDueCritical = graceSeverity === "critical" || isGraceExpired;
   // The client's wording, verbatim.
   const paymentDueLabel = "Your payment is due.";

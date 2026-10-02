@@ -58,13 +58,124 @@ export function SearchField({ value, onChange, placeholder }: { value: string; o
   );
 }
 
+/**
+ * The status filter.
+ *
+ * A native `<select>` before this. Its OPTION LIST is drawn by the operating
+ * system, not by us: the panel, the font and that flat blue highlight row come
+ * from Windows, and no class on the element reaches inside them. So the control
+ * sat in the middle of a themed sidebar looking like nothing else on the page,
+ * and could not be made to match however it was styled.
+ *
+ * This is a listbox we draw ourselves, built from the same tokens the rest of
+ * this file uses — `border-input`, `bg-background`, `ring-ring`, `text-primary`
+ * — which resolve to whichever app mounts it. Nothing here names a colour, so
+ * the portal and the admin each get their own theme without this file knowing
+ * either exists.
+ *
+ * Keyboard behaviour is the part a native select gives away for free and a
+ * hand-rolled one usually loses: arrows move, Home/End jump, Enter and Space
+ * select, Escape closes and returns focus to the trigger.
+ */
 export function StatusFilter({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const options = React.useMemo(
+    () => [{ value: '', label: 'All statuses' }, ...STATUS_ORDER.map((s) => ({ value: s, label: STATUS_LABEL[s] }))],
+    [],
+  );
+  const [open, setOpen] = React.useState(false);
+  const [active, setActive] = React.useState(0);
+  const rootRef = React.useRef<HTMLDivElement>(null);
+  const triggerRef = React.useRef<HTMLButtonElement>(null);
+
+  const selectedIndex = Math.max(0, options.findIndex((o) => o.value === value));
+  const selected = options[selectedIndex];
+
+  // Clicking anywhere else closes it — the one behaviour people expect from a
+  // dropdown and the one a hand-rolled listbox most often forgets.
+  React.useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [open]);
+
+  const openAt = (index: number) => { setActive(index); setOpen(true); };
+
+  const commit = (index: number) => {
+    onChange(options[index]!.value);
+    setOpen(false);
+    triggerRef.current?.focus();
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (!open) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        openAt(selectedIndex);
+      }
+      return;
+    }
+    if (e.key === 'Escape') { e.preventDefault(); setOpen(false); triggerRef.current?.focus(); return; }
+    if (e.key === 'ArrowDown') { e.preventDefault(); setActive((i) => Math.min(i + 1, options.length - 1)); return; }
+    if (e.key === 'ArrowUp') { e.preventDefault(); setActive((i) => Math.max(i - 1, 0)); return; }
+    if (e.key === 'Home') { e.preventDefault(); setActive(0); return; }
+    if (e.key === 'End') { e.preventDefault(); setActive(options.length - 1); return; }
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); commit(active); }
+  };
+
   return (
-    <select aria-label="Filter ticket status" value={value} onChange={(e) => onChange(e.target.value)}
-      className="h-9 shrink-0 rounded-lg border border-input bg-background px-2 text-[12px] outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20">
-      <option value="">All statuses</option>
-      {STATUS_ORDER.map((status) => <option key={status} value={status}>{STATUS_LABEL[status]}</option>)}
-    </select>
+    <div ref={rootRef} className="relative shrink-0" onKeyDown={onKeyDown}>
+      <button
+        ref={triggerRef}
+        type="button"
+        aria-label="Filter ticket status"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => (open ? setOpen(false) : openAt(selectedIndex))}
+        className="flex h-9 items-center gap-1.5 rounded-lg border border-input bg-background px-2.5 text-[12px] outline-none transition-colors hover:bg-muted/60 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20"
+      >
+        <span className="truncate">{selected?.label}</span>
+        <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+          className={`size-3.5 shrink-0 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`}>
+          <path d="m6 9 6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+
+      {open && (
+        <ul
+          role="listbox"
+          aria-label="Ticket status"
+          className="absolute right-0 z-50 mt-1 min-w-[10rem] overflow-hidden rounded-lg border border-input bg-popover p-1 shadow-lg"
+        >
+          {options.map((option, index) => {
+            const isSelected = index === selectedIndex;
+            return (
+              <li key={option.value || 'all'}>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={isSelected}
+                  onMouseEnter={() => setActive(index)}
+                  onClick={() => commit(index)}
+                  className={`flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-[12px] transition-colors ${
+                    index === active ? 'bg-primary/10 text-primary' : 'text-foreground'
+                  }`}
+                >
+                  <span className="truncate">{option.label}</span>
+                  {isSelected && (
+                    <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="size-3.5 shrink-0">
+                      <path d="m5 13 4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  )}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
   );
 }
 

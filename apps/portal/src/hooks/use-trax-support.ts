@@ -70,7 +70,20 @@ export function useTraxSupport(enabled = true, surfaceVisible = true): UseChatRe
     const {data:{session}}=await supabase.auth.getSession();
     if(signal.aborted)throw new DOMException('Cancelled','AbortError');
     if(!session?.access_token || session.user.id!==userId)throw new ChatFailure('Sign in again to use TRAX.','unauthorized');
-    const result=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${session.access_token}`},body:JSON.stringify({...body,tenantId:tenant?.id}),signal,cache:'no-store'});
+    /* A fetch that never reaches the server rejects with a TypeError whose
+       message is the browser's own — "Failed to fetch" in Chrome, "Load failed"
+       in Safari, "NetworkError when attempting to fetch resource" in Firefox.
+       That string was being shown to the operator verbatim, which reads as a
+       broken portal and says nothing about what to do. An abort is NOT one of
+       these: it has to pass through untouched, or a cancelled request would be
+       reported as a failure. */
+    let result:Response;
+    try{
+      result=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${session.access_token}`},body:JSON.stringify({...body,tenantId:tenant?.id}),signal,cache:'no-store'});
+    }catch(networkError){
+      if(networkError instanceof DOMException&&networkError.name==='AbortError')throw networkError;
+      throw new ChatFailure('TRAX could not reach the server. Check your connection and try again.','network');
+    }
     const data=await result.json();
     if(!result.ok)throw new ChatFailure(data.error||'TRAX could not verify access.',data.code||'service_unavailable');
     // Do not silently consume an old deployed RAG endpoint with live-looking data.
@@ -78,7 +91,7 @@ export function useTraxSupport(enabled = true, surfaceVisible = true): UseChatRe
     const operational=data.provenance?.kind==='operational_support'&&data.provenance?.protocolVersion===2&&data.provenance?.engine==='model'&&typeof data.provenance?.liveDataChecked==='boolean';
     const allowedTables=operational?[...OPERATIONAL_SOURCE_TABLES,...(data.capabilities?.finance===true?FINANCE_SOURCE_TABLES:[])]:['application_knowledge'];
     if((!guidance&&!operational)||typeof data.contextScope!=='string'
-      ||!Array.isArray(data.sources)||data.sources.some((s:{table:string})=>!allowedTables.includes(s.table))||data.chart||data.rentalRequests||data.action){
+      ||!Array.isArray(data.sources)||data.sources.some((s:{table:string}|null)=>!s||!allowedTables.includes(s.table))||data.chart||data.rentalRequests||data.action){
       throw new ChatFailure('The application-guidance service is not available in this environment.','unsupported_service');
     }
     if(operational&&(!Array.isArray(data.evidence)||data.evidence.length>7||data.evidence.some((e:any)=>!['verified','partial','restricted','missing','error','needs_input'].includes(e.status)||typeof e.observedAt!=='string'||!Array.isArray(e.findings)||!Array.isArray(e.checks)||!Array.isArray(e.limitations))))throw new ChatFailure('The diagnostic response could not be verified.','unsupported_service');
@@ -195,7 +208,11 @@ export function useTraxSupport(enabled = true, surfaceVisible = true): UseChatRe
            and its ticket. `data.ticket` is the fallback for a conversation stored
            before transcripts existed — it re-attaches the link to the last answer. */
         messages:type==='new_issue'?[]:data.resumedMessages?(data.resumedMessages.length?data.resumedMessages.map((e,index,all)=>({id:crypto.randomUUID(),role:e.role,content:e.content,
-          sources:e.sources,provenance:e.provenance,evidence:e.evidence,navigation:e.navigation,canRecheck:e.canRecheck,
+          /* Older stored turns can carry a null inside `sources` — a server-side
+             map lookup once missed and JSON wrote the gap out as null. The writer
+             is fixed, but those rows are already saved, and one null here used to
+             replace the entire portal with the error page. */
+          sources:Array.isArray(e.sources)?e.sources.filter(Boolean):e.sources,provenance:e.provenance,evidence:e.evidence,navigation:e.navigation,canRecheck:e.canRecheck,
           ticket:e.ticket??(data.ticket&&e.role==='assistant'&&index===all.map(m=>m.role).lastIndexOf('assistant')?{id:data.ticket.id,reference:data.ticket.reference}:undefined),timestamp:new Date(e.at)}))
           :[{id:crypto.randomUUID(),role:'assistant' as const,content:'This earlier conversation is open again. Its previous messages are not stored for display; ask your next question to continue.',timestamp:new Date()}]):old.messages}));
       return data;

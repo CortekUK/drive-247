@@ -20,7 +20,8 @@
  */
 
 import { format } from "date-fns";
-import { Car, Clock, Copy, Edit, FileText, History, MoreHorizontal, Trash2, UserX } from "lucide-react";
+import { Clock, Copy, Edit, FileText, History, MoreHorizontal, Trash2, UserX } from "lucide-react";
+import { SteeringWheel } from "@/components/ui/steering-wheel";
 import { Button } from "@/components/ui-v2/button";
 import {
   DropdownMenu,
@@ -291,7 +292,7 @@ export function PlatesTableV2<T extends PlateRowV2>({
                           <DropdownMenuSeparator />
                           {!plate.vehicle_id ? (
                             <DropdownMenuItem onClick={() => onAssign(plate)}>
-                              <Car className="h-4 w-4" />
+                              <SteeringWheel className="h-4 w-4" />
                               Assign
                             </DropdownMenuItem>
                           ) : (

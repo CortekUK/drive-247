@@ -32,6 +32,7 @@ import {
 } from "./onboarding-types";
 import { AccountStep, type ResetShellState } from "./steps/account-step";
 import { PaymentStep } from "./steps/payment-step";
+import { VerifyStep } from "./steps/verify-step";
 
 /**
  * One form id per step. The footer holds the single primary action for both
@@ -58,6 +59,13 @@ const STEP_META = [
   { key: "account", label: "Account", Icon: UserRound },
   { key: "payment", label: "Payment", Icon: CreditCard },
 ] as const;
+
+/*
+ * `verify` is deliberately NOT in STEP_META. The bar counts the stages the
+ * operator is buying through; a code screen is a gate between two of them, not
+ * a third thing to get through, and adding it would make the bar jump backwards
+ * for every signup that does not need one.
+ */
 
 type DialogStep = (typeof STEP_META)[number]["key"];
 
@@ -104,6 +112,10 @@ export function OnboardingDialog() {
     applyPromoCode,
     submitTenantDetails,
     startGoogleSignup,
+    verifyEmailCode,
+    resendEmailCode,
+    verifyError,
+    clearVerifyError,
     updateBusiness,
     checkSlug,
     setError,
@@ -144,7 +156,13 @@ export function OnboardingDialog() {
   }, [closeConfirmOpen]);
 
   const step = state.step;
-  const dialogStep = isDialogStep(step) ? step : null;
+  /*
+   * `verify` borrows the account stage's slot. It is a gate between two stages
+   * rather than a third one, so it must resolve to a key STEP_META knows —
+   * otherwise `stepIndex` is -1 and the progress bar collapses to nothing on
+   * the one screen that most needs to look deliberate.
+   */
+  const dialogStep = step === "verify" ? "account" : isDialogStep(step) ? step : null;
   const stepIndex = dialogStep ? STEP_META.findIndex((s) => s.key === dialogStep) : -1;
 
   // The provisioning and done steps are owned by the full-screen boot overlay,
@@ -393,7 +411,7 @@ export function OnboardingDialog() {
                   key={dialogStep}
                   className="animate-in fade-in-0 slide-in-from-bottom-3 duration-200 ease-out motion-reduce:animate-none"
                 >
-                  {dialogStep === "account" ? (
+                  {dialogStep === "account" && step !== "verify" ? (
                     <AccountStep
                       plan={plan}
                       mode={accountMode}
@@ -416,6 +434,21 @@ export function OnboardingDialog() {
                       onSignInInstead={signInInstead}
                       onResetStateChange={setAccountReset}
                       onClearError={clearStepError}
+                    />
+                  ) : null}
+
+                  {/* The emailed code. Rendered in the account stage's slot —
+                      see the note on STEP_META for why it is not a stage of its
+                      own. */}
+                  {step === "verify" ? (
+                    <VerifyStep
+                      email={state.account?.email ?? ""}
+                      busy={state.busy}
+                      onVerify={(code) => verifyEmailCode(code)}
+                      onResend={() => resendEmailCode()}
+                      onUseDifferentEmail={useDifferentEmail}
+                      error={verifyError}
+                      onClearError={clearVerifyError}
                     />
                   ) : null}
 

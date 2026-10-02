@@ -1,0 +1,69 @@
+-- "Dashboard" instead of "Book a strategy call", for operators who already pay.
+--
+-- The marketing header needs one answer: does the person reading this page
+-- already have a working portal? That is two facts in different tables — which
+-- tenant they staff, and whether that tenant's subscription is live — and the
+-- browser is the wrong place to assemble them:
+--
+--   * app_users and tenant_subscriptions are staff and billing tables. Opening
+--     them to the marketing site's anon/authenticated role to answer one
+--     boolean would expose every colleague's email and every card detail on the
+--     subscription row.
+--   * the rule for "live" is not obvious (trialing counts, past_due counts
+--     while the grace window runs), and a copy of it in the browser would drift
+--     from the one the portal enforces.
+--
+-- So this function answers exactly that one question, for the CALLER ONLY, and
+-- returns nothing else. It is the same shape as landing_pricing_enabled(): a
+-- security-definer window onto one fact, rather than a grant on the tables.
+--
+-- NOTHING IS LEAKED BY ASKING. `auth.uid()` is null for an anonymous caller, so
+-- the join finds no row and the function returns an empty set. A signed-in
+-- renter (customer_users, no app_users row) gets the same empty answer. There
+-- is no input, so nobody can ask about anybody else.
+--
+-- past_due IS included, deliberately. A tenant inside the payment grace window
+-- still has their portal — see DEFAULT_GRACE_DAYS in subscription-gate.ts — and
+-- a header that hid the link would be telling them they had lost something they
+-- had not.
+
+CREATE OR REPLACE FUNCTION public.my_portal_access()
+RETURNS TABLE (portal_url text, company_name text, is_active boolean)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  WITH me AS (
+    SELECT au.tenant_id
+      FROM public.app_users au
+     WHERE au.auth_user_id = auth.uid()
+       AND au.is_active
+       AND au.tenant_id IS NOT NULL
+     LIMIT 1
+  )
+  SELECT
+    'https://' || COALESCE(NULLIF(t.custom_portal_domain, ''), t.slug || '.portal.drive-247.com'),
+    t.company_name,
+    COALESCE(s.status IN ('active', 'trialing', 'past_due'), false)
+  FROM me
+  JOIN public.tenants t ON t.id = me.tenant_id
+  -- The newest subscription row is the current one; older rows are the
+  -- cancelled history a re-subscribe leaves behind.
+  LEFT JOIN LATERAL (
+    SELECT ts.status
+      FROM public.tenant_subscriptions ts
+     WHERE ts.tenant_id = t.id
+     ORDER BY ts.created_at DESC
+     LIMIT 1
+  ) s ON true
+  WHERE t.status = 'active';
+$$;
+
+COMMENT ON FUNCTION public.my_portal_access() IS
+  'The one fact the marketing header may read about the signed-in caller: their own portal URL and whether their subscription is live. Takes no input and answers only for auth.uid(), so it cannot be used to ask about anyone else. Empty set for an anonymous caller, a renter, or a tenant that is not active.';
+
+REVOKE ALL ON FUNCTION public.my_portal_access() FROM public;
+GRANT EXECUTE ON FUNCTION public.my_portal_access() TO authenticated;
+
+NOTIFY pgrst, 'reload schema';

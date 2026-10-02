@@ -63,10 +63,10 @@ import {
   ShieldCheck,
   FileSignature,
   Mail,
-  Car,
   Bell,
   Pencil,
 } from "lucide-react";
+import { SteeringWheel } from "@/components/ui/steering-wheel";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
@@ -379,7 +379,7 @@ function useRentalActivity(rental: Record<string, any>, tenantId: string | null 
           id: `sw-${s.id}`,
           at: s.created_at,
           kind: "change",
-          icon: Car,
+          icon: SteeringWheel,
           text: `Vehicle swapped${s.reason ? ` — ${s.reason}` : ""}`,
           by: s.swapped_by ?? null,
         });

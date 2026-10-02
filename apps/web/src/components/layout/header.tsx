@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
+import { HeaderCta } from "./header-cta";
 
 export function Header() {
   const [scrolled, setScrolled] = useState(false);
@@ -46,13 +46,9 @@ export function Header() {
 
         <div className="flex items-center gap-3">
           <ThemeToggle />
-          <Button
-            asChild
-            size="sm"
-            className="bg-indigo-600 px-5 text-sm font-normal text-white shadow-lg shadow-indigo-600/25 transition-all hover:bg-indigo-700 hover:shadow-xl hover:shadow-indigo-600/30 dark:bg-indigo-500 dark:hover:bg-indigo-600"
-          >
-            <a href="/strategy-call">Book a strategy call</a>
-          </Button>
+          {/* "Book a strategy call", or "Dashboard" once the server confirms
+              this caller already has a live portal. */}
+          <HeaderCta />
         </div>
       </div>
     </header>

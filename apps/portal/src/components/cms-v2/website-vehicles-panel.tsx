@@ -18,7 +18,8 @@
  * alternative is that nobody dares touch it.
  */
 
-import { Car, Eye, EyeOff, Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { SteeringWheel } from "@/components/ui/steering-wheel";
 import { Switch } from "@/components/ui-v2/switch";
 import { useWebsiteVehicles } from "@/hooks/use-website-vehicles";
 import { toast } from "sonner";
@@ -58,7 +59,7 @@ export function WebsiteVehiclesPanel({ canEdit }: { canEdit: boolean }) {
   if (vehicles.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-border px-6 py-10 text-center">
-        <Car className="mx-auto mb-3 size-8 text-muted-foreground" />
+        <SteeringWheel className="mx-auto mb-3 size-8 text-muted-foreground" />
         <p className="text-[13px] font-medium">No vehicles yet</p>
         <p className="mx-auto mt-1 max-w-sm text-[12px] leading-relaxed text-muted-foreground">
           Vehicles you add to your fleet appear here, and you can choose which of them show on
@@ -92,7 +93,7 @@ export function WebsiteVehiclesPanel({ canEdit }: { canEdit: boolean }) {
                 />
               ) : (
                 <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted">
-                  <Car className="size-4 text-muted-foreground" />
+                  <SteeringWheel className="size-4 text-muted-foreground" />
                 </div>
               )}
 

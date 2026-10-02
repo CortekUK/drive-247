@@ -33,6 +33,7 @@ import {
   lookupPromoCode,
   signupBegin,
   signupBeginOauth,
+  signupVerifyOtp,
   signupPaymentIntent,
   signupProvision,
   signupResume,
@@ -51,6 +52,7 @@ import {
   readPendingOauth,
   resolveTenantDraft,
   saveTenantDraft,
+  writeLocalTenantDraft,
   writePendingOauth,
 } from "./tenant-draft";
 import { OnboardingDialog } from "./onboarding-dialog";
@@ -122,7 +124,14 @@ const STALL_MESSAGE = "This is taking longer than it should.";
  */
 const ALLOWED_TRANSITIONS: Record<SignupStep, readonly SignupStep[]> = {
   plan: ["plan", "account", "payment", "provisioning", "done"],
-  account: ["account", "payment", "provisioning", "plan"],
+  account: ["account", "verify", "payment", "provisioning", "plan"],
+  /*
+   * `verify -> account` is the ONLY forward move, and it is deliberate: a
+   * confirmed address goes to the business fields, not to the card. Payment is
+   * reachable from there, once there is something to name the tenant after.
+   * `plan` is the way back out for someone who mistyped the address.
+   */
+  verify: ["verify", "account", "plan"],
   // `payment -> done` is the second-tab recovery: signup-payment-intent answers
   // ALREADY_PROVISIONED when another tab has already finished the whole signup,
   // and the only coherent destination from there is the success panel.
@@ -490,6 +499,15 @@ export function OnboardingProvider({
   const [planSwitchBlocked, setPlanSwitchBlocked] = useState<SignupPlanId | null>(null);
   const [accountMode, setAccountMode] = useState<AccountStepMode>("create");
 
+  /*
+   * `submitTenantDetails` needs `startPayment`, which is declared further down
+   * this component — a const cannot be closed over before it exists. The ref is
+   * assigned right after that declaration, and only ever read inside an async
+   * handler, long after the first render has run.
+   */
+  const startPaymentRef = useRef<(() => Promise<void>) | null>(null);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
+
   // Async work reads state through this ref, never through the closure it was
   // created in: a poller created once must see the newest state on every tick.
   const stateRef = useRef(state);
@@ -498,6 +516,24 @@ export function OnboardingProvider({
   });
 
   /** The passive hint read from app_metadata on mount. A hint — never proof of payment. */
+  /**
+   * The password, held ONLY between `signup-begin` and the verification code.
+   *
+   * With verification on, `signup-begin` creates the account UNCONFIRMED on
+   * purpose — and GoTrue refuses a password sign-in for an unconfirmed address.
+   * The old order signed in immediately after creating the account, so every
+   * verified signup died on the first screen: the sign-in failed, the dialog
+   * showed "An account already exists for this email", and the code screen was
+   * never reached. Reproduced on a brand-new address on 2 Oct 2026, with one
+   * signup-begin call in the log and no second attempt.
+   *
+   * So the sign-in moves to AFTER the code, which is the moment the address
+   * becomes confirmed. A ref, not state: it is never rendered, never
+   * serialised into a devtools snapshot, and cleared the moment it is spent.
+   */
+  const pendingPasswordRef = useRef<string | null>(null);
+  /** The business values typed before the code; saved once a session exists. */
+  const pendingTenantRef = useRef<TenantFormValues | null>(null);
   const resumeHintRef = useRef<ClientSignupMeta | null>(null);
 
   /**
@@ -1312,6 +1348,27 @@ export function OnboardingProvider({
 
         resumeHintRef.current = await fetchSignupMeta();
         setHasResumableSignup(true);
+
+        /*
+         * ASK FOR THE BUSINESS BEFORE THE CARD.
+         *
+         * A Google signup can now start without the company name and web
+         * address — that is the whole point of the button. The server would
+         * answer `payment` for a freshly stamped signup, and paying first would
+         * leave `signup-provision` with nothing to name the tenant after.
+         *
+         * `tenant` mode renders the account step as just those two fields plus
+         * the terms, which is exactly the screen this flow needs. It is the same
+         * mode the post-payment recovery path uses; the difference is only that
+         * nothing has been charged yet, and `submitTenantDetails` branches on
+         * that.
+         */
+        if (!pending.values.companyName.trim() || !pending.values.slug.trim()) {
+          setAccountMode("tenant");
+          dispatch({ type: "resumeTo", step: "account" });
+          return;
+        }
+
         // The server decides the step, exactly as it does for a password resume.
         // For a signup that has just been stamped that is always `payment`.
         await resolveResume(pending.planId);
@@ -1416,7 +1473,7 @@ export function OnboardingProvider({
       dispatch({ type: "business", patch: draftToBusiness(tenant) });
       let handedOff = false;
       try {
-        await signupBegin({
+        const begun = await signupBegin({
           fullName: values.fullName.trim(),
           email: values.email.trim().toLowerCase(),
           password: values.password,
@@ -1424,6 +1481,35 @@ export function OnboardingProvider({
           companyWebsite: values.companyWebsite,
           formStartedAt: values.formStartedAt,
         });
+
+        /*
+         * NOTHING IS SIGNED IN YET WHEN A CODE IS COMING.
+         *
+         * `signup-begin` has just created this account UNCONFIRMED, and GoTrue
+         * will not issue a session for an unconfirmed address. Signing in here
+         * — which is what this did — fails every time, and the failure handler
+         * below replaces the code screen with "An account already exists for
+         * this email". The account is real, the code is in their inbox, and the
+         * only screen that can spend it is the one they never reach.
+         *
+         * The password and the business values ride a ref to the verify step,
+         * which signs in once the code has confirmed the address.
+         */
+        if (begun?.requiresVerification) {
+          pendingPasswordRef.current = values.password;
+          pendingTenantRef.current = tenant;
+          dispatch({
+            type: "setAccount",
+            account: { fullName: values.fullName.trim(), email: values.email.trim().toLowerCase() },
+          });
+          dispatch({ type: "signInPrompt", prompt: null });
+          // The local half of the draft needs no session, and it is what makes
+          // a reload during the code screen survivable.
+          writeLocalTenantDraft(tenant);
+          setHasResumableSignup(true);
+          dispatch({ type: "goto", step: "verify" });
+          return;
+        }
 
         // The password exists only inside this closure: it goes straight to
         // GoTrue and is never written to React state, so it cannot resurface in
@@ -1464,17 +1550,71 @@ export function OnboardingProvider({
         // a later one — which is what makes the `?signup=resume` return path and
         // the reopen-after-close path work for a first-time visitor.
         setHasResumableSignup(true);
+
+        /*
+         * THE CODE COMES BEFORE THE CARD.
+         *
+         * `requiresVerification` is the server's answer, not a second flag in
+         * the browser — if the two could disagree, one of them would either
+         * show a code screen for an email nobody sent, or walk an unverified
+         * account into payment.
+         *
+         * No `startPayment` here: an intent minted now would sit unconfirmed
+         * while they read their inbox, and the verify step is the one place
+         * that knows when they are through.
+         */
         dispatch({ type: "goto", step: "payment" });
         handedOff = true;
         void startPaymentInternal(planId);
       } catch (e) {
         const error = toOnboardingError(e);
         if (error.code === "EMAIL_IN_SIGNUP" || error.code === "EMAIL_EXISTS_SIGN_IN") {
-          // Not an error the user caused — swap the form for the sign-in panel,
+          const email = values.email.trim().toLowerCase();
+
+          /*
+           * AN UNVERIFIED SIGNUP NEEDS ITS CODE, NOT ITS PASSWORD.
+           *
+           * The password panel is a dead end for this account: the address is
+           * unconfirmed, so GoTrue refuses a session whatever is typed. Someone
+           * hit "Forgot password?", reset it, was told "sign in with your new
+           * password to carry on", and was refused again — because the password
+           * was never what was wrong. The only thing that can move this signup
+           * is the code.
+           *
+           * There is no flag on the 409 to read, so we ask the one endpoint that
+           * knows: a resend SUCCEEDS only for an account that is unconfirmed and
+           * mid-signup, and answers OTP_COOLDOWN when a code was sent moments
+           * ago and is still good. Either way the code screen is where they
+           * belong. Anything else — a confirmed account, a renter, an address
+           * that finished signing up — falls through to the password panel,
+           * which is correct for all of them.
+           */
+          try {
+            const res = await signupVerifyOtp({ email, action: "resend" });
+            if (res.ok || res.code === "OTP_COOLDOWN") {
+              // They typed it a moment ago; keep it so the verify step can sign
+              // in the instant the address is confirmed.
+              pendingPasswordRef.current = values.password;
+              pendingTenantRef.current = tenant;
+              dispatch({
+                type: "setAccount",
+                account: { fullName: values.fullName.trim(), email },
+              });
+              dispatch({ type: "signInPrompt", prompt: null });
+              dispatch({ type: "error", error: null });
+              dispatch({ type: "goto", step: "verify" });
+              return;
+            }
+          } catch {
+            // Fall through to the panel below: an unreachable resend says
+            // nothing about this account.
+          }
+
+          // Not an unverified signup — swap the form for the sign-in panel,
           // which carries its own copy.
           dispatch({
             type: "signInPrompt",
-            prompt: { email: values.email.trim().toLowerCase(), reason: error.code },
+            prompt: { email, reason: error.code },
           });
           dispatch({ type: "error", error: null });
         } else {
@@ -1493,6 +1633,90 @@ export function OnboardingProvider({
    * `continueToProvisioning`: the account exists, the card has been charged, and
    * the only thing missing is the three fields this collects.
    */
+  /**
+   * The emailed code.
+   *
+   * On success the step does NOT go to payment. It goes to the business
+   * fields — `tenant` mode — because the whole point of the order is that the
+   * card is the last thing asked. `submitTenantDetails` then routes to payment
+   * because nothing has been charged, which is the branch the Google path
+   * already uses.
+   */
+  const verifyEmailCode = useCallback(
+    async (code: string): Promise<boolean> => {
+      const email = stateRef.current.account?.email;
+      if (!email) return false;
+      dispatch({ type: "busy", busy: true });
+      dispatch({ type: "error", error: null });
+      try {
+        const res = await signupVerifyOtp({ email, action: "verify", code });
+        if (!res.ok && !res.verified && !res.alreadyVerified) {
+          setVerifyError(res.error ?? "That code is not valid.");
+          return false;
+        }
+        setVerifyError(null);
+
+        /*
+         * THE SESSION IS MINTED HERE, NOT BEFORE.
+         *
+         * The address is confirmed as of the line above, which is the first
+         * moment GoTrue will issue a session for it. Everything after this —
+         * the payment intent, provisioning — runs on that session, so a failure
+         * here has to be visible rather than silent.
+         */
+        const password = pendingPasswordRef.current;
+        pendingPasswordRef.current = null;
+        if (password) {
+          const { error: signInError } = await getBrowserSupabase().auth.signInWithPassword({
+            email,
+            password,
+          });
+          if (signInError) {
+            // Verified but not signed in: the password is the only thing
+            // missing, so ask for it rather than stranding them on the code
+            // screen with nothing left to enter.
+            dispatch({ type: "signInPrompt", prompt: { email, reason: "SIGN_IN_FAILED" } });
+            dispatch({ type: "resumeTo", step: "account" });
+            return true;
+          }
+        }
+
+        // Now that a session exists, the draft can reach the server copy — the
+        // one that survives a device switch.
+        const pendingTenant = pendingTenantRef.current;
+        pendingTenantRef.current = null;
+        if (pendingTenant) await saveTenantDraft(pendingTenant);
+
+        setAccountMode("tenant");
+        dispatch({ type: "resumeTo", step: "account" });
+        return true;
+      } catch (e) {
+        setVerifyError(toOnboardingError(e).message);
+        return false;
+      } finally {
+        dispatch({ type: "busy", busy: false });
+      }
+    },
+    [],
+  );
+
+  const clearVerifyError = useCallback(() => setVerifyError(null), []);
+
+  const resendEmailCode = useCallback(async () => {
+    const email = stateRef.current.account?.email;
+    if (!email) return;
+    try {
+      const res = await signupVerifyOtp({ email, action: "resend" });
+      // A cooldown is not an error the operator caused; the button already
+      // shows the countdown, so saying it twice is noise.
+      if (!res.ok && res.code !== "OTP_COOLDOWN") {
+        setVerifyError(res.error ?? "We could not send another code.");
+      }
+    } catch (e) {
+      setVerifyError(toOnboardingError(e).message);
+    }
+  }, []);
+
   const submitTenantDetails = useCallback(
     async (values: TenantFormValues) => {
       const s = stateRef.current;
@@ -1508,6 +1732,25 @@ export function OnboardingProvider({
         dispatch({ type: "business", patch: draftToBusiness(tenant) });
         await saveTenantDraft(tenant);
         setAccountMode("create");
+
+        /*
+         * WHERE THIS GOES NEXT DEPENDS ON WHETHER THE CARD HAS RUN.
+         *
+         * This step had one caller — the post-payment recovery path, where the
+         * money is already in and the only thing missing is a name — so it went
+         * straight to provisioning.
+         *
+         * The Google flow now arrives here too, BEFORE paying. Provisioning
+         * then would build a tenant nobody has paid for; `signup-provision`
+         * verifies the charge against Stripe and would refuse, stranding them
+         * on a boot screen with no way forward.
+         */
+        if (!s.payment.paid) {
+          dispatch({ type: "goto", step: "payment" });
+          await startPaymentRef.current?.();
+          return;
+        }
+
         dispatch({ type: "goto", step: "provisioning" });
         await runProvision(buildProvisionRequest(tenant));
       } catch (e) {
@@ -1672,6 +1915,9 @@ export function OnboardingProvider({
     },
     [startPaymentInternal],
   );
+
+  // See the note on `startPaymentRef`.
+  startPaymentRef.current = startPayment;
 
   const markPaid = useCallback(async () => {
     const s = stateRef.current;
@@ -1902,6 +2148,10 @@ export function OnboardingProvider({
       startGoogleSignup,
       signInExisting,
       useDifferentEmail,
+      verifyEmailCode,
+      resendEmailCode,
+      verifyError,
+      clearVerifyError,
       signInInstead,
       startPayment,
       markPaid,
@@ -1926,6 +2176,14 @@ export function OnboardingProvider({
       startGoogleSignup,
       signInExisting,
       useDifferentEmail,
+      verifyEmailCode,
+      resendEmailCode,
+      verifyError,
+      clearVerifyError,
+      verifyEmailCode,
+      resendEmailCode,
+      verifyError,
+      clearVerifyError,
       signInInstead,
       startPayment,
       markPaid,

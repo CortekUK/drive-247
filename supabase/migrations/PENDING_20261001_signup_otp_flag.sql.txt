@@ -1,0 +1,39 @@
+-- The signup email-verification switch, as a row instead of a secret.
+--
+-- WHAT IT TURNS ON. With this true, `signup-begin` creates the operator's auth
+-- user UNCONFIRMED and emails a 6-digit code; the signup dialog shows the
+-- "Check your email" screen, and `signup-verify-otp` confirms the address
+-- before the flow reaches the company name or the card. With it false, signup
+-- behaves exactly as it does today: the account is auto-confirmed and no code
+-- is sent. The full order, once on:
+--
+--   name, email, password  ->  enter code  ->  company + slug  ->  payment
+--
+-- WHY A COLUMN AND NOT AN EDGE FUNCTION SECRET. It was `SIGNUP_OTP_ENABLED` in
+-- the function environment, and that slot was not available: the project's
+-- secret limit is full. A column is the better home regardless — it sits beside
+-- `subscription_gate_disabled` and `landing_pricing_enabled`, it is a checkbox
+-- on the Signup Plans tab, and flipping it needs no redeploy. If Resend stops
+-- delivering at 2am, signup keeps working the moment someone unticks it.
+--
+-- The function still honours the env var, so freeing a secret slot later
+-- changes nothing.
+--
+-- DEFAULT OFF, and the read FAILS OFF. A failed read means "auto-confirm",
+-- i.e. today's behaviour. Defaulting the other way would mint unconfirmed
+-- accounts during a database blip, and nothing in the UI could verify them —
+-- those people would be locked out of a portal they had paid for.
+--
+-- Additive, and safe to run while the current code is live: `signup-begin`
+-- tolerates the column not existing (the read fails, OTP reads off), and the
+-- deployed version ignores it entirely.
+
+ALTER TABLE public.admin_settings
+  ADD COLUMN IF NOT EXISTS signup_otp_enabled boolean NOT NULL DEFAULT false;
+
+COMMENT ON COLUMN public.admin_settings.signup_otp_enabled IS
+  'Super-admin switch (Signup Plans tab): when true, self-serve signup emails a 6-digit code and will not continue to the company details or payment until the address is verified. Read by supabase/functions/signup-begin as "true if any row is true". Default off, and a failed read is treated as off.';
+
+-- Make the API see the new column straight away, rather than answering
+-- "column does not exist" until its schema cache next refreshes.
+NOTIFY pgrst, 'reload schema';

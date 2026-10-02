@@ -29,6 +29,7 @@
 // =============================================================================
 
 import { describe, expect, it } from "vitest";
+import ts from "typescript";
 import { blankComments, readEdgeFunctionSource } from "../../helpers/edge-contract";
 import { classifyLive, liveCall, liveStatus } from "../../helpers/live-call";
 import { positionsOf, readRepoSource } from "./boldsign-source";
@@ -288,7 +289,12 @@ describe("boldsign/webhook — known defects, pinned", () => {
     const src = webhookSrc();
 
     const defaultsToPending = src.includes("return statusMap[eventType] || 'pending';");
-    const guarded = /if\s*\(\s*mappedStatus\s*(?:!==|===)\s*['"]pending['"]/.test(src);
+    // Either shape counts: a direct test of the mapped value, or the ladder
+    // guard that refuses any backwards step (isStatusRegression), which covers
+    // 'pending' because it covers everything below a FINAL status.
+    const guarded =
+      /if\s*\(\s*mappedStatus\s*(?:!==|===)\s*['"]pending['"]/.test(src) ||
+      /isStatusRegression\(/.test(src);
 
     if (!defaultsToPending || guarded) {
       // THE FIX LANDED. Assert the property that makes it a fix: an event the
@@ -460,5 +466,85 @@ describe("boldsign/webhook — live (Layer 2)", () => {
         "than the function — which would mean verify_jwt is no longer false and " +
         "BoldSign can no longer call us at all.",
     ).toMatch(/No document ID in payload/i);
+  });
+});
+
+// ===========================================================================
+// A signed agreement never becomes unsigned again
+// ===========================================================================
+describe("boldsign/webhook — the status ladder only runs one way", () => {
+  /*
+   * THE DEFECT THIS CLOSES, found on Moore Luxe on 2 Oct 2026.
+   *
+   * BoldSign keeps sending events after a document is finished: a renter who
+   * re-opens their signed copy raises another `Viewed`, which maps to
+   * 'delivered' and was written straight over 'completed'. Four of that
+   * tenant's agreements were holding an `envelope_completed_at` — a column only
+   * ever written on completion — while their status read 'delivered'. Signed on
+   * 6, 8, 12 and 19 September; still shown as outstanding three weeks later,
+   * still being chased, still being re-sent.
+   *
+   * The renter cannot even obey: BoldSign will not issue a signing link for a
+   * completed document, so every chase ends in "it doesn't work".
+   */
+  const lift = () => {
+    const src = readEdgeFunctionSource("boldsign-webhook");
+    const start = src.indexOf("const STATUS_RANK");
+    const end = src.indexOf("return to < from;", start);
+    if (start < 0 || end < 0) {
+      throw new Error(
+        "isStatusRegression is gone from boldsign-webhook. If it was renamed, update this " +
+          "lift; if it was deleted, a signed agreement can be walked backwards again.",
+      );
+    }
+    const snippet = src.slice(start, src.indexOf("}", end) + 1);
+    const js = ts.transpileModule(snippet, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
+    return new Function(`${js}; return isStatusRegression;`)() as (a: string | null, b: string) => boolean;
+  };
+
+  it("refuses the exact event that unsigned four of Moore Luxe's agreements", () => {
+    expect(lift()("completed", "delivered")).toBe(true);
+  });
+
+  it("lets a document still reach its ending", () => {
+    const regresses = lift();
+    expect(regresses("sent", "delivered"), "a first view").toBe(false);
+    expect(regresses("delivered", "signed"), "the signature itself").toBe(false);
+    expect(regresses("signed", "completed"), "the final event of a one-signer document").toBe(false);
+    expect(regresses(null, "sent"), "a brand new agreement").toBe(false);
+    expect(regresses("completed", "completed"), "the same event twice").toBe(false);
+  });
+
+  it("still admits the outcomes that are not a signature", () => {
+    const regresses = lift();
+    expect(regresses("sent", "declined"), "a renter refusing is a real answer").toBe(false);
+    expect(regresses("delivered", "voided"), "the operator cancelling is a real answer").toBe(false);
+    expect(regresses("sent", "expired")).toBe(false);
+  });
+
+  it("holds a finished document against everything, including the unknown-event default", () => {
+    const regresses = lift();
+    for (const current of ["completed", "declined", "voided", "expired"]) {
+      for (const incoming of ["pending", "sent", "delivered", "signed"]) {
+        expect(regresses(current, incoming), `${current} must not become ${incoming}`).toBe(true);
+      }
+    }
+  });
+
+  it("guards BOTH writes — the agreement row and the rental row", () => {
+    // The rental row is what the agreements screen reads for an original. A
+    // guard on one write only would leave the screen contradicting itself.
+    const src = blankComments(readEdgeFunctionSource("boldsign-webhook"));
+    expect(
+      src,
+      "the rental_agreements write is no longer guarded against a backwards step",
+    ).toMatch(/agreementId && isStatusRegression\(/);
+    expect(
+      src,
+      "the rentals write is no longer guarded — the agreements screen reads this one for " +
+        "an original, so a signed contract would show as outstanding again",
+    ).toMatch(/agreementType === 'original' && isStatusRegression\(/);
+    // Two call sites plus the declaration.
+    expect([...src.matchAll(/isStatusRegression\(/g)].length).toBe(3);
   });
 });

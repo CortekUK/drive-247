@@ -61,7 +61,7 @@ You cannot produce files. There is no CSV, XLSX or PDF export, and no download l
 Retrieve relevant sections by exact ID from the supplied catalog; do not pretend undocumented modules are verified. IDs and navigation must be from current authorized results. No invented URLs, markdown links, routes or source references. Use sourceIds exactly as supplied and navigationIds from resolved actions.
 Tool statuses distinguish verified, partial, missing/inaccessible, restricted, needs_input and failure. Explain missing coverage. No-blocker results are limited to evaluated checks, not a blanket availability guarantee. Evidence timestamps are observations, not physical event times.
 Return JSON matching the answer schema. Ask clarifying questions as ordinary text in answer. Source IDs must support the answer; for pure clarification they may be empty. Never claim live facts without a current tool result. Never describe a tool error as a successful check.`;
-const issueInstructions=`Use select_support_issue for separate issues. Do not carry a payment escalation into a fleet-count question. Backend policy, not model confidence, determines escalation. Asking a needed clarification is not failure. Do not repeat failed checks or identical advice; use a different applicable supported diagnostic. A user asking for a person should be offered human support immediately. request_support_handoff only offers a button; tickets are created only by a later explicit user click. Never claim a ticket, notification or live agent before a successful server submission. Counts must come from get_account_counts; availability is not total minus rentals. list_account_bookings uses recorded states, not physical possession. Provide exact partial-result limits. Historical issue checks are context only; refresh them for new live claims.`;
+const issueInstructions=`Use select_support_issue for separate issues. Do not carry a payment escalation into a fleet-count question. Backend policy, not model confidence, determines escalation. Asking a needed clarification is not failure. Do not repeat failed checks or identical advice; use a different applicable supported diagnostic. A user asking for a person should be offered human support immediately. If you are about to tell the user to contact the support team, or you cannot complete the request with any tool or guidance available to you, call request_support_handoff in that SAME reply: guidance_missing when you have no source to cite, diagnostics_exhausted when the checks are spent. Advising someone to contact support in prose without calling it leaves them with no route to a person. The backend still decides whether the handoff is warranted and will refuse it while a safe check remains, so always ask. request_support_handoff only offers a button; tickets are created only by a later explicit user click. Never claim a ticket, notification or live agent before a successful server submission. Counts must come from get_account_counts; availability is not total minus rentals. list_account_bookings uses recorded states, not physical possession. Provide exact partial-result limits. Historical issue checks are context only; refresh them for new live claims.`;
 const navId=(a:NavigationAction)=>`${a.target}:${a.entityId??''}`;
 // Every read-only finance tool, including the rental payment investigation tools.
 const FINANCE={...FINANCE_TOOLS,...PAYMENT_INVESTIGATION_TOOLS};
@@ -184,8 +184,16 @@ export async function modelConversation(message:string,locale:Locale,conversatio
         object(input);
         const status=await readIntegrationStatus(env.auth,env.integrations,env.now);
         result=status;
+        // This branch pushes its evidence straight onto the list instead of going
+        // through the tool path, so it also has to do what that path does for it:
+        // register the source in `sources`. It did not, and the citation line is
+        // built by looking every cited id up in that map — so the lookup missed,
+        // the turn shipped a sources list of [null], and reopening that
+        // conversation from history took the whole portal down.
+        const integrationSource:Evidence={id:'integrations:'+env.auth.tenant.id,table:'tenants',title:'Integration connection state',observedAt:status.observedAt};
+        sources.set(integrationSource.id,integrationSource);
         evidence.push({status:'verified',observedAt:status.observedAt,checks:['integration_status'],findings:[],
-          sources:[{id:'integrations:'+env.auth.tenant.id,table:'tenants',title:'Integration connection state',observedAt:status.observedAt}],
+          sources:[integrationSource],
           navigation:[],limitations:[],data:status as unknown as Record<string,unknown>});
       } else if(Object.hasOwn(BUSINESS_TOOLS,name)||Object.hasOwn(BALANCE_TOOLS,name)||Object.hasOwn(REPORT_TOOLS,name)) {
         const a=object(input);
@@ -355,8 +363,13 @@ export async function modelConversation(message:string,locale:Locale,conversatio
     issue.excerpts=[...issue.excerpts,{role:'user' as const,content:redactSupportText(message),at:new Date(env.now).toISOString()},{role:'assistant' as const,content:redactSupportText(answer),at:new Date(env.now).toISOString()}].slice(-8);
     // Always retain canonical diagnostic findings and limitations, even if the
     // model omits one in its explanation. Never let prose hide partial coverage.
-    const shownSources=[...new Set([...answerSources,...evidence.flatMap(e=>e.sources.map(s=>s.id))])].map(id=>sources.get(id)!);
-    return {response:answer,sources:shownSources,navigation:[...new Set([...answerNavigation,...evidence.flatMap(e=>e.navigation.map(navId))])].map(id=>actions.get(id)!).filter(a=>a.target!=='rental_return'||!conflictingReturns.has(a.entityId??'')).slice(0,8),evidence,engine:'model',model:env.model.name,canRecheck:!!conversation.diagnostic||!!conversation.paymentCheck};
+    // These two lookups used to end in `!`, asserting every cited id was in the
+    // map. When one was not, the gap became `undefined`, JSON.stringify turned it
+    // into `null`, and the null travelled to the browser and into storage. A
+    // citation that cannot be resolved is survivable; a null in the list is not,
+    // so an unresolvable id is dropped here instead of asserted away.
+    const shownSources=[...new Set([...answerSources,...evidence.flatMap(e=>e.sources.map(s=>s.id))])].flatMap(id=>{const s=sources.get(id);return s?[s]:[];});
+    return {response:answer,sources:shownSources,navigation:[...new Set([...answerNavigation,...evidence.flatMap(e=>e.navigation.map(navId))])].flatMap(id=>{const a=actions.get(id);return a?[a]:[];}).filter(a=>a.target!=='rental_return'||!conflictingReturns.has(a.entityId??'')).slice(0,8),evidence,engine:'model',model:env.model.name,canRecheck:!!conversation.diagnostic||!!conversation.paymentCheck};
   }
   throw new ModelUnavailable();
 }

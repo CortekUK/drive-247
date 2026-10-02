@@ -1,0 +1,20 @@
+-- Rollback for PENDING_20261001_signup_otp_flag.sql.txt
+--
+-- Dropping the column turns email verification OFF: `signup-begin`'s read
+-- fails, which it treats as off, so signup auto-confirms the address again.
+-- That is the pre-feature behaviour and locks nobody out.
+--
+-- ANYONE MID-SIGNUP IS THE ONE THING TO CHECK. An account created while the
+-- flag was on is unconfirmed until its code is entered, and `signup-verify-otp`
+-- keeps working after this runs (it never reads this column), so they can still
+-- finish. But nothing will be prompting them for a code any more, so confirm
+-- any stragglers from the Supabase auth dashboard before dropping it:
+--
+--   select email, created_at from auth.users
+--   where email_confirmed_at is null
+--     and raw_app_meta_data ? 'd247_signup';
+
+ALTER TABLE public.admin_settings
+  DROP COLUMN IF EXISTS signup_otp_enabled;
+
+NOTIFY pgrst, 'reload schema';

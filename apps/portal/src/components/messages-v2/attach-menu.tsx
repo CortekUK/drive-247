@@ -30,7 +30,8 @@
 
 import { useMemo, useRef, useState } from "react";
 import { format } from "date-fns";
-import { Car, Paperclip, Search, Upload } from "lucide-react";
+import { Paperclip, Search, Upload } from "lucide-react";
+import { SteeringWheel } from "@/components/ui/steering-wheel";
 import { Button } from "@/components/ui-v2/button";
 import { Input } from "@/components/ui-v2/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui-v2/popover";
@@ -173,7 +174,7 @@ export function AttachMenu({
                 className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-[hsl(var(--v2-hover,var(--accent)_/_0.6))]"
               >
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
-                  <Car className="h-4 w-4" />
+                  <SteeringWheel className="h-4 w-4" />
                 </span>
                 <span className="min-w-0">
                   <span className="block text-[13px] font-medium">Attach booking</span>
@@ -231,7 +232,7 @@ export function AttachMenu({
                         className="flex w-full items-start gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-[hsl(var(--v2-hover,var(--accent)_/_0.6))]"
                       >
                         <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-                          <Car className="h-4 w-4" />
+                          <SteeringWheel className="h-4 w-4" />
                         </span>
                         <span className="min-w-0 flex-1">
                           <span className="flex items-center gap-2">

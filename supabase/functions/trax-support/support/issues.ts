@@ -28,6 +28,29 @@ export function configuredEscalationPolicy(value:string|undefined):EscalationPol
     policy.human_requested=policy.unsupported_finance=policy.diagnostics_exhausted=100;policy.user_resolved=0;return policy;
   }catch{throw new SupportError('policy_unavailable','The support policy is not configured correctly.',503);}
 }
+/**
+ * Does this unbroken run look like a pasted attachment, or like someone typing?
+ *
+ * The rule here used to be `[A-Za-z0-9+/=_-]{100,}` — any hundred characters
+ * without a space. That is not a base64 test, it is a LENGTH test, and a
+ * support message typed as one long unbroken string matched it: the operator's
+ * whole message was replaced with "[attachment removed]" and the text was lost.
+ * Reported 1 Oct 2026 from the portal's support tab.
+ *
+ * Base64 of binary data is distinguishable from prose by its ALPHABET, not its
+ * length: it mixes cases with digits and usually carries `+`, `/` or `=`
+ * padding. Human text that happens to lack spaces is overwhelmingly one case
+ * and letters only. The threshold also moves to 200, because a real pasted
+ * image runs to thousands of characters and 100 is well inside what a person
+ * types in a hurry.
+ *
+ * Erring towards KEEPING text is the right way round: a missed blob is noise in
+ * a support ticket, a wrongly redacted message is a report nobody can read.
+ */
+function looksLikeBase64(run:string):boolean {
+  if(/[+/=]/.test(run))return true;
+  return /[a-z]/.test(run)&&/[A-Z]/.test(run)&&/\d/.test(run);
+}
 export function redactSupportText(text:string,limit=600):string {
   return text.replace(/(?:sk|rk|pk)[_-](?:proj-|live_|test_)?[A-Za-z0-9_-]{10,}/g,'[credential removed]')
     .replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g,'[token removed]')
@@ -35,7 +58,8 @@ export function redactSupportText(text:string,limit=600):string {
     .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi,'[email removed]')
     .replace(/\b(?:pi|pm|cus|ch|re|acct)_[A-Za-z0-9]+\b/g,'[payment reference removed]')
     .replace(/(?:\+?\d[\d ()-]{8,}\d)/g,value=>/^\d{4}-\d{2}-\d{2}(?:\s+-\s+\d{4}-\d{2}-\d{2})?$/.test(value)?value:'[number removed]')
-    .replace(/data:[^\s]+|[A-Za-z0-9+/=_-]{100,}/g,'[attachment removed]')
+    .replace(/data:[^\s]+/g,'[attachment removed]')
+    .replace(/[A-Za-z0-9+/=_-]{200,}/g,run=>looksLikeBase64(run)?'[attachment removed]':run)
     .replace(/[\u0000-\u001f\u007f]/g,' ').slice(0,limit);
 }
 export function newIssue(topic:IssueTopic,summary:string,record?:SupportIssue['record']):SupportIssue {

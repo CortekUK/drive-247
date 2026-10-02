@@ -19,6 +19,12 @@ import type { PromoOffer } from "@/lib/promo-offer";
 export type SignupStep =
   | "plan"
   | "account"
+  /**
+   * The emailed code, between the account form and everything that costs money.
+   * Only ever reached when `signup-begin` answered `requiresVerification` — see
+   * the note on that field for why the server decides and not the browser.
+   */
+  | "verify"
   | "payment"
   | "provisioning"
   | "done";
@@ -468,6 +474,13 @@ export interface PaymentStepProps {
 // Context value
 // ---------------------------------------------------------------------------
 export interface OnboardingContextValue {
+  /** The emailed code. Resolves true once the address is confirmed. */
+  verifyEmailCode(code: string): Promise<boolean>;
+  /** Send another, subject to the server's cooldown. */
+  resendEmailCode(): Promise<void>;
+  /** Kept out of the shared error channel: it belongs to one field. */
+  verifyError: string | null;
+  clearVerifyError(): void;
   state: OnboardingState;
   plan: SignupPlan | null;
   isOpen: boolean;

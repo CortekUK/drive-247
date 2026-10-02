@@ -29,8 +29,9 @@ import Link from "next/link";
 import { differenceInCalendarDays, format, formatDistanceToNowStrict } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
 import {
-  Car, CalendarDays, Clock, ExternalLink, Mail, Pencil, Phone, Sparkles,
+  CalendarDays, Clock, ExternalLink, Mail, Pencil, Phone, Sparkles,
 } from "lucide-react";
+import { SteeringWheel } from "@/components/ui/steering-wheel";
 import { useTenant } from "@/contexts/TenantContext";
 import { useV2 } from "@/lib/v2-context";
 import type { ChatMessage } from "@/hooks/use-chat-messages";
@@ -329,7 +330,7 @@ export function CustomerContext({ channel }: { channel: ChatChannel }) {
             >
               <div className="flex items-start justify-between gap-2">
                 <span className="inline-flex items-center gap-1.5 text-[13px] font-medium">
-                  <Car className="h-3.5 w-3.5 text-muted-foreground" />
+                  <SteeringWheel className="h-3.5 w-3.5 text-muted-foreground" />
                   {current.vehicle?.make} {current.vehicle?.model}
                 </span>
                 <span

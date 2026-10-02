@@ -125,13 +125,20 @@ export function TraxSupportThread({ density = "page", autoFocus = false, onOpenS
             <div className={cn("flex flex-[1_0_auto] flex-col items-center justify-end px-4", page ? "pt-12" : "pt-10")}>
               <div className={cn("w-full", page && "max-w-[720px]")}>
                 <TraxGreeting density={density} />
-                <p className={cn("mt-2 text-center text-[12px] leading-relaxed text-muted-foreground", page && "text-[13px]")}>
-                  {intro && capabilities?.modelReady
-                    ? intro
-                    : capabilities?.modelReady
-                    ? "Ask about your fleet, rentals and bookings. TRAX checks your own records before it answers."
-                    : "Prepared application guidance. TRAX is not connected to an AI model in this environment."}
-                </p>
+                {/* Only state what the server actually told us. `capabilities`
+                    arrives with the context reply, so when that request fails it
+                    is undefined — and the old ternary read that as "no model",
+                    announcing a configuration fact we had not established. The
+                    error below already says what went wrong. */}
+                {capabilities ? (
+                  <p className={cn("mt-2 text-center text-[12px] leading-relaxed text-muted-foreground", page && "text-[13px]")}>
+                    {intro && capabilities.modelReady
+                      ? intro
+                      : capabilities.modelReady
+                      ? "Ask about your fleet, rentals and bookings. TRAX checks your own records before it answers."
+                      : "Prepared application guidance. TRAX is not connected to an AI model in this environment."}
+                  </p>
+                ) : null}
               </div>
             </div>
           ) : (
