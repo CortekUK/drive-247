@@ -52,6 +52,7 @@ import {
   readPendingOauth,
   resolveTenantDraft,
   saveTenantDraft,
+  writeLocalTenantDraft,
   writePendingOauth,
 } from "./tenant-draft";
 import { OnboardingDialog } from "./onboarding-dialog";
@@ -515,6 +516,24 @@ export function OnboardingProvider({
   });
 
   /** The passive hint read from app_metadata on mount. A hint — never proof of payment. */
+  /**
+   * The password, held ONLY between `signup-begin` and the verification code.
+   *
+   * With verification on, `signup-begin` creates the account UNCONFIRMED on
+   * purpose — and GoTrue refuses a password sign-in for an unconfirmed address.
+   * The old order signed in immediately after creating the account, so every
+   * verified signup died on the first screen: the sign-in failed, the dialog
+   * showed "An account already exists for this email", and the code screen was
+   * never reached. Reproduced on a brand-new address on 2 Oct 2026, with one
+   * signup-begin call in the log and no second attempt.
+   *
+   * So the sign-in moves to AFTER the code, which is the moment the address
+   * becomes confirmed. A ref, not state: it is never rendered, never
+   * serialised into a devtools snapshot, and cleared the moment it is spent.
+   */
+  const pendingPasswordRef = useRef<string | null>(null);
+  /** The business values typed before the code; saved once a session exists. */
+  const pendingTenantRef = useRef<TenantFormValues | null>(null);
   const resumeHintRef = useRef<ClientSignupMeta | null>(null);
 
   /**
@@ -1463,6 +1482,35 @@ export function OnboardingProvider({
           formStartedAt: values.formStartedAt,
         });
 
+        /*
+         * NOTHING IS SIGNED IN YET WHEN A CODE IS COMING.
+         *
+         * `signup-begin` has just created this account UNCONFIRMED, and GoTrue
+         * will not issue a session for an unconfirmed address. Signing in here
+         * — which is what this did — fails every time, and the failure handler
+         * below replaces the code screen with "An account already exists for
+         * this email". The account is real, the code is in their inbox, and the
+         * only screen that can spend it is the one they never reach.
+         *
+         * The password and the business values ride a ref to the verify step,
+         * which signs in once the code has confirmed the address.
+         */
+        if (begun?.requiresVerification) {
+          pendingPasswordRef.current = values.password;
+          pendingTenantRef.current = tenant;
+          dispatch({
+            type: "setAccount",
+            account: { fullName: values.fullName.trim(), email: values.email.trim().toLowerCase() },
+          });
+          dispatch({ type: "signInPrompt", prompt: null });
+          // The local half of the draft needs no session, and it is what makes
+          // a reload during the code screen survivable.
+          writeLocalTenantDraft(tenant);
+          setHasResumableSignup(true);
+          dispatch({ type: "goto", step: "verify" });
+          return;
+        }
+
         // The password exists only inside this closure: it goes straight to
         // GoTrue and is never written to React state, so it cannot resurface in
         // a devtools snapshot or a serialised error report.
@@ -1515,11 +1563,6 @@ export function OnboardingProvider({
          * while they read their inbox, and the verify step is the one place
          * that knows when they are through.
          */
-        if (begun?.requiresVerification) {
-          dispatch({ type: "goto", step: "verify" });
-          return;
-        }
-
         dispatch({ type: "goto", step: "payment" });
         handedOff = true;
         void startPaymentInternal(planId);
@@ -1571,6 +1614,38 @@ export function OnboardingProvider({
           return false;
         }
         setVerifyError(null);
+
+        /*
+         * THE SESSION IS MINTED HERE, NOT BEFORE.
+         *
+         * The address is confirmed as of the line above, which is the first
+         * moment GoTrue will issue a session for it. Everything after this —
+         * the payment intent, provisioning — runs on that session, so a failure
+         * here has to be visible rather than silent.
+         */
+        const password = pendingPasswordRef.current;
+        pendingPasswordRef.current = null;
+        if (password) {
+          const { error: signInError } = await getBrowserSupabase().auth.signInWithPassword({
+            email,
+            password,
+          });
+          if (signInError) {
+            // Verified but not signed in: the password is the only thing
+            // missing, so ask for it rather than stranding them on the code
+            // screen with nothing left to enter.
+            dispatch({ type: "signInPrompt", prompt: { email, reason: "SIGN_IN_FAILED" } });
+            dispatch({ type: "resumeTo", step: "account" });
+            return true;
+          }
+        }
+
+        // Now that a session exists, the draft can reach the server copy — the
+        // one that survives a device switch.
+        const pendingTenant = pendingTenantRef.current;
+        pendingTenantRef.current = null;
+        if (pendingTenant) await saveTenantDraft(pendingTenant);
+
         setAccountMode("tenant");
         dispatch({ type: "resumeTo", step: "account" });
         return true;

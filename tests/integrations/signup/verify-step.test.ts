@@ -116,3 +116,82 @@ describe('the screen itself', () => {
     expect(screen).toMatch(/Use a different email/);
   });
 });
+
+// ===========================================================================
+// The sign-in cannot happen before the address is confirmed
+// ===========================================================================
+describe('an unconfirmed account is never asked for a session', () => {
+  /*
+   * THE BUG THIS CLOSES, found on a brand-new address on 2 Oct 2026.
+   *
+   * `signup-begin` creates the account UNCONFIRMED when verification is on —
+   * that is the point. GoTrue will not issue a password session for an
+   * unconfirmed address, so the sign-in that ran immediately after it failed
+   * every single time, and the failure handler replaced the code screen with
+   * "An account already exists for this email". The account was real, the code
+   * was in their inbox, and the one screen that could spend it was unreachable.
+   *
+   * The signup log showed exactly one signup-begin call, which is what ruled
+   * out a double submit and pointed here.
+   */
+  const fn = provider.slice(
+    provider.indexOf('const submitAccount'),
+    provider.indexOf('const submitTenantDetails'),
+  );
+
+  it('routes to the code screen BEFORE it tries to sign in', () => {
+    const branch = fn.indexOf('if (begun?.requiresVerification)');
+    const signIn = fn.indexOf('signInWithPassword');
+    expect(branch).toBeGreaterThan(-1);
+    expect(signIn).toBeGreaterThan(-1);
+    expect(
+      branch < signIn,
+      'submitAccount signs in before checking whether a code is coming. GoTrue ' +
+        'refuses an unconfirmed address, so every verified signup dies on the first screen.',
+    ).toBe(true);
+  });
+
+  it('carries the password in a ref, never in state', () => {
+    // It has to survive to the verify step, and it must not land in a devtools
+    // snapshot or a serialised error on the way.
+    expect(provider).toMatch(/const pendingPasswordRef = useRef<string \| null>\(null\)/);
+    expect(fn).toMatch(/pendingPasswordRef\.current = values\.password/);
+    expect(fn).not.toMatch(/type: "setPassword"/);
+  });
+
+  it('keeps a reload during the code screen survivable', () => {
+    // The local draft needs no session; the server copy waits for one.
+    expect(fn).toMatch(/writeLocalTenantDraft\(tenant\)/);
+  });
+});
+
+describe('the session is minted once the code is accepted', () => {
+  const fn = provider.slice(
+    provider.indexOf('const verifyEmailCode'),
+    provider.indexOf('const clearVerifyError'),
+  );
+
+  it('signs in after verifying, which is the first moment GoTrue will allow it', () => {
+    expect(fn).toMatch(/signInWithPassword/);
+    const verify = fn.indexOf('signupVerifyOtp');
+    const signIn = fn.indexOf('signInWithPassword');
+    expect(verify).toBeLessThan(signIn);
+  });
+
+  it('spends the password and drops it', () => {
+    expect(fn).toMatch(/pendingPasswordRef\.current = null/);
+  });
+
+  it('asks for the password rather than stranding them if that sign-in fails', () => {
+    // They are verified by then; there is nothing left to enter on the code
+    // screen, so leaving them there would be a dead end.
+    expect(fn).toMatch(/reason: "SIGN_IN_FAILED"/);
+  });
+
+  it('writes the server-side draft only once a session exists', () => {
+    const signIn = fn.indexOf('signInWithPassword');
+    const draft = fn.indexOf('saveTenantDraft');
+    expect(draft).toBeGreaterThan(-1);
+    expect(signIn).toBeLessThan(draft);
+  });
+});
