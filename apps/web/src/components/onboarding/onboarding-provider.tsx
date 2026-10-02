@@ -1569,11 +1569,52 @@ export function OnboardingProvider({
       } catch (e) {
         const error = toOnboardingError(e);
         if (error.code === "EMAIL_IN_SIGNUP" || error.code === "EMAIL_EXISTS_SIGN_IN") {
-          // Not an error the user caused — swap the form for the sign-in panel,
+          const email = values.email.trim().toLowerCase();
+
+          /*
+           * AN UNVERIFIED SIGNUP NEEDS ITS CODE, NOT ITS PASSWORD.
+           *
+           * The password panel is a dead end for this account: the address is
+           * unconfirmed, so GoTrue refuses a session whatever is typed. Someone
+           * hit "Forgot password?", reset it, was told "sign in with your new
+           * password to carry on", and was refused again — because the password
+           * was never what was wrong. The only thing that can move this signup
+           * is the code.
+           *
+           * There is no flag on the 409 to read, so we ask the one endpoint that
+           * knows: a resend SUCCEEDS only for an account that is unconfirmed and
+           * mid-signup, and answers OTP_COOLDOWN when a code was sent moments
+           * ago and is still good. Either way the code screen is where they
+           * belong. Anything else — a confirmed account, a renter, an address
+           * that finished signing up — falls through to the password panel,
+           * which is correct for all of them.
+           */
+          try {
+            const res = await signupVerifyOtp({ email, action: "resend" });
+            if (res.ok || res.code === "OTP_COOLDOWN") {
+              // They typed it a moment ago; keep it so the verify step can sign
+              // in the instant the address is confirmed.
+              pendingPasswordRef.current = values.password;
+              pendingTenantRef.current = tenant;
+              dispatch({
+                type: "setAccount",
+                account: { fullName: values.fullName.trim(), email },
+              });
+              dispatch({ type: "signInPrompt", prompt: null });
+              dispatch({ type: "error", error: null });
+              dispatch({ type: "goto", step: "verify" });
+              return;
+            }
+          } catch {
+            // Fall through to the panel below: an unreachable resend says
+            // nothing about this account.
+          }
+
+          // Not an unverified signup — swap the form for the sign-in panel,
           // which carries its own copy.
           dispatch({
             type: "signInPrompt",
-            prompt: { email: values.email.trim().toLowerCase(), reason: error.code },
+            prompt: { email, reason: error.code },
           });
           dispatch({ type: "error", error: null });
         } else {

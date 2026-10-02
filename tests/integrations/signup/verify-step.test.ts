@@ -195,3 +195,44 @@ describe('the session is minted once the code is accepted', () => {
     expect(signIn).toBeLessThan(draft);
   });
 });
+
+// ===========================================================================
+// A half-finished signup is sent back to its code, not to a password box
+// ===========================================================================
+describe('an unverified signup never lands on the password panel', () => {
+  /*
+   * WHAT HAPPENED, 2 Oct 2026. Someone whose signup was waiting on its code
+   * started again with the same address, was shown "Welcome back — enter your
+   * password", pressed "Forgot password?", reset it, was told "sign in with
+   * your new password to carry on", and was refused again. The password was
+   * never what was wrong: the address is unconfirmed, so GoTrue refuses a
+   * session whatever is typed. The panel was a room with no door.
+   */
+  const fn = provider.slice(
+    provider.indexOf('const submitAccount'),
+    provider.indexOf('const submitTenantDetails'),
+  );
+
+  it('asks the endpoint that knows, because the 409 does not say', () => {
+    // A resend succeeds only for an account that is unconfirmed and mid-signup.
+    expect(fn).toMatch(/signupVerifyOtp\(\{ email, action: "resend" \}\)/);
+  });
+
+  it('treats a cooldown as proof too — the code it refers to is still good', () => {
+    expect(fn).toMatch(/res\.ok \|\| res\.code === "OTP_COOLDOWN"/);
+  });
+
+  it('goes to the code screen and keeps the password for the other side', () => {
+    const branch = fn.slice(fn.indexOf('action: "resend"'), fn.indexOf('Not an unverified signup'));
+    expect(branch).toMatch(/pendingPasswordRef\.current = values\.password/);
+    expect(branch).toMatch(/step: "verify"/);
+  });
+
+  it('still shows the password panel for everyone else', () => {
+    // A confirmed account, a renter, a finished signup: the panel is right for
+    // all of them, and an unreachable resend must not change that.
+    expect(fn).toMatch(/prompt: \{ email, reason: error\.code \}/);
+    const order = fn.indexOf('action: "resend"') < fn.indexOf('reason: error.code');
+    expect(order, 'the resend probe now runs after the panel is already shown').toBe(true);
+  });
+});
