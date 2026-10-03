@@ -38,6 +38,7 @@ import type {
 } from "@/components/onboarding/onboarding-types";
 import { SIGNUP_ERROR_COPY } from "@/components/onboarding/onboarding-types";
 import type { PromoOffer } from "@/lib/promo-offer";
+import { readReferralCodeFromDocument } from "@/lib/referral-cookie";
 
 /** "$79", "$79.20" from cents. */
 function formatCents(cents: number): string {
@@ -340,14 +341,17 @@ export function PaymentStep({
           onRemove={onApplyPromo ? () => void onApplyPromo(null) : undefined}
         />
       ) : (
-        <>
-          {promoNotice && (
-            <p className="mt-2 text-xs leading-relaxed text-amber-700 dark:text-amber-400" role="status">
-              {promoNotice}
-            </p>
-          )}
-          {onApplyPromo && <PromoCodeField busy={busy} onApply={onApplyPromo} />}
-        </>
+        promoNotice && (
+          <p className="mt-2 text-xs leading-relaxed text-amber-700 dark:text-amber-400" role="status">
+            {promoNotice}
+          </p>
+        )
+      )}
+
+      {/* Offered even once a code is on: the fields are how you SWAP one, and
+          hiding them left "use a different code" with nowhere to go. */}
+      {onApplyPromo && (
+        <DiscountCodeFields busy={busy} applied={promo ?? null} onApply={onApplyPromo} />
       )}
 
       {mode === "test" && (
@@ -886,22 +890,68 @@ function AppliedPromo({
 }
 
 /**
- * "Have a promo code?" A link until asked for, because most operators have
- * none and an empty field reads as a price they are missing out on. The code is
- * checked before anything changes; only a good code replaces the payment form
- * (a new intent is minted with it).
+ * Two code fields, and only one code can win.
+ *
+ * It was one field labelled "Promo code" that quietly accepted referral codes
+ * too, because `promo-code-lookup` decides the kind from the code itself. That
+ * works, but it reads as if referral codes are not accepted here: somebody
+ * holding one from a friend's link has no field with their name on it.
+ *
+ * So there are two labelled fields, and both post to the same lookup. The kind
+ * is still the server's decision — a referral code typed into the promo box is
+ * accepted on its merits, not rejected on its label. The labels are a signpost,
+ * not a second validation rule.
+ *
+ * ── ONE CODE PER SUBSCRIPTION ───────────────────────────────────────────────
+ *
+ * The subscription carries a single signup discount, so applying a code
+ * REPLACES whatever was on it rather than adding to it. Two fields make that
+ * worth saying out loud, which is what the line under them does — without it,
+ * two boxes imply two discounts and the second apply looks like a bug that ate
+ * the first.
+ *
+ * Still a link until asked for: most operators have no code, and an empty pair
+ * of boxes reads as a price they are missing out on.
  */
-function PromoCodeField({
+type CodeKind = "promo" | "referral";
+
+const OTHER: Record<CodeKind, CodeKind> = { promo: "referral", referral: "promo" };
+
+const FIELD_COPY: Record<CodeKind, { label: string; placeholder: string }> = {
+  promo: { label: "Promo code", placeholder: "PROMO CODE" },
+  referral: { label: "Referral code", placeholder: "REFERRAL CODE" },
+};
+
+export function DiscountCodeFields({
   busy,
+  applied,
   onApply,
 }: {
   busy: boolean;
+  /** The code already on this subscription, if any. */
+  applied: PromoOffer | null;
   onApply(code: string | null): Promise<string | null>;
 }) {
   const [open, setOpen] = React.useState(false);
-  const [code, setCode] = React.useState("");
-  const [checking, setChecking] = React.useState(false);
-  const [message, setMessage] = React.useState<string | null>(null);
+  const [values, setValues] = React.useState<Record<CodeKind, string>>({ promo: "", referral: "" });
+  const [pending, setPending] = React.useState<CodeKind | null>(null);
+  const [error, setError] = React.useState<{ field: CodeKind; text: string } | null>(null);
+  const [replaced, setReplaced] = React.useState<string | null>(null);
+
+  /*
+   * A referral arriving by link is already APPLIED by the provider before this
+   * step renders — the banner on the marketing page says so. Showing the field
+   * empty underneath that would read as "we lost it", so the carried code is
+   * put back in the box it belongs to. Reading the cookie rather than the
+   * applied offer keeps it right when the code was carried but rejected (an
+   * expired referral, say): the visitor still sees what they arrived with.
+   */
+  React.useEffect(() => {
+    if (!open) return;
+    const carried = readReferralCodeFromDocument();
+    if (!carried) return;
+    setValues((v) => (v.referral ? v : { ...v, referral: carried }));
+  }, [open]);
 
   if (!open) {
     return (
@@ -910,54 +960,103 @@ function PromoCodeField({
         onClick={() => setOpen(true)}
         className="mt-2 text-xs font-medium text-indigo-600 underline-offset-2 hover:underline dark:text-indigo-400"
       >
-        Have a promo code?
+        {applied ? "Use a different code" : "Have a promo or referral code?"}
       </button>
     );
   }
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!code.trim() || checking || busy) return;
-    setChecking(true);
-    setMessage(null);
+  const submit = async (field: CodeKind) => {
+    const code = values[field].trim();
+    if (!code || pending || busy) return;
+
+    const previous = applied?.displayCode ?? null;
+    const isReplacement = !!previous && previous.toUpperCase() !== code.toUpperCase();
+
+    setPending(field);
+    setError(null);
+    setReplaced(null);
     try {
-      setMessage(await onApply(code.trim()));
+      const failure = await onApply(code);
+      if (failure) {
+        setError({ field, text: failure });
+        return;
+      }
+      // One code wins, so the other box must not sit there looking applied.
+      setValues((v) => ({ ...v, [OTHER[field]]: "" }));
+      if (isReplacement) setReplaced(previous);
     } finally {
-      setChecking(false);
+      setPending(null);
     }
   };
 
   return (
-    <form onSubmit={submit} className="mt-2">
-      <div className="flex gap-2">
-        <Input
-          value={code}
-          onChange={(e) => {
-            setCode(e.target.value.toUpperCase());
-            setMessage(null);
+    <div className="mt-2 space-y-2">
+      {(["promo", "referral"] as const).map((field) => (
+        <form
+          key={field}
+          onSubmit={(e) => {
+            e.preventDefault();
+            void submit(field);
           }}
-          placeholder="Promo code"
-          aria-label="Promo code"
-          autoComplete="off"
-          spellCheck={false}
-          maxLength={64}
-          className="h-9 font-mono text-sm uppercase"
-        />
-        <Button
-          type="submit"
-          variant="outline"
-          size="sm"
-          className="h-9 shrink-0"
-          disabled={!code.trim() || checking || busy}
         >
-          {checking ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : "Apply"}
-        </Button>
-      </div>
-      {message && (
-        <p className="mt-1.5 text-xs text-destructive" role="alert">
-          {message}
+          <label
+            htmlFor={"signup-" + field + "-code"}
+            className="mb-1 block text-xs font-medium text-muted-foreground"
+          >
+            {FIELD_COPY[field].label}
+          </label>
+          <div className="flex gap-2">
+            <Input
+              id={"signup-" + field + "-code"}
+              value={values[field]}
+              onChange={(e) => {
+                const next = e.target.value.toUpperCase();
+                setValues((v) => ({ ...v, [field]: next }));
+                setError(null);
+                setReplaced(null);
+              }}
+              placeholder={FIELD_COPY[field].placeholder}
+              aria-label={FIELD_COPY[field].label}
+              aria-invalid={error?.field === field || undefined}
+              aria-describedby={error?.field === field ? "signup-" + field + "-error" : undefined}
+              autoComplete="off"
+              spellCheck={false}
+              maxLength={64}
+              className="h-9 font-mono text-sm uppercase"
+            />
+            <Button
+              type="submit"
+              variant="outline"
+              size="sm"
+              className="h-9 shrink-0"
+              disabled={!values[field].trim() || !!pending || busy}
+            >
+              {pending === field ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+              ) : (
+                "Apply"
+              )}
+            </Button>
+          </div>
+          {error?.field === field && (
+            <p id={"signup-" + field + "-error"} className="mt-1.5 text-xs text-destructive" role="alert">
+              {error.text}
+            </p>
+          )}
+        </form>
+      ))}
+
+      {/* Said before they try it, not after it surprises them. */}
+      <p className="text-xs text-muted-foreground">
+        Only one discount code can be applied per subscription. Applying a code
+        replaces the one already on it.
+      </p>
+
+      {replaced && (
+        <p className="text-xs text-amber-700 dark:text-amber-400" role="status">
+          {replaced} was replaced.
         </p>
       )}
-    </form>
+    </div>
   );
 }
