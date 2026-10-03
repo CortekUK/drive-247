@@ -99,3 +99,49 @@ describe('what the backend does with a test connection', () => {
     expect(callback).toMatch(/payment_model: 'own'/);
   });
 });
+
+/*
+ * Two doors, shown side by side on the rehearsal tenant.
+ *
+ * Everywhere else this panel offers one button, because an operator has one
+ * account that matters and a choice could only help them link the wrong one.
+ * Here the choice is the point: a sandbox can only be linked through the test
+ * door, since Stripe refuses one at the live door.
+ *
+ * The pairing is what these guard. Two buttons wired to the same handler, or
+ * swapped, would be invisible on screen — both open a Stripe chooser and both
+ * look like they worked — and the cost of getting it backwards is a tenant
+ * taken live from a button labelled "test".
+ */
+describe('the live and test buttons', () => {
+  const block = code.slice(code.indexOf('const action = showConnectChoice'), code.indexOf('const links = ['));
+
+  it('are both offered, and say which is which', () => {
+    expect(block).toContain('Connect live account');
+    expect(block).toContain('Connect test account');
+  });
+
+  it('are wired to the matching handler, not to each other', () => {
+    const live = block.indexOf('Connect live account');
+    const test = block.indexOf('Connect test account');
+    // connect() is the live door; connectTest() is the test one.
+    expect(block.lastIndexOf('void connect()', live)).toBeGreaterThan(-1);
+    expect(block.lastIndexOf('void connectTest()', test)).toBeGreaterThan(block.lastIndexOf('void connect()', live));
+  });
+
+  it('warn that the live one goes live', () => {
+    // The whole asymmetry in one sentence, next to the button that does it.
+    expect(block).toMatch(/switches this tenant to live/);
+    expect(block).toMatch(/real customer money/);
+  });
+
+  it('appear only for the allow-listed tenant, and only to someone who may manage it', () => {
+    expect(code).toMatch(/const showConnectChoice =\s*\n?\s*canManage && view\.model === "own" && STRIPE_TEST_CONNECT_SLUGS\.includes\(tenant\.slug\)/);
+  });
+
+  it('leave every other tenant with the single button it had', () => {
+    // The old branches are still there, after the choice branch.
+    expect(code).toMatch(/\) : primaryLabel \? \(/);
+    expect(code).toMatch(/\) : isConnected \? \(/);
+  });
+});

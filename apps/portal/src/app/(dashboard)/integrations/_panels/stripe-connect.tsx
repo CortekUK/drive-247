@@ -972,10 +972,70 @@ export default function StripeConnectPanel({ tenant, onBack, fromIntro }: Integr
 
   /* ── the main screen ───────────────────────────────────────────────────── */
 
+  // Own model only: the managed/Express path has no OAuth handshake to sign, so
+  // a test link there would lead nowhere.
+  const showConnectChoice =
+    canManage && view.model === "own" && STRIPE_TEST_CONNECT_SLUGS.includes(tenant.slug);
   const title = TITLE_BY_LABEL[view.label] ?? "Stripe Connect";
   const eyebrow = view.state === "connected" ? "Live" : view.label;
 
-  const action = primaryLabel ? (
+  /*
+   * Both doors, side by side — STRIPE_TEST_CONNECT_SLUGS only.
+   *
+   * Everywhere else this panel offers exactly one button, because an operator
+   * has one account that matters and a choice could only help them link the
+   * wrong one. On the rehearsal tenant the choice IS the point: a sandbox has
+   * to be linked through the test door, because Stripe answers "Test accounts
+   * cannot be connected to live accounts" to anything arriving at the live one.
+   *
+   * Each button opens Stripe's own account chooser. Which accounts it offers is
+   * decided by the credentials that signed the link, not by us: the live door
+   * greys out every sandbox, and the test door is where the sandboxes are.
+   *
+   * The two are NOT interchangeable, and the caution under them is not
+   * decoration. A live connect writes `stripe_mode: 'live'` and
+   * `payment_model: 'own'` the moment Stripe reports the account usable — it is
+   * the go-live switch for real customer money, pressed from a screen somebody
+   * opened to try something out. The test connect writes only the
+   * `own_stripe_test_*` columns and changes no routing at all.
+   */
+  const action = showConnectChoice ? (
+    <div className="flex flex-col items-center gap-2.5">
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        <Button
+          className="h-10 rounded-2xl px-6"
+          variant="outline"
+          onClick={() => void connect()}
+          disabled={connecting}
+        >
+          {connecting ? <Loader2 className="animate-spin" /> : <Link2 />}
+          Connect live account
+        </Button>
+        <Button
+          className="h-10 rounded-2xl px-6"
+          variant="outline"
+          onClick={() => void connectTest()}
+          disabled={connecting}
+        >
+          {connecting ? <Loader2 className="animate-spin" /> : <Link2 />}
+          Connect test account
+        </Button>
+      </div>
+      <p className="max-w-sm text-center text-xs text-muted-foreground">
+        Connecting a <span className="font-medium">live</span> account switches this tenant to live
+        and starts settling real customer money into it. A{" "}
+        <span className="font-medium">test</span> account is saved for rehearsal and changes nothing.
+      </p>
+      {isConnected && (
+        <Button className="h-9 rounded-2xl px-5" variant="ghost" asChild>
+          <a href={stripeHref} target="_blank" rel="noopener noreferrer">
+            Open Stripe
+            <ArrowUpRight />
+          </a>
+        </Button>
+      )}
+    </div>
+  ) : primaryLabel ? (
     <Button className="h-10 rounded-2xl px-6" onClick={() => void connect()} disabled={connecting}>
       {connecting ? <Loader2 className="animate-spin" /> : <Link2 />}
       {connecting ? "Opening Stripe…" : primaryLabel}
@@ -989,18 +1049,11 @@ export default function StripeConnectPanel({ tenant, onBack, fromIntro }: Integr
     </Button>
   ) : null;
 
-  // Only on the own model: the managed/Express path has no OAuth handshake to
-  // sign, so a test link there would lead nowhere. A quiet link rather than a
-  // button — rehearsing is not the main thing anyone came here to do, and it
-  // must never sit where someone reaches for "Connect Stripe".
-  const canConnectTest =
-    canManage && view.model === "own" && STRIPE_TEST_CONNECT_SLUGS.includes(tenant.slug);
 
   const links = [
     ...(view.requirementsDue.length > 0 ? [{ label: "What Stripe still needs", onClick: () => setScreen("needs") }] : []),
     ...(isConnected || view.brokenRouting ? [{ label: "Account details", onClick: () => setScreen("details") }] : []),
     ...(isConnected ? [{ label: "Disconnecting", onClick: () => setScreen("disconnect") }] : []),
-    ...(canConnectTest ? [{ label: "Connect a test account", onClick: () => void connectTest() }] : []),
   ];
 
   return (
