@@ -55,7 +55,7 @@ import { Button } from "@/components/ui-v2/button";
 
 import type { IntegrationPanelProps, IntegrationState, PanelTenant } from "./_kit";
 import { CopyValue, PanelCard, PanelError, PanelLoading, PanelRow, StatusChip } from "./_kit";
-import { ConnectionTest, DisconnectScreen, Hero, QuietNav, ScreenNav, SubScreen, demoCheck } from "./_screens";
+import { ConnectionTest, DisconnectScreen, Hero, QuietNav, ScreenNav, SubScreen } from "./_screens";
 import { PaymentsEmptyArt } from "@/components/illustrations-v2/scenes/payments";
 import { OwnerPayoutsEmptyArt } from "@/components/illustrations-v2/scenes/owner-payouts";
 
@@ -496,88 +496,27 @@ async function invokeFn<T>(name: string, body: Record<string, unknown>): Promise
   return { data: null, status: context?.status ?? null, message };
 }
 
-/* ─────────────────────────── first-run demo ─────────────────────────────── */
 
 /**
- * FIRST-RUN DEMO — northwind only, on screen only (Ghulam, Oct 2 2026).
+ * Tenants offered "Connect a test account".
  *
- * northwind's real Stripe account is linked, so its dialog can never show the
- * flow a brand-new operator meets. For demoing that flow, this pretends — in
- * the browser, nowhere else — that no account was ever connected: the chip and
- * the panel read a STAND-IN row derived from the real one with the account
- * columns emptied, so the education screens and "Connect your Stripe account"
- * appear. Pressing Connect then plays the outcome (Stripe opening → linked →
- * taking payments) instead of calling `stripe-oauth-start`, because a real
- * OAuth hand-off would re-point where northwind's money lands.
+ * Keyed on SLUG (V2_PLAN §2), never on an id, and deliberately not everyone:
+ * a real operator has one Stripe account that matters and no use for a
+ * sandbox, so the choice would only be a way to link the wrong one.
  *
- * NOTHING IS WRITTEN. No query, no edge function, no column. The real row is
- * still fetched exactly as before; only what is drawn from it changes. Closing
- * the dialog resets the demo so it can be shown again.
- *
- * To remove: delete this block, the two `useDemoRow` calls, and the demo
- * branch in `connect`. Keyed on SLUG (V2_PLAN §2), never on an id.
+ * northwind is where the flow is rehearsed. It used to carry a first-run DEMO
+ * here instead — a stand-in row and a Connect button that opened Stripe's
+ * sign-up page and then pretended, after 2.6 seconds, that it had worked.
+ * Nothing was linked and nothing was written, which made the one screen you
+ * would want to trust while testing the least trustworthy in the portal. The
+ * demo is gone; this connects a real sandbox for real.
  */
-const STRIPE_FIRST_RUN_DEMO_SLUGS: readonly string[] = ["northwind"];
-
-type DemoStage = "fresh" | "opening" | "linked" | "live";
-
-/** One tiny store so the header chip and the panel always agree on the stage. */
-const demoStore = (() => {
-  let stage: DemoStage = "fresh";
-  const listeners = new Set<() => void>();
-  return {
-    get: () => stage,
-    set: (next: DemoStage) => {
-      stage = next;
-      listeners.forEach((l) => l());
-    },
-    subscribe: (l: () => void) => {
-      listeners.add(l);
-      return () => listeners.delete(l);
-    },
-  };
-})();
-
-function useDemoStage(enabled: boolean): DemoStage | null {
-  const stage = useSyncExternalStore(demoStore.subscribe, demoStore.get, demoStore.get);
-  return enabled ? stage : null;
-}
-
-/** The real row, re-drawn for the demo stage. Never sent anywhere. */
-function demoRow(row: StripeRow, stage: DemoStage): StripeRow {
-  const linked = stage === "linked" || stage === "live";
-  return {
-    ...row,
-    payment_provider: "stripe",
-    payment_model: "own",
-    // `live` is what makes derive() call the account "receiving payments";
-    // before that the stand-in trades in test, which is what keeps an empty
-    // own account reading as "Not connected" rather than "Payments failing".
-    stripe_mode: stage === "live" ? "live" : "test",
-    own_stripe_account_id: linked ? row.own_stripe_account_id ?? row.stripe_account_id ?? "acct_demo" : null,
-    own_stripe_connected_at: linked ? new Date().toISOString() : null,
-    stripe_account_id: null,
-    stripe_onboarding_complete: null,
-    stripe_charges_enabled: linked ? true : null,
-    stripe_payouts_enabled: linked ? true : null,
-    stripe_requirements_due: [],
-    stripe_account_disabled_reason: null,
-    stripe_status_synced_at: null,
-  };
-}
-
-function useDemoRow(tenant: PanelTenant, row: StripeRow | undefined) {
-  const enabled = STRIPE_FIRST_RUN_DEMO_SLUGS.includes(tenant.slug);
-  const stage = useDemoStage(enabled);
-  const data = useMemo(() => (row && stage ? demoRow(row, stage) : row), [row, stage]);
-  return { demo: enabled, stage, data };
-}
+const STRIPE_TEST_CONNECT_SLUGS: readonly string[] = ["northwind"];
 
 /* ────────────────────────────── panel ───────────────────────────────────── */
 
 export function StripeConnectStatus({ tenant }: { tenant: PanelTenant }) {
-  const { data: realData, isLoading, isError } = useStripeConnect(tenant);
-  const { data } = useDemoRow(tenant, realData);
+  const { data, isLoading, isError } = useStripeConnect(tenant);
 
   if (isLoading) return <StatusChip state="loading" />;
   // A failed READ is not a disconnected integration. Saying "Not connected"
@@ -591,14 +530,7 @@ export function StripeConnectStatus({ tenant }: { tenant: PanelTenant }) {
 
 export default function StripeConnectPanel({ tenant, onBack, fromIntro }: IntegrationPanelProps) {
   const queryClient = useQueryClient();
-  const { data: realData, isLoading, isError, error, refetch } = useStripeConnect(tenant);
-  const { demo, data } = useDemoRow(tenant, realData);
-  // The demo starts fresh every time the dialog opens, and is put back when it
-  // closes, so it can be shown again from the top.
-  useEffect(() => {
-    if (!demo) return;
-    return () => demoStore.set("fresh");
-  }, [demo]);
+  const { data, isLoading, isError, error, refetch } = useStripeConnect(tenant);
 
   // Read from the auth store rather than queried: `sync-connect-status` is
   // super-admin only, and whether this caller HAS that control is a property of
@@ -630,26 +562,14 @@ export default function StripeConnectPanel({ tenant, onBack, fromIntro }: Integr
   const connect = useCallback(async () => {
     if (!data || !view) return;
     setConnecting(true);
-    if (demo) {
-      // Plays the hand-off: Stripe opens in a new tab (its public sign-up
-      // page — no account is created or linked), the button spins while the
-      // operator "finishes there", then the dialog lands on connected. A real
-      // connect instead leaves this page for Stripe's onboarding below.
-      window.open("https://dashboard.stripe.com/register", "_blank", "noopener,noreferrer");
-      window.setTimeout(() => {
-        demoStore.set("live");
-        setConnecting(false);
-      }, 2600);
-      return;
-    }
     try {
       if (view.model === "own") {
         // The operator links their OWN account, so this is Stripe's OAuth flow
         // on the UAE platform — NOT the managed Express account links below.
         // `mode: 'live'` is not a mode toggle: it is which platform credentials
         // sign the handshake, and an operator only ever connects the real
-        // account they are paid into. A test-mode link is an admin rehearsal
-        // tool and is deliberately not offered here.
+        // account they are paid into. The test-mode link is a rehearsal and
+        // lives in `connectTest`, offered to STRIPE_TEST_CONNECT_SLUGS alone.
         const res = await invokeFn<{ url?: string }>("stripe-oauth-start", {
           tenantId: tenant.id,
           mode: "live",
@@ -689,7 +609,50 @@ export default function StripeConnectPanel({ tenant, onBack, fromIntro }: Integr
       });
       setConnecting(false);
     }
-  }, [data, view, tenant.id, demo]);
+  }, [data, view, tenant.id]);
+
+  /*
+   * Connect a Stripe SANDBOX, for rehearsing the flow end to end.
+   *
+   * Stripe will not let a test account through a live Connect handshake — it
+   * answers "Test accounts cannot be connected to live accounts" and greys out
+   * every sandbox on its chooser. The only way to link one is to sign the
+   * handshake with the platform's TEST credentials, which is what `mode:
+   * 'test'` selects (STRIPE_UAE_OAUTH_CLIENT_ID_TEST).
+   *
+   * WHY THIS IS SAFE, AND WHY THE LIVE BUTTON IS NOT A SUBSTITUTE.
+   *
+   * `stripe-oauth-callback` writes a test connection to its own columns —
+   * `own_stripe_test_account_id` / `own_stripe_test_connected_at` — and touches
+   * neither `stripe_mode` nor `payment_model`: "Test connections are admin
+   * rehearsals and do NOT change routing."
+   *
+   * A LIVE connect does the opposite, and that is the trap this exists to avoid.
+   * When Stripe reports the account usable it also writes `stripe_mode: 'live'`
+   * and `payment_model: 'own'` — connecting the real account IS the go-live
+   * moment, and from that press every booking settles into it. Nobody should
+   * reach for that button to try something out.
+   */
+  const connectTest = useCallback(async () => {
+    setConnecting(true);
+    try {
+      const res = await invokeFn<{ url?: string }>("stripe-oauth-start", {
+        tenantId: tenant.id,
+        mode: "test",
+        returnTo: "portal",
+        origin: window.location.origin,
+      });
+      if (!res.data?.url) throw new Error(res.message || "Could not create the test connection link");
+      window.location.href = res.data.url;
+    } catch (e) {
+      toast({
+        title: "Could not open Stripe",
+        description: e instanceof Error ? e.message : "Please try again.",
+        variant: "destructive",
+      });
+      setConnecting(false);
+    }
+  }, [tenant.id]);
 
   /* ── straight from the education ───────────────────────────────────────── */
 
@@ -826,9 +789,7 @@ export default function StripeConnectPanel({ tenant, onBack, fromIntro }: Integr
   const syncedRelative = relativeTime(view.syncedAt);
   const connectedOn = formatDate(view.connectedAt);
   const isConnected = !!view.accountId;
-  // Never in the demo: its account is a stand-in, and a re-check would run a
-  // real `sync-connect-status` against northwind.
-  const canCheckNow = !demo && syncPlan(view, data, isSuperAdmin).length > 0;
+  const canCheckNow = syncPlan(view, data, isSuperAdmin).length > 0;
 
   // Where the operator finishes what Stripe is asking for. A Standard account
   // holder uses their own dashboard; an Express account holder has no full
@@ -947,14 +908,12 @@ export default function StripeConnectPanel({ tenant, onBack, fromIntro }: Integr
           <ConnectionTest
             idle="Ask Stripe for this account's current state."
             run={
-              demo
-                ? () => demoCheck("Working · Stripe confirmed payments and payouts")
-                : canCheckNow
-                  ? async () => {
-                      const { full } = await syncMutation.mutateAsync();
-                      return full ? "Working · this is Stripe's current answer" : "Working · account status refreshed";
-                    }
-                  : null
+              canCheckNow
+                ? async () => {
+                    const { full } = await syncMutation.mutateAsync();
+                    return full ? "Working · this is Stripe's current answer" : "Working · account status refreshed";
+                  }
+                : null
             }
             unavailable="Stripe tells me the moment anything changes, so this keeps itself current."
           />
@@ -991,24 +950,16 @@ export default function StripeConnectPanel({ tenant, onBack, fromIntro }: Integr
   }
 
   if (screen === "disconnect") {
-    // Unlinking is allowed from here (Ghulam, Oct 2). Real tenants go through
-    // `stripe-disconnect-v2` (own model only — a Drive247-made Express
-    // account is refused with a "support unlinks it" sentence); the demo just
-    // puts itself back to the start.
+    // Unlinking is allowed from here (Ghulam, Oct 2), through
+    // `stripe-disconnect-v2` — own model only, because a Drive247-made Express
+    // account is refused with a "support unlinks it" sentence.
     return (
       <DisconnectScreen
         name="Stripe"
         canManage={canManage}
         pending={disconnect.isPending}
         onBack={home}
-        onConfirm={() => {
-          if (demo) {
-            demoStore.set("fresh");
-            home();
-            return;
-          }
-          disconnect.mutate(undefined, { onSuccess: home });
-        }}
+        onConfirm={() => disconnect.mutate(undefined, { onSuccess: home })}
         consequence={
           <>
             New bookings stop being paid into your Stripe account straight away, and rentals in progress
@@ -1038,10 +989,18 @@ export default function StripeConnectPanel({ tenant, onBack, fromIntro }: Integr
     </Button>
   ) : null;
 
+  // Only on the own model: the managed/Express path has no OAuth handshake to
+  // sign, so a test link there would lead nowhere. A quiet link rather than a
+  // button — rehearsing is not the main thing anyone came here to do, and it
+  // must never sit where someone reaches for "Connect Stripe".
+  const canConnectTest =
+    canManage && view.model === "own" && STRIPE_TEST_CONNECT_SLUGS.includes(tenant.slug);
+
   const links = [
     ...(view.requirementsDue.length > 0 ? [{ label: "What Stripe still needs", onClick: () => setScreen("needs") }] : []),
     ...(isConnected || view.brokenRouting ? [{ label: "Account details", onClick: () => setScreen("details") }] : []),
     ...(isConnected ? [{ label: "Disconnecting", onClick: () => setScreen("disconnect") }] : []),
+    ...(canConnectTest ? [{ label: "Connect a test account", onClick: () => void connectTest() }] : []),
   ];
 
   return (
