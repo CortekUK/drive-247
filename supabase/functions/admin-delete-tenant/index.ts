@@ -252,43 +252,80 @@ Deno.serve(async (req) => {
       deletionResults.pnl_entries = pnlError ? pnlError.message : (pnlData?.length || 0);
     }
 
-    // Delete tables with tenant_id.
-    //
-    // The first four have FKs to tenants(id) with NO ACTION (verified against
-    // prod: bonzah_insurance_policies, gig_driver_images, promocodes,
-    // rental_additional_drivers). They are NOT covered by a cascade, so if a
-    // tenant has any such rows the final `DELETE FROM tenants` fails with a
-    // foreign-key violation and the whole call 500s. Everything else here either
-    // cascades or is cleaned up for tidiness. rental_additional_drivers is first
-    // because it also references rentals.
-    const tablesWithTenantId = [
-      'rental_additional_drivers',
-      'bonzah_insurance_policies',
-      'gig_driver_images',
-      'promocodes',
-      'ledger_entries',
-      'payments',
-      'fines',
-      'reminders',
-      'service_records',
-      'rentals',
-      'vehicles',
-      'customers',
-      'app_users',
-      'audit_logs',
+    /*
+     * Every row that must go before `DELETE FROM tenants` can succeed.
+     *
+     * A FK to tenants(id) that is NOT `ON DELETE CASCADE` will refuse the final
+     * delete, and the whole call 500s with a message naming one constraint. The
+     * list used to carry four such tables and name them "verified against prod".
+     * It has since fallen eleven behind: the referral and promo-code tables
+     * arrived afterwards and nobody came back here, so deleting a tenant that
+     * had ever been referred, or that owned a referral code, failed with
+     *
+     *   violates foreign key constraint
+     *   "platform_promo_codes_owner_tenant_id_fkey" on table
+     *   "platform_promo_codes"
+     *
+     * and fixing just that one only moved the failure to `referrals`. The list
+     * below is the full set, taken from the migrations rather than from memory.
+     *
+     * TWO THINGS TO KNOW BEFORE EDITING:
+     *
+     *   1. The column is NOT always `tenant_id` — platform_promo_codes uses
+     *      `owner_tenant_id`, and referrals points at a tenant TWICE. That is
+     *      why these are [table, column] pairs and not bare names.
+     *   2. Order is child-before-parent. Redemptions reference the promo code,
+     *      the referral_* detail tables reference the referral, tickets
+     *      reference the conversation, additional drivers reference the rental.
+     *
+     * If a new table takes a non-cascading FK to tenants, it belongs here, and
+     * the symptom of forgetting is a 500 on a delete nobody can explain.
+     */
+    const tenantScopedRows: Array<[table: string, column: string]> = [
+      // ── blocking: FK to tenants(id) with NO ACTION ──────────────────────
+      ['promo_code_redemptions', 'tenant_id'],
+      ['referral_claims', 'referrer_tenant_id'],
+      ['referral_events', 'tenant_id'],
+      ['referral_savings', 'tenant_id'],
+      ['referral_subscription_scans', 'tenant_id'],
+      ['referral_tier_state', 'tenant_id'],
+      ['referrals', 'referred_tenant_id'],
+      ['referrals', 'referrer_tenant_id'],
+      ['platform_promo_codes', 'owner_tenant_id'],
+      ['trax_support_tickets', 'tenant_id'],
+      ['trax_support_conversations', 'tenant_id'],
+      ['rental_additional_drivers', 'tenant_id'],
+      ['bonzah_insurance_policies', 'tenant_id'],
+      ['gig_driver_images', 'tenant_id'],
+      // ── not blocking; cleared for tidiness ──────────────────────────────
+      ['promocodes', 'tenant_id'],
+      ['ledger_entries', 'tenant_id'],
+      ['payments', 'tenant_id'],
+      ['fines', 'tenant_id'],
+      ['reminders', 'tenant_id'],
+      ['service_records', 'tenant_id'],
+      ['rentals', 'tenant_id'],
+      ['vehicles', 'tenant_id'],
+      ['customers', 'tenant_id'],
+      ['app_users', 'tenant_id'],
+      ['audit_logs', 'tenant_id'],
     ];
 
-    for (const table of tablesWithTenantId) {
+    for (const [table, column] of tenantScopedRows) {
+      // Two passes over `referrals` on different columns, so the key is the
+      // pair — keyed by table alone, the second would overwrite the first's
+      // count and hide a failure.
+      const key = column === 'tenant_id' ? table : `${table}.${column}`;
       try {
         const { data, error } = await supabaseAdmin
           .from(table)
           .delete()
-          .eq('tenant_id', tenant_id)
+          .eq(column, tenant_id)
           .select('id');
 
-        deletionResults[table] = error ? error.message : (data?.length || 0);
+        deletionResults[key] = error ? error.message : (data?.length || 0);
       } catch (err) {
-        deletionResults[table] = `Error: ${err}`;
+        deletionResults[key] = `Error: ${err}`;
       }
     }
 
