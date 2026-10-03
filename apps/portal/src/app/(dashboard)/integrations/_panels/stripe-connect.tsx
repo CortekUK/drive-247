@@ -497,23 +497,24 @@ async function invokeFn<T>(name: string, body: Record<string, unknown>): Promise
 }
 
 /**
- * Tenants whose "Connect Stripe" follows `stripe_mode` instead of always
- * signing the handshake live.
+ * Tenants offered BOTH connect buttons, live and test.
  *
- * A tenant kept in test mode is a rehearsal tenant, and its operator wants the
- * sandbox chooser — the live one refuses every sandbox outright, so there is no
- * way to link one from a live link no matter what they pick.
+ * Stripe decides which accounts its chooser lists from the credentials that
+ * signed the link, so one button can only ever reach one world: the live link
+ * greys out every sandbox, the test link lists nothing else. A rehearsal tenant
+ * needs both, and asking it to infer which from `stripe_mode` was worse — the
+ * screen then gave no way to reach the other one, and no way to see which it
+ * was about to use.
  *
- * Deliberately NOT everyone. A real operator is in test mode on their first
- * day, and following the mode there would offer them a sandbox at the exact
- * moment they are trying to get paid. Worse, it would look like it worked:
- * `stripe-oauth-callback` stores a test connection in `own_stripe_test_*` and
- * changes no routing, so they would come away believing they were set up with
- * nothing settling into their account.
+ * Deliberately NOT everyone. A real operator has one account they are paid
+ * into, and the second button could only help them link the wrong one. Worse,
+ * it would look like it worked: `stripe-oauth-callback` files a test connection
+ * under `own_stripe_test_*` and changes no routing at all, so they would come
+ * away believing they were set up with nothing settling into their account.
  *
  * Keyed on SLUG (V2_PLAN §2), never on an id.
  */
-const STRIPE_CONNECT_FOLLOWS_MODE: readonly string[] = ["northwind"];
+const STRIPE_CONNECT_CHOICE_SLUGS: readonly string[] = ["northwind"];
 
 /* ────────────────────────────── panel ───────────────────────────────────── */
 
@@ -561,31 +562,60 @@ export default function StripeConnectPanel({ tenant, onBack, fromIntro }: Integr
 
   /* ── connect / resume onboarding ──────────────────────────────────────── */
 
+  /**
+   * Stripe's OAuth hand-off on the UAE platform, in one mode or the other.
+   *
+   * `mode` is not a preference. It selects which platform credentials sign the
+   * link, and Stripe decides from THEM which of the operator's accounts its
+   * chooser will even list: a live link greys out every sandbox ("Test accounts
+   * cannot be connected to live accounts"), and a test link lists the sandboxes
+   * and nothing else. One link can therefore never reach both.
+   *
+   * Deliberately independent of `view.model`. The two buttons below call this
+   * directly instead of going through `connect`, because `stripe-disconnect-v2`
+   * reverts `payment_model` to 'managed' — so after a disconnect the own-model
+   * branch of `connect` is unreachable, and the ordinary button creates a NEW
+   * Drive247 Express account instead. That happened on northwind and left a
+   * stray acct_ on the platform. From here, a connect is always a connect.
+   */
+  const connectWith = useCallback(
+    async (mode: "live" | "test") => {
+      setConnecting(true);
+      try {
+        const res = await invokeFn<{ url?: string }>("stripe-oauth-start", {
+          tenantId: tenant.id,
+          mode,
+          returnTo: "portal",
+          origin: window.location.origin,
+        });
+        if (!res.data?.url) throw new Error(res.message || "Could not create the connection link");
+        window.location.href = res.data.url;
+      } catch (e) {
+        toast({
+          title: "Could not open Stripe",
+          description: e instanceof Error ? e.message : "Please try again.",
+          variant: "destructive",
+        });
+        setConnecting(false);
+      }
+    },
+    [tenant.id],
+  );
+
   const connect = useCallback(async () => {
     if (!data || !view) return;
-    // `view.mode` is `tenants.stripe_mode`, i.e. the world this tenant trades
-    // in. Only the allow-listed tenants follow it; see the note below.
-    const connectMode =
-      STRIPE_CONNECT_FOLLOWS_MODE.includes(tenant.slug) && view.mode === "test" ? "test" : "live";
     setConnecting(true);
     try {
       if (view.model === "own") {
         // The operator links their OWN account, so this is Stripe's OAuth flow
         // on the UAE platform — NOT the managed Express account links below.
-        // `mode` is not a preference: it is which platform credentials sign the
-        // handshake, and Stripe decides from them which of the operator's
-        // accounts it will even offer. A live link greys out every sandbox
-        // ("Test accounts cannot be connected to live accounts"); a test link
-        // offers the sandboxes and nothing else.
-        //
-        // Everyone gets 'live', because an operator has one account they are
-        // paid into and connecting a sandbox would leave them believing they
-        // are set up when no routing changed. On STRIPE_CONNECT_FOLLOWS_MODE it
-        // follows the tenant instead, so a tenant kept in test mode is offered
-        // its test accounts — which is the whole point of a rehearsal tenant.
+        // `mode: 'live'` because an operator has one account they are paid into;
+        // connecting a sandbox would leave them believing they were set up while
+        // no routing changed. The test link is offered only on the rehearsal
+        // tenants, through `connectWith` above.
         const res = await invokeFn<{ url?: string }>("stripe-oauth-start", {
           tenantId: tenant.id,
-          mode: connectMode,
+          mode: "live",
           returnTo: "portal",
           origin: window.location.origin,
         });
@@ -945,7 +975,54 @@ export default function StripeConnectPanel({ tenant, onBack, fromIntro }: Integr
   const title = TITLE_BY_LABEL[view.label] ?? "Stripe Connect";
   const eyebrow = view.state === "connected" ? "Live" : view.label;
 
-  const action = primaryLabel ? (
+  /*
+   * Both doors, named, on the rehearsal tenants.
+   *
+   * Gated on the SLUG and the manage permission only — not on `view.model`.
+   * That was the flaw in the first version of this: `stripe-disconnect-v2`
+   * reverts `payment_model` to 'managed', so disconnecting removed the very
+   * buttons needed to connect again, and the ordinary button that replaced them
+   * created a new Drive247 Express account instead.
+   */
+  const showConnectChoice = canManage && STRIPE_CONNECT_CHOICE_SLUGS.includes(tenant.slug);
+
+  const action = showConnectChoice ? (
+    <div className="flex flex-col items-center gap-2.5">
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        <Button
+          className="h-10 rounded-2xl px-6"
+          variant="outline"
+          onClick={() => void connectWith("live")}
+          disabled={connecting}
+        >
+          {connecting ? <Loader2 className="animate-spin" /> : <Link2 />}
+          Connect live account
+        </Button>
+        <Button
+          className="h-10 rounded-2xl px-6"
+          variant="outline"
+          onClick={() => void connectWith("test")}
+          disabled={connecting}
+        >
+          {connecting ? <Loader2 className="animate-spin" /> : <Link2 />}
+          Connect test account
+        </Button>
+      </div>
+      <p className="max-w-sm text-center text-xs text-muted-foreground">
+        Connecting a <span className="font-medium">live</span> account switches this tenant to live
+        and starts settling real customer money into it. A{" "}
+        <span className="font-medium">test</span> account is saved for rehearsal and changes nothing.
+      </p>
+      {isConnected && (
+        <Button className="h-9 rounded-2xl px-5" variant="ghost" asChild>
+          <a href={stripeHref} target="_blank" rel="noopener noreferrer">
+            Open Stripe
+            <ArrowUpRight />
+          </a>
+        </Button>
+      )}
+    </div>
+  ) : primaryLabel ? (
     <Button className="h-10 rounded-2xl px-6" onClick={() => void connect()} disabled={connecting}>
       {connecting ? <Loader2 className="animate-spin" /> : <Link2 />}
       {connecting ? "Opening Stripe…" : primaryLabel}

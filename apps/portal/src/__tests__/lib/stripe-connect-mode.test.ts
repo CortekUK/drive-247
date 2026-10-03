@@ -31,29 +31,64 @@ const panel = read('apps/portal/src/app/(dashboard)/integrations/_panels/stripe-
 const code = strip(panel);
 const callback = strip(read('supabase/functions/stripe-oauth-callback/index.ts'));
 
-describe('the handshake follows the tenant, for the allow-listed tenants only', () => {
-  it('names the tenants in one place, keyed on slug', () => {
-    expect(code).toMatch(/const STRIPE_CONNECT_FOLLOWS_MODE: readonly string\[\] = \["northwind"\]/);
+describe('the two connect buttons', () => {
+  const block = code.slice(code.indexOf('const action = showConnectChoice'), code.indexOf('const links = ['));
+
+  it('names the rehearsal tenants in one place, keyed on slug', () => {
+    expect(code).toContain('const STRIPE_CONNECT_CHOICE_SLUGS: readonly string[] = ["northwind"];');
     // V2_PLAN §2 — a tenant id here would be unreadable and would rot.
-    expect(code).not.toMatch(/STRIPE_CONNECT_FOLLOWS_MODE[\s\S]{0,160}[0-9a-f]{8}-[0-9a-f]{4}/);
+    const decl = code.slice(code.indexOf('STRIPE_CONNECT_CHOICE_SLUGS'), code.indexOf('STRIPE_CONNECT_CHOICE_SLUGS') + 160);
+    expect(decl).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}/);
   });
 
-  it('uses test ONLY when allow-listed AND the tenant trades in test', () => {
-    expect(code).toMatch(
-      /STRIPE_CONNECT_FOLLOWS_MODE\.includes\(tenant\.slug\) && view\.mode === "test" \? "test" : "live"/,
+  it('offers both doors, named', () => {
+    expect(block).toContain('Connect live account');
+    expect(block).toContain('Connect test account');
+  });
+
+  it('wires each button to its own mode, not to the other', () => {
+    const live = block.indexOf('Connect live account');
+    const test = block.indexOf('Connect test account');
+    // Swapped, both would still open a Stripe chooser and both would look
+    // like they worked — and the cost is a tenant going live from a button
+    // marked "test".
+    expect(block.lastIndexOf('connectWith("live")', live)).toBeGreaterThan(-1);
+    expect(block.lastIndexOf('connectWith("test")', test)).toBeGreaterThan(
+      block.lastIndexOf('connectWith("live")', live),
     );
   });
 
-  it('passes that mode to the handshake rather than a hardcoded one', () => {
-    const own = code.slice(code.indexOf('"stripe-oauth-start"'), code.indexOf('"stripe-oauth-start"') + 260);
-    expect(own).toMatch(/mode: connectMode/);
-    expect(own).not.toMatch(/mode: "live"/);
+  it('warns that the live one goes live', () => {
+    expect(block).toMatch(/switches this tenant to live/);
+    expect(block).toMatch(/real customer money/);
   });
 
-  it('still falls back to live for every other tenant', () => {
-    // The ternary's else branch is the guarantee: no allow-list entry, no test
-    // link, whatever mode the tenant happens to be in.
-    expect(code).toMatch(/\? "test" : "live"/);
+  it('does NOT gate on view.model, which a disconnect flips', () => {
+    // The first version gated on `view.model === "own"`. stripe-disconnect-v2
+    // reverts payment_model to 'managed', so disconnecting removed the very
+    // buttons needed to connect again — and the ordinary button that replaced
+    // them created a new Drive247 Express account instead.
+    expect(code).toContain(
+      'const showConnectChoice = canManage && STRIPE_CONNECT_CHOICE_SLUGS.includes(tenant.slug);',
+    );
+    const gate = code.slice(code.indexOf('const showConnectChoice'), code.indexOf('const showConnectChoice') + 140);
+    expect(gate).not.toContain('view.model');
+  });
+
+  it('always takes the OAuth hand-off, never the Express path', () => {
+    // connectWith does not branch on view.model at all, so a managed tenant
+    // on the allow-list still connects rather than having an account minted.
+    const fn = code.slice(code.indexOf('const connectWith'), code.indexOf('const connect ='));
+    expect(fn).toMatch(/"stripe-oauth-start"/);
+    expect(fn).toMatch(/mode,/);
+    expect(fn).not.toMatch(/create-connected-account/);
+    expect(fn).not.toMatch(/view.model/);
+  });
+
+  it('leaves every other tenant the single live button', () => {
+    const fn = code.slice(code.indexOf('const connect ='), code.indexOf('const connect =') + 900);
+    expect(fn).toMatch(/mode: "live"/);
+    expect(code).toContain(') : primaryLabel ? (');
   });
 });
 
