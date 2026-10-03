@@ -274,24 +274,84 @@ Deno.serve(async (req) => {
      *   1. The column is NOT always `tenant_id` — platform_promo_codes uses
      *      `owner_tenant_id`, and referrals points at a tenant TWICE. That is
      *      why these are [table, column] pairs and not bare names.
-     *   2. Order is child-before-parent. Redemptions reference the promo code,
-     *      the referral_* detail tables reference the referral, tickets
-     *      reference the conversation, additional drivers reference the rental.
+     *   2. Order is child-before-parent, and the referral group is NOT ordered
+     *      by this list — see `unpickReferrals` below, which runs first.
      *
      * If a new table takes a non-cascading FK to tenants, it belongs here, and
      * the symptom of forgetting is a 500 on a delete nobody can explain.
      */
+
+    /*
+     * The referral group has to be unpicked by hand, and a first attempt that
+     * simply listed the tables in `tenantScopedRows` failed against prod twice
+     * over. Both reasons matter:
+     *
+     *   referral_events -> referrals -> promo_code_redemptions -> platform_promo_codes
+     *
+     *   1. ORDER. Deleting the redemption first is refused — "Key (id)=(…) is
+     *      still referenced from table referrals" — and deleting the referral
+     *      first is refused by referral_events. The chain has to be walked from
+     *      the far end, which is the opposite of the order a reader would guess
+     *      from the tenant columns.
+     *   2. OWNERSHIP. A referral joins TWO tenants, and the rows hanging off it
+     *      can belong to the OTHER one. Deleting referral_events by `tenant_id`
+     *      leaves exactly the row that blocks the referral, because that event
+     *      belongs to the referrer and the tenant being deleted was the
+     *      referred. So the children are deleted by `referral_id`, from
+     *      referrals found at EITHER end.
+     */
+    const unpickReferrals = async () => {
+      const { data: refs } = await supabaseAdmin
+        .from('referrals')
+        .select('id')
+        .or(`referrer_tenant_id.eq.${tenant_id},referred_tenant_id.eq.${tenant_id}`);
+      const referralIds = (refs ?? []).map((r: { id: string }) => r.id);
+
+      if (referralIds.length) {
+        for (const [table, column] of [
+          ['referral_events', 'referral_id'],
+          ['referral_claims', 'resolved_referral_id'],
+        ] as const) {
+          const { data, error } = await supabaseAdmin
+            .from(table).delete().in(column, referralIds).select('id');
+          deletionResults[table] = error ? error.message : (data?.length || 0);
+        }
+        const { data, error } = await supabaseAdmin
+          .from('referrals').delete().in('id', referralIds).select('id');
+        deletionResults.referrals = error ? error.message : (data?.length || 0);
+      }
+
+      // Promo codes this tenant owns, and the rows pointing at them. Scans are
+      // keyed by the CODE, so a scan by another tenant still blocks the code.
+      const { data: codes } = await supabaseAdmin
+        .from('platform_promo_codes').select('id').eq('owner_tenant_id', tenant_id);
+      const codeIds = (codes ?? []).map((c: { id: string }) => c.id);
+      if (codeIds.length) {
+        await supabaseAdmin.from('referral_subscription_scans').delete().in('found_promo_code_id', codeIds);
+        await supabaseAdmin.from('promo_code_redemptions').delete().in('promo_code_id', codeIds);
+      }
+      for (const [table, column] of [
+        ['promo_code_redemptions', 'tenant_id'],
+        ['platform_promo_codes', 'owner_tenant_id'],
+      ] as const) {
+        const { data, error } = await supabaseAdmin
+          .from(table).delete().eq(column, tenant_id).select('id');
+        deletionResults[table] = error ? error.message : (data?.length || 0);
+      }
+    };
+
+    try {
+      await unpickReferrals();
+    } catch (err) {
+      deletionResults.referral_group = `Error: ${err}`;
+    }
+
     const tenantScopedRows: Array<[table: string, column: string]> = [
       // ── blocking: FK to tenants(id) with NO ACTION ──────────────────────
-      ['promo_code_redemptions', 'tenant_id'],
-      ['referral_claims', 'referrer_tenant_id'],
-      ['referral_events', 'tenant_id'],
+      // The referral group above has already gone; what remains is independent.
       ['referral_savings', 'tenant_id'],
       ['referral_subscription_scans', 'tenant_id'],
       ['referral_tier_state', 'tenant_id'],
-      ['referrals', 'referred_tenant_id'],
-      ['referrals', 'referrer_tenant_id'],
-      ['platform_promo_codes', 'owner_tenant_id'],
       ['trax_support_tickets', 'tenant_id'],
       ['trax_support_conversations', 'tenant_id'],
       ['rental_additional_drivers', 'tenant_id'],

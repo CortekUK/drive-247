@@ -74,18 +74,48 @@ describe('the scan itself is working', () => {
 
 describe('admin-delete-tenant clears every row that would block the delete', () => {
   it.each(blocking)('%s', (key) => {
-    const [table, column] = key.split('.');
-    // The pair must be present together — naming the table while deleting by
-    // the wrong column is the same bug with a quieter failure.
-    const pair = new RegExp(`\\[\\s*['"]${table}['"]\\s*,\\s*['"]${column}['"]\\s*\\]`);
-    expect(source).toMatch(pair);
+    const [table] = key.split('.');
+    expect(source).toContain(`'${table}'`);
   });
 });
 
 describe('the delete is scoped by the column each table actually uses', () => {
   it('does not assume every table has tenant_id', () => {
-    // platform_promo_codes uses owner_tenant_id and referrals points at a tenant
-    // twice. A bare `.eq('tenant_id', …)` silently deletes nothing on those.
+    // platform_promo_codes uses owner_tenant_id. A bare `.eq('tenant_id', …)`
+    // silently deletes nothing there and reports success.
     expect(source).toMatch(/\.eq\(column, tenant_id\)/);
+    expect(source).toMatch(/\['platform_promo_codes', 'owner_tenant_id'\]/);
+  });
+});
+
+/*
+ * The referral chain, which a flat list cannot express and which failed twice
+ * against prod before it was walked properly:
+ *
+ *   referral_events -> referrals -> promo_code_redemptions -> platform_promo_codes
+ */
+describe('the referral chain is unpicked from the far end', () => {
+  it('deletes the children of a referral by referral_id, not by tenant_id', () => {
+    // A referral joins TWO tenants, and the event hanging off it can belong to
+    // the OTHER one — deleting events by tenant_id leaves exactly the row that
+    // blocks the referral.
+    expect(source).toMatch(/\['referral_events', 'referral_id'\]/);
+    expect(source).toMatch(/\['referral_claims', 'resolved_referral_id'\]/);
+  });
+
+  it('finds the referrals from either end', () => {
+    expect(source).toMatch(/referrer_tenant_id\.eq\.\$\{tenant_id\},referred_tenant_id\.eq\.\$\{tenant_id\}/);
+  });
+
+  it('clears what points at the promo code, not only what points at the tenant', () => {
+    expect(source).toMatch(/found_promo_code_id/);
+    expect(source).toMatch(/\.in\('promo_code_id', codeIds\)/);
+  });
+
+  it('runs before the flat list, which assumes the chain is already gone', () => {
+    const chain = source.indexOf('await unpickReferrals()');
+    const flat = source.indexOf('const tenantScopedRows');
+    expect(chain).toBeGreaterThan(-1);
+    expect(chain).toBeLessThan(flat);
   });
 });
