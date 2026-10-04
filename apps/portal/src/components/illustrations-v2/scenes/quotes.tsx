@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Quotes empty-state picture (docs/brand/illustration-guide.md §4a).
+ * Quotes empty-state picture (ILLUSTRATION_GUIDE.md §4a).
  *
  * The story: pick the dates, every free car is priced onto one quote, and the
  * quote flies off to the customer. No car drawn — the lines are the fleet.

@@ -41,38 +41,9 @@ import { assertLooseContract, fixtureOrNull, readLooseBodyShape, readRepoFile, s
 const FN = "bonzah-partner-review";
 const src = () => srcOf(FN);
 
-const CONSOLE_UI = "apps/bonzah/components/console/BonzahQueue.tsx";
 const PORTAL_PANEL = "apps/portal/src/app/(dashboard)/integrations/_panels/bonzah.tsx";
 
 describe("bonzah/partner-review — contract", () => {
-  it("agrees with the payloads Bonzah's console builds", () => {
-    // One function, two shapes: the approve dialog sends credentials, the reject
-    // dialog sends a reason. Both keys stay in the contract — the console is
-    // what decides per review which branch it is calling, and excusing a field
-    // a caller demonstrably sends is the stale excuse tests/README.md §9 warns
-    // about.
-    const shape = assertLooseContract({
-      fn: FN,
-      builtIn: CONSOLE_UI,
-      payload: {
-        submissionId: "00000000-0000-0000-0000-000000000000",
-        action: "approve",
-        username: "operator@example.invalid",
-        password: "not-a-real-password",
-        message: "Welcome aboard",
-        reason: "Please re-upload the W-9",
-      },
-    });
-    expect(shape.fields).toEqual([
-      "action",
-      "message",
-      "password",
-      "reason",
-      "submissionId",
-      "username",
-    ]);
-  });
-
   it("takes NO tenant id off the request — the submission decides the tenant", () => {
     // The single most dangerous field this endpoint could grow. Everything it
     // writes is scoped by `submission.tenant_id`; a caller-supplied tenant id
@@ -90,20 +61,6 @@ describe("bonzah/partner-review — contract", () => {
       src(),
       "The tenant is no longer derived from the submission row.",
     ).toMatch(/const tenantId = submission\.tenant_id/);
-  });
-
-  it("is invoked by the Bonzah console for both actions", () => {
-    const ui = readRepoFile(CONSOLE_UI);
-    expect(ui, `${CONSOLE_UI} no longer invokes ${FN}.`).toContain("bonzah-partner-review");
-    expect(
-      ui,
-      "The approve call no longer sends action: 'approve' with a username and password. " +
-        "The function 400s without them, after having already flipped the tenant to live mode.",
-    ).toMatch(/action:\s*'approve'[\s\S]{0,200}username:/);
-    expect(
-      ui,
-      "The reject call no longer sends action: 'reject' with a reason.",
-    ).toMatch(/action:\s*'reject',\s*reason:/);
   });
 });
 

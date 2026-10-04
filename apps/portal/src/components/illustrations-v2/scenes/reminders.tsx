@@ -5,7 +5,7 @@
  * pill) in front of one already ticked off, beside a clock set to nine with an
  * indigo bell on its shoulder. No car.
  *
- * Built only from the scene kit (docs/brand/illustration-guide.md §4a): static
+ * Built only from the scene kit (ILLUSTRATION_GUIDE.md §4a): static
  * markup from constants, nothing user-supplied is interpolated.
  */
 import { ground, makeEmptyArt, pal, stroke, tick, txt } from '../scene-kit';

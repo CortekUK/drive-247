@@ -15,7 +15,7 @@ const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 if (!SUPABASE_URL) {
   throw new Error(
-    "NEXT_PUBLIC_SUPABASE_URL is not set. Create v2/apps/web/.env.local with the " +
+    "NEXT_PUBLIC_SUPABASE_URL is not set. Create apps/booking/.env.local with the " +
       "Supabase project URL and anon key. There is deliberately no fallback — " +
       "without it the app would otherwise talk to production.",
   );
@@ -23,7 +23,7 @@ if (!SUPABASE_URL) {
 
 if (!SUPABASE_ANON_KEY) {
   throw new Error(
-    "NEXT_PUBLIC_SUPABASE_ANON_KEY is not set. Create v2/apps/web/.env.local with the " +
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY is not set. Create apps/booking/.env.local with the " +
       "Supabase project URL and anon key. There is deliberately no fallback — " +
       "without it the app would otherwise talk to production.",
   );

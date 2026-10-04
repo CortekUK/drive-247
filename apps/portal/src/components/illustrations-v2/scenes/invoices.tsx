@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Invoices empty state (docs/brand/illustration-guide.md §4a).
+ * Invoices empty state (ILLUSTRATION_GUIDE.md §4a).
  *
  * The story: a rental (its booked dates) produces its invoice — line items
  * and a total in indigo — and the invoice goes on to the customer's inbox.

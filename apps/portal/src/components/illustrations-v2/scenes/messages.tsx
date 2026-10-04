@@ -5,7 +5,7 @@
  * email (envelope mark) arrive from the customer on the left, and your reply,
  * in indigo with its read ticks, goes back from the right. No car.
  *
- * Built only from the scene kit (docs/brand/illustration-guide.md §4a): static
+ * Built only from the scene kit (ILLUSTRATION_GUIDE.md §4a): static
  * markup from constants, nothing user-supplied is interpolated.
  */
 import { avatar, ground, makeEmptyArt, pal, stroke } from '../scene-kit';

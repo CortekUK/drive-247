@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Payments empty state (docs/brand/illustration-guide.md §4a).
+ * Payments empty state (ILLUSTRATION_GUIDE.md §4a).
  *
  * The story: money arrives two ways — a card payment, and cash or a bank
  * transfer you record by hand — and both land in one ledger, the newest row

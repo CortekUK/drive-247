@@ -4,7 +4,7 @@
  * Support: your ticket (a ticket stub with a question mark on it) travels to a
  * person on a headset, and their reply comes back as an indigo bubble. No car.
  *
- * Built only from the scene kit (docs/brand/illustration-guide.md §4a): static
+ * Built only from the scene kit (ILLUSTRATION_GUIDE.md §4a): static
  * markup from constants, nothing user-supplied is interpolated.
  */
 import { avatar, ground, makeEmptyArt, pal, stroke, txt } from '../scene-kit';

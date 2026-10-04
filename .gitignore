@@ -48,11 +48,9 @@ helper-folder
 quality-assurance
 testing-qa.env
 
-# Code analysis tool output (graphify) — generated artifacts, never commit.
-# Scoped to the repo root: an unanchored "graphify-out/" also matched
-# knowledge-graph/units/*/graphify-out/, which silently excluded the whole
-# knowledge graph. What is kept there is governed by knowledge-graph/.gitignore.
-/graphify-out/
+# Screenshots and deploy snapshots written by scripts/trax-deploy.mjs and the
+# tests/trax browser runs — local output, never commit.
+/artifacts/
 
 # local env backups — NEVER commit (contain secrets)
 .env*.bak

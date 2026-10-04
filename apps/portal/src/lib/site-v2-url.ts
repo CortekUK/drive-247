@@ -1,17 +1,15 @@
 /**
- * Where the tenant's v2 website (`v2/apps/web`) is served.
+ * Where the tenant's v2 website is served. The v2 design lives in the booking
+ * app (apps/booking/src/northwind-site), so in dev that is the booking app's
+ * port, 3000; its middleware picks the v2 design for canary tenants.
  *
- * Separate from `getBookingBaseUrl` on purpose: that resolves the v1 booking
- * app, and in dev it hardcodes port 3000, which is not where either app runs
- * here (v2 web is on 4006 — see the root dev scripts). The two must never be
- * confused, because the portal embeds THIS one in an iframe and talks to it by
- * origin; embedding the wrong app is a silent, blank preview.
+ * Kept separate from `getBookingBaseUrl` because the portal embeds THIS one in
+ * an iframe and talks to it by origin.
  *
- * Production: `{slug}.drive-247.com`. Which app answers there is decided by
- * Vercel's domain assignment, not by code — the canary's subdomain is attached
- * to the v2 project, everyone else's stays on v1.
+ * Production: `{slug}.drive-247.com`, served by the booking app for every
+ * tenant; its middleware routes the canary to the v2 design.
  */
-export const SITE_V2_DEV_PORT = 4006;
+export const SITE_V2_DEV_PORT = 3000;
 
 export function getSiteV2BaseUrl(tenantSlug: string | null | undefined): string {
   if (!tenantSlug) return "";

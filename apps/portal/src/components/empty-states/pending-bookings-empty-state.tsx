@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Pending bookings teaching empty state (docs/brand/illustration-guide.md §4a).
+ * Pending bookings teaching empty state (ILLUSTRATION_GUIDE.md §4a).
  *
  * Records here only ever arrive from outside — a website booking whose payment
  * is held (`capture_status = 'requires_capture'`) until the operator decides —

@@ -24,7 +24,7 @@ import type { TrailKind, TrailStep } from "@/lib/price-trail";
  * number on the page, so they always agree.
  */
 
-/* Small illustrated icons, in the house style (docs/brand/illustration-guide):
+/* Small illustrated icons, in the house style (ILLUSTRATION_GUIDE.md):
    ink lines on white, the accent only where it means something. 36×36. */
 // More accent (Oct 2026): outlines in the accent, shapes filled with a soft
 // accent wash, and the one meaningful detail in the full accent.

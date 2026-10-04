@@ -2,7 +2,7 @@
 
 /**
  * Insights → Reports: one small picture per report card
- * (docs/brand/illustration-guide.md §4a style — ink lines, white cards, the
+ * (ILLUSTRATION_GUIDE.md §4a style — ink lines, white cards, the
  * tenant's accent only where it matters, the car only where the report is
  * about cars).
  *

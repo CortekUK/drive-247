@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Pending bookings empty-state picture (docs/brand/illustration-guide.md §4a).
+ * Pending bookings empty-state picture (ILLUSTRATION_GUIDE.md §4a).
  *
  * The story: a customer presses Book on your site, and the request lands here
  * with its payment held, waiting for you to decline or approve. No car.

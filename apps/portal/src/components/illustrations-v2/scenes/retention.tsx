@@ -2,7 +2,7 @@
 
 /**
  * The two "Before you go" choices on v2 Billing's cancel flow, as square spot
- * pictures (docs/brand/illustration-guide.md: ink lines, white cards, the
+ * pictures (ILLUSTRATION_GUIDE.md: ink lines, white cards, the
  * accent only where it matters, one idea each, both themes). No car.
  *
  *  - Help:  a video-call window with a specialist on a headset, and a small

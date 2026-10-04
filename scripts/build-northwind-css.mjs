@@ -33,7 +33,7 @@ const BOOKING = path.join(ROOT, 'apps/booking');
 const SOURCE = path.join(BOOKING, 'src/northwind-site/styles/site.css');
 const OUT_DIR = path.join(BOOKING, 'public/nw-assets');
 const URL_MODULE = path.join(BOOKING, 'src/northwind-site/site-css.ts');
-const TOOLCHAIN_DIR = path.join(ROOT, 'v2/apps/web');
+const TOOLCHAIN_DIR = path.join(ROOT, 'scripts/northwind-css');
 
 const requireTool = createRequire(path.join(TOOLCHAIN_DIR, 'package.json'));
 let postcss, tailwind;
@@ -41,7 +41,7 @@ try {
   postcss = requireTool('postcss');
   tailwind = requireTool('@tailwindcss/postcss');
 } catch {
-  console.error('Tailwind 4 is not installed. Run:  npm --prefix v2/apps/web install');
+  console.error('Tailwind 4 is not installed. Run:  npm --prefix scripts/northwind-css install');
   process.exit(1);
 }
 

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Enquiries teaching empty state (docs/brand/illustration-guide.md §4a).
+ * Enquiries teaching empty state (ILLUSTRATION_GUIDE.md §4a).
  *
  * Enquiries only arrive from the booking site (the `submit-enquiry` edge
  * function writes here when lead management is off), and this page is

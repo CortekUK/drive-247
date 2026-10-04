@@ -52,7 +52,7 @@ import { FeatureAnnouncementDialog, isFeatureImageRenderable } from './feature-a
  * When the feature has a picture it is laid UNDER that text, full bleed, with
  * no wash over it — so card art for this variant must be drawn for it: light,
  * with the top-left and bottom-left left clear (the Turo Sync art is; see
- * docs/brand/illustration-guide.md). With no picture, or one that fails, the
+ * ILLUSTRATION_GUIDE.md). With no picture, or one that fails, the
  * white card alone.
  */
 const ACCENT_UI = {

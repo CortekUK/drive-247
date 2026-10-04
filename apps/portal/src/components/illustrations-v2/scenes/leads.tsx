@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Leads empty-state picture (docs/brand/illustration-guide.md §4a).
+ * Leads empty-state picture (ILLUSTRATION_GUIDE.md §4a).
  *
  * The story: prospects move along a small pipeline — one is being carried from
  * New to Contacted, and the one at the end has been approved. No car.

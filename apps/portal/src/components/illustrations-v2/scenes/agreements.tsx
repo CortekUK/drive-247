@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Agreements empty state (docs/brand/illustration-guide.md §4a).
+ * Agreements empty state (ILLUSTRATION_GUIDE.md §4a).
  *
  * The story: a rental (its booked dates, the customer on the bar) sends its
  * agreement out; the document comes back signed — signature, pen, and the

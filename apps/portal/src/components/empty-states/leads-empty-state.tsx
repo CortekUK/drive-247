@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Leads teaching empty state (docs/brand/illustration-guide.md §4a).
+ * Leads teaching empty state (ILLUSTRATION_GUIDE.md §4a).
  *
  * Two real ways in: add a lead by hand (NewLeadDialog — phone-in, walk-in or
  * admin-created) or share the apply link (submit-application creates a lead

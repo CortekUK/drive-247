@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Enquiries empty-state picture (docs/brand/illustration-guide.md §4a).
+ * Enquiries empty-state picture (ILLUSTRATION_GUIDE.md §4a).
  *
  * The story: a customer asks a question on your site, and it drops into your
  * inbox as a new, unread message at the top. No car.

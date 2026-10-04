@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Bonzah integration pictures (docs/brand/illustration-guide.md §4a).
+ * Bonzah integration pictures (ILLUSTRATION_GUIDE.md §4a).
  *
  * One picture per screen of the Bonzah panel on the Integrations board, each
  * telling one step of the story: apply → Bonzah reviews → (sent back) → the

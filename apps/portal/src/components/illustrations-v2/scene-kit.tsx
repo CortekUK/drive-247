@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Shared kit for empty-state pictures (docs/brand/illustration-guide.md §4a).
+ * Shared kit for empty-state pictures (ILLUSTRATION_GUIDE.md §4a).
  *
  * Each page's picture is a function `(dark) => string` returning SVG markup,
  * built only from these helpers and constants — nothing user-supplied is ever

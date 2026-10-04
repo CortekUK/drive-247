@@ -2,7 +2,7 @@ import { forwardRef, type SVGProps } from "react";
 
 /**
  * The brand coupe as a 24px line icon — low and wide, glass worn like
- * sunglasses (docs/brand/illustration-guide.md, "quiet confidence").
+ * sunglasses (ILLUSTRATION_GUIDE.md, "quiet confidence").
  * Drop-in for a lucide icon: same viewBox, stroke and props.
  */
 export const CoupeIcon = forwardRef<SVGSVGElement, SVGProps<SVGSVGElement>>(

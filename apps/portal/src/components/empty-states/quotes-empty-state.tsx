@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Quotes teaching empty state (docs/brand/illustration-guide.md §4a).
+ * Quotes teaching empty state (ILLUSTRATION_GUIDE.md §4a).
  *
  * Quotes are not stored — the page is a generator — so "empty" means the
  * operator has not started one on this visit. The tile reveals the generator.

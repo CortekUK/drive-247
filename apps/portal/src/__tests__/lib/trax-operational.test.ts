@@ -9,7 +9,7 @@ import { configuredModel, MODEL_POLICY, ModelUnavailable, type ModelMessage, typ
 import { createOperationalReads, type OperationalDatabase } from '../../../../../supabase/functions/trax-support/support/operational-reads';
 import type { SupportReads, Staff, Permission } from '../../../../../supabase/functions/trax-support/support/types';
 import type { OperationalReads, VehicleRecord, RentalRecord, DiagnosticInput } from '../../../../../supabase/functions/trax-support/support/operational-types';
-import { applyWebsiteVisibility, websiteVisibilityReasons, applyCheckoutOverlap, rentalOccupiesWindow, durationTierForDays } from '../../../../../v2/apps/web/src/lib/vehicles/availability-rules';
+import { applyWebsiteVisibility, websiteVisibilityReasons, applyCheckoutOverlap, rentalOccupiesWindow, durationTierForDays } from '../../../../../apps/booking/src/northwind-site/lib/vehicles/availability-rules';
 import * as generated from '../../../../../supabase/functions/trax-support/support/availability-rules.generated.js';
 
 // Isolated support scenarios. Never inserted into a live account.

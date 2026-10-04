@@ -1,6 +1,6 @@
 /**
  * The approved Drive247 car, as an SVG string: the illustrated three-quarter
- * coupe with simple rounded headlights (docs/brand/illustration-guide.md §5).
+ * coupe with simple rounded headlights (ILLUSTRATION_GUIDE.md §5).
  *
  * A string rather than JSX so it stays byte-identical to the guide's drawing
  * code; it is static art built from constants only — nothing user-supplied is

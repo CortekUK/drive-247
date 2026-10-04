@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Custom domain (docs/brand/illustration-guide.md §4a).
+ * Custom domain (ILLUSTRATION_GUIDE.md §4a).
  *
  * The story: your booking site, in a browser, at YOUR address — the padlock
  * and the address bar are the hero, the page behind them is the rental site,

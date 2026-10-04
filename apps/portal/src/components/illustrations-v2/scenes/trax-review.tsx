@@ -1,8 +1,8 @@
 'use client';
 
 /**
- * Insights → Trax summary, before the first review (docs/brand/illustration-
- * guide.md §4a style).
+ * Insights → Trax summary, before the first review (ILLUSTRATION_GUIDE.md
+ * §4a style).
  *
  * The story: Trax reads the business. A review sheet — a verdict line, a small
  * bar chart, three ticked findings — under a magnifying glass, with the

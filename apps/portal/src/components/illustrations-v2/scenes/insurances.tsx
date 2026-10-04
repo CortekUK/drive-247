@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Insurance empty state (docs/brand/illustration-guide.md §4a).
+ * Insurance empty state (ILLUSTRATION_GUIDE.md §4a).
  *
  * The story: at checkout on your booking site the customer ticks "Cover";
  * the shield locks on to the booking, and the policy comes out the other side,

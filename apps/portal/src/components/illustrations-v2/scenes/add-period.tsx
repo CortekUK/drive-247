@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Add period — the two choice pictures (docs/brand/illustration-guide.md §4a).
+ * Add period — the two choice pictures (ILLUSTRATION_GUIDE.md §4a).
  *
  * Manual extension: a month card where the booked days sit in the soft accent
  * and ONE new return day, picked by hand, is the solid accent with a plus.
