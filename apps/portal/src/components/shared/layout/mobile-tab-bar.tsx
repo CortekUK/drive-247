@@ -6,8 +6,9 @@
  * The portal is installed as a PWA and opened from the Home Screen, so on a
  * phone it should move like a native app: the five places an operator lives
  * are one thumb-tap away along the bottom edge, and everything else is under
- * "More", which opens the existing v2 navigation sheet (the same sidebar the
- * top bar's menu button opens — nothing is duplicated).
+ * "More", which opens a full-screen More page (mobile-more-screen.tsx, Oct 6
+ * 2026) rather than the desktop sidebar as a side sheet. The bar stays on top
+ * of that screen with "More" lit, the way a native tab bar does.
  *
  * Phone only (`md:hidden`); v2 chrome only (mounted from the dashboard layout
  * behind `v2Chrome`). Frosted like an iOS tab bar, and padded for the home
@@ -28,7 +29,8 @@ import { usePathname } from "next/navigation";
 import { Ellipsis, FileText, LayoutGrid, Users, type LucideIcon } from "lucide-react";
 import { CarMark } from "@/components/ui/car-mark";
 import { cn } from "@/lib/utils";
-import { useSidebar } from "@/components/ui-v2/sidebar";
+import { useMobileNavStore } from "@/stores/mobile-nav-store";
+import { MobileMoreScreen } from "@/components/shared/layout/mobile-more-screen";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 
 interface Tab {
@@ -40,8 +42,8 @@ interface Tab {
 const TABS: Tab[] = [
   { label: "Home", href: "/", icon: LayoutGrid },
   { label: "Rentals", href: "/rentals", icon: FileText },
-  { label: "Customers", href: "/customers", icon: Users },
   { label: "Vehicles", href: "/vehicles", icon: CarMark },
+  { label: "Customers", href: "/customers", icon: Users },
 ];
 
 const ITEM =
@@ -49,7 +51,8 @@ const ITEM =
 
 export function MobileTabBar() {
   const pathname = usePathname() ?? "/";
-  const { setOpenMobile, openMobile } = useSidebar();
+  const moreOpen = useMobileNavStore((s) => s.open);
+  const setMoreOpen = useMobileNavStore((s) => s.setOpen);
   const { canAccessRoute } = useManagerPermissions();
 
   const tabs = TABS.filter((t) => t.href === "/" || canAccessRoute(t.href));
@@ -57,6 +60,8 @@ export function MobileTabBar() {
   const anyTabActive = tabs.some((t) => isActive(t.href));
 
   return (
+    <>
+    <MobileMoreScreen />
     <nav
       aria-label="Main"
       data-mobile-tab-bar=""
@@ -70,11 +75,14 @@ export function MobileTabBar() {
     >
       <div className="mx-auto flex h-[52px] max-w-lg items-stretch px-2">
         {tabs.map(({ label, href, icon: Icon }) => {
-          const active = isActive(href);
+          const active = !moreOpen && isActive(href);
           return (
             <Link
               key={href}
               href={href}
+              // A tab whose page is already open would not change the route,
+              // so the More screen's route-change close would never fire.
+              onClick={() => setMoreOpen(false)}
               aria-current={active ? "page" : undefined}
               className={cn(ITEM, active ? "text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" : "text-muted-foreground")}
             >
@@ -85,17 +93,19 @@ export function MobileTabBar() {
         })}
         <button
           type="button"
-          onClick={() => setOpenMobile(!openMobile)}
+          onClick={() => setMoreOpen(!moreOpen)}
           aria-label="More"
+          aria-expanded={moreOpen}
           className={cn(
             ITEM,
-            openMobile || !anyTabActive ? "text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" : "text-muted-foreground"
+            moreOpen || !anyTabActive ? "text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" : "text-muted-foreground"
           )}
         >
-          <Ellipsis className="size-[22px]" strokeWidth={openMobile || !anyTabActive ? 2.3 : 1.8} aria-hidden />
+          <Ellipsis className="size-[22px]" strokeWidth={moreOpen || !anyTabActive ? 2.3 : 1.8} aria-hidden />
           More
         </button>
       </div>
     </nav>
+    </>
   );
 }

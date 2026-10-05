@@ -300,8 +300,15 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
           workspace does that — because the trigger would still toggle sidebar
           state and open nothing, which is a control that looks broken rather
           than absent. */}
+      {/* Also stands down wherever the bottom tab bar is showing: its "More"
+          tab is the phone's one way into the rest of the app, and a burger
+          beside it opened the same menu a second way. It stays on record
+          screens, where the tab bar gives way to the record dock. */}
       {showNavTrigger && (
-        <SidebarTrigger aria-label="Open navigation" className="-ml-1 shrink-0 md:hidden" />
+        <SidebarTrigger
+          aria-label="Open navigation"
+          className="-ml-1 shrink-0 md:hidden [body:has([data-mobile-tab-bar]):not(:has([data-record-dock]))_&]:hidden"
+        />
       )}
 
       {/* sm+ : either the page's own list search, or the global ⌘K pill.

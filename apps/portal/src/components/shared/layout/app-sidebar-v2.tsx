@@ -101,6 +101,7 @@ import { useSoftSubscriptionBlock } from "@/hooks/use-soft-subscription-block";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useCMSPages } from "@/hooks/use-cms-pages";
 import { useCmsOutline } from "@/stores/cms-outline-store";
+import { useMobileNavStore } from "@/stores/mobile-nav-store";
 import { ROUTE_TO_TAB } from "@/lib/permissions";
 import { UserMenuV2, SettingsLinkV2 } from "@/components/shared/layout/user-menu-v2";
 import { OrgSwitcher } from "@/components/shared/layout/org-switcher";
@@ -878,6 +879,27 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
 
   const isCmsActive = (href: string) =>
     href === "/cms" ? pathname === "/cms" : (pathname?.startsWith(href) ?? false);
+
+  // Hand the computed nav to the phone's "More" screen (mobile-more-screen.tsx),
+  // so it lists exactly what this rail would — same grants, same lean gates,
+  // same arrangement — without a second copy of the rules. Keyed on a
+  // signature rather than the arrays, which are new on every render.
+  const setMobileNavModel = useMobileNavStore((s) => s.setModel);
+  const mobileNavSignature = [
+    canSeeCms,
+    ...moreItems.map((i) => `${i.href}:${i.badge ?? 0}`),
+    ...groups.map((g) => `${g.label}[${g.items.map((i) => `${i.href}:${i.badge ?? 0}`).join(",")}]`),
+    ...cmsPageNav.map((p) => `${p.href}:${p.published}`),
+  ].join("|");
+  useEffect(() => {
+    setMobileNavModel({
+      more: moreItems,
+      groups: groups.map((g) => ({ label: g.label, items: g.items })),
+      cmsPages: cmsPageNav,
+      canSeeCms,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mobileNavSignature, setMobileNavModel]);
 
   // --- Rental Control Centre Mode ---
   //
