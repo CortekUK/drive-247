@@ -1,4 +1,4 @@
--- Rollback for PENDING_20261007_signup_plan_trial_days.sql.txt
+-- Rollback for 20261007120000_signup_plan_trial_days.sql
 -- Signups already on a trial keep it: their trial lives on the Stripe
 -- subscription, not in this column.
 ALTER TABLE public.signup_plans DROP CONSTRAINT IF EXISTS signup_plans_trial_days_range;

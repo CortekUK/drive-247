@@ -210,7 +210,7 @@ export function SignupTrialGrants({ plans }: { plans: SignupPlan[] }) {
             <p className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs">
               Needs a database update first: run{' '}
               <code className="rounded bg-muted px-1 py-0.5">
-                supabase/migrations/PENDING_20261007b_signup_trial_grants.sql.txt
+                supabase/migrations/20261007120100_signup_trial_grants.sql
               </code>
               .
             </p>

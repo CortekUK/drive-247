@@ -1,7 +1,8 @@
 -- =============================================================================
+-- APPLIED to production 2026-10-07 via the Management API.
 -- Free trials for SPECIFIC new signups, chosen by a super admin.
 --
--- Apply AFTER PENDING_20261007_signup_plan_trial_days.sql.txt.
+-- Apply AFTER 20261007120000_signup_plan_trial_days.sql.
 --
 -- A super admin types the email a new operator will sign up with and the
 -- number of days (admin → Signup Plans → Free trial). When someone signs up

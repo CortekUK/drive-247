@@ -1,4 +1,4 @@
--- Rollback for PENDING_20261007b_signup_trial_grants.sql.txt
+-- Rollback for 20261007120100_signup_trial_grants.sql
 -- Anyone already on a granted trial keeps it: it lives on their Stripe subscription.
 DROP TABLE IF EXISTS public.signup_trial_grants;
 -- Back to the 30-day cap. Fails if a plan currently has more than 30 days set.

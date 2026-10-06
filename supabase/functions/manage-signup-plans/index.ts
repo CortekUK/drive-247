@@ -352,7 +352,7 @@ Deno.serve(async (req) => {
           if ((error as any).code === "42703") {
             return fail(
               "NOT_INSTALLED",
-              "Free trials need a database update first (PENDING_20261007_signup_plan_trial_days).",
+              "Free trials need a database update first (20261007120000_signup_plan_trial_days.sql).",
               409,
             );
           }

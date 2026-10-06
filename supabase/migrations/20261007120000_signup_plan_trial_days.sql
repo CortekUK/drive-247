@@ -1,4 +1,5 @@
 -- =============================================================================
+-- APPLIED to production 2026-10-07 via the Management API.
 -- Free trial per signup plan.
 --
 -- `signup_plans.trial_days` — 0 means no trial (today's behaviour). Set from the
