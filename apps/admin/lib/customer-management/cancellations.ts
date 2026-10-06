@@ -13,6 +13,10 @@
  *            and is not counted.
  *   LEAVING  still live, but cancellation is scheduled (cancel_at in the
  *            future) or they have an open cancellation request.
+ *   STAYED   still live, went into the v2 cancel flow, and took the help
+ *            instead — booked a call ("Book a call" + an issue type) or
+ *            accepted the discount. Their reason counts too: it is why they
+ *            nearly left.
  *
  * A UAE-migrated operator keeps its cancelled UK row beside the live UAE one;
  * the live row is what decides, so a migration is never counted as churn.
@@ -20,9 +24,12 @@
  * ── WHERE THE REASON COMES FROM, most trusted first ─────────────────────────
  *
  *   1. admin     a super admin recorded it (tenant_churn_reasons)
- *   2. request   what they picked / wrote when asking to cancel — v2's
- *                dropdown ("CANCELLATION — It's too expensive. …") or v1's
- *                free text, read for keywords (go_live_requests)
+ *   2. request   what they picked / wrote when asking to cancel — the
+ *                reason dropdown in v1 and v2 ("CANCELLATION — It's too
+ *                expensive. …"), or older v1 free text read for keywords
+ *   2b. call     the issue type they picked when they booked a call instead
+ *                ("CALL REQUESTED — I need help setting things up. …"), or
+ *                "Too expensive" when they took the discount
  *   3. stripe    feedback the customer gave Stripe, then Stripe's own
  *                reason when a payment failed or was disputed
  *   4. inferred  Stripe never connected and setup never completed →
@@ -38,6 +45,9 @@ export type ChurnReason =
   | 'closing_business'
   | 'technical_problems'
   | 'never_finished_setup'
+  | 'setup_help'
+  | 'billing_question'
+  | 'integration_problems'
   | 'payment_failed'
   | 'other'
   | 'unknown';
@@ -50,6 +60,9 @@ export const REASON_LABEL: Record<ChurnReason, string> = {
   closing_business: 'Closing or pausing the business',
   technical_problems: 'Technical problems',
   never_finished_setup: 'Never finished setup',
+  setup_help: 'Needed help setting up',
+  billing_question: 'Billing or payments question',
+  integration_problems: 'Integration problems',
   payment_failed: 'Payment failed',
   other: 'Other',
   unknown: 'No reason given',
@@ -64,15 +77,20 @@ export const SETTABLE_REASONS: readonly Exclude<ChurnReason, 'unknown'>[] = [
   'closing_business',
   'technical_problems',
   'never_finished_setup',
+  'setup_help',
+  'billing_question',
+  'integration_problems',
   'payment_failed',
   'other',
 ];
 
-export type ReasonSource = 'admin' | 'request' | 'stripe' | 'inferred' | 'none';
+export type ReasonSource = 'admin' | 'request' | 'call' | 'discount' | 'stripe' | 'inferred' | 'none';
 
 export const SOURCE_LABEL: Record<ReasonSource, string> = {
   admin: 'Recorded by admin',
-  request: 'They told us',
+  request: 'They told us when cancelling',
+  call: 'Booked a call about it',
+  discount: 'Took the discount instead',
   stripe: 'From Stripe',
   inferred: 'Worked out from their setup',
   none: 'Not known',
@@ -123,9 +141,17 @@ export interface ChurnOverride {
   updated_at: string;
 }
 
+export type ChurnState = 'left' | 'leaving' | 'stayed';
+
+export const STATE_LABEL: Record<ChurnState, string> = {
+  left: 'Left',
+  leaving: 'Leaving',
+  stayed: 'Tried to cancel, stayed',
+};
+
 export interface ChurnRow {
   tenant: ChurnTenant;
-  state: 'left' | 'leaving';
+  state: ChurnState;
   /** When they left (or are scheduled to). Null for a suspension with no subscription dates. */
   leftAt: string | null;
   reason: ChurnReason;
@@ -172,26 +198,63 @@ export function classifyText(text: string | null | undefined): ChurnReason | nul
   return 'other';
 }
 
+/** v2's "Book a call" issue types, word for word (cancel-flow-dialog-v2.tsx ISSUE_TYPES). */
+const V2_ISSUE: Record<string, ChurnReason> = {
+  "something isn't working as expected": 'technical_problems',
+  "i need a feature that's missing": 'missing_features',
+  'i need help setting things up': 'setup_help',
+  'a billing or payments question': 'billing_question',
+  'an integration (stripe, e-signing, insurance…)': 'integration_problems',
+  'an integration (stripe, e-signing, insurance...)': 'integration_problems',
+  'something else': 'other',
+};
+
+export type RequestKind = 'cancel' | 'call' | 'discount';
+
+export interface ParsedRequest {
+  kind: RequestKind;
+  reason: ChurnReason;
+  detail: string | null;
+}
+
 /**
- * One cancellation request's note → a reason and the words worth showing.
- * v2 retention outcomes (a call booked, a discount accepted) are not reasons
- * to leave, so they return null.
+ * One request's note → what they did, why, and the words worth showing.
+ *
+ *   "CANCELLATION — <reason>. <words>"      asked to cancel (v1 and v2)
+ *   "CALL REQUESTED — <issue type>. <words>" booked a call instead (v2)
+ *   "RETENTION OFFER ACCEPTED — …"          took the discount (v2) → too expensive
+ *   anything else                           older v1 free text → cancel, keywords
  */
-export function parseRequestNote(note: string | null | undefined): { reason: ChurnReason; detail: string | null } | null {
+export function parseRequestNote(note: string | null | undefined): ParsedRequest | null {
   const raw = (note ?? '').trim();
   if (!raw) return null;
-  if (/^(CALL REQUESTED|DISCOUNT)/i.test(raw)) return null;
+
+  if (/^RETENTION OFFER ACCEPTED/i.test(raw)) {
+    return { kind: 'discount', reason: 'too_expensive', detail: null };
+  }
+
+  const call = raw.match(/^CALL REQUESTED\s*[—-]\s*(.+?)\.(?:\s+([\s\S]*))?$/i);
+  if (call) {
+    const picked = call[1].trim().toLowerCase();
+    const details = call[2]?.trim() || null;
+    const mapped = V2_ISSUE[picked];
+    return {
+      kind: 'call',
+      reason: mapped && mapped !== 'other' ? mapped : classifyText(details) ?? 'other',
+      detail: details,
+    };
+  }
 
   const v2 = raw.match(/^CANCELLATION\s*[—-]\s*(.+?)\.(?:\s+([\s\S]*))?$/);
   if (v2) {
     const picked = v2[1].trim().toLowerCase();
     const details = v2[2]?.trim() || null;
     const mapped = V2_REASON[picked];
-    if (mapped && mapped !== 'other') return { reason: mapped, detail: details };
+    if (mapped && mapped !== 'other') return { kind: 'cancel', reason: mapped, detail: details };
     // "Something else" — their own words may still say which.
-    return { reason: classifyText(details) ?? 'other', detail: details };
+    return { kind: 'cancel', reason: classifyText(details) ?? 'other', detail: details };
   }
-  return { reason: classifyText(raw) ?? 'other', detail: raw };
+  return { kind: 'cancel', reason: classifyText(raw) ?? 'other', detail: raw };
 }
 
 /** Stripe's customer feedback codes → our reasons. */
@@ -254,12 +317,18 @@ export function resolveChurn(args: {
 
   const live = subscriptions.filter((s) => LIVE.has(s.status));
   const cancelled = subscriptions.filter((s) => s.status === 'canceled');
+  const parsed = requests
+    .map((r) => ({ r, p: parseRequestNote(r.note) }))
+    .filter((x): x is { r: ChurnRequest; p: ParsedRequest } => x.p !== null);
+  const cancelAsks = parsed.filter((x) => x.p.kind === 'cancel');
+  const helpAsks = parsed.filter((x) => x.p.kind !== 'cancel');
   const openRequest = latest(
-    requests.filter((r) => r.status === 'pending' && parseRequestNote(r.note) !== null),
-    (r) => r.created_at,
+    cancelAsks.filter((x) => x.r.status === 'pending'),
+    (x) => x.r.created_at,
   );
+  const lastHelp = latest(helpAsks, (x) => x.r.created_at);
 
-  let state: 'left' | 'leaving' | null = null;
+  let state: ChurnState | null = null;
   let leftAt: string | null = null;
   let planSub: ChurnSubscription | null = null;
 
@@ -271,7 +340,10 @@ export function resolveChurn(args: {
       leftAt = current.cancel_at;
     } else if (openRequest) {
       state = 'leaving';
-      leftAt = openRequest.created_at;
+      leftAt = openRequest.r.created_at;
+    } else if (lastHelp) {
+      state = 'stayed';
+      leftAt = lastHelp.r.created_at;
     }
     planSub = current;
   } else if (cancelled.length > 0 || tenant.status === 'suspended') {
@@ -287,12 +359,7 @@ export function resolveChurn(args: {
   let source: ReasonSource = 'none';
   let detail: string | null = null;
 
-  const said = latest(
-    requests
-      .map((r) => ({ r, parsed: parseRequestNote(r.note) }))
-      .filter((x) => x.parsed !== null),
-    (x) => x.r.created_at,
-  );
+  const said = latest(cancelAsks, (x) => x.r.created_at);
   const feedback = fromStripeFeedback(planSub?.cancellation_feedback);
   const stripePayment =
     planSub?.cancellation_reason === 'payment_failed' || planSub?.cancellation_reason === 'payment_disputed';
@@ -303,9 +370,13 @@ export function resolveChurn(args: {
     source = 'admin';
     detail = override.note;
   } else if (said) {
-    reason = said.parsed!.reason;
+    reason = said.p.reason;
     source = 'request';
-    detail = said.parsed!.detail;
+    detail = said.p.detail;
+  } else if (lastHelp) {
+    reason = lastHelp.p.reason;
+    source = lastHelp.p.kind === 'call' ? 'call' : 'discount';
+    detail = lastHelp.p.detail;
   } else if (feedback) {
     reason = feedback;
     source = 'stripe';
@@ -372,13 +443,20 @@ export interface ReasonShare {
   percent: number;
 }
 
-/** Reasons by count, largest first; ties keep the label order. */
-export function reasonShares(rows: readonly ChurnRow[]): ReasonShare[] {
-  const counts = new Map<ChurnReason, number>();
-  for (const r of rows) counts.set(r.reason, (counts.get(r.reason) ?? 0) + 1);
+/** Reasons by count, largest first; ties keep the label order. Split by state for the stacked chart. */
+export function reasonShares(rows: readonly ChurnRow[]): (ReasonShare & Record<ChurnState, number>)[] {
+  const counts = new Map<ChurnReason, Record<ChurnState, number>>();
+  for (const r of rows) {
+    const c = counts.get(r.reason) ?? { left: 0, leaving: 0, stayed: 0 };
+    c[r.state] += 1;
+    counts.set(r.reason, c);
+  }
   const total = rows.length || 1;
   return [...counts.entries()]
-    .map(([reason, count]) => ({ reason, label: REASON_LABEL[reason], count, percent: Math.round((count / total) * 100) }))
+    .map(([reason, c]) => {
+      const count = c.left + c.leaving + c.stayed;
+      return { reason, label: REASON_LABEL[reason], count, percent: Math.round((count / total) * 100), ...c };
+    })
     .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 }
 

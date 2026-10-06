@@ -85,14 +85,58 @@ describe('who counts', () => {
 describe('the reason', () => {
   it('reads the v2 dropdown word for word, with their extra words as detail', () => {
     expect(parseRequestNote("CANCELLATION — It's too expensive. We only have 2 cars.")).toEqual({
+      kind: 'cancel',
       reason: 'too_expensive',
       detail: 'We only have 2 cars.',
     });
     expect(parseRequestNote("CANCELLATION — I'm switching to another tool.")?.reason).toBe('switched_tools');
   });
 
-  it('ignores retention outcomes (a call, a discount) — they did not leave', () => {
-    expect(parseRequestNote('CALL REQUESTED — Something else.')).toBeNull();
+  it('reads the "Book a call" issue types as reasons', () => {
+    expect(parseRequestNote('CALL REQUESTED — I need help setting things up. Cannot add cars')).toEqual({
+      kind: 'call',
+      reason: 'setup_help',
+      detail: 'Cannot add cars',
+    });
+    expect(parseRequestNote('CALL REQUESTED — A billing or payments question.')?.reason).toBe('billing_question');
+    expect(parseRequestNote('CALL REQUESTED — An integration (Stripe, e-signing, insurance…).')?.reason).toBe('integration_problems');
+    expect(parseRequestNote("CALL REQUESTED — Something isn't working as expected.")?.reason).toBe('technical_problems');
+  });
+
+  it('the discount means "too expensive" and is NOT a cancellation', () => {
+    const note = 'RETENTION OFFER ACCEPTED — 10% off the next 3 bills ($199 → $179/month). Please apply it.';
+    expect(parseRequestNote(note)).toEqual({ kind: 'discount', reason: 'too_expensive', detail: null });
+    const r = resolveChurn({
+      ...base,
+      tenant: tenant(),
+      subscriptions: [sub({ status: 'active', canceled_at: null, ended_at: null })],
+      requests: [{ status: 'pending', note, created_at: ago(3) }],
+    });
+    // A happy customer who took 10% off must not be listed as leaving.
+    expect([r?.state, r?.reason, r?.source]).toEqual(['stayed', 'too_expensive', 'discount']);
+  });
+
+  it('a call booked instead of cancelling counts as STAYED with that reason', () => {
+    const r = resolveChurn({
+      ...base,
+      tenant: tenant(),
+      subscriptions: [sub({ status: 'active', canceled_at: null, ended_at: null })],
+      requests: [{ status: 'pending', note: "CALL REQUESTED — I need a feature that's missing. Fleet map", created_at: ago(2) }],
+    });
+    expect([r?.state, r?.reason, r?.source, r?.detail]).toEqual(['stayed', 'missing_features', 'call', 'Fleet map']);
+  });
+
+  it('cancelling after a call: the cancellation reason wins', () => {
+    const r = resolveChurn({
+      ...base,
+      tenant: tenant(),
+      subscriptions: [sub({ status: 'active', canceled_at: null, ended_at: null })],
+      requests: [
+        { status: 'approved', note: 'CALL REQUESTED — A billing or payments question.', created_at: ago(10) },
+        { status: 'pending', note: "CANCELLATION — I'm switching to another tool.", created_at: ago(1) },
+      ],
+    });
+    expect([r?.state, r?.reason, r?.source]).toEqual(['leaving', 'switched_tools', 'request']);
   });
 
   it('reads v1 free text by keywords', () => {

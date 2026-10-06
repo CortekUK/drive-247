@@ -17,7 +17,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { ArrowRight, DoorOpen, Loader2, LogOut, PencilLine, RefreshCw, TrendingDown, UserMinus } from 'lucide-react';
+import { ArrowRight, DoorOpen, HeartHandshake, Loader2, LogOut, PencilLine, RefreshCw, TrendingDown } from 'lucide-react';
 
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
@@ -40,10 +40,12 @@ import {
   resolveChurn,
   SETTABLE_REASONS,
   SOURCE_LABEL,
+  STATE_LABEL,
   type ChurnOverride,
   type ChurnReason,
   type ChurnRequest,
   type ChurnRow,
+  type ChurnState,
   type ChurnSubscription,
   type ChurnTenant,
   type Period,
@@ -55,6 +57,9 @@ const CANCELLATION_TYPE = 'subscription_cancellation';
 const REASON_FILL: Record<ChurnReason, string> = {
   too_expensive: 'hsl(var(--chart-1))',
   never_finished_setup: 'hsl(var(--chart-2))',
+  setup_help: 'hsl(var(--chart-2))',
+  billing_question: 'hsl(var(--chart-4))',
+  integration_problems: 'hsl(var(--primary))',
   switched_tools: 'hsl(var(--chart-3))',
   missing_features: 'hsl(var(--chart-4))',
   not_using: 'hsl(var(--chart-5))',
@@ -63,6 +68,13 @@ const REASON_FILL: Record<ChurnReason, string> = {
   technical_problems: 'hsl(var(--primary))',
   other: 'hsl(var(--muted-foreground))',
   unknown: 'hsl(var(--border))',
+};
+
+/** The chart stacks each reason by what happened next. */
+const STATE_FILL: Record<ChurnState, string> = {
+  left: 'hsl(var(--destructive))',
+  leaving: 'hsl(var(--warning))',
+  stayed: 'hsl(var(--success))',
 };
 
 function money(cents: number | null, currency = 'usd'): string {
@@ -107,7 +119,7 @@ export function CancellationsTab({ canEdit }: { canEdit: boolean }) {
   const [error, setError] = useState<string | null>(null);
 
   const [period, setPeriod] = useState<Period>('90');
-  const [stateFilter, setStateFilter] = useState<'all' | 'left' | 'leaving'>('all');
+  const [stateFilter, setStateFilter] = useState<'all' | ChurnState>('all');
   const [portalFilter, setPortalFilter] = useState<'all' | 'v1' | 'v2'>('all');
   const [reasonFilter, setReasonFilter] = useState<ChurnReason | null>(null);
   const [editing, setEditing] = useState<ChurnRow | null>(null);
@@ -196,9 +208,16 @@ export function CancellationsTab({ canEdit }: { canEdit: boolean }) {
   );
   const leftRows = inScope.filter((r) => r.state === 'left');
   const leavingRows = inScope.filter((r) => r.state === 'leaving');
-  const shares = useMemo(() => reasonShares(leftRows), [leftRows]);
+  const stayedRows = inScope.filter((r) => r.state === 'stayed');
+  // The headline answers "why do people leave": those who left or are leaving.
+  const goneRows = [...leftRows, ...leavingRows];
+  // The chart shows every reason someone gave, split by what happened next;
+  // a state card narrows it to one group.
+  const chartRows = stateFilter === 'all' ? inScope : inScope.filter((r) => r.state === stateFilter);
+  const shares = useMemo(() => reasonShares(chartRows), [chartRows]);
+  const goneShares = useMemo(() => reasonShares(goneRows), [goneRows]); // eslint-disable-line react-hooks/exhaustive-deps
   const lostMonthly = leftRows.reduce((s, r) => s + (r.monthlyCents ?? 0), 0);
-  const known = leftRows.filter((r) => r.reason !== 'unknown').length;
+  const known = goneRows.filter((r) => r.reason !== 'unknown').length;
 
   const tableRows = inScope.filter(
     (r) => (stateFilter === 'all' || r.state === stateFilter) && (!reasonFilter || r.reason === reasonFilter),
@@ -261,11 +280,17 @@ export function CancellationsTab({ canEdit }: { canEdit: boolean }) {
           ) : error ? (
             <p className="text-sm text-destructive">Could not load: {error}</p>
           ) : (
-            <p className="text-lg font-medium tracking-tight">{headline(leftRows, period)}</p>
+            <p className="text-lg font-medium tracking-tight">{headline(goneRows, period)}</p>
           )}
-          {!loading && !error && leftRows.length > 0 && known < leftRows.length && (
+          {!loading && !error && stayedRows.length > 0 && (
+            <p className="mt-1 text-sm text-muted-foreground">
+              {stayedRows.length} more started to cancel and stayed after booking a call or taking the discount —
+              mostly “{reasonShares(stayedRows)[0].label.toLowerCase()}”.
+            </p>
+          )}
+          {!loading && !error && goneRows.length > 0 && known < goneRows.length && (
             <p className="mt-1 text-xs text-muted-foreground">
-              {leftRows.length - known} of {leftRows.length} left without a known reason — record one with “Set reason”
+              {goneRows.length - known} of {goneRows.length} left without a known reason — record one with “Set reason”
               below after you speak to them.
             </p>
           )}
@@ -291,11 +316,12 @@ export function CancellationsTab({ canEdit }: { canEdit: boolean }) {
           onClick={() => setStateFilter(stateFilter === 'leaving' ? 'all' : 'leaving')}
         />
         <StatCard
-          label="Top reason"
-          value={loading ? null : shares[0] ? `${shares[0].percent}% · ${shares[0].label}` : '—'}
-          icon={UserMinus}
-          tone="primary"
-          small
+          label="Tried to cancel, stayed"
+          value={loading ? null : String(stayedRows.length)}
+          icon={HeartHandshake}
+          tone="success"
+          active={stateFilter === 'stayed'}
+          onClick={() => setStateFilter(stateFilter === 'stayed' ? 'all' : 'stayed')}
         />
         <StatCard
           label="Monthly revenue lost"
@@ -308,17 +334,29 @@ export function CancellationsTab({ canEdit }: { canEdit: boolean }) {
       {/* Why — the chart. */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Why they left</CardTitle>
+          <CardTitle className="text-base">Why they leave</CardTitle>
           <CardDescription>
-            {PERIOD_LABEL[period]} · {leftRows.length} {leftRows.length === 1 ? 'company' : 'companies'}. Click a bar to see
-            who.
+            {PERIOD_LABEL[period]} · {chartRows.length} {chartRows.length === 1 ? 'company' : 'companies'}
+            {stateFilter !== 'all' && ` · ${STATE_LABEL[stateFilter].toLowerCase()} only`}. Every reason someone gave
+            or we know of, split by what happened next. Click a bar to see who.
+            {goneShares[0] && (
+              <> Top reason for leaving: <span className="font-medium text-foreground">{goneShares[0].percent}% {goneShares[0].label.toLowerCase()}</span>.</>
+            )}
           </CardDescription>
+          <div className="flex flex-wrap gap-3 pt-1 text-xs text-muted-foreground">
+            {(Object.keys(STATE_FILL) as ChurnState[]).map((st) => (
+              <span key={st} className="inline-flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-sm" style={{ background: STATE_FILL[st] }} />
+                {STATE_LABEL[st]}
+              </span>
+            ))}
+          </div>
         </CardHeader>
         <CardContent>
           {loading ? (
             <Skeleton className="h-[240px] w-full" />
           ) : shares.length === 0 ? (
-            <p className="py-10 text-center text-sm text-muted-foreground">Nobody left in this period.</p>
+            <p className="py-10 text-center text-sm text-muted-foreground">Nobody left or tried to in this period.</p>
           ) : (
             <ResponsiveContainer width="100%" height={Math.max(160, shares.length * 40)}>
               <BarChart data={shares} layout="vertical" margin={{ top: 0, right: 40, left: 10, bottom: 0 }}>
@@ -328,26 +366,27 @@ export function CancellationsTab({ canEdit }: { canEdit: boolean }) {
                 <Tooltip
                   cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }}
                   contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 12, fontSize: 12 }}
-                  formatter={(v, _n, item) => [`${v} (${(item?.payload as { percent: number }).percent}%)`, 'Companies']}
+                  formatter={(v, name) => [String(v), STATE_LABEL[name as ChurnState] ?? String(name)]}
                 />
-                <Bar
-                  dataKey="count"
-                  radius={[0, 4, 4, 0]}
-                  className="cursor-pointer"
-                  onClick={(d) => {
-                    const reason = (d as unknown as { reason: ChurnReason }).reason;
-                    setReasonFilter(reasonFilter === reason ? null : reason);
-                  }}
-                  label={{ position: 'right', fontSize: 11, formatter: (v: unknown) => String(v) }}
-                >
-                  {shares.map((s) => (
-                    <Cell
-                      key={s.reason}
-                      fill={REASON_FILL[s.reason]}
-                      opacity={reasonFilter && reasonFilter !== s.reason ? 0.35 : 1}
-                    />
-                  ))}
-                </Bar>
+                {(Object.keys(STATE_FILL) as ChurnState[]).map((st, i, all) => (
+                  <Bar
+                    key={st}
+                    dataKey={st}
+                    name={st}
+                    stackId="state"
+                    fill={STATE_FILL[st]}
+                    radius={i === all.length - 1 ? [0, 4, 4, 0] : [0, 0, 0, 0]}
+                    className="cursor-pointer"
+                    onClick={(d) => {
+                      const reason = (d as unknown as { reason: ChurnReason }).reason;
+                      setReasonFilter(reasonFilter === reason ? null : reason);
+                    }}
+                  >
+                    {shares.map((s) => (
+                      <Cell key={s.reason} opacity={reasonFilter && reasonFilter !== s.reason ? 0.35 : 1} />
+                    ))}
+                  </Bar>
+                ))}
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -382,7 +421,7 @@ export function CancellationsTab({ canEdit }: { canEdit: boolean }) {
                 <TableHead>Portal</TableHead>
                 <TableHead>Plan</TableHead>
                 <TableHead>Customer for</TableHead>
-                <TableHead>Left</TableHead>
+                <TableHead>Left / asked</TableHead>
                 <TableHead>Reason</TableHead>
                 <TableHead className="w-[110px]" />
               </TableRow>
@@ -437,6 +476,8 @@ export function CancellationsTab({ canEdit }: { canEdit: boolean }) {
                     <TableCell className="whitespace-nowrap text-sm">
                       {r.state === 'leaving' ? (
                         <span className="text-amber-600">Leaving · {fmtDay(r.leftAt)}</span>
+                      ) : r.state === 'stayed' ? (
+                        <span className="text-emerald-600">Stayed · asked {fmtDay(r.leftAt)}</span>
                       ) : (
                         fmtDay(r.leftAt)
                       )}
@@ -491,7 +532,7 @@ function StatCard({
   label: string;
   value: string | null;
   icon: typeof LogOut;
-  tone: 'destructive' | 'warning' | 'primary';
+  tone: 'destructive' | 'warning' | 'primary' | 'success';
   active?: boolean;
   onClick?: () => void;
   small?: boolean;
@@ -500,6 +541,7 @@ function StatCard({
     destructive: { bg: 'bg-destructive/15', text: 'text-destructive', active: 'border-destructive/40 bg-destructive/5' },
     warning: { bg: 'bg-warning/15', text: 'text-warning', active: 'border-warning/40 bg-warning/5' },
     primary: { bg: 'bg-primary/15', text: 'text-primary', active: 'border-primary/40 bg-primary/5' },
+    success: { bg: 'bg-success/15', text: 'text-success', active: 'border-success/40 bg-success/5' },
   }[tone];
   return (
     <Card className={cn(onClick && 'cursor-pointer transition-all', active && toneCls.active)} onClick={onClick}>
@@ -574,7 +616,9 @@ function ReasonDialog({ row, onClose, onSaved }: { row: ChurnRow | null; onClose
         {row && (
           <>
             <DialogHeader>
-              <DialogTitle>Why did {row.tenant.company_name ?? 'they'} leave?</DialogTitle>
+              <DialogTitle>
+                Why did {row.tenant.company_name ?? 'they'} {row.state === 'stayed' ? 'try to leave' : 'leave'}?
+              </DialogTitle>
               <DialogDescription>
                 What you record here replaces the reason worked out automatically
                 {row.source !== 'none' && row.source !== 'admin' && <> (now: {REASON_LABEL[row.reason]}, {SOURCE_LABEL[row.source].toLowerCase()})</>}.
