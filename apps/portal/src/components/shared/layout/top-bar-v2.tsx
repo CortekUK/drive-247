@@ -18,6 +18,7 @@ import { useCreditWallet } from "@/hooks/use-credit-wallet";
 import { useIntegrationBilling } from "@/lib/integration-billing/hooks";
 import { useTraxOptional } from "@/components/trax/trax-provider";
 import { usePageSearchSlot } from "@/components/shared/layout/page-search-slot";
+import { DevBridge } from "@/components/dev/dev-bridge";
 
 /**
  * The v2 top bar — the portal's chrome row, on every page.
@@ -295,6 +296,9 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
          instead of leaving an 8px gap on those screens. */
       className={"flex h-16 shrink-0 items-center gap-2 bg-transparent px-3 sm:px-4"}
     >
+      {/* Northwind only, renders nothing: carries out the super-admin Developer
+          page's commands in this tab. See components/dev/dev-bridge.tsx. */}
+      <DevBridge />
       {/* Phone-only navigation opener. Replaces the floating left-edge handle.
           Suppressed where the layout renders no sidebar at all — the Messages
           workspace does that — because the trigger would still toggle sidebar

@@ -71,6 +71,7 @@ import {
 } from "../_shared/tenant-provisioning.ts";
 import { sendResendEmail } from "../_shared/resend-service.ts";
 import { buildCmsContent, seedTenantCmsContent } from "../_shared/tenant-cms-content.ts";
+import { readRehearsalFor, REHEARSAL_TENANT_SLUG } from "../_shared/signup-rehearsal.ts";
 
 const LOG = "[signup-provision]";
 
@@ -406,6 +407,25 @@ Deno.serve(async (req) => {
       return signupError("PROVISION_IN_PROGRESS", "Your portal is already being built", 409);
     }
 
+    // ---- Developer rehearsal: adopt the canary instead of inserting --------
+    //
+    // True ONLY for the super-admin Developer page's rehearsal address, when
+    // that signup was STARTED with "Link to Northwind" on (stamped into the
+    // metadata by signup-begin / signup-begin-oauth) AND the address is still
+    // the configured one now. Every real signup has no `rehearsal` stamp and
+    // runs the code below exactly as before.
+    //
+    // Adopting means: the business form updates the existing `northwind` row
+    // (never its slug), the parked owner row is re-linked to this login, and
+    // the plan + subscription are attached to it. Northwind is NEVER inserted,
+    // deleted or rolled back — see `deleteTenant` and the recovery branch.
+    const adoptCanary =
+      meta.rehearsal?.linkToNorthwind === true &&
+      !!(await readRehearsalFor(supabase, meta.email));
+    if (adoptCanary) {
+      console.log(`${LOG} rehearsal signup for ${meta.email} — adopting "${REHEARSAL_TENANT_SLUG}"`);
+    }
+
     // ---- Recovery: a tenant row from a run that never reported back --------
     //
     // `pendingTenantId` is written the instant the tenant is inserted, so it is
@@ -479,6 +499,12 @@ Deno.serve(async (req) => {
           });
         }
 
+        // The canary is never a half-built tenant to discard, whatever pointer
+        // says so. Clear the pointer and carry on.
+        if (pendingTenant.slug === REHEARSAL_TENANT_SLUG) {
+          console.warn(`${LOG} pendingTenantId points at "${REHEARSAL_TENANT_SLUG}" — clearing the pointer, never deleting it`);
+          meta = await writeSignupMeta(supabase, authUserId, { pendingTenantId: null, milestones: [] });
+        } else {
         console.warn(`${LOG} discarding half-built tenant ${pendingId} before retrying`);
         const discardErrors: string[] = [];
         for (
@@ -519,6 +545,7 @@ Deno.serve(async (req) => {
           pendingTenantId: null,
           milestones: [],
         });
+        }
       }
     }
 
@@ -581,7 +608,10 @@ Deno.serve(async (req) => {
     let slug: string;
     const requestedSlug = normalizeSlug(clean(body.slug, 100));
 
-    if (requestedSlug) {
+    if (adoptCanary) {
+      // The canary's address never changes — every v2 gate is keyed on it.
+      slug = REHEARSAL_TENANT_SLUG;
+    } else if (requestedSlug) {
       slug = requestedSlug;
       if (
         !/^[a-z][a-z0-9-]*$/.test(slug) ||
@@ -676,11 +706,13 @@ Deno.serve(async (req) => {
     // Pre-check the slug. This is advisory — the 23505 catch on the INSERT is
     // what actually closes the race — but it turns the common case into a fast
     // 409 with suggestions instead of a rollback.
-    const { data: slugTaken } = await supabase
-      .from("tenants")
-      .select("id")
-      .eq("slug", slug)
-      .maybeSingle();
+    const { data: slugTaken } = adoptCanary
+      ? { data: null }
+      : await supabase
+        .from("tenants")
+        .select("id")
+        .eq("slug", slug)
+        .maybeSingle();
     if (slugTaken) {
       return await fail("SLUG_TAKEN", "That web address is already taken", 409, {
         field: "slug",
@@ -840,12 +872,15 @@ Deno.serve(async (req) => {
     let tenantId: string | null = null;
     let appUserId: string | null = null;
     let planRowId: string | null = null;
+    /** Adoption re-linked an EXISTING owner row: roll back by detaching, never deleting. */
+    let appUserRelinked = false;
 
     const rollbackNote = () =>
       orphans.length ? ` | MANUAL CLEANUP REQUIRED: ${orphans.join(", ")}` : "";
 
     const deleteTenant = async () => {
-      if (!tenantId) return;
+      // An adopted canary existed before this run and outlives any failure in it.
+      if (!tenantId || adoptCanary) return;
       try {
         const { error } = await supabase.from("tenants").delete().eq("id", tenantId);
         if (!error) return;
@@ -864,6 +899,20 @@ Deno.serve(async (req) => {
 
     const deleteAppUser = async () => {
       if (!appUserId) return;
+      if (appUserRelinked) {
+        // The row belongs to the canary (and everything that references it);
+        // undo only the link this run made.
+        const { error } = await supabase
+          .from("app_users")
+          .update({ auth_user_id: null })
+          .eq("id", appUserId)
+          .eq("auth_user_id", authUserId);
+        if (error) {
+          console.error(`${LOG} rollback: detach app_user ${appUserId} failed:`, error);
+          orphans.push(`app_user ${appUserId} (still linked)`);
+        }
+        return;
+      }
       try {
         const { error } = await supabase.from("app_users").delete().eq("id", appUserId);
         if (!error) return;
@@ -988,11 +1037,33 @@ Deno.serve(async (req) => {
       ...tzCols,
     };
 
-    let { data: tenant, error: tenantError } = await supabase
+    let tenant: { id: string } | null = null;
+    let tenantError: any = null;
+
+    if (adoptCanary) {
+      // UPDATE the canary with what the form said. Left alone on purpose: the
+      // slug (the gate key), status, tenant_type (it stays a test tenant),
+      // portal_experience (already v2) and boldsign_mode (lean forces live).
+      const {
+        slug: _slug,
+        status: _status,
+        tenant_type: _tenantType,
+        portal_experience: _experience,
+        boldsign_mode: _boldsign,
+        ...adoptRow
+      } = tenantRow as Record<string, unknown>;
+      ({ data: tenant, error: tenantError } = await supabase
+        .from("tenants")
+        .update(adoptRow)
+        .eq("slug", REHEARSAL_TENANT_SLUG)
+        .select("id")
+        .single());
+    } else {
+    ({ data: tenant, error: tenantError } = await supabase
       .from("tenants")
       .insert(tenantRow)
       .select("id")
-      .single();
+      .single());
 
     /*
      * ops/portal_experience.sql not applied yet? Then PostgREST has no
@@ -1019,6 +1090,7 @@ Deno.serve(async (req) => {
         .insert(rowWithoutExperience)
         .select("id")
         .single());
+    }
     }
 
     if (tenantError || !tenant) {
@@ -1056,7 +1128,9 @@ Deno.serve(async (req) => {
      * unrecoverable state this write exists to prevent, and rolling back now is
      * clean: nothing references the tenant yet.
      */
-    try {
+    // Not for an adopted canary: it existed before this run, so a killed
+    // isolate cannot orphan it, and the pointer must never lead step 0 to it.
+    if (!adoptCanary) try {
       meta = await writeSignupMeta(supabase, authUserId, {
         pendingTenantId: tenantId,
         slug,
@@ -1071,7 +1145,8 @@ Deno.serve(async (req) => {
 
     // 100 live welcome credits. Non-fatal: a tenant without credits works, a
     // rollback over a gift does not.
-    try {
+    // Skipped for a rehearsal: every rerun would gift the canary another 100.
+    if (!adoptCanary) try {
       const { error: creditError } = await supabase.rpc("add_credits", {
         p_tenant_id: tenantId,
         p_amount: 100,
@@ -1093,7 +1168,42 @@ Deno.serve(async (req) => {
     // chosen by the operator ninety seconds ago. Forcing a change would be a
     // pointless speed bump on their very first login.
     // =====================================================================
-    const { data: appUser, error: appUserError } = await supabase
+    let appUser: { id: string } | null = null;
+    let appUserError: any = null;
+
+    // Rehearsal: re-link the canary's PARKED owner row (the Developer page's
+    // reset deleted the login; `ON DELETE SET NULL` kept the row and everything
+    // that points at it). Falls through to a normal insert if there is none.
+    if (adoptCanary) {
+      const { data: owners } = await supabase
+        .from("app_users")
+        .select("id, email, auth_user_id")
+        .eq("tenant_id", tenantId)
+        .ilike("email", meta.email);
+      const parked = (owners || []).find(
+        (u: { email: string | null; auth_user_id: string | null }) =>
+          (u.email || "").toLowerCase() === meta!.email.toLowerCase() &&
+          (!u.auth_user_id || u.auth_user_id === authUserId),
+      );
+      if (parked) {
+        ({ data: appUser, error: appUserError } = await supabase
+          .from("app_users")
+          .update({
+            auth_user_id: authUserId,
+            name: meta.fullName,
+            role: "head_admin",
+            is_active: true,
+            must_change_password: false,
+          })
+          .eq("id", parked.id)
+          .select("id")
+          .single());
+        if (appUser) appUserRelinked = true;
+      }
+    }
+
+    if (!appUser && !appUserError) {
+    ({ data: appUser, error: appUserError } = await supabase
       .from("app_users")
       .insert({
         auth_user_id: authUserId,
@@ -1105,7 +1215,8 @@ Deno.serve(async (req) => {
         tenant_id: tenantId,
       })
       .select("id")
-      .single();
+      .single());
+    }
 
     if (appUserError || !appUser) {
       console.error(`${LOG} app_users insert failed:`, appUserError);
@@ -1174,6 +1285,19 @@ Deno.serve(async (req) => {
     // owner walks straight into the subscription paywall on first login — so a
     // failure here rolls steps 4–6 back and lets them retry cleanly, rather
     // than handing them a tenant they cannot use.
+    // Rehearsal: the canary may still carry a previous run's live-status row,
+    // and only one may be live per tenant (unique index). The Developer page's
+    // reset cancels those in Stripe; this only stops a leftover row blocking.
+    if (adoptCanary) {
+      const { error: retireError } = await supabase
+        .from("tenant_subscriptions")
+        .update({ status: "canceled", canceled_at: new Date().toISOString(), ended_at: new Date().toISOString() })
+        .eq("tenant_id", tenantId)
+        .in("status", ["active", "trialing", "past_due"])
+        .neq("stripe_subscription_id", subscription.id);
+      if (retireError) console.error(`${LOG} rehearsal: could not retire old canary subscriptions:`, retireError);
+    }
+
     const card = await resolveCard(stripe, subscription);
     const { data: subRow, error: subError } = await supabase
       .from("tenant_subscriptions")
@@ -1356,7 +1480,12 @@ Deno.serve(async (req) => {
     // paid tenant over it is not.
     // =====================================================================
     let contentSeeded = false;
-    try {
+    if (adoptCanary) {
+      // The canary's booking site is real work in progress; a rehearsal must
+      // never overwrite it with starter copy.
+      contentSeeded = true;
+      console.log(`${LOG} rehearsal: kept "${REHEARSAL_TENANT_SLUG}"'s existing booking-site content`);
+    } else try {
       const { pages, sections, missing } = await seedTenantCmsContent(
         supabase,
         tenantId,
@@ -1431,7 +1560,10 @@ Deno.serve(async (req) => {
       stripe_customer_id: (subscription.customer as string) ?? null,
       stripe_subscription_id: subscription.id,
       tenant_id: tenantId,
-      metadata: { slug, mode, contentSeeded, duplicateName, fleetSize, vehicleType },
+      metadata: {
+        slug, mode, contentSeeded, duplicateName, fleetSize, vehicleType,
+        ...(adoptCanary ? { rehearsal: REHEARSAL_TENANT_SLUG } : {}),
+      },
     });
 
     console.log(

@@ -47,7 +47,7 @@
 import { handleCors, errorResponse, jsonResponse } from "../_shared/cors.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { getSignupPlan } from "../_shared/signup-plans.ts";
-import { getSignupStripeMode } from "../_shared/signup-stripe.ts";
+import { isParkedRow, readRehearsalFor, signupModeFor } from "../_shared/signup-rehearsal.ts";
 import {
   checkThrottle,
   clientIp,
@@ -218,16 +218,23 @@ Deno.serve(async (req) => {
       );
     }
 
+    // The Developer page's rehearsal address, or null for every real signup.
+    const rehearsal = await readRehearsalFor(supabase, email);
+
     const { data: staffMatches, error: staffError } = await supabase
       .from("app_users")
-      .select("id, email")
+      .select("id, email, auth_user_id")
       .ilike("email", email);
     if (staffError) throw staffError;
     // `ilike` narrows in Postgres; JS re-checks exactly so a legal underscore in
     // the address cannot wildcard-match someone else.
     if (
       (staffMatches || []).some(
-        (u: { email: string | null }) => (u.email || "").toLowerCase() === email,
+        (u: { email: string | null; auth_user_id: string | null }) =>
+          (u.email || "").toLowerCase() === email &&
+          // A rehearsal reset parks the owner row (login deleted, row kept);
+          // that row must not block the rehearsal address from signing up again.
+          !(rehearsal && isParkedRow(u)),
       )
     ) {
       console.log(`${LOG} refused ${email}: already a portal staff account`);
@@ -266,7 +273,8 @@ Deno.serve(async (req) => {
       // Locked now, exactly as `signup-begin` locks it. Later steps read THIS
       // rather than the env var, so flipping SIGNUP_STRIPE_MODE mid-flight
       // cannot strand an in-progress signup on the wrong Stripe account.
-      mode: getSignupStripeMode(),
+      mode: signupModeFor(rehearsal),
+      ...(rehearsal ? { rehearsal: { linkToNorthwind: rehearsal.linkToNorthwind } } : {}),
       createdAt: now,
       updatedAt: now,
       milestones: [],

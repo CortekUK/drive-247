@@ -135,6 +135,12 @@ export interface SignupMetadata {
   /** ISO. A lock older than PROVISION_LOCK_MS is treated as stale and taken over. */
   provisionLockAt?: string | null;
   lastError?: { code: string; message: string; at: string } | null;
+  /**
+   * Developer rehearsal (see _shared/signup-rehearsal.ts). Stamped at signup
+   * start ONLY for the Developer page's rehearsal address; absent on every
+   * real signup. `linkToNorthwind` makes signup-provision adopt the canary.
+   */
+  rehearsal?: { linkToNorthwind: boolean };
 }
 
 /**

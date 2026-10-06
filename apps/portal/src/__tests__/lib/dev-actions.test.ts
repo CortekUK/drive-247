@@ -14,7 +14,7 @@
 import { describe, it, expect, vi } from 'vitest';
 
 import {
-  DEV_ROUTE,
+  developerPageUrl,
   TOUR_STORAGE_PREFIX,
   checklistStorageKeys,
   clearChecklistState,
@@ -71,10 +71,10 @@ describe('isLocalhostHost', () => {
   ])('refuses %s', (host) => expect(isLocalhostHost(host)).toBe(false));
 });
 
-describe('DEV_ROUTE', () => {
-  it('is the /dev page, and the route file exists where the link points', () => {
-    expect(DEV_ROUTE).toBe('/dev');
-    expect(readPortalSource('app/(dashboard)/dev/page.tsx')).toMatch(/export default function DevPage/);
+describe('developerPageUrl', () => {
+  it('points at the admin app\'s Developer page, local or live', () => {
+    expect(developerPageUrl('northwind.portal.localhost')).toBe('http://localhost:4004/admin/developer');
+    expect(developerPageUrl('northwind.portal.drive-247.com')).toBe('https://admin.drive-247.com/admin/developer');
   });
 });
 

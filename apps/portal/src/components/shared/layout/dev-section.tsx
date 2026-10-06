@@ -1,21 +1,22 @@
 "use client";
 
-import Link from "next/link";
 import { ArrowUpRight, Wrench } from "lucide-react";
 
 import { useTenant } from "@/contexts/TenantContext";
 import { NORTHWIND } from "@/lib/v2";
-import { DEV_ROUTE } from "@/lib/dev-actions";
+import { developerPageUrl } from "@/lib/dev-actions";
 
 /**
  * A developer link pinned to the bottom of the v2 sidebar, beside the avatar,
- * leading to the `/dev` page. The page is the destination; this block is
- * deliberately nothing more than the way there.
+ * leading to the super-admin Developer page in the admin app (a new tab). That
+ * page replaced the portal's own `/dev` page in Oct 2026; its buttons reach
+ * this tab through `components/dev/dev-bridge.tsx`. This block is deliberately
+ * nothing more than the way there.
  *
- * It used to carry the reset actions itself. They moved to the page
- * (`components/dev/dev-page.tsx`) and the logic behind them to
- * `lib/dev-actions.ts`, which both the page and — through `DEV_ROUTE` — this
- * link import, so nothing about "what first-time means" is written down twice.
+ * It used to carry the reset actions itself. They moved to a portal `/dev`
+ * page, and from there to the admin app; the local half of "what first-time
+ * means" is still written down once, in `lib/dev-actions.ts`, which the bridge
+ * and — through `developerPageUrl` — this link import.
  *
  * It is NOT the old Dev Panel. That was deleted on purpose (3,762 lines across
  * three apps) and must not come back.
@@ -71,19 +72,21 @@ export function DevSection() {
   if (tenant?.slug !== NORTHWIND) return null;
 
   return (
-    <Link
-      href={DEV_ROUTE}
+    <a
+      href={developerPageUrl(window.location.hostname)}
+      target="_blank"
+      rel="noreferrer"
       // Dashed border + monospace + no brand colour: it borrows the v2 tokens
       // so it does not look broken next to the avatar, while looking like
       // nothing else in the product does.
       className="mb-1.5 flex w-full items-center gap-1.5 rounded-md border border-dashed border-border bg-muted/40 px-2 py-1.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground transition-colors cursor-pointer hover:border-foreground/30 hover:text-foreground"
       data-testid="dev-section"
-      title="Open the developer page (canary tenant only)"
+      title="Open the Developer page in the admin app (super admins)"
     >
       <Wrench className="h-3 w-3 shrink-0" />
       <span className="flex-1 text-left">Developer</span>
       <span className="normal-case tracking-normal opacity-60">canary</span>
       <ArrowUpRight className="h-3 w-3 shrink-0 opacity-60" />
-    </Link>
+    </a>
   );
 }

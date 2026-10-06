@@ -41,6 +41,7 @@ import {
   Settings,
   SlidersHorizontal,
   Sparkles,
+  TerminalSquare,
   TicketPercent,
   TrendingUp,
   Users,
@@ -171,6 +172,8 @@ function useBuildNav(): AdminNav {
           // The short list of features that cost a live walkthrough.
           { name: 'Setup Checklist', href: '/admin/setup-checklist', icon: ClipboardCheck },
           ...(isPrimary ? [{ name: 'Manage Admins', href: '/admin/admins', icon: Users }] : []),
+          // Signup rehearsal + the Northwind canary's developer tools (was portal /dev).
+          ...(isSuper ? [{ name: 'Developer', href: '/admin/developer', icon: TerminalSquare }] : []),
         ],
       },
     ];

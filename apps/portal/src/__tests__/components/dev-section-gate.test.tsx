@@ -47,7 +47,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 
 import { DevSection } from '@/components/shared/layout/dev-section';
-import { DEV_ROUTE } from '@/lib/dev-actions';
+import { developerPageUrl } from '@/lib/dev-actions';
 
 // ── Test doubles ───────────────────────────────────────────────────────────
 
@@ -186,8 +186,9 @@ describe('Developer sidebar link — shows for the canary', () => {
 
     const link = devSection()!;
     expect(link.tagName).toBe('A');
-    expect(link.getAttribute('href')).toBe(DEV_ROUTE);
-    expect(DEV_ROUTE).toBe('/dev');
+    // The admin app's Developer page, which replaced portal /dev.
+    expect(link.getAttribute('href')).toBe(developerPageUrl(window.location.hostname));
+    expect(link.getAttribute('href')).toMatch(/\/admin\/developer$/);
     expect(link.querySelectorAll('button')).toHaveLength(0);
   });
 });

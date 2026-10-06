@@ -26,8 +26,16 @@
 
 import { REPLAY_TOUR_EVENT, safeStorage } from '@/lib/first-rental-tour';
 
-/** The developer page's route. Also the sidebar link's target. */
-export const DEV_ROUTE = '/dev';
+/**
+ * Where the developer tools live: the super-admin Developer page in the admin
+ * app. It replaced this portal's `/dev` page (Oct 2026) and drives this tab
+ * through `components/dev/dev-bridge.tsx`. The sidebar link's target.
+ */
+export function developerPageUrl(hostname: string): string {
+  return isLocalhostHost(hostname)
+    ? 'http://localhost:4004/admin/developer'
+    : 'https://admin.drive-247.com/admin/developer';
+}
 
 /**
  * Is this the developer's own machine?
