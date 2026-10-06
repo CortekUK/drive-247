@@ -40,6 +40,14 @@ import { SIGNUP_ERROR_COPY } from "@/components/onboarding/onboarding-types";
 import type { PromoOffer } from "@/lib/promo-offer";
 import { readReferralCodeFromDocument } from "@/lib/referral-cookie";
 
+/** "13 Oct 2026" — the day a trial ends and the card is first charged. */
+function formatDay(iso: string | null): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+
 /** "$79", "$79.20" from cents. */
 function formatCents(cents: number): string {
   const dollars = cents / 100;
@@ -124,8 +132,13 @@ export function PaymentStep({
   amountDueCents = null,
   promo = null,
   promoNotice = null,
+  intentType = "payment",
+  trialDays = 0,
+  trialEndsAt = null,
   onApplyPromo,
 }: PaymentStepProps) {
+  const isTrial = intentType === "setup";
+  const chargeDate = formatDay(trialEndsAt);
   const { resolvedTheme } = useTheme();
   const [stripeJs, setStripeJs] = React.useState<StripeJsState>("idle");
 
@@ -314,7 +327,16 @@ export function PaymentStep({
             {plan.fleetBand}
           </p>
         </div>
-        {promo && typeof amountDueCents === "number" ? (
+        {isTrial ? (
+          // Free trial: nothing today. The price and the day it starts are said
+          // here, before the card is saved, so day 6 is never a surprise.
+          <div className="shrink-0 text-right">
+            <p className="text-2xl font-bold tracking-tighter">$0</p>
+            <p className="text-xs text-muted-foreground">
+              today · then {promo ? "discounted" : `$${plan.priceUsd}`}/month
+            </p>
+          </div>
+        ) : promo && typeof amountDueCents === "number" ? (
           // A promo / referral code: the figure is Stripe's own first invoice,
           // so what is shown here is exactly what the card is charged.
           <div className="shrink-0 text-right">
@@ -361,6 +383,22 @@ export function PaymentStep({
         </p>
       )}
 
+      {isTrial ? (
+        <div className="mt-3 rounded-lg border border-indigo-600/20 bg-indigo-600/5 p-3 text-xs leading-relaxed text-foreground/80 dark:border-indigo-400/20 dark:bg-indigo-400/5">
+          <p className="flex items-center gap-1.5 font-medium text-indigo-700 dark:text-indigo-300">
+            <Gift className="h-3.5 w-3.5" aria-hidden="true" />
+            {trialDays}-day free trial — full access, nothing charged today
+          </p>
+          <p className="mt-1">
+            We save your card now. You&apos;ll be charged ${plan.priceUsd}/month
+            {chargeDate ? <> on <strong>{chargeDate}</strong></> : <> when the trial ends</>}{" "}
+            unless you cancel before then from your portal, which shows a countdown.
+            {promo && promo.duration !== "forever" && (
+              <> Your discount applies {promo.durationText} after the trial.</>
+            )}
+          </p>
+        </div>
+      ) : (
       <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
         You&apos;re starting a monthly subscription. Today&apos;s payment covers
         your first month; it renews on the same date each month and you can
@@ -369,6 +407,7 @@ export function PaymentStep({
           <> Your discount applies {promo.durationText}; after that the plan is ${plan.priceUsd}/month.</>
         )}
       </p>
+      )}
 
       <Separator className="my-4" />
 
@@ -393,7 +432,7 @@ export function PaymentStep({
           stripe={stripePromise}
           options={elementsOptions ?? { clientSecret }}
         >
-          <PaymentForm busy={busy} onPaid={onPaid} onError={onError} />
+          <PaymentForm busy={busy} onPaid={onPaid} onError={onError} intentType={intentType} />
         </Elements>
       )}
 
@@ -426,10 +465,13 @@ function PaymentForm({
   busy,
   onPaid,
   onError,
+  intentType = "payment",
 }: {
   busy: boolean;
   onPaid(): void;
   onError(err: OnboardingError): void;
+  /** "setup" = free trial: save the card with confirmSetup, charge nothing. */
+  intentType?: "payment" | "setup";
 }) {
   const stripe = useStripe();
   const elements = useElements();
@@ -488,6 +530,41 @@ function PaymentForm({
     setNotice(null);
 
     try {
+      if (intentType === "setup") {
+        // Free trial. The client secret is the subscription's SetupIntent, so
+        // this saves the card (with 3-D Secure if the bank asks) and charges
+        // nothing. signup-provision re-checks with Stripe that the card really
+        // is on file before building the portal.
+        const { error: setupError, setupIntent } = await stripe.confirmSetup({
+          elements,
+          redirect: "if_required",
+          confirmParams: { return_url: `${window.location.origin}/?signup=resume` },
+        });
+        if (setupError) {
+          handleStripeError(setupError, { setMessage, onError });
+          return;
+        }
+        switch (setupIntent?.status) {
+          case "succeeded":
+          case "processing":
+            onPaid();
+            return;
+          case "requires_payment_method":
+            setMessage(SIGNUP_ERROR_COPY.CARD_DECLINED);
+            return;
+          case "requires_action":
+          case "requires_confirmation":
+            setMessage(SIGNUP_ERROR_COPY.CARD_AUTH_FAILED);
+            return;
+          case "canceled":
+            onError({ code: "PAYMENT_EXPIRED", message: SIGNUP_ERROR_COPY.PAYMENT_EXPIRED });
+            return;
+          default:
+            setMessage(SIGNUP_ERROR_COPY.INTERNAL);
+            return;
+        }
+      }
+
       const { error: stripeError, paymentIntent } = await stripe.confirmPayment({
         elements,
         redirect: "if_required",
@@ -615,7 +692,9 @@ function PaymentForm({
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
             {awaitingBank
               ? "Waiting for your bank…"
-              : "Confirming your payment…"}
+              : intentType === "setup"
+                ? "Saving your card…"
+                : "Confirming your payment…"}
           </p>
         )}
         {notice && !message && (
@@ -653,6 +732,7 @@ function handleStripeError(
   // shell mints a fresh one.
   if (
     code === "payment_intent_unexpected_state" ||
+    code === "setup_intent_unexpected_state" ||
     code === "resource_missing" ||
     code === "payment_intent_incompatible_payment_method"
   ) {
@@ -663,7 +743,7 @@ function handleStripeError(
     return;
   }
 
-  if (code === "payment_intent_authentication_failure") {
+  if (code === "payment_intent_authentication_failure" || code === "setup_intent_authentication_failure") {
     setMessage(SIGNUP_ERROR_COPY.CARD_AUTH_FAILED);
     return;
   }

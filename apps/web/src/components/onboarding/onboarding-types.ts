@@ -343,6 +343,12 @@ export interface OnboardingState {
     promo?: PromoOffer | null;
     /** Why a code the visitor carried was dropped (shown on the card step). */
     promoNotice?: string | null;
+    /** "setup" = free trial: save the card, charge nothing today. */
+    intentType?: "payment" | "setup";
+    /** Free-trial length on this subscription; 0 = paid today. */
+    trialDays?: number;
+    /** When the trial ends and the card is first charged (ISO). */
+    trialEndsAt?: string | null;
   };
   business: BusinessDraft;
   provisioning: ProvisioningState;
@@ -466,6 +472,12 @@ export interface PaymentStepProps {
   promo?: PromoOffer | null;
   /** Why a code the visitor carried was dropped. */
   promoNotice?: string | null;
+  /** "setup" = free trial: the client secret saves the card instead of paying. */
+  intentType?: "payment" | "setup";
+  /** Free-trial length; 0 = paid today. */
+  trialDays?: number;
+  /** When the trial ends and the card is first charged (ISO). */
+  trialEndsAt?: string | null;
   /** "Have a promo code?": apply a code, or remove the applied one with null. Resolves to a message, or null. */
   onApplyPromo?(code: string | null): Promise<string | null>;
 }

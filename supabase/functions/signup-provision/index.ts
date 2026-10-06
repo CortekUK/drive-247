@@ -72,6 +72,7 @@ import {
 import { sendResendEmail } from "../_shared/resend-service.ts";
 import { buildCmsContent, seedTenantCmsContent } from "../_shared/tenant-cms-content.ts";
 import { readRehearsalFor, REHEARSAL_TENANT_SLUG } from "../_shared/signup-rehearsal.ts";
+import { isSecured, savedPaymentMethodOf } from "../_shared/signup-trial.ts";
 
 const LOG = "[signup-provision]";
 
@@ -203,7 +204,8 @@ function escapeHtml(value: string): string {
 const HOUR_MS = 60 * 60 * 1000;
 
 /** Stripe statuses that mean this signup has been paid for. */
-const PAID_STATUSES = new Set(["active", "trialing"]);
+// "Paid" is `isSecured` (_shared/signup-trial.ts): active, or a free trial
+// whose card is saved. A trial is `trialing` before the card is entered.
 
 const DAY_LABELS: Record<string, string> = {
   monday: "Mon",
@@ -789,7 +791,7 @@ Deno.serve(async (req) => {
     let subscription: any;
     try {
       subscription = await stripe.subscriptions.retrieve(meta.stripeSubscriptionId, {
-        expand: ["latest_invoice.payment_intent", "default_payment_method"],
+        expand: ["latest_invoice.payment_intent", "default_payment_method", "pending_setup_intent"],
       });
     } catch (e) {
       console.error(`${LOG} could not retrieve subscription ${meta.stripeSubscriptionId}:`, e);
@@ -807,7 +809,7 @@ Deno.serve(async (req) => {
       return await fail("PAYMENT_REQUIRED", "We couldn't verify your payment", 402);
     }
 
-    if (!PAID_STATUSES.has(subscription.status)) {
+    if (!isSecured(subscription)) {
       if (subscription.status === "incomplete_expired" || subscription.status === "canceled") {
         return await fail(
           "PAYMENT_EXPIRED",
@@ -816,6 +818,26 @@ Deno.serve(async (req) => {
         );
       }
       return await fail("PAYMENT_INCOMPLETE", "Your payment has not completed yet", 402);
+    }
+
+    // A free trial saves the card through the subscription's setup intent.
+    // Make sure that card is the subscription's default, so the charge when
+    // the trial ends has something to bill — otherwise
+    // `missing_payment_method: "cancel"` would end a subscription whose owner
+    // did give us a card. Retried on every provision attempt until it sticks.
+    if (subscription.status === "trialing" && !subscription.default_payment_method) {
+      const pm = savedPaymentMethodOf(subscription);
+      if (pm) {
+        try {
+          subscription = await stripe.subscriptions.update(subscription.id, {
+            default_payment_method: pm,
+            expand: ["latest_invoice.payment_intent", "default_payment_method", "pending_setup_intent"],
+          });
+        } catch (e) {
+          console.error(`${LOG} could not set default card on trialing ${subscription.id}:`, e);
+          return await fail("STRIPE_UNAVAILABLE", "We couldn't reach our payment provider", 502);
+        }
+      }
     }
 
     await markMilestone(supabase, authUserId, "payment_verified");
@@ -1250,7 +1272,12 @@ Deno.serve(async (req) => {
           stripe_price_id: priceId,
           stripe_product_id: productId,
           stripe_account: SIGNUP_STRIPE_ACCOUNT,
-          trial_days: 0,
+          // The trial this subscription was actually created with (the admin
+          // may have changed the plan's since), 0 when it paid up front.
+          trial_days:
+            typeof subscription.trial_start === "number" && typeof subscription.trial_end === "number"
+              ? Math.round((subscription.trial_end - subscription.trial_start) / 86_400)
+              : 0,
           billing_model: "trial",
           is_active: true,
           sort_order: 0,

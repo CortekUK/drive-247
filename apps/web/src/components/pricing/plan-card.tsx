@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Check, Sparkles } from "lucide-react";
+import { ArrowRight, Check, Gift, Sparkles } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -61,6 +61,8 @@ export function PlanCard({ plan, onSelect, offer }: PlanCardProps) {
     );
   }
 
+  const trialDays = plan.trialDays ?? 0;
+
   const handlePress = () => {
     if (onSelect) onSelect(plan.id);
     else onboarding?.open(plan.id);
@@ -116,6 +118,12 @@ export function PlanCard({ plan, onSelect, offer }: PlanCardProps) {
           {offer.discountText} {offer.durationText}
         </p>
       )}
+      {trialDays > 0 && (
+        <p className="mt-1 inline-flex items-center gap-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400">
+          <Gift className="h-3.5 w-3.5" aria-hidden="true" />
+          {trialDays}-day free trial · card required, cancel anytime
+        </p>
+      )}
       {/* Reserves two rendered lines (14px text at leading-relaxed ≈ 22.75px/line),
           so a tier whose tagline happens to fit on one line does not pull its
           Subscribe button above the other two. 2.5rem was under one line short. */}
@@ -129,7 +137,11 @@ export function PlanCard({ plan, onSelect, offer }: PlanCardProps) {
         // Three buttons all labelled "Subscribe" are ambiguous when a screen
         // reader lists them out of context, so the accessible name carries the
         // tier and the price.
-        aria-label={`Subscribe to ${plan.name} — ${formatPlanPriceUsd(plan)} per month`}
+        aria-label={
+          trialDays > 0
+            ? `Start a ${trialDays}-day free trial of ${plan.name}, then ${formatPlanPriceUsd(plan)} per month`
+            : `Subscribe to ${plan.name} — ${formatPlanPriceUsd(plan)} per month`
+        }
         // Every tier gets the same solid indigo CTA. Giving the non-recommended
         // tiers an `outline` button read as "these are the lesser options" and
         // suppressed clicks on Starter and Scale, which are real plans we want
@@ -142,7 +154,8 @@ export function PlanCard({ plan, onSelect, offer }: PlanCardProps) {
           "dark:bg-indigo-500 dark:hover:bg-indigo-600"
         )}
       >
-        Subscribe <ArrowRight className="h-4 w-4" aria-hidden="true" />
+        {trialDays > 0 ? "Start free trial" : "Subscribe"}{" "}
+        <ArrowRight className="h-4 w-4" aria-hidden="true" />
       </Button>
 
       <ul className="mt-6 space-y-2.5 border-t pt-6">

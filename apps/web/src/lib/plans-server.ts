@@ -169,6 +169,38 @@ function toSignupPlan(raw: unknown): SignupPlan | null {
  * so the intent is readable at the call site and the query keeps working if the
  * policy is ever relaxed for another reader.
  */
+/**
+ * `trial_days` per plan, in a request of its own. The column arrives by a
+ * hand-applied migration; folding it into PLAN_COLUMNS would turn the whole
+ * read into a 400 until then and serve the HARDCODED prices — so a failure
+ * here costs only the "free trial" wording, never the price.
+ */
+async function fetchTrialDays(baseUrl: string, anonKey: string): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  try {
+    const res = await fetch(
+      `${baseUrl.replace(/\/$/, "")}/rest/v1/signup_plans?select=plan_key,trial_days&is_visible=eq.true`,
+      {
+        headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}`, Accept: "application/json" },
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+        next: { revalidate: PLANS_REVALIDATE_SECONDS },
+      },
+    );
+    if (!res.ok) return out;
+    const body: unknown = await res.json();
+    if (!Array.isArray(body)) return out;
+    for (const row of body) {
+      if (typeof row !== "object" || row === null) continue;
+      const key = readString(row as Record<string, unknown>, "plan_key");
+      const days = readNumber(row as Record<string, unknown>, "trial_days");
+      if (key && days !== null && Number.isInteger(days) && days > 0 && days <= 30) out.set(key, days);
+    }
+  } catch {
+    /* No trial wording; prices are unaffected. */
+  }
+  return out;
+}
+
 export async function fetchSignupPlans(): Promise<readonly SignupPlan[]> {
   const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -233,7 +265,8 @@ export async function fetchSignupPlans(): Promise<readonly SignupPlan[]> {
     // Runs in production too: these rows are edited without a deploy, so a dev
     // console would never see the mistake. See the function's own comment.
     reportPlanCatalogueProblems(plans, "signup_plans");
-    return plans;
+    const trials = await fetchTrialDays(baseUrl, anonKey);
+    return plans.map((plan) => ({ ...plan, trialDays: trials.get(plan.id) ?? 0 }));
   } catch (error) {
     // Includes the AbortSignal timeout and any DNS/TLS failure. Static render
     // must survive all of it.

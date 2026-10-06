@@ -26,11 +26,12 @@ import {
   writeSignupMeta,
   type SignupMetadata,
 } from "../_shared/signup-state.ts";
+import { isSecured } from "../_shared/signup-trial.ts";
 
 const LOG = "[signup-resume]";
 
-/** Stripe statuses that mean the platform has been paid for this period. */
-const PAID_STATUSES = new Set(["active", "trialing"]);
+// "Paid" is `isSecured` (_shared/signup-trial.ts): active, or a free trial
+// whose card is saved. A trial is `trialing` before the card is entered.
 
 /** The business draft, in the exact shape signup-provision accepts back. */
 function businessDto(meta: SignupMetadata) {
@@ -145,9 +146,11 @@ Deno.serve(async (req) => {
       }
 
       try {
-        const sub = await stripe.subscriptions.retrieve(meta.stripeSubscriptionId);
+        const sub = await stripe.subscriptions.retrieve(meta.stripeSubscriptionId, {
+          expand: ["pending_setup_intent"],
+        });
         stripeStatus = sub.status;
-        paid = PAID_STATUSES.has(sub.status);
+        paid = isSecured(sub);
       } catch (e) {
         // Deliberately NOT falling back to `meta.status === "paid"`. A resume
         // that guesses at payment sends the user into the business form, where

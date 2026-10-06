@@ -43,12 +43,20 @@ import {
   signupError,
   writeSignupMeta,
 } from "../_shared/signup-state.ts";
+import {
+  isAwaitingCard,
+  isSecured,
+  setupClientSecretOf,
+  trialCreateParams,
+  trialEndIso,
+  trialTermsChanged,
+} from "../_shared/signup-trial.ts";
 
 const LOG = "[signup-payment-intent]";
 const HOUR_MS = 60 * 60 * 1000;
 
-/** Statuses that mean this subscription is already paid for. */
-const PAID_STATUSES = new Set(["active", "trialing"]);
+// "Already paid" is `isSecured` (_shared/signup-trial.ts), not a status list:
+// a free-trial subscription is `trialing` before its card is even entered.
 /** Statuses that mean the old attempt is dead and a NEW one must be created. */
 const DEAD_STATUSES = new Set(["incomplete_expired", "canceled"]);
 
@@ -133,6 +141,8 @@ Deno.serve(async (req) => {
     );
     if (!requested) return signupError("PLAN_UNKNOWN", "Unknown plan", 400);
     const plan: SignupPlanServer = requested;
+    // Free trial for this plan, as the super admin has it now. 0 = pay today.
+    const trialDays = plan.trialDays ?? 0;
 
     // Mode is locked at account creation — see signup-state.ts.
     const mode = meta.mode ?? getSignupStripeMode();
@@ -168,7 +178,7 @@ Deno.serve(async (req) => {
         let existing: any = null;
         try {
           existing = await stripe.subscriptions.retrieve(subscriptionId, {
-            expand: ["latest_invoice.payment_intent"],
+            expand: ["latest_invoice.payment_intent", "pending_setup_intent"],
           });
         } catch (e) {
           // Not on this account, or deleted. Fall through and make a new one.
@@ -199,9 +209,12 @@ Deno.serve(async (req) => {
             (!!plan.stripePriceId && !!existingPriceId && existingPriceId !== plan.stripePriceId) ||
             (existingAmount !== null && existingAmount !== plan.amountCents) ||
             (!plan.stripePriceId && !!item?.price?.lookup_key && item.price.lookup_key !== plan.lookupKey);
-          const stale = planChanged || priceChanged;
+          // The admin switched the trial on/off or changed its length before
+          // this visitor finished: replace it so they get what the card says.
+          const trialChanged = !isSecured(existing) && trialTermsChanged(existing, trialDays);
+          const stale = planChanged || priceChanged || trialChanged;
 
-          if (PAID_STATUSES.has(existing.status)) {
+          if (isSecured(existing)) {
             // Already paid. Never charge again, never offer a card form.
             await writeSignupMeta(supabase, user.id, {
               status: "paid",
@@ -220,7 +233,38 @@ Deno.serve(async (req) => {
               currency: plan.currency,
               mode,
               alreadyPaid: true,
+              intentType: "payment",
+              trialDays: existing.status === "trialing" ? trialDays : 0,
+              trialEndsAt: trialEndIso(existing),
             });
+          }
+
+          // A trial whose card step was opened but not finished: hand back the
+          // same setup intent rather than starting another subscription.
+          if (isAwaitingCard(existing) && !stale) {
+            const secret = setupClientSecretOf(existing);
+            if (secret) {
+              await writeSignupMeta(supabase, user.id, {
+                status: "payment_pending",
+                stripeCustomerId: (existing.customer as string) ?? customerId ?? undefined,
+                stripeSubscriptionId: existing.id,
+              });
+              return jsonResponse({
+                success: true,
+                clientSecret: secret,
+                publishableKey,
+                stripeCustomerId: existing.customer as string,
+                stripeSubscriptionId: existing.id,
+                amountCents: plan.amountCents,
+                currency: plan.currency,
+                mode,
+                alreadyPaid: false,
+                intentType: "setup",
+                trialDays,
+                trialEndsAt: trialEndIso(existing),
+              });
+            }
+            console.warn(`${LOG} trialing ${existing.id} has no usable setup intent — replacing it`);
           }
 
           if (existing.status === "incomplete" && !stale) {
@@ -241,6 +285,9 @@ Deno.serve(async (req) => {
                 currency: plan.currency,
                 mode,
                 alreadyPaid: false,
+                intentType: "payment",
+                trialDays: 0,
+                trialEndsAt: null,
               });
             }
             console.warn(`${LOG} subscription ${existing.id} is incomplete with no client secret`);
@@ -250,13 +297,18 @@ Deno.serve(async (req) => {
           // subscription FIRST. Two live subscriptions for one tenant would
           // collide with the partial unique index on tenant_subscriptions and
           // strand one of them permanently.
-          if (existing.status === "incomplete" && stale) {
+          // A trial still waiting for its card is cancelled here too — reaching
+          // this line means it is stale or its setup intent is unusable, and a
+          // second trialing subscription would collide with the first.
+          if ((existing.status === "incomplete" && stale) || isAwaitingCard(existing)) {
             try {
               await stripe.subscriptions.cancel(existing.id);
               console.log(
                 `${LOG} cancelled incomplete ${existing.id} — ` +
                   (planChanged
                     ? `plan changed to ${plan.id}`
+                    : trialChanged
+                    ? `trial changed to ${trialDays} day(s)`
                     : `price changed (${existingPriceId ?? "?"} ${existingAmount ?? "?"} -> ${plan.stripePriceId ?? plan.lookupKey} ${plan.amountCents})`),
               );
             } catch (e) {
@@ -342,6 +394,10 @@ Deno.serve(async (req) => {
       // ---------------------------------------------------------------------
       // 4. Subscription, incomplete until the card confirms.
       //
+      // With a free trial it is `trialing` at once, charges nothing today, and
+      // collects the card through `pending_setup_intent` instead of a
+      // PaymentIntent. Stripe charges that card when the trial ends.
+      //
       // `payment_method_types: ["card"]` is load-bearing: card is the only
       // method whose 3DS challenge renders in Stripe's own iframe. Allowing a
       // redirect-based method would bounce the user out of the dialog and lose
@@ -351,25 +407,27 @@ Deno.serve(async (req) => {
         {
           customer: stripeCustomerId,
           items: [{ price: priceId }],
+          ...trialCreateParams(trialDays),
           payment_behavior: "default_incomplete",
           payment_settings: {
             payment_method_types: ["card"],
             save_default_payment_method: "on_subscription",
           },
-          expand: ["latest_invoice.payment_intent"],
+          expand: ["latest_invoice.payment_intent", "pending_setup_intent"],
           metadata: {
             d247_signup: "pending",
             d247_signup_auth_user: user.id,
             signup_email: meta.email,
             plan_id: plan.id,
             plan_name: plan.name,
+            ...(trialDays > 0 ? { d247_trial_days: String(trialDays) } : {}),
             // NO tenant_id — see the header comment.
           },
         },
-        { idempotencyKey: `signup-sub-${user.id}-${plan.id}-${paymentAttempts}` },
+        { idempotencyKey: `signup-sub-${user.id}-${plan.id}-${paymentAttempts}-t${trialDays}` },
       );
 
-      const clientSecret = clientSecretOf(subscription);
+      const clientSecret = trialDays > 0 ? setupClientSecretOf(subscription) : clientSecretOf(subscription);
       if (!clientSecret) {
         // Stripe accepted the subscription but gave us nothing to confirm. The
         // subscription is `incomplete`, so nothing has been charged.
@@ -397,7 +455,7 @@ Deno.serve(async (req) => {
         outcome: "ok",
         stripe_customer_id: stripeCustomerId,
         stripe_subscription_id: subscription.id,
-        metadata: { mode, amountCents: plan.amountCents, attempt: paymentAttempts },
+        metadata: { mode, amountCents: plan.amountCents, attempt: paymentAttempts, trialDays },
       });
 
       console.log(
@@ -414,6 +472,9 @@ Deno.serve(async (req) => {
         currency: plan.currency,
         mode,
         alreadyPaid: false,
+        intentType: trialDays > 0 ? "setup" : "payment",
+        trialDays,
+        trialEndsAt: trialEndIso(subscription),
       });
     } catch (e) {
       // Everything above is either a read or a create that leaves the

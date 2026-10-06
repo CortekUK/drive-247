@@ -107,6 +107,16 @@ export interface PaymentIntentResponse {
   listAmountCents?: number;
   /** signup-payment-intent-v2 only: the promo / referral code applied, if any. */
   promo?: PromoOffer | null;
+  /**
+   * "setup" when the plan has a free trial: the client secret is a SetupIntent
+   * that saves the card (nothing is charged today) — confirm it with
+   * `confirmSetup`, not `confirmPayment`. Absent from an older deploy = payment.
+   */
+  intentType?: "payment" | "setup";
+  /** Free-trial length on this subscription; 0 = paid today. */
+  trialDays?: number;
+  /** When the trial ends and the card is first charged (ISO), or null. */
+  trialEndsAt?: string | null;
 }
 export interface ResumeSignupDTO {
   planId: SignupPlanId;

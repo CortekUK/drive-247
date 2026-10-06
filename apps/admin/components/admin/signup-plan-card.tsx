@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -19,6 +20,7 @@ import {
   ArrowUp,
   Eye,
   EyeOff,
+  Gift,
   Loader2,
   Plus,
   Sparkles,
@@ -46,6 +48,8 @@ export interface SignupPlan {
   stripe_price_id: string | null;
   stripe_lookup_key: string | null;
   price_version: number | null;
+  /** Free trial for new signups, in days. 0 = none. */
+  trial_days: number;
   updated_at: string;
 }
 
@@ -90,6 +94,9 @@ export const MAX_VEHICLES_MAX = 10000;
 export const BULLETS_MIN = 1;
 export const BULLETS_MAX = 8;
 export const BULLET_MAX = 120;
+export const TRIAL_DAYS_MAX = 30;
+/** What the switch fills in when a trial is first turned on. */
+export const TRIAL_DAYS_DEFAULT = 5;
 const PRICE_MIN_CENTS = 50;
 const PRICE_MAX_CENTS = 99_999_900;
 
@@ -124,6 +131,19 @@ export function parsePriceToCents(input: string): PriceParse {
   if (cents < PRICE_MIN_CENTS) return { ok: false, error: 'Price must be at least $0.50.' };
   if (cents > PRICE_MAX_CENTS) return { ok: false, error: 'Price cannot be more than $999,999.' };
   return { ok: true, cents };
+}
+
+export type TrialParse = { ok: true; days: number } | { ok: false; error: string };
+
+/** The trial length field: a whole number of days, 1–30. */
+export function parseTrialDays(input: string): TrialParse {
+  const trimmed = input.trim();
+  if (!/^\d+$/.test(trimmed)) return { ok: false, error: 'Use a whole number of days.' };
+  const days = Number(trimmed);
+  if (days < 1 || days > TRIAL_DAYS_MAX) {
+    return { ok: false, error: `A trial must be 1–${TRIAL_DAYS_MAX} days.` };
+  }
+  return { ok: true, days };
 }
 
 export function draftFromPlan(plan: SignupPlan): PlanDraft {
@@ -260,6 +280,8 @@ interface SignupPlanCardProps {
    * a legitimate state and the server accepts `is_highlighted: false`.
    */
   onToggleHighlight: (next: boolean) => void;
+  /** Saves the free-trial length; 0 switches the trial off. */
+  onSaveTrial: (days: number) => void;
 }
 
 export function SignupPlanCard({
@@ -276,6 +298,7 @@ export function SignupPlanCard({
   onRequestPriceChange,
   onToggleVisibility,
   onToggleHighlight,
+  onSaveTrial,
 }: SignupPlanCardProps) {
   const errors = validateContent(draft);
   const invalid = hasContentErrors(errors);
@@ -462,6 +485,10 @@ export function SignupPlanCard({
             )}
           </p>
         </section>
+
+        <Separator />
+
+        <TrialSection plan={plan} busy={busy} saving={pending === `${plan.id}:trial`} onSave={onSaveTrial} />
 
         <Separator />
 
@@ -708,5 +735,135 @@ export function SignupPlanCard({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Free trial                                                                 */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A free trial for NEW signups on this plan: full access for N days with the
+ * portal's countdown, card saved up front, charged the day after the trial
+ * ends unless they cancel. Saved on its own button, like the price, because it
+ * changes what a new customer pays today.
+ *
+ * Changing it never touches anyone already signed up — each trial lives on
+ * that customer's own Stripe subscription.
+ */
+function TrialSection({
+  plan,
+  busy,
+  saving,
+  onSave,
+}: {
+  plan: SignupPlan;
+  busy: boolean;
+  saving: boolean;
+  onSave: (days: number) => void;
+}) {
+  const [enabled, setEnabled] = useState(plan.trial_days > 0);
+  const [days, setDays] = useState(String(plan.trial_days > 0 ? plan.trial_days : TRIAL_DAYS_DEFAULT));
+
+  // Re-sync when the saved value changes (after a save, or another admin's).
+  useEffect(() => {
+    setEnabled(plan.trial_days > 0);
+    setDays(String(plan.trial_days > 0 ? plan.trial_days : TRIAL_DAYS_DEFAULT));
+  }, [plan.trial_days]);
+
+  const parsed = parseTrialDays(days);
+  const target = enabled ? (parsed.ok ? parsed.days : null) : 0;
+  const dirty = target !== null && target !== plan.trial_days;
+  const helpId = `trial-help-${plan.id}`;
+
+  return (
+    <section className="space-y-2" aria-labelledby={`trial-heading-${plan.id}`}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h3 id={`trial-heading-${plan.id}`} className="flex items-center gap-2 text-sm font-semibold">
+          <Gift className="h-4 w-4 text-primary" aria-hidden="true" />
+          Free trial
+          {plan.trial_days > 0 && (
+            <Badge variant="secondary" className="font-normal">
+              {plan.trial_days} days · live
+            </Badge>
+          )}
+        </h3>
+        <div className="flex items-center gap-2.5">
+          <Label htmlFor={`trial-on-${plan.id}`} className="text-xs text-muted-foreground">
+            Offer a free trial
+          </Label>
+          <Switch
+            id={`trial-on-${plan.id}`}
+            checked={enabled}
+            disabled={busy}
+            onCheckedChange={setEnabled}
+          />
+        </div>
+      </div>
+
+      {enabled && (
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <Input
+              id={`trial-days-${plan.id}`}
+              inputMode="numeric"
+              value={days}
+              disabled={busy}
+              aria-label="Trial length in days"
+              aria-invalid={!parsed.ok}
+              aria-describedby={helpId}
+              onChange={(event) => setDays(event.target.value)}
+              className="w-20 tabular-nums"
+            />
+            <span className="text-sm text-muted-foreground">days</span>
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-3">
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={busy || !dirty}
+          onClick={() => target !== null && onSave(target)}
+        >
+          {saving && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+          {target === 0 && plan.trial_days > 0 ? 'Turn off trial' : 'Save trial'}
+        </Button>
+        {dirty && !saving && (
+          <button
+            type="button"
+            disabled={busy}
+            className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+            onClick={() => {
+              setEnabled(plan.trial_days > 0);
+              setDays(String(plan.trial_days > 0 ? plan.trial_days : TRIAL_DAYS_DEFAULT));
+            }}
+          >
+            Discard
+          </button>
+        )}
+      </div>
+
+      <p id={helpId} className="text-xs">
+        {enabled && !parsed.ok ? (
+          <span className="text-destructive">{parsed.error}</span>
+        ) : dirty ? (
+          <span className="text-warning">
+            Unsaved. Applies to new signups only — anyone already signed up keeps their terms.
+          </span>
+        ) : plan.trial_days > 0 ? (
+          <span className="text-muted-foreground">
+            New signups get full access for {plan.trial_days} days with a countdown. Their card is
+            saved at signup and charged {formatMoney(plan.amount_cents, plan.currency)} on day{' '}
+            {plan.trial_days + 1} unless they cancel.
+          </span>
+        ) : (
+          <span className="text-muted-foreground">
+            Off — new signups pay {formatMoney(plan.amount_cents, plan.currency)} today.
+          </span>
+        )}
+      </p>
+    </section>
   );
 }

@@ -58,6 +58,12 @@ export interface SignupPlan {
   bullets: readonly string[];
   /** Exactly one plan sets this true (growth). */
   highlighted: boolean;
+  /**
+   * Free trial in days for a new signup; absent or 0 = pay today. Set per plan
+   * by a super admin (signup_plans.trial_days). The server decides what is
+   * actually charged — this only words the card.
+   */
+  trialDays?: number;
 }
 
 export const SIGNUP_PLANS: readonly SignupPlan[] = [

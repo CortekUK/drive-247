@@ -118,6 +118,7 @@ function parsePlan(raw: unknown): SignupPlan | null {
     stripe_price_id: asNullableString(raw.stripe_price_id),
     stripe_lookup_key: asNullableString(raw.stripe_lookup_key),
     price_version: asNullableNumber(raw.price_version),
+    trial_days: asNumber(raw.trial_days, 0),
     updated_at: asString(raw.updated_at),
   };
 }
@@ -423,6 +424,35 @@ export default function SignupPlansPage() {
     setPricePlanId(null);
   };
 
+  const handleSaveTrial = async (plan: SignupPlan, days: number) => {
+    if (busy) return;
+
+    setPending(`${plan.id}:trial`);
+    setStatus(days > 0 ? `Setting a ${days}-day trial on ${plan.name}…` : `Turning off the trial on ${plan.name}…`);
+
+    const { data, failure } = await callPlansFn(
+      { action: 'set-trial', id: plan.id, trial_days: days, updated_at: plan.updated_at },
+      `Could not change the free trial for "${plan.name}".`,
+    );
+
+    if (failure) {
+      handleFailure(plan, failure);
+      setPending(null);
+      return;
+    }
+
+    const next = parsePlan(isRecord(data) ? data.plan : null);
+    if (next) replacePlan(next);
+
+    const done =
+      days > 0
+        ? `New ${plan.name} signups now get a ${days}-day free trial.`
+        : `${plan.name} no longer has a free trial — new signups pay today.`;
+    setStatus(done);
+    toast.success(done);
+    setPending(null);
+  };
+
   const handleVisibility = async (plan: SignupPlan, nextVisible: boolean) => {
     if (busy) return;
 
@@ -697,6 +727,7 @@ export default function SignupPlansPage() {
                   onRequestPriceChange={() => setPricePlanId(plan.id)}
                   onToggleVisibility={(next) => void handleVisibility(plan, next)}
                   onToggleHighlight={(next) => void handleToggleHighlight(plan, next)}
+                  onSaveTrial={(days) => void handleSaveTrial(plan, days)}
                 />
               );
             })}
@@ -716,6 +747,7 @@ export default function SignupPlansPage() {
               visible={activePlan.is_visible}
               dirty={isDirty(activePlan, activeDraft)}
               priceCents={activePrice?.ok ? activePrice.cents : null}
+              trialDays={activePlan.trial_days}
             />
           </aside>
         </div>

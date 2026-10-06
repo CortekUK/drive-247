@@ -21,6 +21,7 @@ import {
   getSignupStripeMode,
   getOrCreateSignupProduct,
 } from "../_shared/signup-stripe.ts";
+import { MAX_TRIAL_DAYS } from "../_shared/signup-trial.ts";
 
 const LOG = "[manage-signup-plans]";
 
@@ -107,6 +108,27 @@ async function loadForWrite(supabase: any, id: string, expectedUpdatedAt: unknow
   return { row: data };
 }
 
+/**
+ * `trial_days` is attached in a SECOND read rather than added to PLAN_COLUMNS.
+ * The column arrives by a hand-applied migration; folding it into the main
+ * select would make every read on this page fail until then. Missing = 0.
+ */
+async function withTrialDays(supabase: any, rows: any[]): Promise<any[]> {
+  const days = new Map<string, number>();
+  if (rows.length) {
+    const { data, error } = await supabase
+      .from("signup_plans")
+      .select("id, trial_days")
+      .in("id", rows.map((r: any) => r.id));
+    if (!error) for (const r of data ?? []) days.set(r.id, Number(r.trial_days) || 0);
+  }
+  return rows.map((r: any) => ({ ...r, trial_days: days.get(r.id) ?? 0 }));
+}
+
+async function withTrial(supabase: any, row: any) {
+  return (await withTrialDays(supabase, [row]))[0];
+}
+
 async function listPlans(supabase: any) {
   // Service role, so this deliberately returns INVISIBLE plans too — the whole
   // point of the admin page is to manage the ones the public cannot see.
@@ -115,7 +137,7 @@ async function listPlans(supabase: any) {
     .select(PLAN_COLUMNS)
     .order("sort_order", { ascending: true });
   if (error) throw new Error(`list failed: ${error.message}`);
-  return data ?? [];
+  return await withTrialDays(supabase, data ?? []);
 }
 
 Deno.serve(async (req) => {
@@ -199,7 +221,7 @@ Deno.serve(async (req) => {
         }
 
         if (!Object.keys(patch).length) {
-          return jsonResponse({ plan: loaded.row });
+          return jsonResponse({ plan: await withTrial(supabase, loaded.row) });
         }
         patch.updated_by = auth.userId;
 
@@ -210,7 +232,7 @@ Deno.serve(async (req) => {
           .select(PLAN_COLUMNS)
           .single();
         if (error) throw new Error(`update failed: ${error.message}`);
-        return jsonResponse({ plan: data });
+        return jsonResponse({ plan: await withTrial(supabase, data) });
       }
 
       // ---------------------------------------------------------------------
@@ -230,7 +252,7 @@ Deno.serve(async (req) => {
             { field: "amount_cents" },
           );
         }
-        if (amount === row.amount_cents) return jsonResponse({ plan: row });
+        if (amount === row.amount_cents) return jsonResponse({ plan: await withTrial(supabase, row) });
 
         const mode = getSignupStripeMode();
         const stripe = getSignupStripeClient(mode);
@@ -298,7 +320,53 @@ Deno.serve(async (req) => {
         }
 
         console.log(`${LOG} ${row.plan_key} ${row.amount_cents} -> ${amount} (price ${newPrice.id}, ${lookupKey})`);
-        return jsonResponse({ plan: data });
+        return jsonResponse({ plan: await withTrial(supabase, data) });
+      }
+
+      // ---------------------------------------------------------------------
+      // FREE TRIAL. Its own action, like price and visibility: it changes what
+      // a new signup is charged today, so a content save must never carry it.
+      // Affects NEW signups only — a trial lives on each Stripe subscription,
+      // so changing or removing it here never touches anyone already signed up.
+      // ---------------------------------------------------------------------
+      case "set-trial": {
+        const loaded = await loadForWrite(supabase, body.id, body.updated_at);
+        if (loaded.err) return loaded.err;
+
+        const days = Number(body.trial_days);
+        if (!Number.isInteger(days) || days < 0 || days > MAX_TRIAL_DAYS) {
+          return fail(
+            "VALIDATION_FAILED",
+            `Trial must be a whole number of days from 0 to ${MAX_TRIAL_DAYS}.`,
+            400,
+            { field: "trial_days" },
+          );
+        }
+
+        const { error } = await supabase
+          .from("signup_plans")
+          .update({ trial_days: days, updated_by: auth.userId })
+          .eq("id", body.id);
+        if (error) {
+          // 42703: the column is not there yet — the migration is applied by hand.
+          if ((error as any).code === "42703") {
+            return fail(
+              "NOT_INSTALLED",
+              "Free trials need a database update first (PENDING_20261007_signup_plan_trial_days).",
+              409,
+            );
+          }
+          throw new Error(`trial update failed: ${error.message}`);
+        }
+
+        const { data, error: readErr } = await supabase
+          .from("signup_plans")
+          .select(PLAN_COLUMNS)
+          .eq("id", body.id)
+          .single();
+        if (readErr) throw new Error(`trial reload failed: ${readErr.message}`);
+        console.log(`${LOG} ${(loaded.row as any).plan_key} trial -> ${days} day(s)`);
+        return jsonResponse({ plan: await withTrial(supabase, data) });
       }
 
       // ---------------------------------------------------------------------
@@ -333,7 +401,7 @@ Deno.serve(async (req) => {
           .select(PLAN_COLUMNS)
           .single();
         if (error) throw new Error(`visibility update failed: ${error.message}`);
-        return jsonResponse({ plan: data });
+        return jsonResponse({ plan: await withTrial(supabase, data) });
       }
 
       // ---------------------------------------------------------------------

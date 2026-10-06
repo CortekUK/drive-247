@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowRight, Check, MonitorSmartphone, Sparkles } from 'lucide-react';
+import { ArrowRight, Check, Gift, MonitorSmartphone, Sparkles } from 'lucide-react';
 import { formatMoney, type PlanDraft } from '@/components/admin/signup-plan-card';
 
 /** Gap left above and below the rail when it is pinned, in px. Matches `top-6`. */
@@ -79,6 +79,7 @@ export function SignupPlanPreview({
   highlighted,
   visible,
   priceCents,
+  trialDays = 0,
 }: {
   draft: PlanDraft;
   currency: string;
@@ -86,6 +87,7 @@ export function SignupPlanPreview({
   highlighted: boolean;
   visible: boolean;
   priceCents: number | null;
+  trialDays?: number;
 }) {
   const bullets = draft.bullets.map((bullet) => bullet.trim()).filter(Boolean);
 
@@ -125,12 +127,18 @@ export function SignupPlanPreview({
         <span className="text-xs text-muted-foreground">/{interval}</span>
       </div>
 
+      {trialDays > 0 && (
+        <p className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-primary">
+          <Gift className="h-3 w-3" /> {trialDays}-day free trial · card required, cancel anytime
+        </p>
+      )}
+
       <p className="mt-1.5 break-words text-[11px] leading-snug text-muted-foreground">
         {draft.tagline.trim() || 'Tagline appears here.'}
       </p>
 
       <div className="mt-3 flex h-8 w-full items-center justify-center gap-2 rounded-md bg-primary text-xs font-medium text-primary-foreground">
-        Subscribe <ArrowRight className="h-3.5 w-3.5" />
+        {trialDays > 0 ? 'Start free trial' : 'Subscribe'} <ArrowRight className="h-3.5 w-3.5" />
       </div>
 
       <ul className="mt-3 space-y-1.5 border-t border-border pt-3">
@@ -165,6 +173,7 @@ export function SignupPlanPreviewPanel({
   dirty,
   draft,
   priceCents,
+  trialDays = 0,
 }: {
   planName: string;
   currency: string;
@@ -174,6 +183,8 @@ export function SignupPlanPreviewPanel({
   dirty: boolean;
   draft: PlanDraft;
   priceCents: number | null;
+  /** The SAVED trial — the public card shows only what is live. */
+  trialDays?: number;
 }) {
   return (
     <Card>
@@ -199,6 +210,7 @@ export function SignupPlanPreviewPanel({
           highlighted={highlighted}
           visible={visible}
           priceCents={priceCents}
+          trialDays={trialDays}
         />
         {!visible && (
           <p className="text-xs text-warning">

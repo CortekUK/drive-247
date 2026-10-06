@@ -174,6 +174,9 @@ const INITIAL_STATE: OnboardingState = {
     amountDueCents: null,
     promo: null,
     promoNotice: null,
+    intentType: "payment",
+    trialDays: 0,
+    trialEndsAt: null,
   },
   business: freshBusinessDraft(),
   provisioning: { completed: [], phase: "idle", failure: null, activeSince: null },
@@ -798,6 +801,9 @@ export function OnboardingProvider({
             amountDueCents: res.promo ? res.amountCents : null,
             promo: res.promo ?? null,
             promoNotice,
+            intentType: res.intentType ?? "payment",
+            trialDays: res.trialDays ?? 0,
+            trialEndsAt: res.trialEndsAt ?? null,
           },
         });
       } catch (e) {

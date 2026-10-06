@@ -1,0 +1,37 @@
+-- =============================================================================
+-- Free trial per signup plan.
+--
+-- `signup_plans.trial_days` — 0 means no trial (today's behaviour). Set from the
+-- admin Signup Plans page. When above 0, a new self-serve signup on that plan
+-- saves a card, gets full access for that many days with the portal's existing
+-- trial countdown, and Stripe charges the card the day after the trial ends
+-- unless they cancel first.
+--
+-- APPLYING THIS IS INERT: every row gets 0, so nothing changes for anybody
+-- until a super admin switches a trial on for a plan.
+--
+-- Order: apply this BEFORE the edge functions are redeployed. (They tolerate the
+-- column being missing — it reads as 0 — but the admin page cannot save a trial
+-- until it exists.)
+-- =============================================================================
+
+ALTER TABLE public.signup_plans
+  ADD COLUMN IF NOT EXISTS trial_days integer NOT NULL DEFAULT 0;
+
+ALTER TABLE public.signup_plans
+  DROP CONSTRAINT IF EXISTS signup_plans_trial_days_range;
+ALTER TABLE public.signup_plans
+  ADD CONSTRAINT signup_plans_trial_days_range CHECK (trial_days BETWEEN 0 AND 30);
+
+COMMENT ON COLUMN public.signup_plans.trial_days IS
+  'Free trial length in days for new self-serve signups on this plan. 0 = no trial. Card is saved up front and charged when the trial ends.';
+
+-- The public pricing page reads visible rows with the anon key. Harmless if the
+-- table already grants SELECT on every column.
+GRANT SELECT (trial_days) ON public.signup_plans TO anon, authenticated;
+
+-- -----------------------------------------------------------------------------
+-- Verify (expected: three rows, trial_days = 0 on each):
+--
+--   SELECT plan_key, amount_cents, trial_days FROM public.signup_plans ORDER BY sort_order;
+-- -----------------------------------------------------------------------------

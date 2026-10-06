@@ -1,3 +1,4 @@
+import { normaliseTrialDays } from "./signup-trial.ts";
 // Server-side plan catalogue — the ONLY source of the amount actually charged.
 // The client sends a `planId` and nothing else; price never crosses the wire
 // inbound. Mirrors apps/web/src/lib/plans.ts (id/name/amountCents/currency/interval).
@@ -34,6 +35,11 @@ export interface SignupPlanServer {
    * resolve by `lookupKey`.
    */
   stripePriceId?: string | null;
+  /**
+   * Free trial in days for a NEW signup on this plan; 0 = none. Set per plan
+   * on the admin Signup Plans page. See _shared/signup-trial.ts.
+   */
+  trialDays?: number;
 }
 
 export const SIGNUP_PLANS: Record<SignupPlanId, SignupPlanServer> = {
@@ -156,6 +162,7 @@ export async function fetchSignupPlan(
 
     return {
       ...base,
+      trialDays: await fetchTrialDays(supabase, base.id),
       name: typeof data.name === "string" && data.name.trim() ? data.name.trim() : base.name,
       amountCents:
         Number.isInteger(amount) && amount >= 50 && amount <= 99_999_999 ? amount : base.amountCents,
@@ -184,5 +191,25 @@ export async function fetchSignupPlan(
   } catch (e) {
     console.warn(`[signup-plans] DB read threw for "${base.id}" — using hardcoded:`, e);
     return base;
+  }
+}
+
+/**
+ * `signup_plans.trial_days`, read on its own so that a database without the
+ * column yet (the migration is applied by hand) costs only the trial — never
+ * the price, which a failed combined select would have sent back to the
+ * hardcoded catalogue.
+ */
+async function fetchTrialDays(supabase: any, planKey: string): Promise<number> {
+  try {
+    const { data, error } = await supabase
+      .from("signup_plans")
+      .select("trial_days")
+      .eq("plan_key", planKey)
+      .maybeSingle();
+    if (error || !data) return 0;
+    return normaliseTrialDays(data.trial_days);
+  } catch {
+    return 0;
   }
 }

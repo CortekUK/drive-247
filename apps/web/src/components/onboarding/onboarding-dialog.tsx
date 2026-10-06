@@ -241,7 +241,14 @@ export function OnboardingDialog() {
         : accountMode === "tenant"
           ? { label: "Build my portal", busyLabel: "Setting up…" }
           : { label: "Continue to payment", busyLabel: "Creating account…" }
-      : { label: `Pay $${plan.priceUsd} and continue`, busyLabel: "Processing payment…" };
+      : state.payment.intentType === "setup"
+        ? // Free trial: the server said so (it created a trialing subscription),
+          // so the button never promises a trial the server did not grant.
+          {
+            label: `Start ${state.payment.trialDays}-day free trial`,
+            busyLabel: "Saving your card…",
+          }
+        : { label: `Pay $${plan.priceUsd} and continue`, busyLabel: "Processing payment…" };
 
   // Steps that hand the user a different set of buttons inside the body own the
   // whole decision — a footer "Create account" next to "Use a different email"
@@ -307,6 +314,7 @@ export function OnboardingDialog() {
             <DialogTitle className="text-lg">Set up your Drive247 portal</DialogTitle>
             <DialogDescription>
               {plan.name} · ${plan.priceUsd}/month
+              {(plan.trialDays ?? 0) > 0 && ` · ${plan.trialDays}-day free trial`}
             </DialogDescription>
 
             <Progress value={progressValue} aria-label="Setup progress" className="mt-4 h-1.5" />
@@ -466,6 +474,9 @@ export function OnboardingDialog() {
                       amountDueCents={state.payment.amountDueCents}
                       promo={state.payment.promo}
                       promoNotice={state.payment.promoNotice}
+                      intentType={state.payment.intentType}
+                      trialDays={state.payment.trialDays}
+                      trialEndsAt={state.payment.trialEndsAt}
                       onApplyPromo={applyPromoCode}
                     />
                   ) : null}
