@@ -241,14 +241,34 @@ Deno.serve(async (req) => {
       user.email
     );
 
-    // Skip signup and recovery emails — these are handled via OTP flow
-    // (send-verification-otp / verify-otp / reset-password-with-otp)
-    if (
-      email_data.email_action_type === "signup" ||
-      email_data.email_action_type === "recovery"
-    ) {
+    /*
+     * Signup confirmation is skipped; RECOVERY is not, and that distinction is
+     * the whole of this block.
+     *
+     * Signup genuinely is handled elsewhere: `signup-begin` issues its own code
+     * and `signup-verify-otp` checks it, so a second confirmation email from
+     * here would be a duplicate.
+     *
+     * Recovery was skipped on the same reasoning — "handled via OTP flow
+     * (send-verification-otp / verify-otp / reset-password-with-otp)" — but
+     * nothing ever called that flow. Grepping apps/portal and apps/admin for
+     * those three functions finds one COMMENT and no code. So both login
+     * screens called `supabase.auth.resetPasswordForEmail`, Supabase asked this
+     * hook to send the recovery mail, and this branch threw it away. The
+     * request succeeded, the UI said "Check your email", and nothing was ever
+     * sent — for every operator, on every tenant, since the hook shipped.
+     *
+     * It is also the safer of the two routes, not merely the quicker. Supabase
+     * mints a single-use recovery token it verifies itself, which is what
+     * proves control of the mailbox. `reset-password-with-otp` does not verify
+     * anything: it takes { email, new_password }, finds the auth user and sets
+     * the password, with no check of the code it is named after. Wiring the
+     * portal to that would have re-created the hole the login screen's own
+     * comment describes.
+     */
+    if (email_data.email_action_type === "signup") {
       console.log(
-        `Skipping ${email_data.email_action_type} email for ${user.email} — handled via OTP`
+        `Skipping signup email for ${user.email} — handled by signup-begin's own OTP`
       );
       return new Response(JSON.stringify({}), {
         status: 200,
