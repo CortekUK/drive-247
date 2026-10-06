@@ -26,6 +26,7 @@ import {
   BadgeDollarSign,
   Ban,
   BellRing,
+  MailCheck,
   BookOpen,
   Building2,
   ClipboardCheck,
@@ -165,6 +166,12 @@ function useBuildNav(): AdminNav {
           ...(isSuper ? [{ name: 'Integrations', href: '/admin/integrations', icon: Plug }] : []),
           // The platform's own notification set. Super admins only.
           ...(isSuper ? [{ name: 'Notifications', href: '/admin/notifications', icon: BellRing }] : []),
+          // The scheduled operator emails: signup sequence, renewal warnings,
+          // payment confirmations. Next to Notifications because both are
+          // platform mail, and super admins only for the same reason.
+          ...(isSuper
+            ? [{ name: 'Customer Management', href: '/admin/customer-management', icon: MailCheck }]
+            : []),
           // drive-247.com's Terms and Privacy — not a tenant's rental terms.
           { name: 'Legal Pages', href: '/admin/legal', icon: Scale },
           // The first-run wizard's questions. Platform-wide.

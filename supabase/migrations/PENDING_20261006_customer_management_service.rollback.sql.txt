@@ -1,0 +1,26 @@
+-- Rollback for PENDING_20261006_customer_management_service.sql.txt
+--
+-- UNSCHEDULE FIRST. Dropping the tables while the cron job still runs leaves a
+-- job posting every minute to a function whose tables are gone — it would not
+-- send anything, but it would fill the logs with errors and the cause would not
+-- be obvious from them.
+
+SELECT cron.unschedule('customer-management-run')
+WHERE EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'customer-management-run');
+
+BEGIN;
+
+-- NOTE ON WHAT THIS DESTROYS: customer_management_sends is the record of every
+-- email the platform actually sent to an operator, and nothing else holds it.
+-- If the intent is to stop the automations rather than to remove the feature,
+-- do that instead and keep the evidence:
+--
+--   UPDATE public.customer_management_settings
+--      SET signup_enabled = false, renewal_enabled = false, receipt_enabled = false
+--    WHERE id = 1;
+
+DROP TABLE IF EXISTS public.customer_management_sends;
+DROP TABLE IF EXISTS public.customer_management_steps;
+DROP TABLE IF EXISTS public.customer_management_settings;
+
+COMMIT;

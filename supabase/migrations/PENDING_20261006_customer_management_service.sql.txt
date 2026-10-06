@@ -1,0 +1,313 @@
+-- Customer Management Service: the three scheduled operator emails.
+--
+-- NOT APPLIED. Named PENDING_*.sql.txt like the other written-but-unapplied
+-- migrations in this directory, because it carries a cron job that sends mail
+-- and the row it seeds decides who receives it. Read the scope section below
+-- before applying it to the production database.
+--
+-- ── WHAT THIS IS FOR ───────────────────────────────────────────────────────
+--
+-- Three automations that nothing on the platform sends today:
+--
+--   signup   a short sequence after an operator creates their account
+--   renewal  a warning before the subscription card is charged
+--   receipt  a branded confirmation that a payment succeeded
+--
+-- The first two are genuinely missing: there is no drip engine anywhere in
+-- supabase/functions and nothing warns an operator before a renewal. The
+-- third duplicates Stripe, which already emails a receipt for every
+-- successful subscription charge — so `receipt_enabled` seeds FALSE and the
+-- admin page says why. Switching it on means two receipts per payment.
+--
+-- ── SCOPE: WHO RECEIVES ANYTHING ───────────────────────────────────────────
+--
+-- `scope_all_tenants` seeds FALSE, which confines every send to the one
+-- tenant named by `scope_tenant_slug` ('northwind'). Applying this migration
+-- therefore cannot mail an operator other than the rehearsal tenant, however
+-- the cron is scheduled.
+--
+-- Switching that flag on is a one-way door in practice: a backlog of tenants
+-- becomes eligible in the same tick. `max_sends_per_run` caps one run at 50 so
+-- the first tick after the switch cannot mail the whole platform at once, and
+-- the runner reports `capped: true` when it stops early.
+--
+-- ── IDEMPOTENCY ────────────────────────────────────────────────────────────
+--
+-- customer_management_sends is both the log and the guard. The unique index on
+-- (tenant_id, automation, step_key, cycle_key) is what stops the next cron
+-- tick re-sending; `cycle_key` is 'once' for a signup step, the billing DAY for
+-- a renewal reminder (so each period earns one), and the payment's own id for a
+-- receipt (so a replayed webhook is harmless). A rehearsal's keys are prefixed
+-- 'test:<run id>:' so testing a step never consumes the production slot.
+--
+-- Rollback: PENDING_20261006_customer_management_service.rollback.sql.txt
+
+BEGIN;
+
+-- ---------------------------------------------------------------------------
+-- Settings: platform scope, exactly one row.
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS public.customer_management_settings (
+  -- The singleton guard. One row, always id = 1, so a second INSERT is an
+  -- error rather than a second source of truth that half the code reads.
+  id                   integer PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+
+  signup_enabled       boolean NOT NULL DEFAULT true,
+  renewal_enabled      boolean NOT NULL DEFAULT true,
+  -- FALSE: Stripe already sends this one. See the header.
+  receipt_enabled      boolean NOT NULL DEFAULT false,
+
+  scope_all_tenants    boolean NOT NULL DEFAULT false,
+  scope_tenant_slug    text    NOT NULL DEFAULT 'northwind',
+
+  test_mode            boolean NOT NULL DEFAULT false,
+  test_mode_started_at timestamptz,
+  test_run_id          text,
+  test_recipient_email text,
+
+  max_sends_per_run    integer NOT NULL DEFAULT 50
+                         CHECK (max_sends_per_run BETWEEN 1 AND 500),
+
+  updated_at           timestamptz NOT NULL DEFAULT now(),
+  updated_by           uuid,
+
+  -- Test mode with nowhere to deliver is the dangerous half-state: the clock is
+  -- compressed and the recipient is still the real operator, so a rehearsal
+  -- would deliver "Welcome to Drive247" to a paying customer every 26 seconds.
+  -- The runner refuses to send without a recipient; this makes the row itself
+  -- unable to express it.
+  CONSTRAINT customer_management_test_needs_recipient
+    CHECK (NOT test_mode OR test_recipient_email IS NOT NULL),
+
+  -- Compressed due times are measured from the moment the rehearsal started,
+  -- so test mode without that stamp has no clock to count from.
+  CONSTRAINT customer_management_test_needs_anchor
+    CHECK (NOT test_mode OR test_mode_started_at IS NOT NULL)
+);
+
+COMMENT ON TABLE public.customer_management_settings IS
+  'Customer Management Service: platform-wide switches for the signup, renewal and receipt automations. Exactly one row (id = 1).';
+
+-- ---------------------------------------------------------------------------
+-- Steps: one editable email per point on a timeline.
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS public.customer_management_steps (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  automation  text NOT NULL CHECK (automation IN ('signup', 'renewal', 'receipt')),
+
+  -- Half of the idempotency key, so renaming one re-sends every mail it ever
+  -- sent. Same snake_case shape the notification keys use.
+  step_key    text NOT NULL CHECK (step_key ~ '^[a-z][a-z0-9_]{2,63}$'),
+
+  label       text NOT NULL,
+
+  -- signup:  days AFTER the operator signed up.
+  -- renewal: days BEFORE the next charge.
+  -- receipt: ignored; the payment is the trigger.
+  offset_days integer NOT NULL DEFAULT 0 CHECK (offset_days BETWEEN 0 AND 365),
+
+  subject     text NOT NULL,
+  body_html   text NOT NULL,
+  enabled     boolean NOT NULL DEFAULT true,
+  sort_order  integer NOT NULL DEFAULT 0,
+
+  updated_at  timestamptz NOT NULL DEFAULT now(),
+  updated_by  uuid,
+
+  CONSTRAINT customer_management_steps_key_unique UNIQUE (automation, step_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_customer_management_steps_automation
+  ON public.customer_management_steps (automation, sort_order);
+
+COMMENT ON TABLE public.customer_management_steps IS
+  'One scheduled email per step of a Customer Management automation. step_key is identity and must never be renamed once shipped.';
+
+-- ---------------------------------------------------------------------------
+-- Sends: the log, and the thing that stops a second send.
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS public.customer_management_sends (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id  uuid NOT NULL REFERENCES public.tenants(id) ON DELETE CASCADE,
+  automation text NOT NULL CHECK (automation IN ('signup', 'renewal', 'receipt')),
+  step_key   text NOT NULL,
+
+  -- 'once' | a billing day | a payment id, optionally prefixed 'test:<run>:'.
+  cycle_key  text NOT NULL,
+
+  due_at     timestamptz NOT NULL,
+  sent_at    timestamptz,
+  status     text NOT NULL CHECK (status IN ('sent', 'skipped', 'failed')),
+
+  to_email   text,
+  subject    text,
+  -- Why it was skipped, or what the provider said when it failed. 'Why did
+  -- this operator not get the day-7 mail' is the question this table exists to
+  -- answer, and silence is not an answer — so skips are rows too.
+  detail     text,
+
+  test_mode  boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- THE GUARD. Not merely an index: this is what makes the runner safe to call
+-- every minute. The insert happens BEFORE the send, so a crash mid-send leaves
+-- a row and does not double-mail.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_customer_management_sends_once
+  ON public.customer_management_sends (tenant_id, automation, step_key, cycle_key);
+
+CREATE INDEX IF NOT EXISTS idx_customer_management_sends_recent
+  ON public.customer_management_sends (created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_customer_management_sends_tenant
+  ON public.customer_management_sends (tenant_id, created_at DESC);
+
+COMMENT ON TABLE public.customer_management_sends IS
+  'Customer Management Service send log. The unique index on (tenant_id, automation, step_key, cycle_key) is the idempotency guard, not just an index.';
+
+-- ---------------------------------------------------------------------------
+-- RLS: super admins only, same idiom as the other platform tables.
+-- ---------------------------------------------------------------------------
+
+ALTER TABLE public.customer_management_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.customer_management_steps    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.customer_management_sends     ENABLE ROW LEVEL SECURITY;
+
+-- No policy for anon or authenticated-operator roles anywhere here. An
+-- operator has no business reading the platform's mail schedule, and the send
+-- log names every tenant on the platform.
+DROP POLICY IF EXISTS super_admin_manage_cms_settings ON public.customer_management_settings;
+CREATE POLICY super_admin_manage_cms_settings
+  ON public.customer_management_settings
+  USING (public.is_super_admin()) WITH CHECK (public.is_super_admin());
+
+DROP POLICY IF EXISTS super_admin_manage_cms_steps ON public.customer_management_steps;
+CREATE POLICY super_admin_manage_cms_steps
+  ON public.customer_management_steps
+  USING (public.is_super_admin()) WITH CHECK (public.is_super_admin());
+
+-- Read-only from the dashboard. The log is written by the runner under the
+-- service role; a super admin editing history would make it worthless as
+-- evidence of what was actually sent.
+DROP POLICY IF EXISTS super_admin_read_cms_sends ON public.customer_management_sends;
+CREATE POLICY super_admin_read_cms_sends
+  ON public.customer_management_sends
+  FOR SELECT USING (public.is_super_admin());
+
+-- ---------------------------------------------------------------------------
+-- Seed. Mirrors apps/admin/lib/customer-management/catalog.ts so the defaults
+-- in the database and the defaults in the app are one list, not two.
+-- ---------------------------------------------------------------------------
+
+INSERT INTO public.customer_management_settings (id) VALUES (1)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.customer_management_steps
+  (automation, step_key, label, offset_days, enabled, sort_order, subject, body_html)
+VALUES
+  ('signup', 'signup_day_0_welcome', 'Day 0 — Welcome', 0, true, 10,
+   'Welcome to Drive247, {{tenant_name}}',
+   '<p>Hi {{tenant_admin_name}},</p>
+<p>Your Drive247 account for <strong>{{tenant_name}}</strong> is live. Everything you need to start taking bookings is already in place — you just need to put your fleet in it.</p>
+<h3>Start here</h3>
+<ul>
+<li>Add your first vehicle, with photos and a daily rate.</li>
+<li>Set your pickup locations and opening hours.</li>
+<li>Share your booking page: {{booking_url}}</li>
+</ul>
+<p><a data-email-button href="{{portal_url}}">Open your portal</a></p>
+<p>You sign in with {{sign_in_email}}. If anything looks wrong, reply to this email and a person will read it.</p>'),
+
+  ('signup', 'signup_day_7_checkin', 'Day 7 — Check-in', 7, true, 20,
+   'A week in — how is {{tenant_name}} getting on?',
+   '<p>Hi {{tenant_admin_name}},</p>
+<p>You have had Drive247 for a week. The operators who get the most out of it tend to have done three things by now:</p>
+<ul>
+<li><strong>Connected payments</strong>, so bookings settle into your own account.</li>
+<li><strong>Published the booking page</strong>, so customers can reserve without phoning you.</li>
+<li><strong>Loaded the real fleet</strong>, not just one test vehicle.</li>
+</ul>
+<p>If any of those is still outstanding, the setup checklist in your portal walks through it.</p>
+<p><a data-email-button href="{{portal_url}}">Pick up where you left off</a></p>'),
+
+  ('signup', 'signup_day_14_next_steps', 'Day 14 — Next steps', 14, true, 30,
+   '{{tenant_name}}: the parts of Drive247 most people miss',
+   '<p>Hi {{tenant_admin_name}},</p>
+<p>Two weeks in, here are the features operators tell us they wish they had found sooner:</p>
+<ul>
+<li><strong>Digital rental agreements</strong> — sent for signature, stored against the booking.</li>
+<li><strong>Damage records with photos</strong>, so a dispute is a document rather than an argument.</li>
+<li><strong>Maintenance reminders</strong> per vehicle, by mileage or by date.</li>
+</ul>
+<p><a data-email-button href="{{portal_url}}">Explore your portal</a></p>
+<p>You are on the {{plan_name}} plan. If it is no longer the right fit, reply and we will sort it out.</p>'),
+
+  ('renewal', 'renewal_14_days_before', '14 days before renewal', 14, true, 10,
+   '{{tenant_name}}: your Drive247 plan renews on {{renewal_date}}',
+   '<p>Hi {{tenant_admin_name}},</p>
+<p>A heads-up rather than a bill: your <strong>{{plan_name}}</strong> plan renews on <strong>{{renewal_date}}</strong>, {{days_until_renewal}} days from now, at {{plan_amount}} per {{plan_interval}}.</p>
+<p>No action needed — the card on file will be charged automatically. If you want to change plan or update that card, there is time to do it now.</p>
+<p><a data-email-button href="{{portal_url}}">Manage your subscription</a></p>'),
+
+  ('renewal', 'renewal_7_days_before', '7 days before renewal', 7, true, 20,
+   'Renewing in {{days_until_renewal}} days — {{tenant_name}}',
+   '<p>Hi {{tenant_admin_name}},</p>
+<p>Your {{plan_name}} plan renews on <strong>{{renewal_date}}</strong> at {{plan_amount}} per {{plan_interval}}.</p>
+<p>If the card on file has expired or been replaced, updating it before then saves the renewal failing.</p>
+<p><a data-email-button href="{{portal_url}}">Check your payment method</a></p>'),
+
+  -- enabled = false: Stripe already sends a receipt for this charge.
+  ('receipt', 'receipt_payment_succeeded', 'On successful payment', 0, false, 10,
+   'Payment received — {{receipt_amount}} for {{tenant_name}}',
+   '<p>Hi {{tenant_admin_name}},</p>
+<p>We have received your payment of <strong>{{receipt_amount}}</strong> on {{receipt_date}} for the {{plan_name}} plan.</p>
+<ul>
+<li>Plan: {{plan_name}} ({{plan_amount}} per {{plan_interval}})</li>
+<li>Reference: {{receipt_reference}}</li>
+<li>Next renewal: {{renewal_date}}</li>
+</ul>
+<p>Stripe has also emailed its own receipt for this charge, which is the one to keep for your records.</p>
+<p><a data-email-button href="{{portal_url}}">View your billing history</a></p>')
+ON CONFLICT (automation, step_key) DO NOTHING;
+
+COMMIT;
+
+-- ---------------------------------------------------------------------------
+-- SCHEDULING, deliberately separate and deliberately last.
+-- ---------------------------------------------------------------------------
+--
+-- Applying the schema above sends nothing: it creates tables and seeds copy.
+-- The cron job below is what starts the automation, so it is kept apart rather
+-- than buried in the same transaction — and it is commented out, because the
+-- right moment to start mailing operators is a decision, not a side effect of
+-- running a migration.
+--
+-- Every minute is the right cadence despite being far finer than a daily mail
+-- needs: Developer Test Mode compresses a 14-day sequence into five minutes,
+-- and a job that runs hourly cannot show you that. The runner is idempotent
+-- per (tenant, step, cycle) and returns immediately when nothing is due, so a
+-- minutely tick on an idle platform costs one cheap query.
+--
+-- Uncomment, replace <SERVICE_ROLE_KEY> with the project's service role key as
+-- the other cron migrations in this directory do, and run it on its own.
+--
+-- SELECT cron.unschedule('customer-management-run')
+-- WHERE EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'customer-management-run');
+--
+-- SELECT cron.schedule(
+--   'customer-management-run',
+--   '* * * * *',
+--   $job$
+--   SELECT net.http_post(
+--     url := 'https://hviqoaokxvlancmftwuo.supabase.co/functions/v1/customer-management-run',
+--     headers := jsonb_build_object(
+--       'Content-Type', 'application/json',
+--       'Authorization', 'Bearer <SERVICE_ROLE_KEY>'
+--     ),
+--     body := '{}'::jsonb
+--   );
+--   $job$
+-- );
