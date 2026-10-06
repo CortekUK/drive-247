@@ -15,18 +15,17 @@
  */
 
 import { useEffect, useState } from 'react';
-import { AlertTriangle, FlaskConical, Users } from 'lucide-react';
+import { Users } from 'lucide-react';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Badge } from '@/components/ui/badge';
 import { toast } from '@/components/ui/sonner';
 
-import { TEST_MODE_ANCHOR_LABELS } from '@/lib/customer-management/schedule';
-import { loadScopeCounts, saveSettings, setTestMode } from '@/lib/customer-management/api';
+import { loadScopeCounts, saveSettings } from '@/lib/customer-management/api';
 import type { CustomerManagementSettings } from '@/lib/customer-management/types';
+
+import { TestModePanel } from './test-mode-panel';
 
 export function ScopeCard({
   settings,
@@ -38,7 +37,6 @@ export function ScopeCard({
   onChange: (next: CustomerManagementSettings) => void;
 }) {
   const [counts, setCounts] = useState<{ all: number; scoped: number } | null>(null);
-  const [recipient, setRecipient] = useState(settings.test_recipient_email || '');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -47,27 +45,11 @@ export function ScopeCard({
       .catch(() => setCounts(null));
   }, [settings.scope_tenant_slug]);
 
-  useEffect(() => {
-    setRecipient(settings.test_recipient_email || '');
-  }, [settings.test_recipient_email]);
-
   const toggleScope = async (on: boolean) => {
     setBusy(true);
     try {
       onChange(await saveSettings({ scope_all_tenants: on }));
       toast.success(on ? 'Now sending to every operator.' : `Now sending to ${settings.scope_tenant_slug} only.`);
-    } catch (e) {
-      toast.error((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const toggleTest = async (on: boolean) => {
-    setBusy(true);
-    try {
-      onChange(await setTestMode(on, recipient));
-      toast.success(on ? 'Test mode on — the timeline is compressed.' : 'Test mode off.');
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -127,66 +109,8 @@ export function ScopeCard({
           />
         </div>
 
-        {/* ---- developer test mode ---- */}
-        <div className="space-y-4 rounded-lg border p-4">
-          <div className="flex items-start justify-between gap-6">
-            <div className="space-y-1">
-              <Label htmlFor="cms-test" className="flex items-center gap-2 text-sm font-medium">
-                <FlaskConical className="h-4 w-4" />
-                Developer test mode
-                {settings.test_mode && <Badge variant="secondary">Running</Badge>}
-              </Label>
-              <p className="text-sm text-muted-foreground">
-                Compresses the timeline so a two-week sequence plays out in minutes:{' '}
-                {TEST_MODE_ANCHOR_LABELS.join(', ')}.
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Every email is redirected to the address below — no operator receives
-                anything while this is on. Rehearsal sends are logged separately and never
-                block the real ones.
-              </p>
-            </div>
-            <Switch
-              id="cms-test"
-              checked={settings.test_mode}
-              disabled={!canEdit || busy || !recipient.trim()}
-              onCheckedChange={toggleTest}
-            />
-          </div>
+        <TestModePanel settings={settings} canEdit={canEdit} onChange={onChange} />
 
-          <div className="space-y-2">
-            <Label htmlFor="cms-test-email">Send rehearsal email to</Label>
-            <Input
-              id="cms-test-email"
-              type="email"
-              placeholder="you@drive-247.com"
-              value={recipient}
-              disabled={!canEdit || settings.test_mode}
-              onChange={(e) => setRecipient(e.target.value)}
-              onBlur={() => {
-                if (settings.test_mode) return;
-                const trimmed = recipient.trim();
-                if (trimmed === (settings.test_recipient_email || '')) return;
-                saveSettings({ test_recipient_email: trimmed || null })
-                  .then(onChange)
-                  .catch((e) => toast.error((e as Error).message));
-              }}
-            />
-            {!recipient.trim() && (
-              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <AlertTriangle className="h-3.5 w-3.5" />
-                Test mode needs an address before it can be switched on.
-              </p>
-            )}
-            {settings.test_mode && settings.test_mode_started_at && (
-              <p className="text-xs text-muted-foreground">
-                Rehearsal started {new Date(settings.test_mode_started_at).toLocaleString()} — every
-                compressed delay is measured from then, not from the operator&apos;s real signup
-                date.
-              </p>
-            )}
-          </div>
-        </div>
       </CardContent>
     </Card>
   );

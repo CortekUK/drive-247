@@ -10,6 +10,7 @@
  *
  *   Signup rehearsal      the real signup, repeatable with one email
  *   Northwind onboarding  first-time operator / quick tour / demo journey
+ *   Customer Management   the operator email sequence, at compressed speed
  *   Previews              skeletons, messages, billing, empty states (localhost)
  */
 
@@ -23,6 +24,7 @@ import { callDeveloper, type DeveloperStatus } from '@/components/admin/develope
 import { RehearsalCard } from '@/components/admin/developer/rehearsal-card';
 import { NorthwindCard } from '@/components/admin/developer/northwind-card';
 import { PreviewsCard } from '@/components/admin/developer/previews-card';
+import { CustomerManagementCard } from '@/components/admin/developer/customer-management-card';
 
 export default function DeveloperPage() {
   const router = useRouter();
@@ -79,6 +81,7 @@ export default function DeveloperPage() {
 
       <RehearsalCard status={status} onChanged={load} />
       <NorthwindCard />
+      <CustomerManagementCard />
       <PreviewsCard initial={status?.settings.portalPreviews ?? null} />
     </div>
   );
