@@ -154,6 +154,14 @@ export function useBonzahOnboarding() {
           /* best-effort; a super admin can still send it manually */
         });
 
+      // Fire-and-forget: tell every Drive247 super admin that this tenant sent
+      // the form, so someone checks it. Best-effort; never blocks submit.
+      void supabase.functions
+        .invoke('notify-bonzah-form-submitted', { body: { submissionId } })
+        .catch(() => {
+          /* best-effort; the submission is still in the admin console */
+        });
+
       return row as unknown as BonzahSubmissionRow;
     },
     onSuccess: () => {
