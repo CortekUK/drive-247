@@ -164,10 +164,16 @@ describe('an unapplied migration is a normal state, not a crash', () => {
 describe('the audience is stated before it is changed', () => {
   it('says how many operators turning the scope on would reach', async () => {
     mount();
-    await waitFor(() => expect(screen.getByText(/Who receives these emails/i)).toBeInTheDocument());
+    /*
+     * Waits on the SENTENCE, not on the heading. The counts come from a query
+     * of their own, so the card paints with `counts` still null and the
+     * heading is there before the numbers are — waiting on the heading made
+     * this assertion a race, which is why it passed alone and failed in a
+     * fuller run.
+     */
     // "all tenants" is an abstraction; a count is a decision.
+    expect(await screen.findByText(/makes 11 more operators eligible/i)).toBeInTheDocument();
     expect(screen.getByText(/only 1 operator \(northwind\) is eligible/i)).toBeInTheDocument();
-    expect(screen.getByText(/makes 11 more operators eligible/i)).toBeInTheDocument();
   });
 
   it('will not let test mode start without somewhere to deliver', async () => {
