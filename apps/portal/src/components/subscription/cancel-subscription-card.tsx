@@ -25,10 +25,11 @@ import { useState } from "react";
 import { Clock, LifeBuoy, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import { Textarea } from "@/components/ui-v2/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui-v2/select";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui-v2/dialog";
-import { useCancellationRequest } from "@/hooks/use-cancellation-request";
+import { CANCEL_REASONS, cancellationNote, useCancellationRequest } from "@/hooks/use-cancellation-request";
 import { toast } from "sonner";
 
 const SUPPORT_EMAIL = "support@drive-247.com";
@@ -37,6 +38,8 @@ export function CancelSubscriptionCard() {
   const { pending, hasPending, isLoading, submit } = useCancellationRequest();
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
+  /** One of CANCEL_REASONS — what the admin's Cancellations report counts. */
+  const [picked, setPicked] = useState<string>("");
 
   /* Nothing at all until the query has answered. A card that says "no request
      open" and then flips to "request received" reads as a bug. */
@@ -63,11 +66,12 @@ export function CancelSubscriptionCard() {
 
   const handleSubmit = () => {
     submit.mutate(
-      { reason },
+      { reason: cancellationNote(picked || null, reason) },
       {
         onSuccess: () => {
           setOpen(false);
           setReason("");
+          setPicked("");
           toast.success("Cancellation request sent", {
             description: "The team has been notified and will be in touch.",
           });
@@ -115,8 +119,26 @@ export function CancelSubscriptionCard() {
           </DialogHeader>
 
           <div className="space-y-2">
+            <label htmlFor="cancel-reason-pick" className="text-[13px] font-medium">
+              Main reason
+            </label>
+            <Select value={picked} onValueChange={setPicked}>
+              <SelectTrigger id="cancel-reason-pick" className="rounded-2xl">
+                <SelectValue placeholder="Choose the main reason" />
+              </SelectTrigger>
+              <SelectContent>
+                {CANCEL_REASONS.map((r) => (
+                  <SelectItem key={r} value={r}>
+                    {r}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
             <label htmlFor="cancel-reason" className="text-[13px] font-medium">
-              What is prompting this? <span className="text-muted-foreground">(optional)</span>
+              Tell us more <span className="text-muted-foreground">(optional)</span>
             </label>
             <Textarea
               id="cancel-reason"
@@ -135,7 +157,7 @@ export function CancelSubscriptionCard() {
             <Button variant="ghost" onClick={() => setOpen(false)} disabled={submit.isPending}>
               Never mind
             </Button>
-            <Button onClick={handleSubmit} disabled={submit.isPending} className="gap-2">
+            <Button onClick={handleSubmit} disabled={submit.isPending || !picked} className="gap-2">
               {submit.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
               Send request
             </Button>

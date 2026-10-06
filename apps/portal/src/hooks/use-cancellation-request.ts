@@ -36,6 +36,29 @@ import { useAuth } from "@/stores/auth-store";
 
 export const CANCELLATION_TYPE = "subscription_cancellation";
 
+/**
+ * Why they want to leave — the same list, word for word, as the v2 cancel flow
+ * (components/billing-v2/cancel-flow-dialog-v2.tsx). The super admin's
+ * Customer Management → Cancellations report reads the reason back out of the
+ * note ("CANCELLATION — It's too expensive. …"), so the wording is a contract.
+ */
+export const CANCEL_REASONS = [
+  "It's too expensive",
+  "It's missing features I need",
+  "I'm switching to another tool",
+  "I'm not using it enough",
+  "I'm closing or pausing the business",
+  "Technical problems",
+  "Something else",
+] as const;
+
+/** The note the report can read: "CANCELLATION — <reason>. <their words>". */
+export function cancellationNote(reason: string | null, details: string): string {
+  const words = details.trim();
+  if (!reason) return words;
+  return `CANCELLATION — ${reason}.${words ? ` ${words}` : ""}`;
+}
+
 export interface CancellationRequest {
   id: string;
   tenant_id: string;

@@ -820,6 +820,7 @@ async function insertMissingSubscription(
     canceled_at: subscription.canceled_at ? new Date(subscription.canceled_at * 1000).toISOString() : null,
     ended_at: subscription.ended_at ? new Date(subscription.ended_at * 1000).toISOString() : null,
     trial_end: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
+    ...cancellationPatch(fullSub?.cancellation_details ? fullSub : subscription),
     card_brand: card?.brand || null,
     card_last4: card?.last4 || null,
     card_exp_month: card?.exp_month || null,
@@ -918,6 +919,7 @@ async function handleSubscriptionUpdated(
     trial_end: authoritative.trial_end
       ? new Date(authoritative.trial_end * 1000).toISOString()
       : null,
+    ...cancellationPatch(fullSub?.cancellation_details ? fullSub : subscription),
     ...(card
       ? {
           card_brand: card.brand || null,
@@ -1088,6 +1090,23 @@ async function handleSubscriptionUpdated(
   console.log(`Subscription ${subscription.id} updated: status=${subscription.status}, plan=${activePlan}`);
 }
 
+/**
+ * Stripe's record of WHY a subscription ended, for admin → Customer Management
+ * → Cancellations. `reason` is Stripe's (cancellation_requested /
+ * payment_failed / payment_disputed); feedback and comment are what the
+ * customer said, when Stripe collected it. Absent fields are written as null,
+ * so a reactivated subscription clears them.
+ */
+function cancellationPatch(sub: any): Record<string, string | null> {
+  const d = sub?.cancellation_details;
+  if (!d || typeof d !== "object") return {};
+  return {
+    cancellation_reason: typeof d.reason === "string" ? d.reason : null,
+    cancellation_feedback: typeof d.feedback === "string" ? d.feedback : null,
+    cancellation_comment: typeof d.comment === "string" ? d.comment.slice(0, 1000) : null,
+  };
+}
+
 async function handleSubscriptionDeleted(supabase: any, subscription: any, account: SubscriptionAccount) {
   const tenantId = subscription.metadata?.tenant_id;
 
@@ -1097,6 +1116,7 @@ async function handleSubscriptionDeleted(supabase: any, subscription: any, accou
       status: "canceled",
       canceled_at: subscription.canceled_at ? new Date(subscription.canceled_at * 1000).toISOString() : new Date().toISOString(),
       ended_at: subscription.ended_at ? new Date(subscription.ended_at * 1000).toISOString() : new Date().toISOString(),
+      ...cancellationPatch(subscription),
     })
     .eq("stripe_subscription_id", subscription.id);
 

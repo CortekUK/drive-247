@@ -40,13 +40,15 @@ import type {
 } from '@/lib/customer-management/types';
 
 import { AutomationTab } from './automation-tab';
+import { CancellationsTab } from './cancellations-tab';
 import { ScopeCard } from './scope-card';
 
 export function CustomerManagementPage() {
   const { user } = useAuthStore();
   const canEdit = !!user?.is_super_admin;
 
-  const [tab, setTab] = useState<AutomationId>('signup');
+  /** The three automations, plus the Cancellations report. */
+  const [tab, setTab] = useState<AutomationId | 'cancellations'>('signup');
   const [settings, setSettings] = useState<CustomerManagementSettings | null>(null);
   const [steps, setSteps] = useState<CustomerManagementStep[]>([]);
   const [loading, setLoading] = useState(true);
@@ -55,9 +57,9 @@ export function CustomerManagementPage() {
 
   useRegisterSidebarSections(
     '/admin/customer-management',
-    AUTOMATIONS.map((a) => ({ id: a.id, label: a.label })),
+    [...AUTOMATIONS.map((a) => ({ id: a.id, label: a.label })), { id: 'cancellations', label: 'Cancellations' }],
     tab,
-    (id) => setTab(id as AutomationId),
+    (id) => setTab(id as AutomationId | 'cancellations'),
   );
 
   const load = useCallback(async () => {
@@ -87,6 +89,12 @@ export function CustomerManagementPage() {
       /* The toast on the failing action already said so. */
     }
   }, []);
+
+  // The report needs none of the email settings, so it never waits on them
+  // (or on the module being installed).
+  if (tab === 'cancellations') {
+    return <CancellationsTab canEdit={canEdit} />;
+  }
 
   if (loading) {
     return (
