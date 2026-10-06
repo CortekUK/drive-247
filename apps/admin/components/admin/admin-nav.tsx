@@ -29,6 +29,7 @@ import {
   MailCheck,
   BookOpen,
   Building2,
+  HeartPulse,
   ClipboardCheck,
   LayoutGrid,
   LifeBuoy,
@@ -135,6 +136,8 @@ function useBuildNav(): AdminNav {
     const topLevel: AdminNavItem[] = [
       { name: 'Rental Companies', href: '/admin/rentals', icon: Building2 },
       { name: 'Platform Rentals', href: '/admin/platform-rentals', icon: Activity },
+      // 0–100 per company: who might leave, so someone calls them first.
+      { name: 'Customer Health Score', href: '/admin/customer-health', icon: HeartPulse },
       { name: 'Mode Requests', href: '/admin/requests', icon: ArrowUpCircle },
     ];
 
