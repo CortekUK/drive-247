@@ -42,7 +42,13 @@ import { toast } from "@/hooks/use-toast";
 import { useRateLimiting } from "@/hooks/use-rate-limiting";
 import { supabase } from "@/integrations/supabase/client";
 import { HeroTypedHeadline } from "@/components/shared/layout/hero-typed-headline";
-import { brandInk, brandSurface } from "@/components/auth-v2/brand-surface";
+import {
+  brandInk,
+  brandSurface,
+  MOBILE_WASH_MASK,
+  PHOTO_MASK,
+  WASH_MASK,
+} from "@/components/auth-v2/brand-surface";
 import { useTenantBranding } from "@/hooks/use-tenant-branding";
 import { useTenant } from "@/contexts/TenantContext";
 import { useIsAreaHidden } from "@/lib/lean-context";
@@ -72,72 +78,7 @@ const loginSchema = z.object({
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 
-/**
- * How the brand wash dissolves into the page.
- *
- * Two things make a blend read as a blend rather than as an edge, and the
- * first attempt at this had neither.
- *
- * Length: the fade is measured against the viewport, not against the wash's
- * own box. A percentage of a 58%-wide layer is a different number of pixels at
- * every window size, so the transition tightened as the window narrowed —
- * exactly when it could least afford to. Spanning the viewport keeps it
- * proportional, and it runs well past the halfway line so the seam has no
- * fixed place to be.
- *
- * Curve: a two-stop mask is linear in alpha, and the eye finds the corners
- * where it starts and stops. The intermediate stops approximate a smoothstep,
- * so the rate of change itself eases in and out and there is no kink to catch.
- */
-const WASH_MASK = `linear-gradient(to right,
-  rgb(0 0 0) 0%,
-  rgb(0 0 0) 34%,
-  rgb(0 0 0 / 0.96) 42%,
-  rgb(0 0 0 / 0.88) 49%,
-  rgb(0 0 0 / 0.74) 56%,
-  rgb(0 0 0 / 0.56) 63%,
-  rgb(0 0 0 / 0.38) 70%,
-  rgb(0 0 0 / 0.22) 77%,
-  rgb(0 0 0 / 0.10) 84%,
-  rgb(0 0 0 / 0.03) 92%,
-  rgb(0 0 0 / 0) 100%)`;
 
-/**
- * The same dissolve for a tenant who uploaded a hero photograph, compressed
- * into a half-width layer.
- *
- * A photograph cannot take the page-wide treatment. A flat tint at a tenth of
- * its opacity is still a flat tint, but a photograph at a tenth is legible
- * imagery sitting underneath the password field, and it arrives with a dark
- * scrim that would drag the form's background down with it. So the picture
- * stays on its own side and only its trailing edge is dissolved.
- *
- * No tenant has set `hero_background_url` today — this is the path staying
- * correct rather than the path anyone is on.
- */
-const PHOTO_MASK = `linear-gradient(to right,
-  rgb(0 0 0) 0%,
-  rgb(0 0 0) 55%,
-  rgb(0 0 0 / 0.86) 66%,
-  rgb(0 0 0 / 0.60) 76%,
-  rgb(0 0 0 / 0.32) 86%,
-  rgb(0 0 0 / 0.10) 94%,
-  rgb(0 0 0 / 0) 100%)`;
-
-/**
- * The mobile wash runs top-to-bottom instead of left-to-right, and eases the
- * same way — the eye finds the corners of a two-stop fade whichever axis it is
- * on.
- */
-const MOBILE_WASH_MASK = `linear-gradient(to bottom,
-  rgb(0 0 0) 0%,
-  rgb(0 0 0) 18%,
-  rgb(0 0 0 / 0.88) 34%,
-  rgb(0 0 0 / 0.68) 48%,
-  rgb(0 0 0 / 0.44) 62%,
-  rgb(0 0 0 / 0.22) 76%,
-  rgb(0 0 0 / 0.08) 88%,
-  rgb(0 0 0 / 0) 100%)`;
 
 /**
  * The sign-in fields.

@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
+import { AuthBrandShell } from "@/components/auth-v2/auth-brand-shell";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
@@ -75,26 +76,33 @@ export default function ResetPasswordPage() {
   };
 
   if (checking) {
+    // Inside the shell too: the brand surface is the first thing painted on the
+    // login, and a white flash between the two screens reads as a redirect to
+    // somewhere else.
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center space-y-4">
-          <Loader2 className="w-10 h-10 animate-spin mx-auto text-primary" />
-          <p className="text-muted-foreground">Processing...</p>
+      <AuthBrandShell>
+        <div className="space-y-4 text-center">
+          <Loader2 className="mx-auto h-10 w-10 animate-spin text-primary" />
+          <p className="text-muted-foreground">Processing…</p>
         </div>
-      </div>
+      </AuthBrandShell>
     );
   }
 
   if (!hasSession) return null;
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-6">
+    <AuthBrandShell>
+      {/* Deliberately the same card the login's form sits in — rounded-3xl, the
+          card ground, generous padding. This is the screen where somebody is
+          asked to type a new password, and a page that does not look like the
+          one that sent them here is indistinguishable from a phishing page. */}
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-sm space-y-4 rounded-lg border border-border bg-card p-6"
+        className="w-full space-y-5 rounded-3xl border border-border/60 bg-card/80 p-7 shadow-xl shadow-black/5 backdrop-blur-sm"
       >
         <div className="space-y-1">
-          <h1 className="text-lg font-semibold">Set a new password</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Set a new password</h1>
           <p className="text-sm text-muted-foreground">
             Choose a new password for your account.
           </p>
@@ -102,9 +110,11 @@ export default function ResetPasswordPage() {
 
         <div className="space-y-2">
           <Label htmlFor="new-password">New password</Label>
-          <Input
+          {/* PasswordInput, not Input: the login offers a reveal toggle, and a
+              password being TYPED FOR THE FIRST TIME is the one most worth
+              being able to check before submitting. */}
+          <PasswordInput
             id="new-password"
-            type="password"
             autoComplete="new-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -114,9 +124,8 @@ export default function ResetPasswordPage() {
 
         <div className="space-y-2">
           <Label htmlFor="confirm-password">Confirm new password</Label>
-          <Input
+          <PasswordInput
             id="confirm-password"
-            type="password"
             autoComplete="new-password"
             value={confirm}
             onChange={(e) => setConfirm(e.target.value)}
@@ -124,12 +133,16 @@ export default function ResetPasswordPage() {
           />
         </div>
 
-        {error && <p className="text-sm text-destructive">{error}</p>}
+        {error && (
+          <p className="text-sm text-destructive" role="alert">
+            {error}
+          </p>
+        )}
 
-        <Button type="submit" className="w-full" disabled={submitting}>
-          {submitting ? "Updating..." : "Update password"}
+        <Button type="submit" className="h-12 w-full rounded-2xl text-base" disabled={submitting}>
+          {submitting ? "Updating…" : "Update password"}
         </Button>
       </form>
-    </div>
+    </AuthBrandShell>
   );
 }
