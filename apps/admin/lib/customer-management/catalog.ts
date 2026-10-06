@@ -212,6 +212,60 @@ const SIGNUP_SEEDS: CustomerManagementStepSeed[] = [
       "The Drive247 team",
     ),
   },
+  /*
+   * Two confirmations, sent ONCE within ~30 seconds of the thing happening
+   * (not on a signup day — `offset_days` is ignored). Companies it was already
+   * true for when these were added were filed as skipped by migration
+   * 20261007160000, so only new connections are congratulated.
+   */
+  {
+    automation: "signup",
+    step_key: "signup_stripe_connected",
+    label: "Stripe connected (sent when it happens)",
+    offset_days: 0,
+    enabled: true,
+    sort_order: 23,
+    send_if: "stripe_connected",
+    subject: "{{tenant_name}}: Stripe is connected — you can take payments",
+    body_html: lines(
+      "Hi {{tenant_admin_name}},",
+      "",
+      "Good news: Stripe is now connected to {{tenant_name}}.",
+      "",
+      "You can take payments from your customers when they book, and the money goes straight to your Stripe account.",
+      "",
+      "Your website, where customers book: {{booking_url}}",
+      "",
+      "Your portal: {{portal_url}}",
+      "",
+      "If you need help, just reply to this email.",
+      "",
+      "The Drive247 team",
+    ),
+  },
+  {
+    automation: "signup",
+    step_key: "signup_bonzah_active",
+    label: "Bonzah active (sent when it happens)",
+    offset_days: 0,
+    enabled: true,
+    sort_order: 24,
+    send_if: "bonzah_active",
+    subject: "{{tenant_name}}: Bonzah insurance is active",
+    body_html: lines(
+      "Hi {{tenant_admin_name}},",
+      "",
+      "Good news: Bonzah insurance is now active for {{tenant_name}}.",
+      "",
+      "Your customers can add insurance to their rental when they book, right on your website: {{booking_url}}",
+      "",
+      "You can see the policies in your portal: {{portal_url}}",
+      "",
+      "If you need help, just reply to this email.",
+      "",
+      "The Drive247 team",
+    ),
+  },
 ];
 
 /*

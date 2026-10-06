@@ -177,7 +177,27 @@ interface StepRow {
   created_at: string;
 }
 
-type SendIf = 'stripe_not_connected' | 'bonzah_form_not_submitted';
+type SendIf = 'stripe_not_connected' | 'bonzah_form_not_submitted' | 'stripe_connected' | 'bonzah_active';
+
+/**
+ * EVENT steps: a confirmation sent once, on the first tick after the thing
+ * happens — "Stripe is connected, you can take payments", "Bonzah is active".
+ * Not tied to a signup day: `offset_days` is ignored and they go out as soon
+ * as the condition is seen (the cron ticks every 30 seconds).
+ *
+ * Who gets them: anyone the condition becomes true for AFTER the step exists.
+ * Companies it was already true for when the step was added were filed as
+ * skipped (`already_true_at_launch`) by the migration that added it
+ * (20261007160000), and the send log's unique key means a skipped row is
+ * never sent — so nobody connected months ago is congratulated today.
+ */
+const EVENT_SEND_IF = new Set<SendIf>(['stripe_connected', 'bonzah_active']);
+
+function eventHappened(sendIf: SendIf | null, tenant: TenantRow): boolean {
+  if (sendIf === 'stripe_connected') return stripeConnected(tenant);
+  if (sendIf === 'bonzah_active') return bonzahActive(tenant);
+  return false;
+}
 
 interface TenantRow {
   id: string;
@@ -191,6 +211,18 @@ interface TenantRow {
   stripe_account_status: string | null;
   own_stripe_account_id: string | null;
   own_stripe_test_account_id: string | null;
+  integration_bonzah: boolean | null;
+  bonzah_mode: string | null;
+  bonzah_username: string | null;
+}
+
+/**
+ * Bonzah is active: switched on, credentials saved, and in LIVE mode — the
+ * point at which customers can actually buy insurance at checkout. (Submitting
+ * the form is earlier; Bonzah approving it and the account going live is this.)
+ */
+function bonzahActive(t: TenantRow): boolean {
+  return !!t.integration_bonzah && !!t.bonzah_username && t.bonzah_mode === 'live';
 }
 
 /**
@@ -393,7 +425,7 @@ async function handleRequest(req: Request): Promise<Response> {
   let tenantQuery = db
     .from('tenants')
     .select(
-      'id, slug, company_name, admin_email, contact_email, notification_recipient_email, created_at, stripe_onboarding_complete, stripe_account_status, own_stripe_account_id, own_stripe_test_account_id',
+      'id, slug, company_name, admin_email, contact_email, notification_recipient_email, created_at, stripe_onboarding_complete, stripe_account_status, own_stripe_account_id, own_stripe_test_account_id, integration_bonzah, bonzah_mode, bonzah_username',
     );
   // A rehearsal is always the scope tenant alone — see TEST MODE in the header.
   if (testMode || !settings.scope_all_tenants) {
@@ -485,6 +517,20 @@ async function handleRequest(req: Request): Promise<Response> {
       // Signup steps one by one; renewal is worked out per tenant below,
       // because only the latest due reminder may go out.
       for (const step of automation === 'signup' ? automationSteps : []) {
+        // "Stripe is connected" / "Bonzah is active": once, as soon as it
+        // happens. Nothing at all until then — not a skip row per tick.
+        if (step.send_if && EVENT_SEND_IF.has(step.send_if)) {
+          if (!eventHappened(step.send_if, tenant)) continue;
+          candidates.push({
+            tenant,
+            step,
+            dueAt: now,
+            cycle: cycleKey({ automation, testMode, testRunId }),
+            vars: planVars(sub),
+          });
+          continue;
+        }
+
         if (step.send_if && step.repeat_every_days) {
           const reminder = repeatingReminder({ tenant, step, sub, compressed, testMode, anchorAt, testRunId, now, grace, bonzahFormSent });
           if (reminder) candidates.push(reminder);

@@ -159,7 +159,20 @@ export interface CustomerManagementStep {
   updated_by: string | null;
 }
 
-export type StepSendIf = "stripe_not_connected" | "bonzah_form_not_submitted";
+export type StepSendIf =
+  | "stripe_not_connected"
+  | "bonzah_form_not_submitted"
+  /** Event: sent once, as soon as Stripe is connected. */
+  | "stripe_connected"
+  /** Event: sent once, as soon as Bonzah is active (live). */
+  | "bonzah_active";
+
+/** Steps sent once when something happens, not on a signup day. */
+export const EVENT_SEND_IF: readonly StepSendIf[] = ["stripe_connected", "bonzah_active"];
+
+export function isEventStep(step: { send_if?: StepSendIf | null }): boolean {
+  return !!step.send_if && EVENT_SEND_IF.includes(step.send_if);
+}
 
 /** A step as the catalogue ships it, before anyone has edited anything. */
 export type CustomerManagementStepSeed = Pick<

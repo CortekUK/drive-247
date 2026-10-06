@@ -31,6 +31,7 @@ import type {
   RunSummary,
   StepSendIf,
 } from '@/lib/customer-management/types';
+import { isEventStep } from '@/lib/customer-management/types';
 
 import { SendLog } from './logs-table';
 
@@ -291,15 +292,15 @@ function StepEditor({
             <p className="truncate text-xs text-muted-foreground">{step.subject}</p>
           </div>
         </button>
-        {step.send_if && <RepeatEvery step={step} canEdit={canEdit} onSaved={onSaved} />}
-        {compressedSeconds !== undefined && (
+        {step.send_if && !isEventStep(step) && <RepeatEvery step={step} canEdit={canEdit} onSaved={onSaved} />}
+        {compressedSeconds !== undefined && !isEventStep(step) && (
           <Badge variant="outline" className="shrink-0">
             {formatSeconds(compressedSeconds)}
           </Badge>
         )}
         {step.send_if && (
           <Badge variant="outline" className="hidden shrink-0 sm:inline-flex">
-            Conditional
+            {isEventStep(step) ? 'When it happens' : 'Conditional'}
           </Badge>
         )}
         {!step.enabled && (
@@ -339,6 +340,11 @@ function StepEditor({
             </div>
             <div className="space-y-2">
               <Label htmlFor={`of-${step.id}`}>{offsetLabel}</Label>
+              {isEventStep(step) ? (
+                <p id={`of-${step.id}`} className="flex h-9 items-center rounded-md border bg-muted/30 px-3 text-sm text-muted-foreground">
+                  Sent as soon as it happens
+                </p>
+              ) : (
               <Input
                 id={`of-${step.id}`}
                 type="number"
@@ -351,7 +357,8 @@ function StepEditor({
                 disabled={!canEdit || !offsetEditable}
                 onChange={(e) => setOffset(e.target.value)}
               />
-              {compressedSeconds !== undefined && (
+              )}
+              {compressedSeconds !== undefined && !isEventStep(step) && (
                 <p className="text-xs text-muted-foreground">
                   In test mode this sends {formatSeconds(compressedSeconds)} after test mode is
                   switched on.
@@ -481,6 +488,10 @@ const SEND_IF_TEXT: Record<StepSendIf, string> = {
     'Only sent while the company has not connected Stripe. First on the day set below, then again every "Repeat every" days, until Stripe is connected. Only for companies that sign up from now on.',
   bonzah_form_not_submitted:
     'Only sent while the company has not submitted the Bonzah form (a rejected form counts as not submitted). First on the day set below, then again every "Repeat every" days, until the form is sent. This checks the form only, not whether Bonzah is connected. Only for companies that sign up from now on.',
+  stripe_connected:
+    'Sent once, within about 30 seconds of the company connecting Stripe — new and existing companies alike. Companies that had already connected Stripe when this email was added are not sent it.',
+  bonzah_active:
+    'Sent once, within about 30 seconds of Bonzah going live for the company (switched on, credentials saved, live mode) — new and existing companies alike. Submitting the form is earlier and does not trigger it. Companies already live on Bonzah when this email was added are not sent it.',
 };
 
 /**

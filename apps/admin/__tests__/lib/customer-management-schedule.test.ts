@@ -284,16 +284,22 @@ describe('the shipped defaults', () => {
     expect(SETTINGS_DEFAULTS.max_sends_per_run).toBeLessThanOrEqual(500);
   });
 
-  it('ship the signup sequence as a welcome plus two reminders that repeat until done', () => {
+  it('ship the signup sequence as a welcome, two reminders that repeat until done, and two confirmations', () => {
     const signup = DEFAULT_STEPS.filter((s) => s.automation === 'signup');
     expect(signup.map((s) => s.step_key)).toEqual([
       'signup_day_0_welcome',
       'signup_day_7_connect_stripe',
       'signup_day_7_bonzah_form',
+      'signup_stripe_connected',
+      'signup_bonzah_active',
     ]);
     // A repeat with no condition would never stop.
     for (const s of signup) {
       if (s.repeat_every_days) expect(s.send_if, s.step_key).toBeTruthy();
+    }
+    // A confirmation is sent once, when it happens — never repeated.
+    for (const s of signup.filter((x) => x.send_if === 'stripe_connected' || x.send_if === 'bonzah_active')) {
+      expect(s.repeat_every_days ?? null, s.step_key).toBeNull();
     }
   });
 
