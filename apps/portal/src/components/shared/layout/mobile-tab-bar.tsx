@@ -46,8 +46,19 @@ const TABS: Tab[] = [
   { label: "Customers", href: "/customers", icon: Users },
 ];
 
+/**
+ * The active tab is marked by colour and weight alone — the icon goes bold and
+ * takes the accent, the label follows. No background shape behind it (Oct 6
+ * 2026: both a tinted cell and a Material pill were tried and taken out).
+ */
 const ITEM =
-  "flex min-w-0 flex-1 flex-col items-center justify-center gap-[3px] pt-1.5 pb-1 text-[10px] font-medium tracking-[0.01em] transition-[color,transform] duration-150 active:scale-[0.92]";
+  "relative flex min-w-0 flex-1 flex-col items-center justify-center gap-[5px] text-[11.5px] leading-none font-medium tracking-[0.01em] transition-[color,transform] duration-200 ease-out active:scale-[0.94] motion-reduce:transition-none";
+const ACTIVE_TEXT = "font-semibold text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]";
+const IDLE_TEXT = "text-muted-foreground";
+
+function TabIcon({ icon: Icon, on }: { icon: LucideIcon; on: boolean }) {
+  return <Icon className="size-5" strokeWidth={on ? 2.4 : 1.75} aria-hidden />;
+}
 
 export function MobileTabBar() {
   const pathname = usePathname() ?? "/";
@@ -58,22 +69,35 @@ export function MobileTabBar() {
   const tabs = TABS.filter((t) => t.href === "/" || canAccessRoute(t.href));
   const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`));
   const anyTabActive = tabs.some((t) => isActive(t.href));
+  const moreLit = moreOpen || !anyTabActive;
 
   return (
     <>
     <MobileMoreScreen />
-    <nav
-      aria-label="Main"
+    {/*
+      NATIVE AND FLAT (Oct 6 2026, option A of three, after a floating pill —
+      tinted, glossy and dark — was tried and dropped). Attached to the bottom
+      edge like the Android apps the operators already use: solid page colour,
+      one hairline on top, no float, no shadow, no gloss. Solid rather than
+      translucent so nothing scrolling beneath shows through it. Padded for the
+      gesture bar with `env(safe-area-inset-bottom)`; 60px plus that inset sits
+      inside the 4.5rem the dashboard's <main> reserves below the last row.
+    */}
+    <div
       data-mobile-tab-bar=""
       className={cn(
         "fixed inset-x-0 bottom-0 z-40 md:hidden",
         // Record screens bring their own dock; this bar gives way to it.
         "[body:has([data-record-dock])_&]:hidden",
-        "border-t border-black/[0.06] bg-white/80 backdrop-blur-xl backdrop-saturate-150 dark:border-white/10 dark:bg-[hsl(var(--background)/0.8)]",
-        "pb-[env(safe-area-inset-bottom,0px)]"
+        "border-t border-border bg-background pb-[env(safe-area-inset-bottom,0px)]"
       )}
     >
-      <div className="mx-auto flex h-[52px] max-w-lg items-stretch px-2">
+      <nav
+        aria-label="Main"
+        className={cn(
+          "mx-auto flex h-[60px] max-w-lg items-stretch px-1"
+        )}
+      >
         {tabs.map(({ label, href, icon: Icon }) => {
           const active = !moreOpen && isActive(href);
           return (
@@ -84,9 +108,9 @@ export function MobileTabBar() {
               // so the More screen's route-change close would never fire.
               onClick={() => setMoreOpen(false)}
               aria-current={active ? "page" : undefined}
-              className={cn(ITEM, active ? "text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" : "text-muted-foreground")}
+              className={cn(ITEM, active ? ACTIVE_TEXT : IDLE_TEXT)}
             >
-              <Icon className="size-[22px]" strokeWidth={active ? 2.3 : 1.8} aria-hidden />
+              <TabIcon icon={Icon} on={active} />
               {label}
             </Link>
           );
@@ -96,16 +120,13 @@ export function MobileTabBar() {
           onClick={() => setMoreOpen(!moreOpen)}
           aria-label="More"
           aria-expanded={moreOpen}
-          className={cn(
-            ITEM,
-            moreOpen || !anyTabActive ? "text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]" : "text-muted-foreground"
-          )}
+          className={cn(ITEM, moreLit ? ACTIVE_TEXT : IDLE_TEXT)}
         >
-          <Ellipsis className="size-[22px]" strokeWidth={moreOpen || !anyTabActive ? 2.3 : 1.8} aria-hidden />
+          <TabIcon icon={Ellipsis} on={moreLit} />
           More
         </button>
-      </div>
-    </nav>
+      </nav>
+    </div>
     </>
   );
 }

@@ -12,7 +12,14 @@ const MARKETING_URL =
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  allowedDevOrigins: ['test.portal.localhost', '*.portal.localhost'],
+  // `*.nip.io` lets a phone on the same Wi-Fi open the dev server as
+  // `northwind.portal.<lan-ip-with-dashes>.nip.io:4002` — a hostname that both
+  // resolves to this machine and still carries the `{tenant}.portal.` shape the
+  // proxy reads. `*.trycloudflare.com` is the same for an https tunnel
+  // (`cloudflared tunnel --url http://localhost:4002 --http-host-header
+  // northwind.portal.localhost`), which Android Chrome needs because it refuses
+  // plain http. Dev only: allowedDevOrigins has no effect in a production build.
+  allowedDevOrigins: ['test.portal.localhost', '*.portal.localhost', '**.nip.io', '**.trycloudflare.com'],
   turbopack: {
     root: workspaceRoot,
   },

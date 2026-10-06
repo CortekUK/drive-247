@@ -1,0 +1,257 @@
+/*
+ * Hover gestures for the v2 navigation icons (components/icons/nav-icons.tsx).
+ *
+ * Modelled on Resend's sidebar (Oct 6 2026): each icon acts out one small
+ * gesture of its own when its row is hovered or focused — the needle revs, the
+ * key turns, the signature writes itself. The curve WINDS UP and then SNAPS:
+ * it starts slow (a hair backwards), accelerates, and lands with a tiny
+ * settle. Leaving is quicker and plain, so nothing lingers.
+ *
+ * This is a deliberate, owner-requested exception to the Trax 200ms ease-out
+ * rule (V2_PLAN §12), scoped to these icons only. Transform, opacity and
+ * stroke-dashoffset only; nothing at all under reduced motion.
+ *
+ * Plain CSS rather than Tailwind classes because the gestures need keyframes
+ * and per-part transform origins, which read far better here than as
+ * arbitrary-value class soup.
+ */
+
+.nav-ic {
+  --nav-ic-in: cubic-bezier(0.65, -0.3, 0.3, 1.25);
+  --nav-ic-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  /* The gestures' own curve: slow away, fast through the middle, soft land. */
+  --nav-ic-key: cubic-bezier(0.45, 0, 0.25, 1);
+  overflow: visible;
+}
+
+/* Every moving part: a quick, plain return home when the hover ends. Each
+   gesture below ANIMATES in with keyframes and DECLARES the pose it holds, so
+   on leave the transition has a target and eases back from wherever it was. */
+.nav-ic [data-m] {
+  transform-box: view-box;
+  transition: transform 380ms var(--nav-ic-out), opacity 260ms var(--nav-ic-out);
+}
+
+/* The row is the hover target; keyboard focus plays the same gesture. */
+
+/* Dashboard — the needle REVS (Oct 6 2026: "a bit more animation"): it pulls
+   back a touch, sweeps hard toward the redline, kicks back off it and settles
+   high, like a gauge when the throttle is blipped. It stays there while the
+   row is hovered; on leave the declared rotate() gives the transition a
+   target, so it eases home from wherever the rev left it. */
+@keyframes nav-ic-rev {
+  0% { transform: rotate(0deg); }
+  18% { transform: rotate(-22deg); }
+  58% { transform: rotate(76deg); }
+  78% { transform: rotate(52deg); }
+  90% { transform: rotate(64deg); }
+  100% { transform: rotate(60deg); }
+}
+.nav-ic [data-m="needle"] { transform-origin: 12px 13px; transition-duration: 420ms; }
+:is(a, button):is(:hover, :focus-visible) > .nav-ic [data-m="needle"] {
+  transform: rotate(60deg);
+  animation: nav-ic-rev 820ms cubic-bezier(0.45, 0, 0.25, 1) both;
+}
+
+/* Customers — the second person steps out from behind; the first nods. */
+@keyframes nav-ic-step {
+  0% { transform: translateX(0); }
+  22% { transform: translateX(-0.9px); }
+  60% { transform: translateX(2.8px); }
+  80% { transform: translateX(1.7px); }
+  100% { transform: translateX(2.1px); }
+}
+@keyframes nav-ic-nod {
+  0%, 100% { transform: translateY(0); }
+  45% { transform: translateY(0.9px); }
+  70% { transform: translateY(-0.6px); }
+}
+:is(a, button):is(:hover, :focus-visible) > .nav-ic [data-m="behind"] {
+  transform: translateX(2.1px);
+  animation: nav-ic-step 720ms var(--nav-ic-key) both;
+}
+:is(a, button):is(:hover, :focus-visible) > .nav-ic [data-m="front"] {
+  animation: nav-ic-nod 620ms var(--nav-ic-key) 120ms both;
+}
+
+/* Vehicles — the coupe rocks back, surges forward and settles; two speed
+   lines flash behind it as it goes. */
+@keyframes nav-ic-surge {
+  0% { transform: translateX(0); }
+  22% { transform: translateX(-1.2px); }
+  58% { transform: translateX(3.2px); }
+  80% { transform: translateX(1.9px); }
+  100% { transform: translateX(2.3px); }
+}
+@keyframes nav-ic-speed {
+  0%, 35% { opacity: 0; transform: translateX(1.5px); }
+  60% { opacity: 1; transform: translateX(0); }
+  100% { opacity: 0; transform: translateX(-1px); }
+}
+.nav-ic [data-m="speed"] { opacity: 0; }
+:is(a, button):is(:hover, :focus-visible) > .nav-ic [data-m="car"] {
+  transform: translateX(2.3px);
+  animation: nav-ic-surge 760ms var(--nav-ic-key) both;
+}
+:is(a, button):is(:hover, :focus-visible) > .nav-ic [data-m="speed"] {
+  animation: nav-ic-speed 760ms ease-out both;
+}
+
+/* Rentals — the key pushes in, turns hard, springs back a little and holds. */
+@keyframes nav-ic-turn {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  20% { transform: translate(0.8px, 0.8px) rotate(6deg); }
+  60% { transform: translate(0.8px, 0.8px) rotate(-42deg); }
+  80% { transform: translate(0.8px, 0.8px) rotate(-26deg); }
+  100% { transform: translate(0.8px, 0.8px) rotate(-32deg); }
+}
+.nav-ic [data-m="key"] { transform-origin: 12px 12px; }
+:is(a, button):is(:hover, :focus-visible) > .nav-ic [data-m="key"] {
+  transform: translate(0.8px, 0.8px) rotate(-32deg);
+  animation: nav-ic-turn 780ms var(--nav-ic-key) both;
+}
+
+/* Availability — the rings hop twice and a booking writes itself in. */
+@keyframes nav-ic-rings {
+  0%, 100% { transform: translateY(0); }
+  30% { transform: translateY(-2px); }
+  50% { transform: translateY(0.3px); }
+  68% { transform: translateY(-1px); }
+  84% { transform: translateY(0); }
+}
+:is(a, button):is(:hover, :focus-visible) > .nav-ic [data-m="rings"] {
+  animation: nav-ic-rings 700ms var(--nav-ic-key) both;
+}
+
+/* Agreements — the page rocks as the signature writes itself. */
+@keyframes nav-ic-rock {
+  0%, 100% { transform: rotate(0deg); }
+  30% { transform: rotate(-6deg); }
+  62% { transform: rotate(3deg); }
+  82% { transform: rotate(-1deg); }
+}
+.nav-ic [data-m="page"] { transform-origin: 12px 21px; }
+:is(a, button):is(:hover, :focus-visible) > .nav-ic [data-m="page"] {
+  animation: nav-ic-rock 720ms var(--nav-ic-key) both;
+}
+
+/* Finances — the card slides up out of the wallet, tips, and settles there. */
+@keyframes nav-ic-card {
+  0% { transform: translateY(0) rotate(0deg); }
+  22% { transform: translateY(0.8px) rotate(2deg); }
+  58% { transform: translateY(-2.4px) rotate(-11deg); }
+  80% { transform: translateY(-1.2px) rotate(-5deg); }
+  100% { transform: translateY(-1.6px) rotate(-7deg); }
+}
+.nav-ic [data-m="card"] { transform-origin: 12px 12px; }
+:is(a, button):is(:hover, :focus-visible) > .nav-ic [data-m="card"] {
+  transform: translateY(-1.6px) rotate(-7deg);
+  animation: nav-ic-card 760ms var(--nav-ic-key) both;
+}
+
+/* Support — the bubble pops and the three dots hop in turn. */
+@keyframes nav-ic-pop {
+  0%, 100% { transform: scale(1); }
+  25% { transform: scale(0.9); }
+  58% { transform: scale(1.08); }
+  80% { transform: scale(0.98); }
+}
+@keyframes nav-ic-hop {
+  0%, 100% { transform: translateY(0); }
+  45% { transform: translateY(-2.4px); }
+  70% { transform: translateY(0.4px); }
+}
+.nav-ic [data-m="bubble"] { transform-origin: 6px 20px; }
+:is(a, button):is(:hover, :focus-visible) > .nav-ic [data-m="bubble"] {
+  animation: nav-ic-pop 640ms var(--nav-ic-key) both;
+}
+:is(a, button):is(:hover, :focus-visible) > .nav-ic [data-hop] {
+  animation: nav-ic-hop 560ms var(--nav-ic-key) 120ms both;
+}
+:is(a, button):is(:hover, :focus-visible) > .nav-ic [data-hop="2"] { animation-delay: 210ms; }
+:is(a, button):is(:hover, :focus-visible) > .nav-ic [data-hop="3"] { animation-delay: 300ms; }
+
+/* Insights — the bars shoot up from the baseline in turn, overshoot, settle. */
+@keyframes nav-ic-grow {
+  0% { transform: scaleY(0.25); }
+  60% { transform: scaleY(1.14); }
+  80% { transform: scaleY(0.95); }
+  100% { transform: scaleY(1); }
+}
+.nav-ic [data-grow] { transform-box: fill-box; transform-origin: 50% 100%; }
+:is(a, button):is(:hover, :focus-visible) > .nav-ic [data-grow] {
+  animation: nav-ic-grow 620ms var(--nav-ic-key) both;
+}
+:is(a, button):is(:hover, :focus-visible) > .nav-ic [data-grow="2"] { animation-delay: 90ms; }
+:is(a, button):is(:hover, :focus-visible) > .nav-ic [data-grow="3"] { animation-delay: 180ms; }
+
+/* Insurances — the shield pulses as the tick draws itself. */
+@keyframes nav-ic-pulse {
+  0%, 100% { transform: scale(1); }
+  30% { transform: scale(0.92); }
+  62% { transform: scale(1.07); }
+  82% { transform: scale(0.99); }
+}
+.nav-ic [data-m="shield"] { transform-origin: 12px 12px; }
+:is(a, button):is(:hover, :focus-visible) > .nav-ic [data-m="shield"] {
+  animation: nav-ic-pulse 680ms var(--nav-ic-key) both;
+}
+
+/* Integrations — a puzzle piece is SLOTTED IN (Oct 6 2026): the right piece
+   lifts out and tilts, holds for a beat, then snaps back into its slot; the
+   left piece takes the knock and both settle locked. Ends at rest. */
+@keyframes nav-ic-piece-out-in {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  30% { transform: translate(2.6px, -1.8px) rotate(12deg); }
+  52% { transform: translate(2.6px, -1.8px) rotate(12deg); }
+  76% { transform: translate(-0.5px, 0.2px) rotate(-2deg); }
+  90% { transform: translate(0.2px, 0) rotate(0.5deg); }
+  100% { transform: translate(0, 0) rotate(0deg); }
+}
+@keyframes nav-ic-piece-knock {
+  0%, 72% { transform: translateX(0); }
+  80% { transform: translateX(-0.9px); }
+  92% { transform: translateX(0.2px); }
+  100% { transform: translateX(0); }
+}
+.nav-ic [data-m="piece-b"] { transform-box: fill-box; transform-origin: 30% 70%; }
+:is(a, button):is(:hover, :focus-visible) > .nav-ic [data-m="piece-b"] {
+  animation: nav-ic-piece-out-in 900ms var(--nav-ic-key) both;
+}
+:is(a, button):is(:hover, :focus-visible) > .nav-ic [data-m="piece-a"] {
+  animation: nav-ic-piece-knock 900ms var(--nav-ic-key) both;
+}
+
+/* Billing — the crown hops up, tilts, and lands slightly askew. */
+@keyframes nav-ic-crown {
+  0% { transform: translateY(0) rotate(0deg); }
+  22% { transform: translateY(0.9px) rotate(0deg); }
+  58% { transform: translateY(-2.8px) rotate(-12deg); }
+  80% { transform: translateY(-1.3px) rotate(-5deg); }
+  100% { transform: translateY(-1.7px) rotate(-8deg); }
+}
+.nav-ic [data-m="crown"] { transform-origin: 12px 17px; }
+:is(a, button):is(:hover, :focus-visible) > .nav-ic [data-m="crown"] {
+  transform: translateY(-1.7px) rotate(-8deg);
+  animation: nav-ic-crown 760ms var(--nav-ic-key) both;
+}
+
+/* Agreements, Availability, Insurances — a line that DRAWS itself. */
+@keyframes nav-ic-draw {
+  from { stroke-dashoffset: 1; }
+  to { stroke-dashoffset: 0; }
+}
+.nav-ic [data-draw] { stroke-dasharray: 1; stroke-dashoffset: 0; }
+:is(a, button):is(:hover, :focus-visible) > .nav-ic [data-draw] {
+  animation: nav-ic-draw 680ms cubic-bezier(0.7, 0, 0.25, 1) 120ms both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-ic *,
+  :is(a, button):is(:hover, :focus-visible) > .nav-ic * {
+    transition: none !important;
+    animation: none !important;
+    transform: none !important;
+  }
+  .nav-ic [data-m="speed"] { opacity: 0 !important; }
+}

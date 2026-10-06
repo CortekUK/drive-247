@@ -84,7 +84,20 @@ import {
   SidebarRail,
   useSidebar,
 } from "@/components/ui-v2/sidebar";
-import { CoupeIcon } from "@/components/icons/coupe-icon";
+import {
+  NavAgreements,
+  NavAvailability,
+  NavBilling,
+  NavCustomers,
+  NavDashboard,
+  NavFinances,
+  NavInsights,
+  NavInsurances,
+  NavIntegrations,
+  NavRentals,
+  NavSupport,
+  NavVehicles,
+} from "@/components/icons/nav-icons";
 import { Input } from "@/components/ui-v2/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui-v2/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui-v2/tooltip";
@@ -263,7 +276,23 @@ interface NavGroup {
  * sheet is the only place the larger set can apply, because at `md` and up
  * this component renders as the rail instead.
  */
+/*
+ * HOVER GROWS THE ROW'S CONTENT BY A PIXEL (Oct 6 2026): the icon and the label
+ * each scale up by about 1px (17→18, 13→14) and go a step bolder, over 200ms.
+ * Scaled rather than resized so nothing in the row reflows — the label grows
+ * from its left edge, the icon from its centre. The weight change rides on the
+ * v2 face (Manrope) being a variable font, so it eases instead of snapping; the icon's
+ * stroke thickens with it. Desktop only (`md:`): a phone has no hover.
+ */
+const NAV_HOVER =
+  "md:[&>span]:origin-left md:[&>span]:[transition:transform_200ms_ease-out,font-weight_200ms_ease-out] " +
+  "md:hover:[&>span]:scale-[1.077] md:hover:[&>span]:font-semibold " +
+  "md:[&>svg]:[transition:transform_200ms_ease-out,stroke-width_200ms_ease-out] " +
+  "md:hover:[&>svg]:scale-[1.06] md:hover:[&>svg]:[stroke-width:2.5] " +
+  "motion-reduce:[&>span]:transition-none motion-reduce:[&>svg]:transition-none ";
+
 const NAV_ROW =
+  NAV_HOVER +
   "h-11 md:h-8 [&>svg]:size-[18px] md:[&>svg]:size-4 font-medium transition-colors " +
   "data-[active=true]:shadow-[inset_0_0_0_1px_hsl(var(--primary)_/_0.12),0_1px_2px_hsl(var(--primary)_/_0.08)]";
 
@@ -604,9 +633,9 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   // alphabetical and not by how often each is clicked. These three stay alone
   // up here; everything else lives under "More" below.
   const rawTopLevel: NavItem[] = ([
-    { name: "Customers", href: "/customers", icon: Users },
-    { name: "Vehicles", href: "/vehicles", icon: CoupeIcon },
-    { name: "Rentals", href: "/rentals", icon: FileText },
+    { name: "Customers", href: "/customers", icon: NavCustomers },
+    { name: "Vehicles", href: "/vehicles", icon: NavVehicles },
+    { name: "Rentals", href: "/rentals", icon: NavRentals },
   ] as NavItem[]).filter(filterItem);
 
   // --- Section 3: "More", flat ---
@@ -645,18 +674,18 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
     // `agreements`), so `filterItem` below decides whether a manager may see
     // them at all, BEFORE any preference is read. Customisation can reveal a
     // row this user could already have been given; it can never widen access.
-    { name: "Insights", href: "/insights", icon: TrendingUp, optional: true },
-    { name: "Insurances", href: "/insurances", icon: Shield, optional: true },
-    { name: "Agreements", href: "/agreements", icon: FileSignature },
+    { name: "Insights", href: "/insights", icon: NavInsights, optional: true },
+    { name: "Insurances", href: "/insurances", icon: NavInsurances, optional: true },
+    { name: "Agreements", href: "/agreements", icon: NavAgreements },
     // `/blocked-dates` is the route; "Availability" is what the page is FOR,
     // which is why the two do not match.
-    { name: "Availability", href: "/blocked-dates", icon: CalendarDays },
+    { name: "Availability", href: "/blocked-dates", icon: NavAvailability },
     // Finances — Payments, Invoices and Fines as one row opening one tabbed
     // screen (`/finances`), behind its own area gate. Tenants outside it keep
     // the three separate rows. `/finances` has no ROUTE_TO_TAB entry: the
     // screen itself shows a manager only the tabs they hold a grant for.
     ...(financesV2
-      ? [{ name: "Finances", href: "/finances", icon: CreditCard }]
+      ? [{ name: "Finances", href: "/finances", icon: NavFinances }]
       : [
           { name: "Payments", href: "/payments", icon: CreditCard },
           { name: "Invoices", href: "/invoices", icon: Receipt },
@@ -669,7 +698,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
     {
       name: "Support",
       href: SUPPORT_ROUTE,
-      icon: LifeBuoy,
+      icon: NavSupport,
       badge: supportUnread ?? 0,
       badgeLabel: (n: number) => `${n} unread ${n === 1 ? "message" : "messages"}`,
     },
@@ -826,9 +855,9 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
    * keep the names in step if one of them is ever renamed.
    */
   const fixedRows: NavItem[] = [
-    { name: "Dashboard", href: "/", icon: LayoutGrid },
-    { name: "Integrations", href: "/integrations", icon: Plug },
-    { name: "Billing", href: "/subscription", icon: Crown },
+    { name: "Dashboard", href: "/", icon: NavDashboard },
+    { name: "Integrations", href: "/integrations", icon: NavIntegrations },
+    { name: "Billing", href: "/subscription", icon: NavBilling },
   ];
 
   // The user's own arrangement, laid over the nav the app just computed.
@@ -1440,7 +1469,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                     className={NAV_ROW}
                   >
                     <Link href="/cms" onClick={closeMobileOnNav}>
-                      <LayoutGrid className="h-4 w-4 shrink-0" />
+                      <NavDashboard className="!size-[17px] shrink-0" />
                       <span
                         className={`text-[15px] md:text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}
                       >
@@ -1464,7 +1493,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                       className="h-11 md:h-8 [&>svg]:size-[18px] md:[&>svg]:size-4 min-w-0 flex-1 transition-colors"
                     >
                       <Link href={item.href} onClick={closeMobileOnNav}>
-                        <item.icon className="h-4 w-4 shrink-0" />
+                        <item.icon className="!size-[17px] shrink-0" />
                         <span
                           className={`text-[15px] md:text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"} ${
                             !collapsed && !item.published ? "text-muted-foreground" : ""
@@ -1606,7 +1635,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                       className={NAV_ROW}
                     >
                       <Link href="/" onClick={closeMobileOnNav}>
-                        <LayoutGrid className="h-4 w-4 shrink-0" />
+                        <NavDashboard className="!size-[17px] shrink-0" />
                         <span className={`text-[15px] md:text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>Dashboard</span>
                       </Link>
                     </SidebarMenuButton>
@@ -1623,7 +1652,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                       className={NAV_ROW}
                     >
                       <Link href="/integrations" onClick={closeMobileOnNav}>
-                        <Plug className="h-4 w-4 shrink-0" />
+                        <NavIntegrations className="!size-[17px] shrink-0" />
                         <span className={`text-[15px] md:text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>Integrations</span>
                       </Link>
                     </SidebarMenuButton>
@@ -1654,7 +1683,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                       className={NAV_ROW}
                     >
                       <Link href="/subscription" onClick={closeMobileOnNav}>
-                        <Crown className="h-4 w-4 shrink-0" />
+                        <NavBilling className="!size-[17px] shrink-0" />
                         <span className={`text-[15px] md:text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>Billing</span>
                       </Link>
                     </SidebarMenuButton>
@@ -1743,7 +1772,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                         >
                           <Link href={item.href} onClick={closeMobileOnNav} className="flex items-center justify-between w-full">
                             <div className="flex items-center gap-2 min-w-0">
-                              <item.icon className="h-4 w-4 shrink-0" />
+                              <item.icon className="!size-[17px] shrink-0" />
                               <span className={`text-[15px] md:text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>
                                 {item.name}
                               </span>
@@ -1792,7 +1821,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                           >
                             <Link href={item.href} onClick={closeMobileOnNav} className="flex items-center justify-between w-full">
                               <div className="flex items-center gap-2 min-w-0">
-                                <item.icon className="h-4 w-4 shrink-0" />
+                                <item.icon className="!size-[17px] shrink-0" />
                                 <span className={`text-[15px] md:text-[13px] transition-all duration-200 ease-in-out ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>
                                   {item.name}
                                 </span>
@@ -1850,7 +1879,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                                 onClick={closeMobileOnNav}
                                 aria-label={count > 0 && item.badgeLabel ? `${item.name}, ${item.badgeLabel(count)}` : undefined}
                               >
-                                <item.icon className="h-4 w-4 shrink-0" />
+                                <item.icon className="!size-[17px] shrink-0" />
                                 <span className={`text-[15px] md:text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "min-w-0 flex-1 truncate opacity-100"}`}>
                                   {item.name}
                                 </span>

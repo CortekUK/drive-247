@@ -39,6 +39,7 @@ import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { useRegisterSidebarSections } from '@/components/admin/sidebar-sections';
 import { CardBrandIcon } from '@/components/ui/card-brand-icon';
 import { TenantCreditsTab } from '@/components/admin/tenant-credits-tab';
+import { TenantTimelineTab } from '@/components/admin/tenant-timeline-tab';
 import { LinkPromoPicker } from '@/components/admin/promo-codes/link-promo-picker';
 import {
   ArrowLeft,
@@ -1536,6 +1537,8 @@ export default function TenantDetailsPage() {
       { id: 'subscriptions', label: 'Subscriptions' },
       { id: 'integrations', label: 'Integrations' },
       { id: 'consent', label: 'Consent' },
+      /* Retention step 1 (RETENTION_PLAN.md): the account's lifecycle events. */
+      { id: 'timeline', label: 'Timeline' },
     ],
     tab,
     setTab,
@@ -2426,6 +2429,10 @@ export default function TenantDetailsPage() {
               )}
             </DialogContent>
           </Dialog>
+        </TabsContent>
+
+        <TabsContent value="timeline" className="space-y-6">
+          <TenantTimelineTab tenantId={tenant.id} />
         </TabsContent>
 
         {/* Payments, Analytics, Finance Sync and Todos were removed from

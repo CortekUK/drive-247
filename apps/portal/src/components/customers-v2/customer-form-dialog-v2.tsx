@@ -1,27 +1,42 @@
 "use client";
 
 /**
- * Add / edit a customer — the v2 dialog (Ghulam, Oct 2 2026: "do the same with
- * add customer", after the vehicle dialog).
+ * Add / edit a customer — the v2 dialog.
  *
- * The same pattern as `add-vehicle-dialog-v2.tsx`, from the shared kit
- * (components/shared/form-grid-v2.tsx): a wide dialog, no header, a fixed
- * three-column grid with one field per cell, and Back / steps / Next at the
- * foot. Two screens:
+ * Oct 6 2026 (Ghulam: "too bland… an illustration at the top and then some
+ * fields underneath, next screen like that… small groups of information"):
+ * a narrow dialog, one small idea per screen, stacked and centred —
  *
- *   1. The customer          type, status, gig driver · name, email, phone ·
- *                            date of birth, license, ID · company fields or notes
- *   2. Emergency contact     next of kin — all optional
+ *   picture  →  what Trax is asking, in one line  →  two to five fields
  *
- * After a NEW customer is saved the dialog turns into v1's follow-up, in the
- * same frame: "Start ID verification?" (QR via create-ai-verification-session),
- * and, for a gig driver, the proof upload. Both reuse v1's components.
+ *   1. Who's renting?        full name, date of birth
+ *   2. How do I reach them?  email, phone (one of them is required)
+ *   3. Their licence         driver's license, ID number
+ *
+ * No Person / Company choice (Ghulam, Oct 6: "I don't want to give the user
+ * the company option"). A new customer is always an Individual; editing an
+ * existing Company customer keeps its type and company fields untouched,
+ * because the form still carries them through to the same payload.
+ *   4. A couple more things  status, gig driver
+ *   5. Emergency contact     their name and relationship — optional
+ *   6. Reaching them         their phone, email and address — optional
+ *
+ * ONE LAYOUT RULE for every screen: the same picture size, a line reserved for
+ * two lines of text, and EXACTLY TWO ROWS of fields in a two-column grid — a
+ * lone field spans the row, a group that needs more becomes another screen. So every screen is the same
+ * height, the fields always start at the same place, and nothing scrolls or
+ * slides under the footer. After a NEW customer is saved the dialog turns into v1's follow-up,
+ * in the same frame: "Verify their ID now?", then the live ID check
+ * (`verify-id-screen-v2.tsx`, QR via create-ai-verification-session) and, for
+ * a gig driver, v1's proof upload.
  *
  * SAVES EXACTLY LIKE v1's `CustomerFormModal` (components/customers/
  * customer-form-modal.tsx, untouched): the same schema, the live blocked-ID
  * check on the license / ID fields, the duplicate license and email checks
  * (tenant-scoped), the blocked-identity re-check on create, the same payload,
- * the same audit log entries and the same cache keys.
+ * the same audit log entries and the same cache keys. One difference: v1
+ * shows a Notes field that is never saved (`customers` has no notes column);
+ * this dialog does not show a field it cannot keep.
  */
 
 import { useEffect, useState } from "react";
@@ -29,6 +44,7 @@ import { useForm, type FieldPath } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, ShieldCheck } from "lucide-react";
+import type { ComponentType } from "react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -39,9 +55,18 @@ import { cn } from "@/lib/utils";
 import { customerFormModalSchema, type CustomerFormModalFormValues } from "@/client-schemas/customers/customer-form-modal";
 import { Button } from "@/components/ui-v2/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui-v2/dialog";
-import { Cell, CONTROL, SCREEN_GRID, Segmented, StepFooter, ToggleTile } from "@/components/shared/form-grid-v2";
+import { Cell, CONTROL, Segmented, StepFooter, ToggleTile } from "@/components/shared/form-grid-v2";
+import {
+  AddCustomerContactArt,
+  AddCustomerEmergencyArt,
+  AddCustomerEmergencyReachArt,
+  AddCustomerExtrasArt,
+  AddCustomerLicenceArt,
+  AddCustomerVerifyArt,
+  AddCustomerWhoArt,
+} from "@/components/illustrations-v2/scenes/add-customer";
 import { BonzahDateField } from "@/app/(dashboard)/integrations/_panels/bonzah-date-field";
-import { VerificationQRModal } from "@/components/customers/verification-qr-modal";
+import { VerifyIdScreenV2 } from "@/components/customers-v2/verify-id-screen-v2";
 import GigDriverUploadDialog from "@/components/customers/gig-driver-upload-dialog";
 
 type Values = CustomerFormModalFormValues;
@@ -64,17 +89,57 @@ export interface CustomerForEdit {
   [key: string]: unknown;
 }
 
-const STEPS: { title: string; fields: FieldPath<Values>[] }[] = [
+type Step = {
+  /** Short name, for the step dots' tooltip. */
+  name: string;
+  art: ComponentType<{ className?: string }>;
+  title: string;
+  line: string;
+  fields: FieldPath<Values>[];
+};
+
+const STEPS: Step[] = [
   {
-    title: "The customer",
-    fields: [
-      "customer_type", "status", "is_gig_driver", "name", "email", "phone",
-      "date_of_birth", "license_number", "id_number", "company_name", "company_registration", "notes",
-    ],
+    name: "Who",
+    art: AddCustomerWhoArt,
+    title: "Who's renting?",
+    line: "Their name and date of birth, as they appear on their licence.",
+    fields: ["name", "date_of_birth"],
   },
   {
-    title: "Emergency contact",
-    fields: ["nok_full_name", "nok_relationship", "nok_phone", "nok_email", "nok_address"],
+    name: "Contact",
+    art: AddCustomerContactArt,
+    title: "How do I reach them?",
+    line: "Email or phone. I need at least one to send their bookings and receipts.",
+    fields: ["email", "phone"],
+  },
+  {
+    name: "Licence",
+    art: AddCustomerLicenceArt,
+    title: "Their licence",
+    line: "I check every number against your blocklist the moment you enter it.",
+    fields: ["license_number", "id_number"],
+  },
+  {
+    name: "Details",
+    art: AddCustomerExtrasArt,
+    title: "A couple more things",
+    line: "If they drive for Uber, Lyft or DoorDash, I'll ask for their proof next.",
+    fields: ["status", "is_gig_driver"],
+  },
+  {
+    name: "Emergency contact",
+    art: AddCustomerEmergencyArt,
+    title: "Who do I call if something happens?",
+    line: "All optional, but it's the first person I'll want if there's trouble on the road.",
+    fields: ["nok_full_name", "nok_relationship"],
+  },
+  {
+    name: "Reaching them",
+    art: AddCustomerEmergencyReachArt,
+    title: "And how do I reach them?",
+    line: "A phone number is the one that matters most. Also optional.",
+    fields: ["nok_phone", "nok_email", "nok_address"],
   },
 ];
 
@@ -240,19 +305,19 @@ export function CustomerFormDialogV2({
   const save = form.handleSubmit(
     async (data) => {
       if (blocked) return fail("Blocked identity", `This ${blocked.type} number is blocked: ${blocked.reason}`);
+      // No tenant, no write: every query below is scoped by it (V2_PLAN §5).
+      if (!tenant?.id) return fail("Couldn't save", "I couldn't tell which business this is for. Please reload and try again.");
       setLoading(true);
       try {
         // Duplicates — within this tenant only, the record itself excluded.
         if (data.license_number) {
-          let q = supabase.from("customers").select("id, name").eq("license_number", data.license_number.trim());
-          if (tenant?.id) q = q.eq("tenant_id", tenant.id);
+          let q = supabase.from("customers").select("id, name").eq("license_number", data.license_number.trim()).eq("tenant_id", tenant.id);
           if (isEditing) q = q.neq("id", customer!.id);
           const { data: dup } = await q.limit(1).maybeSingle();
           if (dup) return fail("Duplicate license number", `A customer with this license number already exists: ${dup.name}`);
         }
         if (data.email) {
-          let q = supabase.from("customers").select("id, name").eq("email", data.email.trim().toLowerCase());
-          if (tenant?.id) q = q.eq("tenant_id", tenant.id);
+          let q = supabase.from("customers").select("id, name").eq("email", data.email.trim().toLowerCase()).eq("tenant_id", tenant.id);
           if (isEditing) q = q.neq("id", customer!.id);
           const { data: dup } = await q.limit(1).maybeSingle();
           if (dup) return fail("Duplicate email", `A customer with this email already exists: ${dup.name}`);
@@ -317,9 +382,7 @@ export function CustomerFormDialogV2({
         };
 
         if (isEditing) {
-          let q = supabase.from("customers").update(payload as never).eq("id", customer!.id);
-          if (tenant?.id) q = q.eq("tenant_id", tenant.id);
-          const { error } = await q;
+          const { error } = await supabase.from("customers").update(payload as never).eq("id", customer!.id).eq("tenant_id", tenant.id);
           if (error) throw error;
           logAction({ action: "customer_updated", entityType: "customer", entityId: customer!.id, details: { customer_name: data.name } });
           toast({ title: "Customer updated", description: `${data.name} has been updated.` });
@@ -329,7 +392,7 @@ export function CustomerFormDialogV2({
           return;
         }
 
-        if (tenant?.id) payload.tenant_id = tenant.id;
+        payload.tenant_id = tenant.id;
         const { data: row, error } = await supabase.from("customers").insert(payload as never).select("id").single();
         if (error) throw error;
         logAction({ action: "customer_created", entityType: "customer", entityId: row.id, details: { customer_name: data.name } });
@@ -377,27 +440,50 @@ export function CustomerFormDialogV2({
   };
 
   const last = step === STEPS.length - 1;
-  const companyMode = v.customer_type === "Company";
+  const screen = STEPS[step];
+  const phoneFilter = (s: string) => s.replace(/[^0-9\s\-()+]/g, "");
 
   return (
     <>
-      <Dialog open={open && !qr} onOpenChange={close}>
-        <DialogContent className="gap-0 p-0 sm:max-w-[1040px]" showCloseButton={false}>
+      <Dialog open={open} onOpenChange={close}>
+        <DialogContent
+          className="gap-0 overflow-hidden p-0 sm:max-w-[600px]"
+          showCloseButton={false}
+          // The ID check is waiting on the customer's phone: a stray click
+          // outside must not throw the QR away. "Later" closes it.
+          onInteractOutside={(e) => qr && e.preventDefault()}
+          // Open on the first field to type in, not on the first button —
+          // focusing a toggle drew a focus ring round it.
+          onOpenAutoFocus={(e) => {
+            e.preventDefault();
+            (e.currentTarget as HTMLElement | null)?.querySelector<HTMLInputElement>("input:not([type=hidden]):not([type=file])")?.focus();
+          }}
+        >
           <DialogTitle className="sr-only">{isEditing ? "Edit customer" : "Add a customer"}</DialogTitle>
-          <DialogDescription className="sr-only">{created ? "Start ID verification" : STEPS[step].title}</DialogDescription>
+          <DialogDescription className="sr-only">{created ? "Verify their ID" : screen.title}</DialogDescription>
 
-          {created ? (
+          {created && qr ? (
+            /* The ID check, live — in the same frame, not a second dialog. */
+            <VerifyIdScreenV2
+              session={qr}
+              name={created.name}
+              onDone={() => close(false)}
+              onRetry={startVerification}
+              retrying={startingVerification}
+              onComplete={() => queryClient.invalidateQueries({ queryKey: ["customers-list"] })}
+            />
+          ) : created ? (
             /* The follow-up after a create: verify now, or later. */
-            <div className="flex h-[440px] flex-col items-center justify-center px-10 text-center animate-in fade-in-0 slide-in-from-bottom-2 duration-200 ease-out motion-reduce:animate-none">
-              <span className="flex size-14 items-center justify-center rounded-full bg-primary/10 text-primary dark:text-[hsl(var(--v2-link,var(--primary)))]">
-                <ShieldCheck className="size-6" />
-              </span>
-              <h3 className="mt-5 text-xl font-medium text-foreground">{created.name} is added.</h3>
-              <p className="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
-                Want to verify their ID now? I&rsquo;ll show a QR code they scan with their phone to photograph their license and
-                take a selfie.
-              </p>
-              <div className="mt-8 flex items-center gap-3">
+            <div className="flex flex-col">
+              <div className="flex h-[456px] flex-col items-center justify-center px-10 text-center duration-200 ease-out animate-in fade-in-0 slide-in-from-bottom-3 motion-reduce:animate-none">
+                <AddCustomerVerifyArt className="max-w-[264px]" />
+                <h3 className="mt-6 text-xl font-medium text-foreground [text-wrap:balance]">{created.name} is in.</h3>
+                <p className="mx-auto mt-2 max-w-[24rem] text-sm leading-relaxed text-muted-foreground [text-wrap:balance]">
+                  Want me to verify their ID now? I&rsquo;ll show a QR code they scan to photograph their licence and take a
+                  selfie.
+                </p>
+              </div>
+              <div className="flex items-center justify-between gap-4 border-t px-8 py-4">
                 <Button variant="outline" className="h-10 rounded-full px-5" onClick={() => close(false)}>
                   Later
                 </Button>
@@ -412,109 +498,115 @@ export function CustomerFormDialogV2({
               onSubmit={(e) => {
                 e.preventDefault();
                 if (last) void save();
-                else void form.trigger(STEPS[step].fields).then((ok) => ok && setStep(step + 1));
+                else void form.trigger(screen.fields).then((ok) => ok && setStep(step + 1));
               }}
               className="flex flex-col"
             >
+              {/* One screen: picture, what Trax is asking, a few fields. Same
+                  height on every step, so nothing jumps and nothing scrolls. */}
               <div
                 key={step}
-                className={cn("h-[440px] px-10 pt-10 animate-in fade-in-0 slide-in-from-bottom-2 duration-200 ease-out motion-reduce:animate-none", SCREEN_GRID)}
+                className="flex h-[456px] flex-col items-center overflow-hidden px-10 pt-8 duration-200 ease-out animate-in fade-in-0 slide-in-from-bottom-3 motion-reduce:animate-none"
               >
-                {step === 0 ? (
-                  <>
-                    <Cell label="Customer type">
-                      <Segmented
-                        value={v.customer_type ?? "Individual"}
-                        options={[
-                          { value: "Individual", label: "Person" },
-                          { value: "Company", label: "Company" },
-                        ]}
-                        onChange={(t) => set("customer_type", t)}
-                      />
-                    </Cell>
-                    <Cell label="Status">
-                      <Segmented
-                        value={v.status}
-                        options={[
-                          { value: "Active", label: "Active" },
-                          { value: "Inactive", label: "Inactive" },
-                        ]}
-                        onChange={(t) => set("status", t)}
-                      />
-                    </Cell>
-                    <Cell label="Gig driver" hint="Drives for Uber, Lyft, DoorDash…">
-                      <ToggleTile label="Gig driver" checked={!!v.is_gig_driver} onChange={(x) => set("is_gig_driver", x)} />
-                    </Cell>
+                <screen.art className="max-w-[240px]" />
+                <h3 className="mt-4 text-center text-xl font-medium leading-snug text-foreground [text-wrap:balance]">
+                  {screen.title}
+                </h3>
+                <p className="mx-auto mt-1.5 min-h-[2lh] max-w-[24rem] text-center text-sm leading-relaxed text-muted-foreground [text-wrap:balance]">
+                  {screen.line}
+                </p>
 
-                    <Cell label={companyMode ? "Contact person" : "Full name"} required error={err("name")}>
-                      {text("name", companyMode ? "Who we deal with" : "e.g. Jordan Ellis", { filter: (s) => s.replace(/\d/g, "") })}
-                    </Cell>
-                    <Cell label="Email" error={err("email")} hint="Email or phone is required">
-                      {text("email", "name@example.com", { type: "email", inputMode: "email" })}
-                    </Cell>
-                    <Cell label="Phone" error={err("phone")}>
-                      {text("phone", "+1 555 123 4567", { type: "tel", inputMode: "tel", filter: (s) => s.replace(/[^0-9\s\-()+]/g, "") })}
-                    </Cell>
-
-                    <Cell label="Date of birth" error={err("date_of_birth")}>
-                      <BonzahDateField
-                        value={v.date_of_birth ?? ""}
-                        triggerClassName={CONTROL}
-                        onChange={(s) => set("date_of_birth", s)}
-                      />
-                    </Cell>
-                    <Cell label="Driver's license" error={blocked?.type === "license" ? `Blocked: ${blocked.reason}` : err("license_number")}>
-                      {text("license_number", "License number", { upper: true, onBlur: () => void checkBlocked(v.license_number) })}
-                    </Cell>
-                    <Cell label="ID number" error={blocked && blocked.type !== "license" ? `Blocked: ${blocked.reason}` : err("id_number")}>
-                      {text("id_number", "Passport or national ID", { upper: true, onBlur: () => void checkBlocked(v.id_number) })}
-                    </Cell>
-
-                    {companyMode ? (
-                      <>
-                        <Cell label="Company name" required error={err("company_name")}>
-                          {text("company_name", "e.g. Acme Corp")}
-                        </Cell>
-                        <Cell label="Tax ID / Reg. no." error={err("company_registration")}>
-                          {text("company_registration", "EIN or registration number")}
-                        </Cell>
-                        <Cell label="Notes" error={err("notes")}>
-                          {text("notes", "Anything worth knowing")}
-                        </Cell>
-                      </>
-                    ) : (
-                      <Cell label="Notes" className="col-span-3" error={err("notes")}>
-                        {text("notes", "Anything worth knowing about this customer")}
+                <div className="mt-5 grid w-full grid-cols-2 gap-x-5 gap-y-1">
+                  {step === 0 && (
+                    <>
+                      <Cell label="Full name" required className="col-span-2" error={err("name")}>
+                        {text("name", "e.g. Jordan Ellis", { filter: (s) => s.replace(/\d/g, "") })}
                       </Cell>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <Cell label="Full name" error={err("nok_full_name")}>
-                      {text("nok_full_name", "Who to call in an emergency", { filter: (s) => s.replace(/\d/g, "") })}
-                    </Cell>
-                    <Cell label="Relationship" error={err("nok_relationship")}>
-                      {text("nok_relationship", "e.g. Spouse, Parent", { filter: (s) => s.replace(/[^a-zA-Z\s]/g, "") })}
-                    </Cell>
-                    <Cell label="Phone" error={err("nok_phone")}>
-                      {text("nok_phone", "+1 555 123 4567", { type: "tel", inputMode: "tel", filter: (s) => s.replace(/[^0-9\s\-()+]/g, "") })}
-                    </Cell>
+                      <Cell label="Date of birth" className="col-span-2" error={err("date_of_birth")}>
+                        <BonzahDateField
+                          value={v.date_of_birth ?? ""}
+                          invalid={!!err("date_of_birth")}
+                          triggerClassName={CONTROL}
+                          onChange={(s) => set("date_of_birth", s)}
+                        />
+                      </Cell>
+                    </>
+                  )}
 
-                    <Cell label="Email" error={err("nok_email")}>
-                      {text("nok_email", "name@example.com", { type: "email", inputMode: "email" })}
-                    </Cell>
-                    <Cell label="Address" className="col-span-2" error={err("nok_address")}>
-                      {text("nok_address", "Street, city, state, ZIP")}
-                    </Cell>
-                    <p className="col-span-3 px-0.5 text-xs text-muted-foreground">
-                      All optional — but it&rsquo;s who you call if something happens on the road.
-                    </p>
-                  </>
-                )}
+                  {step === 1 && (
+                    <>
+                      <Cell label="Email" className="col-span-2" error={err("email")}>
+                        {text("email", "name@example.com", { type: "email", inputMode: "email" })}
+                      </Cell>
+                      <Cell label="Phone" className="col-span-2" error={err("phone")}>
+                        {text("phone", "+1 555 123 4567", { type: "tel", inputMode: "tel", filter: phoneFilter })}
+                      </Cell>
+                    </>
+                  )}
+
+                  {step === 2 && (
+                    <>
+                      <Cell
+                        label="Driver's license"
+                        className="col-span-2"
+                        error={blocked?.type === "license" ? `Blocked: ${blocked.reason}` : err("license_number")}
+                      >
+                        {text("license_number", "License number", { upper: true, onBlur: () => void checkBlocked(v.license_number) })}
+                      </Cell>
+                      <Cell label="ID number" className="col-span-2" error={blocked && blocked.type !== "license" ? `Blocked: ${blocked.reason}` : err("id_number")}>
+                        {text("id_number", "Passport or national ID", { upper: true, onBlur: () => void checkBlocked(v.id_number) })}
+                      </Cell>
+                    </>
+                  )}
+
+                  {step === 3 && (
+                    <>
+                      <Cell label="Status" className="col-span-2">
+                        <Segmented
+                          value={v.status}
+                          options={[
+                            { value: "Active", label: "Active" },
+                            { value: "Inactive", label: "Inactive" },
+                          ]}
+                          onChange={(t) => set("status", t)}
+                        />
+                      </Cell>
+                      <Cell label="Gig driver" className="col-span-2">
+                        <ToggleTile label="Gig driver" checked={!!v.is_gig_driver} onChange={(x) => set("is_gig_driver", x)} />
+                      </Cell>
+                    </>
+                  )}
+
+                  {step === 4 && (
+                    <>
+                      <Cell label="Full name" className="col-span-2" error={err("nok_full_name")}>
+                        {text("nok_full_name", "Who to call", { filter: (s) => s.replace(/\d/g, "") })}
+                      </Cell>
+                      <Cell label="Relationship" className="col-span-2" error={err("nok_relationship")}>
+                        {text("nok_relationship", "e.g. Spouse, Parent", { filter: (s) => s.replace(/[^a-zA-Z\s]/g, "") })}
+                      </Cell>
+                    </>
+                  )}
+
+                  {step === 5 && (
+                    <>
+                      <Cell label="Phone" error={err("nok_phone")}>
+                        {text("nok_phone", "+1 555 123 4567", { type: "tel", inputMode: "tel", filter: phoneFilter })}
+                      </Cell>
+                      <Cell label="Email" error={err("nok_email")}>
+                        {text("nok_email", "name@example.com", { type: "email", inputMode: "email" })}
+                      </Cell>
+                      <Cell label="Address" className="col-span-2" error={err("nok_address")}>
+                        {text("nok_address", "Street, city, state, ZIP")}
+                      </Cell>
+                    </>
+                  )}
+                </div>
               </div>
 
               <StepFooter
-                steps={STEPS.map((s) => s.title)}
+                compact
+                steps={STEPS.map((s) => s.name)}
                 step={step}
                 loading={loading}
                 onBack={() => setStep(step - 1)}
@@ -526,15 +618,6 @@ export function CustomerFormDialogV2({
           )}
         </DialogContent>
       </Dialog>
-
-      <VerificationQRModal
-        open={!!qr}
-        onOpenChange={(o) => {
-          if (!o) close(false);
-        }}
-        sessionData={qr}
-        onComplete={() => queryClient.invalidateQueries({ queryKey: ["customers-list"] })}
-      />
 
       {gigCustomerId && (
         <GigDriverUploadDialog

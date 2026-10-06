@@ -111,8 +111,10 @@ export function Segmented<T extends string>({
           onClick={() => onChange(o.value)}
           aria-pressed={value === o.value}
           className={cn(
-            "rounded-lg text-sm transition-colors duration-200 motion-reduce:transition-none",
-            value === o.value ? "bg-background font-medium text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+            "rounded-lg text-sm outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-primary/30 motion-reduce:transition-none",
+            value === o.value
+              ? "bg-background font-medium text-foreground shadow-[0_1px_2px_hsl(var(--foreground)/0.08)] ring-1 ring-foreground/10"
+              : "text-muted-foreground hover:text-foreground",
           )}
         >
           {o.label}
@@ -131,6 +133,7 @@ export function StepFooter({
   onCancel,
   finishLabel,
   busyLabel,
+  compact,
 }: {
   steps: readonly string[];
   step: number;
@@ -139,10 +142,12 @@ export function StepFooter({
   onCancel: () => void;
   finishLabel: string;
   busyLabel: string;
+  /** Dots only, no titles — for a narrow dialog with many short screens. */
+  compact?: boolean;
 }) {
   const last = step === steps.length - 1;
   return (
-    <div className="mt-6 flex items-center justify-between gap-4 border-t px-10 py-5">
+    <div className={cn("flex items-center justify-between gap-4 border-t", compact ? "px-8 py-4" : "mt-6 px-10 py-5")}>
       <Button
         type="button"
         variant="outline"
@@ -159,6 +164,20 @@ export function StepFooter({
         )}
       </Button>
 
+      {compact ? (
+        <ol className="flex items-center gap-1.5" aria-label={`Step ${step + 1} of ${steps.length}: ${steps[step]}`}>
+          {steps.map((title, i) => (
+            <li
+              key={title}
+              title={title}
+              className={cn(
+                "size-1.5 rounded-full transition-colors duration-200 motion-reduce:transition-none",
+                i === step ? "bg-primary dark:bg-[hsl(var(--v2-link,var(--primary)))]" : i < step ? "bg-primary/40" : "bg-foreground/15",
+              )}
+            />
+          ))}
+        </ol>
+      ) : (
       <ol className="flex items-center gap-2" aria-label="Steps">
         {steps.map((title, i) => (
           <li key={title} className="flex items-center gap-2">
@@ -179,6 +198,7 @@ export function StepFooter({
           </li>
         ))}
       </ol>
+      )}
 
       <Button type="submit" className="h-10 rounded-full px-5" variant={last ? "default" : "outline"} disabled={loading}>
         {loading ? (
