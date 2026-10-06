@@ -19,8 +19,8 @@
  * page today and it has to say which file to run rather than "Something went
  * wrong".
  */
-import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 
 import { SidebarSectionsProvider, useSidebarSections } from '@/components/admin/sidebar-sections';
 
@@ -102,6 +102,8 @@ function RailProbe() {
   );
 }
 
+afterEach(cleanup);
+
 function mount(onRender?: () => void) {
   function Probe() {
     onRender?.();
@@ -115,12 +117,28 @@ function mount(onRender?: () => void) {
   );
 }
 
+/**
+ * Mount, then wait until the page has genuinely finished loading.
+ *
+ * The send log queries its rows SEPARATELY from the settings and the steps, so
+ * a test that asserts on the rail and returns leaves that last state update to
+ * land after it — React reports it as an act() warning, and under a full suite
+ * of jsdom files the unflushed work was enough to tip an already
+ * timing-sensitive test elsewhere over. Waiting for the log's empty state is
+ * the signal that nothing is still in flight.
+ */
+async function mountSettled(onRender?: () => void) {
+  const result = mount(onRender);
+  await screen.findByLabelText('rail');
+  await screen.findByText(/Nothing yet/i);
+  return result;
+}
+
 /* -------------------------------------------------------------------------- */
 
 describe('the page publishes its three sections to the rail', () => {
   it('registers them, rather than drawing a tab strip', async () => {
-    mount();
-    await waitFor(() => expect(screen.getByLabelText('rail')).toBeInTheDocument());
+    await mountSettled();
     const rail = screen.getByLabelText('rail');
     expect(rail).toHaveTextContent('Signup Sequences');
     expect(rail).toHaveTextContent('Renewal Reminders');
@@ -135,10 +153,9 @@ describe('the page publishes its three sections to the rail', () => {
      * regresses, this count runs away.
      */
     let renders = 0;
-    mount(() => {
+    await mountSettled(() => {
       renders++;
     });
-    await waitFor(() => expect(screen.getByLabelText('rail')).toBeInTheDocument());
     await new Promise((r) => setTimeout(r, 60));
     expect(renders).toBeLessThan(20);
   });
@@ -163,7 +180,7 @@ describe('an unapplied migration is a normal state, not a crash', () => {
 
 describe('the audience is stated before it is changed', () => {
   it('says how many operators turning the scope on would reach', async () => {
-    mount();
+    await mountSettled();
     /*
      * Waits on the SENTENCE, not on the heading. The counts come from a query
      * of their own, so the card paints with `counts` still null and the
@@ -177,8 +194,7 @@ describe('the audience is stated before it is changed', () => {
   });
 
   it('will not let test mode start without somewhere to deliver', async () => {
-    mount();
-    await waitFor(() => expect(screen.getByLabelText(/Send rehearsal email to/i)).toBeInTheDocument());
+    await mountSettled();
     // Compressing the clock while still writing to the real operator would
     // deliver the welcome sequence to a paying customer every 26 seconds.
     expect(screen.getByText(/needs an address before it can be switched on/i)).toBeInTheDocument();
@@ -188,8 +204,7 @@ describe('the audience is stated before it is changed', () => {
 
 describe('the receipt tab warns that Stripe already sends one', () => {
   it('shows the caution on the tab itself', async () => {
-    mount();
-    await waitFor(() => expect(screen.getByLabelText('rail')).toBeInTheDocument());
+    await mountSettled();
     // The default tab is signup, which carries no caution.
     expect(screen.queryByText(/two receipts per payment/i)).not.toBeInTheDocument();
   });

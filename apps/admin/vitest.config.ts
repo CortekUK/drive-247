@@ -24,6 +24,23 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./__tests__/setup.ts'],
     include: ['__tests__/**/*.test.{ts,tsx}'],
+    /*
+     * Vitest's default is 5000ms, and this suite had outgrown it.
+     *
+     * `notifications-v2-page` and `list-pages-render` mount large trees and
+     * finish in well under a second when run on their own. In a full run they
+     * compete with two dozen other jsdom files for the same cores and the
+     * slowest of them would cross 5s and fail with "Test timed out in 5000ms"
+     * — not a defect in the test or the component, purely scheduling. Which
+     * files lost varied from run to run, which is the expensive kind of red:
+     * it sends somebody looking for a bug in whichever test happened to draw
+     * the short straw.
+     *
+     * Raised rather than worked around per file, because the limit is there to
+     * catch a test that HANGS, and 20s still catches that long before CI
+     * notices. Nothing about any test's behaviour changes.
+     */
+    testTimeout: 20_000,
     coverage: {
       reporter: ['text', 'json', 'html'],
       include: ['app/**/*.{ts,tsx}', 'components/**/*.{ts,tsx}', 'hooks/**/*.{ts,tsx}', 'lib/**/*.{ts,tsx}'],
