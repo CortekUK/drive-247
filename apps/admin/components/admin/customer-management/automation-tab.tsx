@@ -10,7 +10,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ChevronDown, ChevronRight, Clock, Loader2, Send } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronRight, Clock, Loader2, Zap } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -22,13 +22,14 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/sonner';
 
 import { automationMeta, CUSTOMER_MANAGEMENT_VARIABLES } from '@/lib/customer-management/catalog';
-import { compressOffsets, formatSeconds } from '@/lib/customer-management/schedule';
+import { compressOffsets, formatSeconds, renewalTestSeconds } from '@/lib/customer-management/schedule';
 import { runNow, saveStep, saveSettings } from '@/lib/customer-management/api';
 import type {
   AutomationId,
   CustomerManagementSettings,
   CustomerManagementStep,
   RunSummary,
+  StepSendIf,
 } from '@/lib/customer-management/types';
 
 import { SendLog } from './logs-table';
@@ -69,10 +70,12 @@ export function AutomationTab({
   /* In test mode the timeline is what it will actually do, so show the
      compressed delays beside the real ones rather than making somebody work
      the curve out from the anchors. */
-  const compressed = useMemo(
-    () => (settings.test_mode ? compressOffsets(mine.map((s) => s.offset_days)) : null),
-    [settings.test_mode, mine],
-  );
+  const compressed = useMemo(() => {
+    if (!settings.test_mode) return null;
+    const offsets = mine.map((s) => s.offset_days);
+    // Renewal counts down (3 days left first), so it has its own countdown.
+    return automation === 'renewal' ? renewalTestSeconds(offsets) : compressOffsets(offsets);
+  }, [settings.test_mode, mine, automation]);
 
   const toggle = async (on: boolean) => {
     setBusy(true);
@@ -86,16 +89,15 @@ export function AutomationTab({
     }
   };
 
-  const preview = async (send: boolean) => {
+  /* Read-only: sending is the cron job's, never this page's. */
+  const preview = async () => {
     setBusy(true);
     setSummary(null);
     try {
-      const result = await runNow({ dryRun: !send, automation });
+      const result = await runNow({ dryRun: true, automation });
       setSummary(result);
       if (result.halted) toast.error(`Nothing ran: ${result.halted}`);
-      else if (send) toast.success(`${result.sent} sent, ${result.skipped} skipped, ${result.failed} failed.`);
-      else toast.success(`${result.sent} would send, ${result.skipped} would be skipped.`);
-      if (send) onStepsChange();
+      else toast.success(`${result.sent} due now, ${result.skipped} would be skipped.`);
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -131,24 +133,24 @@ export function AutomationTab({
             </div>
           )}
 
+          {/* No "Run now": the cron job runs this every 30 seconds, so an
+              email goes out as soon as it is due without anyone pressing
+              anything. */}
+          <p className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Zap className="h-4 w-4" />
+            {isOn
+              ? 'Automatic — each email sends itself when it is due. Nothing to press.'
+              : 'Off — nothing in this automation sends until it is switched on.'}
+          </p>
+
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" size="sm" disabled={busy} onClick={() => preview(false)}>
+            <Button variant="outline" size="sm" disabled={busy} onClick={preview}>
               {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Preview what would send
+              Preview what is due now
             </Button>
-            {/* Sending for real is a separate, second press. Nobody should
-                learn what an automation does by having it mail every
-                operator. */}
-            <Button
-              variant="secondary"
-              size="sm"
-              disabled={!canEdit || busy || !isOn}
-              onClick={() => preview(true)}
-            >
-              <Send className="mr-2 h-4 w-4" />
-              Run now
-            </Button>
-            {settings.test_mode && <Badge variant="secondary">Test mode — redirected</Badge>}
+            {settings.test_mode && (
+              <Badge variant="secondary">Test mode — {settings.scope_tenant_slug} only</Badge>
+            )}
           </div>
 
           {summary && <RunResult summary={summary} />}
@@ -270,23 +272,34 @@ function StepEditor({
 
   return (
     <Card>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-3 p-4 text-left"
-      >
-        {open ? (
-          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-        ) : (
-          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-        )}
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium">{step.label}</p>
-          <p className="truncate text-xs text-muted-foreground">{step.subject}</p>
-        </div>
+      {/* The repeat box sits beside the toggle, not inside it: an input
+          nested in a <button> is invalid and would open the step on every
+          click into it. */}
+      <div className="flex w-full items-center gap-3 p-4">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="flex min-w-0 flex-1 items-center gap-3 text-left"
+        >
+          {open ? (
+            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+          )}
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium">{step.label}</p>
+            <p className="truncate text-xs text-muted-foreground">{step.subject}</p>
+          </div>
+        </button>
+        {step.send_if && <RepeatEvery step={step} canEdit={canEdit} onSaved={onSaved} />}
         {compressedSeconds !== undefined && (
           <Badge variant="outline" className="shrink-0">
             {formatSeconds(compressedSeconds)}
+          </Badge>
+        )}
+        {step.send_if && (
+          <Badge variant="outline" className="hidden shrink-0 sm:inline-flex">
+            Conditional
           </Badge>
         )}
         {!step.enabled && (
@@ -294,10 +307,16 @@ function StepEditor({
             Off
           </Badge>
         )}
-      </button>
+      </div>
 
       {open && (
         <CardContent className="space-y-4 border-t pt-4">
+          {step.send_if && (
+            <p className="rounded-md border bg-muted/30 p-2 text-xs text-muted-foreground">
+              {SEND_IF_TEXT[step.send_if]}
+            </p>
+          )}
+
           <div className="flex items-center justify-between gap-4">
             <Label htmlFor={`en-${step.id}`}>This step is on</Label>
             <Switch
@@ -334,8 +353,8 @@ function StepEditor({
               />
               {compressedSeconds !== undefined && (
                 <p className="text-xs text-muted-foreground">
-                  In test mode this fires {formatSeconds(compressedSeconds)} after the rehearsal
-                  starts.
+                  In test mode this sends {formatSeconds(compressedSeconds)} after test mode is
+                  switched on.
                 </p>
               )}
             </div>
@@ -352,20 +371,19 @@ function StepEditor({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor={`bd-${step.id}`}>Body</Label>
+            <Label htmlFor={`bd-${step.id}`}>Email text</Label>
             <Textarea
               id={`bd-${step.id}`}
-              rows={12}
-              className="font-mono text-xs"
+              rows={14}
+              className="text-sm leading-relaxed"
               value={body}
               disabled={!canEdit}
               onChange={(e) => setBody(e.target.value)}
             />
             <p className="text-xs text-muted-foreground">
-              Simple HTML: <code>p</code>, <code>h3</code>, <code>ul</code>/<code>li</code>,{' '}
-              <code>strong</code>, <code>a</code>, and{' '}
-              <code>&lt;a data-email-button href=&quot;…&quot;&gt;</code> for a button. Drive247&apos;s
-              header, footer and colours are added when it is sent.
+              Plain text. Leave an empty line between paragraphs, start a line with{' '}
+              <code>- </code> for a bullet point, and web addresses become links on their own.
+              Drive247&apos;s header and footer are added when it is sent.
             </p>
           </div>
 
@@ -391,6 +409,79 @@ function StepEditor({
     </Card>
   );
 }
+
+/**
+ * "Repeat every [3] days" on a conditional step's row. Saved on its own, the
+ * moment the box loses focus or Enter is pressed, so it never mixes with the
+ * step's unsaved text edits. Empty means send once.
+ */
+function RepeatEvery({
+  step,
+  canEdit,
+  onSaved,
+}: {
+  step: CustomerManagementStep;
+  canEdit: boolean;
+  onSaved: () => void;
+}) {
+  const current = step.repeat_every_days ? String(step.repeat_every_days) : '';
+  const [value, setValue] = useState(current);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => setValue(current), [current]);
+
+  const commit = async () => {
+    if (value.trim() === current) return;
+    const days = value.trim() === '' ? null : Number.parseInt(value, 10);
+    if (days !== null && (!Number.isFinite(days) || days < 1 || days > 365)) {
+      toast.error('Repeat every must be a whole number of days between 1 and 365, or empty to send once.');
+      setValue(current);
+      return;
+    }
+    setSaving(true);
+    try {
+      await saveStep(step.id, { repeat_every_days: days });
+      toast.success(days ? `Repeats every ${days} ${days === 1 ? 'day' : 'days'} until done.` : 'Sends once.');
+      onSaved();
+    } catch (e) {
+      toast.error((e as Error).message);
+      setValue(current);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <label className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+      <span className="hidden sm:inline">Repeat every</span>
+      <Input
+        type="number"
+        min={1}
+        max={365}
+        inputMode="numeric"
+        aria-label="Repeat every how many days"
+        placeholder="—"
+        className="h-7 w-14 px-2 text-xs"
+        value={value}
+        disabled={!canEdit || saving}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={() => void commit()}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+        }}
+      />
+      <span>days</span>
+    </label>
+  );
+}
+
+/** What a conditional step checks, in the words the admin page shows. */
+const SEND_IF_TEXT: Record<StepSendIf, string> = {
+  stripe_not_connected:
+    'Only sent while the company has not connected Stripe. First on the day set below, then again every "Repeat every" days, until Stripe is connected. Only for companies that sign up from now on.',
+  bonzah_form_not_submitted:
+    'Only sent while the company has not submitted the Bonzah form (a rejected form counts as not submitted). First on the day set below, then again every "Repeat every" days, until the form is sent. This checks the form only, not whether Bonzah is connected. Only for companies that sign up from now on.',
+};
 
 /**
  * The variables these templates may use.

@@ -20,18 +20,22 @@
  */
 
 import { useEffect, useState } from 'react';
-import { AlertTriangle, FlaskConical } from 'lucide-react';
+import { FlaskConical, Mail } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { toast } from '@/components/ui/sonner';
 
 import { TEST_MODE_ANCHOR_LABELS } from '@/lib/customer-management/schedule';
-import { saveSettings, setTestMode } from '@/lib/customer-management/api';
+import { loadTestTargetEmail, setTestMode } from '@/lib/customer-management/api';
 import type { CustomerManagementSettings } from '@/lib/customer-management/types';
 
+/**
+ * There is no address to type. Rehearsal mail goes to the rehearsal tenant's
+ * own email (Northwind's), looked up when test mode is switched on — so the
+ * switch is the only control, and it works the first time it is pressed.
+ */
 export function TestModePanel({
   settings,
   canEdit,
@@ -44,32 +48,32 @@ export function TestModePanel({
   /** Two instances can be mounted on one page; ids have to stay unique. */
   idPrefix?: string;
 }) {
-  const [recipient, setRecipient] = useState(settings.test_recipient_email || '');
+  const [target, setTarget] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // While a rehearsal runs, the address it was stamped with is the truth.
+  // Otherwise show where the next one would go.
   useEffect(() => {
-    setRecipient(settings.test_recipient_email || '');
-  }, [settings.test_recipient_email]);
+    if (settings.test_mode) return;
+    loadTestTargetEmail(settings.scope_tenant_slug)
+      .then(setTarget)
+      .catch(() => setTarget(null));
+  }, [settings.test_mode, settings.scope_tenant_slug]);
+
+  const recipient = settings.test_mode ? settings.test_recipient_email : target;
 
   const toggle = async (on: boolean) => {
     setBusy(true);
     try {
-      onChange(await setTestMode(on, recipient));
-      toast.success(on ? 'Test mode on — the timeline is compressed.' : 'Test mode off.');
+      onChange(await setTestMode(on, settings.scope_tenant_slug));
+      toast.success(
+        on ? 'Test mode on — the day-0 email is on its way.' : 'Test mode off.',
+      );
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
       setBusy(false);
     }
-  };
-
-  const saveRecipient = () => {
-    if (settings.test_mode) return;
-    const trimmed = recipient.trim();
-    if (trimmed === (settings.test_recipient_email || '')) return;
-    saveSettings({ test_recipient_email: trimmed || null })
-      .then(onChange)
-      .catch((e) => toast.error((e as Error).message));
   };
 
   return (
@@ -85,49 +89,36 @@ export function TestModePanel({
             {settings.test_mode && <Badge variant="secondary">Running</Badge>}
           </Label>
           <p className="text-sm text-muted-foreground">
-            Compresses the timeline so a two-week sequence plays out in minutes:{' '}
-            {TEST_MODE_ANCHOR_LABELS.join(', ')}.
+            Plays the timeline at test speed: day 0 immediately,{' '}
+            {TEST_MODE_ANCHOR_LABELS.join(', ')}. The emails send themselves — there is nothing to
+            press after switching this on.
           </p>
           <p className="text-xs text-muted-foreground">
-            Every email is redirected to the address below — no operator receives anything while
-            this is on. Rehearsal sends are logged separately and never block the real ones.
+            Only {settings.scope_tenant_slug} is rehearsed, even when every operator is switched on,
+            and real operators receive nothing while this runs. Test sends are logged separately
+            and never block the real ones.
           </p>
         </div>
         <Switch
           id={`${idPrefix}-test`}
           checked={settings.test_mode}
-          disabled={!canEdit || busy || !recipient.trim()}
+          disabled={!canEdit || busy}
           onCheckedChange={toggle}
         />
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor={`${idPrefix}-test-email`}>Send rehearsal email to</Label>
-        <Input
-          id={`${idPrefix}-test-email`}
-          type="email"
-          placeholder="you@drive-247.com"
-          value={recipient}
-          /* Locked while a rehearsal runs: the anchor and the run id were
-             stamped against this address, and moving it mid-run would split
-             one rehearsal across two inboxes. */
-          disabled={!canEdit || settings.test_mode}
-          onChange={(e) => setRecipient(e.target.value)}
-          onBlur={saveRecipient}
-        />
-        {!recipient.trim() && (
-          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <AlertTriangle className="h-3.5 w-3.5" />
-            Test mode needs an address before it can be switched on.
-          </p>
-        )}
-        {settings.test_mode && settings.test_mode_started_at && (
-          <p className="text-xs text-muted-foreground">
-            Rehearsal started {new Date(settings.test_mode_started_at).toLocaleString()} — every
-            compressed delay is measured from then, not from the operator&apos;s real signup date.
-          </p>
-        )}
-      </div>
+      <p className="flex items-center gap-2 text-sm">
+        <Mail className="h-4 w-4 text-muted-foreground" />
+        <span className="text-muted-foreground">Test emails go to</span>
+        <span className="font-medium">{recipient || `${settings.scope_tenant_slug}'s email`}</span>
+      </p>
+
+      {settings.test_mode && settings.test_mode_started_at && (
+        <p className="text-xs text-muted-foreground">
+          Rehearsal started {new Date(settings.test_mode_started_at).toLocaleString()} — every
+          delay is measured from then, not from the operator&apos;s real signup date.
+        </p>
+      )}
     </div>
   );
 }

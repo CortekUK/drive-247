@@ -1,20 +1,14 @@
 /**
- * The rehearsal card on /admin/developer cannot email a real operator.
+ * The rehearsal card on /admin/developer: nothing to press, nothing to type.
  *
- * That page's header promises "nothing here affects any other tenant", and this
- * card is the one thing on it wired to a sender. The promise is kept
- * structurally rather than by wording: **Run rehearsal is enabled only while
- * test mode is on**, and test mode redirects every recipient to the rehearsal
- * address.
- *
- * It matters because the audience lives on the OTHER page. `scope_all_tenants`
- * may well be on by the time somebody opens this one, and then an always-live
- * Run button would mail the entire platform from a screen that told them it
- * could not. So the disabled state is a safety control, not a nicety, and it is
- * asserted here.
+ * The emails are sent by the cron job, so this card has no send button at all —
+ * only Preview, which sends nothing. And test mode needs no address typed in:
+ * it goes to Northwind's own email, looked up when the switch is turned on.
+ * Both are asserted here, because a "Run" button creeping back is exactly the
+ * manual step the module was rebuilt to remove.
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 vi.mock('@/components/ui/sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
@@ -24,6 +18,11 @@ const api = vi.hoisted(() => ({
   runNow: vi.fn(),
   saveSettings: vi.fn(),
   setTestMode: vi.fn(),
+  loadTestTargetEmail: vi.fn(),
+  loadSends: vi.fn(),
+  loadSubscriptionsFor: vi.fn(),
+  setSimulatedRenewalDate: vi.fn(),
+  simulateReceipt: vi.fn(),
 }));
 
 vi.mock('@/lib/customer-management/api', async (importOriginal) => {
@@ -41,7 +40,9 @@ const base = {
   test_mode: false,
   test_mode_started_at: null,
   test_run_id: null,
-  test_recipient_email: 'dev@drive-247.com',
+  test_recipient_email: 'owner@northwind.test',
+  test_renewal_date: null,
+  test_receipt_at: null,
   updated_at: '2026-10-06T00:00:00Z',
   updated_by: null,
 };
@@ -64,6 +65,9 @@ const step = (over: Record<string, unknown> = {}) => ({
 beforeEach(() => {
   vi.clearAllMocks();
   api.loadSteps.mockResolvedValue([step()]);
+  api.loadTestTargetEmail.mockResolvedValue('owner@northwind.test');
+  api.loadSends.mockResolvedValue([]);
+  api.loadSubscriptionsFor.mockResolvedValue([]);
   api.runNow.mockResolvedValue({
     ok: true,
     dry_run: true,
@@ -78,44 +82,50 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
-/**
- * The first automation's button (Signup Sequences). There is one per
- * automation, and the gate under test is the same on all three — asserting on
- * one keeps the test about the gate rather than about the catalogue's length.
- */
-const rehearse = () => screen.getAllByRole('button', { name: /Run rehearsal/i })[0];
-
-describe('the live sender is locked behind test mode', () => {
-  it('is disabled while test mode is off', async () => {
+describe('nothing to press', () => {
+  it('has no send button, only a preview', async () => {
     api.loadSettings.mockResolvedValue({ ...base, test_mode: false });
     render(<CustomerManagementCard />);
     await screen.findByText(/Customer Management rehearsal/i);
 
-    expect(rehearse()).toBeDisabled();
-    // ...and says why, rather than looking broken.
-    expect(rehearse()).toHaveAttribute('title', expect.stringMatching(/test mode on first/i));
+    expect(screen.queryByRole('button', { name: /run/i })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /^Preview$/i })[0]).toBeEnabled();
   });
 
-  it('is enabled once test mode is on, and names where it will go', async () => {
-    api.loadSettings.mockResolvedValue({
+  it('previews without sending', async () => {
+    api.loadSettings.mockResolvedValue({ ...base, test_mode: false });
+    render(<CustomerManagementCard />);
+    await screen.findByText(/Customer Management rehearsal/i);
+
+    fireEvent.click(screen.getAllByRole('button', { name: /^Preview$/i })[0]);
+    await waitFor(() => expect(api.runNow).toHaveBeenCalled());
+    expect(api.runNow.mock.calls[0][0]).toMatchObject({ dryRun: true });
+  });
+});
+
+describe('nothing to type', () => {
+  it("shows Northwind's email as the target before test mode is on", async () => {
+    api.loadSettings.mockResolvedValue({ ...base, test_recipient_email: null });
+    render(<CustomerManagementCard />);
+    expect(await screen.findByText('owner@northwind.test')).toBeInTheDocument();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  });
+
+  it('switches on with no address entered, aimed at the scope tenant', async () => {
+    api.loadSettings.mockResolvedValue({ ...base, test_recipient_email: null });
+    api.setTestMode.mockResolvedValue({
       ...base,
       test_mode: true,
       test_mode_started_at: '2026-10-06T12:00:00Z',
       test_run_id: 'abc123',
     });
     render(<CustomerManagementCard />);
-    await screen.findByText(/Customer Management rehearsal/i);
+    await screen.findByText('owner@northwind.test');
 
-    expect(rehearse()).toBeEnabled();
-    expect(rehearse()).toHaveAttribute('title', expect.stringContaining('dev@drive-247.com'));
-  });
-
-  it('leaves the dry run available either way, because it sends nothing', async () => {
-    api.loadSettings.mockResolvedValue({ ...base, test_mode: false });
-    render(<CustomerManagementCard />);
-    await screen.findByText(/Customer Management rehearsal/i);
-
-    expect(screen.getAllByRole('button', { name: /^Preview$/i })[0]).toBeEnabled();
+    const toggle = screen.getByRole('switch', { name: /Developer test mode/i });
+    expect(toggle).toBeEnabled();
+    fireEvent.click(toggle);
+    await waitFor(() => expect(api.setTestMode).toHaveBeenCalledWith(true, 'northwind'));
   });
 });
 
@@ -127,7 +137,7 @@ describe('the card shows when each email will actually fire', () => {
   });
 
   it('counts in compressed time when it is on', async () => {
-    // Day 7 is one of the two specified anchors: 7 days -> 1 minute.
+    // Day 7 is one of the specified anchors: 7 days -> 1 minute.
     api.loadSettings.mockResolvedValue({
       ...base,
       test_mode: true,
@@ -145,6 +155,6 @@ describe('an unapplied migration', () => {
     api.loadSteps.mockRejectedValue(new NotInstalledError());
     render(<CustomerManagementCard />);
     await screen.findByText(/Not installed yet/i);
-    expect(screen.queryByRole('button', { name: /Run rehearsal/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Preview/i })).not.toBeInTheDocument();
   });
 });

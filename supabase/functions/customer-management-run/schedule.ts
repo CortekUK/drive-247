@@ -45,37 +45,37 @@ export const AUTOMATION_OFFSET_DIRECTION: Record<AutomationId, OffsetDirection> 
 /* -------------------------------------------------------------------------- */
 
 /**
- * The compression curve, anchored on the two points that were asked for:
- * 7 days behaves like 1 minute, 14 days like 5 minutes.
+ * The compression curve, anchored on the points that were asked for:
+ * day 0 is immediate, 7 days behaves like 1 minute, 14 days like 3 minutes.
  *
  * ── WHY SECONDS AND NOT MINUTES ─────────────────────────────────────────────
  *
  * The obvious unit is minutes, and it does not work. A sequence with steps at
- * day 0, 3, 7 and 14 compresses to 0, 0, 1 and 5 minutes — day 0 and day 3
+ * day 0, 3, 7 and 14 compresses to 0, 0, 1 and 3 minutes — day 0 and day 3
  * land in the same minute, so those two emails arrive together and the one
  * thing a rehearsal exists to show you, THE ORDER, is the one thing you cannot
  * see. Rounding them apart instead moves day 7 off its anchor.
  *
- * At second resolution both anchors hold exactly (7 -> 60s, 14 -> 300s) and
+ * At second resolution both anchors hold exactly (7 -> 60s, 14 -> 180s) and
  * day 3 lands at 26s: distinct, ordered, nothing bumped.
  */
 const TEST_ANCHORS: readonly (readonly [days: number, seconds: number])[] = [
   [0, 0],
   [7, 60],
-  [14, 300],
+  [14, 180],
 ] as const;
 
 /** Human form of the anchors, so the UI can state what test mode will do. */
 export const TEST_MODE_ANCHOR_LABELS: readonly string[] = [
   "7 days -> 1 minute",
-  "14 days -> 5 minutes",
+  "14 days -> 3 minutes",
 ] as const;
 
 /**
  * One offset in days -> its rehearsal delay in seconds.
  *
  * Linear between the anchors. Beyond the last anchor it continues at that
- * segment's rate (4/7 of a minute per day) rather than flattening, so a step
+ * segment's rate (2/7 of a minute per day) rather than flattening, so a step
  * someone adds at day 30 is still later than the day-14 one instead of
  * colliding with it.
  */
@@ -122,6 +122,40 @@ export function compressOffsets(offsetDays: readonly number[]): Map<number, numb
   return out;
 }
 
+/**
+ * Renewal reminders in a rehearsal: a countdown, one minute apart.
+ *
+ * Renewal offsets count BACKWARD from the payment, so the biggest offset is
+ * the first email ("3 days left"), not the last. Feeding them through the
+ * signup curve would play the countdown in reverse — "1 day left" first. So
+ * the largest offset fires immediately and each day after it is one minute:
+ * 3 days left -> 0 min, 2 days left -> 1 min, 1 day left -> 2 min.
+ */
+export function renewalTestSeconds(offsetDays: readonly number[]): Map<number, number> {
+  const max = Math.max(0, ...offsetDays);
+  return new Map(offsetDays.map((d) => [d, Math.max(0, max - d) * 60]));
+}
+
+/**
+ * Of the renewal reminders already due for one tenant, the one to send.
+ *
+ * Only the most recent: if a tenant comes into scope (or a cron outage ends)
+ * with one day left, they get "1 day left" — not the 3-day, 2-day and 1-day
+ * emails in the same minute. The others are logged as superseded.
+ */
+export function latestDueIndex(dueTimes: readonly number[]): number {
+  let best = -1;
+  for (let i = 0; i < dueTimes.length; i++) {
+    if (best === -1 || dueTimes[i] > dueTimes[best]) best = i;
+  }
+  return best;
+}
+
+/** "3 days" / "1 day" — for "{{days_until_renewal_text}} left". */
+export function daysText(days: number): string {
+  return `${days} ${days === 1 ? "day" : "days"}`;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Due times                                                                  */
 /* -------------------------------------------------------------------------- */
@@ -157,6 +191,36 @@ export function signupStepDueAt(args: {
   const signedUp = toDate(args.signedUpAt);
   if (!signedUp) return null;
   return new Date(signedUp.getTime() + args.offsetDays * DAY_MS);
+}
+
+/**
+ * A reminder that repeats until the operator does the thing it asks for
+ * (connect Stripe, send the Bonzah form): every `everyMs` from its first due
+ * time — with first = day 3 and every = 3 days, that is day 3, 6, 9, ...
+ *
+ * Returns only the LATEST occurrence already due, never the backlog: a tenant
+ * who comes into scope on day 10 gets the day-9 reminder, not three at once.
+ * Null while the first one is not yet due.
+ */
+export function latestRepeatDue(args: {
+  firstDueAt: Date;
+  everyMs: number;
+  now: Date;
+}): { occurrence: number; dueAt: Date } | null {
+  if (!(args.everyMs > 0)) return null;
+  const elapsed = args.now.getTime() - args.firstDueAt.getTime();
+  if (elapsed < 0) return null;
+  const occurrence = Math.floor(elapsed / args.everyMs);
+  return { occurrence, dueAt: new Date(args.firstDueAt.getTime() + occurrence * args.everyMs) };
+}
+
+/**
+ * The repeat interval in milliseconds. In a rehearsal it is compressed on the
+ * same curve as the offsets (3 days -> 26 sec), so the repeats are watchable.
+ */
+export function repeatEveryMs(days: number, testMode: boolean): number {
+  if (!Number.isFinite(days) || days <= 0) return 0;
+  return testMode ? Math.max(1, testOffsetSeconds(days)) * 1000 : days * DAY_MS;
 }
 
 /**
@@ -302,13 +366,15 @@ export function cycleKey(args: {
   automation: AutomationId;
   /** renewal: the billing date. receipt: the payment / invoice id. */
   anchor?: string | Date | null;
+  /** signup, repeating reminder only: which repeat (0 = the first one). */
+  occurrence?: number;
   testMode?: boolean;
   testRunId?: string | null;
 }): string {
   let base: string;
   switch (args.automation) {
     case "signup":
-      base = "once";
+      base = args.occurrence === undefined ? "once" : `rep:${args.occurrence}`;
       break;
     case "renewal": {
       const d = toDate(args.anchor);

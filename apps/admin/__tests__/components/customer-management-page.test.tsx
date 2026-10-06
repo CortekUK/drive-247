@@ -47,6 +47,7 @@ const api = vi.hoisted(() => ({
   saveStep: vi.fn(),
   setTestMode: vi.fn(),
   runNow: vi.fn(),
+  loadTestTargetEmail: vi.fn(),
 }));
 
 vi.mock('@/lib/customer-management/api', async (importOriginal) => {
@@ -87,6 +88,7 @@ beforeEach(() => {
   api.loadSteps.mockResolvedValue([step]);
   api.loadSends.mockResolvedValue([]);
   api.loadScopeCounts.mockResolvedValue({ all: 12, scoped: 1 });
+  api.loadTestTargetEmail.mockResolvedValue('owner@northwind.test');
 });
 
 /** Stands in for the sidebar: shows whatever the page published. */
@@ -193,12 +195,19 @@ describe('the audience is stated before it is changed', () => {
     expect(screen.getByText(/only 1 operator \(northwind\) is eligible/i)).toBeInTheDocument();
   });
 
-  it('will not let test mode start without somewhere to deliver', async () => {
+  it("aims test mode at Northwind's own email, with nothing to type", async () => {
     await mountSettled();
-    // Compressing the clock while still writing to the real operator would
-    // deliver the welcome sequence to a paying customer every 26 seconds.
-    expect(screen.getByText(/needs an address before it can be switched on/i)).toBeInTheDocument();
-    expect(screen.getByRole('switch', { name: /Developer test mode/i })).toBeDisabled();
+    expect(await screen.findByText('owner@northwind.test')).toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: /Developer test mode/i })).toBeEnabled();
+  });
+});
+
+describe('the emails send themselves', () => {
+  it('offers no Run now button, only a preview', async () => {
+    await mountSettled();
+    expect(screen.queryByRole('button', { name: /run now/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Preview what is due now/i })).toBeInTheDocument();
+    expect(screen.getByText(/each email sends itself when it is due/i)).toBeInTheDocument();
   });
 });
 

@@ -22,17 +22,17 @@ import type {
 } from './types';
 
 const SETTINGS_COLUMNS =
-  'id, signup_enabled, renewal_enabled, receipt_enabled, scope_all_tenants, scope_tenant_slug, test_mode, test_mode_started_at, test_run_id, test_recipient_email, max_sends_per_run, updated_at, updated_by';
+  'id, signup_enabled, renewal_enabled, receipt_enabled, scope_all_tenants, scope_tenant_slug, test_mode, test_mode_started_at, test_run_id, test_recipient_email, test_renewal_date, test_receipt_at, max_sends_per_run, updated_at, updated_by';
 
 const STEP_COLUMNS =
-  'id, automation, step_key, label, offset_days, subject, body_html, enabled, sort_order, updated_at, updated_by';
+  'id, automation, step_key, label, offset_days, subject, body_html, enabled, sort_order, send_if, repeat_every_days, updated_at, updated_by';
 
 /**
  * Raised when the tables are not there yet.
  *
- * The migration is `PENDING_20261006_customer_management_service.sql.txt` and
- * has deliberately not been applied, so the page has to render something
- * honest in the meantime. PostgREST answers an unknown relation with 42P01;
+ * The tables come from `PENDING_20261006_customer_management_service.sql.txt`.
+ * On a database where that has not been run, the page has to render something
+ * honest. PostgREST answers an unknown relation with 42P01;
  * treating that as "not installed" rather than as a generic failure is what
  * lets the page say which file to run instead of "Something went wrong".
  */
@@ -71,6 +71,8 @@ export async function loadSettings(): Promise<CustomerManagementSettings> {
       test_mode_started_at: null,
       test_run_id: null,
       test_recipient_email: null,
+      test_renewal_date: null,
+      test_receipt_at: null,
       updated_at: new Date().toISOString(),
       updated_by: null,
     } as CustomerManagementSettings;
@@ -91,43 +93,122 @@ export async function saveSettings(
 }
 
 /**
+ * The email address of the rehearsal tenant (Northwind), in the same order the
+ * runner picks an operator's address: notification recipient, then contact,
+ * then admin email.
+ */
+export async function loadTestTargetEmail(slug: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('tenants')
+    .select('notification_recipient_email, contact_email, admin_email')
+    .eq('slug', slug)
+    .maybeSingle();
+  rethrow(error);
+  if (!data) return null;
+  return (
+    data.notification_recipient_email?.trim() ||
+    data.contact_email?.trim() ||
+    data.admin_email?.trim() ||
+    null
+  );
+}
+
+/**
  * Switch Developer Test Mode on or off.
  *
- * Not a plain boolean write, because three columns have to move together: the
- * anchor the compressed timeline counts from, the run id that keeps one
- * rehearsal's log rows from blocking the next, and the recipient every mail is
- * redirected to. The database has CHECK constraints saying test mode cannot
- * exist without the first two, so writing the flag alone would simply fail —
- * which is the intended design, but a confusing error to hand somebody.
+ * Nobody types an address: switching on looks up the rehearsal tenant's own
+ * email (Northwind's) and sends every rehearsal email there. It is looked up
+ * fresh each time, so if Northwind's email changes the next rehearsal follows.
+ *
+ * Three columns move together with the flag: the anchor the compressed
+ * timeline counts from, the run id that keeps one rehearsal's log rows from
+ * blocking the next, and the recipient. The database's CHECK constraints
+ * refuse test mode without the first and last of those.
+ *
+ * Switching ON also asks the runner to run once straight away, so the day-0
+ * email lands now instead of on the next cron tick. Everything after that is
+ * sent by the cron job on its own.
  *
  * Switching OFF clears the anchor and the run id so the next rehearsal starts
  * from scratch rather than resuming a timeline that began days ago.
  */
 export async function setTestMode(
   on: boolean,
-  recipientEmail: string | null,
+  scopeSlug: string,
 ): Promise<CustomerManagementSettings> {
-  if (on && !recipientEmail?.trim()) {
-    throw new Error('Add the email address rehearsal mail should go to first.');
+  if (!on) {
+    return saveSettings({ test_mode: false, test_mode_started_at: null, test_run_id: null });
   }
 
-  return saveSettings(
-    on
-      ? {
-          test_mode: true,
-          test_mode_started_at: new Date().toISOString(),
-          test_run_id: crypto.randomUUID().slice(0, 8),
-          test_recipient_email: recipientEmail!.trim(),
-        }
-      : {
-          test_mode: false,
-          test_mode_started_at: null,
-          test_run_id: null,
-          // The address is kept: whoever rehearses next is almost always the
-          // same person, and retyping it is the step they would skip.
-          test_recipient_email: recipientEmail?.trim() || null,
-        },
-  );
+  const recipient = await loadTestTargetEmail(scopeSlug);
+  if (!recipient) {
+    throw new Error(`The ${scopeSlug} tenant has no email address to send the rehearsal to.`);
+  }
+
+  const next = await saveSettings({
+    test_mode: true,
+    test_mode_started_at: new Date().toISOString(),
+    test_run_id: crypto.randomUUID().slice(0, 8),
+    test_recipient_email: recipient,
+  });
+
+  // Fire-and-forget: the cron job would pick it up within 30 seconds anyway,
+  // so a failure here only delays the first email, it does not lose it.
+  void runNow({ dryRun: false }).catch(() => undefined);
+
+  return next;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Renewal simulator                                                          */
+/* -------------------------------------------------------------------------- */
+
+/** The scope tenant's real subscription, as the renewal reminder reads it. */
+export interface TenantSubscriptionSnapshot {
+  status: string;
+  current_period_end: string | null;
+  trial_end: string | null;
+  cancel_at: string | null;
+  created_at: string;
+  plan_name: string | null;
+}
+
+export async function loadSubscriptionsFor(slug: string): Promise<TenantSubscriptionSnapshot[]> {
+  const { data: tenant, error } = await supabase
+    .from('tenants')
+    .select('id')
+    .eq('slug', slug)
+    .maybeSingle();
+  rethrow(error);
+  if (!tenant) return [];
+  const { data, error: subError } = await supabase
+    .from('tenant_subscriptions')
+    .select('status, current_period_end, trial_end, cancel_at, created_at, plan_name')
+    .eq('tenant_id', tenant.id);
+  rethrow(subError);
+  return (data || []) as TenantSubscriptionSnapshot[];
+}
+
+/**
+ * Set (or clear, with null) the pretend payment date for the scope tenant.
+ *
+ * Only `customer_management_settings` is written — never the real
+ * subscription — so testing a reminder cannot change what Northwind is
+ * charged or what its portal shows.
+ */
+export async function setSimulatedRenewalDate(
+  date: Date | null,
+): Promise<CustomerManagementSettings> {
+  return saveSettings({ test_renewal_date: date ? date.toISOString() : null });
+}
+
+/**
+ * Pretend the scope tenant (Northwind) just paid its subscription. The runner
+ * sends the receipt on its next tick, through the real template and sender.
+ * Each press is a new pretend payment, so it can be repeated.
+ */
+export async function simulateReceipt(): Promise<CustomerManagementSettings> {
+  return saveSettings({ test_receipt_at: new Date().toISOString() });
 }
 
 /* -------------------------------------------------------------------------- */
@@ -153,7 +234,9 @@ export async function loadSteps(): Promise<CustomerManagementStep[]> {
  */
 export async function saveStep(
   id: string,
-  patch: Pick<CustomerManagementStep, 'label' | 'offset_days' | 'subject' | 'body_html' | 'enabled'>,
+  patch: Partial<
+    Pick<CustomerManagementStep, 'label' | 'offset_days' | 'subject' | 'body_html' | 'enabled' | 'repeat_every_days'>
+  >,
 ): Promise<void> {
   const { error } = await supabase
     .from('customer_management_steps')
@@ -203,10 +286,9 @@ export async function loadSends(options?: {
 /**
  * Ask the runner what it would do, or make it do it.
  *
- * `dryRun` is the default on purpose. The page's button is "Preview what would
- * send", and sending for real is a second, explicit press — because the one
- * thing nobody wants from an admin page is to discover what the automation
- * does by having it mail every operator.
+ * Sending is the cron job's job; the page only ever previews (`dryRun`, the
+ * default). The one real call from here is the kick `setTestMode` gives the
+ * runner when a rehearsal starts, which can only reach the rehearsal address.
  */
 export async function runNow(options?: {
   dryRun?: boolean;

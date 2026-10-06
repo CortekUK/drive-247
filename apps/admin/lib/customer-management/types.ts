@@ -62,7 +62,7 @@ export interface CustomerManagementSettings {
   /* ---- Developer Test Mode ---- */
 
   /**
-   * Compresses the timeline so a 14-day sequence plays out in five minutes.
+   * Compresses the timeline so a 14-day sequence plays out in three minutes.
    * See `schedule.ts` for the curve.
    */
   test_mode: boolean;
@@ -93,6 +93,21 @@ export interface CustomerManagementSettings {
    * the clock; it must never change who is written to.
    */
   test_recipient_email: string | null;
+
+  /**
+   * Renewal simulator (Developer page): a pretend next payment date for the
+   * scope tenant. While set, the runner uses it instead of Northwind's real
+   * subscription date, under the real 3/2/1-day rules. Billing tables are
+   * never touched. Null = off.
+   */
+  test_renewal_date: string | null;
+
+  /**
+   * Receipt simulator (Developer page): when a pretend paid payment was made
+   * for the scope tenant. The runner sends a receipt for it exactly as for a
+   * real invoice, with TEST references. No invoice row, no Stripe call.
+   */
+  test_receipt_at: string | null;
 
   /** Safety valve: the most emails one cron tick may send. */
   max_sends_per_run: number;
@@ -130,14 +145,26 @@ export interface CustomerManagementStep {
   body_html: string;
   enabled: boolean;
   sort_order: number;
+  /**
+   * Checked by the runner when the step is due; when it does not hold the step
+   * is skipped and logged. NULL sends always. Fixed per step — not editable.
+   */
+  send_if?: StepSendIf | null;
+  /**
+   * Conditional steps only: send again every N days until the condition stops
+   * holding (first on `offset_days`, then every N). NULL = send once.
+   */
+  repeat_every_days?: number | null;
   updated_at: string;
   updated_by: string | null;
 }
 
+export type StepSendIf = "stripe_not_connected" | "bonzah_form_not_submitted";
+
 /** A step as the catalogue ships it, before anyone has edited anything. */
 export type CustomerManagementStepSeed = Pick<
   CustomerManagementStep,
-  "automation" | "step_key" | "label" | "offset_days" | "subject" | "body_html" | "enabled" | "sort_order"
+  "automation" | "step_key" | "label" | "offset_days" | "subject" | "body_html" | "enabled" | "sort_order" | "send_if" | "repeat_every_days"
 >;
 
 /* -------------------------------------------------------------------------- */

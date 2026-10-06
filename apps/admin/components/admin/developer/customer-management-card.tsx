@@ -4,28 +4,21 @@
  * Customer Management rehearsal — the compressed run, driven from here.
  *
  * The timelines and the copy are edited on /admin/customer-management. This is
- * the other half of that job: switching the clock to rehearsal speed, seeing
- * exactly when each email will land, and firing the sequence at yourself. It
- * belongs on this page because that is where every other rehearsal already is,
- * and because somebody driving the canary should not have to go and find a
- * settings screen to do it.
+ * the other half of that job: switching the clock to rehearsal speed and
+ * seeing exactly when each email will land. It belongs on this page because
+ * that is where every other rehearsal already is.
  *
- * ── THIS CARD CANNOT EMAIL A REAL OPERATOR ──────────────────────────────────
+ * ── NOTHING TO PRESS ────────────────────────────────────────────────────────
  *
- * The page header promises "nothing here affects any other tenant", and a
- * button that sends live mail would quietly break that promise — the audience
- * is governed by `scope_all_tenants`, which lives on the other page and may
- * well be on by the time somebody reads this.
- *
- * So the promise is kept structurally rather than by wording: **Run rehearsal
- * is enabled only while test mode is on**, and test mode redirects every
- * recipient to the rehearsal address. With it off, the only button that works
- * is the dry run, which sends nothing at all. Firing the real thing is done on
- * the Customer Management page, deliberately, where the audience is stated.
+ * There is no send button. Switching test mode on starts the rehearsal and the
+ * cron job delivers each step when it falls due, to Northwind's own email.
+ * The only other button is Preview, which sends nothing — so the page header's
+ * promise that "nothing here affects any other tenant" holds: test mode is
+ * confined to Northwind by the runner itself.
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { ExternalLink, FlaskConical, Loader2, Send, SlidersHorizontal } from 'lucide-react';
+import { ExternalLink, FlaskConical, Loader2, SlidersHorizontal } from 'lucide-react';
 import Link from 'next/link';
 
 import { Badge } from '@/components/ui/badge';
@@ -34,8 +27,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { toast } from '@/components/ui/sonner';
 
 import { TestModePanel } from '@/components/admin/customer-management/test-mode-panel';
+import { RenewalSimulator } from '@/components/admin/developer/renewal-simulator';
+import { ReceiptSimulator } from '@/components/admin/developer/receipt-simulator';
 import { AUTOMATIONS } from '@/lib/customer-management/catalog';
-import { compressOffsets, formatSeconds } from '@/lib/customer-management/schedule';
+import { compressOffsets, formatSeconds, renewalTestSeconds } from '@/lib/customer-management/schedule';
 import { loadSettings, loadSteps, NotInstalledError, runNow } from '@/lib/customer-management/api';
 import type {
   AutomationId,
@@ -70,15 +65,14 @@ export function CustomerManagementCard() {
     void load();
   }, [load]);
 
-  const run = async (automation: AutomationId, send: boolean) => {
+  const preview = async (automation: AutomationId) => {
     setBusy(automation);
     setSummary(null);
     try {
-      const result = await runNow({ dryRun: !send, automation });
+      const result = await runNow({ dryRun: true, automation });
       setSummary(result);
       if (result.halted) toast.error(`Nothing ran: ${result.halted}`);
-      else if (send) toast.success(`${result.sent} sent to the rehearsal address.`);
-      else toast.success(`${result.sent} would send, ${result.skipped} would be skipped.`);
+      else toast.success(`${result.sent} due now, ${result.skipped} would be skipped.`);
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -133,8 +127,8 @@ export function CustomerManagementCard() {
               Customer Management rehearsal
             </CardTitle>
             <CardDescription>
-              Play the signup sequence and the renewal reminders at compressed speed, addressed to
-              you.
+              Play the signup sequence and the renewal reminders at test speed, sent to
+              Northwind&apos;s email. Switch test mode on and the emails send themselves.
             </CardDescription>
           </div>
           <Button asChild variant="ghost" size="sm">
@@ -160,7 +154,10 @@ export function CustomerManagementCard() {
           const mine = steps
             .filter((s) => s.automation === meta.id && s.enabled)
             .sort((a, b) => a.sort_order - b.sort_order);
-          const compressed = compressOffsets(mine.map((s) => s.offset_days));
+          const offsets = mine.map((s) => s.offset_days);
+          // Renewal counts down — "3 days left" first — so it has its own countdown.
+          const compressed =
+            meta.id === 'renewal' ? renewalTestSeconds(offsets) : compressOffsets(offsets);
 
           return (
             <div key={meta.id} className="space-y-3 rounded-lg border p-4">
@@ -174,27 +171,10 @@ export function CustomerManagementCard() {
                     variant="outline"
                     size="sm"
                     disabled={busy !== null || mine.length === 0}
-                    onClick={() => run(meta.id, false)}
+                    onClick={() => preview(meta.id)}
                   >
                     {busy === meta.id ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
                     Preview
-                  </Button>
-                  {/* Enabled ONLY in test mode — see the note at the top of this
-                      file. Off, this would mail whoever `scope_all_tenants`
-                      currently covers, which is not this page's to do. */}
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    disabled={busy !== null || !testing || mine.length === 0}
-                    title={
-                      testing
-                        ? `Sends to ${settings.test_recipient_email}`
-                        : 'Switch test mode on first — otherwise this would email real operators.'
-                    }
-                    onClick={() => run(meta.id, true)}
-                  >
-                    <Send className="mr-2 size-4" />
-                    Run rehearsal
                   </Button>
                 </div>
               </div>
@@ -214,7 +194,7 @@ export function CustomerManagementCard() {
                       <span className="shrink-0 font-mono">
                         {testing
                           ? formatSeconds(compressed.get(step.offset_days) ?? 0)
-                          : `${step.offset_days}d`}
+                          : `${step.offset_days}d${meta.id === 'renewal' ? ' before' : ''}`}
                       </span>
                     </li>
                   ))}
@@ -224,10 +204,14 @@ export function CustomerManagementCard() {
           );
         })}
 
+        <RenewalSimulator settings={settings} steps={steps} onChange={setSettings} />
+
+        <ReceiptSimulator settings={settings} onChange={setSettings} />
+
         {summary && (
           <div className="space-y-2 rounded-lg border bg-muted/30 p-3 text-sm">
             <p className="font-medium">
-              {summary.dry_run ? 'Preview' : 'Rehearsal'} — {summary.considered} considered,{' '}
+              Preview — {summary.considered} considered,{' '}
               {summary.sent} {summary.dry_run ? 'would send' : 'sent'}, {summary.skipped} skipped,{' '}
               {summary.failed} failed
             </p>
@@ -245,13 +229,10 @@ export function CustomerManagementCard() {
           </div>
         )}
 
-        {!testing && (
-          <p className="text-xs text-muted-foreground">
-            Preview sends nothing. <strong>Run rehearsal</strong> needs test mode on, which
-            redirects every email to the address above — that is what keeps this page unable to
-            reach a real operator.
-          </p>
-        )}
+        <p className="text-xs text-muted-foreground">
+          Preview sends nothing. With test mode on, each email sends itself at the time shown
+          beside it.
+        </p>
       </CardContent>
     </Card>
   );

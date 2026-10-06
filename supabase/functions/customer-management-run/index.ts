@@ -1,8 +1,11 @@
 // customer-management-run
 //
 // The scheduler behind the super admin dashboard's Customer Management Service.
-// Called every minute by cron, and on demand (with `dry_run`) by the admin page
-// so somebody can see what WOULD go out before anything does.
+// Called every 30 seconds by the pg_cron job `customer-management-run`, which is
+// what makes the module fully automatic: a new tenant's day-0 email goes out on
+// the next tick after the tenant is created, with nobody pressing anything.
+// The admin page also calls it with `dry_run` to preview, and once right after
+// test mode is switched on so the day-0 rehearsal email arrives immediately.
 //
 // Three automations, none of which anything else on the platform sends:
 //   signup   a sequence after an operator creates their Drive247 account
@@ -30,12 +33,13 @@
 //   query is narrowed to one slug. Not filtered later: narrowed in the query,
 //   so a bug further down has no other tenant to reach.
 //
-//   TEST MODE REDIRECTS. With `test_mode` on, every recipient is replaced by
-//   `test_recipient_email` and the runner HALTS if that is empty. Compressing a
-//   14-day sequence into five minutes while still writing to the real operator
-//   would deliver "Welcome to Drive247" to a paying customer at 26-second
-//   intervals. Test mode changes the clock; it must never change who is written
-//   to.
+//   TEST MODE IS NORTHWIND ONLY. With `test_mode` on, the tenant query is
+//   narrowed to the scope tenant (Northwind) even if `scope_all_tenants` is on,
+//   and every email goes to `test_recipient_email` — which the admin page fills
+//   in automatically with Northwind's own email, falling back here to
+//   Northwind's contact address if it is somehow empty. Compressing a 14-day
+//   sequence into three minutes across every tenant would deliver "Welcome to
+//   Drive247" to paying customers a minute apart; a rehearsal is one tenant.
 //
 //   BACKFILL GRACE. A step is only sent if its due time is within
 //   BACKFILL_GRACE_MS of now. Without this, the first tick after switching the
@@ -51,9 +55,9 @@
 // called, so a crash halfway leaves a record and does not double-mail; a
 // duplicate-key error is the normal "already handled" path and is not an error.
 //
-// Depends on PENDING_20261006_customer_management_service.sql.txt. Until that
-// is applied this function returns 503 and sends nothing — it fails closed.
-// NOT DEPLOYED.
+// Depends on the tables from PENDING_20261006_customer_management_service.sql.txt
+// (applied 2026-10-06). Without them this function returns 503 and sends
+// nothing — it fails closed.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { handleCors, jsonResponse } from '../_shared/cors.ts';
@@ -70,9 +74,15 @@ import {
   selectSubscription,
   signupStepDueAt,
   renewalReminderDueAt,
+  renewalTestSeconds,
+  latestDueIndex,
+  latestRepeatDue,
+  repeatEveryMs,
+  daysText,
   type AutomationId,
   type SubscriptionFacts,
 } from './schedule.ts';
+import { renderBody } from './plain-text.ts';
 
 /* -------------------------------------------------------------------------- */
 /* Constants                                                                  */
@@ -101,15 +111,22 @@ const PLATFORM_EMAIL_BRAND: EmailLayoutBrand = {
  * This is the backfill guard described in the header. Two days is wide enough
  * that a weekend of failed cron runs still delivers, and narrow enough that
  * turning the feature on does not mail a year of history. The rehearsal window
- * is short because its whole timeline is five minutes long — a 2-day grace
+ * is short because its whole timeline is three minutes long — a 2-day grace
  * there would make every step due immediately and defeat the compression.
  */
 const BACKFILL_GRACE_MS = 2 * 86_400_000;
 const BACKFILL_GRACE_MS_TEST = 10 * 60_000;
 
-/** The platform URLs the templates link to. */
-const PORTAL_URL = 'https://app.drive-247.com';
-const BOOKING_URL_BASE = 'https://book.drive-247.com';
+/**
+ * The tenant's own sites, built the way the rest of the platform builds them
+ * (send-user-welcome-email, signup-provision). There is no shared host with a
+ * slug path: book.drive-247.com/{slug} is a 404 and app.drive-247.com is the
+ * booking app with no tenant.
+ */
+const portalUrl = (slug: string) => `https://${slug}.portal.drive-247.com`;
+const bookingUrl = (slug: string) => `https://${slug}.drive-247.com`;
+/** Where the tenant sees its real invoices — a receipt's link when Stripe gave none. */
+const billingUrl = (slug: string) => `${portalUrl(slug)}/subscription`;
 
 const PAID_INVOICE_LOOKBACK_MS = 36 * 3_600_000;
 
@@ -127,6 +144,16 @@ interface SettingsRow {
   test_mode_started_at: string | null;
   test_run_id: string | null;
   test_recipient_email: string | null;
+  /**
+   * Developer page's renewal simulator: a pretend next payment date for the
+   * scope tenant (Northwind). See RENEWAL SIMULATOR below.
+   */
+  test_renewal_date: string | null;
+  /**
+   * Developer page's receipt simulator: when a pretend payment for the scope
+   * tenant (Northwind) was made. See RECEIPT SIMULATOR below.
+   */
+  test_receipt_at: string | null;
   max_sends_per_run: number;
 }
 
@@ -139,7 +166,18 @@ interface StepRow {
   body_html: string;
   enabled: boolean;
   sort_order: number;
+  /** Checked when the step is due; NULL sends always. See `unmetCondition`. */
+  send_if: SendIf | null;
+  /**
+   * Conditional steps only: send again every N days until the condition stops
+   * holding. NULL sends once. Ignored without `send_if` — an unconditional
+   * step that repeated would never stop.
+   */
+  repeat_every_days: number | null;
+  created_at: string;
 }
+
+type SendIf = 'stripe_not_connected' | 'bonzah_form_not_submitted';
 
 interface TenantRow {
   id: string;
@@ -149,6 +187,45 @@ interface TenantRow {
   contact_email: string | null;
   notification_recipient_email: string | null;
   created_at: string;
+  stripe_onboarding_complete: boolean | null;
+  stripe_account_status: string | null;
+  own_stripe_account_id: string | null;
+  own_stripe_test_account_id: string | null;
+}
+
+/**
+ * Stripe is connected, by the same rule the portal's setup checklist uses
+ * (apps/portal/src/hooks/use-setup-status.ts): the tenant's own Stripe
+ * account, or a Connect account that finished onboarding and is active.
+ */
+function stripeConnected(t: TenantRow): boolean {
+  return (
+    !!t.own_stripe_account_id ||
+    !!t.own_stripe_test_account_id ||
+    (!!t.stripe_onboarding_complete && t.stripe_account_status === 'active')
+  );
+}
+
+/**
+ * Why a conditional step should NOT go out, or null when it should. Checked at
+ * the moment the step is due, so a tenant who connected Stripe on day 6 never
+ * gets the day-7 nudge.
+ *
+ * The Bonzah check is about the FORM only: a pending or approved submission
+ * counts as sent. A rejected one does not — they have to send it again. Whether
+ * Bonzah is actually connected (approved and switched on) is a separate thing
+ * and does not matter here.
+ */
+function unmetCondition(
+  sendIf: SendIf | null,
+  tenant: TenantRow,
+  bonzahFormSent: Set<string>,
+): string | null {
+  if (sendIf === 'stripe_not_connected' && stripeConnected(tenant)) return 'stripe_already_connected';
+  if (sendIf === 'bonzah_form_not_submitted' && bonzahFormSent.has(tenant.id)) {
+    return 'bonzah_form_already_submitted';
+  }
+  return null;
 }
 
 interface SubRow extends SubscriptionFacts {
@@ -163,10 +240,19 @@ interface InvoiceRow {
   id: string;
   tenant_id: string;
   status: string;
+  /** Minor units (cents), as Stripe sends them. */
   amount_paid: number | null;
   currency: string | null;
   invoice_date: string | null;
+  paid_at: string | null;
   created_at: string;
+  invoice_number: string | null;
+  stripe_invoice_id: string | null;
+  stripe_charge_id: string | null;
+  stripe_payment_intent_id: string | null;
+  stripe_receipt_url: string | null;
+  stripe_hosted_invoice_url: string | null;
+  stripe_invoice_pdf: string | null;
 }
 
 type Candidate = {
@@ -178,6 +264,8 @@ type Candidate = {
   vars: Record<string, string>;
   /** Set when the candidate must be recorded but not sent. */
   skip?: string;
+  /** Log the row as a test send even outside test mode (the simulator). */
+  test?: boolean;
 };
 
 type Outcome = {
@@ -254,7 +342,7 @@ async function handleRequest(req: Request): Promise<Response> {
   const { data: settings, error: settingsError } = await db
     .from('customer_management_settings')
     .select(
-      'signup_enabled, renewal_enabled, receipt_enabled, scope_all_tenants, scope_tenant_slug, test_mode, test_mode_started_at, test_run_id, test_recipient_email, max_sends_per_run',
+      'signup_enabled, renewal_enabled, receipt_enabled, scope_all_tenants, scope_tenant_slug, test_mode, test_mode_started_at, test_run_id, test_recipient_email, test_renewal_date, test_receipt_at, max_sends_per_run',
     )
     .eq('id', 1)
     .maybeSingle<SettingsRow>();
@@ -269,9 +357,6 @@ async function handleRequest(req: Request): Promise<Response> {
 
   const testMode = settings.test_mode === true;
 
-  if (testMode && !settings.test_recipient_email) {
-    return jsonResponse({ ok: false, test_mode: true, halted: 'test_recipient_missing' }, 409);
-  }
   if (testMode && !settings.test_mode_started_at) {
     return jsonResponse({ ok: false, test_mode: true, halted: 'test_anchor_missing' }, 409);
   }
@@ -293,7 +378,7 @@ async function handleRequest(req: Request): Promise<Response> {
 
   const { data: stepRows } = await db
     .from('customer_management_steps')
-    .select('automation, step_key, label, offset_days, subject, body_html, enabled, sort_order')
+    .select('automation, step_key, label, offset_days, subject, body_html, enabled, sort_order, send_if, repeat_every_days, created_at')
     .eq('enabled', true)
     .order('automation')
     .order('sort_order');
@@ -307,14 +392,26 @@ async function handleRequest(req: Request): Promise<Response> {
 
   let tenantQuery = db
     .from('tenants')
-    .select('id, slug, company_name, admin_email, contact_email, notification_recipient_email, created_at');
-  if (!settings.scope_all_tenants) {
+    .select(
+      'id, slug, company_name, admin_email, contact_email, notification_recipient_email, created_at, stripe_onboarding_complete, stripe_account_status, own_stripe_account_id, own_stripe_test_account_id',
+    );
+  // A rehearsal is always the scope tenant alone — see TEST MODE in the header.
+  if (testMode || !settings.scope_all_tenants) {
     tenantQuery = tenantQuery.eq('slug', settings.scope_tenant_slug);
   }
   const { data: tenantRows } = await tenantQuery;
   const tenants = (tenantRows || []) as TenantRow[];
   if (tenants.length === 0) {
     return jsonResponse({ ok: true, ...summaryBase, considered: 0, sent: 0, skipped: 0, failed: 0, capped: false, results: [] });
+  }
+
+  // Where rehearsal mail goes: the address stamped when test mode was switched
+  // on, else the scope tenant's own. Never a guess — no address, no send.
+  const testRecipient = testMode
+    ? settings.test_recipient_email?.trim() || tenantEmail(tenants[0])
+    : null;
+  if (testMode && !testRecipient) {
+    return jsonResponse({ ok: false, test_mode: true, halted: 'test_recipient_missing' }, 409);
   }
 
   const tenantIds = tenants.map((t) => t.id);
@@ -333,6 +430,24 @@ async function handleRequest(req: Request): Promise<Response> {
     subsByTenant.set(row.tenant_id, list);
   }
 
+  /* ---- Bonzah forms sent (pending or approved), for the day-7 check ---- */
+
+  const bonzahFormSent = new Set<string>();
+  if (steps.some((s) => s.send_if === 'bonzah_form_not_submitted')) {
+    const { data: formRows, error: formError } = await db
+      .from('bonzah_onboarding_submissions')
+      .select('tenant_id')
+      .in('tenant_id', tenantIds)
+      .in('status', ['pending', 'approved']);
+    // Fail closed: without the answer we cannot know who still needs the
+    // reminder, and nagging someone who already sent the form is the worse
+    // mistake. Nothing is claimed, so the next tick tries again.
+    if (formError) {
+      return jsonResponse({ ok: false, halted: 'bonzah_forms_unreadable', detail: formError.message }, 500);
+    }
+    for (const row of (formRows || []) as { tenant_id: string }[]) bonzahFormSent.add(row.tenant_id);
+  }
+
   /* ---- build candidates ---- */
 
   const now = new Date();
@@ -348,14 +463,18 @@ async function handleRequest(req: Request): Promise<Response> {
     if (automationSteps.length === 0) continue;
 
     // Compress the whole set together, not step by step: that is what keeps
-    // day 0, day 7 and day 14 distinct and in order in a rehearsal.
-    const compressed = testMode
-      ? compressOffsets(automationSteps.map((s) => s.offset_days))
-      : new Map<number, number>();
+    // day 0, day 7 and day 14 distinct and in order in a rehearsal. Renewal
+    // reminders count DOWN, so they get their own one-minute countdown.
+    const offsets = automationSteps.map((s) => s.offset_days);
+    const compressed = !testMode
+      ? new Map<number, number>()
+      : automation === 'renewal'
+        ? renewalTestSeconds(offsets)
+        : compressOffsets(offsets);
 
     if (automation === 'receipt') {
       candidates.push(
-        ...(await receiptCandidates(db, tenants, subsByTenant, automationSteps, now, testMode, testRunId)),
+        ...(await receiptCandidates(db, tenants, subsByTenant, automationSteps, now, settings, grace)),
       );
       continue;
     }
@@ -363,75 +482,47 @@ async function handleRequest(req: Request): Promise<Response> {
     for (const tenant of tenants) {
       const sub = selectSubscription(subsByTenant.get(tenant.id) || []);
 
-      for (const step of automationSteps) {
-        const seconds = compressed.get(step.offset_days);
-
-        if (automation === 'signup') {
-          const dueAt = signupStepDueAt({
-            signedUpAt: tenant.created_at,
-            offsetDays: step.offset_days,
-            testMode,
-            anchorAt,
-            compressedSeconds: seconds,
-          });
-          if (!dueAt || dueAt.getTime() > now.getTime()) continue;
-
-          const cycle = cycleKey({ automation, testMode, testRunId });
-          const late = now.getTime() - dueAt.getTime() > grace;
-          candidates.push({
-            tenant,
-            step,
-            dueAt,
-            cycle,
-            skip: late ? 'past_backfill_grace' : undefined,
-            vars: planVars(sub),
-          });
+      // Signup steps one by one; renewal is worked out per tenant below,
+      // because only the latest due reminder may go out.
+      for (const step of automation === 'signup' ? automationSteps : []) {
+        if (step.send_if && step.repeat_every_days) {
+          const reminder = repeatingReminder({ tenant, step, sub, compressed, testMode, anchorAt, testRunId, now, grace, bonzahFormSent });
+          if (reminder) candidates.push(reminder);
           continue;
         }
 
-        /* renewal */
-        const billing = nextBillingDate(sub, now);
-        if (billing.skip) {
-          // Recorded, not silently dropped: "why did this operator not get the
-          // renewal reminder" is exactly what the log is for. Keyed on the
-          // reason so one skip row is written per cycle, not per tick.
-          candidates.push({
-            tenant,
-            step,
-            dueAt: now,
-            cycle: cycleKey({ automation, anchor: `skip:${billing.skip}`, testMode, testRunId }),
-            skip: billing.skip,
-            vars: planVars(sub),
-          });
-          continue;
-        }
-
-        const dueAt = renewalReminderDueAt({
-          billingDate: billing.date,
+        const dueAt = signupStepDueAt({
+          signedUpAt: tenant.created_at,
           offsetDays: step.offset_days,
           testMode,
           anchorAt,
-          compressedSeconds: seconds,
+          compressedSeconds: compressed.get(step.offset_days),
         });
         if (!dueAt || dueAt.getTime() > now.getTime()) continue;
 
         const late = now.getTime() - dueAt.getTime() > grace;
-        const days = Math.max(
-          0,
-          Math.round((billing.date!.getTime() - now.getTime()) / 86_400_000),
-        );
         candidates.push({
           tenant,
           step,
           dueAt,
-          cycle: cycleKey({ automation, anchor: billing.date, testMode, testRunId }),
-          skip: late ? 'past_backfill_grace' : undefined,
-          vars: {
-            ...planVars(sub),
-            renewal_date: formatDay(billing.date),
-            days_until_renewal: String(days),
-          },
+          cycle: cycleKey({ automation, testMode, testRunId }),
+          skip: late ? 'past_backfill_grace' : unmetCondition(step.send_if, tenant, bonzahFormSent) ?? undefined,
+          vars: planVars(sub),
         });
+      }
+
+      if (automation === 'renewal') {
+        candidates.push(
+          ...renewalCandidates({
+            tenant,
+            sub,
+            steps: automationSteps,
+            compressed,
+            settings,
+            now,
+            grace,
+          }),
+        );
       }
     }
   }
@@ -461,12 +552,7 @@ async function handleRequest(req: Request): Promise<Response> {
       break;
     }
 
-    const recipient = testMode
-      ? settings.test_recipient_email
-      : candidate.tenant.notification_recipient_email?.trim() ||
-        candidate.tenant.contact_email?.trim() ||
-        candidate.tenant.admin_email?.trim() ||
-        null;
+    const recipient = testMode ? testRecipient : tenantEmail(candidate.tenant);
 
     const skipReason = candidate.skip || (recipient ? null : 'no_recipient');
 
@@ -504,7 +590,7 @@ async function handleRequest(req: Request): Promise<Response> {
       to_email: recipient,
       subject,
       detail: skipReason,
-      test_mode: testMode,
+      test_mode: testMode || candidate.test === true,
     });
     writes++;
 
@@ -535,7 +621,11 @@ async function handleRequest(req: Request): Promise<Response> {
       continue;
     }
 
-    const bodyHtml = sanitizeEmailBodyHtml(fill(candidate.step.body_html, vars));
+    // Plain-English templates become paragraphs, bullets and links here; a
+    // template written in HTML is used as it is.
+    const bodyHtml = sanitizeEmailBodyHtml(
+      renderBody(candidate.step.body_html, (text) => fill(text, vars)),
+    );
     const html = renderNotificationEmailHtml({
       bodyHtml,
       brand: PLATFORM_EMAIL_BRAND,
@@ -601,62 +691,322 @@ async function handleRequest(req: Request): Promise<Response> {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Renewal reminders                                                          */
+/* -------------------------------------------------------------------------- */
+
+const DAY_MS = 86_400_000;
+
+/** Twin of `simRunId` in apps/admin/components/admin/developer/renewal-simulator.tsx. */
+function simRunId(simDate: string): string {
+  return `sim-${Math.floor(new Date(simDate).getTime() / 60_000)}`;
+}
+
+/**
+ * The renewal countdown for one tenant: "3 days left", "2 days left",
+ * "1 day left" before the next subscription payment.
+ *
+ * Every tick re-reads the tenant's subscription, works out the next payment
+ * date (`nextBillingDate` — trial end for a trial, period end otherwise, and
+ * nothing at all for a cancelled or past-due one), and sends whichever
+ * reminder is due. The cycle key is the payment DAY, so each billing period
+ * gets its own countdown and a later tick cannot repeat one.
+ *
+ * ONLY THE LATEST DUE REMINDER IS SENT. A tenant who comes into scope with one
+ * day left gets "1 day left", not all three in the same minute; the earlier
+ * ones are logged as superseded.
+ *
+ * ── RENEWAL SIMULATOR ──────────────────────────────────────────────────────
+ *
+ * `test_renewal_date`, set from the Developer page, replaces the scope
+ * tenant's (Northwind's) real payment date with a pretend one, under the REAL
+ * production rules — real days, real grace. Set it to 3 days from now and the
+ * "3 days left" email goes out on the next tick; move it to 2 days and the
+ * next one does. The billing tables are never touched, and the sends are
+ * logged as test rows keyed apart from production, so a simulation can never
+ * use up a real reminder.
+ *
+ * In TEST MODE the countdown is compressed instead: 3 days left at once, then
+ * one minute per day. With no live subscription the rehearsal pretends the
+ * payment is due when the countdown ends, so it can always be played.
+ */
+function renewalCandidates(args: {
+  tenant: TenantRow;
+  sub: SubRow | null;
+  steps: StepRow[];
+  compressed: Map<number, number>;
+  settings: SettingsRow;
+  now: Date;
+  grace: number;
+}): Candidate[] {
+  const { tenant, sub, steps, compressed, settings, now, grace } = args;
+  const testMode = settings.test_mode === true;
+
+  const simDate =
+    settings.test_renewal_date && tenant.slug === settings.scope_tenant_slug
+      ? settings.test_renewal_date
+      : null;
+  const simulated = !testMode && simDate !== null;
+
+  const effective: SubRow | null = simDate
+    ? {
+        tenant_id: tenant.id,
+        status: 'active',
+        current_period_end: simDate,
+        trial_end: null,
+        cancel_at: null,
+        created_at: now.toISOString(),
+        plan_name: sub?.plan_name ?? 'Test plan',
+        amount: sub?.amount ?? null,
+        currency: sub?.currency ?? 'usd',
+        interval: sub?.interval ?? 'month',
+      }
+    : sub;
+
+  let billing = nextBillingDate(effective, now);
+  if (testMode && billing.skip) {
+    const maxOffset = Math.max(0, ...steps.map((s) => s.offset_days));
+    const anchor = new Date(settings.test_mode_started_at!).getTime();
+    billing = { date: new Date(anchor + maxOffset * DAY_MS), skip: null };
+  }
+
+  // Each pretend date is its own run, so setting "3 days from now" again
+  // later sends a fresh email instead of finding the first one already done.
+  const testRunId = simulated ? simRunId(simDate!) : settings.test_run_id;
+  const asTest = testMode || simulated;
+
+  if (billing.skip) {
+    // Recorded, not silently dropped: "why did this operator not get the
+    // reminder" is exactly what the log is for. Keyed on the reason so one
+    // skip row is written per step, not one per tick.
+    return steps.map((step) => ({
+      tenant,
+      step,
+      dueAt: now,
+      cycle: cycleKey({ automation: 'renewal', anchor: `skip:${billing.skip}`, testMode: asTest, testRunId }),
+      skip: billing.skip!,
+      test: simulated,
+      vars: planVars(effective),
+    }));
+  }
+
+  const due: Candidate[] = [];
+  for (const step of steps) {
+    const dueAt = renewalReminderDueAt({
+      billingDate: billing.date,
+      offsetDays: step.offset_days,
+      testMode,
+      anchorAt: settings.test_mode_started_at,
+      compressedSeconds: compressed.get(step.offset_days),
+    });
+    if (!dueAt || dueAt.getTime() > now.getTime()) continue;
+
+    due.push({
+      tenant,
+      step,
+      dueAt,
+      cycle: cycleKey({ automation: 'renewal', anchor: billing.date, testMode: asTest, testRunId }),
+      skip: now.getTime() - dueAt.getTime() > grace ? 'past_backfill_grace' : undefined,
+      test: simulated,
+      vars: {
+        ...planVars(effective),
+        renewal_date: formatDay(billing.date),
+        // The step's own number, not arithmetic on the clock: the "3 days
+        // left" email says 3 even if the tick ran a few seconds late.
+        days_until_renewal: String(step.offset_days),
+        days_until_renewal_text: daysText(step.offset_days),
+      },
+    });
+  }
+
+  const latest = latestDueIndex(due.map((c) => c.dueAt.getTime()));
+  return due.map((c, i) => (i === latest || c.skip ? c : { ...c, skip: 'superseded' }));
+}
+
+/* -------------------------------------------------------------------------- */
+/* Repeating setup reminders                                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * "Connect Stripe" / "Send the Bonzah form": first on day `offset_days`, then
+ * every `repeat_every_days` until the operator has done it — day 3, 6, 9, ...
+ * Each repeat is its own send-log row (cycle `rep:<n>`), so one tick sends it
+ * once however often the cron runs.
+ *
+ * - DONE: once the condition no longer holds there is nothing to remind them
+ *   of, so no candidate at all. Not a skip row: a skip row per tenant every
+ *   few days, forever, would bury the log.
+ * - ONLY NEW SIGNUPS: a company that signed up before this reminder existed
+ *   never gets it. Without that, switching on "all tenants" would start
+ *   mailing every older account that never connected Stripe — many of them
+ *   long gone — every three days.
+ * - Only the latest repeat that is due is considered, never the backlog.
+ */
+function repeatingReminder(args: {
+  tenant: TenantRow;
+  step: StepRow;
+  sub: SubRow | null;
+  compressed: Map<number, number>;
+  testMode: boolean;
+  anchorAt: string | null;
+  testRunId: string | null;
+  now: Date;
+  grace: number;
+  bonzahFormSent: Set<string>;
+}): Candidate | null {
+  const { tenant, step, testMode, now } = args;
+  if (unmetCondition(step.send_if, tenant, args.bonzahFormSent)) return null;
+  // A rehearsal is anchored on when test mode started, not on signup, so the
+  // new-signups rule would only ever stop Northwind from being tested.
+  if (!testMode && new Date(tenant.created_at).getTime() < new Date(step.created_at).getTime()) return null;
+
+  const firstDueAt = signupStepDueAt({
+    signedUpAt: tenant.created_at,
+    offsetDays: step.offset_days,
+    testMode,
+    anchorAt: args.anchorAt,
+    compressedSeconds: args.compressed.get(step.offset_days),
+  });
+  if (!firstDueAt) return null;
+
+  const latest = latestRepeatDue({
+    firstDueAt,
+    everyMs: repeatEveryMs(step.repeat_every_days ?? 0, testMode),
+    now,
+  });
+  if (!latest) return null;
+
+  return {
+    tenant,
+    step,
+    dueAt: latest.dueAt,
+    cycle: cycleKey({ automation: 'signup', occurrence: latest.occurrence, testMode, testRunId: args.testRunId }),
+    skip: now.getTime() - latest.dueAt.getTime() > args.grace ? 'past_backfill_grace' : undefined,
+    vars: planVars(args.sub),
+  };
+}
+
+/* -------------------------------------------------------------------------- */
 /* Receipts                                                                   */
 /* -------------------------------------------------------------------------- */
 
 /**
- * Receipts are event-driven, so they are found by polling recently PAID
- * invoices rather than by arithmetic on a date.
+ * Billing receipts: one email per PAID subscription invoice, carrying Stripe's
+ * own references — the invoice number, the invoice id and the payment id —
+ * and links to Stripe's receipt and the invoice PDF.
  *
- * Polling, and not a hook in the Stripe webhook: the webhook is the most
- * load-bearing function on the platform and this feature is not worth a change
- * to it. The invoice's own id is the cycle key, so a replayed webhook, a
- * reconciler backfill and two cron ticks all collapse to one receipt.
+ * Found by polling recently paid invoices rather than by a hook in the Stripe
+ * webhook: the webhook is the most load-bearing function on the platform and
+ * this feature is not worth a change to it. The invoice's own row id is the
+ * cycle key, so a replayed webhook, a reconciler backfill and two cron ticks
+ * all collapse to one receipt.
+ *
+ * Polled on `updated_at`, not `created_at`: an invoice row is often written
+ * while still open and only flips to paid later (a retried card, a hosted
+ * invoice paid by hand). Polling on creation would miss exactly those.
+ *
+ * ── RECEIPT SIMULATOR ──────────────────────────────────────────────────────
+ *
+ * `test_receipt_at`, set by the Developer page's "Simulate a paid payment",
+ * makes a pretend paid invoice for the scope tenant (Northwind), dated then,
+ * with TEST references. It goes through exactly the same template and sender
+ * as a real receipt, to the tenant's own email, and is logged as a test row.
+ * No invoice row is written and Stripe is never called.
  */
 async function receiptCandidates(
-  db: ReturnType<typeof createClient>,
+  // The service-role client from handleRequest. Typed loosely because
+  // `ReturnType<typeof createClient>` resolves to a schema-less client that the
+  // real one does not assign to.
+  // deno-lint-ignore no-explicit-any
+  db: any,
   tenants: TenantRow[],
   subsByTenant: Map<string, SubRow[]>,
   steps: StepRow[],
   now: Date,
-  testMode: boolean,
-  testRunId: string | null,
+  settings: SettingsRow,
+  grace: number,
 ): Promise<Candidate[]> {
   const step = steps[0];
   if (!step) return [];
 
+  const testMode = settings.test_mode === true;
   const since = new Date(now.getTime() - PAID_INVOICE_LOOKBACK_MS).toISOString();
   const byId = new Map(tenants.map((t) => [t.id, t]));
 
   const { data: invoiceRows } = await db
     .from('tenant_subscription_invoices')
-    .select('id, tenant_id, status, amount_paid, currency, invoice_date, created_at')
+    .select(
+      'id, tenant_id, status, amount_paid, currency, invoice_date, paid_at, created_at, invoice_number, stripe_invoice_id, stripe_charge_id, stripe_payment_intent_id, stripe_receipt_url, stripe_hosted_invoice_url, stripe_invoice_pdf',
+    )
     .in('tenant_id', [...byId.keys()])
     .eq('status', 'paid')
-    .gte('created_at', since);
+    .gte('updated_at', since);
+
+  const invoices = (invoiceRows || []) as InvoiceRow[];
+
+  /* ---- the simulator's pretend payment ---- */
+  const scopeTenant = tenants.find((t) => t.slug === settings.scope_tenant_slug);
+  if (settings.test_receipt_at && scopeTenant) {
+    const sub = selectSubscription(subsByTenant.get(scopeTenant.id) || []);
+    const stamp = Math.floor(new Date(settings.test_receipt_at).getTime() / 60_000);
+    invoices.push({
+      id: `sim-${stamp}`,
+      tenant_id: scopeTenant.id,
+      status: 'paid',
+      amount_paid: sub?.amount && sub.amount > 0 ? sub.amount : 9900,
+      currency: sub?.currency || 'usd',
+      invoice_date: settings.test_receipt_at,
+      paid_at: settings.test_receipt_at,
+      created_at: settings.test_receipt_at,
+      invoice_number: `TEST-${stamp}`,
+      stripe_invoice_id: `in_test_${stamp}`,
+      stripe_charge_id: `ch_test_${stamp}`,
+      stripe_payment_intent_id: null,
+      stripe_receipt_url: null,
+      // A pretend payment has no Stripe invoice to link to, and another
+      // tenant's real one must never be borrowed — so both links open the
+      // tenant's own billing page, which is real and works.
+      stripe_hosted_invoice_url: billingUrl(scopeTenant.slug),
+      stripe_invoice_pdf: null,
+    });
+  }
 
   const out: Candidate[] = [];
-  for (const invoice of (invoiceRows || []) as InvoiceRow[]) {
+  for (const invoice of invoices) {
     const tenant = byId.get(invoice.tenant_id);
     if (!tenant) continue;
     // A zero-value paid invoice is a 100% coupon or a proration that nets to
     // nothing. "We have received your payment of $0.00" is not a receipt.
     if (!invoice.amount_paid || invoice.amount_paid <= 0) continue;
 
+    const simulated = invoice.id.startsWith('sim-');
     const sub = selectSubscription(subsByTenant.get(tenant.id) || []);
     const billing = nextBillingDate(sub, now);
-    const paidOn = invoice.invoice_date || invoice.created_at;
+    const paidOn = new Date(invoice.paid_at || invoice.invoice_date || invoice.created_at);
 
     out.push({
       tenant,
       step,
-      dueAt: new Date(paidOn),
-      cycle: cycleKey({ automation: 'receipt', anchor: invoice.id, testMode, testRunId }),
+      dueAt: paidOn,
+      cycle: cycleKey({
+        automation: 'receipt',
+        anchor: invoice.id,
+        testMode: testMode || simulated,
+        testRunId: simulated ? 'sim' : settings.test_run_id,
+      }),
+      // An old invoice that only just changed (a refund note, a backfilled
+      // PDF link) is not a payment that just happened.
+      skip: now.getTime() - paidOn.getTime() > grace ? 'past_backfill_grace' : undefined,
+      test: simulated,
       vars: {
         ...planVars(sub),
         receipt_amount: formatMoney(invoice.amount_paid, invoice.currency || sub?.currency || 'usd'),
-        receipt_date: formatDay(new Date(paidOn)),
-        receipt_reference: invoice.id,
+        receipt_date: formatDay(paidOn),
+        receipt_reference: invoice.invoice_number || invoice.stripe_invoice_id || invoice.id,
+        stripe_invoice_number: invoice.invoice_number || '—',
+        stripe_invoice_id: invoice.stripe_invoice_id || '—',
+        stripe_payment_id: invoice.stripe_charge_id || invoice.stripe_payment_intent_id || '—',
+        receipt_url: invoice.stripe_receipt_url || invoice.stripe_hosted_invoice_url || billingUrl(tenant.slug),
+        invoice_pdf_url: invoice.stripe_invoice_pdf || invoice.stripe_hosted_invoice_url || billingUrl(tenant.slug),
         renewal_date: billing.date ? formatDay(billing.date) : '—',
       },
     });
@@ -668,6 +1018,16 @@ async function receiptCandidates(
 /* Templates                                                                  */
 /* -------------------------------------------------------------------------- */
 
+/** The address an operator's mail goes to, in the platform's usual order. */
+function tenantEmail(tenant: TenantRow): string | null {
+  return (
+    tenant.notification_recipient_email?.trim() ||
+    tenant.contact_email?.trim() ||
+    tenant.admin_email?.trim() ||
+    null
+  );
+}
+
 function baseVars(tenant: TenantRow, recipient: string | null): Record<string, string> {
   return {
     tenant_name: tenant.company_name || tenant.slug,
@@ -678,8 +1038,14 @@ function baseVars(tenant: TenantRow, recipient: string | null): Record<string, s
     tenant_admin_name: tenant.company_name || tenant.slug,
     tenant_contact_email: tenant.contact_email || '',
     sign_in_email: recipient || tenant.contact_email || '',
-    portal_url: PORTAL_URL,
-    booking_url: `${BOOKING_URL_BASE}/${tenant.slug}`,
+    portal_url: portalUrl(tenant.slug),
+    booking_url: bookingUrl(tenant.slug),
+    // The deep links the portal's own setup checklist uses
+    // (use-setup-status.ts). They work on v1 and v2 alike: v2 forwards
+    // ?tab=payments to the Integrations board, and ?tab=insurance still renders.
+    // `/integrations` would 404 for every tenant not on v2.
+    stripe_connect_url: `${portalUrl(tenant.slug)}/settings?tab=payments`,
+    bonzah_form_url: `${portalUrl(tenant.slug)}/settings?tab=insurance`,
   };
 }
 
@@ -706,16 +1072,24 @@ function fill(template: string, vars: Record<string, string>): string {
   });
 }
 
-/** Stripe stores minor units; `amount` here is already major (see rentals page). */
-function formatMoney(amount: number | null | undefined, currency: string): string {
-  if (amount === null || amount === undefined || Number.isNaN(amount)) return '—';
+/**
+ * Money from Stripe, in MINOR units (cents): 15000 -> "$150.00".
+ *
+ * Both `tenant_subscriptions.amount` and the invoice amounts are stored the
+ * way Stripe sends them, and the admin Rental Companies page divides by 100
+ * for the same reason (`formatMinor`, rentals/page.tsx). Formatting them as
+ * dollars would tell an operator on a $350 plan that they pay $35,000.
+ */
+function formatMoney(amountMinor: number | null | undefined, currency: string): string {
+  if (amountMinor === null || amountMinor === undefined || Number.isNaN(amountMinor)) return '—';
+  const major = amountMinor / 100;
   try {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: currency.toUpperCase(),
-    }).format(amount);
+    }).format(major);
   } catch {
-    return `${amount} ${currency.toUpperCase()}`;
+    return `${major.toFixed(2)} ${currency.toUpperCase()}`;
   }
 }
 
