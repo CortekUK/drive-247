@@ -72,7 +72,7 @@ import {
 import { sendResendEmail } from "../_shared/resend-service.ts";
 import { buildCmsContent, seedTenantCmsContent } from "../_shared/tenant-cms-content.ts";
 import { readRehearsalFor, REHEARSAL_TENANT_SLUG } from "../_shared/signup-rehearsal.ts";
-import { isSecured, savedPaymentMethodOf } from "../_shared/signup-trial.ts";
+import { isSecured, markTrialGrantUsed, savedPaymentMethodOf } from "../_shared/signup-trial.ts";
 
 const LOG = "[signup-provision]";
 
@@ -1492,6 +1492,12 @@ Deno.serve(async (req) => {
         `${LOG} first-invoice backfill failed for tenant ${tenantId} (non-fatal) — run reconcile-subscriptions to recover it:`,
         e,
       );
+    }
+
+    // A free trial a super admin gave to this email is now spent, and the
+    // admin list shows which company it went to. Non-fatal.
+    if (subscription.status === "trialing") {
+      await markTrialGrantUsed(supabase, meta.email, tenantId, subscription.id ?? null);
     }
 
     await markMilestone(supabase, authUserId, "subscription_linked");

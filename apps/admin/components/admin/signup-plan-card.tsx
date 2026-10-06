@@ -94,7 +94,7 @@ export const MAX_VEHICLES_MAX = 10000;
 export const BULLETS_MIN = 1;
 export const BULLETS_MAX = 8;
 export const BULLET_MAX = 120;
-export const TRIAL_DAYS_MAX = 30;
+export const TRIAL_DAYS_MAX = 90;
 /** What the switch fills in when a trial is first turned on. */
 export const TRIAL_DAYS_DEFAULT = 5;
 const PRICE_MIN_CENTS = 50;

@@ -47,6 +47,7 @@ import {
 import {
   isAwaitingCard,
   isSecured,
+  resolveTrialDays,
   setupClientSecretOf,
   trialCreateParams,
   trialEndIso,
@@ -126,7 +127,9 @@ Deno.serve(async (req) => {
     const requested = await fetchSignupPlan(supabase, alreadyCommitted ? meta.planId : body?.planId ?? meta.planId);
     if (!requested) return signupError("PLAN_UNKNOWN", "Unknown plan", 400);
     const plan: SignupPlanServer = requested;
-    const trialDays = plan.trialDays ?? 0;
+    // Free trial, as the super admin has it now: a trial given to this email
+    // on the Signup Plans page wins, else the plan's own. 0 = pay today.
+    const trialDays = await resolveTrialDays(supabase, meta.email, plan);
 
     // ── the promo code, checked with the same rules as everywhere else ──────
     // A brand-new signup has no tenant yet, so "new operators only" and

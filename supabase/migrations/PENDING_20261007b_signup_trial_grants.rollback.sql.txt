@@ -1,0 +1,7 @@
+-- Rollback for PENDING_20261007b_signup_trial_grants.sql.txt
+-- Anyone already on a granted trial keeps it: it lives on their Stripe subscription.
+DROP TABLE IF EXISTS public.signup_trial_grants;
+-- Back to the 30-day cap. Fails if a plan currently has more than 30 days set.
+ALTER TABLE public.signup_plans DROP CONSTRAINT IF EXISTS signup_plans_trial_days_range;
+ALTER TABLE public.signup_plans
+  ADD CONSTRAINT signup_plans_trial_days_range CHECK (trial_days BETWEEN 0 AND 30);

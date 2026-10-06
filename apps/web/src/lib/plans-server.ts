@@ -193,7 +193,7 @@ async function fetchTrialDays(baseUrl: string, anonKey: string): Promise<Map<str
       if (typeof row !== "object" || row === null) continue;
       const key = readString(row as Record<string, unknown>, "plan_key");
       const days = readNumber(row as Record<string, unknown>, "trial_days");
-      if (key && days !== null && Number.isInteger(days) && days > 0 && days <= 30) out.set(key, days);
+      if (key && days !== null && Number.isInteger(days) && days > 0 && days <= 90) out.set(key, days);
     }
   } catch {
     /* No trial wording; prices are unaffected. */

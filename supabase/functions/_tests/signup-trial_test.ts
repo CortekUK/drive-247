@@ -1,5 +1,8 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
+  findTrialGrant,
+  normaliseEmail,
+  resolveTrialDays,
   isAwaitingCard,
   isSecured,
   normaliseTrialDays,
@@ -41,10 +44,11 @@ Deno.test("trial params: none for 0, cancel-if-no-card for a trial", () => {
   });
 });
 
-Deno.test("trial days are clamped to 0..30 whole days", () => {
+Deno.test("trial days are clamped to 0..90 whole days", () => {
   assertEquals(normaliseTrialDays(5), 5);
   assertEquals(normaliseTrialDays("7"), 7);
-  assertEquals(normaliseTrialDays(31), 0);
+  assertEquals(normaliseTrialDays(90), 90);
+  assertEquals(normaliseTrialDays(91), 0);
   assertEquals(normaliseTrialDays(2.5), 0);
   assertEquals(normaliseTrialDays(null), 0);
 });
@@ -56,4 +60,29 @@ Deno.test("trial terms changed mid-signup", () => {
   assertEquals(trialTermsChanged(fiveDay, 0), true);
   assertEquals(trialTermsChanged({ trial_start: null, trial_end: null }, 5), true);
   assertEquals(trialTermsChanged({ trial_start: null, trial_end: null }, 0), false);
+});
+
+
+/** A tiny stand-in for the supabase query builder. */
+function fakeDb(row: unknown, error: unknown = null) {
+  const q: any = {
+    select: () => q, eq: () => q, is: () => q, order: () => q, limit: () => q,
+    maybeSingle: async () => ({ data: row, error }),
+  };
+  return { from: () => q };
+}
+
+Deno.test("a personal grant overrides the plan's trial", async () => {
+  const db = fakeDb({ id: "g1", trial_days: 14 });
+  assertEquals(await resolveTrialDays(db, " Mike@Example.com ", { trialDays: 5 }), 14);
+});
+
+Deno.test("no grant falls back to the plan; a missing table is just 'no grant'", async () => {
+  assertEquals(await resolveTrialDays(fakeDb(null), "a@b.co", { trialDays: 5 }), 5);
+  assertEquals(await resolveTrialDays(fakeDb(null, { code: "42P01" }), "a@b.co", { trialDays: 0 }), 0);
+  assertEquals(await findTrialGrant(fakeDb({ id: "g", trial_days: 500 }), "a@b.co"), null);
+});
+
+Deno.test("emails are compared trimmed and lower-cased", () => {
+  assertEquals(normaliseEmail("  Mike@Example.COM "), "mike@example.com");
 });

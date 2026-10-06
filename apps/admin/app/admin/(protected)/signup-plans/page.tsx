@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { LandingPricingSwitch } from '@/components/admin/landing-pricing-switch';
 import { SignupOtpSwitch } from '@/components/admin/signup-otp-switch';
+import { SignupTrialGrants } from '@/components/admin/signup-trial-grants';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -599,6 +600,9 @@ export default function SignupPlansPage() {
 
       {/* Whether a new signup has to prove its email address before paying. */}
       <SignupOtpSwitch />
+
+      {/* Who gets a free trial: everyone on a plan, or people chosen by email. */}
+      <SignupTrialGrants plans={plans} />
 
       {/* Async status for screen readers */}
       <p role="status" aria-live="polite" className="sr-only">

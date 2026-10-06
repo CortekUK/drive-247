@@ -46,6 +46,7 @@ import {
 import {
   isAwaitingCard,
   isSecured,
+  resolveTrialDays,
   setupClientSecretOf,
   trialCreateParams,
   trialEndIso,
@@ -141,8 +142,9 @@ Deno.serve(async (req) => {
     );
     if (!requested) return signupError("PLAN_UNKNOWN", "Unknown plan", 400);
     const plan: SignupPlanServer = requested;
-    // Free trial for this plan, as the super admin has it now. 0 = pay today.
-    const trialDays = plan.trialDays ?? 0;
+    // Free trial, as the super admin has it now: a trial given to this email
+    // on the Signup Plans page wins, else the plan's own. 0 = pay today.
+    const trialDays = await resolveTrialDays(supabase, meta.email, plan);
 
     // Mode is locked at account creation — see signup-state.ts.
     const mode = meta.mode ?? getSignupStripeMode();
