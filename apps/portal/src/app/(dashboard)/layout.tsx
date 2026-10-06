@@ -26,6 +26,7 @@ import { useV2 } from "@/lib/v2-context";
 import { GenericFrameSkeleton, ShapeSkeleton, useShapeRecorder } from "@/components/skeleton-v2/shape-snapshot";
 import { AppSidebarV2 } from "@/components/shared/layout/app-sidebar-v2";
 import { TopBarV2 } from "@/components/shared/layout/top-bar-v2";
+import { HelplineLink } from "@/components/shared/layout/helpline-link";
 import { MobileTabBar } from "@/components/shared/layout/mobile-tab-bar";
 import { TraxV2Provider } from "@/components/trax/support/trax-support-context";
 import { TraxPanel } from "@/components/trax/trax-panel";
@@ -783,6 +784,7 @@ export default function DashboardLayout({
                   <BonzahBalance />
                   <CreditBalance />
                 </div>
+                <HelplineLink />
                 <NotificationBell />
                 <ThemeToggle />
                 <UserMenu />

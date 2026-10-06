@@ -10,6 +10,7 @@ import { Separator } from "@/components/ui-v2/separator";
 import { SidebarTrigger } from "@/components/ui-v2/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui-v2/tooltip";
 import { GlobalSearchV2 } from "@/components/shared/layout/global-search-v2";
+import { HelplineLink } from "@/components/shared/layout/helpline-link";
 import { MessagesSheetV2 } from "@/components/messages-v2/messages-sheet-v2";
 import { NotificationBellV2 } from "@/components/notifications-v2/notification-bell-v2";
 import { useUnreadCount } from "@/hooks/use-unread-count";
@@ -556,6 +557,10 @@ export function TopBarV2({ showNavTrigger = true }: { showNavTrigger?: boolean }
             </TooltipContent>
           </Tooltip>
         )}
+
+        {/* The support helpline, right before Help: the two ways to get help
+            sit together. A tel: link, so a click starts the call. */}
+        <HelplineLink className={phoneField ? "max-sm:hidden" : ""} />
 
         {trax && (
           <Tooltip>
