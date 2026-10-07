@@ -15,7 +15,8 @@ import { Button } from "@/components/ui-v2/button";
 import { Textarea } from "@/components/ui-v2/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui-v2/select";
 import { useCancellationRequest } from "@/hooks/use-cancellation-request";
-import { SAMPLE_RETENTION_KEY } from "@/hooks/use-retention-offer";
+import { DEFAULT_RETENTION_TERMS, SAMPLE_RETENTION_KEY, useRetentionOfferTerms } from "@/hooks/use-retention-offer";
+import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { formatBillDate, formatMoney } from "@/lib/integration-billing/catalog";
 import {
@@ -33,7 +34,11 @@ import {
  *        · Something isn't working → raise a ticket (issue type + details) and
  *          book a call: the team calendar opens in a new tab to pick a slot for an
  *          online meeting.
- *        · The price is too high (green) → 10% off the next 3 bills.
+ *        · The price is too high (green) → the tenant's retention offer: N% off
+ *          for M months, set by a super admin (Customer management → Tiered
+ *          retention offers; default 10% for 1 month). ONE per tenant, ever —
+ *          once used, this card goes straight to the cancel step. Accepting
+ *          calls `accept-retention-offer`, which attaches the Stripe coupon.
  *        · "I still want to cancel" → 3.
  *   2. The offer       — accept, or "No thanks, continue to cancel" → 3.
  *   3. Cancel          — reason (dropdown) + tell us more, what they'll lose,
@@ -73,8 +78,6 @@ const BOOK_A_CALL_URL = "https://api.leadconnectorhq.com/widget/booking/WhGxejLX
 /** Enough to tell the specialist what the call is about. */
 const MIN_TICKET_DETAILS = 10;
 
-const RETENTION_PERCENT = 10;
-const RETENTION_BILLS = 3;
 
 type Step = "start" | "ticket" | "offer" | "cancel" | "done";
 type Outcome = "call" | "discount" | "cancel";
@@ -109,6 +112,11 @@ export function CancelFlowDialogV2({
   const [step, setStep] = useState<Step>("start");
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [sending, setSending] = useState(false);
+  const termsQuery = useRetentionOfferTerms(!!sample);
+  // A failed read falls back to the default: the edge function is the one that
+  // decides, and it refuses a tenant who has already used theirs.
+  const terms = termsQuery.data ?? DEFAULT_RETENTION_TERMS;
+  const { percent, months } = terms;
   useEffect(() => {
     if (open) {
       setStep("start");
@@ -132,14 +140,23 @@ export function CancelFlowDialogV2({
         try {
           window.sessionStorage.setItem(
             SAMPLE_RETENTION_KEY,
-            JSON.stringify({ percent: RETENTION_PERCENT, bills: RETENTION_BILLS, acceptedAt: new Date().toISOString() }),
+            JSON.stringify({ percent, bills: months, acceptedAt: new Date().toISOString() }),
           );
         } catch {
           /* the breakdown just won't show it */
         }
         void queryClient.invalidateQueries({ queryKey: ["retention-offer"] });
+        void queryClient.invalidateQueries({ queryKey: ["retention-offer-terms"] });
       }
       setTimeout(finish, 600);
+      return;
+    }
+    if (kind === "discount") {
+      void acceptOffer().then(finish, (e: Error) => {
+        setSending(false);
+        toast.error("We couldn't apply that", { description: `${e.message}. You can also email support@drive-247.com.` });
+        void queryClient.invalidateQueries({ queryKey: ["retention-offer-terms"] });
+      });
       return;
     }
     submit.mutate(
@@ -156,6 +173,29 @@ export function CancelFlowDialogV2({
       },
     );
   };
+
+  /** The offer is applied server-side, in Stripe, once per tenant. */
+  async function acceptOffer() {
+    const { data, error } = await supabase.functions.invoke("accept-retention-offer", { body: { monthlyCents } });
+    if (error) {
+      let message = error.message;
+      try {
+        const body = await (error as { context?: Response }).context?.json();
+        if (body?.error) message = body.error;
+      } catch {
+        /* keep the generic message */
+      }
+      throw new Error(message);
+    }
+    if (data?.success === false) throw new Error(data.error || "Something went wrong");
+    if (data?.requestId) {
+      // Fire-and-forget, as for every other request in this queue.
+      void supabase.functions.invoke("notify-cancellation-request", { body: { requestId: data.requestId } }).catch(() => {});
+    }
+    void queryClient.invalidateQueries({ queryKey: ["retention-offer"] });
+    void queryClient.invalidateQueries({ queryKey: ["retention-offer-terms"] });
+    void queryClient.invalidateQueries({ queryKey: ["cancellation-request"] });
+  }
 
   const busy = sending || readOnly;
 
@@ -175,8 +215,9 @@ export function CancelFlowDialogV2({
           />
         ) : step === "start" ? (
           <Start
+            offerUsed={!terms.available}
             onIssue={() => setStep("ticket")}
-            onPrice={() => setStep("offer")}
+            onPrice={() => setStep(terms.available ? "offer" : "cancel")}
             onCancel={() => setStep("cancel")}
           />
         ) : step === "ticket" ? (
@@ -192,18 +233,13 @@ export function CancelFlowDialogV2({
           />
         ) : step === "offer" ? (
           <Offer
+            percent={percent}
+            months={months}
             monthlyCents={monthlyCents}
             money={money}
             busy={busy}
             onBack={() => setStep("start")}
-            onAccept={() =>
-              send(
-                "discount",
-                `RETENTION OFFER ACCEPTED — ${RETENTION_PERCENT}% off the next ${RETENTION_BILLS} bills${
-                  monthlyCents != null ? ` (${money(monthlyCents)} → ${money(Math.round(monthlyCents * (1 - RETENTION_PERCENT / 100)))}/month)` : ""
-                }. Please apply it.`,
-              )
-            }
+            onAccept={() => send("discount", "")}
             onDecline={() => setStep("cancel")}
           />
         ) : step === "cancel" ? (
@@ -236,10 +272,10 @@ export function CancelFlowDialogV2({
           <Done
             Art={RetentionDiscountArt}
             eyebrow="Offer accepted"
-            title={`${RETENTION_PERCENT}% off, on its way`}
-            body={`Thanks for staying. Your next ${RETENTION_BILLS} bills will be ${RETENTION_PERCENT}% lower${
-              monthlyCents != null ? ` — ${money(Math.round(monthlyCents * (1 - RETENTION_PERCENT / 100)))}/month instead of ${money(monthlyCents)}` : ""
-            }. You'll see it on your next invoice.`}
+            title={`${percent}% off, on its way`}
+            body={`Thanks for staying. Your next ${billsLabel(months)} will be ${percent}% lower${
+              monthlyCents != null ? ` — ${money(Math.round(monthlyCents * (1 - percent / 100)))}/month instead of ${money(monthlyCents)}` : ""
+            }. You'll see it on your next invoice, then it's back to your regular price.`}
             onClose={() => onOpenChange(false)}
           />
         ) : (
@@ -332,7 +368,17 @@ function Choice({
   );
 }
 
-function Start({ onIssue, onPrice, onCancel }: { onIssue: () => void; onPrice: () => void; onCancel: () => void }) {
+function Start({
+  offerUsed,
+  onIssue,
+  onPrice,
+  onCancel,
+}: {
+  offerUsed: boolean;
+  onIssue: () => void;
+  onPrice: () => void;
+  onCancel: () => void;
+}) {
   return (
     <>
       <Header
@@ -353,7 +399,7 @@ function Start({ onIssue, onPrice, onCancel }: { onIssue: () => void; onPrice: (
           tone="indigo"
           Art={RetentionPriceArt}
           title="The price is too high for us"
-          body="We'll see what we can do."
+          body={offerUsed ? "You've already used your one-time offer." : "We'll see what we can do."}
           onClick={onPrice}
         />
       </div>
@@ -443,7 +489,13 @@ function Ticket({ busy, onBack, onSend }: { busy: boolean; onBack: () => void; o
   );
 }
 
+function billsLabel(months: number): string {
+  return months === 1 ? "bill" : `${months} bills`;
+}
+
 function Offer({
+  percent,
+  months,
   monthlyCents,
   money,
   busy,
@@ -451,6 +503,8 @@ function Offer({
   onAccept,
   onDecline,
 }: {
+  percent: number;
+  months: number;
   monthlyCents: number | null;
   money: (c: number) => string;
   busy: boolean;
@@ -458,14 +512,14 @@ function Offer({
   onAccept: () => void;
   onDecline: () => void;
 }) {
-  const after = monthlyCents != null ? Math.round(monthlyCents * (1 - RETENTION_PERCENT / 100)) : null;
+  const after = monthlyCents != null ? Math.round(monthlyCents * (1 - percent / 100)) : null;
   return (
     <>
-      <Header eyebrow="An offer for you" title={`Stay, and save ${RETENTION_PERCENT}%`} body="We'd rather keep you. Here's what that looks like on your bill." />
+      <Header eyebrow="An offer for you" title={`Stay, and save ${percent}%`} body="We'd rather keep you. Here's what that looks like on your bill — a one-time offer." />
       <div className="px-8 pb-6 pt-5">
         <div className="rounded-2xl border border-green-200 bg-green-50/70 p-6 dark:border-green-400/25 dark:bg-green-500/10">
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-green-700 dark:text-green-300">
-            {RETENTION_PERCENT}% off your next {RETENTION_BILLS} bills
+            {percent}% off your next {billsLabel(months)}
           </p>
           {after != null && monthlyCents != null ? (
             <div className="mt-2 flex items-baseline gap-3">
@@ -474,11 +528,11 @@ function Offer({
               <span className="text-base text-muted-foreground line-through">{money(monthlyCents)}</span>
             </div>
           ) : (
-            <p className="mt-2 text-2xl font-bold tracking-tight">{RETENTION_PERCENT}% off</p>
+            <p className="mt-2 text-2xl font-bold tracking-tight">{percent}% off</p>
           )}
           <p className="mt-2 text-sm text-muted-foreground">
             {after != null && monthlyCents != null
-              ? `You save ${money((monthlyCents - after) * RETENTION_BILLS)} over ${RETENTION_BILLS} months. Then back to your regular price — nothing else changes.`
+              ? `You save ${money((monthlyCents - after) * months)} over ${months === 1 ? "the month" : `${months} months`}. Then back to your regular price — nothing else changes.`
               : "Then back to your regular price — nothing else changes."}
           </p>
         </div>
@@ -488,7 +542,7 @@ function Offer({
           No thanks, continue to cancel
         </button>
         <Button onClick={onAccept} disabled={busy} className="h-9 rounded-xl bg-green-600 px-5 text-white hover:bg-green-700">
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : `Accept ${RETENTION_PERCENT}% off`}
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : `Accept ${percent}% off`}
         </Button>
       </Footer>
     </>

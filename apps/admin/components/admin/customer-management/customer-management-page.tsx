@@ -41,14 +41,15 @@ import type {
 
 import { AutomationTab } from './automation-tab';
 import { CancellationsTab } from './cancellations-tab';
+import { RetentionOffersTab } from './retention-offers-tab';
 import { ScopeCard } from './scope-card';
 
 export function CustomerManagementPage() {
   const { user } = useAuthStore();
   const canEdit = !!user?.is_super_admin;
 
-  /** The three automations, plus the Cancellations report. */
-  const [tab, setTab] = useState<AutomationId | 'cancellations'>('signup');
+  /** The three automations, the Cancellations report and the retention offers. */
+  const [tab, setTab] = useState<AutomationId | 'cancellations' | 'retention'>('signup');
   const [settings, setSettings] = useState<CustomerManagementSettings | null>(null);
   const [steps, setSteps] = useState<CustomerManagementStep[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,9 +58,13 @@ export function CustomerManagementPage() {
 
   useRegisterSidebarSections(
     '/admin/customer-management',
-    [...AUTOMATIONS.map((a) => ({ id: a.id, label: a.label })), { id: 'cancellations', label: 'Cancellations' }],
+    [
+      ...AUTOMATIONS.map((a) => ({ id: a.id, label: a.label })),
+      { id: 'cancellations', label: 'Cancellations' },
+      { id: 'retention', label: 'Tiered retention offers' },
+    ],
     tab,
-    (id) => setTab(id as AutomationId | 'cancellations'),
+    (id) => setTab(id as AutomationId | 'cancellations' | 'retention'),
   );
 
   const load = useCallback(async () => {
@@ -94,6 +99,9 @@ export function CustomerManagementPage() {
   // (or on the module being installed).
   if (tab === 'cancellations') {
     return <CancellationsTab canEdit={canEdit} />;
+  }
+  if (tab === 'retention') {
+    return <RetentionOffersTab canEdit={canEdit} />;
   }
 
   if (loading) {
