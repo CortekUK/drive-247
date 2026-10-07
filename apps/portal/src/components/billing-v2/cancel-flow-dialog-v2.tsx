@@ -70,6 +70,9 @@ const CANCEL_REASONS = [
 /** The team's calendar — "Book a call" opens it so the tenant picks a slot then and there. */
 const BOOK_A_CALL_URL = "https://api.leadconnectorhq.com/widget/booking/WhGxejLXDJt4pN10JYUg";
 
+/** Enough to tell the specialist what the call is about. */
+const MIN_TICKET_DETAILS = 10;
+
 const RETENTION_PERCENT = 10;
 const RETENTION_BILLS = 3;
 
@@ -366,14 +369,15 @@ function Start({ onIssue, onPrice, onCancel }: { onIssue: () => void; onPrice: (
 function Ticket({ busy, onBack, onSend }: { busy: boolean; onBack: () => void; onSend: (type: string, details: string) => void }) {
   const [type, setType] = useState("");
   const [details, setDetails] = useState("");
-  // Only the issue type is required. A minimum description length used to keep
-  // the button silently disabled — it looked broken, with nothing saying why.
-  const [missingType, setMissingType] = useState(false);
+  // The button stays clickable and says what is missing. It used to sit
+  // disabled until 10 characters were typed, with nothing saying so — it read
+  // as broken.
+  const [tried, setTried] = useState(false);
+  const detailsLength = details.trim().length;
+  const detailsShort = detailsLength < MIN_TICKET_DETAILS;
   const press = () => {
-    if (!type) {
-      setMissingType(true);
-      return;
-    }
+    setTried(true);
+    if (!type || detailsShort) return;
     onSend(type, details.trim());
   };
   return (
@@ -388,12 +392,9 @@ function Ticket({ busy, onBack, onSend }: { busy: boolean; onBack: () => void; o
           <label className="text-xs text-muted-foreground">What's it about?</label>
           <Select
             value={type}
-            onValueChange={(v) => {
-              setType(v);
-              setMissingType(false);
-            }}
+            onValueChange={setType}
           >
-            <SelectTrigger className="w-full" aria-invalid={missingType}>
+            <SelectTrigger className="w-full" aria-invalid={tried && !type}>
               <SelectValue placeholder="Choose an issue type" />
             </SelectTrigger>
             <SelectContent tone="surface">
@@ -404,11 +405,11 @@ function Ticket({ busy, onBack, onSend }: { busy: boolean; onBack: () => void; o
               ))}
             </SelectContent>
           </Select>
-          {missingType && <p className="text-xs text-destructive">Choose what it&apos;s about first.</p>}
+          {tried && !type && <p className="text-xs text-destructive">Choose what it&apos;s about first.</p>}
         </div>
         <div className="space-y-1.5">
           <label htmlFor="ticket-details" className="text-xs text-muted-foreground">
-            Describe the problem
+            Describe the problem <span className="text-muted-foreground/70">(at least {MIN_TICKET_DETAILS} characters)</span>
           </label>
           <Textarea
             id="ticket-details"
@@ -418,7 +419,19 @@ function Ticket({ busy, onBack, onSend }: { busy: boolean; onBack: () => void; o
             placeholder="What happened, where, and what you expected instead. Screens, booking numbers or customers involved all help."
             className="resize-none rounded-xl"
             maxLength={2000}
+            aria-invalid={tried && detailsShort}
+            aria-describedby="ticket-details-hint"
           />
+          <p
+            id="ticket-details-hint"
+            className={`text-xs ${tried && detailsShort ? "text-destructive" : "text-muted-foreground"}`}
+          >
+            {detailsShort
+              ? tried
+                ? `Please write at least ${MIN_TICKET_DETAILS} characters — ${MIN_TICKET_DETAILS - detailsLength} more to go.`
+                : `${detailsLength}/${MIN_TICKET_DETAILS} characters minimum`
+              : "Thanks — that helps us match the right specialist."}
+          </p>
         </div>
       </div>
       <Footer onBack={onBack} note="Your subscription carries on as normal.">
