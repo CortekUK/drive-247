@@ -44,6 +44,7 @@ import { CancellationsTab } from './cancellations-tab';
 import { RetentionOffersTab } from './retention-offers-tab';
 import { LifecycleCheckinsTab } from './lifecycle-checkins-tab';
 import { WebinarPollTab } from './webinar-poll-tab';
+import { MarketingEmailsTab } from './marketing-emails-tab';
 import { ScopeCard } from './scope-card';
 
 export function CustomerManagementPage() {
@@ -51,7 +52,7 @@ export function CustomerManagementPage() {
   const canEdit = !!user?.is_super_admin;
 
   /** The three automations, the Cancellations report and the retention offers. */
-  const [tab, setTab] = useState<AutomationId | 'cancellations' | 'retention' | 'lifecycle' | 'poll'>('signup');
+  const [tab, setTab] = useState<AutomationId | 'cancellations' | 'retention' | 'lifecycle' | 'poll' | 'marketing'>('signup');
   const [settings, setSettings] = useState<CustomerManagementSettings | null>(null);
   const [steps, setSteps] = useState<CustomerManagementStep[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,9 +67,10 @@ export function CustomerManagementPage() {
       { id: 'retention', label: 'Tiered retention offers' },
       { id: 'lifecycle', label: 'Lifecycle check-ins' },
       { id: 'poll', label: 'Webinar Poll' },
+      { id: 'marketing', label: 'Marketing Instructions Emails' },
     ],
     tab,
-    (id) => setTab(id as AutomationId | 'cancellations' | 'retention' | 'lifecycle' | 'poll'),
+    (id) => setTab(id as AutomationId | 'cancellations' | 'retention' | 'lifecycle' | 'poll' | 'marketing'),
   );
 
   const load = useCallback(async () => {
@@ -112,6 +114,9 @@ export function CustomerManagementPage() {
   }
   if (tab === 'poll') {
     return <WebinarPollTab canEdit={canEdit} />;
+  }
+  if (tab === 'marketing') {
+    return <MarketingEmailsTab canEdit={canEdit} />;
   }
 
   if (loading) {
