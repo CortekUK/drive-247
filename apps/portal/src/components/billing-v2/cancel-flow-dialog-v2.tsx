@@ -366,7 +366,16 @@ function Start({ onIssue, onPrice, onCancel }: { onIssue: () => void; onPrice: (
 function Ticket({ busy, onBack, onSend }: { busy: boolean; onBack: () => void; onSend: (type: string, details: string) => void }) {
   const [type, setType] = useState("");
   const [details, setDetails] = useState("");
-  const ok = !!type && details.trim().length >= 10;
+  // Only the issue type is required. A minimum description length used to keep
+  // the button silently disabled — it looked broken, with nothing saying why.
+  const [missingType, setMissingType] = useState(false);
+  const press = () => {
+    if (!type) {
+      setMissingType(true);
+      return;
+    }
+    onSend(type, details.trim());
+  };
   return (
     <>
       <Header
@@ -377,8 +386,14 @@ function Ticket({ busy, onBack, onSend }: { busy: boolean; onBack: () => void; o
       <div className="space-y-4 px-8 pb-6 pt-5">
         <div className="space-y-1.5">
           <label className="text-xs text-muted-foreground">What's it about?</label>
-          <Select value={type} onValueChange={setType}>
-            <SelectTrigger className="w-full">
+          <Select
+            value={type}
+            onValueChange={(v) => {
+              setType(v);
+              setMissingType(false);
+            }}
+          >
+            <SelectTrigger className="w-full" aria-invalid={missingType}>
               <SelectValue placeholder="Choose an issue type" />
             </SelectTrigger>
             <SelectContent tone="surface">
@@ -389,6 +404,7 @@ function Ticket({ busy, onBack, onSend }: { busy: boolean; onBack: () => void; o
               ))}
             </SelectContent>
           </Select>
+          {missingType && <p className="text-xs text-destructive">Choose what it&apos;s about first.</p>}
         </div>
         <div className="space-y-1.5">
           <label htmlFor="ticket-details" className="text-xs text-muted-foreground">
@@ -406,7 +422,7 @@ function Ticket({ busy, onBack, onSend }: { busy: boolean; onBack: () => void; o
         </div>
       </div>
       <Footer onBack={onBack} note="Your subscription carries on as normal.">
-        <Button onClick={() => onSend(type, details.trim())} disabled={!ok || busy} className="h-9 rounded-xl px-5">
+        <Button onClick={press} disabled={busy} className="h-9 rounded-xl px-5">
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Book a call"}
         </Button>
       </Footer>
