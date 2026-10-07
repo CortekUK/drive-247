@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/dialog";
 import { DashboardKPICards } from "@/components/dashboard/dashboard-kpi-cards";
 import { DashboardCharts } from "@/components/dashboard/dashboard-charts";
+import { ValueSummaryCard } from "@/components/dashboard/value-summary-card";
 import { FleetOverview } from "@/components/dashboard/fleet-overview";
 import { ComplianceOverviewCard } from "@/components/dashboard/compliance-overview-card";
 import { ActionItems } from "@/components/dashboard/action-items";
@@ -214,6 +215,9 @@ export default function DashboardPage() {
 
       {/* Charts */}
       <DashboardCharts />
+
+      {/* What the platform did this month — always last. */}
+      <ValueSummaryCard />
 
 
     </div>
