@@ -26,6 +26,7 @@ import { PHONE_CAROUSEL, PageDots } from './phone-carousel';
 import { BusyDaysCard } from './busy-days-card';
 import { BookingSourcesCard } from './booking-sources-card';
 import { ValueSummaryCard } from './value-summary-card';
+import { WebinarPolls } from './webinar-poll-card';
 import { buildDemoBookingSources, buildDemoBusyDays } from './mock';
 import { useBookingSources, useBusyDays } from '@/hooks/use-dashboard-insights';
 import { useSkeletonLoading } from '@/hooks/use-skeleton-loading';
@@ -146,6 +147,11 @@ export function HomeBands() {
       {/* ── Always last: what the platform did for them this month ───────── */}
       <section aria-label="What Drive247 did for you" className="mt-5 pb-4">
         <ValueSummaryCard />
+      </section>
+
+      {/* ── The very bottom: live webinar polls (renders nothing when none) ── */}
+      <section aria-label="Webinar polls" className="pb-4 empty:hidden">
+        <WebinarPolls />
       </section>
     </div>
   );
