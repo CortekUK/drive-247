@@ -17,7 +17,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CalendarClock, CheckCircle2, ClipboardList, Eye, Loader2, Mail, Pencil, Play, Plus, RefreshCw, Send, Trash2 } from 'lucide-react';
+import { CalendarClock, CheckCircle2, ClipboardList, Eye, Loader2, Mail, Pencil, Plus, RefreshCw, Send, Trash2 } from 'lucide-react';
 
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/authStore';
@@ -124,7 +124,7 @@ export function LifecycleCheckinsTab({ canEdit }: { canEdit: boolean }) {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [saving, setSaving] = useState(false);
   const [preview, setPreview] = useState<{ due: number; rows: PreviewRow[] } | null>(null);
-  const [busy, setBusy] = useState<'preview' | 'run' | null>(null);
+  const [busy, setBusy] = useState<'preview' | null>(null);
   const [testFor, setTestFor] = useState<Checkin | null>(null);
   const [testTo, setTestTo] = useState('');
   const [testing, setTesting] = useState(false);
@@ -235,21 +235,6 @@ export function LifecycleCheckinsTab({ canEdit }: { canEdit: boolean }) {
     }
   }
 
-  async function runNow() {
-    setBusy('run');
-    try {
-      const data = await invoke({ action: 'run' });
-      const n = (data?.results as unknown[])?.length ?? 0;
-      toast.success(n ? `Handled ${n} check-in${n === 1 ? '' : 's'}` : 'Nothing was due');
-      setPreview(null);
-      await load();
-    } catch (e) {
-      toast.error('Run failed', { description: (e as Error).message });
-    } finally {
-      setBusy(null);
-    }
-  }
-
   async function sendTest() {
     if (!testFor) return;
     setTesting(true);
@@ -296,8 +281,8 @@ export function LifecycleCheckinsTab({ canEdit }: { canEdit: boolean }) {
               </CardTitle>
               <CardDescription>
                 Planned touch-points over a new operator&apos;s first months. Each check-in goes out once, on its day after
-                signup, to <span className="font-medium text-foreground">tenants who sign up after it is switched on</span>. The
-                system checks every hour.
+                signup, to <span className="font-medium text-foreground">tenants who sign up after it is switched on</span>. Switching
+                one on is all it takes — it runs automatically from then on.
               </CardDescription>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -310,16 +295,10 @@ export function LifecycleCheckinsTab({ canEdit }: { canEdit: boolean }) {
                 What&apos;s due now
               </Button>
               {canEdit && (
-                <>
-                  <Button variant="outline" size="sm" className="gap-1.5" onClick={() => void runNow()} disabled={!!busy}>
-                    {busy === 'run' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-                    Run now
-                  </Button>
-                  <Button size="sm" className="gap-1.5" onClick={() => setDraft(emptyDraft())}>
-                    <Plus className="h-4 w-4" />
-                    Add check-in
-                  </Button>
-                </>
+                <Button size="sm" className="gap-1.5" onClick={() => setDraft(emptyDraft())}>
+                  <Plus className="h-4 w-4" />
+                  Add check-in
+                </Button>
               )}
             </div>
           </div>
@@ -347,7 +326,9 @@ export function LifecycleCheckinsTab({ canEdit }: { canEdit: boolean }) {
                       {c.kind === 'email' ? c.subject : c.task_note || 'No note'}
                     </p>
                     <p className="mt-0.5 text-xs text-muted-foreground">
-                      {c.enabled && c.active_since ? `On since ${formatDate(c.active_since)}` : 'Off — nobody gets this'}
+                      {c.enabled && c.active_since
+                        ? `Automatic — on since ${formatDate(c.active_since)}, for operators who sign up from then`
+                        : 'Off — nobody gets this'}
                     </p>
                   </div>
                   <div className="flex items-center gap-1">
