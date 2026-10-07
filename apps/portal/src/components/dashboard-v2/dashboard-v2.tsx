@@ -7,6 +7,7 @@ import { useIntegrationBilling } from "@/lib/integration-billing/hooks";
 import { BonzahStatusBanner } from "@/components/dashboard/bonzah-status-banner";
 import { BonzahPendingAlert } from "@/components/dashboard/bonzah-pending-alert";
 import { HomeBands } from "@/components/dashboard-v2/home/home-bands";
+import { WebinarPopup } from "@/components/dashboard-v2/webinar-popup";
 import { HOME_PALETTE } from "@/components/dashboard-v2/home/ui";
 import { format } from "date-fns";
 
@@ -66,6 +67,8 @@ export function DashboardV2() {
           <main> (already bounded to the viewport) and HomeBands shares it out. */}
       <div className="pv lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
         <HomeBands />
+        {/* Webinar invitation popup — a portal, so it takes no space here. */}
+        <WebinarPopup />
       </div>
       {/* The palette goes LAST. `space-y-10` gives every child after the first
           a 40px top margin, and a <style> element counts as a child, so ahead of
