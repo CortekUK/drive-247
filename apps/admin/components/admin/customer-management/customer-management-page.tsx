@@ -42,6 +42,7 @@ import type {
 import { AutomationTab } from './automation-tab';
 import { CancellationsTab } from './cancellations-tab';
 import { RetentionOffersTab } from './retention-offers-tab';
+import { LifecycleCheckinsTab } from './lifecycle-checkins-tab';
 import { ScopeCard } from './scope-card';
 
 export function CustomerManagementPage() {
@@ -49,7 +50,7 @@ export function CustomerManagementPage() {
   const canEdit = !!user?.is_super_admin;
 
   /** The three automations, the Cancellations report and the retention offers. */
-  const [tab, setTab] = useState<AutomationId | 'cancellations' | 'retention'>('signup');
+  const [tab, setTab] = useState<AutomationId | 'cancellations' | 'retention' | 'lifecycle'>('signup');
   const [settings, setSettings] = useState<CustomerManagementSettings | null>(null);
   const [steps, setSteps] = useState<CustomerManagementStep[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,9 +63,10 @@ export function CustomerManagementPage() {
       ...AUTOMATIONS.map((a) => ({ id: a.id, label: a.label })),
       { id: 'cancellations', label: 'Cancellations' },
       { id: 'retention', label: 'Tiered retention offers' },
+      { id: 'lifecycle', label: 'Lifecycle check-ins' },
     ],
     tab,
-    (id) => setTab(id as AutomationId | 'cancellations' | 'retention'),
+    (id) => setTab(id as AutomationId | 'cancellations' | 'retention' | 'lifecycle'),
   );
 
   const load = useCallback(async () => {
@@ -102,6 +104,9 @@ export function CustomerManagementPage() {
   }
   if (tab === 'retention') {
     return <RetentionOffersTab canEdit={canEdit} />;
+  }
+  if (tab === 'lifecycle') {
+    return <LifecycleCheckinsTab canEdit={canEdit} />;
   }
 
   if (loading) {
