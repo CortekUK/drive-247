@@ -7,7 +7,7 @@
 //      second click is a no-op that still answers success
 //   3. emails the confirmation to the person who clicked (their sign-in email,
 //      else the tenant's contact address): title, date and time in the
-//      tenant's time zone, the Google Meet link and an "add to calendar" link.
+//      tenant's time zone, the meeting link (Google Meet, Zoom, …) and an "add to calendar" link.
 //      A send that failed earlier is retried on the next click.
 //
 // The registration stands even if the email fails; the admin tab shows the
@@ -167,7 +167,7 @@ Deno.serve(async (req) => {
           "",
           `- Date: ${when.date}`,
           `- Time: ${when.time} (${w.duration_minutes} minutes)`,
-          `- Join on Google Meet: ${w.meet_url}`,
+          `- Meeting link: ${w.meet_url}`,
           "",
           ...(w.description ? [w.description, ""] : []),
           `Add it to your calendar: ${calendarLink(w)}`,

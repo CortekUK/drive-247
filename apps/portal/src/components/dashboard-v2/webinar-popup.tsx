@@ -147,7 +147,7 @@ export function WebinarPopup() {
             {done && (
               <DialogDescription>
                 {done.emailStatus === "sent" && done.email
-                  ? `We've sent the details and the Google Meet link to ${done.email}.`
+                  ? `We've sent the details and the meeting link to ${done.email}.`
                   : "Your place is saved. Here's the link — keep it handy."}
               </DialogDescription>
             )}
@@ -170,7 +170,7 @@ export function WebinarPopup() {
                 className="flex items-center gap-2.5 text-primary underline-offset-4 hover:underline"
               >
                 <ExternalLink className="h-4 w-4" />
-                Join on Google Meet
+                Join the meeting
               </a>
             )}
           </div>

@@ -5,7 +5,7 @@
  * registered, all in one view.
  *
  *   Webinars       title, description, date / time (in a chosen time zone),
- *                  length and Google Meet link. Draft → published → cancelled.
+ *                  length and meeting link (Google Meet, Zoom, …). Draft → published → cancelled.
  *                  Audience: every v2 tenant minus exclusions, or only the
  *                  selected ones.
  *   Registrations  per webinar: every tenant in its audience, registered or
@@ -287,7 +287,7 @@ export function WebinarsTab({ canEdit }: { canEdit: boolean }) {
     const duration = Number(draft.duration);
     if (!draft.title.trim()) return void toast.error('Give the webinar a title');
     if (!draft.date || !draft.time) return void toast.error('Choose a date and time');
-    if (!/^https?:\/\/\S+$/i.test(draft.meetUrl.trim())) return void toast.error('Paste the full Google Meet link, starting with https://');
+    if (!/^https?:\/\/\S+$/i.test(draft.meetUrl.trim())) return void toast.error('Paste the full meeting link, starting with https://');
     if (!Number.isInteger(duration) || duration < 5 || duration > 600) return void toast.error('Length must be 5–600 minutes');
     if (draft.audience === 'selected' && draft.picked.length === 0) return void toast.error('Pick at least one tenant, or choose All tenants');
     let startsAt: string;
@@ -383,7 +383,7 @@ export function WebinarsTab({ canEdit }: { canEdit: boolean }) {
               </CardTitle>
               <CardDescription>
                 Published webinars pop up on the <span className="font-medium text-foreground">v2</span> portal home. Operators
-                register with one click and get a confirmation email with the date, time and Meet link.
+                register with one click and get a confirmation email with the date, time and meeting link.
               </CardDescription>
             </div>
             <div className="flex items-center gap-2">
@@ -437,7 +437,7 @@ export function WebinarsTab({ canEdit }: { canEdit: boolean }) {
                         </span>
                         <a href={w.meet_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 hover:text-foreground">
                           <ExternalLink className="h-3.5 w-3.5" />
-                          Meet link
+                          Meeting link
                         </a>
                       </p>
                       <p className="mt-0.5 text-xs text-muted-foreground">
@@ -645,8 +645,8 @@ function WebinarEditor({ draft, onChange, tenants }: { draft: Draft; onChange: (
           <Input id="wb-len" type="number" min={5} max={600} value={draft.duration} onChange={(e) => onChange({ ...draft, duration: e.target.value })} />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="wb-meet">Google Meet link</Label>
-          <Input id="wb-meet" value={draft.meetUrl} onChange={(e) => onChange({ ...draft, meetUrl: e.target.value })} placeholder="https://meet.google.com/abc-defg-hij" />
+          <Label htmlFor="wb-meet">Meeting link</Label>
+          <Input id="wb-meet" value={draft.meetUrl} onChange={(e) => onChange({ ...draft, meetUrl: e.target.value })} placeholder="Google Meet, Zoom, Teams… e.g. https://zoom.us/j/123456789" />
         </div>
       </div>
       {preview && (
