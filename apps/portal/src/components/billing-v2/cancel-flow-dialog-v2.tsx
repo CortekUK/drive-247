@@ -31,7 +31,7 @@ import {
  *
  *   1. "Before you go"  — what's wrong? Two ways we can help, and a way out:
  *        · Something isn't working → raise a ticket (issue type + details) and
- *          book a call: a specialist comes back within 12 hours to set up an
+ *          book a call: the team calendar opens in a new tab to pick a slot for an
  *          online meeting.
  *        · The price is too high (green) → 10% off the next 3 bills.
  *        · "I still want to cancel" → 3.
@@ -66,6 +66,9 @@ const CANCEL_REASONS = [
   "Technical problems",
   "Something else",
 ];
+
+/** The team's calendar — "Book a call" opens it so the tenant picks a slot then and there. */
+const BOOK_A_CALL_URL = "https://api.leadconnectorhq.com/widget/booking/WhGxejLXDJt4pN10JYUg";
 
 const RETENTION_PERCENT = 10;
 const RETENTION_BILLS = 3;
@@ -174,7 +177,16 @@ export function CancelFlowDialogV2({
             onCancel={() => setStep("cancel")}
           />
         ) : step === "ticket" ? (
-          <Ticket busy={busy} onBack={() => setStep("start")} onSend={(type, details) => send("call", `CALL REQUESTED — ${type}. ${details}`.trim())} />
+          <Ticket
+            busy={busy}
+            onBack={() => setStep("start")}
+            onSend={(type, details) => {
+              // Opened inside the click itself, before any await — a window.open
+              // after the request resolves is treated as a popup and blocked.
+              window.open(BOOK_A_CALL_URL, "_blank", "noopener,noreferrer");
+              send("call", `CALL REQUESTED — ${type}. ${details}`.trim());
+            }}
+          />
         ) : step === "offer" ? (
           <Offer
             monthlyCents={monthlyCents}
@@ -207,9 +219,14 @@ export function CancelFlowDialogV2({
             body="A dedicated specialist will work through it with you. Your subscription carries on as normal in the meantime."
             steps={[
               "We read what you sent and match you with the right specialist.",
-              "They contact you within 12 hours to agree a time.",
+              "Pick a time in the calendar that opened in a new tab.",
               "You meet online, and they resolve it with you there.",
             ]}
+            extra={
+              <a href={BOOK_A_CALL_URL} target="_blank" rel="noopener noreferrer" className={LINK}>
+                Calendar didn&apos;t open? Book your call here
+              </a>
+            }
             onClose={() => onOpenChange(false)}
           />
         ) : outcome === "discount" ? (
@@ -355,7 +372,7 @@ function Ticket({ busy, onBack, onSend }: { busy: boolean; onBack: () => void; o
       <Header
         eyebrow="Raise an issue"
         title="Tell us what's going on"
-        body="A dedicated specialist will get back to you within 12 hours and set up an online meeting to resolve it with you."
+        body="Tell us what it is, then pick a time that suits you. A dedicated specialist will meet you online and resolve it with you."
       />
       <div className="space-y-4 px-8 pb-6 pt-5">
         <div className="space-y-1.5">
