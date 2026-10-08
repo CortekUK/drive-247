@@ -544,3 +544,9 @@ verify_jwt = false
 # (RESEND_INBOUND_WEBHOOK_SECRET) or x-inbound-secret; refuses all without one.
 [functions.abandoned-recovery-inbound]
 verify_jwt = false
+
+# Sunday Newsletter. Cron calls it with the service-role bearer and super admins
+# with their JWT — both checked inside. Public only for the footer's
+# unsubscribe link (GET ?unsubscribe=<delivery id>).
+[functions.sunday-newsletter-run]
+verify_jwt = false

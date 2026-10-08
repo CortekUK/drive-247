@@ -49,6 +49,7 @@ import { WebinarsTab } from './webinars-tab';
 import { MilestonesTab } from './milestones-tab';
 import { AbandonedRecoveryTab } from './abandoned-recovery-tab';
 import { NpsProgramTab } from './nps-program-tab';
+import { SundayNewsletterTab } from './sunday-newsletter-tab';
 import { ScopeCard } from './scope-card';
 
 export function CustomerManagementPage() {
@@ -56,7 +57,7 @@ export function CustomerManagementPage() {
   const canEdit = !!user?.is_super_admin;
 
   /** The three automations, the Cancellations report and the retention offers. */
-  const [tab, setTab] = useState<AutomationId | 'cancellations' | 'retention' | 'lifecycle' | 'poll' | 'marketing' | 'webinars' | 'milestones' | 'abandoned' | 'nps'>('signup');
+  const [tab, setTab] = useState<AutomationId | 'cancellations' | 'retention' | 'lifecycle' | 'poll' | 'marketing' | 'webinars' | 'milestones' | 'abandoned' | 'nps' | 'newsletter'>('signup');
   const [settings, setSettings] = useState<CustomerManagementSettings | null>(null);
   const [steps, setSteps] = useState<CustomerManagementStep[]>([]);
   const [loading, setLoading] = useState(true);
@@ -76,9 +77,10 @@ export function CustomerManagementPage() {
       { id: 'milestones', label: 'Milestone Celebrations' },
       { id: 'abandoned', label: 'Abandoned Recovery' },
       { id: 'nps', label: 'NPS Program' },
+      { id: 'newsletter', label: 'Sunday Newsletter' },
     ],
     tab,
-    (id) => setTab(id as AutomationId | 'cancellations' | 'retention' | 'lifecycle' | 'poll' | 'marketing' | 'webinars' | 'milestones' | 'abandoned' | 'nps'),
+    (id) => setTab(id as AutomationId | 'cancellations' | 'retention' | 'lifecycle' | 'poll' | 'marketing' | 'webinars' | 'milestones' | 'abandoned' | 'nps' | 'newsletter'),
   );
 
   const load = useCallback(async () => {
@@ -137,6 +139,9 @@ export function CustomerManagementPage() {
   }
   if (tab === 'nps') {
     return <NpsProgramTab canEdit={canEdit} />;
+  }
+  if (tab === 'newsletter') {
+    return <SundayNewsletterTab canEdit={canEdit} />;
   }
 
   if (loading) {
