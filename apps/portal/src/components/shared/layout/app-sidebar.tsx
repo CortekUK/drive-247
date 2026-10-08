@@ -35,7 +35,7 @@ import { useTenant } from "@/contexts/TenantContext";
 import { useIsAreaHidden } from "@/lib/lean-context";
 import { isV2 } from "@/lib/v2";
 import { useV2 } from "@/lib/v2-context";
-import { UserPlus, Workflow, Gift } from "lucide-react";
+import { UserPlus, Workflow, Gift, RefreshCw } from "lucide-react";
 import { usePendingBookingsCount } from "@/hooks/use-pending-bookings";
 import { useUnreadCount } from "@/hooks/use-unread-count";
 import { useAuthStore } from "@/stores/auth-store";
@@ -121,6 +121,10 @@ const settingsTabGroups = [
       { value: 'preauth', icon: CreditCard, label: 'Deposit' },
       { value: 'installments', icon: Banknote, label: 'Installments' },
       { value: 'payg', icon: Clock, label: 'Pay As You Go' },
+      // Weekly/monthly auto-renewing rentals: grace window before a rental with
+      // an unpaid week pauses, retries, lead time. Was reachable only by URL
+      // (?tab=auto-extend), so operators could not find it.
+      { value: 'auto-extend', icon: RefreshCw, label: 'Auto-Extend' },
       { value: 'promos', icon: Zap, label: 'Promo Codes' },
       { value: 'extras', icon: Package, label: 'Extras' },
       // Provider-neutral: this tab holds whichever processor the tenant settled
