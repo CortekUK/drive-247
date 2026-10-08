@@ -48,6 +48,7 @@ import { MarketingEmailsTab } from './marketing-emails-tab';
 import { WebinarsTab } from './webinars-tab';
 import { MilestonesTab } from './milestones-tab';
 import { AbandonedRecoveryTab } from './abandoned-recovery-tab';
+import { NpsProgramTab } from './nps-program-tab';
 import { ScopeCard } from './scope-card';
 
 export function CustomerManagementPage() {
@@ -55,7 +56,7 @@ export function CustomerManagementPage() {
   const canEdit = !!user?.is_super_admin;
 
   /** The three automations, the Cancellations report and the retention offers. */
-  const [tab, setTab] = useState<AutomationId | 'cancellations' | 'retention' | 'lifecycle' | 'poll' | 'marketing' | 'webinars' | 'milestones' | 'abandoned'>('signup');
+  const [tab, setTab] = useState<AutomationId | 'cancellations' | 'retention' | 'lifecycle' | 'poll' | 'marketing' | 'webinars' | 'milestones' | 'abandoned' | 'nps'>('signup');
   const [settings, setSettings] = useState<CustomerManagementSettings | null>(null);
   const [steps, setSteps] = useState<CustomerManagementStep[]>([]);
   const [loading, setLoading] = useState(true);
@@ -74,9 +75,10 @@ export function CustomerManagementPage() {
       { id: 'webinars', label: 'Webinars' },
       { id: 'milestones', label: 'Milestone Celebrations' },
       { id: 'abandoned', label: 'Abandoned Recovery' },
+      { id: 'nps', label: 'NPS Program' },
     ],
     tab,
-    (id) => setTab(id as AutomationId | 'cancellations' | 'retention' | 'lifecycle' | 'poll' | 'marketing' | 'webinars' | 'milestones' | 'abandoned'),
+    (id) => setTab(id as AutomationId | 'cancellations' | 'retention' | 'lifecycle' | 'poll' | 'marketing' | 'webinars' | 'milestones' | 'abandoned' | 'nps'),
   );
 
   const load = useCallback(async () => {
@@ -132,6 +134,9 @@ export function CustomerManagementPage() {
   }
   if (tab === 'abandoned') {
     return <AbandonedRecoveryTab canEdit={canEdit} />;
+  }
+  if (tab === 'nps') {
+    return <NpsProgramTab canEdit={canEdit} />;
   }
 
   if (loading) {

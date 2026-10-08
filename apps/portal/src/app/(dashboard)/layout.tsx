@@ -62,6 +62,7 @@ import { FirstRentalTour } from "@/components/onboarding/first-rental-tour";
 import { usePortalAnnouncements } from "@/hooks/use-portal-announcements";
 import { SystemAnnouncementBanner } from "@/components/announcements/system-announcement-banner";
 import { AnnouncementDialogHost } from "@/components/announcements/announcement-dialog-host";
+import { NpsPrompt } from "@/components/nps/nps-prompt";
 
 function LoadingSkeleton() {
   return (
@@ -1038,6 +1039,12 @@ export default function DashboardLayout({
           isSubscriptionPage={!!isSubscriptionPage}
           pathname={pathname ?? "/"}
         />
+
+        {/* NPS question (admin → Customer management → NPS Program), v1 and v2.
+            The lowest-priority dialog here: it waits for the paywall, every
+            onboarding surface, announcements and any open modal, using the
+            same check the feature-announcement dialogs use. */}
+        <NpsPrompt v2={v2Chrome} suppressed={promptsSuppressed} />
       </Provider>
     </DynamicThemeProvider>
   );
