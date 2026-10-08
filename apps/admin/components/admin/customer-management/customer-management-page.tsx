@@ -50,6 +50,7 @@ import { MilestonesTab } from './milestones-tab';
 import { AbandonedRecoveryTab } from './abandoned-recovery-tab';
 import { NpsProgramTab } from './nps-program-tab';
 import { SundayNewsletterTab } from './sunday-newsletter-tab';
+import { AdvisoryBoardTab } from './advisory-board-tab';
 import { ScopeCard } from './scope-card';
 
 export function CustomerManagementPage() {
@@ -57,7 +58,7 @@ export function CustomerManagementPage() {
   const canEdit = !!user?.is_super_admin;
 
   /** The three automations, the Cancellations report and the retention offers. */
-  const [tab, setTab] = useState<AutomationId | 'cancellations' | 'retention' | 'lifecycle' | 'poll' | 'marketing' | 'webinars' | 'milestones' | 'abandoned' | 'nps' | 'newsletter'>('signup');
+  const [tab, setTab] = useState<AutomationId | 'cancellations' | 'retention' | 'lifecycle' | 'poll' | 'marketing' | 'webinars' | 'milestones' | 'abandoned' | 'nps' | 'newsletter' | 'advisory'>('signup');
   const [settings, setSettings] = useState<CustomerManagementSettings | null>(null);
   const [steps, setSteps] = useState<CustomerManagementStep[]>([]);
   const [loading, setLoading] = useState(true);
@@ -78,9 +79,10 @@ export function CustomerManagementPage() {
       { id: 'abandoned', label: 'Abandoned Recovery' },
       { id: 'nps', label: 'NPS Program' },
       { id: 'newsletter', label: 'Sunday Newsletter' },
+      { id: 'advisory', label: 'Advisory Board' },
     ],
     tab,
-    (id) => setTab(id as AutomationId | 'cancellations' | 'retention' | 'lifecycle' | 'poll' | 'marketing' | 'webinars' | 'milestones' | 'abandoned' | 'nps' | 'newsletter'),
+    (id) => setTab(id as AutomationId | 'cancellations' | 'retention' | 'lifecycle' | 'poll' | 'marketing' | 'webinars' | 'milestones' | 'abandoned' | 'nps' | 'newsletter' | 'advisory'),
   );
 
   const load = useCallback(async () => {
@@ -142,6 +144,9 @@ export function CustomerManagementPage() {
   }
   if (tab === 'newsletter') {
     return <SundayNewsletterTab canEdit={canEdit} />;
+  }
+  if (tab === 'advisory') {
+    return <AdvisoryBoardTab canEdit={canEdit} />;
   }
 
   if (loading) {
