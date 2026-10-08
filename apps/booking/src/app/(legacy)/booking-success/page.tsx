@@ -12,6 +12,7 @@ import { supabase, supabaseUntyped } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { useTenant } from "@/contexts/TenantContext";
+import { trackBookingProgress } from "@/lib/abandoned-booking-tracker";
 import { verifyingLine, recordedButNotSavedLine } from "@/lib/payment-provider";
 import { useCustomerAuthStore } from "@/stores/customer-auth-store";
 import { useBookingStore } from "@/stores/booking-store";
@@ -236,6 +237,13 @@ const BookingSuccessContent = () => {
   const [loading, setLoading] = useState(true);
   const sessionId = searchParams?.get("session_id");
   const rentalId = searchParams?.get("rental_id");
+
+  // Abandoned-booking tracking: this booking was completed — closes the session.
+  useEffect(() => {
+    if (tenant?.id && rentalId) {
+      trackBookingProgress({ tenantId: tenant.id, site: 'v1', stage: 'completed', rentalId });
+    }
+  }, [tenant?.id, rentalId]);
   const isInstallment = searchParams?.get("installment") === "true";
   const isInvoicePayment = searchParams?.get("type") === "invoice" || searchParams?.get("type") === "hold";
   const isAuthenticated = !!customerUser;

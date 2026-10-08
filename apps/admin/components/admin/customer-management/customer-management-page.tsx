@@ -46,6 +46,8 @@ import { LifecycleCheckinsTab } from './lifecycle-checkins-tab';
 import { WebinarPollTab } from './webinar-poll-tab';
 import { MarketingEmailsTab } from './marketing-emails-tab';
 import { WebinarsTab } from './webinars-tab';
+import { MilestonesTab } from './milestones-tab';
+import { AbandonedRecoveryTab } from './abandoned-recovery-tab';
 import { ScopeCard } from './scope-card';
 
 export function CustomerManagementPage() {
@@ -53,7 +55,7 @@ export function CustomerManagementPage() {
   const canEdit = !!user?.is_super_admin;
 
   /** The three automations, the Cancellations report and the retention offers. */
-  const [tab, setTab] = useState<AutomationId | 'cancellations' | 'retention' | 'lifecycle' | 'poll' | 'marketing' | 'webinars'>('signup');
+  const [tab, setTab] = useState<AutomationId | 'cancellations' | 'retention' | 'lifecycle' | 'poll' | 'marketing' | 'webinars' | 'milestones' | 'abandoned'>('signup');
   const [settings, setSettings] = useState<CustomerManagementSettings | null>(null);
   const [steps, setSteps] = useState<CustomerManagementStep[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,9 +72,11 @@ export function CustomerManagementPage() {
       { id: 'poll', label: 'Webinar Poll' },
       { id: 'marketing', label: 'Marketing Instructions Emails' },
       { id: 'webinars', label: 'Webinars' },
+      { id: 'milestones', label: 'Milestone Celebrations' },
+      { id: 'abandoned', label: 'Abandoned Recovery' },
     ],
     tab,
-    (id) => setTab(id as AutomationId | 'cancellations' | 'retention' | 'lifecycle' | 'poll' | 'marketing' | 'webinars'),
+    (id) => setTab(id as AutomationId | 'cancellations' | 'retention' | 'lifecycle' | 'poll' | 'marketing' | 'webinars' | 'milestones' | 'abandoned'),
   );
 
   const load = useCallback(async () => {
@@ -122,6 +126,12 @@ export function CustomerManagementPage() {
   }
   if (tab === 'webinars') {
     return <WebinarsTab canEdit={canEdit} />;
+  }
+  if (tab === 'milestones') {
+    return <MilestonesTab canEdit={canEdit} />;
+  }
+  if (tab === 'abandoned') {
+    return <AbandonedRecoveryTab canEdit={canEdit} />;
   }
 
   if (loading) {

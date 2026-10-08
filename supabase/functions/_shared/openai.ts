@@ -139,6 +139,7 @@ export interface ChatCompletionOptions {
   model?: string;
   tools?: ToolDefinition[];
   tool_choice?: 'auto' | 'none' | { type: 'function'; function: { name: string } };
+  response_format?: { type: 'json_object' | 'text' };
 }
 
 export interface ChatCompletionResponse {
@@ -324,6 +325,7 @@ export async function chatCompletion(
     model = CHAT_MODEL,
     tools,
     tool_choice,
+    response_format,
   } = options;
 
   const requestBody: Record<string, unknown> = {
@@ -332,6 +334,10 @@ export async function chatCompletion(
     temperature,
     max_tokens,
   };
+
+  if (response_format) {
+    requestBody.response_format = response_format;
+  }
 
   if (tools && tools.length > 0) {
     requestBody.tools = tools;

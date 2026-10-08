@@ -13,6 +13,7 @@ import { format } from "date-fns";
 import { useCustomerAuthStore } from "@/stores/customer-auth-store";
 import { useBookingStore } from "@/stores/booking-store";
 import { useTenant } from "@/contexts/TenantContext";
+import { trackBookingProgress } from "@/lib/abandoned-booking-tracker";
 import { formatCurrency } from "@/lib/format-utils";
 import { parseDateOnly } from "@/lib/date-utils";
 import { vehiclePublicColumnsNested, vehicleDisplayName, displayRegistration } from "@/lib/vehicle-identity";
@@ -28,6 +29,13 @@ const BookingPendingContent = () => {
   const [loading, setLoading] = useState(true);
   const sessionId = searchParams?.get("session_id");
   const rentalId = searchParams?.get("rental_id");
+
+  // Abandoned-booking tracking: this booking was completed — closes the session.
+  useEffect(() => {
+    if (tenant?.id && rentalId) {
+      trackBookingProgress({ tenantId: tenant.id, site: 'v1', stage: 'completed', rentalId });
+    }
+  }, [tenant?.id, rentalId]);
   const isAuthenticated = !!customerUser;
 
   // Clear persisted booking form data on successful booking

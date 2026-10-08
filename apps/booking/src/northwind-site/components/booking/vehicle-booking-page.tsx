@@ -53,6 +53,10 @@ import {
   type CheckoutBlock,
   type CheckoutState,
 } from "./booking-checkout";
+import {
+  trackBookingProgress,
+  type BookingStage,
+} from "@/lib/abandoned-booking-tracker";
 import { BookingForm } from "./booking-form";
 import { deriveBookingRules, resolveDeliveryModes } from "./booking-rules";
 import {
@@ -1055,6 +1059,60 @@ export function VehicleBookingPage({ vehicleId }: { vehicleId: string }) {
     billableExtras,
     bookingLegs,
     createBooking,
+  ]);
+
+  /* ── abandoned-booking tracking ───────────────────────────────────────────
+   * Reports how far the renter got (debounced, fire-and-forget) so Drive 247
+   * can follow up if they leave halfway. See lib/abandoned-booking-tracker.ts.
+   */
+  const trackedRentalId =
+    booking.state.status === "ready" ? booking.state.booking.rentalId : null;
+  useEffect(() => {
+    if (!hydrated || !tenant?.id || !vehicle) return;
+    const stage: BookingStage =
+      paidHandoff !== null
+        ? "completed"
+        : paymentOpen
+          ? "payment"
+          : trackedRentalId !== null
+            ? "checkout"
+            : form.customerEmail.trim() !== ""
+              ? "details"
+              : "vehicle";
+    const timer = window.setTimeout(() => {
+      trackBookingProgress({
+        tenantId: tenant.id,
+        site: "v2",
+        stage,
+        vehicleId: vehicle.id,
+        vehicleName: vehicle.displayName,
+        pickupDate: form.pickupDate || null,
+        pickupTime: form.pickupTime || null,
+        dropoffDate: form.dropoffDate || null,
+        dropoffTime: form.dropoffTime || null,
+        pickupLocation: form.pickupAddress || null,
+        customerName: form.customerName || null,
+        customerEmail: form.customerEmail || null,
+        customerPhone: form.customerPhone || null,
+        rentalId: paidHandoff?.rentalId ?? trackedRentalId,
+      });
+    }, stage === "completed" ? 0 : 1500);
+    return () => window.clearTimeout(timer);
+  }, [
+    hydrated,
+    tenant?.id,
+    vehicle,
+    paidHandoff,
+    paymentOpen,
+    trackedRentalId,
+    form.customerEmail,
+    form.customerName,
+    form.customerPhone,
+    form.pickupDate,
+    form.pickupTime,
+    form.dropoffDate,
+    form.dropoffTime,
+    form.pickupAddress,
   ]);
 
   /* ── states ───────────────────────────────────────────────────────────── */

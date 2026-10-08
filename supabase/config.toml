@@ -533,3 +533,14 @@ verify_jwt = false
 # only fixed GET reads run, using the existing Stripe secrets by name.
 [functions.trax-stripe-read]
 verify_jwt = false
+
+# Abandoned booking recovery. The booking sites report progress anonymously
+# (input is validated, nothing is sent from here) and the recovery email's
+# unsubscribe link is a plain GET.
+[functions.abandoned-booking-track]
+verify_jwt = false
+
+# Renter replies to recovery emails. Authenticated inside by Svix signature
+# (RESEND_INBOUND_WEBHOOK_SECRET) or x-inbound-secret; refuses all without one.
+[functions.abandoned-recovery-inbound]
+verify_jwt = false

@@ -14,6 +14,7 @@ import { format } from "date-fns";
 import { parseDateOnly } from "@/lib/date-utils";
 import { vehiclePublicColumnsNested, vehicleDisplayName, displayRegistration } from "@/lib/vehicle-identity";
 import { useTenant } from "@/contexts/TenantContext";
+import { trackBookingProgress } from "@/lib/abandoned-booking-tracker";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 
 const BookingEnquirySubmittedContent = () => {
@@ -24,6 +25,13 @@ const BookingEnquirySubmittedContent = () => {
   const [bookingDetails, setBookingDetails] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const rentalId = searchParams?.get("rental_id");
+
+  // Abandoned-booking tracking: this booking was completed — closes the session.
+  useEffect(() => {
+    if (tenant?.id && rentalId) {
+      trackBookingProgress({ tenantId: tenant.id, site: 'v1', stage: 'completed', rentalId });
+    }
+  }, [tenant?.id, rentalId]);
 
   // Clear persisted booking form data on successful enquiry submission
   useEffect(() => {

@@ -17,6 +17,7 @@ import { calcExtrasTotal, extraLineTotal } from "@/lib/calculate-extras-total";
 import { clampToBonzahStart } from "@/lib/bonzah-dates";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
+import { trackBookingProgress } from "@/lib/abandoned-booking-tracker";
 import { securedByLine } from "@/lib/payment-provider";
 import { vehicleDisplayName, displayRegistration } from "@/lib/vehicle-identity";
 import { useCustomerAuthStore } from "@/stores/customer-auth-store";
@@ -1315,6 +1316,26 @@ export default function BookingCheckoutStep({
       };
       localStorage.setItem('pendingPaymentDetails', JSON.stringify(paymentDetails));
       console.log('Payment details stored:', paymentDetails);
+
+      // Abandoned-booking tracking: the rental exists, the renter is now paying.
+      if (tenant?.id) {
+        trackBookingProgress({
+          tenantId: tenant.id,
+          site: 'v1',
+          stage: 'payment',
+          vehicleId: selectedVehicle.id,
+          vehicleName: `${selectedVehicle.make ?? ''} ${selectedVehicle.model ?? ''}`.trim() || null,
+          pickupDate: formData.pickupDate || null,
+          pickupTime: formData.pickupTime || null,
+          dropoffDate: formData.dropoffDate || null,
+          dropoffTime: formData.dropoffTime || null,
+          customerName: formData.customerName || null,
+          customerEmail: formData.customerEmail || null,
+          customerPhone: formData.customerPhone || null,
+          rentalId: rental.id,
+          estimatedTotal: grandTotalCharged,
+        });
+      }
 
       // Store rental and invoice data for later use (including Bonzah policy ID)
       setCreatedRentalData({

@@ -38,6 +38,7 @@ import AIVerificationQR from "./AIVerificationQR";
 import { stripePromise } from "@/config/stripe";
 import { usePageContent, defaultHomeContent, mergeWithDefaults } from "@/hooks/usePageContent";
 import { useWorkingHours, getWorkingHoursForDate } from "@/hooks/useWorkingHours";
+import { trackBookingProgress, type BookingStage } from "@/lib/abandoned-booking-tracker";
 import { isInsuranceExemptTenant, isBonzahSellable } from "@/config/tenant-config";
 import { canCustomerBook } from "@/lib/tenantQueries";
 import { sanitizeName, sanitizeEmail, sanitizePhone, sanitizeLocation, sanitizeTextArea, isInputSafe } from "@/lib/sanitize";
@@ -2661,6 +2662,51 @@ const MultiStepBookingWidget = ({
   const hasActiveFilters = searchTerm || selectedCategories.length > 0 || sortBy !== "recommended";
   const selectedVehicle = vehicles.find(v => v.id === formData.vehicleId);
   const estimatedBooking = selectedVehicle ? calculateEstimatedTotal(selectedVehicle) : null;
+
+  // Abandoned-booking tracking: report how far the renter got (debounced,
+  // fire-and-forget) so a mid-way drop-off can be followed up. Payment and
+  // completion are reported by BookingCheckoutStep and the success pages.
+  const trackedVehicleName = selectedVehicle ? `${selectedVehicle.make ?? ''} ${selectedVehicle.model ?? ''}`.trim() : null;
+  const trackedTotal = estimatedBooking?.total ?? null;
+  useEffect(() => {
+    if (!tenant?.id) return;
+    if (currentStep === 1 && !formData.pickupDate && !formData.vehicleId) return; // only looking
+    const stage: BookingStage =
+      currentStep >= 5 ? 'checkout' : currentStep === 4 ? 'details' : currentStep === 3 ? 'insurance' : currentStep === 2 ? 'vehicle' : 'dates';
+    const timer = window.setTimeout(() => {
+      trackBookingProgress({
+        tenantId: tenant.id,
+        site: 'v1',
+        stage,
+        vehicleId: formData.vehicleId || null,
+        vehicleName: trackedVehicleName || null,
+        pickupDate: formData.pickupDate || null,
+        pickupTime: formData.pickupTime || null,
+        dropoffDate: formData.dropoffDate || null,
+        dropoffTime: formData.dropoffTime || null,
+        pickupLocation: formData.pickupLocation || null,
+        customerName: formData.customerName || null,
+        customerEmail: formData.customerEmail || null,
+        customerPhone: formData.customerPhone || null,
+        estimatedTotal: trackedTotal,
+      });
+    }, 1500);
+    return () => window.clearTimeout(timer);
+  }, [
+    tenant?.id,
+    currentStep,
+    formData.vehicleId,
+    formData.pickupDate,
+    formData.pickupTime,
+    formData.dropoffDate,
+    formData.dropoffTime,
+    formData.pickupLocation,
+    formData.customerName,
+    formData.customerEmail,
+    formData.customerPhone,
+    trackedVehicleName,
+    trackedTotal,
+  ]);
 
   /** What a vehicle card shows for price: shared by the legacy cards and the custom site's. */
   const getVehicleCardPricing = (vehicle: Vehicle) => {
