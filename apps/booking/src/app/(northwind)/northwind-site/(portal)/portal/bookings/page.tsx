@@ -11,6 +11,7 @@
  */
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { CalendarDays, CarFront } from 'lucide-react-nw';
 
 import { BookingCard } from '@nw/components/portal/booking-card';
@@ -20,6 +21,7 @@ import {
   LoadError,
   PageHeader,
   Panel,
+  PanelHeader,
 } from '@nw/components/portal/primitives';
 import { StatusChip } from '@nw/components/portal/status-chip';
 import {
@@ -28,6 +30,8 @@ import {
   type CustomerRental,
   type RentalFilter,
 } from '@nw/hooks/use-customer-rentals';
+import { useUnfinishedBookings } from '@nw/hooks/use-unfinished-bookings';
+import { parseDateOnly } from '@nw/lib/domain';
 import { cn } from '@nw/lib/utils';
 
 const FILTERS: ReadonlyArray<{ value: RentalFilter; label: string }> = [
@@ -73,6 +77,8 @@ export default function PortalBookingsPage() {
         title="My Bookings"
         description="Every rental you have made with us, newest first."
       />
+
+      <UnfinishedBookings />
 
       <div
         role="group"
@@ -146,6 +152,66 @@ export default function PortalBookingsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+/* ─────────────────────── bookings started, not finished ────────────────── */
+
+const STAGE_LABEL: Record<string, string> = {
+  dates: 'Choosing dates',
+  vehicle: 'Choosing a car',
+  insurance: 'Insurance',
+  details: 'Your details',
+  checkout: 'Review',
+  payment: 'Payment',
+};
+
+function shortDate(iso: string | null): string | null {
+  if (!iso) return null;
+  const d = parseDateOnly(iso);
+  return Number.isNaN(d.getTime())
+    ? null
+    : d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+/**
+ * Bookings the customer started on the site and did not finish, each with a
+ * link that reopens it where they left off (the recovery email's link). Above
+ * the filter because no filter owns it: an unfinished booking is not a rental.
+ */
+function UnfinishedBookings() {
+  const { data: unfinished } = useUnfinishedBookings();
+  if (!unfinished || unfinished.length === 0) return null;
+
+  return (
+    <Panel>
+      <PanelHeader title="Continue your booking" />
+      <ul className="divide-y divide-brand-border-soft">
+        {unfinished.map((b) => {
+          const from = shortDate(b.pickup_date);
+          const to = shortDate(b.dropoff_date);
+          return (
+            <li key={b.id} className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:px-5">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-brand-text">
+                  {b.vehicle_name || 'Car not chosen yet'}
+                </p>
+                <p className="text-xs text-brand-text-soft">
+                  {from ? `${from}${to ? ` – ${to}` : ''} · ` : ''}
+                  Left at: {STAGE_LABEL[b.stage] ?? b.stage}
+                </p>
+              </div>
+              <Link
+                href={b.resume_path}
+                className="inline-flex min-h-11 items-center justify-center rounded-full bg-brand-forest px-5 text-sm font-medium text-white transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-forest/25"
+              >
+                Continue booking
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </Panel>
   );
 }
 

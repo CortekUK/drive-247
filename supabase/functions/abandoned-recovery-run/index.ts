@@ -25,6 +25,7 @@ import {
   unsubscribeUrl,
   writeRecoveryEmail,
   type RecoveryBooking,
+  type RecoverySequence,
   type RecoveryTenant,
 } from "../_shared/abandoned-recovery.ts";
 
@@ -34,9 +35,10 @@ const MAX_SENDS_PER_RUN = 50;
 const LATE_LIMIT_MS = 2 * DAY;
 const SAME_ADDRESS_COOLDOWN_MS = 7 * DAY;
 const EXPIRE_AFTER_MS = 30 * DAY;
+const FOLLOW_UP_EVERY_MS = DAY;
 
 const TENANT_COLS =
-  "id, slug, company_name, app_name, logo_url, primary_color, accent_color, contact_email, contact_phone, custom_booking_domain";
+  "id, slug, company_name, app_name, logo_url, primary_color, accent_color, contact_email, contact_phone, custom_booking_domain, booking_v2_enabled, custom_site_eligible";
 
 interface Settings {
   enabled: boolean;
@@ -44,6 +46,8 @@ interface Settings {
   tenant_scope: "all" | "selected";
   tenant_ids: string[];
   ai_instructions: string;
+  /** Emails per abandoned booking: the first, then one a day (1–7). */
+  max_emails: number;
 }
 
 interface Row extends RecoveryBooking {
@@ -54,10 +58,41 @@ interface Row extends RecoveryBooking {
   last_activity_at: string;
   abandoned_at: string | null;
   unsubscribed_at: string | null;
+  email_count: number;
+  last_email_at: string | null;
+  next_email_at: string | null;
+  last_reply_at: string | null;
+  email_sent_at: string | null;
 }
 
 // deno-lint-ignore no-explicit-any
 type Db = any;
+
+/** Write, send and log one recovery email (the first or a follow-up). */
+async function sendRecovery(supabase: Db, tenant: RecoveryTenant, r: Row, settings: Settings, seq: RecoverySequence) {
+  const mail = await writeRecoveryEmail(tenant, r, settings.ai_instructions, seq);
+  const { html, text } = renderRecoveryHtml(tenant, mail.subject, mail.body, unsubscribeUrl(r.recovery_token), mail.link);
+  const outcome = await sendTenantEmail({
+    tenant,
+    to: r.customer_email!,
+    subject: mail.subject,
+    html,
+    text,
+    replyTo: replyToFor(tenant, r.recovery_token),
+    headers: { "List-Unsubscribe": `<${unsubscribeUrl(r.recovery_token)}>` },
+  });
+  await supabase.from("abandoned_recovery_messages").insert({
+    abandoned_booking_id: r.id,
+    tenant_id: r.tenant_id,
+    direction: "outbound",
+    kind: "recovery",
+    subject: mail.subject,
+    body: mail.body,
+    status: outcome.ok ? "sent" : "failed",
+    detail: outcome.ok ? outcome.id ?? null : outcome.detail ?? null,
+  });
+  return { mail, outcome };
+}
 
 async function tenantsById(supabase: Db, ids: string[]): Promise<Map<string, RecoveryTenant>> {
   const out = new Map<string, RecoveryTenant>();
@@ -108,6 +143,7 @@ Deno.serve(async (req) => {
       tenant_scope: settingsRow?.tenant_scope ?? "selected",
       tenant_ids: settingsRow?.tenant_ids ?? [],
       ai_instructions: settingsRow?.ai_instructions ?? "",
+      max_emails: Math.min(7, Math.max(1, Number(settingsRow?.max_emails) || 1)),
     };
 
     /* ── super-admin tools ─────────────────────────────────────────────── */
@@ -142,7 +178,7 @@ Deno.serve(async (req) => {
       if (action === "preview") return jsonResponse({ success: true, ...mail });
       const to = String(body?.to ?? "").trim();
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) return errorResponse("A valid email address is required");
-      const { html, text } = renderRecoveryHtml(tenant, mail.subject, mail.body, null);
+      const { html, text } = renderRecoveryHtml(tenant, mail.subject, mail.body, null, mail.link);
       const outcome = await sendTenantEmail({ tenant, to, subject: `[Test] ${mail.subject}`, html, text });
       return outcome.ok ? jsonResponse({ success: true, ...mail }) : errorResponse(outcome.detail || "Send failed", 502);
     }
@@ -153,7 +189,7 @@ Deno.serve(async (req) => {
 
     const now = Date.now();
     const nowIso = new Date(now).toISOString();
-    const counts = { converted: 0, abandoned: 0, sent: 0, failed: 0, skipped: 0, expired: 0 };
+    const counts = { converted: 0, abandoned: 0, sent: 0, followUps: 0, stopped: 0, failed: 0, skipped: 0, expired: 0 };
 
     const { data: openRaw, error: openErr } = await supabase
       .from("abandoned_bookings")
@@ -256,17 +292,8 @@ Deno.serve(async (req) => {
       sends++;
       recent.add(key);
 
-      const mail = await writeRecoveryEmail(tenant!, r, settings.ai_instructions);
-      const { html, text } = renderRecoveryHtml(tenant!, mail.subject, mail.body, unsubscribeUrl(r.recovery_token));
-      const outcome = await sendTenantEmail({
-        tenant: tenant!,
-        to: r.customer_email!,
-        subject: mail.subject,
-        html,
-        text,
-        replyTo: replyToFor(tenant!, r.recovery_token),
-        headers: { "List-Unsubscribe": `<${unsubscribeUrl(r.recovery_token)}>` },
-      });
+      const { mail, outcome } = await sendRecovery(supabase, tenant!, r, settings, { attempt: 1, total: settings.max_emails });
+      const sentAt = new Date().toISOString();
 
       await supabase
         .from("abandoned_bookings")
@@ -276,23 +303,84 @@ Deno.serve(async (req) => {
               status: "emailed",
               email_subject: mail.subject,
               email_body: mail.body,
-              email_sent_at: new Date().toISOString(),
+              email_sent_at: sentAt,
               email_detail: mail.ai ? null : "Sent the standard message (AI unavailable)",
+              email_count: 1,
+              last_email_at: sentAt,
+              next_email_at: settings.max_emails > 1 ? new Date(Date.parse(sentAt) + FOLLOW_UP_EVERY_MS).toISOString() : null,
             }
             : { email_status: "failed", email_detail: outcome.detail ?? "Send failed", email_subject: mail.subject, email_body: mail.body },
         )
         .eq("id", r.id);
-      await supabase.from("abandoned_recovery_messages").insert({
-        abandoned_booking_id: r.id,
-        tenant_id: r.tenant_id,
-        direction: "outbound",
-        kind: "recovery",
-        subject: mail.subject,
-        body: mail.body,
-        status: outcome.ok ? "sent" : "failed",
-        detail: outcome.ok ? outcome.id ?? null : outcome.detail ?? null,
-      });
       if (outcome.ok) counts.sent++;
+      else counts.failed++;
+    }
+
+    // 3b. Follow-ups: one a day after the first, until max_emails have gone —
+    //     or the renter acts. "Acts" = booked (step 1 already took those out),
+    //     came back to the booking (any tracked activity after the last email,
+    //     which includes opening the email's resume link), replied, or
+    //     unsubscribed. Any of those ends the sequence for good; coming back
+    //     and leaving again does not restart it.
+    const due = open.filter(
+      (r) => r.status === "emailed" && r.next_email_at !== null && Date.parse(r.next_email_at) <= now,
+    );
+    const dueTenants = await tenantsById(supabase, due.map((r) => r.tenant_id));
+    for (const r of due) {
+      if (sends >= MAX_SENDS_PER_RUN) break;
+      const tenant = dueTenants.get(r.tenant_id);
+      const sentSoFar = r.email_count || 1;
+      const lastEmail = Date.parse(r.last_email_at ?? r.email_sent_at ?? r.next_email_at!);
+      const inScope = settings.tenant_scope === "all" || settings.tenant_ids.includes(r.tenant_id);
+      const stop = r.unsubscribed_at
+        ? "Unsubscribed"
+        : r.last_reply_at && Date.parse(r.last_reply_at) > lastEmail
+        ? "Replied to the email"
+        : Date.parse(r.last_activity_at) > lastEmail
+        ? "Came back to the booking"
+        : sentSoFar >= settings.max_emails
+        ? `All ${sentSoFar} emails sent`
+        : !settings.enabled
+        ? "Recovery emails were turned off"
+        : !inScope
+        ? "Tenant no longer included in recovery"
+        : !tenant || !r.customer_email
+        ? "Nowhere to send it"
+        : null;
+
+      // Claim: only the run that clears next_email_at may act on it.
+      const { data: claimed } = await supabase
+        .from("abandoned_bookings")
+        .update({ next_email_at: null, ...(stop ? { follow_up_stopped: stop } : {}) })
+        .eq("id", r.id)
+        .eq("next_email_at", r.next_email_at)
+        .select("id");
+      if (!claimed || claimed.length === 0) continue;
+      if (stop) {
+        counts.stopped++;
+        continue;
+      }
+
+      sends++;
+      const attempt = sentSoFar + 1;
+      const { outcome } = await sendRecovery(supabase, tenant!, r, settings, { attempt, total: settings.max_emails });
+      const sentAt = new Date().toISOString();
+      await supabase
+        .from("abandoned_bookings")
+        .update(
+          outcome.ok
+            ? {
+              email_count: attempt,
+              last_email_at: sentAt,
+              next_email_at: attempt < settings.max_emails ? new Date(Date.parse(sentAt) + FOLLOW_UP_EVERY_MS).toISOString() : null,
+              follow_up_stopped: attempt >= settings.max_emails ? `All ${attempt} emails sent` : null,
+            }
+            // A failed follow-up ends the sequence rather than retrying every
+            // ten minutes into a mailbox that refuses it.
+            : { follow_up_stopped: `Email ${attempt} failed: ${outcome.detail ?? "send failed"}` },
+        )
+        .eq("id", r.id);
+      if (outcome.ok) counts.followUps++;
       else counts.failed++;
     }
 

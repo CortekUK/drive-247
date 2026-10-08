@@ -58,6 +58,8 @@ interface Settings {
   tenant_scope: 'all' | 'selected';
   tenant_ids: string[];
   ai_instructions: string;
+  /** Emails per abandoned booking: the first, then one a day until they act (1–7). */
+  max_emails: number;
 }
 
 interface Session {
@@ -84,6 +86,10 @@ interface Session {
   email_subject: string | null;
   email_body: string | null;
   email_sent_at: string | null;
+  email_count: number;
+  last_email_at: string | null;
+  next_email_at: string | null;
+  follow_up_stopped: string | null;
   unsubscribed_at: string | null;
   converted_at: string | null;
   converted_after_email: boolean;
@@ -207,6 +213,7 @@ export function AbandonedRecoveryTab({ canEdit }: { canEdit: boolean }) {
         tenant_scope: 'selected',
         tenant_ids: [],
         ai_instructions: '',
+        max_emails: 1,
       };
       setSettings(loaded);
       setDraft(loaded);
@@ -278,6 +285,10 @@ export function AbandonedRecoveryTab({ canEdit }: { canEdit: boolean }) {
       toast.error('Wait time must be between 15 minutes and 7 days');
       return;
     }
+    if (!Number.isInteger(draft.max_emails) || draft.max_emails < 1 || draft.max_emails > 7) {
+      toast.error('Emails per booking must be between 1 and 7');
+      return;
+    }
     setSavingSettings(true);
     try {
       const row = { ...draft, updated_at: new Date().toISOString() };
@@ -319,8 +330,8 @@ export function AbandonedRecoveryTab({ canEdit }: { canEdit: boolean }) {
                 Abandoned Recovery
               </CardTitle>
               <CardDescription>
-                When a renter starts a booking on a tenant&apos;s site (V1 or V2) and leaves halfway, they get one AI-written email
-                picking up exactly where they left off. If they reply with a question, the AI answers{' '}
+                When a renter starts a booking on a tenant&apos;s site (V1 or V2) and leaves halfway, they get an AI-written email
+                picking up exactly where they left off — and, if you choose, one follow-up a day until they come back. If they reply with a question, the AI answers{' '}
                 <span className="font-medium text-foreground">only from that tenant&apos;s approved FAQs</span>, and passes
                 anything else to the tenant.
               </CardDescription>
@@ -352,7 +363,8 @@ export function AbandonedRecoveryTab({ canEdit }: { canEdit: boolean }) {
                   onCheckedChange={(v) => setDraft({ ...draft, auto_reply_enabled: v })}
                 />
               </div>
-              <div className="space-y-1.5 rounded-lg border p-4">
+              <div className="grid gap-4 rounded-lg border p-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
                 <Label htmlFor="ar-delay" className="text-sm font-medium">
                   Email after they&apos;ve been gone for
                 </Label>
@@ -375,6 +387,29 @@ export function AbandonedRecoveryTab({ canEdit }: { canEdit: boolean }) {
                     )}
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="ar-max-emails" className="text-sm font-medium">
+                  Emails per booking
+                </Label>
+                <Select
+                  value={String(draft.max_emails ?? 1)}
+                  disabled={!canEdit}
+                  onValueChange={(v) => setDraft({ ...draft, max_emails: Number(v) })}
+                >
+                  <SelectTrigger id="ar-max-emails">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[1, 2, 3, 4, 5, 6, 7].map((n) => (
+                      <SelectItem key={n} value={String(n)}>
+                        {n === 1 ? '1 email only' : `Up to ${n} — one a day`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">Stops as soon as they book, come back, reply or unsubscribe.</p>
+              </div>
               </div>
               <div className="space-y-1.5 rounded-lg border p-4">
                 <Label className="text-sm font-medium">Tenants</Label>
@@ -399,8 +434,9 @@ export function AbandonedRecoveryTab({ canEdit }: { canEdit: boolean }) {
               />
               <p className="text-xs text-muted-foreground">
                 The AI always uses only the real booking details (car, dates, where they stopped) and never invents prices,
-                discounts or policies. One email per abandoned booking, never more than one per renter per tenant each week,
-                with an unsubscribe link.
+                discounts or policies. Each abandoned booking gets the first email, then (if set above) one follow-up a day until
+                the renter books, comes back, replies or unsubscribes. A renter starts a new sequence at most once per tenant each
+                week, and every email has an unsubscribe link.
               </p>
             </div>
             {canEdit && (
@@ -560,6 +596,14 @@ export function AbandonedRecoveryTab({ canEdit }: { canEdit: boolean }) {
                           <div className="text-xs text-muted-foreground">
                             {formatDateTime(s.email_sent_at)}
                             {s.reply_count > 0 && ` · ${s.reply_count} repl${s.reply_count === 1 ? 'y' : 'ies'}`}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {`${s.email_count || 1} email${(s.email_count || 1) === 1 ? '' : 's'} sent`}
+                            {s.next_email_at
+                              ? ` · next ${formatDateTime(s.next_email_at)}`
+                              : s.follow_up_stopped
+                              ? ` · ${s.follow_up_stopped}`
+                              : ''}
                           </div>
                         </div>
                       ) : s.email_status ? (

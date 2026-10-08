@@ -52,6 +52,9 @@ export interface RecoveryTenant {
   contact_email: string | null;
   contact_phone?: string | null;
   custom_booking_domain?: string | null;
+  /** Both on = the V1 wizard lives on the custom site's /book page, not on /. */
+  booking_v2_enabled?: boolean | null;
+  custom_site_eligible?: boolean | null;
 }
 
 export interface RecoveryBooking {
@@ -89,13 +92,26 @@ export function brandOf(t: RecoveryTenant): EmailLayoutBrand {
   };
 }
 
-/** Where "Finish your booking" goes. V2 resumes on the car's page; V1's wizard
- *  restores itself from the browser it was started in. */
+/** The query param the booking site reads to restore a session from the email. */
+export const RESUME_PARAM = "resume";
+
+/**
+ * Where "Finish your booking" goes: the page that hosts the booking, carrying
+ * the session's recovery token. The booking site trades the token for what the
+ * renter had entered (abandoned-booking-track, action "resume") and reopens the
+ * step they left at — on any device, not just the browser they started in.
+ *
+ *   V2  the car's own page
+ *   V1  the wizard: on the custom site it lives on /book (the custom home has
+ *       no wizard), on the original site on the home page
+ */
 export function resumeUrl(t: RecoveryTenant, b: RecoveryBooking): string {
   const domain = t.custom_booking_domain?.trim().replace(/^https?:\/\//, "").replace(/\/+$/, "");
   const base = `https://${domain || `${t.slug}.drive-247.com`}`;
-  if (b.site === "v2" && b.vehicle_id) return `${base}/booking/${b.vehicle_id}`;
-  return `${base}/`;
+  const query = `?${RESUME_PARAM}=${encodeURIComponent(b.recovery_token)}`;
+  if (b.site === "v2" && b.vehicle_id) return `${base}/booking/${b.vehicle_id}${query}`;
+  if (t.booking_v2_enabled && t.custom_site_eligible) return `${base}/custom-booking-page/book${query}`;
+  return `${base}/${query}`;
 }
 
 export function unsubscribeUrl(token: string): string {
@@ -138,23 +154,57 @@ export interface RecoveryEmail {
   subject: string;
   body: string;
   ai: boolean;
+  /** The resume link inside `body` — renderRecoveryHtml draws it as a button. */
+  link: string;
 }
 
-function fallbackRecoveryEmail(t: RecoveryTenant, b: RecoveryBooking, link: string): RecoveryEmail {
+/** Which email of the sequence this is: 1 = the first, then one follow-up a day. */
+export interface RecoverySequence {
+  attempt: number;
+  total: number;
+}
+
+function fallbackRecoveryEmail(t: RecoveryTenant, b: RecoveryBooking, link: string, seq: RecoverySequence): RecoveryEmail {
   const name = firstName(b.customer_name);
   const car = b.vehicle_name || "your car";
   const from = prettyDate(b.pickup_date);
   const to = prettyDate(b.dropoff_date);
   const when = from && to ? ` for ${from} to ${to}` : from ? ` from ${from}` : "";
+  if (seq.attempt > 1) {
+    const last = seq.attempt >= seq.total;
+    return {
+      subject: last
+        ? `Last reminder: your ${b.vehicle_name ?? "booking"} with ${tenantName(t)}`
+        : b.vehicle_name ? `Your ${b.vehicle_name} is still waiting` : `Your booking with ${tenantName(t)} is still waiting`,
+      body:
+        `Hi${name ? ` ${name}` : ""},
+
+` +
+        `Just a reminder that your booking for ${car}${when} isn't finished yet. Everything you entered is saved, so you can pick up right where you left off.
+
+` +
+        `${link}
+
+` +
+        (last ? `This is the last reminder we'll send about this booking. ` : "") +
+        `Any questions? Just reply to this email.
+
+` +
+        `${tenantName(t)}`,
+      ai: false,
+      link,
+    };
+  }
   return {
     subject: b.vehicle_name ? `Still want the ${b.vehicle_name}?` : `Your booking with ${tenantName(t)} is waiting`,
     body:
       `Hi${name ? ` ${name}` : ""},\n\n` +
       `You were part-way through booking ${car}${when} with ${tenantName(t)}. Your details are saved — it only takes a minute to finish.\n\n` +
-      `Finish your booking: ${link}\n\n` +
+      `${link}\n\n` +
       `Any questions? Just reply to this email.\n\n` +
       `${tenantName(t)}`,
     ai: false,
+    link,
   };
 }
 
@@ -162,9 +212,10 @@ export async function writeRecoveryEmail(
   t: RecoveryTenant,
   b: RecoveryBooking,
   extraInstructions: string,
+  seq: RecoverySequence = { attempt: 1, total: 1 },
 ): Promise<RecoveryEmail> {
   const link = resumeUrl(t, b);
-  const fallback = fallbackRecoveryEmail(t, b, link);
+  const fallback = fallbackRecoveryEmail(t, b, link, seq);
   if (!Deno.env.get("OPENAI_API_KEY")) return fallback;
 
   const facts = {
@@ -175,12 +226,15 @@ export async function writeRecoveryEmail(
     return: [prettyDate(b.dropoff_date), b.dropoff_time].filter(Boolean).join(" ") || null,
     pickup_location: b.pickup_location,
     left_while: STAGE_LABEL[b.stage] ?? b.stage,
+    reminder_number: seq.attempt,
+    is_last_reminder: seq.attempt > 1 && seq.attempt >= seq.total,
   };
 
   const system = [
     `You write ONE short follow-up email for ${tenantName(t)}, a car rental company, to a renter who started a booking on its website and left before finishing.`,
     "Goal: a warm, personal nudge to come back and finish. Mention the car and the dates when they are known, e.g. \"Still want the Tesla for Saturday–Sunday?\".",
     "Tailor it to where they left off: choosing dates or a car → help them pick; insurance → reassure it is quick; their details or reviewing → nearly done; paying → their booking is one step from confirmed.",
+    "reminder_number > 1 means they already got an email about this booking (one a day) and have not come back. Write a shorter, light follow-up that does not repeat the earlier wording and never guilt-trips. If is_last_reminder is true, say plainly that this is the last reminder about this booking.",
     "Rules:",
     "- Use ONLY the facts given. Never invent prices, discounts, availability guarantees, policies, deadlines or urgency.",
     "- Plain text, no markdown, no HTML. 50–110 words. Short paragraphs.",
@@ -207,8 +261,8 @@ export async function writeRecoveryEmail(
     if (!subject || !body || body.length > 3000) return fallback;
     body = body.includes("{{resume_link}}")
       ? body.replace(/\{\{\s*resume_link\s*\}\}/g, link)
-      : `${body}\n\nFinish your booking: ${link}`;
-    return { subject, body, ai: true };
+      : `${body}\n\n${link}`;
+    return { subject, body, ai: true, link };
   } catch (e) {
     console.error("[abandoned-recovery] AI email failed, using fallback:", (e as Error).message);
     return fallback;
@@ -304,10 +358,36 @@ export async function answerFromFaqs(
 
 /* ── Rendering ──────────────────────────────────────────────────────────── */
 
-/** Plain text (AI output is never trusted as HTML) → the branded email. */
-export function renderRecoveryHtml(t: RecoveryTenant, subject: string, body: string, unsubscribe: string | null) {
-  const footer = unsubscribe ? `\n\nDon't want these reminders? Unsubscribe: ${unsubscribe}` : "";
-  const bodyHtml = sanitizeEmailBodyHtml(plainTextToEmailHtml(body + footer));
+/** Same escaping plainTextToEmailHtml applies, so an address can be found in its output. */
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+/**
+ * Plain text (AI output is never trusted as HTML) → the branded email.
+ *
+ * Both links are ours, not the model's, so they are drawn after the text is
+ * escaped: the resume link as a "Finish your booking" button in place of its
+ * raw address (which carries a token and reads as noise), the unsubscribe
+ * address as a short "Unsubscribe" link. The plain-text part still spells both
+ * addresses out.
+ */
+export function renderRecoveryHtml(
+  t: RecoveryTenant,
+  subject: string,
+  body: string,
+  unsubscribe: string | null,
+  resumeLink: string | null = null,
+) {
+  let html = plainTextToEmailHtml(body);
+  if (resumeLink) {
+    const href = escapeHtml(resumeLink);
+    html = html.split(`<a href="${href}">${href}</a>`).join(`<a data-email-button href="${href}">Finish your booking</a>`);
+  }
+  if (unsubscribe) {
+    html += `<p>Don't want these reminders? <a href="${escapeHtml(unsubscribe)}">Unsubscribe</a></p>`;
+  }
+  const bodyHtml = sanitizeEmailBodyHtml(html);
   return {
     html: renderNotificationEmailHtml({ bodyHtml, brand: brandOf(t), preheader: subject }),
     text: emailBodyToPlainText(bodyHtml),

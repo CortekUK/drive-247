@@ -54,6 +54,9 @@ import {
   type CheckoutState,
 } from "./booking-checkout";
 import {
+  clearResumeParam,
+  isUpcomingIsoDate,
+  takeResumedBooking,
   trackBookingProgress,
   type BookingStage,
 } from "@/lib/abandoned-booking-tracker";
@@ -351,6 +354,50 @@ export function VehicleBookingPage({ vehicleId }: { vehicleId: string }) {
     // this effect a loop. The actions it uses are stable across the store's life.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated, tenant, vehicleId, modes, rules]);
+
+  /* ── "Finish your booking" from the recovery email ─────────────────────
+   * ?resume=<token> brings back the dates and contact details the renter had
+   * entered for THIS car, on any device. It overrides the seeded defaults
+   * (that is the point of the link), but an address only fills a hole, for
+   * the same reason the trip intent above does: which arrangement accepts a
+   * typed address is the seeding's call. Dates that have gone by are left to
+   * the seeding. A browser that already holds this booking keeps its own copy.
+   */
+  useEffect(() => {
+    if (!hydrated || !tenant?.id) return;
+    let cancelled = false;
+    void takeResumedBooking(tenant.id).then((resumed) => {
+      if (cancelled || !resumed) return;
+      clearResumeParam();
+      if (!resumed.ok) return;
+      if (resumed.site !== "v2" || resumed.sameSession || resumed.vehicleId !== vehicleId) return;
+      const s = resumed.state;
+      const text = (v: unknown) => (typeof v === "string" && v.trim() !== "" ? v : null);
+      const patch: Parameters<typeof form.patch>[0] = {};
+      if (isUpcomingIsoDate(s.pickupDate) && isUpcomingIsoDate(s.dropoffDate) && s.dropoffDate >= s.pickupDate) {
+        patch.pickupDate = s.pickupDate;
+        patch.dropoffDate = s.dropoffDate;
+        const pickupTime = text(s.pickupTime);
+        const dropoffTime = text(s.dropoffTime);
+        if (pickupTime) patch.pickupTime = pickupTime;
+        if (dropoffTime) patch.dropoffTime = dropoffTime;
+      }
+      const name = text(s.customerName);
+      const email = text(s.customerEmail);
+      const phone = text(s.customerPhone);
+      if (name) patch.customerName = name;
+      if (email) patch.customerEmail = email;
+      if (phone) patch.customerPhone = phone;
+      const address = text(s.pickupLocation);
+      if (address && useBookingStore.getState().pickupAddress === "") patch.pickupAddress = address;
+      if (Object.keys(patch).length > 0) form.patch(patch);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // `form` is a fresh object on every store write (see the seeding above).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, tenant?.id, vehicleId]);
 
   /* ── availability ─────────────────────────────────────────────────────── */
 

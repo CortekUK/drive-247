@@ -38,13 +38,13 @@ import AIVerificationQR from "./AIVerificationQR";
 import { stripePromise } from "@/config/stripe";
 import { usePageContent, defaultHomeContent, mergeWithDefaults } from "@/hooks/usePageContent";
 import { useWorkingHours, getWorkingHoursForDate } from "@/hooks/useWorkingHours";
-import { trackBookingProgress, type BookingStage } from "@/lib/abandoned-booking-tracker";
+import { trackBookingProgress, takeResumedBooking, clearResumeParam, isUpcomingIsoDate, type BookingStage } from "@/lib/abandoned-booking-tracker";
 import { isInsuranceExemptTenant, isBonzahSellable } from "@/config/tenant-config";
 import { canCustomerBook } from "@/lib/tenantQueries";
 import { sanitizeName, sanitizeEmail, sanitizePhone, sanitizeLocation, sanitizeTextArea, isInputSafe } from "@/lib/sanitize";
 import { formatVerificationProvider } from "@/lib/verification-provider";
 import { useCustomerAuthStore } from "@/stores/customer-auth-store";
-import { useBookingStore } from "@/stores/booking-store";
+import { useBookingStore, initialWidgetFormData, type WidgetFormData } from "@/stores/booking-store";
 import { useCustomerVerification } from "@/hooks/use-customer-verification";
 import { AuthPromptDialog } from "@/components/booking/AuthPromptDialog";
 import { CbpBookStepper } from "@/components/custom-booking-page/book-stepper";
@@ -2689,6 +2689,18 @@ const MultiStepBookingWidget = ({
         customerEmail: formData.customerEmail || null,
         customerPhone: formData.customerPhone || null,
         estimatedTotal: trackedTotal,
+        // What "Finish your booking" needs to rebuild the wizard on another device.
+        resumeState: {
+          dropoffLocation: formData.dropoffLocation,
+          pickupLocationId: formData.pickupLocationId,
+          returnLocationId: formData.returnLocationId,
+          pickupDeliveryFee: formData.pickupDeliveryFee,
+          returnDeliveryFee: formData.returnDeliveryFee,
+          promoCode: formData.promoCode,
+          customerTimezone: formData.customerTimezone,
+          specialRequests: formData.specialRequests,
+          selectedExtras,
+        },
       });
     }, 1500);
     return () => window.clearTimeout(timer);
@@ -2701,12 +2713,95 @@ const MultiStepBookingWidget = ({
     formData.dropoffDate,
     formData.dropoffTime,
     formData.pickupLocation,
+    formData.dropoffLocation,
+    formData.pickupLocationId,
+    formData.returnLocationId,
+    formData.pickupDeliveryFee,
+    formData.returnDeliveryFee,
+    formData.promoCode,
+    formData.customerTimezone,
+    formData.specialRequests,
     formData.customerName,
     formData.customerEmail,
     formData.customerPhone,
+    selectedExtras,
     trackedVehicleName,
     trackedTotal,
   ]);
+
+  // "Finish your booking" from the recovery email (?resume=<token>): rebuild the
+  // wizard from what the renter entered and reopen the step they left at — on
+  // any device. The furthest step reopened is Details: date of birth, licence
+  // and identity verification are never stored, so they are confirmed there and
+  // Review & Pay follows as usual. A browser that already holds this booking
+  // keeps its own, fuller copy.
+  useEffect(() => {
+    if (!tenant?.id) return;
+    let cancelled = false;
+    void takeResumedBooking(tenant.id).then((resumed) => {
+      if (cancelled || !resumed) return;
+      clearResumeParam();
+      if (!resumed.ok) {
+        if (resumed.reason === 'completed') toast.info("This booking has already been completed.");
+        else if (resumed.reason === 'expired') toast.info("That booking link has expired — please start a new booking.");
+        return;
+      }
+      if (resumed.site !== 'v1' || resumed.sameSession) return;
+
+      const s = resumed.state;
+      const restored: WidgetFormData = { ...initialWidgetFormData };
+      for (const key of Object.keys(initialWidgetFormData) as (keyof WidgetFormData)[]) {
+        const value = s[key];
+        if (typeof value === typeof initialWidgetFormData[key] && value !== null) {
+          (restored as unknown as Record<string, unknown>)[key] = value;
+        }
+      }
+      const datesStillAhead = isUpcomingIsoDate(restored.pickupDate) && isUpcomingIsoDate(restored.dropoffDate);
+      if (!datesStillAhead) {
+        restored.pickupDate = "";
+        restored.dropoffDate = "";
+        restored.pickupTime = "";
+        restored.dropoffTime = "";
+      }
+
+      const STEP_FOR_STAGE: Record<string, number> = { dates: 1, vehicle: 2, insurance: 3, details: 4, checkout: 4, payment: 4 };
+      let step = STEP_FOR_STAGE[resumed.stage] ?? 1;
+      if (step >= 3 && !restored.vehicleId) step = 2;
+      if (step >= 2 && (!restored.pickupDate || !restored.dropoffDate || !restored.pickupLocation)) step = 1;
+      if (step === 3 && skipInsurance) step = 4;
+
+      setFormData(restored);
+      // What the step 1 and step 2 Continue handlers would have recorded on the way.
+      if (step >= 2) {
+        updateBookingContext({
+          pickupLocation: restored.pickupLocation,
+          dropoffLocation: restored.dropoffLocation,
+          pickupLocationId: restored.pickupLocationId,
+          returnLocationId: restored.returnLocationId,
+          pickupDeliveryFee: restored.pickupDeliveryFee,
+          returnDeliveryFee: restored.returnDeliveryFee,
+          pickupDate: restored.pickupDate,
+          pickupTime: restored.pickupTime,
+          dropoffDate: restored.dropoffDate,
+          dropoffTime: restored.dropoffTime,
+          customerTimezone: restored.customerTimezone,
+          ...(step >= 3 ? { selectedVehicleId: restored.vehicleId } : {}),
+        } as any);
+      }
+      const extras = s.selectedExtras;
+      setSelectedExtras(extras && typeof extras === 'object' && !Array.isArray(extras) ? (extras as unknown as string[]) : []);
+      setHighestStepReached(step);
+      setCurrentStep(step);
+      if (!datesStillAhead && resumed.stage !== 'dates') {
+        toast.info("Welcome back! Your dates have passed, so please choose new ones.");
+      } else {
+        toast.success(step === 4 ? "Welcome back! Please confirm your details to finish your booking." : "Welcome back! Your booking is just as you left it.");
+      }
+    });
+    return () => { cancelled = true; };
+    // Runs once per tenant: the setters are stable store actions.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tenant?.id]);
 
   /** What a vehicle card shows for price: shared by the legacy cards and the custom site's. */
   const getVehicleCardPricing = (vehicle: Vehicle) => {

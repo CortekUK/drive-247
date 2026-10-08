@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useCustomerRentals, useCustomerRentalStats } from '@/hooks/use-customer-rentals';
 import { parseDateOnly } from '@/lib/date-utils';
 import { useCustomerNotifications } from '@/hooks/use-customer-notifications';
+import { useUnfinishedBookings } from '@/hooks/use-unfinished-bookings';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
@@ -86,6 +87,69 @@ function formatDateShort(date: string | null): string {
   } catch {
     return '-';
   }
+}
+
+/** Where the renter stopped, in their words. */
+const UNFINISHED_STAGE_LABEL: Record<string, string> = {
+  dates: 'Choosing dates',
+  vehicle: 'Choosing a car',
+  insurance: 'Insurance',
+  details: 'Your details',
+  checkout: 'Review',
+  payment: 'Payment',
+};
+
+/**
+ * Bookings the customer started on the site and did not finish, each with a
+ * link that reopens it where they left off (the recovery email's link). Shown
+ * on every tab: an unfinished booking is not a rental yet, so no tab owns it.
+ */
+function UnfinishedBookings() {
+  const { data: unfinished } = useUnfinishedBookings();
+  if (!unfinished || unfinished.length === 0) return null;
+
+  return (
+    <Card className="border-indigo-500/30">
+      <CardHeader className="p-4 pb-2 sm:p-6 sm:pb-2">
+        <CardTitle className="text-base sm:text-lg">Continue your booking</CardTitle>
+        <p className="text-sm text-muted-foreground">
+          You started {unfinished.length === 1 ? 'a booking' : 'these bookings'} but didn&apos;t finish. Pick up where you left off.
+        </p>
+      </CardHeader>
+      <CardContent className="p-4 pt-2 sm:p-6 sm:pt-2">
+        <div className="border rounded-lg divide-y">
+          {unfinished.map((b) => (
+            <div key={b.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
+              <div className="h-10 w-10 rounded-md bg-muted flex-shrink-0 hidden sm:flex items-center justify-center">
+                <Car className="h-5 w-5 text-muted-foreground" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-medium truncate">{b.vehicle_name || 'Car not chosen yet'}</p>
+                <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5 flex-wrap">
+                  {b.pickup_date && (
+                    <span className="flex items-center gap-1">
+                      <Calendar className="h-3 w-3" />
+                      {formatDateShort(b.pickup_date)} — {formatDateShort(b.dropoff_date)}
+                    </span>
+                  )}
+                  <span className="flex items-center gap-1">
+                    <Clock className="h-3 w-3" />
+                    Left at: {UNFINISHED_STAGE_LABEL[b.stage] ?? b.stage}
+                  </span>
+                </div>
+              </div>
+              <Link href={b.resume_path} className="w-full sm:w-auto">
+                <Button className="w-full sm:w-auto">
+                  Continue booking
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </Link>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 function formatDateTimeShort(date: string | null): string {
@@ -179,6 +243,8 @@ export default function BookingsPage() {
           icon={DollarSign}
         />
       </div>
+
+      <UnfinishedBookings />
 
       {/* Tabs, Search, Sort */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
