@@ -678,6 +678,12 @@ export const AddPaymentDialog = ({
       // days, status not Cancelled. Applies to all entry paths (including
       // bundled Collect Now flows) because the duplicate is defined by what
       // hits the DB, not how staff got here.
+      //
+      // Only money that actually came in counts. A 'Pending' row is a payment
+      // link that was sent and never paid (none of them is captured), and
+      // 'Reversed' was undone — matching those flagged every payment a staff
+      // member recorded after emailing the same amount as a link (RevTek, Carol
+      // Jackson: three unpaid links, then both real payments warned "duplicate").
       const recentWindowMs = 14 * 24 * 60 * 60 * 1000;
       const sinceIso = new Date(Date.now() - recentWindowMs).toISOString();
       const { data: recentMatches } = await supabase
@@ -685,7 +691,7 @@ export const AddPaymentDialog = ({
         .select('id, amount, payment_date, created_at, method, status, booking_source')
         .eq('rental_id', rentalId)
         .eq('amount', data.amount)
-        .neq('status', 'Cancelled')
+        .not('status', 'in', '("Cancelled","Pending","Reversed")')
         .gte('created_at', sinceIso)
         .order('created_at', { ascending: false })
         .limit(1);
