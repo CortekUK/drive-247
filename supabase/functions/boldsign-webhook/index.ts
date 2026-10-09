@@ -218,8 +218,23 @@ async function handleBoldSignWebhook(supabaseClient: ReturnType<typeof createCli
         .eq('id', agreementId);
     }
 
-    // For original agreements (or fallback without agreement row): update rentals too
-    if (agreementType === 'original' && isStatusRegression(rental?.document_status as string | null, mappedStatus)) {
+    // A document the rental no longer points at: "Resend agreement" creates a
+    // new document and revokes the old one, and the old one's Revoked event
+    // arrives a minute later. Letting it through marked the rental 'voided'
+    // while the new document was still out for signature — and 'voided' is
+    // final, so the new document's own events (signed, completed) were then
+    // ignored at the rental level, and the customer portal offered no way to
+    // sign (Moore Luxe R-65d560, 8 Oct). Its rental_agreements row is updated
+    // above; the rental follows only its current document.
+    const superseded =
+      agreementType === 'original' &&
+      !!rental?.docusign_envelope_id &&
+      rental.docusign_envelope_id !== documentId;
+    if (superseded) {
+      console.log(
+        `Ignoring '${eventType}' for rental ${rental.id}: document ${documentId} was replaced by ${rental.docusign_envelope_id}`,
+      );
+    } else if (agreementType === 'original' && isStatusRegression(rental?.document_status as string | null, mappedStatus)) {
       console.log(
         `Ignoring '${eventType}' for rental ${rental.id}: it would move ` +
           `${rental?.document_status} back to ${mappedStatus}`,

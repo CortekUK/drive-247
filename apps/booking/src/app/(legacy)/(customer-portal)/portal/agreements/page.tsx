@@ -94,9 +94,10 @@ function AgreementCard({
   const hasSignedDocument = !!agreement.signed_document?.file_url;
   const hasEnvelope = !!agreement.document_id;
   const canViewDocument = hasSignedDocument || hasEnvelope;
+  // A voided, declined or expired document can't be signed (a resent
+  // agreement leaves the revoked one here); only an open one gets the button.
   const needsSignature = hasEnvelope && !hasSignedDocument &&
-    agreement.document_status !== 'completed' &&
-    agreement.document_status !== 'signed';
+    !['completed', 'signed', 'voided', 'declined', 'expired'].includes(agreement.document_status ?? '');
   // Hyphen form left "Audi A4 - " dangling once the plate was withheld; the
   // shared helper omits the suffix entirely instead.
   const vehicleInfo = vehicleDisplayLabel(agreement.vehicles, tenant);

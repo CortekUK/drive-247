@@ -588,10 +588,17 @@ export default function BookingDetailPage() {
   const vehicle = rental?.vehicles as any;
   const installmentPlan = (rental?.installment_plans as any)?.[0] || null;
 
-  const originalAgreement = useMemo(
-    () => agreements.find((a) => a.agreement_type === 'original') || null,
-    [agreements]
-  );
+  // The agreement the rental points at now. A resent agreement leaves the old,
+  // revoked one in the list (oldest first), and showing that one gave the
+  // customer a "Voided" card with no way to sign the new one.
+  const originalAgreement = useMemo(() => {
+    const originals = agreements.filter((a) => a.agreement_type === 'original');
+    return (
+      originals.find((a) => a.document_id && a.document_id === rental?.docusign_envelope_id) ||
+      originals[originals.length - 1] ||
+      null
+    );
+  }, [agreements, rental?.docusign_envelope_id]);
   const extensionAgreements = useMemo(
     () => agreements.filter((a) => a.agreement_type === 'extension'),
     [agreements]
