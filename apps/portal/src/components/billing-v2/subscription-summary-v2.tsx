@@ -19,6 +19,9 @@ import { SAMPLE_INTEGRATIONS, SAMPLE_JOINED, SAMPLE_RETENTION } from "@/lib/pric
 import type { PlanAction } from "@/components/billing-v2/manage-plan-dialog-v2";
 import { CancelFlowDialogV2 } from "@/components/billing-v2/cancel-flow-dialog-v2";
 import { UpgradeDialogV2 } from "@/components/billing-v2/upgrade-dialog-v2";
+import { PauseDialogV2 } from "@/components/billing-v2/pause-dialog-v2";
+import { useSubscriptionPause } from "@/hooks/use-subscription-pause";
+import { billsAroundPause } from "@/lib/subscription-pause";
 
 /**
  * The top of v2 Billing: ONE big number — what the operator pays each month:
@@ -149,6 +152,11 @@ export function SubscriptionSummaryV2({
   const [historyOpen, setHistoryOpen] = useState(false);
   const [trailOpen, setTrailOpen] = useState(false);
   const [planAction, setPlanAction] = useState<PlanAction | null>(null);
+  const [pauseOpen, setPauseOpen] = useState(false);
+  // Pausing is for v2 tenants that Super Admin → Pausing Accounts lets in.
+  const pauseState = useSubscriptionPause(!payDisabled).data;
+  const pause = pauseState?.pause ?? null;
+  const canPause = !!pauseState?.eligible || !!pause;
   const referrals = useReferrals();
   const upcoming = useUpcomingInvoice({ enabled: useStripeInvoice });
   const invoice = useStripeInvoice ? upcoming.data ?? null : null;
@@ -197,6 +205,16 @@ export function SubscriptionSummaryV2({
       ? baseCents - total
       : 0;
   const cur = invoice?.currency ?? currency;
+  // A bill that falls inside a pause is skipped (Stripe voids it), so the next
+  // real one is the first on the usual billing day after the pause.
+  const billAt = invoice?.date ?? nextBillAt;
+  const billInPause =
+    !!pause && !!billAt &&
+    new Date(billAt).getTime() >= new Date(pause.starts_at).getTime() &&
+    new Date(billAt).getTime() < new Date(pause.ends_at).getTime();
+  const upcomingAt = billInPause
+    ? billsAroundPause(new Date(billAt!), interval, new Date(pause!.starts_at), new Date(pause!.ends_at)).nextBill.toISOString()
+    : billAt;
   const per = interval === "year" ? "year" : "month";
   const billLine = endsAt
     ? `Access ends ${formatBillDate(endsAt)}`
@@ -236,6 +254,15 @@ export function SubscriptionSummaryV2({
               >
                 Upgrade
               </button>
+              {canPause && (
+                <button
+                  type="button"
+                  onClick={() => setPauseOpen(true)}
+                  className="inline-flex h-8 items-center rounded-lg border border-border bg-background px-3.5 text-sm font-medium text-foreground transition-colors duration-200 ease-out hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-offset-2 motion-reduce:transition-none"
+                >
+                  {pauseState?.pausedNow ? "Paused" : pause ? "Pause booked" : "Pause"}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setPlanAction("cancel")}
@@ -250,7 +277,7 @@ export function SubscriptionSummaryV2({
 
       <RecentPaymentsV2
         invoices={invoices}
-        upcoming={endsAt ? null : { date: invoice?.date ?? nextBillAt, amount: total, currency: cur }}
+        upcoming={endsAt ? null : { date: upcomingAt, amount: total, currency: cur }}
         onViewInvoice={onViewInvoice}
         payDisabled={payDisabled}
         onExplainPrice={baseCents != null ? () => setTrailOpen(true) : undefined}
@@ -271,6 +298,15 @@ export function SubscriptionSummaryV2({
         readOnly={readOnly}
         sample={payDisabled}
         cardOnFile={cardOnFile ?? null}
+      />
+      <PauseDialogV2
+        open={pauseOpen}
+        onOpenChange={setPauseOpen}
+        pause={pause}
+        nextBillAt={nextBillAt}
+        interval={interval}
+        readOnly={readOnly}
+        sample={payDisabled}
       />
       <CancelFlowDialogV2
         open={planAction === "cancel"}
@@ -295,7 +331,7 @@ export function SubscriptionSummaryV2({
         open={historyOpen}
         onOpenChange={setHistoryOpen}
         invoices={invoices}
-        upcoming={endsAt ? null : { date: invoice?.date ?? nextBillAt, amount: total, currency: cur, estimated: !invoice && estimate }}
+        upcoming={endsAt ? null : { date: upcomingAt, amount: total, currency: cur, estimated: !invoice && estimate }}
         onViewInvoice={(inv) => {
           setHistoryOpen(false);
           onViewInvoice(inv);

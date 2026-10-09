@@ -51,6 +51,7 @@ import { AbandonedRecoveryTab } from './abandoned-recovery-tab';
 import { NpsProgramTab } from './nps-program-tab';
 import { SundayNewsletterTab } from './sunday-newsletter-tab';
 import { AdvisoryBoardTab } from './advisory-board-tab';
+import { PausingAccountsTab } from './pausing-accounts-tab';
 import { ScopeCard } from './scope-card';
 
 export function CustomerManagementPage() {
@@ -58,7 +59,7 @@ export function CustomerManagementPage() {
   const canEdit = !!user?.is_super_admin;
 
   /** The three automations, the Cancellations report and the retention offers. */
-  const [tab, setTab] = useState<AutomationId | 'cancellations' | 'retention' | 'lifecycle' | 'poll' | 'marketing' | 'webinars' | 'milestones' | 'abandoned' | 'nps' | 'newsletter' | 'advisory'>('signup');
+  const [tab, setTab] = useState<AutomationId | 'cancellations' | 'retention' | 'lifecycle' | 'poll' | 'marketing' | 'webinars' | 'milestones' | 'abandoned' | 'nps' | 'newsletter' | 'advisory' | 'pausing'>('signup');
   const [settings, setSettings] = useState<CustomerManagementSettings | null>(null);
   const [steps, setSteps] = useState<CustomerManagementStep[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,9 +81,10 @@ export function CustomerManagementPage() {
       { id: 'nps', label: 'NPS Program' },
       { id: 'newsletter', label: 'Sunday Newsletter' },
       { id: 'advisory', label: 'Advisory Board' },
+      { id: 'pausing', label: 'Pausing Accounts' },
     ],
     tab,
-    (id) => setTab(id as AutomationId | 'cancellations' | 'retention' | 'lifecycle' | 'poll' | 'marketing' | 'webinars' | 'milestones' | 'abandoned' | 'nps' | 'newsletter' | 'advisory'),
+    (id) => setTab(id as AutomationId | 'cancellations' | 'retention' | 'lifecycle' | 'poll' | 'marketing' | 'webinars' | 'milestones' | 'abandoned' | 'nps' | 'newsletter' | 'advisory' | 'pausing'),
   );
 
   const load = useCallback(async () => {
@@ -147,6 +149,9 @@ export function CustomerManagementPage() {
   }
   if (tab === 'advisory') {
     return <AdvisoryBoardTab canEdit={canEdit} />;
+  }
+  if (tab === 'pausing') {
+    return <PausingAccountsTab canEdit={canEdit} />;
   }
 
   if (loading) {

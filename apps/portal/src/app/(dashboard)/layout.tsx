@@ -15,6 +15,7 @@ import { SubscriptionGateDialog } from "@/components/subscription/subscription-g
 import { SubscriptionSoftReminder } from "@/components/subscription/subscription-soft-reminder";
 import { SubscriptionActivatedDialog } from "@/components/subscription/subscription-activated-dialog";
 import { PaymentDueBar } from "@/components/subscription/payment-due-bar";
+import { AccountPausedBar } from "@/components/subscription/account-paused-bar";
 import { SetupReminderDialog } from "@/components/dashboard/setup-reminder-dialog";
 import { MigrationBlockerDialog } from "@/components/migration/migration-blocker-dialog";
 import { TenantSuspendedScreen } from "@/components/tenant/tenant-suspended-screen";
@@ -745,6 +746,7 @@ export default function DashboardLayout({
               close, one route over. Everywhere else it stays phone-only so it
               never doubles up with the chip. */}
           <PaymentDueBar allWidths={isMessagesWorkspace || isTraxWorkspace} />
+          <AccountPausedBar />
           {/* v2 only — the Stripe-style chrome row: search, messages,
               notifications. Sits in exactly the slot v1's <header> occupies, as a
               `shrink-0` flex sibling ABOVE the banners and <main>, so the flex

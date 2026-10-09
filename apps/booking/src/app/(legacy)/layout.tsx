@@ -18,6 +18,7 @@ import { CustomerAuthProvider } from '@/providers/CustomerAuthProvider';
 import { BookingPersistenceGuard } from '@/components/BookingPersistenceGuard';
 import { MaintenanceBanner } from '@/components/MaintenanceBanner';
 import { SuspendedGate } from '@/components/SuspendedGate';
+import { BookingPauseGate } from '@/components/BookingPauseGate';
 import { GoogleAnalytics } from '@/components/GoogleAnalytics';
 import { ServiceWorkerRegistrar } from '@/components/push/service-worker-registrar';
 
@@ -192,7 +193,7 @@ export default async function RootLayout({
                   <ScrollToTopOnNavigate />
                   <GDPRConsent />
                   <MaintenanceBanner />
-                  <SuspendedGate>{children}</SuspendedGate>
+                  <SuspendedGate><BookingPauseGate>{children}</BookingPauseGate></SuspendedGate>
                 </TooltipProvider>
               </ThemeInitializer>
               </ThemeProvider>
