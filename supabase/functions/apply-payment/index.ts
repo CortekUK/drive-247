@@ -187,9 +187,19 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
       ledgerData.tenant_id = payment.tenant_id;
     }
 
-    const { error: ledgerError } = await supabase
+    let { error: ledgerError } = await supabase
       .from('ledger_entries')
       .insert([ledgerData]);
+
+    // ux_rental_charge_unique (rental, due_date, type, category, extension, reference)
+    // also covers Payment lines, so a second payment on the same rental/day/category
+    // collides with the first. That is NOT "this payment is already recorded" — retry
+    // with a reference that makes the line distinct. Treating it as a duplicate used to
+    // leave the payment with no ledger line at all.
+    if (ledgerError && ledgerError.message.includes('ux_rental_charge_unique')) {
+      ledgerData.reference = `Payment ${String(payment.id).slice(0, 8).toUpperCase()}`;
+      ({ error: ledgerError } = await supabase.from('ledger_entries').insert([ledgerData]));
+    }
 
     if (ledgerError) {
       if (ledgerError.message.includes('duplicate key') || ledgerError.message.includes('idx_ledger_payment_unique')) {
