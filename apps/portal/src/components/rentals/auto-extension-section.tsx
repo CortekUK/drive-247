@@ -70,6 +70,20 @@ export function AutoExtensionSection({
   const [previewOpen, setPreviewOpen] = useState(false);
   const [cadenceOpen, setCadenceOpen] = useState(false);
 
+  // Keep-billing companies (tenants.auto_extend_keep_billing): every period is
+  // billed while the customer has the car, paid or not, until the collection
+  // date below or a recorded return. Read here because the portal's tenant
+  // context carries only a handful of fields.
+  const { data: keepBilling } = useQuery({
+    queryKey: ["auto-extend-keep-billing", tenant?.id],
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("tenants").select("auto_extend_keep_billing").eq("id", tenant!.id).maybeSingle();
+      return !!data?.auto_extend_keep_billing;
+    },
+    enabled: !!tenant?.id,
+  });
+
   if (!rental?.auto_extend_enabled) return null;
 
   const tz = timezone || "America/New_York";
@@ -235,6 +249,34 @@ export function AutoExtensionSection({
               )}
             </div>
             <span className="text-xs text-muted-foreground">Per-extension breakdown, agreements & insurance are in the Extension section below.</span>
+          </div>
+        )}
+
+        {/* Collection date — keep-billing companies only. No period that starts
+            on or after this date is billed; recording the return stops it too. */}
+        {keepBilling && status !== "ended" && (
+          <div className="rounded-lg border p-4 flex flex-wrap items-end justify-between gap-3">
+            <div className="space-y-1 min-w-0">
+              <p className="text-sm font-medium">Collection date</p>
+              <p className="text-xs text-muted-foreground max-w-md">
+                This rental keeps billing every {periodLabel}, paid or not, until the car is back. Set the date you&apos;ll collect it
+                and no {periodLabel} starting on or after that date is billed. Recording the return handover stops billing too.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Input
+                type="date"
+                className="h-8 w-[160px]"
+                defaultValue={rental.auto_extend_bill_until ?? ""}
+                disabled={!canEdit}
+                onBlur={(e) => {
+                  const v = e.target.value || null;
+                  if (v !== (rental.auto_extend_bill_until ?? null)) {
+                    update({ auto_extend_bill_until: v }, v ? `Billing stops at the collection date (${v})` : "Collection date cleared — billing continues");
+                  }
+                }}
+              />
+            </div>
           </div>
         )}
 

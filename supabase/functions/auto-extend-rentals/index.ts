@@ -131,6 +131,64 @@ function applyExceptions(gridYmd: string, unit: string, count: number, ex: any):
   return moves[g] || g;
 }
 
+/**
+ * Keep-billing tenants (tenants.auto_extend_keep_billing): where the next
+ * period starts, and whether billing has to stop.
+ *
+ *   - Any earlier week whose charges are fully paid but whose record was never
+ *     finalized (paid by a generic payment, or out of order) is finalized first,
+ *     so end_date catches up with what has really been paid.
+ *   - The next period starts at the end of the last BILLED week, unpaid weeks
+ *     included — never at end_date, which only moves when a week is paid.
+ *   - Billing stops at the collection date (rentals.auto_extend_bill_until: no
+ *     period starts on or after it) or once a return handover is recorded.
+ *
+ * Fail-safe: if any read fails, `stop` is set and nothing is billed this tick.
+ */
+async function keepBillingState(supabase: any, r: any): Promise<{ billedThrough: string; stop: string | null }> {
+  const { data: exts, error: extErr } = await supabase
+    .from("rental_extensions").select("id, status, new_end_date").eq("rental_id", r.id);
+  if (extErr) return { billedThrough: r.end_date, stop: `extensions unreadable: ${extErr.message}` };
+
+  for (const e of (exts ?? []) as any[]) {
+    if (e.status !== "approved") continue;
+    const { data: chg, error: chgErr } = await supabase
+      .from("ledger_entries").select("remaining_amount").eq("extension_id", e.id).eq("type", "Charge");
+    if (chgErr || !chg || chg.length === 0) continue;
+    const rem = chg.reduce((sum: number, c: any) => sum + Number(c.remaining_amount || 0), 0);
+    if (rem > 0.001) continue;
+    // Re-checks settlement server-side and only ever moves end_date forward.
+    const { error: finErr } = await supabase.rpc("finalize_credit_covered_extension", { p_extension_id: e.id });
+    if (finErr) { console.warn(`[auto-extend] keep-billing finalize ${e.id}: ${finErr.message}`); continue; }
+    e.status = "paid";
+    if (r.auto_extend_pending_extension_id === e.id) {
+      await supabase.from("rentals").update({ auto_extend_pending_extension_id: null })
+        .eq("id", r.id).eq("auto_extend_pending_extension_id", e.id);
+    }
+  }
+
+  let billedThrough: string = r.end_date;
+  for (const e of (exts ?? []) as any[]) {
+    if ((e.status === "approved" || e.status === "paid") && e.new_end_date && e.new_end_date > billedThrough) {
+      billedThrough = e.new_end_date;
+    }
+  }
+
+  const { data: row, error: rowErr } = await supabase
+    .from("rentals").select("auto_extend_bill_until").eq("id", r.id).maybeSingle();
+  if (rowErr) return { billedThrough, stop: `collection date unreadable: ${rowErr.message}` };
+  const billUntil: string | null = row?.auto_extend_bill_until ?? null;
+  if (billUntil && billedThrough >= billUntil) return { billedThrough, stop: `collection date ${billUntil}` };
+
+  const { data: back, error: backErr } = await supabase
+    .from("rental_key_handovers").select("id").eq("rental_id", r.id).eq("handover_type", "receiving")
+    .not("handed_at", "is", null).limit(1);
+  if (backErr) return { billedThrough, stop: `handovers unreadable: ${backErr.message}` };
+  if (back && back.length > 0) return { billedThrough, stop: "vehicle returned" };
+
+  return { billedThrough, stop: null };
+}
+
 function round2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
@@ -383,6 +441,24 @@ Deno.serve(async (req) => {
       .eq("payment_provider", "stripe");
     const tenantMap = new Map<string, any>((tenants ?? []).map((t: any) => [t.id, t]));
 
+    // ── KEEP BILLING UNTIL THE CAR IS BACK (tenants.auto_extend_keep_billing) ──
+    // Off (the default) is the original behaviour: one unpaid week blocks the
+    // next, and the rental pauses after the grace window. On, a rental keeps
+    // being billed every period while the customer has the car — unpaid weeks
+    // add up in the balance instead of billing silently stopping. RevTek:
+    // R-4c677b went unbilled from 25 Sep because $5.46 of one week was unpaid,
+    // and a recovered rental owed far more than its ledger ever showed.
+    //
+    // Read on its own and fail-soft, like auto_extend_resumed_at below: if the
+    // column were missing, this switches off and the run is unchanged.
+    const keepBillingTenants = new Set<string>();
+    {
+      const { data: kb, error: kbErr } = await supabase
+        .from("tenants").select("id").in("id", tenantIds).eq("auto_extend_keep_billing", true);
+      if (kbErr) console.warn(`[auto-extend] keep-billing flag unreadable: ${kbErr.message} — off this run`);
+      for (const t of (kb ?? []) as any[]) keepBillingTenants.add(t.id);
+    }
+
     for (const r of rentals as any[]) {
       try {
         const tenant = tenantMap.get(r.tenant_id);
@@ -408,8 +484,30 @@ Deno.serve(async (req) => {
           skipped++; continue;
         }
 
+        // Keep-billing tenants: settle the books, then take the next period from
+        // what has been BILLED (not paid), and stop at the collection date or
+        // once the car's return is recorded. See keepBillingState.
+        const keepBilling = keepBillingTenants.has(r.tenant_id);
+        let periodStart: string = r.end_date;
+        let backfill = false;
+        if (keepBilling) {
+          const kb = await keepBillingState(supabase, r);
+          if (kb.stop) {
+            console.log(`[auto-extend] keep-billing ${r.id}: no new period (${kb.stop})`);
+            skipped++; continue;
+          }
+          periodStart = kb.billedThrough;
+          // A period whose successor is already due is a missed week being
+          // caught up, not this week's renewal: it goes on the ledger quietly.
+          const { newEndDate: peekEnd } = addPeriod(periodStart, r.auto_extend_period_unit || "Weekly", r.auto_extend_interval_count || 1);
+          const peekDue = new Date(`${peekEnd}T00:00:00Z`).getTime() - (Number(r.auto_extend_lead_hours) || 0) * 3600 * 1000;
+          backfill = peekDue <= now.getTime();
+        }
+
         // A pay-link extension is still awaiting payment -> don't create another.
-        if (r.auto_extend_pending_extension_id) {
+        // Not for keep-billing tenants: their unpaid weeks stay in the balance
+        // and the next week is billed regardless.
+        if (r.auto_extend_pending_extension_id && !keepBilling) {
           const { data: pending } = await supabase
             .from("rental_extensions").select("id, status, created_at").eq("id", r.auto_extend_pending_extension_id).maybeSingle();
           if (pending && pending.status === "paid") {
@@ -499,17 +597,17 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        if (!r.end_date) { skipped++; continue; }
+        if (!periodStart) { skipped++; continue; }
 
         const customer = r.customers;
         if (!customer?.email) { skipped++; continue; }
 
         // 1. Next period + breakdown
-        const { newEndDate, days } = addPeriod(r.end_date, r.auto_extend_period_unit || "Weekly", r.auto_extend_interval_count || 1);
+        const { newEndDate, days } = addPeriod(periodStart, r.auto_extend_period_unit || "Weekly", r.auto_extend_interval_count || 1);
 
         // Per-occurrence override (keyed by the current renewal date = end_date):
         // custom price, extras, insurance, and email content for just this renewal.
-        const occ = (r.auto_extend_overrides && r.auto_extend_overrides[r.end_date]) || {};
+        const occ = (r.auto_extend_overrides && r.auto_extend_overrides[periodStart]) || {};
 
         // Price: when overridden, the value is tax-inclusive — back out the pre-tax rental.
         let bd: { rental: number; tax: number; serviceFee: number; total: number };
@@ -543,7 +641,7 @@ Deno.serve(async (req) => {
           try {
             const { data: prem } = await supabase.functions.invoke("bonzah-calculate-premium", {
               body: {
-                trip_start_date: r.end_date,
+                trip_start_date: periodStart,
                 trip_end_date: newEndDate,
                 pickup_state: customer?.address_state || "FL",
                 cdw_cover: !!cov.cdw, rcli_cover: !!cov.rcli, sli_cover: !!cov.sli, pai_cover: !!cov.pai,
@@ -568,7 +666,7 @@ Deno.serve(async (req) => {
           .from("rental_extensions")
           .insert({
             rental_id: r.id, tenant_id: r.tenant_id, sequence_number: seq, status: "approved",
-            previous_end_date: r.end_date, new_end_date: newEndDate, extension_days: days,
+            previous_end_date: periodStart, new_end_date: newEndDate, extension_days: days,
             rental_amount: bd.rental, tax_amount: bd.tax, service_fee_amount: bd.serviceFee, insurance_amount: insurancePremium,
             requested_at: nowIso, approved_at: nowIso,
           })
@@ -582,7 +680,7 @@ Deno.serve(async (req) => {
           type: "Charge" as const, entry_date: today, due_date: newEndDate, extension_id: ext.id,
         };
         const ledgerRows: any[] = [
-          { ...baseLedger, category: "Extension Rental", reference: `Auto-extend #${seq}: ${days}d (${r.end_date} → ${newEndDate})`, amount: bd.rental, remaining_amount: bd.rental },
+          { ...baseLedger, category: "Extension Rental", reference: `Auto-extend #${seq}: ${days}d (${periodStart} → ${newEndDate})`, amount: bd.rental, remaining_amount: bd.rental },
         ];
         if (bd.tax > 0) ledgerRows.push({ ...baseLedger, category: "Extension Tax", reference: `Auto-extend #${seq}: Tax`, amount: bd.tax, remaining_amount: bd.tax });
         if (bd.serviceFee > 0) ledgerRows.push({ ...baseLedger, category: "Extension Service Fee", reference: `Auto-extend #${seq}: Service Fee`, amount: bd.serviceFee, remaining_amount: bd.serviceFee });
@@ -976,6 +1074,37 @@ Deno.serve(async (req) => {
           }
         }
 
+        // 4a'. KEEP-BILLING catch-up week: its charges are on the ledger, which is
+        // the point — the balance now shows it. No checkout link and no email per
+        // missed week; the current week's email carries the total still owed,
+        // and payments settle the oldest charges first.
+        if (keepBilling && backfill) {
+          await writeRentalState({
+            auto_extend_status: "awaiting_payment",
+            auto_extend_next_charge_at: nextChargeAt.toISOString(),
+            auto_extend_charge_count: (r.auto_extend_charge_count || 0) + 1,
+            auto_extend_failed_attempts: 0,
+            updated_at: nowIso,
+          }, "keep-billing catch-up");
+          renewed++;
+          console.log(`[auto-extend] keep-billing catch-up ${r.id} ext#${seq} ${periodStart} -> ${newEndDate} due ${dueNow}`);
+          continue;
+        }
+
+        // What else is still owed on this rental, for the renewal email.
+        let arrearsHtml = "";
+        if (keepBilling && ctx) {
+          const { data: openRows } = await supabase
+            .from("ledger_entries").select("remaining_amount, extension_id")
+            .eq("rental_id", r.id).eq("type", "Charge").gt("remaining_amount", 0);
+          const arrears = round2((openRows ?? [])
+            .filter((c: any) => c.extension_id !== ext.id)
+            .reduce((sum: number, c: any) => sum + Number(c.remaining_amount || 0), 0));
+          if (arrears > 0.009) {
+            arrearsHtml = `<p>You also have <strong>${fmtCurrency(arrears, ctx.currencyCode)}</strong> outstanding from earlier periods. Please contact ${tenant.company_name || "us"} to settle it.</p>`;
+          }
+        }
+
         // 4b. PAY-LINK path — email a checkout link, park the pending extension
         if (ctx) {
           const origin = deriveBookingOrigin(tenant.slug || "app");
@@ -990,7 +1119,7 @@ Deno.serve(async (req) => {
               line_items: [{
                 price_data: {
                   currency: ctx.currencyCode.toLowerCase(),
-                  product_data: { name: "Rental Renewal", description: `Renew ${r.end_date} → ${newEndDate}` },
+                  product_data: { name: "Rental Renewal", description: `Renew ${periodStart} → ${newEndDate}` },
                   unit_amount: Math.round(dueNow * 100),
                 },
                 quantity: 1,
@@ -1004,7 +1133,7 @@ Deno.serve(async (req) => {
               metadata: {
                 type: "extension", extension_id: ext.id, rental_id: r.id, customer_id: r.customer_id,
                 tenant_id: r.tenant_id, extension_days: String(days), new_end_date: newEndDate,
-                previous_end_date: r.end_date, source: "auto_extend",
+                previous_end_date: periodStart, source: "auto_extend",
                 target_categories: JSON.stringify(["Extension Rental", "Extension Tax", "Extension Service Fee", "Extension Add-on", "Extension Insurance"]),
               },
             }, ctx.options);
@@ -1110,7 +1239,7 @@ Deno.serve(async (req) => {
           if (occ.sendEmail !== false) {
             const bodyHtml = occ.emailBody
               ? String(occ.emailBody).split("\n").map((p: string) => `<p>${p}</p>`).join("")
-              : `<p>Hi ${customer.name || "there"},</p><p>Your rental of <strong>${vehicle}</strong> with <strong>${tenant.company_name || "us"}</strong> is due to renew for another period (<strong>${r.end_date} → ${newEndDate}</strong>).</p><p>Please pay <strong>${total}</strong> upfront to continue:</p>`;
+              : `<p>Hi ${customer.name || "there"},</p><p>Your rental of <strong>${vehicle}</strong> with <strong>${tenant.company_name || "us"}</strong> is due to renew for another period (<strong>${periodStart} → ${newEndDate}</strong>).</p><p>Please pay <strong>${total}</strong> upfront to continue:</p>${arrearsHtml}`;
             // Itemised breakdown when extras / insurance ride on this renewal.
             const breakdownRows: string[] = [];
             if (occExtras.length > 0 || insurancePremium > 0 || dueNow < chargeTotal - 0.001) {
