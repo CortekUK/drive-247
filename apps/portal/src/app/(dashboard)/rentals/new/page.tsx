@@ -191,6 +191,20 @@ const MANUAL_VERIFY_AUDIT_ACTION = "customer_identity_manually_verified";
 const ID_WAIVER_MIN_REASON = 15;
 const ID_WAIVER_AUDIT_ACTION = "rental_created_without_id_verification";
 
+/**
+ * How many period units one auto-extend renewal covers, matching the first paid
+ * span: 14 days on the Weekly tier → 2 (every 2 weeks), 3 days Daily → 3. A
+ * Weekly span that isn't whole weeks, and Monthly, keep the single-unit cadence.
+ */
+function autoExtendIntervalCount(data: Pick<RentalFormData, "rental_period_type" | "start_date" | "end_date">): number {
+  if (!data.start_date || !data.end_date) return 1;
+  const days = differenceInDays(data.end_date, data.start_date);
+  if (days < 1) return 1;
+  if (data.rental_period_type === "Daily") return days;
+  if (data.rental_period_type === "Weekly" && days % 7 === 0) return days / 7;
+  return 1;
+}
+
 const CreateRental = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -1878,6 +1892,10 @@ const CreateRental = () => {
         auto_extend_enabled: isAutoExtend,
         auto_extend_charge_mode: isAutoExtend ? autoExtendChargeMode : 'pay_link',
         auto_extend_period_unit: isAutoExtend ? data.rental_period_type : 'Weekly',
+        // Each renewal re-bills monthly_amount (the price of the whole first span),
+        // so it must also re-extend by that span: a 14-day weekly rental renews
+        // every 2 weeks, not every week at the 2-week price.
+        auto_extend_interval_count: isAutoExtend ? autoExtendIntervalCount(data) : 1,
         auto_extend_next_charge_at: autoExtendNextChargeAt,
         auto_extend_lead_hours: isAutoExtend ? Number((rentalSettings as any)?.auto_extend_default_lead_hours ?? 0) : 0,
         auto_extend_max_periods: isAutoExtend ? autoExtendMaxPeriods : null,
@@ -6421,19 +6439,18 @@ const CreateRental = () => {
         />
       )}
 
-      {/* Insurance Upload Dialog - Hidden for insurance-exempt tenants */}
-      {!skipInsurance && (
-        <InsuranceUploadDialog
-          open={showInsuranceUpload}
-          onOpenChange={setShowInsuranceUpload}
-          customerId={selectedCustomerId}
-          onUploadComplete={(documentId) => {
-            setInsuranceDocId(documentId);
-            form.setValue("insurance_status", "uploaded");
-            queryClient.invalidateQueries({ queryKey: ["customer-documents"] });
-          }}
-        />
-      )}
+      {/* Insurance Upload Dialog - a manual certificate upload, independent of
+          Bonzah, so it must render whenever the "Upload Certificate" button does */}
+      <InsuranceUploadDialog
+        open={showInsuranceUpload}
+        onOpenChange={setShowInsuranceUpload}
+        customerId={selectedCustomerId}
+        onUploadComplete={(documentId) => {
+          setInsuranceDocId(documentId);
+          form.setValue("insurance_status", "uploaded");
+          queryClient.invalidateQueries({ queryKey: ["customer-documents"] });
+        }}
+      />
 
       {/* AI Verification QR Modal */}
       <Dialog
