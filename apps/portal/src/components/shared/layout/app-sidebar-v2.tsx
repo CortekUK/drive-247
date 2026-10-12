@@ -17,6 +17,7 @@ import { runThroughLeaveGuard } from "@/lib/leave-guard";
 //   Signature→FileSignature  ShieldSlash→ShieldX  FlowArrow→Workflow
 import {
   Clock,
+  Gift,
   ChevronRight,
   CircleDollarSign,
   Zap,
@@ -626,6 +627,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
     }
     return true;
   };
+  const canSeeRewards = filterItem({ name: "Rewards", href: "/rewards", icon: Gift });
 
   // --- Section 2: the three things the job is actually made of ---
   //
@@ -858,6 +860,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
     { name: "Dashboard", href: "/", icon: NavDashboard },
     { name: "Integrations", href: "/integrations", icon: NavIntegrations },
     { name: "Billing", href: "/subscription", icon: NavBilling },
+    { name: "Rewards", href: "/rewards", icon: Gift },
   ];
 
   // The user's own arrangement, laid over the nav the app just computed.
@@ -1688,6 +1691,27 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
+
+                  {/* Rewards — the Creator Rewards Programme. This rail only
+                      renders for v2-chrome tenants, which is exactly who the
+                      programme is for (the route 404s for everyone else).
+                      In ROUTE_TO_TAB under the Subscription key: the reward is
+                      money off the tenant's Drive247 bill. */}
+                  {canSeeRewards && (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={isActive("/rewards")}
+                      tooltip={collapsed ? "Rewards" : undefined}
+                      className={NAV_ROW}
+                    >
+                      <Link href="/rewards" onClick={closeMobileOnNav}>
+                        <Gift className="!size-[17px] shrink-0" />
+                        <span className={`text-[15px] md:text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>Rewards</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  )}
 
                   {/* Welcome pack, kept from v1 — the source worktree dropped
                       it, but `/welcome` is a live route this branch's v1 rail

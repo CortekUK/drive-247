@@ -202,6 +202,9 @@ export const ROUTE_TO_TAB: Record<string, string> = {
   // and Drive247, so it inherits the Subscription tab's key. Unmapped routes are
   // ALLOWED for every manager, so leaving this out would open the page to all.
   '/referrals': 'settings.subscription',
+  // Creator Rewards: approved videos earn money off the Drive247 bill, so the
+  // same key as Billing. Unmapped would open it to every manager.
+  '/rewards': 'settings.subscription',
   // `/integrations` maps to the SAME key as the Settings > Integrations tab it
   // is a full-page version of. It was missing, and this table FAILS OPEN:
   // `getTabKeyForRoute` returning null makes `canAccessRoute` treat the route as
