@@ -27,6 +27,7 @@ import {
   RotateCcw,
   Search,
   Settings2,
+  Trash2,
   Video,
   XCircle,
 } from 'lucide-react';
@@ -209,6 +210,8 @@ export function CreatorRewardsTab({ canEdit }: { canEdit: boolean }) {
 
   const [reviewing, setReviewing] = useState<Submission | null>(null);
   const [rulesOpen, setRulesOpen] = useState(false);
+  const [deleting, setDeleting] = useState<Submission | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -289,6 +292,22 @@ export function CreatorRewardsTab({ canEdit }: { canEdit: boolean }) {
   }, [rows, statusFilter, search, tenants]);
 
   const replaceRow = (s: Submission) => setRows((list) => list.map((r) => (r.id === s.id ? { ...r, ...s } : r)));
+
+  const remove = async () => {
+    if (!deleting) return;
+    setDeleteBusy(true);
+    try {
+      const { error } = await db.from('creator_reward_submissions').delete().eq('id', deleting.id);
+      if (error) throw error;
+      setRows((list) => list.filter((r) => r.id !== deleting.id));
+      toast.success('Submission deleted');
+      setDeleting(null);
+    } catch (e) {
+      toast.error('Could not delete the submission', { description: (e as Error).message });
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
 
   if (loading && !settings) {
     return (
@@ -427,13 +446,25 @@ export function CreatorRewardsTab({ canEdit }: { canEdit: boolean }) {
                         <RewardCell s={s} />
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          size="sm"
-                          variant={s.status === 'pending' ? 'default' : 'outline'}
-                          onClick={() => setReviewing(s)}
-                        >
-                          {s.status === 'pending' ? 'Review' : 'View'}
-                        </Button>
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            size="sm"
+                            variant={s.status === 'pending' ? 'default' : 'outline'}
+                            onClick={() => setReviewing(s)}
+                          >
+                            {s.status === 'pending' ? 'Review' : 'View'}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-destructive hover:text-destructive"
+                            aria-label="Delete submission"
+                            disabled={!canEdit}
+                            onClick={() => setDeleting(s)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -458,6 +489,33 @@ export function CreatorRewardsTab({ canEdit }: { canEdit: boolean }) {
           }}
         />
       )}
+
+      <Dialog open={deleting !== null} onOpenChange={(open) => !open && !deleteBusy && setDeleting(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete submission?</DialogTitle>
+            <DialogDescription>
+              {deleting && nameOf(deleting.tenant_id)}’s submission will be removed from this list and from their
+              Rewards page. This can’t be undone, and the same link can then be submitted again.
+            </DialogDescription>
+          </DialogHeader>
+          {deleting?.status === 'approved' && deleting.reward_status === 'applied' && (
+            <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-300">
+              Its reward is already on the operator’s subscription. Deleting the submission does not remove that
+              discount from Stripe.
+            </p>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleting(null)} disabled={deleteBusy}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => void remove()} disabled={deleteBusy} className="gap-1.5">
+              {deleteBusy && <Loader2 className="h-4 w-4 animate-spin" />}
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {rulesOpen && settings && (
         <RulesDialog
