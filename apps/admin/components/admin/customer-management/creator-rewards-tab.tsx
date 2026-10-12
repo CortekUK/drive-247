@@ -11,6 +11,10 @@
  *   reject   → a message the operator sees on their Rewards page and in their
  *              notification bell (e.g. "this link is fake / not your video")
  *
+ * ONE REWARD PER OPERATOR, EVER: once a tenant has an approved submission,
+ * its other submissions can only be rejected (the edge function and a unique
+ * index both refuse a second approval, with no override).
+ *
  * Rules and limits live in `creator_reward_settings` (one row) and are enforced
  * server-side: submission limits by `submit_creator_reward()`, reward limits by
  * the edge function at approval time (a reviewer can override one deliberately).
@@ -114,6 +118,10 @@ const REJECT_TEMPLATES = [
     text: 'This post is private or restricted, so we couldn’t view it. Please make it public and submit the link again.',
   },
   {
+    label: 'Already rewarded',
+    text: 'Thank you for sharing another video! You’ve already received your creator reward — it’s one per account — so this one isn’t eligible for another.',
+  },
+  {
     label: 'Not your content',
     text: 'This video doesn’t appear to be posted by your business. Rewards are for original content from your own account.',
   },
@@ -142,7 +150,8 @@ async function review(body: Record<string, unknown>): Promise<Submission> {
     let limit = false;
     try {
       const parsed = await (error as { context?: Response }).context?.clone().json();
-      limit = !!parsed?.limit;
+      // Monthly limits can be overridden; "once" (already rewarded) cannot.
+      limit = parsed?.limit === 'tenant' || parsed?.limit === 'global';
     } catch {
       /* not JSON */
     }
@@ -264,6 +273,11 @@ export function CreatorRewardsTab({ canEdit }: { canEdit: boolean }) {
       return t ? t.company_name || t.slug : tenantId.slice(0, 8);
     },
     [tenants],
+  );
+
+  const rewardedTenants = useMemo(
+    () => new Set(rows.filter((r) => r.status === 'approved').map((r) => r.tenant_id)),
+    [rows],
   );
 
   const since = monthStartUtc();
@@ -417,7 +431,14 @@ export function CreatorRewardsTab({ canEdit }: { canEdit: boolean }) {
                   {shown.map((s) => (
                     <TableRow key={s.id}>
                       <TableCell>
-                        <div className="font-medium">{nameOf(s.tenant_id)}</div>
+                        <div className="flex items-center gap-1.5 font-medium">
+                          {nameOf(s.tenant_id)}
+                          {rewardedTenants.has(s.tenant_id) && (
+                            <Badge variant="secondary" className="gap-1 text-[10px]" title="This operator has had their one reward">
+                              <Gift className="h-3 w-3" /> Rewarded
+                            </Badge>
+                          )}
+                        </div>
                         <div className="text-xs text-muted-foreground">{tenants.get(s.tenant_id)?.slug}</div>
                       </TableCell>
                       <TableCell>
@@ -566,7 +587,10 @@ function ReviewDialog({
   onClose: () => void;
   onUpdated: (s: Submission) => void;
 }) {
-  const [decision, setDecision] = useState<'approve' | 'reject'>('approve');
+  // One reward per operator: if another of their videos was approved, this one
+  // can only be rejected.
+  const alreadyRewarded = history.some((r) => r.status === 'approved');
+  const [decision, setDecision] = useState<'approve' | 'reject'>(alreadyRewarded ? 'reject' : 'approve');
   const [rewardType, setRewardType] = useState<RewardType>(settings.default_reward_type);
   const [percent, setPercent] = useState(String(settings.default_reward_percent));
   const [message, setMessage] = useState('');
@@ -669,6 +693,16 @@ function ReviewDialog({
             )}
           </div>
 
+          {alreadyRewarded && s.status === 'pending' && (
+            <div className="flex gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-300">
+              <Gift className="mt-0.5 h-4 w-4 shrink-0" />
+              <p>
+                {operator} has already been rewarded for another video. Creator rewards are one per operator, so this
+                submission can only be rejected.
+              </p>
+            </div>
+          )}
+
           {s.status !== 'pending' ? (
             <ReviewedSummary s={s} canEdit={canEdit} busy={busy} run={run} />
           ) : (
@@ -678,6 +712,7 @@ function ReviewDialog({
                   type="button"
                   variant={decision === 'approve' ? 'default' : 'outline'}
                   className="gap-1.5"
+                  disabled={alreadyRewarded}
                   onClick={() => setDecision('approve')}
                 >
                   <CheckCircle2 className="h-4 w-4" /> Approve & reward
@@ -788,7 +823,7 @@ function ReviewDialog({
           </Button>
           {s.status === 'pending' &&
             (decision === 'approve' ? (
-              <Button onClick={() => approve()} disabled={!canEdit || busy || percentInvalid} className="gap-1.5">
+              <Button onClick={() => approve()} disabled={!canEdit || busy || percentInvalid || alreadyRewarded} className="gap-1.5">
                 {busy && <Loader2 className="h-4 w-4 animate-spin" />}
                 Approve & send reward
               </Button>

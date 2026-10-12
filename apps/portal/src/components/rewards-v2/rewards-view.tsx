@@ -92,9 +92,12 @@ export function RewardsView() {
   const pending = subs.filter((s) => s.status === "pending").length;
   const earned = subs.filter((s) => s.status === "approved").length;
 
+  // One reward per account: once one video is approved, the form closes.
   const blockedReason = !settings
     ? null
-    : !settings.enabled
+    : earned > 0
+      ? "You've already received your creator reward — it's one per account. Thank you for sharing Drive247!"
+      : !settings.enabled
       ? "The programme is paused right now. Please check back soon."
       : usedThisMonth >= settings.monthly_submission_limit
         ? `You've used all ${settings.monthly_submission_limit} submission${settings.monthly_submission_limit === 1 ? "" : "s"} for this month. You can submit again next month.`
@@ -170,8 +173,8 @@ export function RewardsView() {
               <Skeleton className="h-4 w-64" />
             ) : (
               <>
-                Approved videos usually earn <strong className="text-foreground">{defaultReward}</strong> on your next
-                Drive247 invoice.
+                An approved video usually earns <strong className="text-foreground">{defaultReward}</strong> on your next
+                Drive247 invoice. One reward per account.
               </>
             )}
           </CardDescription>

@@ -6,6 +6,9 @@
 //             tenant's Drive247 subscription as a one-time Stripe coupon.
 //             Refused when it would break the monthly reward limits in
 //             creator_reward_settings, unless `override` is true.
+//             ALWAYS refused (no override) when the tenant already has an
+//             approved submission: one reward per tenant, ever. A unique index
+//             on (tenant_id) WHERE status = 'approved' backs this up.
 //   reject    { message }  — required; shown to the operator verbatim.
 //   apply     re-try attaching an approved reward whose reward_status is
 //             pending (no active subscription at approval) or failed.
@@ -201,6 +204,23 @@ Deno.serve(async (req) => {
       }
       const message = String(body.message ?? "").trim().slice(0, 1000) || null;
 
+      // One reward per tenant, ever — not overridable.
+      const { data: earlier } = await supabase
+        .from("creator_reward_submissions")
+        .select("id, reviewed_at")
+        .eq("tenant_id", sub.tenant_id)
+        .eq("status", "approved")
+        .neq("id", sub.id)
+        .limit(1)
+        .maybeSingle();
+      if (earlier) {
+        return jsonResponse({
+          success: false,
+          limit: "once",
+          error: "This operator has already been rewarded for another video. Creator rewards are one per operator.",
+        }, 409);
+      }
+
       if (!body.override) {
         const { data: cfg } = await supabase.from("creator_reward_settings").select("*").eq("id", 1).single();
         const since = monthStartUtc();
@@ -226,15 +246,9 @@ Deno.serve(async (req) => {
         }
       }
 
-      const approved = {
-        ...sub,
-        status: "approved",
-        reward_type: rewardType,
-        reward_percent: percent,
-      };
-      const rewardFields = await attachReward(supabase, approved);
-
-      const { data, error } = await supabase
+      // Mark approved FIRST: the one-reward-per-tenant index settles any race
+      // here, before a Stripe coupon exists for the losing approval.
+      const { data: claimed, error: claimErr } = await supabase
         .from("creator_reward_submissions")
         .update({
           status: "approved",
@@ -243,8 +257,29 @@ Deno.serve(async (req) => {
           reviewed_at: new Date().toISOString(),
           reward_type: rewardType,
           reward_percent: percent,
-          ...rewardFields,
+          reward_status: "pending",
+          reward_error: null,
         })
+        .eq("id", sub.id)
+        .neq("status", "approved")
+        .select("*")
+        .maybeSingle();
+      if (claimErr) {
+        if (claimErr.code === "23505") {
+          return jsonResponse({
+            success: false,
+            limit: "once",
+            error: "This operator has already been rewarded for another video. Creator rewards are one per operator.",
+          }, 409);
+        }
+        throw claimErr;
+      }
+      if (!claimed) return errorResponse("Already approved", 409);
+
+      const rewardFields = await attachReward(supabase, claimed);
+      const { data, error } = await supabase
+        .from("creator_reward_submissions")
+        .update(rewardFields)
         .eq("id", sub.id)
         .select("*")
         .single();
