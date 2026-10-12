@@ -1,7 +1,7 @@
 "use client";
 
 import { Star, ArrowRight } from "lucide-react";
-import { TESTIMONIALS } from "@/lib/constants";
+import type { Testimonial } from "@/lib/testimonials-server";
 import { useFadeIn } from "@/hooks/use-fade-in";
 
 function Stars({ count }: { count: number }) {
@@ -30,7 +30,7 @@ function TestimonialCard({
   visible,
   delay,
 }: {
-  t: (typeof TESTIMONIALS)[number];
+  t: Testimonial;
   index: number;
   featured?: boolean;
   visible: boolean;
@@ -63,7 +63,7 @@ function TestimonialCard({
         <div>
           <p className="text-sm font-semibold">{t.name}</p>
           <p className="text-xs text-muted-foreground">
-            {t.role} &middot; {t.fleetSize} &middot; {t.location}
+            {[t.role, t.fleetSize, t.location].filter(Boolean).join(" · ")}
           </p>
         </div>
       </div>
@@ -71,10 +71,14 @@ function TestimonialCard({
   );
 }
 
-export function SocialProof() {
+export function SocialProof({ testimonials }: { testimonials: Testimonial[] }) {
   const { ref, visible } = useFadeIn();
 
-  const [featured, ...rest] = TESTIMONIALS;
+  // Every quote unpublished in the admin: hide the section rather than show
+  // an empty heading.
+  if (testimonials.length === 0) return null;
+
+  const [featured, ...rest] = testimonials;
 
   return (
     <section className="bg-muted/30 py-20 sm:py-24">
@@ -105,11 +109,12 @@ export function SocialProof() {
             delay={0}
           />
 
-          {/* Two smaller cards */}
+          {/* The rest, two-up */}
+          {rest.length > 0 && (
           <div className="grid gap-6 sm:grid-cols-2">
             {rest.map((t, i) => (
               <TestimonialCard
-                key={t.name}
+                key={t.id}
                 t={t}
                 index={i + 1}
                 visible={visible}
@@ -117,6 +122,7 @@ export function SocialProof() {
               />
             ))}
           </div>
+          )}
         </div>
 
         <div className="mt-10 text-center">
