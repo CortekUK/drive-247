@@ -3901,8 +3901,21 @@ const CreateRental = () => {
                           // explicit per-period rate, but it's a REGULAR rental (keeps end_date + return).
                           setInstallmentPlanType('full');
                           setInstallmentAmountOverride(null);
-                          if (form.getValues('rental_period_type') === 'Daily') {
+                          // Daily is a valid auto-extend cadence (every N days — see
+                          // autoExtendIntervalCount), so keep the period the dates imply
+                          // rather than forcing Weekly: a 3-day span must renew every 3 days,
+                          // not bill its 3-day price every 7. Only fall back to Weekly when
+                          // no dates are picked yet; the date effect above corrects it then.
+                          const s = form.getValues('start_date');
+                          const e = form.getValues('end_date');
+                          if (!(s && e) && form.getValues('rental_period_type') === 'Daily') {
                             form.setValue('rental_period_type', 'Weekly');
+                          } else if (s && e) {
+                            const span = Math.max(1, differenceInDays(e, s));
+                            const implied = span >= mtd ? 'Monthly' : span >= 7 ? 'Weekly' : 'Daily';
+                            if (form.getValues('rental_period_type') !== implied) {
+                              form.setValue('rental_period_type', implied, { shouldValidate: true });
+                            }
                           }
                           setAutoExtendChargeMode(((rentalSettings as any)?.auto_extend_default_charge_mode ?? 'pay_link') as 'auto_charge' | 'pay_link');
                         }
