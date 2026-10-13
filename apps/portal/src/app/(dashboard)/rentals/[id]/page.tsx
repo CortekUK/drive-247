@@ -23,6 +23,7 @@ import { Progress } from "@/components/ui/progress";
 import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
 import { AutoExtensionSection } from "@/components/rentals/auto-extension-section";
 import { RefundDialog } from "@/components/shared/dialogs/refund-dialog";
+import { EditRentalExtrasDialog } from "@/components/rentals/edit-rental-extras-dialog";
 import { ChargeDepositDialog } from "@/components/shared/dialogs/charge-deposit-dialog";
 import { TakeDepositDialog } from "@/components/shared/dialogs/take-deposit-dialog";
 import { AddHoldDialog } from "@/components/shared/dialogs/add-hold-dialog";
@@ -1379,6 +1380,14 @@ const RentalDetail = () => {
     0
   );
   const [showExtrasDialog, setShowExtrasDialog] = useState(false);
+  const [showEditExtrasDialog, setShowEditExtrasDialog] = useState(false);
+  // What the Extras charge stands at in the ledger (original rental, not
+  // extensions). After paid add-ons are removed this stays above the
+  // selections total until the operator refunds the difference, so the
+  // Extras row shows the charged figure and its Refund action stays live.
+  const extrasLedgerAmount = (rentalCharges || [])
+    .filter((c: any) => c.category === 'Extras' && !c.extension_id)
+    .reduce((sum: number, c: any) => sum + Number(c.amount || 0), 0);
   const [showChargeDepositDialog, setShowChargeDepositDialog] = useState(false);
   const [showAddHoldDialog, setShowAddHoldDialog] = useState(false);
   const [verifyingHold, setVerifyingHold] = useState(false);
@@ -3726,7 +3735,7 @@ const RentalDetail = () => {
           })() },
           { label: 'Delivery Fee', category: 'Delivery Fee', amount: deliveryFeeAmount, detail: 'Vehicle delivery', icon: Truck, color: 'text-cyan-500', bg: 'bg-cyan-500/10' },
           { label: 'Collection Fee', category: 'Collection Fee', amount: collectionFeeAmount, detail: 'Vehicle collection', icon: MapPin, color: 'text-rose-500', bg: 'bg-rose-500/10' },
-          { label: 'Extras', category: 'Extras', amount: extrasTotal, detail: (extrasDetails?.length || 0) > 0 ? `${extrasDetails!.length} item${extrasDetails!.length > 1 ? 's' : ''}` : 'Add-ons', icon: Package, color: 'text-indigo-500', bg: 'bg-indigo-500/10', onClick: extrasTotal > 0 ? () => setShowExtrasDialog(true) : undefined },
+          { label: 'Extras', category: 'Extras', amount: Math.max(extrasTotal, extrasLedgerAmount), detail: (extrasDetails?.length || 0) > 0 ? `${extrasDetails!.length} item${extrasDetails!.length > 1 ? 's' : ''}` : 'Add-ons', icon: Package, color: 'text-indigo-500', bg: 'bg-indigo-500/10', onClick: () => setShowExtrasDialog(true) },
         ];
 
         // Add fines row if any fines are linked to this rental
@@ -7606,14 +7615,47 @@ const RentalDetail = () => {
                   <span className="text-sm font-semibold">Total</span>
                   <span className="text-sm font-bold">{formatCurrencyUtil(extrasTotal, tenant?.currency_code || 'USD')}</span>
                 </div>
-                <p className="text-xs text-muted-foreground pt-2 px-2">Extras are non-refundable.</p>
               </>
             ) : (
               <p className="text-sm text-muted-foreground py-4 text-center">No extras for this rental.</p>
             )}
           </div>
+          {canEdit('rentals') && !rental?.is_pay_as_you_go && (
+            <div className="flex justify-end pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={() => { setShowExtrasDialog(false); setShowEditExtrasDialog(true); }}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Edit add-ons
+              </Button>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
+
+      {rental && (
+        <EditRentalExtrasDialog
+          open={showEditExtrasDialog}
+          onOpenChange={setShowEditExtrasDialog}
+          rentalId={rental.id}
+          rentalDays={extrasRentalDays}
+          currentSelections={extrasDetails || []}
+          currentTotal={extrasTotal}
+          currencyCode={tenant?.currency_code || 'USD'}
+          onSaved={(result) => {
+            if (result.refund_due > 0) {
+              setRefundCategory('Extras');
+              setRefundTotalAmount(result.refund_due);
+              setRefundPaidAmount(result.refund_due);
+              setRefundExtensionId(undefined);
+              setShowRefundDialog(true);
+            }
+          }}
+        />
+      )}
 
       {/* Supercharger Charges Dialog */}
       {!teslaHidden && <SuperchargerChargesDialog
