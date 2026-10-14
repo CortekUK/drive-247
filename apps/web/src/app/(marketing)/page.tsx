@@ -16,8 +16,16 @@ import { fetchSignupPlans } from "@/lib/plans-server";
 import { fetchTestimonials } from "@/lib/testimonials-server";
 import { lookupPromoOffer } from "@/lib/promo-lookup-server";
 import { normalizeReferralCode } from "@/lib/referral-cookie";
+import { fetchLandingVersion, parseLandingPreview } from "@/lib/landing-version-server";
+import { Header } from "@/components/layout/header";
+import { Footer } from "@/components/layout/footer";
+import { LandingV2 } from "@/components/landing-v2/landing-v2";
 
-export default async function Home({ searchParams }: { searchParams: Promise<{ ref?: string }> }) {
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ ref?: string; landing?: string }>;
+}) {
   // The pricing tier section (and with it self-serve signup) shows only while
   // the super-admin switch on the Signup Plans tab is on. Off by default, and
   // off on any read failure, so the page is exactly as before unless someone is
@@ -69,19 +77,35 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ r
     fetchTestimonials(),
   ]);
 
+  /*
+   * v1 or v2 of the landing page — the super-admin switch on the Signup Plans
+   * tab (`admin_settings.landing_version`), failing to v1. `?landing=v1|v2`
+   * previews either one without flipping the switch for everyone.
+   */
+  const version =
+    parseLandingPreview((await searchParams)?.landing) ?? (await fetchLandingVersion());
+
+  if (version === "v2") {
+    return <LandingV2 plans={plans} offer={offer} />;
+  }
+
   return (
     <>
-      {offer && <ReferralBanner offer={offer} />}
-      <Hero />
-      <CredibilityStrip />
-      <OperationsDashboard />
-      <SocialProof testimonials={testimonials} />
-      <ProblemSection />
-      <ProductShowcase />
-      <Timeline />
-      {plans && <PricingSection plans={plans} offer={offer} />}
-      <FAQSection />
-      <CTABand />
+      <Header />
+      <main id="main" className="min-h-[calc(100vh-4rem)]">
+        {offer && <ReferralBanner offer={offer} />}
+        <Hero />
+        <CredibilityStrip />
+        <OperationsDashboard />
+        <SocialProof testimonials={testimonials} />
+        <ProblemSection />
+        <ProductShowcase />
+        <Timeline />
+        {plans && <PricingSection plans={plans} offer={offer} />}
+        <FAQSection />
+        <CTABand />
+      </main>
+      <Footer />
     </>
   );
 }
