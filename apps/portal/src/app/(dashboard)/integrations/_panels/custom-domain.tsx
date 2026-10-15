@@ -73,7 +73,7 @@ import {
 
 import type { IntegrationPanelProps, PanelTenant } from "./_kit";
 import { ScreenPager } from "./_screens";
-import { CustomDomainDemo, useCustomDomainDemoStage } from "./custom-domain-demo";
+import { CustomDomainSelfServe, SelfServeDomainStatus } from "./custom-domain-self-serve";
 import {
   CopyValue,
   PanelCard,
@@ -317,19 +317,13 @@ function useReachability() {
  * tenant whose domain has been live for months; the panel says how to check.
  */
 export function CustomDomainStatus({ tenant }: { tenant: PanelTenant }) {
-  const { data, isLoading, isError } = useCustomDomains(tenant);
-  const demoStage = useCustomDomainDemoStage();
+  // Self-serve tenants have a real status column — see custom-domain-self-serve.tsx.
+  if (CUSTOM_DOMAIN_SELF_SERVE_SLUGS.includes(tenant.slug)) return <SelfServeDomainStatus tenant={tenant} />;
+  return <ManualDomainStatus tenant={tenant} />;
+}
 
-  // The demo's own state — see custom-domain-demo.tsx. Nothing real changed.
-  if (CUSTOM_DOMAIN_DEMO_SLUGS.includes(tenant.slug)) {
-    return demoStage === "live" ? (
-      <StatusChip state="connected" label="Live" />
-    ) : demoStage === "pending" ? (
-      <StatusChip state="disconnected" label="Pending" />
-    ) : (
-      <StatusChip state="disconnected" label="Not set up" />
-    );
-  }
+function ManualDomainStatus({ tenant }: { tenant: PanelTenant }) {
+  const { data, isLoading, isError } = useCustomDomains(tenant);
 
   // A failed read is not "not requested" — that would offer the request form
   // over a row that may already carry a live domain (_kit's rule).
@@ -345,18 +339,19 @@ export function CustomDomainStatus({ tenant }: { tenant: PanelTenant }) {
 /* ─────────────────────────────── panel ──────────────────────────────────── */
 
 /**
- * DEMO GATE — the self-serve flow (custom-domain-demo.tsx) is a mock, shown to
- * the canary only so it can be demoed. Every other tenant gets the real panel
- * below, paged into screens. Keyed on SLUG (V2_PLAN §2). To retire the demo:
- * delete this list, the branch below, the chip branch above and the file.
+ * SELF-SERVE GATE — these tenants connect their domain themselves through
+ * Vercel (custom-domain-self-serve.tsx + the `custom-domain` edge function,
+ * which keeps its own copy of this list in _shared/custom-domain.ts — change
+ * both). Every other tenant gets the manual-handoff panel below, paged into
+ * screens. Keyed on SLUG (V2_PLAN §2).
  */
-const CUSTOM_DOMAIN_DEMO_SLUGS: readonly string[] = ["northwind"];
+const CUSTOM_DOMAIN_SELF_SERVE_SLUGS: readonly string[] = ["northwind"];
 
 export default function CustomDomainPanel(props: IntegrationPanelProps) {
-  if (CUSTOM_DOMAIN_DEMO_SLUGS.includes(props.tenant.slug)) {
+  if (CUSTOM_DOMAIN_SELF_SERVE_SLUGS.includes(props.tenant.slug)) {
     return (
-      <CustomDomainDemo
-        slug={props.tenant.slug}
+      <CustomDomainSelfServe
+        tenant={props.tenant}
         onBack={props.onBack}
         onClose={props.onClose}
         normalize={normalizeDomain}

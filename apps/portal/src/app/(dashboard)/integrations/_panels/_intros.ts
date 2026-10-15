@@ -228,9 +228,9 @@ export const INTEGRATION_INTROS: Record<string, IntroSpec> = {
       {
         art: SupportEmptyArt,
         // The self-serve story (Ghulam, Oct 2): the operator adds two records
-        // themselves and never hands over access. Demoed on northwind via
-        // custom-domain-demo.tsx; other tenants' panel is still the manual
-        // handoff until the Vercel-backed function is built.
+        // themselves and never hands over access. Live on northwind via
+        // custom-domain-self-serve.tsx; other tenants' panel is still the
+        // manual handoff.
         title: "Connect it in a few minutes.",
         body: "Tell me your domain, then add two records where you bought it. You stay in charge — nobody needs your password or access — and I'll let you know the moment it's live.",
       },
