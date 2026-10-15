@@ -73,7 +73,7 @@ import {
 
 import type { IntegrationPanelProps, PanelTenant } from "./_kit";
 import { ScreenPager } from "./_screens";
-import { CustomDomainSelfServe, SelfServeDomainStatus } from "./custom-domain-self-serve";
+import { CustomDomainSelfServe, SelfServeDomainStatus, useSelfServeAllowed } from "./custom-domain-self-serve";
 import {
   CopyValue,
   PanelCard,
@@ -318,7 +318,9 @@ function useReachability() {
  */
 export function CustomDomainStatus({ tenant }: { tenant: PanelTenant }) {
   // Self-serve tenants have a real status column — see custom-domain-self-serve.tsx.
-  if (CUSTOM_DOMAIN_SELF_SERVE_SLUGS.includes(tenant.slug)) return <SelfServeDomainStatus tenant={tenant} />;
+  const selfServe = useSelfServeAllowed(tenant.id);
+  if (selfServe.isLoading) return <StatusChip state="loading" />;
+  if (selfServe.data) return <SelfServeDomainStatus tenant={tenant} />;
   return <ManualDomainStatus tenant={tenant} />;
 }
 
@@ -339,16 +341,16 @@ function ManualDomainStatus({ tenant }: { tenant: PanelTenant }) {
 /* ─────────────────────────────── panel ──────────────────────────────────── */
 
 /**
- * SELF-SERVE GATE — these tenants connect their domain themselves through
- * Vercel (custom-domain-self-serve.tsx + the `custom-domain` edge function,
- * which keeps its own copy of this list in _shared/custom-domain.ts — change
- * both). Every other tenant gets the manual-handoff panel below, paged into
- * screens. Keyed on SLUG (V2_PLAN §2).
+ * SELF-SERVE GATE — the pilot tenant (northwind), or every v2 tenant once Super
+ * Admin → Customer Management → Custom Domain is on, connects their domain
+ * themselves through Vercel (custom-domain-self-serve.tsx + the `custom-domain`
+ * edge function, which checks the same rule). Every other tenant gets the
+ * manual-handoff panel below, paged into screens.
  */
-const CUSTOM_DOMAIN_SELF_SERVE_SLUGS: readonly string[] = ["northwind"];
-
 export default function CustomDomainPanel(props: IntegrationPanelProps) {
-  if (CUSTOM_DOMAIN_SELF_SERVE_SLUGS.includes(props.tenant.slug)) {
+  const selfServe = useSelfServeAllowed(props.tenant.id);
+  if (selfServe.isLoading) return <PanelLoading rows={4} />;
+  if (selfServe.data) {
     return (
       <CustomDomainSelfServe
         tenant={props.tenant}

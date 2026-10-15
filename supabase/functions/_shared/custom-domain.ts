@@ -20,8 +20,16 @@
 
 import { getTenantBranding, getTenantNotificationRecipient, sendResendEmail, wrapWithBrandedTemplate } from "./resend-service.ts";
 
-/** Tenants that get the self-serve flow. Everyone else keeps the manual handoff. */
-export const SELF_SERVE_SLUGS: readonly string[] = ["northwind"];
+/**
+ * Who gets the self-serve flow: the pilot tenant, or every v2 tenant once the
+ * switch in Super Admin → Customer Management → Custom Domain is on
+ * (custom_domain_settings, migration 20261015140000).
+ */
+export async function selfServeAllowed(db: any, tenantId: string): Promise<boolean> {
+  const { data, error } = await db.rpc("custom_domain_self_serve_allowed", { p_tenant_id: tenantId });
+  if (error) throw error;
+  return data === true;
+}
 
 /** A pending domain still not live after this long is marked `error`. */
 export const GIVE_UP_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
@@ -379,7 +387,9 @@ export async function checkAndRecord(db: any, tenant: {
     ...(wentLive ? { custom_domain_live_at: nowIso } : {}),
   }).eq("id", tenant.id);
 
-  if (wentLive) await emailLive(db, tenant.id, domain).catch((e) => console.error("custom domain live email failed:", e));
+  // Only a domain we were waiting on gets the email — not one that was
+  // already working before this tenant's first check.
+  if (wentLive && tenant.custom_domain_status === "pending") await emailLive(db, tenant.id, domain).catch((e) => console.error("custom domain live email failed:", e));
   return result;
 }
 

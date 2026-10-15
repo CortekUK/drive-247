@@ -55,6 +55,7 @@ import { PausingAccountsTab } from './pausing-accounts-tab';
 import { TestimonialsTab } from './testimonials-tab';
 import { CreatorRewardsTab } from './creator-rewards-tab';
 import { TenureRewardsTab } from './tenure-rewards-tab';
+import { CustomDomainTab } from './custom-domain-tab';
 import { ScopeCard } from './scope-card';
 
 export function CustomerManagementPage() {
@@ -62,7 +63,7 @@ export function CustomerManagementPage() {
   const canEdit = !!user?.is_super_admin;
 
   /** The three automations, the Cancellations report and the retention offers. */
-  const [tab, setTab] = useState<AutomationId | 'cancellations' | 'retention' | 'lifecycle' | 'poll' | 'marketing' | 'webinars' | 'milestones' | 'abandoned' | 'nps' | 'newsletter' | 'advisory' | 'pausing' | 'testimonials' | 'rewards' | 'tenure'>('signup');
+  const [tab, setTab] = useState<AutomationId | 'cancellations' | 'retention' | 'lifecycle' | 'poll' | 'marketing' | 'webinars' | 'milestones' | 'abandoned' | 'nps' | 'newsletter' | 'advisory' | 'pausing' | 'testimonials' | 'rewards' | 'tenure' | 'domain'>('signup');
   const [settings, setSettings] = useState<CustomerManagementSettings | null>(null);
   const [steps, setSteps] = useState<CustomerManagementStep[]>([]);
   const [loading, setLoading] = useState(true);
@@ -88,9 +89,10 @@ export function CustomerManagementPage() {
       { id: 'testimonials', label: 'Testimonials' },
       { id: 'rewards', label: 'Rewards' },
       { id: 'tenure', label: 'Tenure Rewards' },
+      { id: 'domain', label: 'Custom Domain' },
     ],
     tab,
-    (id) => setTab(id as AutomationId | 'cancellations' | 'retention' | 'lifecycle' | 'poll' | 'marketing' | 'webinars' | 'milestones' | 'abandoned' | 'nps' | 'newsletter' | 'advisory' | 'pausing' | 'testimonials' | 'rewards' | 'tenure'),
+    (id) => setTab(id as AutomationId | 'cancellations' | 'retention' | 'lifecycle' | 'poll' | 'marketing' | 'webinars' | 'milestones' | 'abandoned' | 'nps' | 'newsletter' | 'advisory' | 'pausing' | 'testimonials' | 'rewards' | 'tenure' | 'domain'),
   );
 
   const load = useCallback(async () => {
@@ -167,6 +169,9 @@ export function CustomerManagementPage() {
   }
   if (tab === 'tenure') {
     return <TenureRewardsTab canEdit={canEdit} />;
+  }
+  if (tab === 'domain') {
+    return <CustomDomainTab canEdit={canEdit} />;
   }
 
   if (loading) {

@@ -2,8 +2,9 @@
 //
 // Called by the tenant's portal user from Integrations → Custom Domain. The
 // tenant is always the caller's own (from app_users), never one named in the
-// body. Only tenants in SELF_SERVE_SLUGS may use it; everyone else keeps the
-// manual handoff panel.
+// body. Only tenants selfServeAllowed() lets through (the pilot, or every v2
+// tenant once Super Admin turns it on) may use it; the rest keep the manual
+// handoff panel.
 //
 //   { action: "records", domain }   the DNS records to add (no writes)
 //   { action: "connect", domain }   "I've added them": adds the domain to our
@@ -17,7 +18,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import {
-  SELF_SERVE_SLUGS,
   VercelError,
   checkAndRecord,
   connectDomain,
@@ -25,6 +25,7 @@ import {
   hostsFor,
   normalizeDomain,
   recommendedRecords,
+  selfServeAllowed,
   validateDomain,
 } from "../_shared/custom-domain.ts";
 
@@ -60,7 +61,7 @@ Deno.serve(async (req) => {
       return data;
     };
     let tenant = await loadTenant();
-    if (!SELF_SERVE_SLUGS.includes(tenant.slug)) {
+    if (!(await selfServeAllowed(db, tenant.id))) {
       return errorResponse("Self-serve custom domains are not available on this account yet.", 403);
     }
 

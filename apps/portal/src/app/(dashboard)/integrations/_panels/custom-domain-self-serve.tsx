@@ -11,8 +11,10 @@
 // while the screen is open, and by `custom-domain-run` every 5 minutes when it
 // is not, which emails the operator once it is live.
 //
-// Shown to SELF_SERVE_SLUGS only (custom-domain.tsx, and enforced again in the
-// edge function). Every other tenant keeps the manual-handoff panel.
+// Shown to the pilot tenant (northwind), or to every v2 tenant once Super
+// Admin → Customer Management → Custom Domain is switched on — see
+// useSelfServeAllowed below; the edge function checks the same rule again.
+// Every other tenant keeps the manual-handoff panel.
 //
 // ⚠️ ISOLATION. The read below carries `.eq('id', tenant.id)`; every write
 // goes through the edge function, which takes the tenant from the caller's own
@@ -69,6 +71,19 @@ function useDomainRow(tenantId: string) {
     // The runner may flip it to live while the board is open.
     refetchInterval: (q) => (q.state.data?.custom_domain_status === "pending" ? 30_000 : false),
     staleTime: 15_000,
+  });
+}
+
+/** May this tenant use the self-serve flow? (custom_domain_settings, via RPC) */
+export function useSelfServeAllowed(tenantId: string) {
+  return useQuery({
+    queryKey: ["custom-domain-self-serve-allowed", tenantId],
+    queryFn: async (): Promise<boolean> => {
+      const { data, error } = await supabaseUntyped.rpc("custom_domain_self_serve_allowed", { p_tenant_id: tenantId });
+      if (error) throw error;
+      return data === true;
+    },
+    staleTime: 60_000,
   });
 }
 
@@ -144,7 +159,8 @@ export function CustomDomainSelfServe({
     if (step || !row.data) return;
     const s = row.data.custom_domain_status;
     setRaw(row.data.custom_booking_domain ?? "");
-    setStep(s === "active" ? "live" : s === "pending" || s === "error" ? "checking" : "domain");
+    // A domain set before self-serve (no status yet) is checked, not re-asked.
+    setStep(s === "active" ? "live" : s || row.data.custom_booking_domain ? "checking" : "domain");
   }, [row.data, step]);
 
   // Went live (here or via the runner) while the checking screen is up.
@@ -598,6 +614,10 @@ function CheckingStep({
   // waits for the operator to fix their records and press Check again.
   const checkRef = useRef(check.mutate);
   checkRef.current = check.mutate;
+  useEffect(() => {
+    if (row.custom_domain_status === null) checkRef.current({ action: "check" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   useEffect(() => {
     if (failed) return;
     const t = window.setInterval(() => checkRef.current({ action: "check" }), CHECK_EVERY_MS);
