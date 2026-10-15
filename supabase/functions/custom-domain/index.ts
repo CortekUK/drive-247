@@ -23,6 +23,7 @@ import {
   connectDomain,
   disconnectDomain,
   hostsFor,
+  loadVercelConfig,
   normalizeDomain,
   recommendedRecords,
   selfServeAllowed,
@@ -65,6 +66,7 @@ Deno.serve(async (req) => {
       return errorResponse("Self-serve custom domains are not available on this account yet.", 403);
     }
 
+    await loadVercelConfig(db);
     const body = await req.json().catch(() => ({}));
     const action = body?.action;
     const canManage = MANAGE_ROLES.has(appUser.role);

@@ -12,11 +12,12 @@
 // they are in place. Vercel issues and renews the certificate on its own once
 // DNS points at it.
 //
-// Secrets (Supabase → Edge Functions → Secrets):
-//   VERCEL_API_TOKEN         a token with access to both projects
-//   VERCEL_TEAM_ID           the team that owns them (omit for a personal account)
-//   VERCEL_BOOKING_PROJECT   booking project id or name
-//   VERCEL_PORTAL_PROJECT    portal project id or name
+// Credentials: the project is at Supabase's 100-secret limit, so they live in
+// Vault as `vercel_custom_domains` = {token, team_id, booking_project,
+// portal_project}, read through custom_domain_vercel_config() (service role
+// only; migration 20261015160000). Call loadVercelConfig(db) once per request
+// before anything else here. VERCEL_API_TOKEN / VERCEL_TEAM_ID /
+// VERCEL_BOOKING_PROJECT / VERCEL_PORTAL_PROJECT env vars override it.
 
 import { getTenantBranding, getTenantNotificationRecipient, sendResendEmail, wrapWithBrandedTemplate } from "./resend-service.ts";
 
@@ -86,14 +87,31 @@ export class VercelError extends Error {
   }
 }
 
-function config() {
-  const token = Deno.env.get("VERCEL_API_TOKEN");
-  const booking = Deno.env.get("VERCEL_BOOKING_PROJECT");
-  const portal = Deno.env.get("VERCEL_PORTAL_PROJECT");
-  if (!token || !booking || !portal) {
+type VercelConfig = { token: string; teamId: string | null; booking: string; portal: string };
+let cached: VercelConfig | null = null;
+
+export async function loadVercelConfig(db: any): Promise<void> {
+  if (cached) return;
+  const env = (k: string) => Deno.env.get(k) || null;
+  let v: any = {};
+  if (!env("VERCEL_API_TOKEN")) {
+    const { data, error } = await db.rpc("custom_domain_vercel_config");
+    if (error) console.error("custom_domain_vercel_config failed:", error);
+    v = data ?? {};
+  }
+  const token = env("VERCEL_API_TOKEN") ?? v.token;
+  const booking = env("VERCEL_BOOKING_PROJECT") ?? v.booking_project;
+  const portal = env("VERCEL_PORTAL_PROJECT") ?? v.portal_project;
+  if (token && booking && portal) {
+    cached = { token, teamId: env("VERCEL_TEAM_ID") ?? v.team_id ?? null, booking, portal };
+  }
+}
+
+function config(): VercelConfig {
+  if (!cached) {
     throw new VercelError(503, "not_configured", "Custom domains are not switched on yet. Please try again later.");
   }
-  return { token, teamId: Deno.env.get("VERCEL_TEAM_ID") || null, booking, portal };
+  return cached;
 }
 
 export function projects() {

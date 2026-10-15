@@ -9,7 +9,7 @@
 // after a week is marked `error` with what is missing.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
-import { checkAndRecord } from "../_shared/custom-domain.ts";
+import { checkAndRecord, loadVercelConfig } from "../_shared/custom-domain.ts";
 
 Deno.serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -21,6 +21,7 @@ Deno.serve(async (req) => {
 
   const db = createClient(Deno.env.get("SUPABASE_URL")!, serviceKey, { auth: { persistSession: false } });
 
+  await loadVercelConfig(db);
   const { data: rows, error } = await db
     .from("tenants")
     .select("id, custom_booking_domain, custom_domain_status, custom_domain_requested_at")
