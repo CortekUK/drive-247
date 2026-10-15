@@ -11,6 +11,9 @@ import {
   WASH_MASK,
 } from "@/components/auth-v2/brand-surface";
 
+/** The v2 motion (V2_PLAN §12): 200ms ease-out in, opacity only, none for reduced motion. */
+const FADE_CLASSES = "transition-opacity duration-200 ease-out motion-reduce:transition-none";
+
 /**
  * The signed-out brand surface, for every screen that is not the login form.
  *
@@ -38,7 +41,15 @@ const PLATFORM_LOGO_LIGHT_GROUND = "/drive247-logo-light.png";
 const PLATFORM_LOGO_DARK_GROUND = "/drive247-logo-dark.png";
 
 export function AuthBrandShell({ children }: { children: React.ReactNode }) {
-  const { branding } = useTenantBranding();
+  const { branding, hasBrandingData, error: brandingError } = useTenantBranding();
+  // Until the tenant's own branding row arrives, `branding` is the placeholder
+  // built from TenantContext — which carries no colour columns, so every colour
+  // falls back to the hook's DEFAULT_BRANDING (a gold accent). Painting that and
+  // then swapping to the real brand is the "two colours on refresh". Hold the
+  // brand layers back until the real row (or a failed fetch) is in, then fade
+  // them in. The page underneath is the plain light ground, so nothing jumps.
+  const brandReady = hasBrandingData || !!brandingError;
+  const brandFade = `${FADE_CLASSES} ${brandReady ? "opacity-100" : "opacity-0"}`;
 
   /* The hero reads light-on-dark or dark-on-light from the resolved colour, so
      the theme has to be known before anything is painted. */
@@ -79,7 +90,7 @@ export function AuthBrandShell({ children }: { children: React.ReactNode }) {
           read as one surface with no vertical seam down the middle. */}
       <div
         aria-hidden
-        className={`absolute inset-y-0 left-0 hidden overflow-hidden lg:block ${
+        className={`absolute inset-y-0 left-0 hidden overflow-hidden lg:block ${brandFade} ${
           heroImage ? "w-[58%]" : "w-full"
         }`}
         style={
@@ -108,7 +119,7 @@ export function AuthBrandShell({ children }: { children: React.ReactNode }) {
           it out above the fields. Always the flat colour, never the photograph. */}
       <div
         aria-hidden
-        className="absolute inset-x-0 top-0 h-[42vh] lg:hidden"
+        className={`absolute inset-x-0 top-0 h-[42vh] lg:hidden ${brandFade}`}
         style={{
           backgroundColor: mobile.color,
           maskImage: MOBILE_WASH_MASK,
@@ -117,7 +128,7 @@ export function AuthBrandShell({ children }: { children: React.ReactNode }) {
       />
 
       <aside
-        className={`relative hidden overflow-hidden p-12 lg:flex lg:flex-col lg:justify-between ${
+        className={`relative hidden overflow-hidden p-12 lg:flex lg:flex-col lg:justify-between ${brandFade} ${
           heroOnDark ? "text-white" : "text-foreground"
         }`}
       >

@@ -139,6 +139,15 @@ const label = `[dev ports ${[...targets].sort((a, b) => a - b).join(', ')}]`;
  * `0.0.0.0:3000`.
  */
 function findListeners() {
+  // Linux: prefer `ss`. Next 16 renames its server process to
+  // `next-server (v16.x.y)`, and the `)` inside that name breaks lsof's parse
+  // of /proc/PID/stat — lsof then silently omits the socket, this script
+  // reports the port "free", and the dev server dies on EADDRINUSE.
+  if (process.platform === 'linux') {
+    const fromSs = findListenersWithSs();
+    if (fromSs) return fromSs;
+  }
+
   const byPort = new Map();
 
   const output = isWindows
@@ -172,6 +181,34 @@ function findListeners() {
     byPort.get(port).add(pid);
   }
 
+  return byPort;
+}
+
+/**
+ * `ss -ltnpH` rows look like:
+ *   LISTEN 0 511 *:4003 *:* users:(("next-server (v1",pid=2007691,fd=24))
+ * Returns null when `ss` is unavailable, so the caller falls back to lsof.
+ */
+function findListenersWithSs() {
+  let output;
+  try {
+    output = execFileSync('ss', ['-ltnpH'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+  } catch {
+    return null;
+  }
+
+  const byPort = new Map();
+  for (const line of output.split('\n')) {
+    const parts = line.trim().split(/\s+/);
+    if (parts.length < 4) continue;
+    const local = parts[3];
+    const port = Number(local.slice(local.lastIndexOf(':') + 1));
+    if (!targets.has(port)) continue;
+    for (const [, pid] of line.matchAll(/pid=(\d+)/g)) {
+      if (!byPort.has(port)) byPort.set(port, new Set());
+      byPort.get(port).add(Number(pid));
+    }
+  }
   return byPort;
 }
 

@@ -55,6 +55,9 @@ import { useIsAreaHidden } from "@/lib/lean-context";
 import { usePinnedLightTheme } from "@/hooks/use-pinned-light-theme";
 
 import { PLATFORM_PRIVACY_URL, PLATFORM_TERMS_URL } from "@/lib/legal/urls";
+
+/** The v2 motion (V2_PLAN §12): 200ms ease-out in, opacity only, none for reduced motion. */
+const FADE_CLASSES = "transition-opacity duration-200 ease-out motion-reduce:transition-none";
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://hviqoaokxvlancmftwuo.supabase.co";
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2aXFvYW9reHZsYW5jbWZ0d3VvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIzNjM2NTcsImV4cCI6MjA3NzkzOTY1N30.jwpdtizfTxl3MeCNDu-mrLI7GNK4PYWYg5gsIZy0T_Q";
 
@@ -126,7 +129,15 @@ function LoginV2Content() {
   const searchParams = useSearchParams();
   const { user, signIn, loading, appUser } = useAuth();
   const google = useGoogleSignIn();
-  const { branding } = useTenantBranding();
+  const { branding, hasBrandingData, error: brandingError } = useTenantBranding();
+  // Until the tenant's own branding row arrives, `branding` is the placeholder
+  // built from TenantContext — which carries no colour columns, so every colour
+  // falls back to the hook's DEFAULT_BRANDING (a gold accent). Painting that and
+  // then swapping to the real brand is the "two colours on refresh". Hold the
+  // brand layers back until the real row (or a failed fetch) is in, then fade
+  // them in. The page underneath is the plain light ground, so nothing jumps.
+  const brandReady = hasBrandingData || !!brandingError;
+  const brandFade = `${FADE_CLASSES} ${brandReady ? "opacity-100" : "opacity-0"}`;
   const { tenant, tenantSlug } = useTenant();
   // Read here and CLOSED OVER by getRedirectPath() below, which is a plain
   // function and not a position a hook can be called from.
@@ -491,7 +502,7 @@ function LoginV2Content() {
           land on and the two halves read as one surface. */}
       <div
         aria-hidden
-        className={`absolute inset-y-0 left-0 hidden overflow-hidden lg:block ${
+        className={`absolute inset-y-0 left-0 hidden overflow-hidden lg:block ${brandFade} ${
           heroImage ? "w-[58%]" : "w-full"
         }`}
         style={{
@@ -531,7 +542,7 @@ function LoginV2Content() {
           keeps at arm's length by giving it its own column. */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 h-[42vh] lg:hidden"
+        className={`pointer-events-none absolute inset-x-0 top-0 h-[42vh] lg:hidden ${brandFade}`}
         style={{
           backgroundColor: hero.color,
           maskImage: MOBILE_WASH_MASK,
@@ -550,7 +561,7 @@ function LoginV2Content() {
           Type colour follows the panel, not the app theme: in light mode the
           panel is a pale tint and white text on it would be unreadable. */}
       <aside
-        className={`relative hidden overflow-hidden p-12 lg:flex lg:flex-col lg:justify-between ${
+        className={`relative hidden overflow-hidden p-12 lg:flex lg:flex-col lg:justify-between ${brandFade} ${
           heroOnDark ? "text-white" : "text-foreground"
         }`}
       >
