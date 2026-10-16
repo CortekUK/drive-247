@@ -61,6 +61,14 @@ verify_jwt = false
 [functions.zoho-oauth-callback]
 verify_jwt = false
 
+# Accounting sync v2 OAuth returns: no JWT on a provider redirect; trust is the
+# single-use state nonce (accounting_v2_oauth_state).
+[functions.xero-oauth-callback-v2]
+verify_jwt = false
+
+[functions.zoho-oauth-callback-v2]
+verify_jwt = false
+
 [functions.twilio-sms-status]
 verify_jwt = false
 

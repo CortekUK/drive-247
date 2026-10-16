@@ -96,6 +96,7 @@ import {
 } from "./finance-data";
 import { ReceiptView } from "./receipt-view";
 import { PaymentSourceIcon } from "./payment-source-icon";
+import { AccountingSyncMarks, SyncMark } from "./accounting-sync-mark";
 import { CopyOnHover } from "./copy-on-hover";
 import { FINANCES_PREVIEW, issueInvoice, markLinkPaid } from "./finance-mock";
 import { PayInvoiceDialog } from "./pay-invoice-dialog";
@@ -262,9 +263,11 @@ export function InvoiceDetailSheet({
   const vehicle = [reg, makeModel].filter(Boolean).join(" · ") || null;
   const canPay = canEdit("payments") && !!invoice.rental_id;
   const invoiceDay = invoice.invoice_date?.slice(0, 10) ?? null;
+  const syncPaymentIds = charges.flatMap((c) => (index.allocsByCharge.get(c.id) ?? []).map((a) => a.payment_id));
 
   return (
     <>
+      <AccountingSyncMarks paymentIds={syncPaymentIds}>
       <Sheet open onOpenChange={close}>
         <SheetContent
           side="right"
@@ -727,6 +730,8 @@ export function InvoiceDetailSheet({
                                             )}
                                             </span>
                                           </span>
+                                          {/* Synced to Xero / Zoho — nothing when neither is connected. */}
+                                          {landed && <SyncMark kind="payment" sourceId={p!.id} />}
                                           {/* The amount, with the receipt icon standing in for the
                                               currency sign. A payment with no receipt shows the plain
                                               figure. */}
@@ -777,6 +782,7 @@ export function InvoiceDetailSheet({
                                                 )}
                                               </span>
                                             </span>
+                                            {p && <SyncMark kind="refund" sourceId={p.id} />}
                                             <span className="flex w-28 shrink-0 items-center justify-end gap-0.5 font-medium tabular-nums text-red-600 dark:text-red-400">
                                               <span aria-hidden className="mr-1">−</span>
                                               <Undo2 aria-hidden className="h-3.5 w-3.5 shrink-0" />
@@ -911,6 +917,7 @@ export function InvoiceDetailSheet({
           )}
         </SheetContent>
       </Sheet>
+      </AccountingSyncMarks>
 
       <EditInvoiceDialog invoice={invoice} open={editOpen} onOpenChange={setEditOpen} />
       <PayInvoiceDialog
