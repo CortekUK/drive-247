@@ -112,7 +112,15 @@ serve(async (req) => {
     }
 
     const actualFileUrl = fileUrl || docRecord?.file_url;
-    const mimeType = docRecord?.mime_type || 'application/pdf';
+    // Rows uploaded without a mime_type used to default to PDF, so PNG/JPG
+    // screenshots were parsed as PDFs and always failed. Infer from the extension.
+    const extensionMime: Record<string, string> = {
+      pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg',
+      webp: 'image/webp', gif: 'image/gif',
+    };
+    const extension = String(fileUrl || docRecord?.file_url || docRecord?.file_name || '')
+      .split('?')[0].split('.').pop()?.toLowerCase() || '';
+    const mimeType = docRecord?.mime_type || extensionMime[extension] || 'application/pdf';
     const fileName = docRecord?.file_name || 'unknown';
     console.log('[INSURANCE-AI] Processing:', fileName, 'Type:', mimeType);
 

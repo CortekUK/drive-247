@@ -2315,6 +2315,8 @@ const RentalDetail = () => {
             document_name: file.name,
             file_name: file.name,
             file_url: fileName,
+            mime_type: file.type || null,
+            file_size: file.size,
             status: 'Pending',
             ai_scan_status: 'pending',
             tenant_id: tenant?.id,
@@ -2391,7 +2393,13 @@ const RentalDetail = () => {
   const displayStatus = computeStatus(rental);
 
   // Check if original agreement is signed (from rental_agreements or fallback to rental fields)
-  const originalAgreement = rentalAgreements.find(a => a.agreement_type === 'original');
+  // A vehicle swap voids the first agreement and issues a new one. The list is
+  // ordered oldest-first, so use the newest non-voided original — otherwise the
+  // voided envelope is checked and a signed rental reads as unsigned.
+  const originalAgreements = rentalAgreements.filter(a => a.agreement_type === 'original');
+  const originalAgreement =
+    [...originalAgreements].reverse().find(a => a.document_status !== 'voided') ??
+    originalAgreements[originalAgreements.length - 1];
   const isDocuSignSigned = originalAgreement
     ? (originalAgreement.document_status === 'completed' || originalAgreement.document_status === 'signed' || !!originalAgreement.signed_document_id)
     : (rental?.document_status === 'completed' || rental?.document_status === 'signed');
@@ -6248,6 +6256,8 @@ const RentalDetail = () => {
                             document_name: file.name,
                             file_name: file.name,
                             file_url: fileName,
+                            mime_type: file.type || null,
+                            file_size: file.size,
                             status: 'Pending',
                             ai_scan_status: 'pending',
                             tenant_id: tenant?.id,
