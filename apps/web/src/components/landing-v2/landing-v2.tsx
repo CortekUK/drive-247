@@ -1,4 +1,4 @@
-import { Geist_Mono, Manrope, Unbounded } from "next/font/google";
+import { Bricolage_Grotesque, Geist_Mono, Instrument_Serif, Manrope, Unbounded } from "next/font/google";
 import type { SignupPlan } from "@/lib/plans";
 import type { PromoOffer } from "@/lib/promo-offer";
 import { LandingV3 } from "@/components/landing-v3/landing-v3";
@@ -26,10 +26,13 @@ const manrope = Manrope({ subsets: ["latin"], variable: "--font-manrope", displa
 // Landing v3's display and mono faces (Claude Design).
 const unbounded = Unbounded({ subsets: ["latin"], weight: ["500", "700", "900"], variable: "--font-unbounded", display: "swap" });
 const geistMono = Geist_Mono({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-geist-mono", display: "swap" });
+// Landing v3 (Trax Glass): section headings, and the serif italic accents in them.
+const bricolage = Bricolage_Grotesque({ subsets: ["latin"], axes: ["opsz"], variable: "--font-bricolage", display: "swap" });
+const instrumentSerif = Instrument_Serif({ subsets: ["latin"], weight: "400", style: ["normal", "italic"], variable: "--font-instrument-serif", display: "swap" });
 
 export function LandingV2(_props: {
   plans: readonly SignupPlan[] | null;
   offer: PromoOffer | null;
 }) {
-  return <LandingV3 fontClasses={`${manrope.variable} ${unbounded.variable} ${geistMono.variable}`} />;
+  return <LandingV3 fontClasses={`${manrope.variable} ${unbounded.variable} ${geistMono.variable} ${instrumentSerif.variable} ${bricolage.variable}`} />;
 }
